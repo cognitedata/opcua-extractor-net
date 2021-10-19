@@ -590,7 +590,7 @@ namespace Cognite.OpcUa.Pushers
             }
             var assets = ConvertNodes(objects, update);
 
-            var data = JsonSerializer.SerializeToUtf8Bytes(assets, null);
+            var data = JsonSerializer.SerializeToUtf8Bytes(assets);
 
             var msg = baseBuilder
                 .WithTopic(config.AssetTopic)
@@ -707,7 +707,7 @@ namespace Cognite.OpcUa.Pushers
 
                 if (minimalTimeseries.Any())
                 {
-                    var minimalData = JsonSerializer.SerializeToUtf8Bytes(minimalTimeseries, null);
+                    var minimalData = JsonSerializer.SerializeToUtf8Bytes(minimalTimeseries);
 
                     var minimalMsg = baseBuilder
                         .WithPayload(minimalData)
@@ -761,7 +761,7 @@ namespace Cognite.OpcUa.Pushers
 
             var timeseries = ConvertVariables(variables, update);
 
-            var data = JsonSerializer.SerializeToUtf8Bytes(timeseries, null);
+            var data = JsonSerializer.SerializeToUtf8Bytes(timeseries);
             var msg = baseBuilder
                 .WithPayload(data)
                 .WithTopic(config.TsTopic)
@@ -792,7 +792,7 @@ namespace Cognite.OpcUa.Pushers
                 .Select(evt => evt.ToStatelessCDFEvent(Extractor, config.DataSetId, eventParents))
                 .Where(evt => evt != null);
 
-            var data = JsonSerializer.SerializeToUtf8Bytes(events, null);
+            var data = JsonSerializer.SerializeToUtf8Bytes(events);
 
             var msg = baseBuilder
                 .WithPayload(data)
@@ -822,7 +822,7 @@ namespace Cognite.OpcUa.Pushers
         {
             bool useRawStore = config.RawMetadata != null && !string.IsNullOrWhiteSpace(config.RawMetadata.Database)
                 && !string.IsNullOrWhiteSpace(config.RawMetadata.RelationshipsTable);
-            var data = JsonSerializer.SerializeToUtf8Bytes(references, null);
+            var data = JsonSerializer.SerializeToUtf8Bytes(references);
 
             if (useRawStore)
             {

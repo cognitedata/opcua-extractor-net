@@ -20,12 +20,12 @@ using Cognite.OpcUa.Pushers;
 using Cognite.OpcUa.Types;
 using CogniteSdk;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -49,20 +49,18 @@ namespace Cognite.OpcUa.NodeSources
         private readonly List<UAVariable> readVariables = new List<UAVariable>();
         private readonly List<UANode> readNodes = new List<UANode>();
 
-        private static async Task<IEnumerable<SavedNode>?> DeserializeRawData(IEnumerable<RawRow> rows, JsonSerializer serializer, CancellationToken token)
+        private static async Task<IEnumerable<SavedNode>?> DeserializeRawData(IEnumerable<RawRow> rows, JsonSerializerOptions options, CancellationToken token)
         {
             using var stream = new MemoryStream();
-            await System.Text.Json.JsonSerializer.SerializeAsync(stream, rows.Select(row => row.Columns), null, token);
+            await JsonSerializer.SerializeAsync(stream, rows.Select(row => row.Columns), options, token);
             stream.Seek(0, SeekOrigin.Begin);
-            using var sr = new StreamReader(stream);
-            using var reader = new JsonTextReader(sr);
-            return serializer.Deserialize<IEnumerable<SavedNode>>(reader);
+            return JsonSerializer.Deserialize<IEnumerable<SavedNode>>(stream, options);
         }
 
         public async Task ReadRawNodes(CancellationToken token)
         {
-            var serializer = new JsonSerializer();
-            Extractor.StringConverter.AddConverters(serializer, ConverterType.Node);
+            var options = new JsonSerializerOptions();
+            Extractor.StringConverter.AddConverters(options, ConverterType.Node);
 
             var nodeSet = new HashSet<NodeId>();
 
@@ -78,7 +76,7 @@ namespace Cognite.OpcUa.NodeSources
                     var tsData = await pusher.GetRawRows(database, sourceConfig.TimeseriesTable, new[] {
                         "NodeId", "ParentNodeId", "name", "DataTypeId", "InternalInfo"
                     }, token);
-                    nodes = await DeserializeRawData(tsData, serializer, token) ?? Enumerable.Empty<SavedNode>();
+                    nodes = await DeserializeRawData(tsData, options, token) ?? Enumerable.Empty<SavedNode>();
                 }
                 catch (Exception ex)
                 {
@@ -124,7 +122,7 @@ namespace Cognite.OpcUa.NodeSources
                     {
                         "NodeId", "ParentNodeId", "name", "InternalInfo"
                     }, token);
-                    nodes = await DeserializeRawData(assetData, serializer, token) ?? Enumerable.Empty<SavedNode>();
+                    nodes = await DeserializeRawData(assetData, options, token) ?? Enumerable.Empty<SavedNode>();
                 }
                 catch (Exception ex)
                 {

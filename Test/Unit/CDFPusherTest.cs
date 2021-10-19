@@ -9,14 +9,11 @@ using CogniteSdk;
 using Com.Cognite.V1.Timeseries.Proto;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Test.Utils;
@@ -772,16 +769,15 @@ namespace Test.Unit
 
         private void NodeToRaw(UAExtractor extractor, UANode node, ConverterType type, bool ts)
         {
-            var serializer = new Newtonsoft.Json.JsonSerializer();
-            extractor.StringConverter.AddConverters(serializer, type);
+            var options = new JsonSerializerOptions();
+            var converter = tester.Client.StringConverter;
+            converter.AddConverters(options, type);
+
             var id = extractor.GetUniqueId(node.Id, (node is UAVariable variable) ? variable.Index : -1);
 
-            var sb = new StringBuilder();
-            var sw = new StringWriter(sb);
-            using var writer = new JsonTextWriter(sw);
-            serializer.Serialize(writer, node);
+            var json = JsonSerializer.Serialize(node, options);
 
-            var val = System.Text.Json.JsonSerializer.Deserialize<JsonElement>(sb.ToString());
+            var val = JsonSerializer.Deserialize<JsonElement>(json, options);
             if (ts)
             {
                 handler.TimeseriesRaw[id] = val;
