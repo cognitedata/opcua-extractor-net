@@ -1040,6 +1040,59 @@ namespace Test.Unit
 
             tester.WipeEventHistory();
         }
+
+        [Fact]
+        public async Task TestCDFNodeSetBackground()
+        {
+            tester.Config.Cognite.RawNodeBuffer = new CDFNodeSourceConfig
+            {
+                AssetsTable = "assets",
+                TimeseriesTable = "timeseries",
+                Database = "metadata",
+                Enable = true
+            };
+            tester.Config.Cognite.RawMetadata = new RawMetadataConfig
+            {
+                AssetsTable = "assets",
+                TimeseriesTable = "timeseries",
+                Database = "metadata"
+            };
+            tester.Config.Extraction.DataTypes.ExpandNodeIds = true;
+            tester.Config.Extraction.DataTypes.AppendInternalValues = true;
+            tester.Config.Events.Enabled = true;
+            tester.Config.Events.ReadServer = false;
+            tester.Config.Subscriptions.DataPoints = false;
+            tester.Config.Extraction.RootNode = tester.Ids.Event.Root.ToProtoNodeId(tester.Client);
+            tester.Config.Source.AltSourceBackgroundBrowse = true;
+
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+
+            // Populate data in Raw
+            tester.Config.Cognite.RawNodeBuffer.BrowseOnEmpty = true;
+            await extractor.RunExtractor(true);
+            Assert.True(extractor.State.NodeStates.Any());
+            Assert.True(handler.AssetRaw.Any());
+            Assert.True(handler.TimeseriesRaw.Any());
+            Assert.True(handler.Timeseries.Any());
+            Assert.Empty(handler.Assets);
+
+            await extractor.WaitForSubscriptions();
+            tester.Client.Browser.ResetVisitedNodes();
+            tester.Client.RemoveSubscription("EventListener");
+
+            extractor.State.Clear();
+
+            // Remove all timeseries
+            handler.TimeseriesRaw.Clear();
+            handler.Timeseries.Clear();
+
+            // Now the extractor should throw instead of falling back to browse
+            tester.Config.Cognite.RawNodeBuffer.BrowseOnEmpty = false;
+
+            await extractor.RunExtractor(true);
+
+            await CommonTestUtils.WaitForCondition(() => handler.TimeseriesRaw.Count > 0, 10);
+        }
         #endregion
         protected override void Dispose(bool disposing)
         {

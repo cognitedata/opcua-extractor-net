@@ -87,6 +87,10 @@ source:
     # Turn this off only if you want to set the limits higher and are certain that the server is reporting the wrong limits.
     # If these limits are exceeded the extractor will typically crash.
     limit-to-server-config: true
+    # If an alternative node source like CDF Raw or a NodeSet file is configured and used,
+    # start browsing for updates immediately in the background.
+    # This setup does not reduce load on the server, but can speed up startup.
+    alt-source-background-browse: false
 
 # Config for reading of history from the server
 history:

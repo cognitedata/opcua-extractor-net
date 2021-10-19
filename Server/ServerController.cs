@@ -21,11 +21,13 @@ namespace Server
         private int port;
         public ServerIssueConfig Issues => Server.Issues;
         public string ConfigRoot { get; set; } = "Server.Test";
+        private readonly string mqttUrl;
 
-        public ServerController(IEnumerable<PredefinedSetup> setups, int port = 62546)
+        public ServerController(IEnumerable<PredefinedSetup> setups, int port = 62546, string mqttUrl = "mqtt://localhost:4060")
         {
             this.setups = setups;
             this.port = port;
+            this.mqttUrl = mqttUrl;
         }
 
         public void Dispose()
@@ -44,7 +46,7 @@ namespace Server
                 var cfg = await app.LoadApplicationConfiguration(Path.Join("config", $"{ConfigRoot}.Config.xml"), false);
                 cfg.ServerConfiguration.BaseAddresses[0] = $"opc.tcp://localhost:{port}";
                 await app.CheckApplicationInstanceCertificate(false, 0);
-                Server = new TestServer(setups);
+                Server = new TestServer(setups, mqttUrl);
                 await app.Start(Server);
                 log.Information("Server started");
             }
