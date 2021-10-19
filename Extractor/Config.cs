@@ -63,6 +63,7 @@ namespace Cognite.OpcUa
             get => browseThrottling; set => browseThrottling = value ?? browseThrottling; }
         public NodeSetSourceConfig? NodeSetSource { get; set; }
         public bool LimitToServerConfig { get; set; } = true;
+        public bool AltSourceBackgroundBrowse { get; set; }
     }
     public enum X509CertificateLocation
     {
