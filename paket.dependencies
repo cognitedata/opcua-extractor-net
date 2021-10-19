@@ -14,6 +14,7 @@ nuget xunit.runner.visualstudio
 nuget OPCFoundation.NetStandard.Opc.Ua.Client
 nuget OPCFoundation.NetStandard.Opc.Ua.Configuration
 nuget OPCFoundation.NetStandard.Opc.Ua.Server
+nuget OPCFoundation.NetStandard.Opc.Ua.PubSub prerelease
 nuget AdysTech.InfluxDB.Client.Net.Core
 nuget Microsoft.Windows.Compatibility
 nuget MQTTnet
