@@ -50,7 +50,6 @@ namespace Server
             Utils.SetTraceOutput(Utils.TraceOutput.DebugAndFile);
             Utils.SetTraceMask(Utils.TraceMasks.All);
             Utils.SetTraceLog("./logs/opcua-server.log", true);
-            Utils.Trace("Test");
 
             base.OnServerStarting(configuration);
             fullConfig = configuration;
