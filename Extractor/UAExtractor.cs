@@ -163,7 +163,7 @@ namespace Cognite.OpcUa
         }
         #region Interface
 
-        public void Init()
+        protected override void Init(CancellationToken token)
         {
             if (historyReader != null)
             {
@@ -171,6 +171,12 @@ namespace Cognite.OpcUa
             }
             Looper = new Looper(Scheduler, this, Config, pushers);
             historyReader = new HistoryReader(uaClient, this, Config.History, Source.Token);
+            base.Init(token);
+        }
+
+        public void InitExternal(CancellationToken token)
+        {
+            Init(token);
         }
 
         private async Task RunExtractorInternal()
@@ -246,8 +252,6 @@ namespace Cognite.OpcUa
                 Extractor.Metrics.Version.GetVersion(Assembly.GetExecutingAssembly()));
             log.Information("Revision information: {status}",
                 Extractor.Metrics.Version.GetDescription(Assembly.GetExecutingAssembly()));
-
-            Init();
 
             await RunExtractorInternal();
             Looper.Run();
@@ -561,7 +565,7 @@ namespace Cognite.OpcUa
             try
             {
                 var tasks = await MapUAToDestinations(result);
-                if (initial && !readFromOpc && config.Source.AltSourceBackgroundBrowse)
+                if (initial && !readFromOpc && Config.Source.AltSourceBackgroundBrowse)
                 {
                     tasks = tasks.Append(async token =>
                     {

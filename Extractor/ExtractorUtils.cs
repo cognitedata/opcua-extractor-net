@@ -16,6 +16,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using Cognite.OpcUa.Types;
+using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using Serilog;
 using System;
@@ -104,13 +105,52 @@ namespace Cognite.OpcUa
             return null;
         }
 
+        public static void LogException(Microsoft.Extensions.Logging.ILogger log, Exception? e, string message, string silentMessage)
+        {
+            if (e == null)
+            {
+                log.LogError("{msg}", message);
+            }
+            else if (e is AggregateException aex)
+            {
+                var flat = aex.Flatten();
+                foreach (var exc in flat.InnerExceptions)
+                {
+                    LogException(log, exc, message, silentMessage);
+                }
+                if (!flat.InnerExceptions.Any())
+                {
+                    log.LogError(e, "{pMsg} - {msg}", message, e.Message);
+                }
+            }
+            else if (e is SilentServiceException silent)
+            {
+                log.LogDebug("Silenced service exception: {msg} - {info}", silentMessage,
+                    silent.InnerServiceException?.AdditionalInfo);
+            }
+            else if (e is ServiceResultException service)
+            {
+                log.LogError(e, "{pMsg} - {msg}: {info}", message, service.Message, service.AdditionalInfo);
+            }
+            else if (e is ExtractorFailureException failure)
+            {
+                log.LogError("{pMsg} - {msg}", message, failure.Message);
+                log.LogDebug(failure, "{msg}", message);
+            }
+            else
+            {
+                log.LogError(e, "{pMsg} - {msg}", e.Message);
+            }
+        }
+
+
         /// <summary>
         /// Log exception, silencing SilentServiceExceptions and formatting results properly.
         /// </summary>
         /// <param name="e">Exception to log</param>
         /// <param name="message">Message to give with normal exceptions</param>
         /// <param name="silentMessage">Message to give with silent exceptions</param>
-        public static void LogException(ILogger log, Exception? e, string message, string silentMessage)
+        public static void LogException(Serilog.ILogger log, Exception? e, string message, string silentMessage)
         {
             if (e == null)
             {
@@ -154,7 +194,7 @@ namespace Cognite.OpcUa
         /// <param name="ex">Exception to transform</param>
         /// <param name="op">Source operation, for logging</param>
         /// <returns>Transformed exception if recognized, otherwise the given exception</returns>
-        public static Exception HandleServiceResult(ILogger log, ServiceResultException ex, SourceOp op)
+        public static Exception HandleServiceResult(Serilog.ILogger log, ServiceResultException ex, SourceOp op)
         {
             uint code = ex.StatusCode;
             string symId = StatusCode.LookupSymbolicId(code);

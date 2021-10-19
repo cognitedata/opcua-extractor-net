@@ -229,7 +229,8 @@ namespace Cognite.OpcUa
                 extServices: services,
                 startupLogger: log,
                 config: config,
-                requireDestination: false);
+                requireDestination: false,
+                logException: (log, e, msg) => ExtractorUtils.LogException(log, e, msg, msg));
         }
     }
 }

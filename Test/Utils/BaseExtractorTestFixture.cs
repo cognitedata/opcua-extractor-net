@@ -95,17 +95,6 @@ namespace Test.Utils
             Config.Source.EndpointUrl = $"opc.tcp://localhost:{Port}";
             Config.GenerateDefaults();
         }
-        private void InitInternal(UAExtractor ext)
-        {
-#pragma warning disable CA2000 // Dispose objects before losing scope
-            var t = typeof(BaseExtractor<FullConfig>);
-            var source = CancellationTokenSource.CreateLinkedTokenSource(Source.Token);
-            t.GetProperty("Source", BindingFlags.NonPublic | BindingFlags.Instance)
-                .SetValue(ext, source);
-            t.GetProperty("Scheduler", BindingFlags.NonPublic | BindingFlags.Instance)
-                .SetValue(ext, new PeriodicScheduler(source.Token));
-#pragma warning restore CA2000 // Dispose objects before losing scope
-        }
         public UAExtractor BuildExtractor(bool clear = true, IExtractionStateStore stateStore = null, params IPusher[] pushers)
         {
             if (clear)
@@ -121,8 +110,7 @@ namespace Test.Utils
                 Client.ObjectTypeManager.Reset();
             }
             var ext = new UAExtractor(Config, Provider, pushers, Client, stateStore);
-            InitInternal(ext);
-            ext.Init();
+            ext.InitExternal(Source.Token);
 
             return ext;
         }
