@@ -24,9 +24,9 @@ using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.Types;
 using CogniteSdk;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using Prometheus;
-using Serilog;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -61,8 +61,13 @@ namespace Cognite.OpcUa.Pushers
         private readonly HashSet<string> missingTimeseries = new HashSet<string>();
         private readonly CogniteDestination destination;
 
-        public CDFPusher(ExtractionConfig extConfig, CognitePusherConfig config, CogniteDestination destination)
+        public CDFPusher(
+            ILogger<CDFPusher> log,
+            ExtractionConfig extConfig,
+            CognitePusherConfig config,
+            CogniteDestination destination)
         {
+            this.log = log;
             this.config = config;
             BaseConfig = config;
             this.destination = destination;
@@ -91,7 +96,7 @@ namespace Cognite.OpcUa.Pushers
         private static readonly Gauge mismatchedTimeseriesCnt = Metrics
             .CreateGauge("opcua_mismatched_timeseries", "Number of distinct timeseries that have been found to have different types in OPC-UA and in CDF");
 
-        private readonly ILogger log = Log.Logger.ForContext(typeof(CDFPusher));
+        private readonly ILogger<CDFPusher> log;
         #region Interface
 
 
@@ -130,7 +135,7 @@ namespace Cognite.OpcUa.Pushers
                     var missing = result.Errors.FirstOrDefault(err => err.Type == ErrorType.ItemMissing);
                     if (missing != null)
                     {
-                        log.Error("Failed to push datapoints to CDF, missing ids: {ids}", missing.Skipped.Select(ms => ms.Id));
+                        log.LogError("Failed to push datapoints to CDF, missing ids: {ids}", missing.Skipped.Select(ms => ms.Id));
                         foreach (var skipped in missing.Skipped)
                         {
                             missingTimeseries.Add(skipped.Id.ExternalId);
@@ -142,7 +147,7 @@ namespace Cognite.OpcUa.Pushers
                     var mismatched = result.Errors.FirstOrDefault(err => err.Type == ErrorType.MismatchedType);
                     if (mismatched != null)
                     {
-                        log.Error("Failed to push datapoints to CDF, mismatched timeseries: {ids}", mismatched.Skipped.Select(ms => ms.Id));
+                        log.LogError("Failed to push datapoints to CDF, mismatched timeseries: {ids}", mismatched.Skipped.Select(ms => ms.Id));
                         foreach (var skipped in mismatched.Skipped)
                         {
                             mismatchedTimeseries.Add(skipped.Id.ExternalId);
@@ -154,7 +159,7 @@ namespace Cognite.OpcUa.Pushers
 
                 result.ThrowOnFatal();
                 
-                log.Debug("Successfully pushed {real} / {total} points to CDF", realCount, count);
+                log.LogDebug("Successfully pushed {real} / {total} points to CDF", realCount, count);
                 dataPointPushes.Inc();
                 dataPointsCounter.Inc(realCount);
 
@@ -162,7 +167,7 @@ namespace Cognite.OpcUa.Pushers
             }
             catch (Exception e)
             {
-                log.Error("Failed to push {count} points to CDF: {msg}", count, e.Message);
+                log.LogError("Failed to push {count} points to CDF: {msg}", count, e.Message);
                 dataPointPushFailures.Inc();
                 // Return false indicating unexpected failure if we want to buffer.
                 return false;
@@ -207,7 +212,7 @@ namespace Cognite.OpcUa.Pushers
                     var fatalError = result.Errors.FirstOrDefault(err => err.Type == ErrorType.FatalFailure);
                     if (fatalError != null)
                     {
-                        log.Error("Failed to push {NumFailedEvents} events to CDF: {msg}", count, fatalError.Exception.Message);
+                        log.LogError("Failed to push {NumFailedEvents} events to CDF: {msg}", count, fatalError.Exception.Message);
                         eventPushFailures.Inc();
                         return fatalError.Exception is ResponseException rex && (rex.Code == 400 || rex.Code == 409);
                     }
@@ -215,12 +220,12 @@ namespace Cognite.OpcUa.Pushers
 
                 eventCounter.Inc(count - skipped);
                 eventPushCounter.Inc();
-                log.Debug("Successfully pushed {count} events to CDF", count - skipped);
+                log.LogDebug("Successfully pushed {count} events to CDF", count - skipped);
                 skippedEvents.Inc(skipped);
             }
             catch (Exception exc)
             {
-                log.Error(exc, "Failed to push {NumFailedEvents} events to CDF: {msg}", count, exc.Message);
+                log.LogError(exc, "Failed to push {NumFailedEvents} events to CDF: {msg}", count, exc.Message);
                 eventPushFailures.Inc();
                 return exc is ResponseException rex && (rex.Code == 400 || rex.Code == 409);
             }
@@ -243,17 +248,17 @@ namespace Cognite.OpcUa.Pushers
         {
             if (!variables.Any() && !objects.Any())
             {
-                log.Debug("Testing 0 nodes against CDF");
+                log.LogDebug("Testing 0 nodes against CDF");
                 return true;
             }
 
-            log.Information("Testing {TotalNodesToTest} nodes against CDF", variables.Count() + objects.Count());
+            log.LogInformation("Testing {TotalNodesToTest} nodes against CDF", variables.Count() + objects.Count());
             if (config.Debug)
             {
                 await Extractor.ReadProperties(objects.Concat(variables));
                 foreach (var node in objects.Concat(variables))
                 {
-                    log.Verbose(node.ToString());
+                    log.LogTrace(node.ToString());
                 }
                 return true;
             }
@@ -264,7 +269,7 @@ namespace Cognite.OpcUa.Pushers
             }
             catch (Exception e)
             {
-                log.Error(e, "Failed to ensure assets");
+                log.LogError(e, "Failed to ensure assets");
                 nodeEnsuringFailures.Inc();
                 return false;
             }
@@ -275,11 +280,11 @@ namespace Cognite.OpcUa.Pushers
             }
             catch (Exception e)
             {
-                log.Error(e, "Failed to ensure timeseries");
+                log.LogError(e, "Failed to ensure timeseries");
                 nodeEnsuringFailures.Inc();
                 return false;
             }
-            log.Information("Finish pushing nodes to CDF");
+            log.LogInformation("Finish pushing nodes to CDF");
             return true;
         }
         /// <summary>
@@ -320,7 +325,7 @@ namespace Cognite.OpcUa.Pushers
                     ids.Add(state.Id);
                 }
             }
-            log.Information("Getting extracted ranges from CDF for {cnt} states", ids.Count);
+            log.LogInformation("Getting extracted ranges from CDF for {cnt} states", ids.Count);
 
             Dictionary<string, TimeRange> ranges;
             try
@@ -330,7 +335,7 @@ namespace Cognite.OpcUa.Pushers
             }
             catch (Exception ex)
             {
-                log.Error(ex, "Failed to get extracted ranges");
+                log.LogError(ex, "Failed to get extracted ranges");
                 return false;
             }
 
@@ -388,7 +393,7 @@ namespace Cognite.OpcUa.Pushers
             }
             catch (Exception ex)
             {
-                log.Error("Failed to get CDF login status, this is likely a problem with the network or configuration. Project {project} at {url}: {msg}",
+                log.LogError("Failed to get CDF login status, this is likely a problem with the network or configuration. Project {project} at {url}: {msg}",
                     config.Project, config.Host, ex.Message);
                 return false;
             }
@@ -399,7 +404,7 @@ namespace Cognite.OpcUa.Pushers
             }
             catch (ResponseException ex)
             {
-                log.Error("Could not access CDF Time Series - most likely due " +
+                log.LogError("Could not access CDF Time Series - most likely due " +
                           "to insufficient access rights on API key. Project {project} at {host}: {msg}",
                     config.Project, config.Host, ex.Message);
                 return false;
@@ -413,7 +418,7 @@ namespace Cognite.OpcUa.Pushers
                 }
                 catch (ResponseException ex)
                 {
-                    log.Error("Could not access CDF Events, though event emitters are specified - most likely due " +
+                    log.LogError("Could not access CDF Events, though event emitters are specified - most likely due " +
                               "to insufficient access rights on API key. Project {project} at {host}: {msg}",
                         config.Project, config.Host, ex.Message);
                     return false;
@@ -429,7 +434,7 @@ namespace Cognite.OpcUa.Pushers
                 }
                 catch (ResponseException ex)
                 {
-                    log.Error("Could not fetch data set by external id. It may not exist, or the user may lack" +
+                    log.LogError("Could not fetch data set by external id. It may not exist, or the user may lack" +
                         " sufficient access rights. Project {project} at {host}, id {id}: {msg}",
                         config.Project, config.Host, config.DataSetExternalId, ex.Message);
                     return false;
@@ -455,7 +460,7 @@ namespace Cognite.OpcUa.Pushers
                 && !string.IsNullOrWhiteSpace(config.RawMetadata.Database)
                 && !string.IsNullOrWhiteSpace(config.RawMetadata.RelationshipsTable);
 
-            log.Information("Test {cnt} relationships against CDF", references.Count());
+            log.LogInformation("Test {cnt} relationships against CDF", references.Count());
             try
             {
                 if (useRawRelationships)
@@ -469,11 +474,11 @@ namespace Cognite.OpcUa.Pushers
             }
             catch (Exception e)
             {
-                log.Error(e, "Failed to ensure relationships");
+                log.LogError(e, "Failed to ensure relationships");
                 nodeEnsuringFailures.Inc();
                 return false;
             }
-            log.Information("Sucessfully pushed relationships to CDF");
+            log.LogInformation("Sucessfully pushed relationships to CDF");
             return true;
         }
         #endregion
@@ -494,7 +499,7 @@ namespace Cognite.OpcUa.Pushers
                 {
                     return assetMap.Select(kvp => (
                         kvp.Key,
-                        update: PusherUtils.CreateRawUpdate(Extractor.StringConverter, kvp.Value, null, ConverterType.Node)
+                        update: PusherUtils.CreateRawUpdate(log, Extractor.StringConverter, kvp.Value, null, ConverterType.Node)
                     )).Where(elem => elem.update != null)
                     .ToDictionary(pair => pair.Key, pair => pair.update!.Value);
                 }
@@ -513,7 +518,7 @@ namespace Cognite.OpcUa.Pushers
                 var updates = toWrite
                     .Select(elem => (
                         elem.key,
-                        update: PusherUtils.CreateRawUpdate(Extractor.StringConverter, elem.node, elem.row, ConverterType.Node)
+                        update: PusherUtils.CreateRawUpdate(log, Extractor.StringConverter, elem.node, elem.row, ConverterType.Node)
                     )).Where(elem => elem.update != null)
                     .ToDictionary(pair => pair.key, pair => pair.update!.Value);
 
@@ -533,7 +538,7 @@ namespace Cognite.OpcUa.Pushers
             {
                 var assets = ids.Select(id => (assetMap[id], id));
                 await Extractor.ReadProperties(assets.Select(pair => pair.Item1));
-                return assets.Select(pair => (pair.Item1.ToJson(Extractor.StringConverter, ConverterType.Node), pair.id))
+                return assets.Select(pair => (pair.Item1.ToJson(log, Extractor.StringConverter, ConverterType.Node), pair.id))
                     .Where(pair => pair.Item1 != null)
                     .ToDictionary(pair => pair.Item2, pair => pair.Item1!.RootElement);
             }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }, token);
@@ -597,7 +602,7 @@ namespace Cognite.OpcUa.Pushers
             }
             if (updates.Any())
             {
-                log.Information("Updating {cnt} assets in CDF", updates.Count);
+                log.LogInformation("Updating {cnt} assets in CDF", updates.Count);
                 await destination.CogniteClient.Assets.UpdateAsync(updates, token);
             }
         }
@@ -666,7 +671,7 @@ namespace Cognite.OpcUa.Pushers
                 {
                     return tsMap.Select(kvp => (
                         kvp.Key,
-                        update: PusherUtils.CreateRawUpdate(Extractor.StringConverter, kvp.Value, null, ConverterType.Variable)
+                        update: PusherUtils.CreateRawUpdate(log, Extractor.StringConverter, kvp.Value, null, ConverterType.Variable)
                     )).Where(elem => elem.update != null)
                     .ToDictionary(pair => pair.Key, pair => pair.update!.Value);
                 }
@@ -685,7 +690,7 @@ namespace Cognite.OpcUa.Pushers
                 var updates = toWrite
                     .Select(elem => (
                         elem.key,
-                        update: PusherUtils.CreateRawUpdate(Extractor.StringConverter, elem.node, elem.row, ConverterType.Variable)
+                        update: PusherUtils.CreateRawUpdate(log, Extractor.StringConverter, elem.node, elem.row, ConverterType.Variable)
                     )).Where(elem => elem.update != null)
                     .ToDictionary(pair => pair.key, pair => pair.update!.Value);
 
@@ -707,7 +712,7 @@ namespace Cognite.OpcUa.Pushers
             {
                 var timeseries = ids.Select(id => (tsMap[id], id));
                 await Extractor.ReadProperties(timeseries.Select(pair => pair.Item1));
-                return timeseries.Select(pair => (pair.Item1.ToJson(Extractor.StringConverter, ConverterType.Variable), pair.id))
+                return timeseries.Select(pair => (pair.Item1.ToJson(log, Extractor.StringConverter, ConverterType.Variable), pair.id))
                     .Where(pair => pair.Item1 != null)
                     .ToDictionary(pair => pair.id, pair => pair.Item1!.RootElement);
             }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }, token);
@@ -762,7 +767,7 @@ namespace Cognite.OpcUa.Pushers
             }
             if (foundBadTimeseries.Any())
             {
-                log.Debug("Found mismatched timeseries when ensuring: {tss}", string.Join(", ", foundBadTimeseries));
+                log.LogDebug("Found mismatched timeseries when ensuring: {tss}", string.Join(", ", foundBadTimeseries));
             }
             return timeseries.Results;
         }
@@ -796,7 +801,7 @@ namespace Cognite.OpcUa.Pushers
             }
             if (updates.Any())
             {
-                log.Information("Updating {cnt} timeseries in CDF", updates.Count);
+                log.LogInformation("Updating {cnt} timeseries in CDF", updates.Count);
                 await destination.CogniteClient.TimeSeries.UpdateAsync(updates, token);
             }
         }
@@ -869,7 +874,7 @@ namespace Cognite.OpcUa.Pushers
 
             var toCreate = keys.Except(existing);
             if (!toCreate.Any()) return;
-            log.Information("Creating {cnt} raw rows in CDF", toCreate.Count());
+            log.LogInformation("Creating {cnt} raw rows in CDF", toCreate.Count());
 
             var createDtos = await dtoBuilder(toCreate);
 
@@ -913,14 +918,14 @@ namespace Cognite.OpcUa.Pushers
                 }
                 catch (ResponseException ex) when (ex.Code == 404)
                 {
-                    log.Warning("Table or database not found: {msg}", ex.Message);
+                    log.LogWarning("Table or database not found: {msg}", ex.Message);
                     break;
                 }
             } while (cursor != null);
 
             await CallAndCreate(null);
 
-            log.Information("Updated or created {cnt} rows in CDF Raw", count);
+            log.LogInformation("Updated or created {cnt} rows in CDF Raw", count);
         }
 
         public async Task<IEnumerable<RawRow>> GetRawRows(
@@ -942,7 +947,7 @@ namespace Cognite.OpcUa.Pushers
                 }
                 catch (ResponseException ex) when (ex.Code == 404)
                 {
-                    log.Warning("Table or database not found: {msg}", ex.Message);
+                    log.LogWarning("Table or database not found: {msg}", ex.Message);
                     break;
                 }
             } while (cursor != null);

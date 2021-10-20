@@ -4,6 +4,7 @@ using Cognite.OpcUa;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using Opc.Ua.Client;
 using Server;
@@ -50,7 +51,7 @@ namespace Test.Unit
 
             Server.Start().Wait();
 
-            Client = new UAClient(Config);
+            Client = new UAClient(Provider, Config);
             Source = new CancellationTokenSource();
             Client.Run(Source.Token).Wait();
         }
@@ -399,7 +400,8 @@ namespace Test.Unit
             var (callback, nodes) = UAClientTestFixture.GetCallback();
             tester.Config.Source.BrowseThrottling.MaxNodeParallelism = 2;
             tester.Config.Source.BrowseThrottling.MaxParallelism = 1;
-            using var browser = new Cognite.OpcUa.Browser(tester.Client, tester.Config);
+            var log = tester.Provider.GetRequiredService<ILogger<Cognite.OpcUa.Browser>>();
+            using var browser = new Cognite.OpcUa.Browser(log, tester.Client, tester.Config);
             try
             {
                 await browser.BrowseNodeHierarchy(tester.Server.Ids.Full.DeepRoot, callback, tester.Source.Token);

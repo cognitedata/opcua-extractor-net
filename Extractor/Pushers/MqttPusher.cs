@@ -23,12 +23,12 @@ using CogniteSdk;
 using Com.Cognite.V1.Timeseries.Proto;
 using Google.Protobuf;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using MQTTnet;
 using MQTTnet.Client;
 using MQTTnet.Client.Options;
 using Opc.Ua;
 using Prometheus;
-using Serilog;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -52,7 +52,7 @@ namespace Cognite.OpcUa.Pushers
         private readonly IMqttClient client;
         private readonly IMqttClientOptions options;
 
-        private readonly ILogger log = Log.Logger.ForContext(typeof(MQTTPusher));
+        private readonly ILogger<MQTTPusher> log;
 
         private readonly MqttApplicationMessageBuilder baseBuilder;
 
@@ -89,8 +89,9 @@ namespace Cognite.OpcUa.Pushers
         /// Constructor, also starts the client and sets up correct disconnect handlers.
         /// </summary>
         /// <param name="config">Config to use</param>
-        public MQTTPusher(IServiceProvider provider, MqttPusherConfig config)
+        public MQTTPusher(ILogger<MQTTPusher> log, IServiceProvider provider, MqttPusherConfig config)
         {
+            this.log = log;
             this.config = config;
             extractionConfig = provider.GetRequiredService<FullConfig>().Extraction;
             var builder = new MqttClientOptionsBuilder()
@@ -117,8 +118,8 @@ namespace Cognite.OpcUa.Pushers
 
             client.UseDisconnectedHandler(async e =>
             {
-                log.Warning("MQTT Client disconnected");
-                log.Debug(e.Exception, "MQTT client disconnected");
+                log.LogWarning("MQTT Client disconnected");
+                log.LogDebug(e.Exception, "MQTT client disconnected");
                 async Task TryReconnect(int retries)
                 {
                     if (client.IsConnected || retries == 0 || closed) return;
@@ -130,7 +131,7 @@ namespace Cognite.OpcUa.Pushers
                     }
                     catch (Exception ex)
                     {
-                        log.Warning("Failed to reconnect to broker: {msg}", ex.Message);
+                        log.LogWarning("Failed to reconnect to broker: {msg}", ex.Message);
                         await TryReconnect(retries - 1);
                     }
                 }
@@ -138,7 +139,7 @@ namespace Cognite.OpcUa.Pushers
             });
             client.UseConnectedHandler(_ =>
             {
-                log.Information("MQTT client connected");
+                log.LogInformation("MQTT client connected");
             });
             client.ConnectAsync(options, CancellationToken.None).Wait();
         }
@@ -153,7 +154,7 @@ namespace Cognite.OpcUa.Pushers
             if (points == null) return null;
             if (!client.IsConnected)
             {
-                log.Warning("Client is not connected");
+                log.LogWarning("Client is not connected");
                 return false;
             }
             int count = 0;
@@ -204,11 +205,11 @@ namespace Cognite.OpcUa.Pushers
 
             if (!results.All(res => res))
             {
-                log.Debug("Failed to push {cnt} points to CDF over MQTT", count);
+                log.LogDebug("Failed to push {cnt} points to CDF over MQTT", count);
                 return false;
             }
 
-            log.Debug("Successfully pushed {cnt} points to CDF over MQTT", count);
+            log.LogDebug("Successfully pushed {cnt} points to CDF over MQTT", count);
 
             return true;
         }
@@ -226,10 +227,10 @@ namespace Cognite.OpcUa.Pushers
             }
             catch (Exception e)
             {
-                log.Warning("Failed to connect to MQTT broker: {msg}", e.Message);
+                log.LogWarning("Failed to connect to MQTT broker: {msg}", e.Message);
                 return false;
             }
-            log.Information("Connected to MQTT broker");
+            log.LogInformation("Connected to MQTT broker");
             return client.IsConnected;
         }
         /// <summary>
@@ -322,7 +323,7 @@ namespace Cognite.OpcUa.Pushers
                 await Extractor.ReadProperties(objects.Concat(variables));
             }
 
-            log.Information("Pushing {cnt} assets and {cnt2} timeseries over MQTT", objects.Count(), variables.Count());
+            log.LogInformation("Pushing {cnt} assets and {cnt2} timeseries over MQTT", objects.Count(), variables.Count());
 
             if (config.Debug) return true;
 
@@ -391,11 +392,11 @@ namespace Cognite.OpcUa.Pushers
             var results = await Task.WhenAll(eventList.ChunkBy(1000).Select(chunk => PushEventsChunk(chunk, token)));
             if (!results.All(result => result))
             {
-                log.Debug("Failed to push {cnt} events to CDF over MQTT", count);
+                log.LogDebug("Failed to push {cnt} events to CDF over MQTT", count);
                 return false;
             }
 
-            log.Debug("Successfully pushed {cnt} events to CDF over MQTT", count);
+            log.LogDebug("Successfully pushed {cnt} events to CDF over MQTT", count);
 
             return true;
         }
@@ -440,7 +441,7 @@ namespace Cognite.OpcUa.Pushers
 
             if (!relationships.Any()) return true;
 
-            log.Information("Pushing {cnt} relationships to CDF over MQTT", relationships.Count());
+            log.LogInformation("Pushing {cnt} relationships to CDF over MQTT", relationships.Count());
 
             var tasks = relationships.ChunkBy(1000).Select(chunk => PushReferencesChunk(chunk, token));
             var results = await Task.WhenAll(tasks);
@@ -536,7 +537,7 @@ namespace Cognite.OpcUa.Pushers
             }
             catch (Exception e)
             {
-                log.Error("Failed to write to MQTT: {msg}", e.Message);
+                log.LogError("Failed to write to MQTT: {msg}", e.Message);
                 return false;
             }
 
@@ -581,7 +582,7 @@ namespace Cognite.OpcUa.Pushers
                 }
                 catch (Exception ex)
                 {
-                    log.Error("Failed to write assets to raw over MQTT: {msg}", ex.Message);
+                    log.LogError("Failed to write assets to raw over MQTT: {msg}", ex.Message);
                     return false;
                 }
 
@@ -603,7 +604,7 @@ namespace Cognite.OpcUa.Pushers
             }
             catch (Exception e)
             {
-                log.Error("Failed to write assets to MQTT: {msg}", e.Message);
+                log.LogError("Failed to write assets to MQTT: {msg}", e.Message);
                 return false;
             }
 
@@ -649,7 +650,7 @@ namespace Cognite.OpcUa.Pushers
             if (Extractor == null) throw new InvalidOperationException("Extractor must be set");
             foreach (var node in nodes)
             {
-                var create = node.ToJson(Extractor.StringConverter, type);
+                var create = node.ToJson(log, Extractor.StringConverter, type);
                 if (create == null) continue;
                 string? id = Extractor.GetUniqueId(node.Id);
                 if (id == null) continue;
@@ -720,7 +721,7 @@ namespace Cognite.OpcUa.Pushers
                     }
                     catch (Exception e)
                     {
-                        log.Error("Failed to write minimal timeseries to MQTT: {msg}", e.Message);
+                        log.LogError("Failed to write minimal timeseries to MQTT: {msg}", e.Message);
                         return false;
                     }
                 }
@@ -751,7 +752,7 @@ namespace Cognite.OpcUa.Pushers
                 }
                 catch (Exception e)
                 {
-                    log.Error("Failed to write timeseries to raw over MQTT: {msg}", e.Message);
+                    log.LogError("Failed to write timeseries to raw over MQTT: {msg}", e.Message);
                     return false;
                 }
 
@@ -773,7 +774,7 @@ namespace Cognite.OpcUa.Pushers
             }
             catch (Exception e)
             {
-                log.Error("Failed to write timeseries to MQTT: {msg}", e.Message);
+                log.LogError("Failed to write timeseries to MQTT: {msg}", e.Message);
                 return false;
             }
 
@@ -804,7 +805,7 @@ namespace Cognite.OpcUa.Pushers
             }
             catch (Exception e)
             {
-                log.Error("Failed to write events to MQTT: {msg}", e.Message);
+                log.LogError("Failed to write events to MQTT: {msg}", e.Message);
                 return false;
             }
             eventCounter.Inc(evts.Count());
@@ -846,7 +847,7 @@ namespace Cognite.OpcUa.Pushers
                 }
                 catch (Exception ex)
                 {
-                    log.Error("Failed to write relationships to raw over MQTT: {msg}", ex.Message);
+                    log.LogError("Failed to write relationships to raw over MQTT: {msg}", ex.Message);
                 }
 
                 return true;
@@ -863,7 +864,7 @@ namespace Cognite.OpcUa.Pushers
             }
             catch (Exception e)
             {
-                log.Error("Failed to write relationships to MQTT: {msg}", e.Message);
+                log.LogError("Failed to write relationships to MQTT: {msg}", e.Message);
                 return false;
             }
             createdRelationships.Inc(references.Count());

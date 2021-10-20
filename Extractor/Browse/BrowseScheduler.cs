@@ -16,9 +16,9 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using Cognite.Extractor.Common;
+using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using Prometheus;
-using Serilog;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -50,7 +50,7 @@ namespace Cognite.OpcUa
         private readonly Action<ReferenceDescription, NodeId>? callback;
         private readonly ISet<NodeId> localVisitedNodes = new HashSet<NodeId>();
 
-        private readonly ILogger log = Log.Logger.ForContext(typeof(BrowseScheduler));
+        private readonly ILogger log;
 
         private readonly BrowseParams baseParams;
 
@@ -66,6 +66,7 @@ namespace Cognite.OpcUa
             .CreateGauge("opcua_tree_depth", "Depth of node tree from rootnode");
 
         public BrowseScheduler(
+            ILogger log,
             TaskThrottler throttler,
             UAClient client,
             IResourceCounter resource,
@@ -73,6 +74,7 @@ namespace Cognite.OpcUa
             CancellationToken token
             ) : base(options.InitialParams!.Items, throttler, options.NodesChunk, resource, token)
         {
+            this.log = log;
             this.client = client;
             this.options = options;
             visitedNodes = options.VisitedNodes ?? new HashSet<NodeId>();
@@ -156,14 +158,14 @@ namespace Cognite.OpcUa
                 var refs = node.GetNextReferences();
                 if (!refs.Any()) continue;
 
-                log.Verbose("Read {cnt} children from node {id}", refs.Count(), node.Id);
+                log.LogTrace("Read {cnt} children from node {id}", refs.Count(), node.Id);
                 foreach (var rd in refs)
                 {
                     var nodeId = client.ToNodeId(rd.NodeId);
                     if (nodeId == ObjectIds.Server || nodeId == ObjectIds.Aliases) continue;
                     if (!NodeFilter(rd.DisplayName.Text, client.ToNodeId(rd.TypeDefinition), nodeId, rd.NodeClass))
                     {
-                        log.Verbose("Ignoring filtered {nodeId}", nodeId);
+                        log.LogTrace("Ignoring filtered {nodeId}", nodeId);
                         continue;
                     }
 
@@ -171,11 +173,11 @@ namespace Cognite.OpcUa
                     if (visitedNodes != null && !visitedNodes.Add(nodeId))
                     {
                         docb = false;
-                        log.Verbose("Ignoring visited {nodeId}", nodeId);
+                        log.LogTrace("Ignoring visited {nodeId}", nodeId);
                     }
                     if (docb)
                     {
-                        log.Verbose("Discovered new node {nodeId}", nodeId);
+                        log.LogTrace("Discovered new node {nodeId}", nodeId);
                         callback?.Invoke(rd, node.Id);
                     }
 
@@ -197,17 +199,17 @@ namespace Cognite.OpcUa
         {
             if (options.MaxDepth < 0)
             {
-                log.Information("Begin browsing {cnt} nodes", baseParams.Nodes!.Count);
+                log.LogInformation("Begin browsing {cnt} nodes", baseParams.Nodes!.Count);
             }
             else
             {
-                log.Information("Begin browsing {cnt} nodes to depth {depth}", baseParams.Nodes!.Count, options.MaxDepth + 1);
+                log.LogInformation("Begin browsing {cnt} nodes to depth {depth}", baseParams.Nodes!.Count, options.MaxDepth + 1);
             }
 
             // If there is a reasonably low number of nodes...
             if (baseParams.Nodes!.Count < 40)
             {
-                log.Debug("Browse node hierarchy for {nodes}", string.Join(',', baseParams.Nodes!.Select(node => node.Key)));
+                log.LogDebug("Browse node hierarchy for {nodes}", string.Join(',', baseParams.Nodes!.Select(node => node.Key)));
             }
             await base.RunAsync();
             LogBrowseResult();
@@ -222,7 +224,7 @@ namespace Cognite.OpcUa
         private void LogBrowseResult()
         {
             int total = depthCounts.Sum();
-            log.Information("Browsed a total of {cnt} nodes in {cnt2} operations, and found {cnt3} nodes total",
+            log.LogInformation("Browsed a total of {cnt} nodes in {cnt2} operations, and found {cnt3} nodes total",
                 currentFinished, numReads, total);
 
             var builder = new StringBuilder("Total results by depth: \n");
@@ -230,14 +232,14 @@ namespace Cognite.OpcUa
             {
                 builder.AppendFormat("    {0}: {1}\n", i, depthCounts[i]);
             }
-            log.Debug(builder.ToString());
+            log.LogDebug(builder.ToString());
             depth.IncTo(depthCounts.Count);
         }
 
         protected override void OnIteration(int pending, int operations, int finished, int total)
         {
             currentFinished = finished;
-            log.Debug("Browse node children: {pend} pending, {op} total operations. {fin}/{tot}", pending, operations, finished, total);
+            log.LogDebug("Browse node children: {pend} pending, {op} total operations. {fin}/{tot}", pending, operations, finished, total);
         }
     }
 }

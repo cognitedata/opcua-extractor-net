@@ -93,7 +93,9 @@ namespace Test.Unit
             Assert.False(File.Exists(cfg.FailureBuffer.DatapointPath));
             Assert.False(File.Exists(cfg.FailureBuffer.EventPath));
 
-            var fb1 = new FailureBuffer(cfg, extractor, null);
+            var log = tester.Provider.GetRequiredService<ILogger<FailureBuffer>>();
+
+            var fb1 = new FailureBuffer(log, cfg, extractor, null);
             Assert.True(File.Exists(cfg.FailureBuffer.DatapointPath));
             Assert.True(File.Exists(cfg.FailureBuffer.EventPath));
 
@@ -103,16 +105,17 @@ namespace Test.Unit
             File.WriteAllText(cfg.FailureBuffer.DatapointPath, "testtest");
             File.WriteAllText(cfg.FailureBuffer.EventPath, "testtest");
 
-            var fb2 = new FailureBuffer(cfg, extractor, null);
+            var fb2 = new FailureBuffer(log, cfg, extractor, null);
 
             Assert.True(fb2.AnyPoints);
             Assert.True(fb2.AnyEvents);
 
             cfg.FailureBuffer.Influx = true;
-            using var pusher = new InfluxPusher(tester.Config.Influx);
-            Assert.Throws<ConfigurationException>(() => new FailureBuffer(cfg, extractor, null));
+            var iflog = tester.Provider.GetRequiredService<ILogger<InfluxPusher>>();
+            using var pusher = new InfluxPusher(iflog, tester.Config.Influx);
+            Assert.Throws<ConfigurationException>(() => new FailureBuffer(log, cfg, extractor, null));
 
-            var fb3 = new FailureBuffer(cfg, extractor, pusher);
+            var fb3 = new FailureBuffer(log, cfg, extractor, pusher);
         }
         [Fact]
         public async Task TestReadBufferState()
@@ -123,8 +126,11 @@ namespace Test.Unit
 
             cfg.FailureBuffer.Influx = true;
             cfg.FailureBuffer.InfluxStateStore = true;
-            using var pusher = new InfluxPusher(tester.Config.Influx);
-            var fb1 = new FailureBuffer(cfg, extractor, pusher);
+            var log = tester.Provider.GetRequiredService<ILogger<FailureBuffer>>();
+            var iflog = tester.Provider.GetRequiredService<ILogger<InfluxPusher>>();
+
+            using var pusher = new InfluxPusher(iflog, tester.Config.Influx);
+            var fb1 = new FailureBuffer(log, cfg, extractor, pusher);
 
             Assert.False(fb1.AnyPoints);
             Assert.False(fb1.AnyEvents);
@@ -205,8 +211,11 @@ namespace Test.Unit
 
             cfg.FailureBuffer.Influx = true;
             cfg.FailureBuffer.InfluxStateStore = true;
-            using var pusher = new InfluxPusher(tester.Config.Influx);
-            var fb1 = new FailureBuffer(cfg, extractor, pusher);
+            var log = tester.Provider.GetRequiredService<ILogger<FailureBuffer>>();
+            var iflog = tester.Provider.GetRequiredService<ILogger<InfluxPusher>>();
+
+            using var pusher = new InfluxPusher(iflog, tester.Config.Influx);
+            var fb1 = new FailureBuffer(log, cfg, extractor, pusher);
 
             var dt = new UADataType(DataTypeIds.Double);
 
@@ -289,8 +298,12 @@ namespace Test.Unit
 
             cfg.FailureBuffer.Influx = true;
             cfg.FailureBuffer.InfluxStateStore = true;
-            using var pusher = new InfluxPusher(tester.Config.Influx);
-            var fb1 = new FailureBuffer(cfg, extractor, pusher);
+
+            var log = tester.Provider.GetRequiredService<ILogger<FailureBuffer>>();
+            var iflog = tester.Provider.GetRequiredService<ILogger<InfluxPusher>>();
+
+            using var pusher = new InfluxPusher(iflog, tester.Config.Influx);
+            var fb1 = new FailureBuffer(log, cfg, extractor, pusher);
 
             var estate1 = new EventExtractionState(extractor, new NodeId("emitter1"), false, false, true);
             var estate2 = new EventExtractionState(extractor, new NodeId("emitter2"), false, false, true);
@@ -365,7 +378,9 @@ namespace Test.Unit
             using var dPusher = new DummyPusher(new DummyPusherConfig());
             pusher.Extractor = extractor;
             var pushers = new IPusher[] { pusher, dPusher };
-            var fb1 = new FailureBuffer(cfg, extractor, pusher);
+            var log = tester.Provider.GetRequiredService<ILogger<FailureBuffer>>();
+
+            var fb1 = new FailureBuffer(log, cfg, extractor, pusher);
 
             var dt = new UADataType(DataTypeIds.Double);
 
@@ -470,7 +485,9 @@ namespace Test.Unit
             using var dPusher = new DummyPusher(new DummyPusherConfig());
             pusher.Extractor = extractor;
             var pushers = new IPusher[] { pusher, dPusher };
-            var fb1 = new FailureBuffer(cfg, extractor, pusher);
+
+            var log = tester.Provider.GetRequiredService<ILogger<FailureBuffer>>();
+            var fb1 = new FailureBuffer(log, cfg, extractor, pusher);
 
             var estate1 = new EventExtractionState(extractor, new NodeId("emitter1"), false, false, true);
             var estate2 = new EventExtractionState(extractor, new NodeId("emitter2"), false, false, true);
@@ -552,7 +569,9 @@ namespace Test.Unit
 
             using var dPusher = new DummyPusher(new DummyPusherConfig());
             var pushers = new IPusher[] { dPusher };
-            var fb1 = new FailureBuffer(cfg, extractor, null);
+
+            var log = tester.Provider.GetRequiredService<ILogger<FailureBuffer>>();
+            var fb1 = new FailureBuffer(log, cfg, extractor, null);
 
             var dt = new UADataType(DataTypeIds.Double);
             var dt2 = new UADataType(DataTypeIds.String);
@@ -622,7 +641,9 @@ namespace Test.Unit
 
             using var dPusher = new DummyPusher(new DummyPusherConfig());
             var pushers = new IPusher[] { dPusher };
-            var fb1 = new FailureBuffer(cfg, extractor, null);
+
+            var log = tester.Provider.GetRequiredService<ILogger<FailureBuffer>>();
+            var fb1 = new FailureBuffer(log, cfg, extractor, null);
 
             var estate1 = new EventExtractionState(extractor, new NodeId("emitter1"), false, false, true);
             var estate2 = new EventExtractionState(extractor, new NodeId("emitter2"), false, false, true);

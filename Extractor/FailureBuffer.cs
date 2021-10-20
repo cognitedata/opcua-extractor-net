@@ -19,8 +19,8 @@ using Cognite.Extractor.Common;
 using Cognite.Extractor.Configuration;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.Types;
+using Microsoft.Extensions.Logging;
 using Prometheus;
-using Serilog;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
@@ -57,7 +57,7 @@ namespace Cognite.OpcUa
         private static readonly Gauge numEventsInBuffer = Metrics.CreateGauge(
             "opcua_buffer_num_events", "The number of events in the local buffer file");
 
-        private static readonly ILogger log = Log.Logger.ForContext(typeof(FailureBuffer));
+        private readonly ILogger<FailureBuffer> log;
         /// <summary>
         /// Constructor. This checks whether any points or events exists in the buffer files
         /// and creates files if they do not exist.
@@ -65,8 +65,9 @@ namespace Cognite.OpcUa
         /// <param name="fullConfig"></param>
         /// <param name="extractor"></param>
         /// <param name="influxPusher">InfluxPusher to use when reading from influxdb</param>
-        public FailureBuffer(FullConfig fullConfig, UAExtractor extractor, InfluxPusher? influxPusher)
+        public FailureBuffer(ILogger<FailureBuffer> log, FullConfig fullConfig, UAExtractor extractor, InfluxPusher? influxPusher)
         {
+            this.log = log;
             config = fullConfig.FailureBuffer;
             this.fullConfig = fullConfig;
 
@@ -178,7 +179,7 @@ namespace Cognite.OpcUa
             if (!UseInflux()) return;
             if (influxPusher.DataFailing)
             {
-                log.Warning("Influx pusher is failing, datapoints will not be buffered in influxdb");
+                log.LogWarning("Influx pusher is failing, datapoints will not be buffered in influxdb");
                 return;
             }
 
@@ -194,7 +195,7 @@ namespace Cognite.OpcUa
             }
             if (config.InfluxStateStore && extractor.StateStorage != null)
             {
-                log.Information("Try to write {cnt} states to state store", nodeBufferStates.Count);
+                log.LogInformation("Try to write {cnt} states to state store", nodeBufferStates.Count);
                 await extractor.StateStorage.StoreExtractionState(nodeBufferStates.Values,
                     fullConfig.StateStorage.InfluxVariableStore, token).ConfigureAwait(false);
             }
@@ -219,7 +220,7 @@ namespace Cognite.OpcUa
 
             if (!points.Any()) return true;
 
-            log.Information("Push {cnt} points to failurebuffer", points.Count());
+            log.LogInformation("Push {cnt} points to failurebuffer", points.Count());
 
             if (config.Influx && influxPusher != null)
             {
@@ -235,7 +236,7 @@ namespace Cognite.OpcUa
                 }
                 catch (Exception ex)
                 {
-                    log.Error(ex, "Failed to write datapoints to file");
+                    log.LogError(ex, "Failed to write datapoints to file");
                     return false;
                 }
             }
@@ -256,7 +257,7 @@ namespace Cognite.OpcUa
                 try
                 {
                     var dps = await influxPusher.ReadDataPoints(nodeBufferStates, token);
-                    log.Information("Read {cnt} points from influxdb failure buffer", dps.Count());
+                    log.LogInformation("Read {cnt} points from influxdb failure buffer", dps.Count());
                     var result = await Task.WhenAll(pushers
                         .Where(pusher => !(pusher is InfluxPusher))
                         .Select(pusher => pusher.PushDataPoints(dps, token)));
@@ -275,7 +276,7 @@ namespace Cognite.OpcUa
                 catch (Exception e)
                 {
                     success = false;
-                    log.Error(e, "Failed to read points from influxdb");
+                    log.LogError(e, "Failed to read points from influxdb");
                 }
             }
 
@@ -295,7 +296,7 @@ namespace Cognite.OpcUa
             if (!UseInflux()) return;
             if (influxPusher.EventsFailing)
             {
-                log.Warning("Influx pusher is failing, events will not be buffered in influxdb");
+                log.LogWarning("Influx pusher is failing, events will not be buffered in influxdb");
                 return;
             }
 
@@ -340,7 +341,7 @@ namespace Cognite.OpcUa
 
             if (!events.Any()) return true;
 
-            log.Information("Push {cnt} events to failurebuffer", events.Count());
+            log.LogInformation("Push {cnt} events to failurebuffer", events.Count());
 
             if (config.Influx)
             {
@@ -356,7 +357,7 @@ namespace Cognite.OpcUa
                 }
                 catch (Exception ex)
                 {
-                    log.Error(ex, "Failed to write events to file");
+                    log.LogError(ex, "Failed to write events to file");
                     return false;
                 }
             }
@@ -378,7 +379,7 @@ namespace Cognite.OpcUa
                 {
                     var events = await influxPusher.ReadEvents(eventBufferStates, token);
 
-                    log.Information("Read {cnt} events from influxdb failure buffer", events.Count());
+                    log.LogInformation("Read {cnt} events from influxdb failure buffer", events.Count());
                     var result = await Task.WhenAll(pushers
                         .Where(pusher => !(pusher is InfluxPusher))
                         .Select(pusher => pusher.PushEvents(events, token)));
@@ -398,7 +399,7 @@ namespace Cognite.OpcUa
                 catch (Exception e)
                 {
                     success = false;
-                    log.Error(e, "Failed to read events from influxdb");
+                    log.LogError(e, "Failed to read events from influxdb");
                 }
             }
 
@@ -442,7 +443,7 @@ namespace Cognite.OpcUa
                         .Where(group => extractor.State.GetNodeState(group.Key) != null)
                         .SelectMany(group => group).ToList();
 
-                    log.Information("Read {cnt} datapoints from file", points.Count);
+                    log.LogInformation("Read {cnt} datapoints from file", points.Count);
                     if (!points.Any() && final) break;
 
                     var results = await Task.WhenAll(pushers.Select(pusher => pusher.PushDataPoints(points, token)));
@@ -464,13 +465,13 @@ namespace Cognite.OpcUa
             }
             catch (Exception ex)
             {
-                log.Error(ex, "Failed to read datapoints from file");
+                log.LogError(ex, "Failed to read datapoints from file");
                 return false;
             }
 
             if (token.IsCancellationRequested) return true;
 
-            log.Information("Wipe datapoint buffer file");
+            log.LogInformation("Wipe datapoint buffer file");
             File.Create(config.DatapointPath).Close();
             fileAnyPoints = false;
             numPointsInBuffer.Set(0);
@@ -505,13 +506,13 @@ namespace Cognite.OpcUa
                         events.Add(evt);
                     }
 
-                    log.Information("Read {cnt} raw events", events.Count);
+                    log.LogInformation("Read {cnt} raw events", events.Count);
 
                     events = events
                         .Where(evt => evt.EmittingNode != null && !evt.EmittingNode.IsNullNodeId)
                         .ToList();
 
-                    log.Information("Read {cnt} events from file", events.Count);
+                    log.LogInformation("Read {cnt} events from file", events.Count);
                     if (!events.Any() && final) break;
 
                     var results = await Task.WhenAll(pushers.Select(pusher => pusher.PushEvents(events, token)));
@@ -533,14 +534,14 @@ namespace Cognite.OpcUa
             }
             catch (Exception ex)
             {
-                log.Error(ex, "Failed to read events from file");
+                log.LogError(ex, "Failed to read events from file");
                 return false;
             }
 
 
             if (token.IsCancellationRequested) return true;
 
-            log.Information("Wipe event buffer file");
+            log.LogInformation("Wipe event buffer file");
             File.Create(config.EventPath).Close();
             fileAnyEvents = false;
             numEventsInBuffer.Set(0);
@@ -569,7 +570,7 @@ namespace Cognite.OpcUa
 
             if (count > 0)
             {
-                log.Debug("Write {cnt} points to file", count);
+                log.LogDebug("Write {cnt} points to file", count);
                 numPointsInBuffer.Inc(count);
             }
         }
@@ -594,7 +595,7 @@ namespace Cognite.OpcUa
 
             if (count > 0)
             {
-                log.Debug("Write {cnt} events to file", count);
+                log.LogDebug("Write {cnt} events to file", count);
                 numEventsInBuffer.Inc();
             }
         }

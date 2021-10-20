@@ -16,6 +16,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using Cognite.Extractor.Common;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Threading;
@@ -35,8 +36,12 @@ namespace Cognite.OpcUa.History
 
         private readonly OperationWaiter waiter;
 
-        public HistoryReader(UAClient uaClient, UAExtractor extractor, HistoryConfig config, CancellationToken token)
+        private readonly ILogger<HistoryReader> log;
+
+        public HistoryReader(ILogger<HistoryReader> log,
+            UAClient uaClient, UAExtractor extractor, HistoryConfig config, CancellationToken token)
         {
+            this.log = log;
             this.config = config;
             this.uaClient = uaClient;
             this.extractor = extractor;
@@ -50,7 +55,7 @@ namespace Cognite.OpcUa.History
 
         private async Task Run(IEnumerable<UAHistoryExtractionState> states, HistoryReadType type)
         {
-            using var scheduler = new HistoryScheduler(uaClient, extractor, config, type,
+            using var scheduler = new HistoryScheduler(log, uaClient, extractor, config, type,
                 throttler, continuationPoints, states, source.Token);
 
             using (var op = waiter.GetInstance())

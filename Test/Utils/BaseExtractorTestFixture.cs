@@ -1,5 +1,4 @@
 ﻿using AdysTech.InfluxDB.Client.Net;
-using Cognite.Extractor.Common;
 using Cognite.Extractor.Configuration;
 using Cognite.Extractor.Logging;
 using Cognite.Extractor.StateStorage;
@@ -7,11 +6,11 @@ using Cognite.Extractor.Utils;
 using Cognite.OpcUa;
 using Cognite.OpcUa.Pushers;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using Server;
 using System;
 using System.IO;
-using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -46,7 +45,7 @@ namespace Test.Utils
                 PredefinedSetup.Wrong, PredefinedSetup.Full, PredefinedSetup.Auditing }, Port);
             Server.Start().Wait();
 
-            Client = new UAClient(Config);
+            Client = new UAClient(Provider, Config);
             Source = new CancellationTokenSource();
             Client.Run(Source.Token).Wait();
         }
@@ -131,7 +130,7 @@ namespace Test.Utils
             {
                 ClearLiteDB(client).Wait();
             }
-            var pusher = new InfluxPusher(Config.Influx);
+            var pusher = new InfluxPusher(Provider.GetRequiredService<ILogger<InfluxPusher>>(), Config.Influx);
             return (pusher, client);
         }
 
@@ -157,7 +156,8 @@ namespace Test.Utils
             Services.AddCogniteClient("appid", null, true, true, false);
             var provider = Services.BuildServiceProvider();
             var destination = provider.GetRequiredService<CogniteDestination>();
-            var pusher = new CDFPusher(Config.Extraction, Config.Cognite, destination);
+            var pusher = new CDFPusher(Provider.GetRequiredService<ILogger<CDFPusher>>(),
+                Config.Extraction, Config.Cognite, destination);
             return (handler, pusher);
         }
 

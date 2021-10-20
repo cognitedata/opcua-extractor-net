@@ -155,7 +155,7 @@ namespace Cognite.OpcUa
 
             string configOutput = setup.ConfigTarget ?? Path.Combine(setup.Config.Source.ConfigRoot, "config.config-tool-output.yml");
 
-            var runTime = new ConfigToolRuntime(setup.Config, setup.BaseConfig, configOutput);
+            var runTime = new ConfigToolRuntime(provider, setup.Config, setup.BaseConfig, configOutput);
             await runTime.Run(token);
         }
 
@@ -204,20 +204,23 @@ namespace Cognite.OpcUa
             {
                 var conf = provider.GetRequiredService<FullConfig>();
                 var dest = provider.GetService<CogniteDestination>();
+                var log = provider.GetRequiredService<ILogger<CDFPusher>>();
                 if (conf.Cognite == null || dest == null || dest.CogniteClient == null) return null;
-                return new CDFPusher(conf.Extraction, conf.Cognite, dest);
+                return new CDFPusher(log, conf.Extraction, conf.Cognite, dest);
             });
             services.AddSingleton<IPusher, InfluxPusher>(provider =>
             {
-                var conf = provider.GetRequiredService<FullConfig>();
-                if (conf.Influx == null) return null;
-                return new InfluxPusher(conf.Influx);
+                var conf = provider.GetService<FullConfig>();
+                var log = provider.GetRequiredService<ILogger<InfluxPusher>>();
+                if (conf?.Influx == null) return null;
+                return new InfluxPusher(log, conf.Influx);
             });
             services.AddSingleton<IPusher, MQTTPusher>(provider =>
             {
-                var conf = provider.GetRequiredService<FullConfig>();
-                if (conf.Mqtt == null) return null;
-                return new MQTTPusher(provider, conf.Mqtt);
+                var conf = provider.GetService<FullConfig>();
+                var log = provider.GetRequiredService<ILogger<MQTTPusher>>();
+                if (conf?.Mqtt == null) return null;
+                return new MQTTPusher(log, provider, conf.Mqtt);
             });
 
             services.AddSingleton<UAClient>();

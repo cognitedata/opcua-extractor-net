@@ -16,8 +16,8 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using Cognite.OpcUa.Types;
+using Microsoft.Extensions.Logging;
 using Opc.Ua;
-using Serilog;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -34,7 +34,7 @@ namespace Cognite.OpcUa.TypeCollectors
     /// </summary>
     public class DataTypeManager
     {
-        private readonly ILogger log = Log.Logger.ForContext<DataTypeManager>();
+        private readonly ILogger<DataTypeManager> log;
         private readonly UAClient uaClient;
         private readonly Dictionary<NodeId, NodeId> parentIds = new Dictionary<NodeId, NodeId>();
         private readonly Dictionary<NodeId, UADataType> dataTypes = new Dictionary<NodeId, UADataType>();
@@ -42,8 +42,9 @@ namespace Cognite.OpcUa.TypeCollectors
         private readonly HashSet<NodeId> ignoreDataTypes = new HashSet<NodeId>();
         private readonly DataTypeConfig config;
 
-        public DataTypeManager(UAClient client, DataTypeConfig config)
+        public DataTypeManager(ILogger<DataTypeManager> log, UAClient client, DataTypeConfig config)
         {
+            this.log = log;
             uaClient = client;
             this.config = config;
         }
@@ -60,11 +61,11 @@ namespace Cognite.OpcUa.TypeCollectors
                     var id = type.NodeId.ToNodeId(uaClient);
                     if (id == null || id.IsNullNodeId)
                     {
-                        log.Warning("Invalid datatype nodeId: {ns}: {identifier}", type.NodeId.NamespaceUri, type.NodeId.NodeId);
+                        log.LogWarning("Invalid datatype nodeId: {ns}: {identifier}", type.NodeId.NamespaceUri, type.NodeId.NodeId);
                         continue;
                     }
                     dataTypes[id] = new UADataType(type, id, config);
-                    log.Information("Add custom datatype: {id}", id);
+                    log.LogInformation("Add custom datatype: {id}", id);
                 }
             }
             if (config.IgnoreDataTypes != null)
@@ -74,7 +75,7 @@ namespace Cognite.OpcUa.TypeCollectors
                     var id = type.ToNodeId(uaClient);
                     if (id == null || id.IsNullNodeId)
                     {
-                        log.Warning("Invalid ignore datatype nodeId: {ns}: {identifier}", type.NamespaceUri, type.NodeId);
+                        log.LogWarning("Invalid ignore datatype nodeId: {ns}: {identifier}", type.NamespaceUri, type.NodeId);
                         continue;
                     }
                     ignoreDataTypes.Add(id);
@@ -154,20 +155,20 @@ namespace Cognite.OpcUa.TypeCollectors
             if (node.NodeClass == NodeClass.VariableType) return true;
             if (node.DataType == null)
             {
-                log.Warning("Skipping variable {name} {id} due to missing datatype", node.DisplayName, node.Id);
+                log.LogWarning("Skipping variable {name} {id} due to missing datatype", node.DisplayName, node.Id);
                 return false;
             }
             var dt = node.DataType;
 
             if (dt.IsString && !config.AllowStringVariables && !overrideString)
             {
-                log.Debug("Skipping variable {name} {id} due to string datatype and allow-string-variables being set to false",
+                log.LogDebug("Skipping variable {name} {id} due to string datatype and allow-string-variables being set to false",
                     node.DisplayName, node.Id);
                 return false;
             }
             if (ignoreDataTypes.Contains(dt.Raw))
             {
-                log.Debug("Skipping variable {name} {id} due to raw datatype {raw} being in list of ignored data types",
+                log.LogDebug("Skipping variable {name} {id} due to raw datatype {raw} being in list of ignored data types",
                     node.DisplayName, node.Id, dt.Raw);
                 return false;
             }
@@ -183,7 +184,7 @@ namespace Cognite.OpcUa.TypeCollectors
                 }
                 else
                 {
-                    log.Debug("Skipping variable {name} {id} due to non-scalar ValueRank {rank} and too large dimension {dim}",
+                    log.LogDebug("Skipping variable {name} {id} due to non-scalar ValueRank {rank} and too large dimension {dim}",
                         node.DisplayName, node.Id, node.ValueRank, length);
                     return false;
                 }
@@ -192,13 +193,13 @@ namespace Cognite.OpcUa.TypeCollectors
             {
                 if (config.UnknownAsScalar && (node.ValueRank == ValueRanks.ScalarOrOneDimension
                     || node.ValueRank == ValueRanks.Any)) return true;
-                log.Debug("Skipping variable {name} {id} due to non-scalar ValueRank {rank} and null ArrayDimensions",
+                log.LogDebug("Skipping variable {name} {id} due to non-scalar ValueRank {rank} and null ArrayDimensions",
                     node.DisplayName, node.Id, node.ValueRank);
                 return false;
             }
             else
             {
-                log.Debug("Skipping variable {name} {id} due to non-scalar ValueRank {rank} and too high dimensionality {dim}",
+                log.LogDebug("Skipping variable {name} {id} due to non-scalar ValueRank {rank} and too high dimensionality {dim}",
                     node.DisplayName, node.Id, node.ValueRank, node.ArrayDimensions.Length);
                 return false;
             }
@@ -248,7 +249,7 @@ namespace Cognite.OpcUa.TypeCollectors
                 && !dt.EnumValues.Any()));
             if (!typeSet.Any()) return;
 
-            log.Information("Get enum properties for {cnt} enum types", typeSet.Count);
+            log.LogInformation("Get enum properties for {cnt} enum types", typeSet.Count);
             var enumPropMap = new Dictionary<NodeId, NodeId>();
 
             var nodes = typeSet.Select(id => new BrowseNode(id)).ToDictionary(node => node.Id);
@@ -290,7 +291,7 @@ namespace Cognite.OpcUa.TypeCollectors
         {
             if (!config.AutoIdentifyTypes) return;
 
-            log.Information("Map out datatype structure to automatically identify numeric datatypes");
+            log.LogInformation("Map out datatype structure to automatically identify numeric datatypes");
 
             void Callback(ReferenceDescription child, NodeId parent)
             {
@@ -357,7 +358,7 @@ namespace Cognite.OpcUa.TypeCollectors
             }
             else
             {
-                log.Warning("Unknown enum strings type: {type}", value.GetType());
+                log.LogWarning("Unknown enum strings type: {type}", value.GetType());
             }
         }
         /// <summary>

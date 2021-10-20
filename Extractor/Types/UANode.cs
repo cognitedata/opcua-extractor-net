@@ -18,9 +18,10 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.TypeCollectors;
 using CogniteSdk;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Newtonsoft.Json;
 using Opc.Ua;
-using Serilog;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -94,8 +95,6 @@ namespace Cognite.OpcUa.Types
         /// </summary>
         public bool Ignore => Attributes.Ignore;
 
-        private static readonly ILogger log = Log.Logger.ForContext(typeof(UANode));
-
         /// <summary>
         /// Where this node was first generated from
         /// </summary>
@@ -128,7 +127,7 @@ namespace Cognite.OpcUa.Types
 
             if (Properties != null && Properties.Any())
             {
-                var meta = BuildMetadataBase(null, new StringConverter(null, null));
+                var meta = BuildMetadataBase(null, new StringConverter(new NullLogger<StringConverter>(), null, null));
                 builder.Append("Properties: {\n");
                 foreach (var prop in meta)
                 {
@@ -366,7 +365,7 @@ namespace Cognite.OpcUa.Types
 
             return asset;
         }
-        public JsonDocument? ToJson(StringConverter converter, ConverterType type)
+        public JsonDocument? ToJson(ILogger log, StringConverter converter, ConverterType type)
         {
             // This is inefficient. A better solution would use System.Text.Json directly, but that requires .NET 6
             // for WriteRaw in Utf8JsonWriter.
@@ -387,7 +386,7 @@ namespace Cognite.OpcUa.Types
             catch (Exception ex)
             {
                 stream.Seek(0, SeekOrigin.Begin);
-                log.Error("Failed to parse JSON data: {msg}, invalid JSON: {data}", ex.Message, Encoding.UTF8.GetString(stream.ToArray()));
+                log.LogError("Failed to parse JSON data: {msg}, invalid JSON: {data}", ex.Message, Encoding.UTF8.GetString(stream.ToArray()));
                 return null;
             }
         }

@@ -17,8 +17,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.Types;
+using Microsoft.Extensions.Logging;
 using Opc.Ua;
-using Serilog;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -39,7 +39,7 @@ namespace Cognite.OpcUa.NodeSources
     /// </summary>
     public abstract class BaseNodeSource
     {
-        protected virtual ILogger Log { get; set; } = Serilog.Log.Logger.ForContext(typeof(BaseNodeSource));
+        protected virtual ILogger Log { get; }
         // Initial collection of nodes, in a map.
         protected Dictionary<NodeId, UANode> NodeMap { get; } = new Dictionary<NodeId, UANode>();
         protected List<UANode> RawObjects { get; } = new List<UANode>();
@@ -63,8 +63,9 @@ namespace Cognite.OpcUa.NodeSources
         protected UAExtractor Extractor { get; }
         protected UAClient Client { get; }
 
-        protected BaseNodeSource(FullConfig config, UAExtractor extractor, UAClient client)
+        protected BaseNodeSource(ILogger log, FullConfig config, UAExtractor extractor, UAClient client)
         {
+            Log = log;
             Config = config;
             Extractor = extractor;
             Client = client;
@@ -113,7 +114,7 @@ namespace Cognite.OpcUa.NodeSources
             // Start by looking for "MaxArrayLength" standard property. This is defined in OPC-UA 5/6.3.2
             if (!nodes.Any()) return;
 
-            Log.Information("Estimating array length for {cnt} nodes", nodes.Count());
+            Log.LogInformation("Estimating array length for {cnt} nodes", nodes.Count());
 
             await Extractor.ReadProperties(nodes);
             var toReadValues = new List<UAVariable>();
@@ -241,7 +242,7 @@ namespace Cognite.OpcUa.NodeSources
             {
                 foreach (var trns in Extractor.Transformations)
                 {
-                    trns.ApplyTransformation(node, Client.NamespaceTable!);
+                    trns.ApplyTransformation(Log, node, Client.NamespaceTable!);
                     if (node.Ignore) return;
                 }
             }
@@ -298,7 +299,7 @@ namespace Cognite.OpcUa.NodeSources
                     return node.Changed;
                 }
             }
-            Log.Verbose(node.ToString());
+            Log.LogTrace(node.ToString());
 
             return true;
         }

@@ -17,8 +17,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.Types;
+using Microsoft.Extensions.Logging;
 using Opc.Ua;
-using Serilog;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -31,12 +31,13 @@ namespace Cognite.OpcUa.TypeCollectors
     /// </summary>
     public class ReferenceTypeManager
     {
-        private readonly ILogger log = Log.Logger.ForContext<ReferenceTypeManager>();
+        private readonly ILogger<ReferenceTypeManager> log;
         private readonly UAClient uaClient;
         private readonly UAExtractor extractor;
         private readonly Dictionary<NodeId, UAReferenceType> mappedTypes = new Dictionary<NodeId, UAReferenceType>();
-        public ReferenceTypeManager(UAClient client, UAExtractor extractor)
+        public ReferenceTypeManager(ILogger<ReferenceTypeManager> log, UAClient client, UAExtractor extractor)
         {
+            this.log = log;
             uaClient = client;
             this.extractor = extractor;
         }
@@ -59,7 +60,7 @@ namespace Cognite.OpcUa.TypeCollectors
         public async Task GetReferenceTypeDataAsync(CancellationToken token)
         {
             var toRead = mappedTypes.Values.Where(type => !type.HasName && !type.Id.IsNullNodeId).ToList();
-            log.Information("Get reference type metadata for {cnt} types", toRead.Count);
+            log.LogInformation("Get reference type metadata for {cnt} types", toRead.Count);
             if (!toRead.Any()) return;
 
             var readValueIds = toRead.SelectMany(type => new[] {
@@ -93,7 +94,7 @@ namespace Cognite.OpcUa.TypeCollectors
 
             // We only care about references to objects or variables, at least for now.
             // Only references between objects represented in the extracted hierarchy are relevant.
-            log.Information("Get extra references from the server for {cnt} nodes", nodeMap.Count);
+            log.LogInformation("Get extra references from the server for {cnt} nodes", nodeMap.Count);
 
             var browseNodes = nodeMap.Keys.Select(node => new BrowseNode(node)).ToDictionary(node => node.Id);
 
@@ -136,7 +137,7 @@ namespace Cognite.OpcUa.TypeCollectors
                 }
             }
 
-            log.Information("Found {cnt} extra references", results.Count);
+            log.LogInformation("Found {cnt} extra references", results.Count);
 
             return results;
         }
