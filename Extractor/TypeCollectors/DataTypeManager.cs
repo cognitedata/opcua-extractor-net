@@ -276,7 +276,7 @@ namespace Cognite.OpcUa.TypeCollectors
             }
             if (!enumPropMap.Any()) return;
 
-            var values = await Task.Run(() => uaClient.ReadRawValues(enumPropMap.Values.Distinct(), token));
+            var values = await uaClient.ReadRawValues(enumPropMap.Values.Distinct(), token);
             foreach (var kvp in enumPropMap)
             {
                 SetEnumStrings(kvp.Key, values[kvp.Value].Value);

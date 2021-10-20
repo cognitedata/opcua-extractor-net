@@ -428,7 +428,7 @@ namespace Cognite.OpcUa.NodeSources
                 InitNodeState(update, node);
             }
 
-            Client.ReadNodeValues(properties, token);
+            await Client.ReadNodeValues(properties, token);
 
             if (Config.Extraction.Relationships.Enabled)
             {

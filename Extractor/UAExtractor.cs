@@ -202,7 +202,7 @@ namespace Cognite.OpcUa
                 }
             }
 
-            ConfigureExtractor();
+            await ConfigureExtractor();
             if (Config.Source.NodeSetSource == null
                 || (!Config.Source.NodeSetSource.NodeSets?.Any() ?? false)
                 || !Config.Source.NodeSetSource.Types)
@@ -297,9 +297,11 @@ namespace Cognite.OpcUa
             log.Information("Restarting extractor...");
             extraNodesToBrowse.Clear();
             Started = false;
+
             await historyReader.Terminate(Source.Token, 30);
             await uaClient.WaitForOperations(Source.Token);
-            ConfigureExtractor();
+            await ConfigureExtractor();
+
             uaClient.Browser.ResetVisitedNodes();
 
             var synchTasks = await RunMapping(RootNodes, true, false);
@@ -354,7 +356,7 @@ namespace Cognite.OpcUa
             {
                 uaClient.Close();
             }
-            catch (ServiceResultException e)
+            catch (Exception e)
             {
                 ExtractorUtils.LogException(log,
                     ExtractorUtils.HandleServiceResult(log, e, ExtractorUtils.SourceOp.CloseSession),
@@ -403,7 +405,7 @@ namespace Cognite.OpcUa
                 nodes = nodes.Where(node => !pendingProperties.Contains(node.Id) && !node.PropertiesRead).ToList();
                 if (nodes.Any())
                 {
-                    newTask = Task.Run(async () => await uaClient.GetNodeProperties(nodes, Source.Token));
+                    newTask = uaClient.GetNodeProperties(nodes, Source.Token);
                     propertyReadTasks.Add(newTask);
                 }
 
@@ -681,7 +683,7 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Set up extractor once UAClient is started. This resets the internal state of the extractor.
         /// </summary>
-        private void ConfigureExtractor()
+        private async Task ConfigureExtractor()
         {
             RootNodes = Config.Extraction.GetRootNodes(uaClient);
 
@@ -725,7 +727,7 @@ namespace Cognite.OpcUa
                 }
                 if (Config.Events.ReadServer)
                 {
-                    var serverNode = uaClient.GetServerNode(Source.Token);
+                    var serverNode = await uaClient.GetServerNode(Source.Token);
                     if (serverNode.EventNotifier != 0)
                     {
                         var history = (serverNode.EventNotifier & EventNotifiers.HistoryRead) != 0 && Config.Events.History;
@@ -737,7 +739,7 @@ namespace Cognite.OpcUa
             BuildTransformations();
 
             var helper = new ServerInfoHelper(uaClient);
-            helper.LimitConfigValues(Config, Source.Token);
+            await helper.LimitConfigValues(Config, Source.Token);
         }
 
         /// <summary>
@@ -910,13 +912,13 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Subscribe to event changes, then run history.
         /// </summary>
-        private async Task SynchronizeEvents()
+        private async Task SynchronizeEvents(CancellationToken token)
         {
             if (Config.Subscriptions.Events)
             {
                 var subscribeStates = State.EmitterStates.Where(state => state.ShouldSubscribe);
-                await Task.Run(() => uaClient.SubscribeToEvents(subscribeStates,
-                    Streamer.EventSubscriptionHandler, Source.Token));
+
+                await uaClient.SubscribeToEvents(subscribeStates, Streamer.EventSubscriptionHandler, Source.Token);
             }
 
             Interlocked.Increment(ref subscribed);
@@ -940,13 +942,14 @@ namespace Cognite.OpcUa
         /// Subscribe to data changes, then run history.
         /// </summary>
         /// <param name="states">States to subscribe to</param>
-        private async Task SynchronizeNodes(IEnumerable<VariableExtractionState> states)
+        private async Task SynchronizeNodes(IEnumerable<VariableExtractionState> states, CancellationToken token)
         {
             log.Information("Sub: {s}", Config.Subscriptions.DataPoints);
             if (Config.Subscriptions.DataPoints)
             {
                 var subscribeStates = states.Where(state => state.ShouldSubscribe);
-                await Task.Run(() => uaClient.SubscribeToNodes(subscribeStates, Streamer.DataSubscriptionHandler, Source.Token));
+
+                await uaClient.SubscribeToNodes(subscribeStates, Streamer.DataSubscriptionHandler, token);
             }
 
             Interlocked.Increment(ref subscribed);
@@ -980,16 +983,16 @@ namespace Cognite.OpcUa
             // Create tasks to subscribe to nodes, then start history read. We might lose data if history read finished before subscriptions were created.
             if (states.Any())
             {
-                tasks.Add(token => SynchronizeNodes(states));
+                tasks.Add(token => SynchronizeNodes(states, token));
             }
             if (State.EmitterStates.Any())
             {
-                tasks.Add(token => SynchronizeEvents());
+                tasks.Add(SynchronizeEvents);
             }
 
             if (Config.Extraction.EnableAuditDiscovery)
             {
-                uaClient.SubscribeToAuditEvents(AuditEventSubscriptionHandler);
+                tasks.Add(token => uaClient.SubscribeToAuditEvents(AuditEventSubscriptionHandler, token));
             }
             return tasks;
         }

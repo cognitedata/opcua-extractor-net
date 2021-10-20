@@ -176,7 +176,7 @@ namespace Cognite.OpcUa.History
             if (token.IsCancellationRequested) return;
             numReads++;
             var readChunk = (HistoryReadParams)chunk;
-            await Task.Run(() => uaClient.DoHistoryRead(readChunk), CancellationToken.None);
+            await uaClient.DoHistoryRead(readChunk, token);
         }
 
         protected override IChunk<HistoryReadNode> GetChunk(IEnumerable<HistoryReadNode> items)
