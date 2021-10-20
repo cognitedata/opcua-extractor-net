@@ -847,7 +847,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="readParams"></param>
         /// <exception cref="InvalidOperationException"></exception>
-        public void AbortHistoryRead(HistoryReadParams readParams)
+        public async Task AbortHistoryRead(HistoryReadParams readParams, CancellationToken token)
         {
             if (Session == null) throw new InvalidOperationException("Requires open session");
             using var operation = waiter.GetInstance();
@@ -875,14 +875,13 @@ namespace Cognite.OpcUa
 
             try
             {
-                Session.HistoryRead(
+                await Session.HistoryReadAsync(
                     null,
                     new ExtensionObject(readParams.Details),
                     TimestampsToReturn.Source,
                     true,
                     ids,
-                    out _,
-                    out _);
+                    token);
 
                 foreach (var node in readParams.Nodes)
                 {

@@ -905,7 +905,7 @@ namespace Test.Unit
         }
 
         [Fact]
-        public void TestAbortHistory()
+        public async Task TestAbortHistory()
         {
             var nodes = new[] { tester.Server.Ids.Base.DoubleVar1, tester.Server.Ids.Base.IntVar, tester.Server.Ids.Base.StringVar }
                 .Select(id => new HistoryReadNode(HistoryReadType.FrontfillData, id)).ToList();
@@ -923,11 +923,11 @@ namespace Test.Unit
 
             try
             {
-                tester.Client.DoHistoryRead(req);
+                await tester.Client.DoHistoryRead(req, tester.Source.Token);
 
                 Assert.All(req.Nodes, node => Assert.NotNull(node.ContinuationPoint));
 
-                tester.Client.AbortHistoryRead(req);
+                await tester.Client.AbortHistoryRead(req, tester.Source.Token);
                 Assert.All(req.Nodes, node => Assert.Null(node.ContinuationPoint));
             }
             finally

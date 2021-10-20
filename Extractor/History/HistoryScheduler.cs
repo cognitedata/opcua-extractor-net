@@ -128,7 +128,7 @@ namespace Cognite.OpcUa.History
         protected override void AbortChunk(IChunk<HistoryReadNode> chunk, CancellationToken token)
         {
             var readChunk = (HistoryReadParams)chunk;
-            Task.Run(() => uaClient.DoHistoryRead(readChunk), CancellationToken.None).Wait();
+            uaClient.AbortHistoryRead(readChunk, CancellationToken.None).Wait(CancellationToken.None);
         }
 
         private HistoryReadDetails GetReadDetails(IEnumerable<HistoryReadNode> nodes)
