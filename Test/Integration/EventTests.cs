@@ -411,7 +411,7 @@ namespace Test.Integration
             }
             finally
             {
-                extractor.Dispose();
+                await extractor.DisposeAsync();
             }
 
             tester.Server.PopulateEvents(now.AddSeconds(-15));
@@ -440,7 +440,7 @@ namespace Test.Integration
             }
             finally
             {
-                extractor.Dispose();
+                await extractor.DisposeAsync();
             }
         }
         [Theory]
@@ -486,7 +486,7 @@ namespace Test.Integration
             }
             finally
             {
-                extractor.Dispose();
+                await extractor.DisposeAsync();
             }
 
             tester.Server.PopulateEvents(now.AddSeconds(-15));
@@ -522,7 +522,7 @@ namespace Test.Integration
             }
             finally
             {
-                extractor.Dispose();
+                await extractor.DisposeAsync();
             }
         }
         #endregion

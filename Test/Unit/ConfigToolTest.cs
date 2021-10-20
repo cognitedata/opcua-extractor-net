@@ -490,7 +490,7 @@ namespace Test.Unit
 
             var runTime = new ConfigToolRuntime(fullConfig, baseConfig, "config.config-tool-output.yml");
 
-            var runTask = runTime.Run();
+            var runTask = runTime.Run(CancellationToken.None);
 
             try
             {

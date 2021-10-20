@@ -77,10 +77,11 @@ namespace Cognite.OpcUa
             this.options = options;
             visitedNodes = options.VisitedNodes ?? new HashSet<NodeId>();
             callback = options.Callback;
-            baseParams = options.InitialParams;
 
-            if (baseParams == null) throw new ArgumentNullException(nameof(baseParams));
-            if (baseParams.Nodes == null) throw new ArgumentNullException(nameof(baseParams.Nodes));
+            if (options == null) throw new ArgumentNullException(nameof(options));
+            if (options.InitialParams?.Nodes == null) throw new ArgumentException("options.InitialParams.Nodes is required");
+
+            baseParams = options.InitialParams;
 
             filters = options.Filters;
             if (baseParams.Nodes.Any())
@@ -113,7 +114,7 @@ namespace Cognite.OpcUa
             if (token.IsCancellationRequested) return;
             numReads++;
             var browseChunk = (BrowseParams)chunk;
-            await Task.Run(() => client.GetReferences(browseChunk, false, token));
+            await Task.Run(() => client.GetReferences(browseChunk, false, token), CancellationToken.None);
         }
 
         protected override IChunk<BrowseNode> GetChunk(IEnumerable<BrowseNode> items)
@@ -155,7 +156,7 @@ namespace Cognite.OpcUa
                 var refs = node.GetNextReferences();
                 if (!refs.Any()) continue;
 
-                log.Verbose("Read {cnt} children from node {id}", refs.Count());
+                log.Verbose("Read {cnt} children from node {id}", refs.Count(), node.Id);
                 foreach (var rd in refs)
                 {
                     var nodeId = client.ToNodeId(rd.NodeId);

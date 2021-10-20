@@ -89,7 +89,7 @@ namespace Cognite.OpcUa.Pushers
         /// Constructor, also starts the client and sets up correct disconnect handlers.
         /// </summary>
         /// <param name="config">Config to use</param>
-        public MQTTPusher(MqttPusherConfig config, IServiceProvider provider)
+        public MQTTPusher(IServiceProvider provider, MqttPusherConfig config)
         {
             this.config = config;
             extractionConfig = provider.GetRequiredService<FullConfig>().Extraction;
