@@ -474,17 +474,6 @@ namespace Cognite.OpcUa
         public ExtractorFailureException(string message, Exception innerException) : base(message, innerException) { }
     }
     /// <summary>
-    /// Indicates a fatal error in configuration
-    /// </summary>
-    /* public class ConfigurationException : Exception
-    {
-        public ConfigurationException(string message) : base(message) { }
-
-        public ConfigurationException(string message, Exception innerException) : base(message, innerException) { }
-
-        public ConfigurationException() { }
-    } */
-    /// <summary>
     /// Indicates a fatal error in some system
     /// </summary>
     public class FatalException : Exception

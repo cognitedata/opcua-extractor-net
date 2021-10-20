@@ -165,13 +165,13 @@ namespace Cognite.OpcUa
 
         protected override void Init(CancellationToken token)
         {
+            base.Init(token);
             if (historyReader != null)
             {
                 historyReader.Dispose();
             }
             Looper = new Looper(Scheduler, this, Config, pushers);
             historyReader = new HistoryReader(uaClient, this, Config.History, Source.Token);
-            base.Init(token);
         }
 
         public void InitExternal(CancellationToken token)
