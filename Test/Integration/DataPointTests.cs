@@ -520,7 +520,7 @@ namespace Test.Integration
             }
             finally
             {
-                extractor.Dispose();
+                await extractor.DisposeAsync();
             }
 
             tester.Server.PopulateCustomHistory(now.AddSeconds(-15));
@@ -547,7 +547,7 @@ namespace Test.Integration
             }
             finally
             {
-                extractor.Dispose();
+                await extractor.DisposeAsync();
             }
         }
         [Theory]
@@ -594,7 +594,7 @@ namespace Test.Integration
             }
             finally
             {
-                extractor.Dispose();
+                await extractor.DisposeAsync();
             }
 
             tester.Server.PopulateCustomHistory(now.AddSeconds(-15));
@@ -629,7 +629,7 @@ namespace Test.Integration
             }
             finally
             {
-                extractor.Dispose();
+                await extractor.DisposeAsync();
             }
         }
         [Fact]

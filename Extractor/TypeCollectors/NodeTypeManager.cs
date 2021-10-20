@@ -67,7 +67,7 @@ namespace Cognite.OpcUa.TypeCollectors
                 NodeId = read.Id
             });
 
-            var values = await Task.Run(() => uaClient.ReadAttributes(new ReadValueIdCollection(readValueIds), toRead.Count, token), token);
+            var values = await uaClient.ReadAttributes(new ReadValueIdCollection(readValueIds), toRead.Count, token);
 
             for (int i = 0; i < toRead.Count; i++)
             {

@@ -15,7 +15,7 @@ namespace Server
             Log.Logger = logConfig.CreateLogger();
 
             using var server = new ServerController(new[] { PredefinedSetup.Custom, PredefinedSetup.Base,
-                    PredefinedSetup.Events, PredefinedSetup.Wrong, PredefinedSetup.Auditing
+                    PredefinedSetup.Events, PredefinedSetup.Wrong, PredefinedSetup.Auditing, PredefinedSetup.PubSub
                     /*, PredefinedSetup.Full, PredefinedSetup.VeryLarge */ });
 
             server.Start().Wait();
@@ -27,6 +27,7 @@ namespace Server
                 //server.DirectGrowth(idx++);
                 //server.ReferenceGrowth(idx++);
                 server.UpdateNode(server.Ids.Base.DoubleVar1, idx++);
+                server.UpdateNode(server.Ids.Custom.Array, new double[] { idx, idx + 1, idx + 2, idx + 3 });
                 Task.Delay(1000).Wait();
             }
         }

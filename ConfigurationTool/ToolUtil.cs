@@ -49,7 +49,7 @@ namespace Cognite.OpcUa.Config
             await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(timeoutSec)), toRun);
             if (!toRun.IsCompleted) throw new TimeoutException();
             if (toRun.Exception != null) throw new FatalException("Task failed during RunWithTimeout", toRun.Exception);
-            return toRun.Result;
+            return await toRun;
         }
         /// <summary>
         /// Run with timeout, returning nothing or throwing a TimeoutException

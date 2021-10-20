@@ -63,6 +63,7 @@ namespace Cognite.OpcUa
             get => browseThrottling; set => browseThrottling = value ?? browseThrottling; }
         public NodeSetSourceConfig? NodeSetSource { get; set; }
         public bool LimitToServerConfig { get; set; } = true;
+        public bool AltSourceBackgroundBrowse { get; set; }
     }
     public enum X509CertificateLocation
     {
@@ -203,7 +204,6 @@ namespace Cognite.OpcUa
         bool Debug { get; set; }
         bool ReadExtractedRanges { get; set; }
         public double? NonFiniteReplacement { get; set; }
-        public IPusher ToPusher(IServiceProvider provider);
     }
     public class CognitePusherConfig : CogniteConfig, IPusherConfig
     {
@@ -221,10 +221,6 @@ namespace Cognite.OpcUa
             set => NanReplacement = value == null || double.IsFinite(value.Value)
                 && value.Value > CogniteUtils.NumericValueMin
                 && value.Value < CogniteUtils.NumericValueMax ? value : null;
-        }
-        public IPusher ToPusher(IServiceProvider provider)
-        {
-            return new CDFPusher(provider, this);
         }
     }
     public class RawMetadataConfig
@@ -267,10 +263,6 @@ namespace Cognite.OpcUa
             }
         }
         private double? nonFiniteReplacement;
-        public IPusher ToPusher(IServiceProvider provider)
-        {
-            return new InfluxPusher(this);
-        }
     }
     public class MqttPusherConfig : IPusherConfig
     {
@@ -304,10 +296,6 @@ namespace Cognite.OpcUa
             }
         }
         private double? nonFiniteReplacement;
-        public IPusher ToPusher(IServiceProvider provider)
-        {
-            return new MQTTPusher(this, provider);
-        }
     }
     public class FailureBufferConfig
     {

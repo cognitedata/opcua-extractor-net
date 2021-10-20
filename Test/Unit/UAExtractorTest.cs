@@ -116,7 +116,7 @@ namespace Test.Unit
 
             await CommonTestUtils.WaitForCondition(() => pusher.PushedNodes.Count > 0, 10);
 
-            extractor.Close();
+            await extractor.Close();
             await tester.Client.Run(tester.Source.Token);
         }
         [Theory]
@@ -259,83 +259,7 @@ namespace Test.Unit
                 }
             }
         }
-        [Theory]
-        [InlineData(true)]
-        [InlineData(false)]
-        public async Task TestExtractorRuntime(bool failedStart)
-        {
-            // Set up for each of the three pushers
-            var services = new ServiceCollection();
-            var config = services.AddConfig<FullConfig>("config.test.yml", 1);
-            config.Source.EndpointUrl = tester.Config.Source.EndpointUrl;
-            var handler = new CDFMockHandler(config.Cognite.Project, CDFMockHandler.MockMode.None);
-
-            handler.AllowConnectionTest = !failedStart;
-
-            CommonTestUtils.AddDummyProvider(handler, services);
-            services.AddCogniteClient("OPC-UA Extractor", null, true, true, false);
-            var provider = services.BuildServiceProvider();
-
-            var runtime = new ExtractorRuntime(config, provider);
-
-            using (var source = new CancellationTokenSource())
-            {
-                var runTask = runtime.Run(source.Token);
-
-                await Task.Delay(2000);
-                Assert.False(runTask.IsFaulted);
-                if (!failedStart)
-                {
-                    await CommonTestUtils.WaitForCondition(() => handler.Timeseries.Any(), 10);
-                }
-                else
-                {
-                    Assert.Empty(handler.Timeseries);
-                }
-                Assert.False(runTask.IsFaulted);
-                source.Cancel();
-
-                try
-                {
-                    await runTask;
-                }
-                catch (Exception ex)
-                {
-                    CommonTestUtils.TestRunResult(ex);
-                }
-            }
-        }
-        [Fact]
-        public async Task TestEmptyRuntime()
-        {
-            var services = new ServiceCollection();
-            var config = services.AddConfig<FullConfig>("config.test.yml", 1);
-            config.Source.EndpointUrl = tester.Config.Source.EndpointUrl;
-            config.Cognite = null;
-            config.Influx = null;
-            config.Mqtt = null;
-            var provider = services.BuildServiceProvider();
-
-            var runtime = new ExtractorRuntime(config, provider);
-
-            using (var source = new CancellationTokenSource())
-            {
-                var runTask = runtime.Run(source.Token);
-
-                await Task.Delay(2000);
-                Assert.False(runTask.IsFaulted);
-                source.Cancel();
-
-                try
-                {
-                    await runTask;
-                }
-                catch (Exception ex)
-                {
-                    CommonTestUtils.TestRunResult(ex);
-                }
-            }
-        }
+        
         [Fact]
         public void TestGetExtraMetadata()
         {
@@ -385,12 +309,12 @@ namespace Test.Unit
         }
 
         [Fact]
-        public void TestServerConfigLimit()
+        public async Task TestServerConfigLimit()
         {
             var helper = new ServerInfoHelper(tester.Client);
             tester.Config.History.Throttling.MaxNodeParallelism = 100;
             tester.Config.Source.BrowseThrottling.MaxNodeParallelism = 10000;
-            helper.LimitConfigValues(tester.Config, tester.Source.Token);
+            await helper.LimitConfigValues(tester.Config, tester.Source.Token);
 
             Assert.Equal(100, tester.Config.History.Throttling.MaxNodeParallelism);
             Assert.Equal(1000, tester.Config.Source.BrowseThrottling.MaxNodeParallelism);
@@ -399,7 +323,7 @@ namespace Test.Unit
             tester.Config.Source.BrowseThrottling.MaxNodeParallelism = 0;
             tester.Config.Source.BrowseNodesChunk = 100;
 
-            helper.LimitConfigValues(tester.Config, tester.Source.Token);
+            await helper.LimitConfigValues(tester.Config, tester.Source.Token);
 
             Assert.Equal(1000, tester.Config.History.Throttling.MaxNodeParallelism);
             Assert.Equal(1000, tester.Config.Source.BrowseThrottling.MaxNodeParallelism);

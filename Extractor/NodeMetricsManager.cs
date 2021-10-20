@@ -128,7 +128,7 @@ namespace Cognite.OpcUa
                 .SelectMany(node => attributes.Select(attr => new ReadValueId { AttributeId = attr, NodeId = node }))
             );
 
-            var results = await Task.Run(() => client.ReadAttributes(readValueIds, nodes.Count, token));
+            var results = await client.ReadAttributes(readValueIds, nodes.Count, token);
 
             int attrPerNode = attributes.Length;
 
@@ -153,7 +153,8 @@ namespace Cognite.OpcUa
 
             if (!metrics.Any()) return;
 
-            await Task.Run(() => client.AddSubscriptions(metrics.Values, "NodeMetrics", SubscriptionHandler,
+#pragma warning disable CA2000 // Dispose objects before losing scope
+            await client.AddSubscriptions(metrics.Values, "NodeMetrics", SubscriptionHandler,
                 state => new MonitoredItem
                 {
                     StartNodeId = state.SourceId,
@@ -164,7 +165,8 @@ namespace Cognite.OpcUa
                     AttributeId = Attributes.Value,
                     NodeClass = NodeClass.Variable,
                     CacheQueueSize = 1
-                }, token));
+                }, token);
+#pragma warning restore CA2000 // Dispose objects before losing scope
         }
         /// <summary>
         /// Converts datapoint callback to metric value

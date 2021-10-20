@@ -42,19 +42,19 @@ namespace Test.Unit
             bool synch2 = false;
             using var source = CancellationTokenSource.CreateLinkedTokenSource(tester.Source.Token);
 
-            var loopTask = extractor.Looper.Run(
-                new Func<CancellationToken, Task>[] { async token =>
-                    {
-                        synch1 = true;
-                        await Task.Delay(100, token);
-                        Console.WriteLine("Terminate synch 1");
-                    },
-                    token =>
-                    {
-                        synch2 = true;
-                        Console.WriteLine("Terminate synch 2");
-                        return Task.CompletedTask;
-                    } });
+            extractor.Looper.Run();
+            extractor.Looper.Scheduler.ScheduleTask(null, async token =>
+            {
+                synch1 = true;
+                await Task.Delay(100, token);
+                Console.WriteLine("Terminate synch 1");
+            });
+            extractor.Looper.Scheduler.ScheduleTask(null, token =>
+            {
+                synch2 = true;
+                Console.WriteLine("Terminate synch 2");
+                return Task.CompletedTask;
+            });
 
             await CommonTestUtils.WaitForCondition(() => synch1 && synch2, 5);
 
@@ -101,6 +101,7 @@ namespace Test.Unit
                 throw new ExtractorFailureException("SomeException");
             });
 
+            var loopTask = extractor.Looper.Scheduler.WaitForAll();
             await CommonTestUtils.WaitForCondition(() => loopTask.IsFaulted || loopTask.IsCompleted, 5);
             var ex = loopTask.Exception.Flatten();
             Assert.IsType<ExtractorFailureException>(ex.InnerException);
@@ -153,7 +154,9 @@ namespace Test.Unit
             var evts1 = pusher1.Events[new NodeId("id")] = new List<UAEvent>();
             var evts2 = pusher2.Events[new NodeId("id")] = new List<UAEvent>();
 
-            var loopTask = extractor.Looper.Run(Enumerable.Empty<Func<CancellationToken, Task>>());
+            tester.Config.Extraction.DataPushDelay = 100;
+            extractor.Looper.Run();
+            var loopTask = extractor.Looper.Scheduler.WaitForAll();
 
             await extractor.Looper.WaitForNextPush(false);
 
@@ -261,7 +264,8 @@ namespace Test.Unit
             extractor.Streamer.Enqueue(dps);
             extractor.Streamer.Enqueue(evts);
 
-            var loopTask = extractor.Looper.Run(Enumerable.Empty<Func<CancellationToken, Task>>());
+            extractor.Looper.Run();
+            var loopTask = extractor.Looper.Scheduler.WaitForAll();
 
             // Verify that the two un-initialized pushers are set to failing
 

@@ -262,7 +262,7 @@ namespace Test.Unit
                 await tester.Client.Run(tester.Source.Token);
                 Assert.True(tester.Client.Started);
                 // Just check that we are able to read, indicating an established connection
-                tester.Client.ReadRawValues(new[] { VariableIds.Server_ServerStatus }, tester.Source.Token);
+                await tester.Client.ReadRawValues(new[] { VariableIds.Server_ServerStatus }, tester.Source.Token);
             }
             finally
             {
@@ -276,19 +276,19 @@ namespace Test.Unit
 
         #region browse
         [Fact]
-        public void TestGetServerNode()
+        public async Task TestGetServerNode()
         {
-            var server = tester.Client.GetServerNode(tester.Source.Token);
+            var server = await tester.Client.GetServerNode(tester.Source.Token);
             Assert.Equal(ObjectIds.Server, server.Id);
             Assert.Equal(NodeId.Null, server.ParentId);
             Assert.Equal("Server", server.DisplayName);
         }
         [Fact]
-        public void TestGetRoots()
+        public async Task TestGetRoots()
         {
             CommonTestUtils.ResetMetricValue("opcua_browse_operations");
             var node = new BrowseNode(ObjectIds.ObjectsFolder);
-            tester.Client.GetReferences(new BrowseParams
+            await tester.Client.GetReferences(new BrowseParams
             {
                 Nodes = new Dictionary<NodeId, BrowseNode> { { ObjectIds.ObjectsFolder, node } }
             }, true, tester.Source.Token);
@@ -310,13 +310,13 @@ namespace Test.Unit
             tester.Client.Browser.ResetVisitedNodes();
         }
         [Fact]
-        public void TestGetReferencesChunking()
+        public async Task TestGetReferencesChunking()
         {
             CommonTestUtils.ResetMetricValue("opcua_browse_operations");
             var nums = new int[2000];
 
             var node = new BrowseNode(tester.Server.Ids.Full.WideRoot);
-            tester.Client.GetReferences(new BrowseParams
+            await tester.Client.GetReferences(new BrowseParams
             {
                 Nodes = new Dictionary<NodeId, BrowseNode> { { tester.Server.Ids.Full.WideRoot, node } },
                 MaxPerNode = 100
@@ -536,7 +536,7 @@ namespace Test.Unit
             Assert.True(CommonTestUtils.TestMetricValue("opcua_tree_depth", 11));
         }
         [Fact]
-        public void TestAbortBrowse()
+        public async Task TestAbortBrowse()
         {
             var nodes = new[]
             {
@@ -552,11 +552,11 @@ namespace Test.Unit
                 ReferenceTypeId = ReferenceTypeIds.HierarchicalReferences,
                 MaxPerNode = 50
             };
-            tester.Client.GetReferences(opt, false, tester.Source.Token);
+            await tester.Client.GetReferences(opt, false, tester.Source.Token);
             Assert.Null(nodes[1].ContinuationPoint);
             Assert.NotNull(nodes[0].ContinuationPoint);
-            tester.Client.AbortBrowse(new[] { nodes[1] });
-            tester.Client.AbortBrowse(nodes);
+            await tester.Client.AbortBrowse(new[] { nodes[1] });
+            await tester.Client.AbortBrowse(nodes);
             Assert.Null(nodes[0].ContinuationPoint);
         }
         [Fact]
@@ -584,7 +584,7 @@ namespace Test.Unit
 
         #region nodedata
         [Fact]
-        public void TestReadNodeData()
+        public async Task TestReadNodeData()
         {
             CommonTestUtils.ResetMetricValues("opcua_attribute_requests");
             var nodes = new UANode[]
@@ -603,7 +603,7 @@ namespace Test.Unit
             tester.Config.Events.Enabled = true;
             try
             {
-                tester.Client.ReadNodeData(nodes, tester.Source.Token);
+                await tester.Client.ReadNodeData(nodes, tester.Source.Token);
             }
             finally
             {
@@ -624,7 +624,7 @@ namespace Test.Unit
             Assert.True(CommonTestUtils.TestMetricValue("opcua_attribute_requests", 1));
         }
         [Fact]
-        public void TestReadNodeDataChunk()
+        public async Task TestReadNodeDataChunk()
         {
             CommonTestUtils.ResetMetricValues("opcua_attribute_requests");
             int start = (int)(uint)tester.Server.Ids.Full.WideRoot.Identifier;
@@ -636,7 +636,7 @@ namespace Test.Unit
             tester.Config.History.Enabled = true;
             try
             {
-                tester.Client.ReadNodeData(nodes, tester.Source.Token);
+                await tester.Client.ReadNodeData(nodes, tester.Source.Token);
             }
             finally
             {
@@ -647,7 +647,7 @@ namespace Test.Unit
             Assert.True(CommonTestUtils.TestMetricValue("opcua_attribute_requests", 100));
         }
         [Fact]
-        public void TestReadRawValues()
+        public async Task TestReadRawValues()
         {
             CommonTestUtils.ResetMetricValues("opcua_attribute_requests");
             var ids = new[]
@@ -657,7 +657,7 @@ namespace Test.Unit
                 tester.Server.Ids.Custom.EUProp,
                 tester.Server.Ids.Custom.RangeProp
             };
-            var values = tester.Client.ReadRawValues(ids, tester.Source.Token);
+            var values = await tester.Client.ReadRawValues(ids, tester.Source.Token);
             Assert.Equal(new[] { 0.0, 0.0, 0.0, 0.0 }, values[ids[0]].Value as double[]);
             Assert.Equal(new[] { "test1", "test2" }, values[ids[1]].Value as string[]);
             var ext1 = Assert.IsType<ExtensionObject>(values[ids[2]].Value);
@@ -672,7 +672,7 @@ namespace Test.Unit
             Assert.True(CommonTestUtils.TestMetricValue("opcua_attribute_requests", 1));
         }
         [Fact]
-        public void TestReadRawValuesChunk()
+        public async Task TestReadRawValuesChunk()
         {
             CommonTestUtils.ResetMetricValues("opcua_attribute_requests");
             int start = (int)(uint)tester.Server.Ids.Full.WideRoot.Identifier;
@@ -682,7 +682,7 @@ namespace Test.Unit
             tester.Config.Source.AttributesChunk = 100;
             try
             {
-                var values = tester.Client.ReadRawValues(nodes, tester.Source.Token);
+                var values = await tester.Client.ReadRawValues(nodes, tester.Source.Token);
                 Assert.All(nodes, node =>
                 {
                     Assert.True(values.TryGetValue(node, out var dv));
@@ -698,7 +698,7 @@ namespace Test.Unit
         }
 
         [Fact]
-        public void TestReadNodeValues()
+        public async Task TestReadNodeValues()
         {
             var nodes = new[]
             {
@@ -714,8 +714,8 @@ namespace Test.Unit
             nodes[4].Attributes.IsProperty = true;
 
             // Need to read attributes first for this, to get proper conversion we need the datatype.
-            tester.Client.ReadNodeData(nodes, tester.Source.Token);
-            tester.Client.ReadNodeValues(nodes, tester.Source.Token);
+            await tester.Client.ReadNodeData(nodes, tester.Source.Token);
+            await tester.Client.ReadNodeValues(nodes, tester.Source.Token);
 
             Assert.Equal(new Variant(0.0), nodes[0].Value);
             Assert.Equal(new Variant(new double[] { 0, 0, 0, 0 }), nodes[1].Value);
@@ -774,7 +774,7 @@ namespace Test.Unit
         }
 
         [Fact]
-        public void TestMissingNodes()
+        public async Task TestMissingNodes()
         {
             var nodes = new[]
             {
@@ -783,7 +783,7 @@ namespace Test.Unit
                 new UAVariable(new NodeId("missing-node2"), "MissingNode2", tester.Server.Ids.Base.Root),
             };
 
-            tester.Client.ReadNodeData(nodes, tester.Source.Token);
+            await tester.Client.ReadNodeData(nodes, tester.Source.Token);
 
             Assert.NotNull(nodes[0].DataType);
             Assert.False(nodes[0].Ignore);
@@ -797,7 +797,7 @@ namespace Test.Unit
         #region synchronization
         // This just tests the actual history-read method in UAClient, further tests should use the HistoryReader
         [Fact]
-        public void TestHistoryReadData()
+        public async Task TestHistoryReadData()
         {
             CommonTestUtils.ResetMetricValues("opcua_history_reads");
 
@@ -820,7 +820,7 @@ namespace Test.Unit
 
             try
             {
-                tester.Client.DoHistoryRead(req);
+                await tester.Client.DoHistoryRead(req, tester.Source.Token);
 
                 Assert.True(CommonTestUtils.TestMetricValue("opcua_history_reads", 1));
 
@@ -834,7 +834,7 @@ namespace Test.Unit
                     Assert.NotNull(node.ContinuationPoint);
                 }
 
-                tester.Client.DoHistoryRead(req);
+                await tester.Client.DoHistoryRead(req, tester.Source.Token);
 
                 foreach (var node in nodes)
                 {
@@ -880,8 +880,8 @@ namespace Test.Unit
 
             try
             {
-                tester.Client.SubscribeToNodes(nodes.Take(1000), handler, tester.Source.Token);
-                tester.Client.SubscribeToNodes(nodes.Skip(1000), handler, tester.Source.Token);
+                await tester.Client.SubscribeToNodes(nodes.Take(1000), handler, tester.Source.Token);
+                await tester.Client.SubscribeToNodes(nodes.Skip(1000), handler, tester.Source.Token);
 
                 await CommonTestUtils.WaitForCondition(() => dps.Count == 2000, 5,
                     () => $"Expected to get 2000 datapoints, but got {dps.Count}");
@@ -953,8 +953,8 @@ namespace Test.Unit
             {
                 await tester.Client.GetEventFields(null, tester.Source.Token);
 
-                tester.Client.SubscribeToEvents(emitters.Take(2), handler, tester.Source.Token);
-                tester.Client.SubscribeToEvents(emitters.Skip(2), handler, tester.Source.Token);
+                await tester.Client.SubscribeToEvents(emitters.Take(2), handler, tester.Source.Token);
+                await tester.Client.SubscribeToEvents(emitters.Skip(2), handler, tester.Source.Token);
 
                 tester.Server.TriggerEvents(0);
 
@@ -1000,7 +1000,7 @@ namespace Test.Unit
             try
             {
                 await tester.Client.GetEventFields(null, tester.Source.Token);
-                tester.Client.SubscribeToEvents(emitters, handler, tester.Source.Token);
+                await tester.Client.SubscribeToEvents(emitters, handler, tester.Source.Token);
 
                 tester.Server.TriggerEvents(0);
 
@@ -1033,7 +1033,7 @@ namespace Test.Unit
 
             try
             {
-                tester.Client.SubscribeToAuditEvents(handler);
+                await tester.Client.SubscribeToAuditEvents(handler, tester.Source.Token);
 
                 tester.Server.DirectGrowth();
 

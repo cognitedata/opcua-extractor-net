@@ -56,7 +56,7 @@ namespace Cognite.OpcUa.NodeSources
         {
             if (parsed) throw new InvalidOperationException("Browse result has already been parsed");
             if (!NodeMap.Any()) return null;
-            await Task.Run(() => Client.ReadNodeData(NodeMap.Values, token), CancellationToken.None);
+            await Client.ReadNodeData(NodeMap.Values, token);
             
             foreach (var node in NodeMap.Values)
             {
@@ -153,7 +153,7 @@ namespace Cognite.OpcUa.NodeSources
                 var toRead = nodes.Where(node => node.NodeClass == NodeClass.VariableType)
                     .SelectNonNull(node => node as UAVariable)
                     .ToList();
-                extraMetaTasks.Add(Task.Run(() => Client.ReadNodeValues(toRead, token), CancellationToken.None));
+                extraMetaTasks.Add(Client.ReadNodeValues(toRead, token));
             }
 
             await Task.WhenAll(extraMetaTasks);

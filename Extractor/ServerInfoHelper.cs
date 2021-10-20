@@ -19,6 +19,7 @@ using Opc.Ua;
 using Serilog;
 using System;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace Cognite.OpcUa
 {
@@ -46,13 +47,13 @@ namespace Cognite.OpcUa
         /// Ensures that if the server exposes these values we can avoid exceeding them.
         /// </summary>
         /// <param name="config">Configuration object to modify</param>
-        public void LimitConfigValues(FullConfig config, CancellationToken token)
+        public async Task LimitConfigValues(FullConfig config, CancellationToken token)
         {
             if (!config.Source.LimitToServerConfig) return;
 
             log.Information("Reading values from server configuration to determine upper limits");
 
-            var values = client.ReadRawValues(idsToRead, token);
+            var values = await client.ReadRawValues(idsToRead, token);
 
             int SafeValue(int cVal, DataValue sVal, string name)
             {

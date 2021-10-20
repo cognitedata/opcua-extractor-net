@@ -75,7 +75,7 @@ namespace Test.Unit
 
             extractor.Streamer.Enqueue(Enumerable.Range(0, 2000000).Select(idx => new UADataPoint(start.AddMilliseconds(idx), "id", idx)));
 
-            Assert.True(evt.WaitOne(1000));
+            Assert.True(evt.WaitOne(10000));
             Assert.Equal(2000000, queue.Count);
             await extractor.Streamer.PushDataPoints(new[] { pusher }, Enumerable.Empty<IPusher>(), tester.Source.Token);
 
@@ -89,7 +89,7 @@ namespace Test.Unit
             Assert.Equal(999999, queue.Count);
 
             extractor.Streamer.Enqueue(new UADataPoint(start.AddMilliseconds(3000000), "id", 300));
-            Assert.True(evt.WaitOne(1000));
+            Assert.True(evt.WaitOne(10000));
             Assert.Equal(1000000, queue.Count);
 
             await extractor.Streamer.PushDataPoints(new[] { pusher }, Enumerable.Empty<IPusher>(), tester.Source.Token);
@@ -140,7 +140,7 @@ namespace Test.Unit
             extractor.Streamer.Enqueue(Enumerable.Range(0, 200000).Select(idx =>
                 new UAEvent { EmittingNode = id, Time = start.AddMilliseconds(idx) }));
 
-            Assert.True(evt.WaitOne(1000));
+            Assert.True(evt.WaitOne(10000));
             Assert.Equal(200000, queue.Count);
             await extractor.Streamer.PushEvents(new[] { pusher }, Enumerable.Empty<IPusher>(), tester.Source.Token);
             evt.Reset();
@@ -155,7 +155,7 @@ namespace Test.Unit
             Assert.Equal(99999, queue.Count);
 
             extractor.Streamer.Enqueue(new UAEvent { EmittingNode = id, Time = start.AddMilliseconds(300000) });
-            Assert.True(evt.WaitOne(1000));
+            Assert.True(evt.WaitOne(10000));
             Assert.Equal(100000, queue.Count);
 
             await extractor.Streamer.PushEvents(new[] { pusher }, Enumerable.Empty<IPusher>(), tester.Source.Token);

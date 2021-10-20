@@ -46,7 +46,7 @@ namespace Test.Unit
             var provider = Services.BuildServiceProvider();
             Config.Mqtt.ClientId = $"opcua-mqtt-pusher-test-{idCounter}";
             idCounter++;
-            var pusher = Config.Mqtt.ToPusher(provider) as MQTTPusher;
+            var pusher = new MQTTPusher(provider, Config.Mqtt);
             var bridge = new MQTTBridge(new Destination(mqttConfig.Cognite, provider), mqttConfig);
             return (handler, bridge, pusher);
         }
