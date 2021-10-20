@@ -78,9 +78,8 @@ namespace Cognite.OpcUa
             visitedNodes = options.VisitedNodes ?? new HashSet<NodeId>();
             callback = options.Callback;
 
-            if (options == null
-                || options.InitialParams == null
-                || options.InitialParams.Nodes == null) throw new ArgumentNullException(nameof(options));
+            if (options == null) throw new ArgumentNullException(nameof(options));
+            if (options.InitialParams?.Nodes == null) throw new ArgumentException("options.InitialParams.Nodes is required");
 
             baseParams = options.InitialParams;
 
