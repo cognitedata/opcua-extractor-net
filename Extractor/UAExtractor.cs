@@ -254,17 +254,20 @@ namespace Cognite.OpcUa
 
             if (pubSubManager != null)
             {
-                try
+                Looper.Scheduler.ScheduleTask(null, async token =>
                 {
-                    await pubSubManager.Start(source.Token);
-                }
-                catch (Exception ex)
-                {
-                    ExtractorUtils.LogException(log, ex, "Failed to launch PubSub client", "Failed to launch PubSub client");
-                }
+                    try
+                    {
+                        await pubSubManager.Start(token);
+                    }
+                    catch (Exception ex)
+                    {
+                        ExtractorUtils.LogException(log, ex, "Failed to launch PubSub client", "Failed to launch PubSub client");
+                    }
+                    log.Information("PubSub manager started");
+                });
             }
 
-            log.Information("PubSub manager started");
 
             await Looper.Run(synchTasks);
         }

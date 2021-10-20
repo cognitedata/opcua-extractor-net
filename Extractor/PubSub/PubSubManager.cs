@@ -66,7 +66,7 @@ namespace Cognite.OpcUa.PubSub
             }
 
             app.DataReceived += DataReceived;
-            app.Start();
+            await Task.Run(() => app.Start(), token);
         }
 
         public void Stop()

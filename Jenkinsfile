@@ -21,7 +21,7 @@ podTemplate(
         resourceLimitMemory: '500Mi',
         ttyEnabled: true),
     containerTemplate(name: 'dotnet',
-        image: 'mcr.microsoft.com/dotnet/sdk:5.0.102-ca-patch-buster-slim',
+        image: 'mcr.microsoft.com/dotnet/sdk:5.0-bullseye-slim',
         envVars: [
             secretEnvVar(key: 'CODECOV_TOKEN', secretName: 'codecov-tokens', secretKey: 'opcua-extractor-net'),
             // /codecov-script/upload-report.sh relies on the following
@@ -98,7 +98,7 @@ podTemplate(
         container('dotnet') {
             stage('Install dependencies') {
                 sh('apt-get update && apt-get -y install gnupg curl procps gawk grep')
-				sh('curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add -')
+                sh('curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add -')
                 sh('apt-get install -y nmap ncat mosquitto')
                 sh('dotnet tool restore')
                 sh('dotnet paket restore')

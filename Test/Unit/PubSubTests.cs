@@ -45,7 +45,7 @@ namespace Test.Unit
             tester.ResetConfig();
         }
 
-        [Theory]
+        [Theory(Timeout = 20000)]
         [InlineData(true)]
         [InlineData(false)]
         public async Task TestPubSubConfiguration(bool uadp)
@@ -71,7 +71,7 @@ namespace Test.Unit
 
             string type = uadp ? "UADP" : "JSON";
             Assert.Equal($"Writer group 1 {type}", group.Name);
-            Assert.Equal(2, group.DataSetReaders.Count());
+            Assert.Equal(2, group.DataSetReaders.Count);
             var reader = group.DataSetReaders.First();
             string queueName = uadp ? "ua-test-publish" : "ua-test-publish-json";
             var dataSet = (reader.SubscribedDataSet?.Body as TargetVariablesDataType)?.TargetVariables;
@@ -93,7 +93,7 @@ namespace Test.Unit
                 Assert.Equal(Attributes.Value, vb.AttributeId);
             }
         }
-        [Theory]
+        [Theory(Timeout = 20000)]
         [InlineData(true)]
         [InlineData(false)]
         public async Task TestPubSubData(bool uadp)
@@ -115,7 +115,9 @@ namespace Test.Unit
 
             using var manager = new Cognite.OpcUa.PubSub.PubSubManager(tester.Client, extractor, tester.Config.PubSub);
 
-            await manager.Start(tester.Source.Token);
+            var startTask = manager.Start(tester.Source.Token);
+            var result = await Task.WhenAny(startTask, Task.Delay(20000));
+            Assert.Equal(startTask, result);
 
             await CommonTestUtils.WaitForCondition(() => queue.Count >= 22, 10);
 

@@ -12,6 +12,7 @@ using System;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using Xunit;
 
 namespace Test.Utils
 {
@@ -19,9 +20,9 @@ namespace Test.Utils
     {
         public int Port { get; }
         public NodeIdReference Ids => Server.Ids;
-        public UAClient Client { get; }
+        public UAClient Client { get; private set; }
         public FullConfig Config { get; }
-        public ServerController Server { get; }
+        public ServerController Server { get; private set; }
         public CancellationTokenSource Source { get; protected set; }
         public IServiceProvider Provider { get; protected set; }
         protected ServiceCollection Services { get; }
@@ -39,6 +40,12 @@ namespace Test.Utils
             LoggingUtils.Configure(Config.Logger);
             Provider = Services.BuildServiceProvider();
 
+            var resultTask = Task.WaitAny(Start(setups), Task.Delay(20000));
+            Assert.Equal(0, resultTask);
+        }
+
+        private async Task Start(PredefinedSetup[] setups)
+        {
             if (setups == null)
             {
                 setups = new[] {
@@ -46,12 +53,13 @@ namespace Test.Utils
                     PredefinedSetup.Wrong, PredefinedSetup.Full, PredefinedSetup.Auditing };
             }
             Server = new ServerController(setups, Port);
-            Server.Start().Wait();
+            await Server.Start();
 
             Client = new UAClient(Config);
             Source = new CancellationTokenSource();
-            Client.Run(Source.Token).Wait();
+            await Client.Run(Source.Token);
         }
+
         private void ResetType(object obj, object reference)
         {
             if (obj == null) return;
