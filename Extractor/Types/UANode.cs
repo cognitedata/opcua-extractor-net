@@ -386,7 +386,7 @@ namespace Cognite.OpcUa.Types
             catch (Exception ex)
             {
                 stream.Seek(0, SeekOrigin.Begin);
-                log.LogError("Failed to parse JSON data: {msg}, invalid JSON: {data}", ex.Message, Encoding.UTF8.GetString(stream.ToArray()));
+                log.LogError("Failed to parse JSON data: {Message}, invalid JSON: {Data}", ex.Message, Encoding.UTF8.GetString(stream.ToArray()));
                 return null;
             }
         }

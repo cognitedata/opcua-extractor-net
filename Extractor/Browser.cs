@@ -77,7 +77,7 @@ namespace Cognite.OpcUa
         {
             if (roots == null) throw new ArgumentNullException(nameof(roots));
 
-            log.LogDebug("Browse node tree for nodes {nodes}", string.Join(", ", roots));
+            log.LogDebug("Browse node tree for nodes {Nodes}", string.Join(", ", roots));
             var rootRefs = await GetRootNodes(roots, token);
 
             foreach (var root in rootRefs)

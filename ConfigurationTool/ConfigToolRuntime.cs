@@ -54,9 +54,9 @@ namespace Cognite.OpcUa.Config
 
             using var source = CancellationTokenSource.CreateLinkedTokenSource(token);
 
-            log.LogInformation("Starting OPC UA Extractor Config tool version {version}",
+            log.LogInformation("Starting OPC UA Extractor Config tool version {Version}",
                 Extractor.Metrics.Version.GetVersion(Assembly.GetExecutingAssembly()));
-            log.LogInformation("Revision information: {status}",
+            log.LogInformation("Revision information: {Status}",
                 Extractor.Metrics.Version.GetDescription(Assembly.GetExecutingAssembly()));
 
             try
@@ -83,7 +83,7 @@ namespace Cognite.OpcUa.Config
 
             log.LogInformation("");
             File.WriteAllText(output, result);
-            log.LogInformation("Emitted suggested config file to {path}", output);
+            log.LogInformation("Emitted suggested config file to {Path}", output);
         }
     }
 }

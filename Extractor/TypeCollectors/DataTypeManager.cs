@@ -61,11 +61,11 @@ namespace Cognite.OpcUa.TypeCollectors
                     var id = type.NodeId.ToNodeId(uaClient);
                     if (id == null || id.IsNullNodeId)
                     {
-                        log.LogWarning("Invalid datatype nodeId: {ns}: {identifier}", type.NodeId.NamespaceUri, type.NodeId.NodeId);
+                        log.LogWarning("Invalid datatype nodeId: {NameSpace}: {Identifier}", type.NodeId.NamespaceUri, type.NodeId.NodeId);
                         continue;
                     }
                     dataTypes[id] = new UADataType(type, id, config);
-                    log.LogInformation("Add custom datatype: {id}", id);
+                    log.LogInformation("Add custom datatype: {Id}", id);
                 }
             }
             if (config.IgnoreDataTypes != null)
@@ -75,7 +75,7 @@ namespace Cognite.OpcUa.TypeCollectors
                     var id = type.ToNodeId(uaClient);
                     if (id == null || id.IsNullNodeId)
                     {
-                        log.LogWarning("Invalid ignore datatype nodeId: {ns}: {identifier}", type.NamespaceUri, type.NodeId);
+                        log.LogWarning("Invalid ignore datatype nodeId: {NameSpace}: {Identifier}", type.NamespaceUri, type.NodeId);
                         continue;
                     }
                     ignoreDataTypes.Add(id);
@@ -155,20 +155,20 @@ namespace Cognite.OpcUa.TypeCollectors
             if (node.NodeClass == NodeClass.VariableType) return true;
             if (node.DataType == null)
             {
-                log.LogWarning("Skipping variable {name} {id} due to missing datatype", node.DisplayName, node.Id);
+                log.LogWarning("Skipping variable {Name} {Id} due to missing datatype", node.DisplayName, node.Id);
                 return false;
             }
             var dt = node.DataType;
 
             if (dt.IsString && !config.AllowStringVariables && !overrideString)
             {
-                log.LogDebug("Skipping variable {name} {id} due to string datatype and allow-string-variables being set to false",
+                log.LogDebug("Skipping variable {Name} {Id} due to string datatype and allow-string-variables being set to false",
                     node.DisplayName, node.Id);
                 return false;
             }
             if (ignoreDataTypes.Contains(dt.Raw))
             {
-                log.LogDebug("Skipping variable {name} {id} due to raw datatype {raw} being in list of ignored data types",
+                log.LogDebug("Skipping variable {Name} {Id} due to raw datatype {Raw} being in list of ignored data types",
                     node.DisplayName, node.Id, dt.Raw);
                 return false;
             }
@@ -184,7 +184,7 @@ namespace Cognite.OpcUa.TypeCollectors
                 }
                 else
                 {
-                    log.LogDebug("Skipping variable {name} {id} due to non-scalar ValueRank {rank} and too large dimension {dim}",
+                    log.LogDebug("Skipping variable {Name} {Id} due to non-scalar ValueRank {Rank} and too large dimension {Dim}",
                         node.DisplayName, node.Id, node.ValueRank, length);
                     return false;
                 }
@@ -193,13 +193,13 @@ namespace Cognite.OpcUa.TypeCollectors
             {
                 if (config.UnknownAsScalar && (node.ValueRank == ValueRanks.ScalarOrOneDimension
                     || node.ValueRank == ValueRanks.Any)) return true;
-                log.LogDebug("Skipping variable {name} {id} due to non-scalar ValueRank {rank} and null ArrayDimensions",
+                log.LogDebug("Skipping variable {Name} {Id} due to non-scalar ValueRank {Rank} and null ArrayDimensions",
                     node.DisplayName, node.Id, node.ValueRank);
                 return false;
             }
             else
             {
-                log.LogDebug("Skipping variable {name} {id} due to non-scalar ValueRank {rank} and too high dimensionality {dim}",
+                log.LogDebug("Skipping variable {Name} {Id} due to non-scalar ValueRank {Rank} and too high dimensionality {Dim}",
                     node.DisplayName, node.Id, node.ValueRank, node.ArrayDimensions.Length);
                 return false;
             }
@@ -249,7 +249,7 @@ namespace Cognite.OpcUa.TypeCollectors
                 && !dt.EnumValues.Any()));
             if (!typeSet.Any()) return;
 
-            log.LogInformation("Get enum properties for {cnt} enum types", typeSet.Count);
+            log.LogInformation("Get enum properties for {Count} enum types", typeSet.Count);
             var enumPropMap = new Dictionary<NodeId, NodeId>();
 
             var nodes = typeSet.Select(id => new BrowseNode(id)).ToDictionary(node => node.Id);
@@ -358,7 +358,7 @@ namespace Cognite.OpcUa.TypeCollectors
             }
             else
             {
-                log.LogWarning("Unknown enum strings type: {type}", value.GetType());
+                log.LogWarning("Unknown enum strings type: {Type}", value.GetType());
             }
         }
         /// <summary>

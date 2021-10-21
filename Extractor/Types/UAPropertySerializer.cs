@@ -98,7 +98,7 @@ namespace Cognite.OpcUa.Types
                 }
                 catch (Exception ex)
                 {
-                    log.LogWarning("Failed to serialize built in type: {err}", ex.Message);
+                    log.LogWarning("Failed to serialize built in type: {Message}", ex.Message);
                 }
             }
 

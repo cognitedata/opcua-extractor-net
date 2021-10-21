@@ -60,7 +60,7 @@ namespace Cognite.OpcUa.TypeCollectors
         public async Task GetReferenceTypeDataAsync(CancellationToken token)
         {
             var toRead = mappedTypes.Values.Where(type => !type.HasName && !type.Id.IsNullNodeId).ToList();
-            log.LogInformation("Get reference type metadata for {cnt} types", toRead.Count);
+            log.LogInformation("Get reference type metadata for {Count} types", toRead.Count);
             if (!toRead.Any()) return;
 
             var readValueIds = toRead.SelectMany(type => new[] {
@@ -94,7 +94,7 @@ namespace Cognite.OpcUa.TypeCollectors
 
             // We only care about references to objects or variables, at least for now.
             // Only references between objects represented in the extracted hierarchy are relevant.
-            log.LogInformation("Get extra references from the server for {cnt} nodes", nodeMap.Count);
+            log.LogInformation("Get extra references from the server for {Count} nodes", nodeMap.Count);
 
             var browseNodes = nodeMap.Keys.Select(node => new BrowseNode(node)).ToDictionary(node => node.Id);
 
@@ -137,7 +137,7 @@ namespace Cognite.OpcUa.TypeCollectors
                 }
             }
 
-            log.LogInformation("Found {cnt} extra references", results.Count);
+            log.LogInformation("Found {Count} extra references", results.Count);
 
             return results;
         }

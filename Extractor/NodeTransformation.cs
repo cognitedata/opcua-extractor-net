@@ -230,15 +230,15 @@ namespace Cognite.OpcUa
                 {
                     case TransformationType.Ignore:
                         node.Attributes.Ignore = true;
-                        log.LogTrace("Ignoring node {name} {id} due to matching ignore filter {idx}", node.DisplayName, node.Id, index);
+                        log.LogTrace("Ignoring node {Name} {Id} due to matching ignore filter {Idx}", node.DisplayName, node.Id, index);
                         break;
                     case TransformationType.Property:
                         node.Attributes.IsProperty = true;
-                        log.LogTrace("Treating node {name} {id} as property due to matching filter {idx}", node.DisplayName, node.Id, index);
+                        log.LogTrace("Treating node {Name} {Id} as property due to matching filter {Idx}", node.DisplayName, node.Id, index);
                         break;
                     case TransformationType.DropSubscriptions:
                         node.Attributes.ShouldSubscribe = false;
-                        log.LogDebug("Dropping subscriptions on node {name} {id} due to matching filter {idx}", node.DisplayName, node.Id, index);
+                        log.LogDebug("Dropping subscriptions on node {Name} {Id} due to matching filter {Idx}", node.DisplayName, node.Id, index);
                         break;
                 }
             }

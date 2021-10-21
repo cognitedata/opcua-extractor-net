@@ -121,7 +121,7 @@ namespace Cognite.OpcUa
             if (task != waitTask) throw new TimeoutException("Waiting for push timed out");
             t.Stop();
 
-            log.LogDebug("Waited {s} milliseconds for push", t.ElapsedMilliseconds);
+            log.LogDebug("Waited {MS} milliseconds for push", t.ElapsedMilliseconds);
         }
 
 
@@ -136,7 +136,7 @@ namespace Cognite.OpcUa
 
                 if (recovered.Any())
                 {
-                    log.LogInformation("Pushers {names} recovered", string.Join(", ", recovered.Select(val => val.pusher.GetType())));
+                    log.LogInformation("Pushers {Names} recovered", string.Join(", ", recovered.Select(val => val.pusher.GetType())));
                 }
 
 

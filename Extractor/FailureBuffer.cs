@@ -195,7 +195,7 @@ namespace Cognite.OpcUa
             }
             if (config.InfluxStateStore && extractor.StateStorage != null)
             {
-                log.LogInformation("Try to write {cnt} states to state store", nodeBufferStates.Count);
+                log.LogInformation("Try to write {Count} states to state store", nodeBufferStates.Count);
                 await extractor.StateStorage.StoreExtractionState(nodeBufferStates.Values,
                     fullConfig.StateStorage.InfluxVariableStore, token).ConfigureAwait(false);
             }
@@ -220,7 +220,7 @@ namespace Cognite.OpcUa
 
             if (!points.Any()) return true;
 
-            log.LogInformation("Push {cnt} points to failurebuffer", points.Count());
+            log.LogInformation("Push {Count} points to failurebuffer", points.Count());
 
             if (config.Influx && influxPusher != null)
             {
@@ -257,7 +257,7 @@ namespace Cognite.OpcUa
                 try
                 {
                     var dps = await influxPusher.ReadDataPoints(nodeBufferStates, token);
-                    log.LogInformation("Read {cnt} points from influxdb failure buffer", dps.Count());
+                    log.LogInformation("Read {Count} points from influxdb failure buffer", dps.Count());
                     var result = await Task.WhenAll(pushers
                         .Where(pusher => !(pusher is InfluxPusher))
                         .Select(pusher => pusher.PushDataPoints(dps, token)));
@@ -341,7 +341,7 @@ namespace Cognite.OpcUa
 
             if (!events.Any()) return true;
 
-            log.LogInformation("Push {cnt} events to failurebuffer", events.Count());
+            log.LogInformation("Push {Count} events to failurebuffer", events.Count());
 
             if (config.Influx)
             {
@@ -379,7 +379,7 @@ namespace Cognite.OpcUa
                 {
                     var events = await influxPusher.ReadEvents(eventBufferStates, token);
 
-                    log.LogInformation("Read {cnt} events from influxdb failure buffer", events.Count());
+                    log.LogInformation("Read {Count} events from influxdb failure buffer", events.Count());
                     var result = await Task.WhenAll(pushers
                         .Where(pusher => !(pusher is InfluxPusher))
                         .Select(pusher => pusher.PushEvents(events, token)));
@@ -443,7 +443,7 @@ namespace Cognite.OpcUa
                         .Where(group => extractor.State.GetNodeState(group.Key) != null)
                         .SelectMany(group => group).ToList();
 
-                    log.LogInformation("Read {cnt} datapoints from file", points.Count);
+                    log.LogInformation("Read {Count} datapoints from file", points.Count);
                     if (!points.Any() && final) break;
 
                     var results = await Task.WhenAll(pushers.Select(pusher => pusher.PushDataPoints(points, token)));
@@ -506,13 +506,13 @@ namespace Cognite.OpcUa
                         events.Add(evt);
                     }
 
-                    log.LogInformation("Read {cnt} raw events", events.Count);
+                    log.LogInformation("Read {Count} raw events", events.Count);
 
                     events = events
                         .Where(evt => evt.EmittingNode != null && !evt.EmittingNode.IsNullNodeId)
                         .ToList();
 
-                    log.LogInformation("Read {cnt} events from file", events.Count);
+                    log.LogInformation("Read {Count} events from file", events.Count);
                     if (!events.Any() && final) break;
 
                     var results = await Task.WhenAll(pushers.Select(pusher => pusher.PushEvents(events, token)));
@@ -570,7 +570,7 @@ namespace Cognite.OpcUa
 
             if (count > 0)
             {
-                log.LogDebug("Write {cnt} points to file", count);
+                log.LogDebug("Write {Count} points to file", count);
                 numPointsInBuffer.Inc(count);
             }
         }
@@ -595,7 +595,7 @@ namespace Cognite.OpcUa
 
             if (count > 0)
             {
-                log.LogDebug("Write {cnt} events to file", count);
+                log.LogDebug("Write {Count} events to file", count);
                 numEventsInBuffer.Inc();
             }
         }

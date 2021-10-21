@@ -131,7 +131,7 @@ namespace Cognite.OpcUa
             try
             {
                 await client.PostPointsAsync(config.Database, ipoints, config.PointChunkSize);
-                log.LogDebug("Successfully pushed {cnt} points to influxdb", count);
+                log.LogDebug("Successfully pushed {Count} points to influxdb", count);
                 dataPointsCounter.Inc(count);
             }
             catch (Exception e)
@@ -139,7 +139,7 @@ namespace Cognite.OpcUa
                 dataPointPushFailures.Inc();
                 if (e is InfluxDBException iex)
                 {
-                    log.LogError("Failed to insert datapoints into influxdb: {line}, {reason}. Message: {msg}",
+                    log.LogError("Failed to insert datapoints into influxdb: {Line}, {Reason}. Message: {Message}",
                         iex.FailedLine, iex.Reason, iex.Message);
                     if (iex.Reason.StartsWith("partial write", StringComparison.InvariantCulture))
                     {
@@ -157,7 +157,7 @@ namespace Cognite.OpcUa
                     }
                     return false;
                 }
-                log.LogError("Failed to insert {count} datapoints into influxdb: {msg}", count, e.Message);
+                log.LogError("Failed to insert {Count} datapoints into influxdb: {Message}", count, e.Message);
                 return false;
             }
             dataPointPushes.Inc();
@@ -194,11 +194,11 @@ namespace Cognite.OpcUa
             {
                 await client.PostPointsAsync(config.Database, points, config.PointChunkSize);
                 eventsCounter.Inc(count);
-                log.LogDebug("Successfully pushed {cnt} events to influxdb", count);
+                log.LogDebug("Successfully pushed {Cnt} events to influxdb", count);
             }
             catch (Exception ex)
             {
-                log.LogWarning(ex, "Failed to push {cnt} events to influxdb: {msg}", count, ex.Message);
+                log.LogWarning(ex, "Failed to push {Cnt} events to influxdb: {Message}", count, ex.Message);
                 eventPushFailures.Inc();
                 return false;
             }
@@ -395,11 +395,11 @@ namespace Cognite.OpcUa
             }
             catch (Exception e)
             {
-                log.LogError("Failed to list measurements in influxdb: {msg}", e.Message);
+                log.LogError("Failed to list measurements in influxdb: {Message}", e.Message);
                 return false;
             }
 
-            log.LogInformation("Initializing extracted event ranges for {cnt} emitters", states.Count());
+            log.LogInformation("Initializing extracted event ranges for {Count} emitters", states.Count());
 
             var getRangeTasks = states.Select(state => InitExtractedEventRange(state, backfillEnabled, eventSeries, token));
             try
@@ -408,12 +408,12 @@ namespace Cognite.OpcUa
             }
             catch (Exception e)
             {
-                log.LogError("Failed to get timestamps from influxdb: {msg}", e.Message);
+                log.LogError("Failed to get timestamps from influxdb: {Message}", e.Message);
                 return false;
             }
             foreach (var state in states)
             {
-                log.LogInformation("State: {id} initialized to {start}, {end}", state.Id, state.DestinationExtractedRange.First, state.DestinationExtractedRange.Last);
+                log.LogInformation("State: {Id} initialized to {Start}, {End}", state.Id, state.DestinationExtractedRange.First, state.DestinationExtractedRange.Last);
             }
             return true;
         }
@@ -431,20 +431,20 @@ namespace Cognite.OpcUa
             }
             catch (Exception ex)
             {
-                log.LogError("Failed to get db names from influx server: {host}, this is most likely due to a faulty connection or" +
-                          " wrong credentials: {msg}", config.Host, ex.Message);
+                log.LogError("Failed to get db names from influx server: {Host}, this is most likely due to a faulty connection or" +
+                          " wrong credentials: {Message}", config.Host, ex.Message);
                 return false;
             }
             if (dbs == null || !dbs.Contains(config.Database))
             {
-                log.LogWarning("Database {db} does not exist in influxDb: {host}, attempting to create", config.Database, config.Host);
+                log.LogWarning("Database {DB} does not exist in influxDb: {Host}, attempting to create", config.Database, config.Host);
                 try
                 {
                     if (await client.CreateDatabaseAsync(config.Database)) return true;
                 }
                 catch (Exception ex)
                 {
-                    log.LogError("Failed to create database {db} in influxdb: {message}", config.Database, ex.Message);
+                    log.LogError("Failed to create database {DB} in influxdb: {Message}", config.Database, ex.Message);
                     return false;
                 }
                 log.LogError("Database not successfully created");
@@ -664,7 +664,7 @@ namespace Cognite.OpcUa
 #pragma warning restore CA1308 // Normalize strings to uppercase
                     evt.MetaData.Add(kvp.Key, kvp.Value.ToString());
                 }
-                log.LogTrace(evt.ToString());
+                log.LogTrace("{Event}", evt.ToString());
 
                 yield return evt;
             }
@@ -711,7 +711,7 @@ namespace Cognite.OpcUa
         /// </summary>
         public void Reconfigure()
         {
-            log.LogInformation("Reconfiguring influxPusher with: {host}", config.Host);
+            log.LogInformation("Reconfiguring influxPusher with: {Host}", config.Host);
             client = new InfluxDBClient(config.Host, config.Username, config.Password);
         }
 

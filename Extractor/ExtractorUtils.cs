@@ -129,7 +129,7 @@ namespace Cognite.OpcUa
         {
             if (e == null)
             {
-                log.LogError("{msg}", message);
+                log.LogError("Unknown error: {Message}", message);
             }
             else if (e is AggregateException aex)
             {
@@ -140,26 +140,26 @@ namespace Cognite.OpcUa
                 }
                 if (!flat.InnerExceptions.Any())
                 {
-                    log.LogError(e, "{pMsg} - {msg}", message, e.Message);
+                    log.LogError(e, "{Message} - {ErrMessage}", message, e.Message);
                 }
             }
             else if (e is SilentServiceException silent)
             {
-                log.LogDebug("Silenced service exception: {msg} - {info}", silentMessage,
+                log.LogDebug("Silenced service exception: {Message} - {Info}", silentMessage,
                     silent.InnerServiceException?.AdditionalInfo);
             }
             else if (e is ServiceResultException service)
             {
-                log.LogError(e, "{pMsg} - {msg}: {info}", message, service.Message, service.AdditionalInfo);
+                log.LogError(e, "{Message} - {ErrMessage}: {Info}", message, service.Message, service.AdditionalInfo);
             }
             else if (e is ExtractorFailureException failure)
             {
-                log.LogError("{pMsg} - {msg}", message, failure.Message);
-                log.LogDebug(failure, "{msg}", message);
+                log.LogError("{Message} - {ErrMessage}", message, failure.Message);
+                log.LogDebug(failure, "{Message}", message);
             }
             else
             {
-                log.LogError(e, "{pMsg} - {msg}", e.Message);
+                log.LogError(e, "{Message} - {ErrMessage}", message, e.Message);
             }
         }
 
@@ -224,7 +224,7 @@ namespace Cognite.OpcUa
             }
             else
             {
-                log.LogError(ex, "Unexpected error of type {type} in operation {op}", ex.GetType(), op);
+                log.LogError(ex, "Unexpected error of type {Type} in operation {Op}", ex.GetType(), op);
                 return new SilentServiceException($"Unexpected error in operation {op}", ex, op);
             }
         }
@@ -277,7 +277,7 @@ namespace Cognite.OpcUa
                 case StatusCodes.BadDecodingError:
                 case StatusCodes.BadUnknownResponse:
                     // This really shouldn't happen, it is either some freak communication error or an issue with the server
-                    log.LogError("Server responded with bad data: {code}, at operation {op}", symId, op);
+                    log.LogError("Server responded with bad data: {Code}, at operation {Op}", symId, op);
                     log.LogError("This is unlikely to be an issue with the extractor");
                     log.LogError("If it repeats, it is most likely a bug in the server");
                     return new SilentServiceException("Server responded with bad data", ex, op);
@@ -291,30 +291,30 @@ namespace Cognite.OpcUa
                 case StatusCodes.BadCertificatePolicyCheckFailed:
                 case StatusCodes.BadCertificateRevocationUnknown:
                 case StatusCodes.BadCertificateRevoked:
-                    log.LogError("There was an issue with the certificate: {code} at operation {op}", symId, op);
+                    log.LogError("There was an issue with the certificate: {Code} at operation {Op}", symId, op);
                     return new SilentServiceException("There was an issue with the certificate", ex, op);
                 case StatusCodes.BadNothingToDo:
-                    log.LogError("Server had nothing to do, this is likely an issue with the extractor: {code} at operation {op}",
+                    log.LogError("Server had nothing to do, this is likely an issue with the extractor: {Code} at operation {Op}",
                         symId, op.ToString());
                     return new SilentServiceException("Server had nothing to do", ex, op);
                 case StatusCodes.BadSessionClosed:
                     // This sometimes occurs if the client is closed during an operation, it is expected
-                    log.LogError("Service failed due to closed Session: {code} at operation {op}", symId, op);
+                    log.LogError("Service failed due to closed Session: {Code} at operation {Op}", symId, op);
                     return new SilentServiceException("Service failed due to closed Session", ex, op);
                 case StatusCodes.BadServerNotConnected:
-                    log.LogError("The client attempted a connection without being connected to the server: {code} at operation {op}",
+                    log.LogError("The client attempted a connection without being connected to the server: {Code} at operation {Op}",
                         symId, op.ToString());
                     log.LogError("This is most likely an issue with the extractor");
                     return new SilentServiceException("Attempted call to unconnected server", ex, op);
                 case StatusCodes.BadServerHalted:
-                    log.LogError("Server halted unexpectedly: {code} at operation {op}", symId, op);
+                    log.LogError("Server halted unexpectedly: {Code} at operation {Op}", symId, op);
                     return new SilentServiceException("Server stopped unexpectedly", ex, op);
                 case StatusCodes.BadRequestInterrupted:
-                    log.LogError("Failed to send request. The request size might be too large for the server: {code} at operation {op}",
+                    log.LogError("Failed to send request. The request size might be too large for the server: {Code} at operation {Op}",
                         symId, op);
                     return new SilentServiceException("Failed to send request to server", ex, op);
                 case StatusCodes.BadRequestTooLarge:
-                    log.LogError("Failed to send request due to too large request size: {code} at operation {op}", symId, op);
+                    log.LogError("Failed to send request due to too large request size: {Code} at operation {Op}", symId, op);
                     log.LogError("This might be solvable by increasing request limits in the xml config file, or by reducing chunk sizes");
                     return new SilentServiceException("Too large request", ex, op);
                 default:
@@ -324,7 +324,7 @@ namespace Cognite.OpcUa
                             if (code == StatusCodes.BadNotConnected || code == StatusCodes.BadSecureChannelClosed)
                             {
                                 // The most common error, generally happens if the server cannot be found
-                                log.LogError("Unable to connect to discovery server: {code} at operation {op}",
+                                log.LogError("Unable to connect to discovery server: {Code} at operation {Op}",
                                     symId, op.ToString());
                                 log.LogError("Check the EndpointURL, and make sure that the server is accessible");
                                 return new SilentServiceException("Unable to connect to discovery server", ex, op);
@@ -334,16 +334,16 @@ namespace Cognite.OpcUa
                             switch (code)
                             {
                                 case StatusCodes.BadIdentityTokenInvalid:
-                                    log.LogError("Invalid identity token, most likely a configuration issue: {code} at operation {op}",
+                                    log.LogError("Invalid identity token, most likely a configuration issue: {Code} at operation {Op}",
                                         symId, op.ToString());
                                     log.LogError("Make sure that the username and password given are valid");
                                     return new SilentServiceException("Invalid identity token", ex, op);
                                 case StatusCodes.BadIdentityTokenRejected:
-                                    log.LogError("Identity token rejected, most likely incorrect username or password: {code} at operation {op}",
+                                    log.LogError("Identity token rejected, most likely incorrect username or password: {Code} at operation {Op}",
                                         symId, op.ToString());
                                     return new SilentServiceException("Identity token rejected", ex, op);
                                 case StatusCodes.BadCertificateUntrusted:
-                                    log.LogError("Certificate not trusted by server: {code} at operation {op}", symId, op);
+                                    log.LogError("Certificate not trusted by server: {Code} at operation {Op}", symId, op);
                                     log.LogError("This can be fixed by moving trusting the certificate on the server");
                                     return new SilentServiceException("Certificate untrusted", ex, op);
                             }
@@ -351,7 +351,7 @@ namespace Cognite.OpcUa
                         case SourceOp.ReadRootNode:
                             if (code == StatusCodes.BadNodeIdInvalid || code == StatusCodes.BadNodeIdUnknown)
                             {
-                                log.LogError("Root node not found, check configuration: {code} at operation {op}",
+                                log.LogError("Root node not found, check configuration: {Code} at operation {Op}",
                                     symId, op.ToString());
                                 return new SilentServiceException("Root node not found", ex, op);
                             }
@@ -363,7 +363,7 @@ namespace Cognite.OpcUa
                                 case StatusCodes.BadNodeIdUnknown:
                                 case StatusCodes.BadReferenceTypeIdInvalid:
                                 case StatusCodes.BadBrowseDirectionInvalid:
-                                    log.LogError("Error during browse, this is most likely a limitation of the server: {code} at operation {op}",
+                                    log.LogError("Error during browse, this is most likely a limitation of the server: {Code} at operation {Op}",
                                         symId, op.ToString());
                                     return new SilentServiceException("Unexpected error during Browse", ex, op);
                             }
@@ -371,7 +371,7 @@ namespace Cognite.OpcUa
                         case SourceOp.BrowseNext:
                             if (code == StatusCodes.BadServiceUnsupported)
                             {
-                                log.LogError("BrowseNext not supported by server: {code} at operation {op}", symId, op);
+                                log.LogError("BrowseNext not supported by server: {Code} at operation {Op}", symId, op);
                                 log.LogError("This is a required service, but it may be possible to increase browse chunk sizes to avoid the issue");
                                 return new SilentServiceException("BrowseNext unspported", ex, op);
                             }
@@ -383,15 +383,15 @@ namespace Cognite.OpcUa
                                 case StatusCodes.BadNodeIdUnknown:
                                 case StatusCodes.BadAttributeIdInvalid:
                                 case StatusCodes.BadNotReadable:
-                                    log.LogError("Failure during read, this is most likely a limitation of the server: {code} at operation {op}",
+                                    log.LogError("Failure during read, this is most likely a limitation of the server: {Code} at operation {Op}",
                                         symId, op.ToString());
                                     return new SilentServiceException("Unexpected error during Read", ex, op);
                                 case StatusCodes.BadUserAccessDenied:
-                                    log.LogError("Failed to read attributes due to insufficient access rights: {code} at operation {op}",
+                                    log.LogError("Failed to read attributes due to insufficient access rights: {Code} at operation {Op}",
                                         symId, op.ToString());
                                     return new SilentServiceException("User access denied during Read", ex, op);
                                 case StatusCodes.BadSecurityModeInsufficient:
-                                    log.LogError("Failed to read attributes due to insufficient security level: {code} at operation {op}",
+                                    log.LogError("Failed to read attributes due to insufficient security level: {Code} at operation {Op}",
                                         symId, op.ToString());
                                     log.LogError("This generally means that reading of specific attributes/nodes requires a secure connection" +
                                               ", and the current connection is not sufficiently secure");
@@ -402,13 +402,13 @@ namespace Cognite.OpcUa
                             switch (code)
                             {
                                 case StatusCodes.BadTooManySubscriptions:
-                                    log.LogError("Too many subscriptions on server: {code} at operation {op}", symId, op);
+                                    log.LogError("Too many subscriptions on server: {Code} at operation {Op}", symId, op);
                                     log.LogError("The extractor creates a maximum of three subscriptions, one for data, one for events, one for auditing");
                                     log.LogError("If this happens after multiple reconnects, it may be due to poor reconnect handling somewhere, " +
                                               "in that case, it may help to turn on ForceRestart in order to clean up subscriptions between each reconnect");
                                     return new SilentServiceException("Too many subscriptions", ex, op);
                                 case StatusCodes.BadServiceUnsupported:
-                                    log.LogError("Create subscription unsupported by server: {code} at operation {op}", symId, op);
+                                    log.LogError("Create subscription unsupported by server: {Code} at operation {Op}", symId, op);
                                     log.LogError("This may be an issue with the extractor, or more likely a server limitation");
                                     return new SilentServiceException("CreateSubscription unsupported", ex, op);
                             }
@@ -418,7 +418,7 @@ namespace Cognite.OpcUa
                             switch (code)
                             {
                                 case StatusCodes.BadSubscriptionIdInvalid:
-                                    log.LogError("Subscription not found on server: {code} at operation {op}", symId, op);
+                                    log.LogError("Subscription not found on server: {Code} at operation {Op}", symId, op);
                                     log.LogError("This is generally caused by a desync between the server and the client");
                                     log.LogError("A solution may be to turn on ForceRestart, to clean up subscriptions between each connect");
                                     return new SilentServiceException("Subscription id invalid", ex, op);
@@ -427,11 +427,11 @@ namespace Cognite.OpcUa
                                 case StatusCodes.BadFilterOperandInvalid:
                                 case StatusCodes.BadFilterLiteralInvalid:
                                 case StatusCodes.BadEventFilterInvalid:
-                                    log.LogError("Event filter invalid: {code} at operation {op}", symId, op);
+                                    log.LogError("Event filter invalid: {Code} at operation {Op}", symId, op);
                                     log.LogError("This may be an issue with the extractor, or the server may not fully support event filtering");
                                     return new SilentServiceException("Filter related error", ex, op);
                                 case StatusCodes.BadTooManyMonitoredItems:
-                                    log.LogError("Server has reached limit of monitored items: {code} at operation {op}", symId, op);
+                                    log.LogError("Server has reached limit of monitored items: {Code} at operation {Op}", symId, op);
                                     log.LogError("The extractor requires one monitored item per data variable, and one per configured event emitter node");
                                     log.LogError("If this happens after multiple reconnects it may be due to poor reconnect handling somewhere, " +
                                               "in that case, it may help to turn on ForceRestarts in order to clean up subscriptions between each reconnect");
@@ -445,21 +445,21 @@ namespace Cognite.OpcUa
                                 case StatusCodes.BadNodeIdUnknown:
                                 case StatusCodes.BadDataEncodingInvalid:
                                 case StatusCodes.BadDataEncodingUnsupported:
-                                    log.LogError("Failure during HistoryRead, this may be caused by a server limitation: {code} at operation {op}",
+                                    log.LogError("Failure during HistoryRead, this may be caused by a server limitation: {Code} at operation {Op}",
                                         symId, op);
                                     return new SilentServiceException("Unexpected error in HistoryRead", ex, op);
                                 case StatusCodes.BadUserAccessDenied:
-                                    log.LogError("Failed to read History due to insufficient access rights: {code} at operation {op}",
+                                    log.LogError("Failed to read History due to insufficient access rights: {Code} at operation {Op}",
                                         symId, op);
                                     return new SilentServiceException("User access denied during HistoryRead", ex, op);
                                 case StatusCodes.BadTooManyOperations:
-                                    log.LogError("Failed to read History due to too many operations: {code} at operation {op}",
+                                    log.LogError("Failed to read History due to too many operations: {Code} at operation {Op}",
                                         symId, op);
-                                    log.LogError("This may be due to too large chunk sizes, try to lower chunk sizes for {op}", op);
+                                    log.LogError("This may be due to too large chunk sizes, try to lower chunk sizes for {Op}", op);
                                     return new SilentServiceException("Too many operations during HistoryRead", ex, op);
                                 case StatusCodes.BadHistoryOperationUnsupported:
                                 case StatusCodes.BadHistoryOperationInvalid:
-                                    log.LogError("HistoryRead operation unsupported by server: {code} at operation {op}",
+                                    log.LogError("HistoryRead operation unsupported by server: {Code} at operation {Op}",
                                         symId, op);
                                     log.LogError("The extractor uses HistoryReadRaw for data and HistoryReadEvents for events");
                                     log.LogError("If the server does not support one, they may be disabled individually");
@@ -475,7 +475,7 @@ namespace Cognite.OpcUa
                                 case StatusCodes.BadFilterOperandInvalid:
                                 case StatusCodes.BadFilterLiteralInvalid:
                                 case StatusCodes.BadEventFilterInvalid:
-                                    log.LogError("Event filter invalid: {code} at operation {op}", symId, op);
+                                    log.LogError("Event filter invalid: {Code} at operation {Op}", symId, op);
                                     log.LogError("This may be an issue with the extractor, or the server may not fully support event filtering");
                                     return new SilentServiceException("Filter related error", ex, op);
                             }
@@ -484,27 +484,27 @@ namespace Cognite.OpcUa
                             switch (code)
                             {
                                 case StatusCodes.BadServiceUnsupported:
-                                    log.LogError("Base requirement \"{op}\" unspported by server: {code}", op, symId);
+                                    log.LogError("Base requirement \"{Op}\" unspported by server: {Code}", op, symId);
                                     log.LogError("This is a required service, if the server does not support it the extractor may not be used");
                                     return new SilentServiceException($"{op} unsupported", ex, op);
                                 case StatusCodes.BadNoContinuationPoints:
                                     log.LogError("Server is out of continuationPoints, this may be the " +
-                                              "result of poor configuration of the extractor: {code} at operation {op}",
+                                              "result of poor configuration of the extractor: {Code} at operation {Op}",
                                         symId, op);
-                                    log.LogError("If the chunk sizes for {op} are set very low, that may be the cause", op);
+                                    log.LogError("If the chunk sizes for {Op} are set very low, that may be the cause", op);
                                     return new SilentServiceException($"Too many continuationPoints for {op}", ex, op);
                                 case StatusCodes.BadTooManyOperations:
-                                    log.LogError("Too many operations, this is most likely due to chunkSize being set too high: {code} at operation {op}",
+                                    log.LogError("Too many operations, this is most likely due to chunkSize being set too high: {Code} at operation {Op}",
                                         symId, op);
-                                    log.LogError("Try lowering the chunk sizes for {op}", op);
+                                    log.LogError("Try lowering the chunk sizes for {Op}", op);
                                     return new SilentServiceException($"Too many operations for {op}", ex, op);
                             }
                             break;
                         case SourceOp.CloseSession:
-                            log.LogError("Failed to close session, this is almost always due to the session already being closed: {code}", symId);
+                            log.LogError("Failed to close session, this is almost always due to the session already being closed: {Code}", symId);
                             return new SilentServiceException("Failed to close session", ex, op);
                     }
-                    log.LogError(ex, "Unexpected service result exception in operation {op}: {code}", op, symId);
+                    log.LogError(ex, "Unexpected service result exception in operation {Op}: {Code}", op, symId);
                     return new SilentServiceException("Unexpected error", ex, op);
             }
         }

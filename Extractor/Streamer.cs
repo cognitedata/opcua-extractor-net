@@ -165,7 +165,7 @@ namespace Cognite.OpcUa
                         pusher.DataFailing = true;
                         failedPushers.Add(pusher);
                     }
-                    log.LogWarning("Pushers of types {types} failed while pushing datapoints",
+                    log.LogWarning("Pushers of types {Types} failed while pushing datapoints",
                         string.Concat(failedPushers.Select(pusher => pusher.GetType().ToString())));
                 }
                 if (config.FailureBuffer.Enabled && extractor.FailureBuffer != null)
@@ -178,11 +178,11 @@ namespace Cognite.OpcUa
             var reconnectedPushers = passingPushers.Where(pusher => pusher.DataFailing).ToList();
             if (reconnectedPushers.Any())
             {
-                log.LogInformation("{cnt} failing pushers were able to push data, reconnecting", reconnectedPushers.Count);
+                log.LogInformation("{Count} failing pushers were able to push data, reconnecting", reconnectedPushers.Count);
 
                 if (config.History.Enabled && extractor.State.NodeStates.Any(state => state.FrontfillEnabled))
                 {
-                    log.LogInformation("Restarting history for {cnt} states", extractor.State.NodeStates.Count(state => state.FrontfillEnabled));
+                    log.LogInformation("Restarting history for {Count} states", extractor.State.NodeStates.Count(state => state.FrontfillEnabled));
                     bool success = await extractor.TerminateHistory(30);
                     if (!success) throw new ExtractorFailureException("Failed to terminate history reader");
                     foreach (var state in extractor.State.NodeStates.Where(state => state.FrontfillEnabled))
@@ -256,7 +256,7 @@ namespace Cognite.OpcUa
                         pusher.EventsFailing = true;
                         failedPushers.Add(pusher);
                     }
-                    log.LogWarning("Pushers of types {types} failed while pushing events",
+                    log.LogWarning("Pushers of types {Types} failed while pushing events",
                         failedPushers.Select(pusher => pusher.GetType().ToString()).Aggregate((src, val) => src + ", " + val));
                 }
 
@@ -270,11 +270,11 @@ namespace Cognite.OpcUa
             var reconnectedPushers = passingPushers.Where(pusher => pusher.EventsFailing).ToList();
             if (reconnectedPushers.Any())
             {
-                log.LogInformation("{cnt} failing pushers were able to push events, reconnecting", reconnectedPushers.Count);
+                log.LogInformation("{Count} failing pushers were able to push events, reconnecting", reconnectedPushers.Count);
 
                 if (config.Events.History && extractor.State.EmitterStates.Any(state => state.FrontfillEnabled))
                 {
-                    log.LogInformation("Restarting event history for {cnt} states", extractor.State.EmitterStates.Count(state => state.FrontfillEnabled));
+                    log.LogInformation("Restarting event history for {Count} states", extractor.State.EmitterStates.Count(state => state.FrontfillEnabled));
                     bool success = await extractor.TerminateHistory(30);
                     if (!success) throw new ExtractorFailureException("Failed to terminate history reader");
                     foreach (var state in extractor.State.EmitterStates.Where(state => state.FrontfillEnabled))
@@ -312,7 +312,7 @@ namespace Cognite.OpcUa
             var node = extractor.State.GetNodeState(item.ResolvedNodeId);
             if (node == null)
             {
-                log.LogWarning("Subscription to unknown node: {id}", item.ResolvedNodeId);
+                log.LogWarning("Subscription to unknown node: {Id}", item.ResolvedNodeId);
                 return;
             }
 
@@ -336,7 +336,7 @@ namespace Cognite.OpcUa
                         || node.IsBackfilling && datapoint.SourceTimestamp < node.SourceExtractedRange.First)) continue;
                 foreach (var buffDp in buffDps)
                 {
-                    log.LogTrace("Subscription DataPoint {dp}", buffDp.ToDebugDescription());
+                    log.LogTrace("Subscription DataPoint {DataPoint}", buffDp);
                     Enqueue(buffDp);
                 }
             }
@@ -365,7 +365,7 @@ namespace Cognite.OpcUa
                 if (values.Length == 0) return Enumerable.Empty<UADataPoint>();
                 if (!variable.IsArray)
                 {
-                    log.LogDebug("Array values returned for scalar variable {id}", variable.Id);
+                    log.LogDebug("Array values returned for scalar variable {Id}", variable.Id);
                     if (values.Length > 1)
                     {
                         missedArrayPoints.Inc(values.Length - 1);
@@ -378,7 +378,7 @@ namespace Cognite.OpcUa
                 else
                 {
                     dim = variable.ArrayDimensions[0];
-                    log.LogDebug("Missing {cnt} points for variable {id} due to too small ArrayDimensions", values.Length - dim, variable.Id);
+                    log.LogDebug("Missing {Count} points for variable {Id} due to too small ArrayDimensions", values.Length - dim, variable.Id);
                     missedArrayPoints.Inc(values.Length - dim);
                 }
                 var ret = new List<UADataPoint>();
@@ -412,7 +412,7 @@ namespace Cognite.OpcUa
             var eventState = extractor.State.GetEmitterState(item.ResolvedNodeId);
             if (eventState == null)
             {
-                log.LogWarning("Event triggered from unknown node: {id}", item.ResolvedNodeId);
+                log.LogWarning("Event triggered from unknown node: {Id}", item.ResolvedNodeId);
                 return;
             }
 
@@ -460,7 +460,7 @@ namespace Cognite.OpcUa
             // Many servers don't handle filtering on history data.
             if (typeId == null || !extractor.State.ActiveEvents.TryGetValue(typeId, out var eventType))
             {
-                log.LogTrace("Invalid event type: {eventType}", typeId);
+                log.LogTrace("Invalid event type: {EventType}", typeId);
                 return null;
             }
 
@@ -486,7 +486,7 @@ namespace Cognite.OpcUa
 
             if (!extractedProperties.TryGetValue("EventId", out var rawEventId) || !(rawEventId.Value.Value is byte[] byteEventId))
             {
-                log.LogTrace("Event of type {type} lacks id", typeId);
+                log.LogTrace("Event of type {Type} lacks id", typeId);
                 return null;
             }
 
@@ -498,7 +498,7 @@ namespace Cognite.OpcUa
 
             if (!extractedProperties.TryGetValue("Time", out var rawTime) || !(rawTime.Value.Value is DateTime time))
             {
-                log.LogTrace("Event lacks specified time, type: {type}", typeId);
+                log.LogTrace("Event lacks specified time, type: {Type}", typeId);
                 return null;
             }
 

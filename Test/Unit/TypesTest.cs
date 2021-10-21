@@ -752,12 +752,12 @@ namespace Test.Unit
         {
             var ts = DateTime.UtcNow;
             var dt = new UADataPoint(ts, "id", 123.123);
-            var str = dt.ToDebugDescription();
+            var str = dt.ToString();
             var refStr = $"Update timeseries id to 123.123 at {ts.ToString(CultureInfo.InvariantCulture)}";
             Assert.Equal(refStr, str);
 
             dt = new UADataPoint(ts, "id", "value");
-            str = dt.ToDebugDescription();
+            str = dt.ToString();
             refStr = $"Update timeseries id to \"value\" at {ts.ToString(CultureInfo.InvariantCulture)}";
             Assert.Equal(refStr, str);
         }

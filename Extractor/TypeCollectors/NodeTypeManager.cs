@@ -59,7 +59,7 @@ namespace Cognite.OpcUa.TypeCollectors
         public async Task GetObjectTypeMetadataAsync(CancellationToken token)
         {
             var toRead = mappedTypes.Values.Where(type => !type.Id.IsNullNodeId && type.Name == null).ToList();
-            log.LogInformation("Get object type metadata for {cnt} types", toRead.Count);
+            log.LogInformation("Get object type metadata for {Count} types", toRead.Count);
             if (!toRead.Any()) return;
 
             var readValueIds = toRead.Select(read => new ReadValueId

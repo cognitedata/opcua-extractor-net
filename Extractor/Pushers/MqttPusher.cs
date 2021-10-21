@@ -131,7 +131,7 @@ namespace Cognite.OpcUa.Pushers
                     }
                     catch (Exception ex)
                     {
-                        log.LogWarning("Failed to reconnect to broker: {msg}", ex.Message);
+                        log.LogWarning("Failed to reconnect to broker: {Message}", ex.Message);
                         await TryReconnect(retries - 1);
                     }
                 }
@@ -205,11 +205,11 @@ namespace Cognite.OpcUa.Pushers
 
             if (!results.All(res => res))
             {
-                log.LogDebug("Failed to push {cnt} points to CDF over MQTT", count);
+                log.LogDebug("Failed to push {Count} points to CDF over MQTT", count);
                 return false;
             }
 
-            log.LogDebug("Successfully pushed {cnt} points to CDF over MQTT", count);
+            log.LogDebug("Successfully pushed {Count} points to CDF over MQTT", count);
 
             return true;
         }
@@ -227,7 +227,7 @@ namespace Cognite.OpcUa.Pushers
             }
             catch (Exception e)
             {
-                log.LogWarning("Failed to connect to MQTT broker: {msg}", e.Message);
+                log.LogWarning("Failed to connect to MQTT broker: {Message}", e.Message);
                 return false;
             }
             log.LogInformation("Connected to MQTT broker");
@@ -323,7 +323,7 @@ namespace Cognite.OpcUa.Pushers
                 await Extractor.ReadProperties(objects.Concat(variables));
             }
 
-            log.LogInformation("Pushing {cnt} assets and {cnt2} timeseries over MQTT", objects.Count(), variables.Count());
+            log.LogInformation("Pushing {ObjCount} assets and {VarCount} timeseries over MQTT", objects.Count(), variables.Count());
 
             if (config.Debug) return true;
 
@@ -392,11 +392,11 @@ namespace Cognite.OpcUa.Pushers
             var results = await Task.WhenAll(eventList.ChunkBy(1000).Select(chunk => PushEventsChunk(chunk, token)));
             if (!results.All(result => result))
             {
-                log.LogDebug("Failed to push {cnt} events to CDF over MQTT", count);
+                log.LogDebug("Failed to push {Count} events to CDF over MQTT", count);
                 return false;
             }
 
-            log.LogDebug("Successfully pushed {cnt} events to CDF over MQTT", count);
+            log.LogDebug("Successfully pushed {Count} events to CDF over MQTT", count);
 
             return true;
         }
@@ -441,7 +441,7 @@ namespace Cognite.OpcUa.Pushers
 
             if (!relationships.Any()) return true;
 
-            log.LogInformation("Pushing {cnt} relationships to CDF over MQTT", relationships.Count());
+            log.LogInformation("Pushing {Count} relationships to CDF over MQTT", relationships.Count());
 
             var tasks = relationships.ChunkBy(1000).Select(chunk => PushReferencesChunk(chunk, token));
             var results = await Task.WhenAll(tasks);
@@ -537,7 +537,7 @@ namespace Cognite.OpcUa.Pushers
             }
             catch (Exception e)
             {
-                log.LogError("Failed to write to MQTT: {msg}", e.Message);
+                log.LogError("Failed to write to MQTT: {Message}", e.Message);
                 return false;
             }
 
@@ -582,7 +582,7 @@ namespace Cognite.OpcUa.Pushers
                 }
                 catch (Exception ex)
                 {
-                    log.LogError("Failed to write assets to raw over MQTT: {msg}", ex.Message);
+                    log.LogError("Failed to write assets to raw over MQTT: {Message}", ex.Message);
                     return false;
                 }
 
@@ -604,7 +604,7 @@ namespace Cognite.OpcUa.Pushers
             }
             catch (Exception e)
             {
-                log.LogError("Failed to write assets to MQTT: {msg}", e.Message);
+                log.LogError("Failed to write assets to MQTT: {Message}", e.Message);
                 return false;
             }
 
@@ -721,7 +721,7 @@ namespace Cognite.OpcUa.Pushers
                     }
                     catch (Exception e)
                     {
-                        log.LogError("Failed to write minimal timeseries to MQTT: {msg}", e.Message);
+                        log.LogError("Failed to write minimal timeseries to MQTT: {Message}", e.Message);
                         return false;
                     }
                 }
@@ -752,7 +752,7 @@ namespace Cognite.OpcUa.Pushers
                 }
                 catch (Exception e)
                 {
-                    log.LogError("Failed to write timeseries to raw over MQTT: {msg}", e.Message);
+                    log.LogError("Failed to write timeseries to raw over MQTT: {Message}", e.Message);
                     return false;
                 }
 
@@ -774,7 +774,7 @@ namespace Cognite.OpcUa.Pushers
             }
             catch (Exception e)
             {
-                log.LogError("Failed to write timeseries to MQTT: {msg}", e.Message);
+                log.LogError("Failed to write timeseries to MQTT: {Message}", e.Message);
                 return false;
             }
 
@@ -805,7 +805,7 @@ namespace Cognite.OpcUa.Pushers
             }
             catch (Exception e)
             {
-                log.LogError("Failed to write events to MQTT: {msg}", e.Message);
+                log.LogError("Failed to write events to MQTT: {Message}", e.Message);
                 return false;
             }
             eventCounter.Inc(evts.Count());
@@ -847,7 +847,7 @@ namespace Cognite.OpcUa.Pushers
                 }
                 catch (Exception ex)
                 {
-                    log.LogError("Failed to write relationships to raw over MQTT: {msg}", ex.Message);
+                    log.LogError("Failed to write relationships to raw over MQTT: {Message}", ex.Message);
                 }
 
                 return true;
@@ -864,7 +864,7 @@ namespace Cognite.OpcUa.Pushers
             }
             catch (Exception e)
             {
-                log.LogError("Failed to write relationships to MQTT: {msg}", e.Message);
+                log.LogError("Failed to write relationships to MQTT: {Message}", e.Message);
                 return false;
             }
             createdRelationships.Inc(references.Count());

@@ -172,7 +172,7 @@ namespace Cognite.OpcUa.Config
 
             foreach (var ep in endpoints)
             {
-                log.LogInformation("Endpoint: {url}, Security: {security}", ep.EndpointUrl, ep.SecurityPolicyUri);
+                log.LogInformation("Endpoint: {Url}, Security: {Security}", ep.EndpointUrl, ep.SecurityPolicyUri);
                 openExists |= ep.SecurityPolicyUri == SecurityPolicies.None;
                 secureExists |= ep.SecurityPolicyUri != SecurityPolicies.None;
                 summary.Secure = secureExists;
@@ -240,7 +240,7 @@ namespace Cognite.OpcUa.Config
 
             int totalChildCount = 0;
 
-            log.LogInformation("Get test node chunk with BrowseNodesChunk {cnt}", nodesChunk);
+            log.LogInformation("Get test node chunk with BrowseNodesChunk {Count}", nodesChunk);
 
             do
             {
@@ -266,7 +266,7 @@ namespace Cognite.OpcUa.Config
                         countChildren += node.Result.References.Count;
                     }
                     count += browseNodes.Count;
-                    log.LogDebug("Read node children {cnt} / {total}. Children: {childcnt}", count, total, countChildren);
+                    log.LogDebug("Read node children {Count} / {Total}. Children: {ChildCount}", count, total, countChildren);
                     totalChildCount += countChildren;
                     if (totalChildCount >= 10000) break;
                 }
@@ -280,7 +280,7 @@ namespace Cognite.OpcUa.Config
                         bool docb = true;
                         if (docb)
                         {
-                            log.LogTrace("Discovered new node {nodeid}", nodeId);
+                            log.LogTrace("Discovered new node {NodeId}", nodeId);
                             callback?.Invoke(rd, parentId);
                         }
                         if (rd.NodeClass == NodeClass.Variable) continue;
@@ -349,7 +349,7 @@ namespace Cognite.OpcUa.Config
                 }
             }
             var parents = testNodes.Select(node => node.ParentId).Distinct().ToList();
-            log.LogInformation("Found {cnt} nodes over {cnt2} parents", testNodes.Count(), parents.Count);
+            log.LogInformation("Found {Count} nodes over {ParentCount} parents", testNodes.Count(), parents.Count);
 
             // Test tolerance for large chunks
             log.LogInformation("Testing browseNodesChunk tolerance");
@@ -362,7 +362,7 @@ namespace Cognite.OpcUa.Config
                 var ids = testNodes.Select(node => node.Id).Take(chunkSize).ToList();
                 try
                 {
-                    log.LogInformation("Try to get the children of {cnt} nodes", ids.Count);
+                    log.LogInformation("Try to get the children of {Count} nodes", ids.Count);
                     var browseNodes = ids.Select(node => new BrowseNode(node)).ToDictionary(node => node.Id);
                     await ToolUtil.RunWithTimeout(GetReferences(new BrowseParams
                     {
@@ -378,7 +378,7 @@ namespace Cognite.OpcUa.Config
                 }
                 browseChunkSize = chunkSize;
             }
-            log.LogInformation("Settled on a BrowseNodesChunk of {chunk}", browseChunkSize);
+            log.LogInformation("Settled on a BrowseNodesChunk of {ChunkSize}", browseChunkSize);
             summary.BrowseNodesChunk = browseChunkSize;
 
             // Test if there are issues with BrowseNext.
@@ -403,7 +403,7 @@ namespace Cognite.OpcUa.Config
                 Dictionary<NodeId, BrowseResult> children;
                 try
                 {
-                    log.LogInformation("Try to get the children of the {cnt} largest parent nodes, with return chunk size {size}",
+                    log.LogInformation("Try to get the children of the {Count} largest parent nodes, with return chunk size {Size}",
                         toBrowse.Count, chunkSize);
                     var nodes = toBrowse.Select(group => new BrowseNode(group.Key)).ToDictionary(node => node.Id);
                     await ToolUtil.RunWithTimeout(GetReferences(new BrowseParams
@@ -422,11 +422,11 @@ namespace Cognite.OpcUa.Config
                 int childCount = children.Aggregate(0, (seed, kvp) => seed + kvp.Value.References.Count);
                 if (childCount < total)
                 {
-                    log.LogWarning("Expected to receive {cnt} nodes but only got {cnt2}!", total, childCount);
+                    log.LogWarning("Expected to receive {Count} nodes but only got {ChildCount}!", total, childCount);
                     log.LogWarning("There is likely an issue with returning large numbers of nodes from the server");
                     summary.BrowseNextWarning = true;
                     int largest = toBrowse.First().Count();
-                    log.LogInformation("The largest discovered node has {cnt} children", largest);
+                    log.LogInformation("The largest discovered node has {Count} children", largest);
                     // Usually we will have found the largest parent by this point, unless the server is extremely large
                     // So we can try to choose a BrowseNodesChunk that lets us avoid the issue
                     summary.BrowseNodesChunk = Math.Max(1, (int)Math.Floor((double)chunkSize / largest));
@@ -592,13 +592,13 @@ namespace Cognite.OpcUa.Config
             switch (dataTypeSwitch)
             {
                 case DataTypes.Number:
-                    log.LogInformation("Found potential numeric type: {id}", type.Id);
+                    log.LogInformation("Found potential numeric type: {Id}", type.Id);
                     break;
                 case DataTypes.Boolean:
-                    log.LogInformation("Found potential boolean type: {id}", type.Id);
+                    log.LogInformation("Found potential boolean type: {Id}", type.Id);
                     break;
                 case DataTypes.Enumeration:
-                    log.LogInformation("Found potential enum type: {id}, consider turning on extraction.enum-as-strings", type.Id);
+                    log.LogInformation("Found potential enum type: {Id}, consider turning on extraction.enum-as-strings", type.Id);
                     summary.Enums = true;
                     break;
             }
@@ -607,7 +607,7 @@ namespace Cognite.OpcUa.Config
             {
                 if (inHierarchy)
                 {
-                    log.LogInformation("DataType {id} is correctly in hierarchy, auto discovery can be used instead", type.Id);
+                    log.LogInformation("DataType {Id} is correctly in hierarchy, auto discovery can be used instead", type.Id);
                     baseConfig.Extraction.DataTypes.AutoIdentifyTypes = true;
                 }
                 else
@@ -621,7 +621,7 @@ namespace Cognite.OpcUa.Config
                 }
                 if (dataTypeSwitch == DataTypes.Enumeration)
                 {
-                    log.LogInformation("DataType {id} is enum, and auto discovery should be enabled to discover labels", type.Id);
+                    log.LogInformation("DataType {Id} is enum, and auto discovery should be enabled to discover labels", type.Id);
                     baseConfig.Extraction.DataTypes.AutoIdentifyTypes = true;
                 }
             }
@@ -647,7 +647,7 @@ namespace Cognite.OpcUa.Config
 
             if (!summary.Enums && dataTypes.Any(type => ToolUtil.IsChildOf(dataTypes, type, DataTypes.Enumeration))) summary.Enums = true;
 
-            log.LogInformation("Found {count} custom datatypes outside of normal hierarchy", customNumericTypes.Count);
+            log.LogInformation("Found {Count} custom datatypes outside of normal hierarchy", customNumericTypes.Count);
             summary.CustomNumTypesCount = customNumericTypes.Count;
             baseConfig.Extraction.DataTypes.CustomNumericTypes = customNumericTypes;
         }
@@ -680,7 +680,7 @@ namespace Cognite.OpcUa.Config
             if (expectedAttributeReads < 1000)
             {
                 log.LogWarning("Reading less than 1000 attributes maximum. Most servers should support more, but" +
-                            " this server only has enough nodes to read {reads}", expectedAttributeReads);
+                            " this server only has enough nodes to read {Reads}", expectedAttributeReads);
                 summary.VariableLimitWarning = true;
             }
 
@@ -694,8 +694,8 @@ namespace Cognite.OpcUa.Config
                     count += node.Attributes.GetAttributeIds(config).Count();
                     return count < chunkSize + 10;
                 }).ToList();
-                log.LogInformation("Total {tot}", nodeList.Count);
-                log.LogInformation("Attempting to read attributes for {cnt} nodes with ChunkSize {chunkSize}", toCheck.Count, chunkSize);
+                log.LogInformation("Total {Total}", nodeList.Count);
+                log.LogInformation("Attempting to read attributes for {Cnt} nodes with ChunkSize {ChunkSize}", toCheck.Count, chunkSize);
                 config.Source.AttributesChunk = chunkSize;
                 try
                 {
@@ -715,7 +715,7 @@ namespace Cognite.OpcUa.Config
                     continue;
                 }
 
-                log.LogInformation("Settled on AttributesChunk: {size}", chunkSize);
+                log.LogInformation("Settled on AttributesChunk: {Size}", chunkSize);
                 succeeded = true;
                 baseConfig.Source.AttributesChunk = chunkSize;
                 break;
@@ -785,7 +785,7 @@ namespace Cognite.OpcUa.Config
 
                 if (variable.DataType == null || variable.DataType.Raw == null || variable.DataType.Raw.IsNullNodeId)
                 {
-                    log.LogWarning("Variable datatype is null on id: {id}", variable.Id);
+                    log.LogWarning("Variable datatype is null on id: {Id}", variable.Id);
                     continue;
                 }
 
@@ -794,7 +794,7 @@ namespace Cognite.OpcUa.Config
                 if (dataType == null && missingTypes.Add(variable.DataType.Raw))
                 {
                     log.LogWarning("DataType found on node but not in hierarchy, " +
-                                "this may mean that some datatypes are defined outside of the main datatype hierarchy: {type}", variable.DataType);
+                                "this may mean that some datatypes are defined outside of the main datatype hierarchy: {Type}", variable.DataType);
                     continue;
                 }
 
@@ -802,7 +802,7 @@ namespace Cognite.OpcUa.Config
                 identifiedTypes.Add(dataType);
             }
 
-            log.LogInformation("Found {cnt} distinct data-types in detected variables", identifiedTypes.Count);
+            log.LogInformation("Found {Count} distinct data-types in detected variables", identifiedTypes.Count);
 
             foreach (var dataType in identifiedTypes)
             {
@@ -833,16 +833,21 @@ namespace Cognite.OpcUa.Config
 
             if (maxLimitedArrayLength > 0)
             {
-                log.LogInformation("Arrays of length {max} were found, which will be used to set the MaxArraySize option", maxLimitedArrayLength);
+                log.LogInformation("Arrays of length {Max} were found, which will be used to set the MaxArraySize option", maxLimitedArrayLength);
             }
             else
             {
                 log.LogInformation("No arrays were found, MaxArraySize remains at its current setting, or 0 if unset");
             }
 
-            log.LogInformation(history
-                ? "Historizing variables were found, tests on history chunkSizes will be performed later"
-                : "No historizing variables were found, tests on history chunkSizes will be skipped");
+            if (history)
+            {
+                log.LogInformation("Historizing variables were found, tests on history chunkSizes will be performed later");
+            }
+            else
+            {
+                log.LogInformation("No historizing variables were found, tests on history chunkSizes will be skipped");
+            }
 
             config.Extraction.DataTypes.MaxArraySize = oldArraySize;
 
@@ -898,7 +903,7 @@ namespace Cognite.OpcUa.Config
 
             if (states.Count < 1000)
             {
-                log.LogWarning("There are only {count} extractable variables, so expected chunksizes may not be accurate. " +
+                log.LogWarning("There are only {Count} extractable variables, so expected chunksizes may not be accurate. " +
                             "The default is 1000, which generally works.", states.Count);
                 summary.SubscriptionLimitWarning = true;
             }
@@ -950,7 +955,7 @@ namespace Cognite.OpcUa.Config
             }
 
             summary.Subscriptions = true;
-            log.LogInformation("Settled on chunkSize: {size}", baseConfig.Source.SubscriptionChunk);
+            log.LogInformation("Settled on chunkSize: {Size}", baseConfig.Source.SubscriptionChunk);
             log.LogInformation("Waiting for datapoints to arrive...");
             summary.SubscriptionChunkSize = baseConfig.Source.SubscriptionChunk;
 
@@ -1088,9 +1093,9 @@ namespace Cognite.OpcUa.Config
 
             summary.History = true;
             baseConfig.History.Enabled = true;
-            log.LogInformation("Settled on chunkSize: {size}", baseConfig.History.DataNodesChunk);
+            log.LogInformation("Settled on chunkSize: {Size}", baseConfig.History.DataNodesChunk);
             summary.HistoryChunkSize = baseConfig.History.DataNodesChunk;
-            log.LogInformation("Largest estimated number of datapoints in a single nodes history is {largestEstimate}, " +
+            log.LogInformation("Largest estimated number of datapoints in a single nodes history is {LargestEstimate}, " +
                             "this is found by looking at the first datapoints, then assuming the average frequency holds until now", largestEstimate);
 
             if (nodeWithData == null)
@@ -1101,16 +1106,16 @@ namespace Cognite.OpcUa.Config
 
             long totalAvgDistance = sumDistance / count;
 
-            log.LogInformation("Average distance between timestamps across all nodes with history: {dist}",
+            log.LogInformation("Average distance between timestamps across all nodes with history: {Distance}",
                 TimeSpan.FromTicks(totalAvgDistance));
             var granularity = TimeSpan.FromTicks(totalAvgDistance * 10).Seconds + 1;
-            log.LogInformation("Suggested granularity is: {gran} seconds", granularity);
+            log.LogInformation("Suggested granularity is: {Granularity} seconds", granularity);
             config.History.Granularity = granularity;
             summary.HistoryGranularity = TimeSpan.FromSeconds(granularity);
 
             bool backfillCapable = false;
 
-            log.LogInformation("Read history backwards from {time}", earliestTime);
+            log.LogInformation("Read history backwards from {Time}", earliestTime);
             var backfillDetails = new ReadRawModifiedDetails
             {
                 IsReadModified = false,
@@ -1129,7 +1134,7 @@ namespace Cognite.OpcUa.Config
 
                 var data = ToolUtil.ReadResultToDataPoints(nodeWithData.LastResult, stateMap[nodeWithData.Id], this);
 
-                log.LogInformation("Last ts: {ts}, {now}", data.First().Timestamp, DateTime.UtcNow);
+                log.LogInformation("Last ts: {TimeStamp}", data.First().Timestamp);
 
                 var last = data.First();
                 bool orderOk = true;
@@ -1203,7 +1208,7 @@ namespace Cognite.OpcUa.Config
 
             if (emitters.Any())
             {
-                log.LogInformation("Discovered {cnt} emitters, of which {cnt2} are historizing", emitters.Count(), historizingEmitters.Count());
+                log.LogInformation("Discovered {EmitterCount} emitters, of which {HistCount} are historizing", emitters.Count(), historizingEmitters.Count());
                 summary.NumEmitters = emitters.Count();
                 summary.NumHistEmitters = historizingEmitters.Count();
                 summary.AnyEvents = true;
@@ -1238,7 +1243,7 @@ namespace Cognite.OpcUa.Config
 
             if (emittedEvents.Any())
             {
-                log.LogInformation("Identified {cnt} events by looking at GeneratesEvent references", emittedEvents.Count);
+                log.LogInformation("Identified {Count} events by looking at GeneratesEvent references", emittedEvents.Count);
                 bool auditReferences = emitterReferences.Any(evt => evt.ParentId == ObjectIds.Server
                 && (evt.Id == ObjectTypeIds.AuditAddNodesEventType || evt.Id == ObjectTypeIds.AuditAddReferencesEventType));
 
@@ -1363,7 +1368,7 @@ namespace Cognite.OpcUa.Config
             log.LogInformation("Suggested namespaceMap: ");
             foreach (var kvp in namespaceMap)
             {
-                log.LogInformation("    {key}: {value}", kvp.Key, kvp.Value);
+                log.LogInformation("    {Key}: {Value}", kvp.Key, kvp.Value);
             }
 
             summary.NamespaceMap = namespaceMap.Select(kvp => $"{kvp.Key}: {kvp.Value}").ToList();
@@ -1382,15 +1387,20 @@ namespace Cognite.OpcUa.Config
 
             if (summary.Endpoints.Any())
             {
-                log.LogInformation("{cnt} endpoints were found: ", summary.Endpoints.Count);
+                log.LogInformation("{Count} endpoints were found: ", summary.Endpoints.Count);
                 foreach (var endpoint in summary.Endpoints)
                 {
-                    log.LogInformation("    {ep}", endpoint);
+                    log.LogInformation("    {EndPoint}", endpoint);
                 }
 
-                log.LogInformation(summary.Secure
-                    ? "At least one of these are secure, meaning that the Secure config option can and should be enabled"
-                    : "None of these are secure, so enabling the Secure config option will probably not work.");
+                if (summary.Secure)
+                {
+                    log.LogInformation("At least one of these are secure, meaning that the Secure config option can and should be enabled.");
+                }
+                else
+                {
+                    log.LogInformation("None of these are secure, so enabling the Secure config option will probably not work.");
+                }
             }
             else
             {
@@ -1401,23 +1411,23 @@ namespace Cognite.OpcUa.Config
 
             if (summary.BrowseChunk == 0)
             {
-                log.LogInformation("Settled on browsing the children of {bnc} nodes at a time and letting the server decide how many results " +
+                log.LogInformation("Settled on browsing the children of {BrowseNodesChunk} nodes at a time and letting the server decide how many results " +
                                 "to return for each request", summary.BrowseNodesChunk);
             }
             else
             {
-                log.LogInformation("Settled on browsing the children of {bnc} nodes at a time and expecting {bc} results maximum for each request",
+                log.LogInformation("Settled on browsing the children of {BrowseNodesChunk} nodes at a time and expecting {BrowseChunk} results maximum for each request",
                     summary.BrowseNodesChunk, summary.BrowseChunk);
             }
             log.LogInformation("");
 
             if (summary.CustomNumTypesCount > 0)
             {
-                log.LogInformation("{cnt} custom numeric types were discovered", summary.CustomNumTypesCount);
+                log.LogInformation("{Count} custom numeric types were discovered", summary.CustomNumTypesCount);
             }
             if (summary.MaxArraySize > 1)
             {
-                log.LogInformation("Arrays of size {size} were discovered", summary.MaxArraySize);
+                log.LogInformation("Arrays of size {Size} were discovered", summary.MaxArraySize);
             }
             if (summary.StringVariables)
             {
@@ -1434,7 +1444,7 @@ namespace Cognite.OpcUa.Config
                 log.LogInformation("");
             }
 
-            log.LogInformation("Settled on reading {cnt} attributes per Read call", summary.AttributeChunkSize);
+            log.LogInformation("Settled on reading {Count} attributes per Read call", summary.AttributeChunkSize);
             if (summary.VariableLimitWarning)
             {
                 log.LogInformation("This is not a completely safe option, as the actual number of attributes is lower than the limit, so if " +
@@ -1445,7 +1455,7 @@ namespace Cognite.OpcUa.Config
             if (summary.Subscriptions)
             {
                 log.LogInformation("Successfully subscribed to data variables");
-                log.LogInformation("Settled on subscription chunk size: {chunk}", summary.SubscriptionChunkSize);
+                log.LogInformation("Settled on subscription chunk size: {SubscriptionChunk}", summary.SubscriptionChunkSize);
                 if (summary.SubscriptionLimitWarning)
                 {
                     log.LogInformation("This is not a completely safe option, as the actual number of extractable nodes is lower than the limit, " +
@@ -1467,7 +1477,7 @@ namespace Cognite.OpcUa.Config
             if (summary.History)
             {
                 log.LogInformation("Successfully read datapoint history");
-                log.LogInformation("Settled on history chunk size {chunk} with granularity {g}",
+                log.LogInformation("Settled on history chunk size {HistoryChunk} with granularity {HistoryGranularity}",
                     summary.HistoryChunkSize, summary.HistoryGranularity);
                 if (summary.BackfillRecommended)
                 {
@@ -1490,10 +1500,10 @@ namespace Cognite.OpcUa.Config
             if (summary.AnyEvents)
             {
                 log.LogInformation("Successfully found support for events on the server");
-                log.LogInformation("Found {cnt} nodes emitting events", summary.NumEmitters);
+                log.LogInformation("Found {Count} nodes emitting events", summary.NumEmitters);
                 if (summary.HistoricalEvents)
                 {
-                    log.LogInformation("{cnt} historizing event emitters were found", summary.NumHistEmitters);
+                    log.LogInformation("{Count} historizing event emitters were found", summary.NumHistEmitters);
                 }
                 if (summary.NumEmitters == 0)
                 {
@@ -1515,7 +1525,7 @@ namespace Cognite.OpcUa.Config
             log.LogInformation("The following NamespaceMap was suggested: ");
             foreach (string ns in summary.NamespaceMap)
             {
-                log.LogInformation("    {ns}", ns);
+                log.LogInformation("    {Namespace}", ns);
             }
         }
 

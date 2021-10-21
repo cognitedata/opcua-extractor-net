@@ -66,12 +66,12 @@ namespace Cognite.OpcUa
                 } catch { }
                 if ((cVal > val || cVal == 0) && val > 0)
                 {
-                    log.LogInformation("Max {name} is restricted to {val}", name, val);
+                    log.LogInformation("Max {Name} is restricted to {Val}", name, val);
                     return val;
                 }
                 else if (val > 0 && val > cVal)
                 {
-                    log.LogInformation("Upper limit on {name} is {val}, but configured to {cVal}", name, val, cVal);
+                    log.LogInformation("Upper limit on {Name} is {Val}, but configured to {CVal}", name, val, cVal);
                 }
                 return cVal;
             }

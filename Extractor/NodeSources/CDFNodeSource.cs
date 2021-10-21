@@ -82,7 +82,7 @@ namespace Cognite.OpcUa.NodeSources
                 }
                 catch (Exception ex)
                 {
-                    Log.LogError("Failed to retrieve and deserialize raw timeseries from CDF: {msg}", ex.Message);
+                    Log.LogError("Failed to retrieve and deserialize raw timeseries from CDF: {Message}", ex.Message);
                     return;
                 }
 
@@ -128,7 +128,7 @@ namespace Cognite.OpcUa.NodeSources
                 }
                 catch (Exception ex)
                 {
-                    Log.LogError("Failed to retrieve and deserialize raw assets from CDF: {msg}", ex.Message);
+                    Log.LogError("Failed to retrieve and deserialize raw assets from CDF: {Message}", ex.Message);
                     return;
                 }
 
@@ -149,7 +149,7 @@ namespace Cognite.OpcUa.NodeSources
                     readNodes.Add(obj);
                 }
             }
-            Log.LogInformation("Retrieved {as} objects and {ts} variables from CDF Raw", readNodes.Count, readVariables.Count);
+            Log.LogInformation("Retrieved {Obj} objects and {Var} variables from CDF Raw", readNodes.Count, readVariables.Count);
         }
 
         public override async Task<NodeSourceResult?> ParseResults(CancellationToken token)
@@ -180,8 +180,8 @@ namespace Cognite.OpcUa.NodeSources
                 InitNodeState(Config.Extraction.Update, node);
             }
 
-            Log.LogInformation("Mapping resulted in {obj} destination objects and {ts} destination timeseries," +
-                " {robj} objects and {var} variables.",
+            Log.LogInformation("Mapping resulted in {ObjCount} destination objects and {TsCount} destination timeseries," +
+                " {SourceObj} objects and {SourceVar} variables.",
                 FinalDestinationObjects.Count, FinalDestinationVariables.Count,
                 FinalSourceObjects.Count, FinalSourceVariables.Count);
 

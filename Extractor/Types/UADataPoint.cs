@@ -132,7 +132,7 @@ namespace Cognite.OpcUa.Types
                 return new UADataPoint(ts, id, value);
             }
         }
-        public string ToDebugDescription()
+        public override string ToString()
         {
             return $"Update timeseries {Id} to {(IsString ? "\"" + StringValue + "\"" : DoubleValue.Value.ToString(CultureInfo.InvariantCulture))}" +
                    $" at {Timestamp.ToString(CultureInfo.InvariantCulture)}";

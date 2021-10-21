@@ -102,7 +102,7 @@ namespace Cognite.OpcUa.NodeSources
                 }
                 set.FileName = fileName;
             }
-            Log.LogInformation("Loading nodeset from {file}", set.FileName);
+            Log.LogInformation("Loading nodeset from {File}", set.FileName);
             LoadNodeSet(set.FileName!);
         }
 
@@ -173,7 +173,7 @@ namespace Cognite.OpcUa.NodeSources
                     }
                 }
             }
-            Log.LogInformation("Found or created {cnt} references in nodeset files", cnt);
+            Log.LogInformation("Found or created {Count} references in nodeset files", cnt);
         }
 
         private void LoadTypeTree()
@@ -457,14 +457,14 @@ namespace Cognite.OpcUa.NodeSources
                 return null;
             }
 
-            Log.LogInformation("Mapping resulted in {obj} destination objects and {ts} destination timeseries," +
-                " {robj} objects and {var} variables.",
+            Log.LogInformation("Mapping resulted in {ObjCount} destination objects and {TsCount} destination timeseries," +
+                " {SourceObj} objects and {SourceVar} variables.",
                 FinalDestinationObjects.Count, FinalDestinationVariables.Count,
                 FinalSourceObjects.Count, FinalSourceVariables.Count);
 
             if (FinalReferences.Any())
             {
-                Log.LogInformation("Found a total of {cnt} references", FinalReferences.Count);
+                Log.LogInformation("Found a total of {Count} references", FinalReferences.Count);
             }
 
             return new NodeSourceResult(

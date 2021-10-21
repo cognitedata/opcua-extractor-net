@@ -254,9 +254,9 @@ namespace Cognite.OpcUa
 
         protected override async Task Start()
         {
-            log.LogInformation("Starting OPC UA Extractor version {version}",
+            log.LogInformation("Starting OPC UA Extractor version {Version}",
                 Extractor.Metrics.Version.GetVersion(Assembly.GetExecutingAssembly()));
-            log.LogInformation("Revision information: {status}",
+            log.LogInformation("Revision information: {Status}",
                 Extractor.Metrics.Version.GetDescription(Assembly.GetExecutingAssembly()));
 
             await RunExtractorInternal();
@@ -490,7 +490,7 @@ namespace Cognite.OpcUa
             {
                 throw new TimeoutException("Waiting for push timed out");
             }
-            log.LogDebug("Waited {s} milliseconds for subscriptions", time * 100);
+            log.LogDebug("Waited {TimeS} milliseconds for subscriptions", time * 100);
         }
         #endregion
 
@@ -667,7 +667,7 @@ namespace Cognite.OpcUa
             }
             if (Config.Extraction.IgnoreNamePrefix != null && Config.Extraction.IgnoreNamePrefix.Any())
             {
-                log.LogWarning("Ignore name prefix is deprecated, use transformations instead: {cnf}", string.Join(',', Config.Extraction.IgnoreNamePrefix));
+                log.LogWarning("Ignore name prefix is deprecated, use transformations instead: {Prefix}", string.Join(',', Config.Extraction.IgnoreNamePrefix));
                 var filterStr = string.Join('|', Config.Extraction.IgnoreNamePrefix.Select(str => $"^{str}"));
                 transformations.Add(new NodeTransformation(new RawNodeTransformation
                 {
@@ -680,7 +680,7 @@ namespace Cognite.OpcUa
             }
             foreach (var trans in transformations)
             {
-                log.LogDebug(trans.ToString());
+                log.LogDebug("{Transformation}", trans.ToString());
             }
             
             uaClient.Browser.IgnoreFilters = transformations.Where(trans => trans.Type == TransformationType.Ignore).Select(trans => trans.Filter).ToList();
@@ -804,7 +804,7 @@ namespace Cognite.OpcUa
         {
             if (pusher.NoInit)
             {
-                log.LogWarning("Skipping pushing on pusher {name}", pusher.GetType());
+                log.LogWarning("Skipping pushing on pusher {Name}", pusher.GetType());
                 PushNodesFailure(objects, timeseries, references, false, false, false, pusher);
                 return;
             }
@@ -823,7 +823,7 @@ namespace Cognite.OpcUa
             var result = results.All(res => res);
             if (!result)
             {
-                log.LogError("Failed to push nodes on pusher {name}", pusher.GetType());
+                log.LogError("Failed to push nodes on pusher {Name}", pusher.GetType());
                 int idx = 0;
                 bool nodesPassed = objects.Any() && timeseries.Any() && results[idx++];
                 bool referencesPassed = references != null && references.Any() && results[idx];
@@ -847,7 +847,7 @@ namespace Cognite.OpcUa
 
                 if (!initResults.All(res => res))
                 {
-                    log.LogError("Initialization of extracted ranges failed for pusher {name}", pusher.GetType());
+                    log.LogError("Initialization of extracted ranges failed for pusher {Name}", pusher.GetType());
                     PushNodesFailure(objects, timeseries, references, true, true, initResults[0], pusher);
                     return;
                 }
@@ -951,7 +951,6 @@ namespace Cognite.OpcUa
         /// <param name="states">States to subscribe to</param>
         private async Task SynchronizeNodes(IEnumerable<VariableExtractionState> states, CancellationToken token)
         {
-            log.LogInformation("Sub: {s}", Config.Subscriptions.DataPoints);
             if (Config.Subscriptions.DataPoints)
             {
                 var subscribeStates = states.Where(state => state.ShouldSubscribe);
@@ -1063,7 +1062,7 @@ namespace Cognite.OpcUa
                         log.LogDebug("No relevant nodes in addNodes audit event");
                         return;
                     }
-                    log.LogInformation("Trigger rebrowse on {numnodes} node ids due to addNodes event", relevantIds.Count());
+                    log.LogInformation("Trigger rebrowse on {NumNodes} node ids due to addNodes event", relevantIds.Count());
 
                     foreach (var id in relevantIds)
                     {
@@ -1097,7 +1096,7 @@ namespace Cognite.OpcUa
                     return;
                 }
 
-                log.LogInformation("Trigger rebrowse on {numnodes} node ids due to addReference event", relevantRefIds.Count());
+                log.LogInformation("Trigger rebrowse on {NumNodes} node ids due to addReference event", relevantRefIds.Count());
 
                 foreach (var id in relevantRefIds)
                 {

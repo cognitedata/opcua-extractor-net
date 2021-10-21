@@ -114,7 +114,7 @@ namespace Cognite.OpcUa.NodeSources
             // Start by looking for "MaxArrayLength" standard property. This is defined in OPC-UA 5/6.3.2
             if (!nodes.Any()) return;
 
-            Log.LogInformation("Estimating array length for {cnt} nodes", nodes.Count());
+            Log.LogInformation("Estimating array length for {Count} nodes", nodes.Count());
 
             await Extractor.ReadProperties(nodes);
             var toReadValues = new List<UAVariable>();
@@ -299,7 +299,7 @@ namespace Cognite.OpcUa.NodeSources
                     return node.Changed;
                 }
             }
-            Log.LogTrace(node.ToString());
+            Log.LogTrace("{Node}", node.ToString());
 
             return true;
         }

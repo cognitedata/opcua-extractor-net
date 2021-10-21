@@ -95,13 +95,13 @@ namespace Cognite.OpcUa.NodeSources
                 return null;
             }
 
-            Log.LogInformation("Mapping resulted in {obj} destination objects and {ts} destination timeseries," +
-                " {robj} objects and {var} variables.",
+            Log.LogInformation("Mapping resulted in {ObjCount} destination objects and {TsCount} destination timeseries," +
+                " {SourceObj} objects and {SourceVar} variables.",
                 FinalDestinationObjects.Count, FinalDestinationVariables.Count,
                 FinalSourceObjects.Count, FinalSourceVariables.Count);
             if (FinalReferences.Any())
             {
-                Log.LogInformation("Found a total of {cnt} references", FinalReferences.Count);
+                Log.LogInformation("Found a total of {Count} references", FinalReferences.Count);
             }
 
             return new NodeSourceResult(
@@ -175,14 +175,14 @@ namespace Cognite.OpcUa.NodeSources
             {
                 FinalReferences.Add(reference);
             }
-            Log.LogInformation("Found {cnt} non-hierarchical references", FinalReferences.Count);
+            Log.LogInformation("Found {Count} non-hierarchical references", FinalReferences.Count);
 
             if (Config.Extraction.Relationships.Hierarchical)
             {
                 var nodeMap = FinalSourceObjects.Concat(FinalSourceVariables)
                     .ToDictionary(node => node.Id);
 
-                Log.LogInformation("Mapping {cnt} hierarchical references", references.Count);
+                Log.LogInformation("Mapping {Count} hierarchical references", references.Count);
 
                 foreach (var pair in references)
                 {
@@ -236,7 +236,7 @@ namespace Cognite.OpcUa.NodeSources
                 mapped = !uaNode.IsProperty;
 
                 Extractor.State.RegisterNode(uaNode.Id, Extractor.GetUniqueId(uaNode.Id));
-                Log.LogTrace("HandleNode {class} {name}", uaNode.NodeClass, uaNode.DisplayName);
+                Log.LogTrace("HandleNode {Class} {Name}", uaNode.NodeClass, uaNode.DisplayName);
 
                 NodeMap[uaNode.Id] = uaNode;
             }
@@ -248,13 +248,13 @@ namespace Cognite.OpcUa.NodeSources
                 mapped = !variable.IsProperty;
 
                 Extractor.State.RegisterNode(variable.Id, Extractor.GetUniqueId(variable.Id));
-                Log.LogTrace("HandleNode Variable {name}", variable.DisplayName);
+                Log.LogTrace("HandleNode Variable {Name}", variable.DisplayName);
 
                 NodeMap[variable.Id] = variable;
             }
             else
             {
-                Log.LogWarning("Node of unknown type received: {type}, {id}", node.NodeClass, node.NodeId);
+                Log.LogWarning("Node of unknown type received: {Type}, {Id}", node.NodeClass, node.NodeId);
             }
 
             if (mapped && Config.Extraction.Relationships.Enabled && Config.Extraction.Relationships.Hierarchical)

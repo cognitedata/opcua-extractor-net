@@ -225,7 +225,7 @@ namespace Cognite.OpcUa.Config
                         state.UpdateFromStream(buffDps);
                         foreach (var buffDp in buffDps)
                         {
-                            log.Verbose("Subscription DataPoint {dp}", buffDp.ToDebugDescription());
+                            log.Verbose("Subscription DataPoint {dp}", buffDp.ToString());
                         }
 
                         points.AddRange(buffDps);
@@ -273,7 +273,7 @@ namespace Cognite.OpcUa.Config
                 var buffDps = ToDataPoint(datapoint, state, client);
                 foreach (var buffDp in buffDps)
                 {
-                    log.Verbose("History DataPoint {dp}", buffDp.ToDebugDescription());
+                    log.Verbose("History DataPoint {dp}", buffDp.ToString());
                     result.Add(buffDp);
                 }
             }
