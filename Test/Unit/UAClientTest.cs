@@ -850,8 +850,6 @@ namespace Test.Unit
                 tester.Server.WipeHistory(tester.Server.Ids.Custom.MysteryVar, null);
                 tester.Server.WipeHistory(tester.Server.Ids.Base.StringVar, null);
             }
-
-
         }
         [Fact]
         public async Task TestDataSubscriptions()
@@ -904,6 +902,40 @@ namespace Test.Unit
                 tester.Config.Source.SubscriptionChunk = 1000;
             }
             Assert.True(CommonTestUtils.TestMetricValue("opcua_subscriptions", 2000));
+        }
+
+        [Fact]
+        public async Task TestAbortHistory()
+        {
+            var nodes = new[] { tester.Server.Ids.Base.DoubleVar1, tester.Server.Ids.Base.IntVar, tester.Server.Ids.Base.StringVar }
+                .Select(id => new HistoryReadNode(HistoryReadType.FrontfillData, id)).ToList();
+            var req = new HistoryReadParams(nodes,
+                new ReadRawModifiedDetails
+                {
+                    IsReadModified = false,
+                    StartTime = DateTime.UtcNow.Subtract(TimeSpan.FromSeconds(200)),
+                    EndTime = DateTime.UtcNow,
+                    NumValuesPerNode = 100
+                });
+            var start = DateTime.UtcNow.AddSeconds(-20);
+
+            tester.Server.PopulateBaseHistory(start);
+
+            try
+            {
+                await tester.Client.DoHistoryRead(req, tester.Source.Token);
+
+                Assert.All(req.Nodes, node => Assert.NotNull(node.ContinuationPoint));
+
+                await tester.Client.AbortHistoryRead(req, tester.Source.Token);
+                Assert.All(req.Nodes, node => Assert.Null(node.ContinuationPoint));
+            }
+            finally
+            {
+                tester.Server.WipeHistory(tester.Server.Ids.Base.DoubleVar1, 0.0);
+                tester.Server.WipeHistory(tester.Server.Ids.Base.IntVar, 0);
+                tester.Server.WipeHistory(tester.Server.Ids.Base.StringVar, null);
+            }
         }
         #endregion
         #region events
