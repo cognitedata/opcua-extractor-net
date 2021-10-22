@@ -16,6 +16,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using Cognite.OpcUa.Types;
+using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using Serilog;
 using System;
@@ -104,14 +105,54 @@ namespace Cognite.OpcUa
             return null;
         }
 
+        public static void LogException(Microsoft.Extensions.Logging.ILogger log, Exception? e, string message, string silentMessage)
+        {
+            if (e == null)
+            {
+                log.LogError("{msg}", message);
+            }
+            else if (e is AggregateException aex)
+            {
+                var flat = aex.Flatten();
+                foreach (var exc in flat.InnerExceptions)
+                {
+                    LogException(log, exc, message, silentMessage);
+                }
+                if (!flat.InnerExceptions.Any())
+                {
+                    log.LogError(e, "{pMsg} - {msg}", message, e.Message);
+                }
+            }
+            else if (e is SilentServiceException silent)
+            {
+                log.LogDebug("Silenced service exception: {msg} - {info}", silentMessage,
+                    silent.InnerServiceException?.AdditionalInfo);
+            }
+            else if (e is ServiceResultException service)
+            {
+                log.LogError(e, "{pMsg} - {msg}: {info}", message, service.Message, service.AdditionalInfo);
+            }
+            else if (e is ExtractorFailureException failure)
+            {
+                log.LogError("{pMsg} - {msg}", message, failure.Message);
+                log.LogDebug(failure, "{msg}", message);
+            }
+            else
+            {
+                log.LogError(e, "{pMsg} - {msg}", e.Message);
+            }
+        }
+
+
         /// <summary>
         /// Log exception, silencing SilentServiceExceptions and formatting results properly.
         /// </summary>
         /// <param name="e">Exception to log</param>
         /// <param name="message">Message to give with normal exceptions</param>
         /// <param name="silentMessage">Message to give with silent exceptions</param>
-        public static void LogException(ILogger log, Exception? e, string message, string silentMessage)
+        public static void LogException(Serilog.ILogger log, Exception? e, string message, string? silentMessage = null)
         {
+            if (silentMessage == null) silentMessage = message;
             if (e == null)
             {
                 log.Error(message);
@@ -142,11 +183,66 @@ namespace Cognite.OpcUa
                 log.Error(message + " - {msg}", failure.Message);
                 log.Debug(failure, message);
             }
+            else if (e is FatalException fatal)
+            {
+                log.Fatal(message + " - {msg}", fatal.Message);
+                log.Debug(fatal, message);
+            }
             else
             {
                 log.Error(e, message + " - {msg}", e.Message);
             }
         }
+        public static Exception HandleServiceResult(Serilog.ILogger log, Exception ex, SourceOp op)
+        {
+            if (ex is AggregateException aex)
+            {
+                return HandleServiceResult(log, aex, op);
+            }
+            else if (ex is ServiceResultException serviceEx)
+            {
+                return HandleServiceResult(log, serviceEx, op);
+            }
+            else
+            {
+                log.Error(ex, "Unexpected error of type {type} in operation {op}", ex.GetType(), op);
+                return new SilentServiceException($"Unexpected error in operation {op}", ex, op);
+            }
+        }
+
+        private static Exception HandleServiceResult(Serilog.ILogger log, AggregateException ex, SourceOp op)
+        {
+            var exceptions = new List<Exception>();
+            var flat = ex.Flatten();
+            if (flat.InnerExceptions != null && flat.InnerExceptions.Any())
+            {
+                foreach (var e in flat.InnerExceptions)
+                {
+                    if (e is ServiceResultException serviceEx)
+                    {
+                        exceptions.Add(HandleServiceResult(log, serviceEx, op));
+                    }
+                    else
+                    {
+                        exceptions.Add(e);
+                    }
+                }
+            }
+            else
+            {
+                return flat;
+            }
+            if (exceptions.Count > 1)
+            {
+                return new AggregateException(exceptions);
+            }
+            else if (exceptions.Count == 1)
+            {
+                return exceptions.Single();
+            }
+            return ex;
+        }
+
         /// <summary>
         /// Parse ServiceResult from OPC-UA and log then transform it into a
         /// SilentServiceException if it is recognized, or just return it if not.
@@ -154,8 +250,13 @@ namespace Cognite.OpcUa
         /// <param name="ex">Exception to transform</param>
         /// <param name="op">Source operation, for logging</param>
         /// <returns>Transformed exception if recognized, otherwise the given exception</returns>
-        public static Exception HandleServiceResult(ILogger log, ServiceResultException ex, SourceOp op)
+        private static Exception HandleServiceResult(Serilog.ILogger log, ServiceResultException ex, SourceOp op)
         {
+            if (ex.InnerException is ServiceResultException innerServiceEx)
+            {
+                HandleServiceResult(log, innerServiceEx, op);
+            }
+
             uint code = ex.StatusCode;
             string symId = StatusCode.LookupSymbolicId(code);
             switch (code)
@@ -164,7 +265,7 @@ namespace Cognite.OpcUa
                 case StatusCodes.BadDecodingError:
                 case StatusCodes.BadUnknownResponse:
                     // This really shouldn't happen, it is either some freak communication error or an issue with the server
-                    log.Error("Server responded with bad data: {code}, at operation {op}", symId, op.ToString());
+                    log.Error("Server responded with bad data: {code}, at operation {op}", symId, op);
                     log.Error("This is unlikely to be an issue with the extractor");
                     log.Error("If it repeats, it is most likely a bug in the server");
                     return new SilentServiceException("Server responded with bad data", ex, op);
@@ -178,24 +279,32 @@ namespace Cognite.OpcUa
                 case StatusCodes.BadCertificatePolicyCheckFailed:
                 case StatusCodes.BadCertificateRevocationUnknown:
                 case StatusCodes.BadCertificateRevoked:
-                    log.Error("There was an issue with the certificate: {code} at operation {op}", symId, op.ToString());
+                    log.Error("There was an issue with the certificate: {code} at operation {op}", symId, op);
                     return new SilentServiceException("There was an issue with the certificate", ex, op);
                 case StatusCodes.BadNothingToDo:
                     log.Error("Server had nothing to do, this is likely an issue with the extractor: {code} at operation {op}",
-                        symId, op.ToString());
+                        symId, op);
                     return new SilentServiceException("Server had nothing to do", ex, op);
                 case StatusCodes.BadSessionClosed:
                     // This sometimes occurs if the client is closed during an operation, it is expected
-                    log.Error("Service failed due to closed Session: {code} at operation {op}", symId, op.ToString());
+                    log.Error("Service failed due to closed Session: {code} at operation {op}", symId, op);
                     return new SilentServiceException("Service failed due to closed Session", ex, op);
                 case StatusCodes.BadServerNotConnected:
                     log.Error("The client attempted a connection without being connected to the server: {code} at operation {op}",
-                        symId, op.ToString());
+                        symId, op);
                     log.Error("This is most likely an issue with the extractor");
                     return new SilentServiceException("Attempted call to unconnected server", ex, op);
                 case StatusCodes.BadServerHalted:
-                    log.Error("Server halted unexpectedly: {code} at operation {op}", symId, op.ToString());
+                    log.Error("Server halted unexpectedly: {code} at operation {op}", symId, op);
                     return new SilentServiceException("Server stopped unexpectedly", ex, op);
+                case StatusCodes.BadRequestInterrupted:
+                    log.Error("Failed to send request. The request size might be too large for the server: {code} at operation {op}",
+                        symId, op);
+                    return new SilentServiceException("Failed to send request to server", ex, op);
+                case StatusCodes.BadRequestTooLarge:
+                    log.Error("Failed to send request due to too large request size: {code} at operation {op}", symId, op);
+                    log.Error("This might be solvable by increasing request limits in the xml config file, or by reducing chunk sizes");
+                    return new SilentServiceException("Too large request", ex, op);
                 default:
                     switch (op)
                     {
@@ -222,7 +331,7 @@ namespace Cognite.OpcUa
                                         symId, op.ToString());
                                     return new SilentServiceException("Identity token rejected", ex, op);
                                 case StatusCodes.BadCertificateUntrusted:
-                                    log.Error("Certificate not trusted by server: {code} at operation {op}", symId, op.ToString());
+                                    log.Error("Certificate not trusted by server: {code} at operation {op}", symId, op);
                                     log.Error("This can be fixed by moving trusting the certificate on the server");
                                     return new SilentServiceException("Certificate untrusted", ex, op);
                             }
@@ -250,7 +359,7 @@ namespace Cognite.OpcUa
                         case SourceOp.BrowseNext:
                             if (code == StatusCodes.BadServiceUnsupported)
                             {
-                                log.Error("BrowseNext not supported by server: {code} at operation {op}", symId, op.ToString());
+                                log.Error("BrowseNext not supported by server: {code} at operation {op}", symId, op);
                                 log.Error("This is a required service, but it may be possible to increase browse chunk sizes to avoid the issue");
                                 return new SilentServiceException("BrowseNext unspported", ex, op);
                             }
@@ -281,13 +390,13 @@ namespace Cognite.OpcUa
                             switch (code)
                             {
                                 case StatusCodes.BadTooManySubscriptions:
-                                    log.Error("Too many subscriptions on server: {code} at operation {op}", symId, op.ToString());
+                                    log.Error("Too many subscriptions on server: {code} at operation {op}", symId, op);
                                     log.Error("The extractor creates a maximum of three subscriptions, one for data, one for events, one for auditing");
                                     log.Error("If this happens after multiple reconnects, it may be due to poor reconnect handling somewhere, " +
                                               "in that case, it may help to turn on ForceRestart in order to clean up subscriptions between each reconnect");
                                     return new SilentServiceException("Too many subscriptions", ex, op);
                                 case StatusCodes.BadServiceUnsupported:
-                                    log.Error("Create subscription unsupported by server: {code} at operation {op}", symId, op.ToString());
+                                    log.Error("Create subscription unsupported by server: {code} at operation {op}", symId, op);
                                     log.Error("This may be an issue with the extractor, or more likely a server limitation");
                                     return new SilentServiceException("CreateSubscription unsupported", ex, op);
                             }
@@ -297,7 +406,7 @@ namespace Cognite.OpcUa
                             switch (code)
                             {
                                 case StatusCodes.BadSubscriptionIdInvalid:
-                                    log.Error("Subscription not found on server", symId, op.ToString());
+                                    log.Error("Subscription not found on server", symId, op);
                                     log.Error("This is generally caused by a desync between the server and the client");
                                     log.Error("A solution may be to turn on ForceRestart, to clean up subscriptions between each connect");
                                     return new SilentServiceException("Subscription id invalid", ex, op);
@@ -306,11 +415,11 @@ namespace Cognite.OpcUa
                                 case StatusCodes.BadFilterOperandInvalid:
                                 case StatusCodes.BadFilterLiteralInvalid:
                                 case StatusCodes.BadEventFilterInvalid:
-                                    log.Error("Event filter invalid: {code} at operation {op}", symId, op.ToString());
+                                    log.Error("Event filter invalid: {code} at operation {op}", symId, op);
                                     log.Error("This may be an issue with the extractor, or the server may not fully support event filtering");
                                     return new SilentServiceException("Filter related error", ex, op);
                                 case StatusCodes.BadTooManyMonitoredItems:
-                                    log.Error("Server has reached limit of monitored items", symId, op.ToString());
+                                    log.Error("Server has reached limit of monitored items", symId, op);
                                     log.Error("The extractor requires one monitored item per data variable, and one per configured event emitter node");
                                     log.Error("If this happens after multiple reconnects it may be due to poor reconnect handling somewhere, " +
                                               "in that case, it may help to turn on ForceRestarts in order to clean up subscriptions between each reconnect");
@@ -334,7 +443,7 @@ namespace Cognite.OpcUa
                                 case StatusCodes.BadTooManyOperations:
                                     log.Error("Failed to read History due to too many operations: {code} at operation {op}",
                                         symId, op.ToString());
-                                    log.Error("This may be due to too large chunk sizes, try to lower chunk sizes for {op}", op.ToString());
+                                    log.Error("This may be due to too large chunk sizes, try to lower chunk sizes for {op}", op);
                                     return new SilentServiceException("Too many operations during HistoryRead", ex, op);
                                 case StatusCodes.BadHistoryOperationUnsupported:
                                 case StatusCodes.BadHistoryOperationInvalid:
@@ -353,7 +462,7 @@ namespace Cognite.OpcUa
                                 case StatusCodes.BadFilterOperandInvalid:
                                 case StatusCodes.BadFilterLiteralInvalid:
                                 case StatusCodes.BadEventFilterInvalid:
-                                    log.Error("Event filter invalid: {code} at operation {op}", symId, op.ToString());
+                                    log.Error("Event filter invalid: {code} at operation {op}", symId, op);
                                     log.Error("This may be an issue with the extractor, or the server may not fully support event filtering");
                                     return new SilentServiceException("Filter related error", ex, op);
                             }
@@ -362,27 +471,28 @@ namespace Cognite.OpcUa
                             switch (code)
                             {
                                 case StatusCodes.BadServiceUnsupported:
-                                    log.Error("Base requirement \"{op}\" unspported by server: {code}", op.ToString(), symId);
+                                    log.Error("Base requirement \"{op}\" unspported by server: {code}", op, symId);
                                     log.Error("This is a required service, if the server does not support it the extractor may not be used");
-                                    return new SilentServiceException($"{op.ToString()} unsupported", ex, op);
+                                    return new SilentServiceException($"Unsupported operation", ex, op);
                                 case StatusCodes.BadNoContinuationPoints:
                                     log.Error("Server is out of continuationPoints, this may be the " +
                                               "result of poor configuration of the extractor: {code} at operation {op}",
                                         symId, op.ToString());
-                                    log.Error("If the chunk sizes for {op} are set very low, that may be the cause", op.ToString());
-                                    return new SilentServiceException($"Too many continuationPoints for {op.ToString()}", ex, op);
+                                    log.Error("If the chunk sizes for {op} are set very low, that may be the cause", op);
+                                    return new SilentServiceException($"Too many continuationPoints for {op}", ex, op);
                                 case StatusCodes.BadTooManyOperations:
                                     log.Error("Too many operations, this is most likely due to chunkSize being set too high: {code} at operation {op}",
                                         symId, op.ToString());
-                                    log.Error("Try lowering the chunk sizes for {op}", op.ToString());
-                                    return new SilentServiceException($"Too many operations for {op.ToString()}", ex, op);
+                                    log.Error("Try lowering the chunk sizes for {op}", op);
+                                    return new SilentServiceException($"Too many operations", ex, op);
                             }
                             break;
                         case SourceOp.CloseSession:
                             log.Error("Failed to close session, this is almost always due to the session already being closed: {code}", symId);
                             return new SilentServiceException("Failed to close session", ex, op);
                     }
-                    return ex;
+                    log.Error(ex, "Unexpected service result exception in operation {op}: {code}", op, symId);
+                    return new SilentServiceException("Unexpected error", ex, op);
             }
         }
     }
@@ -397,11 +507,19 @@ namespace Cognite.OpcUa
         public uint StatusCode { get; }
         public ServiceResultException? InnerServiceException { get; }
 
-        public SilentServiceException(string msg, ServiceResultException ex, ExtractorUtils.SourceOp op) : base(msg, ex)
+        public SilentServiceException(string msg, ServiceResultException ex, ExtractorUtils.SourceOp op)
+            : base($"{msg}: code {ex?.StatusCode ?? StatusCodes.BadUnexpectedError}, operation {op}", ex)
         {
             Operation = op;
-            StatusCode = ex?.StatusCode ?? StatusCodes.Bad;
+            StatusCode = ex?.StatusCode ?? StatusCodes.BadUnexpectedError;
             InnerServiceException = ex;
+        }
+
+        public SilentServiceException(string msg, Exception ex, ExtractorUtils.SourceOp op)
+            : base($"{msg}: operation {op}", ex)
+        {
+            Operation = op;
+            StatusCode = StatusCodes.BadUnexpectedError;
         }
 
         public SilentServiceException()
@@ -432,17 +550,6 @@ namespace Cognite.OpcUa
         public ExtractorFailureException() { }
 
         public ExtractorFailureException(string message, Exception innerException) : base(message, innerException) { }
-    }
-    /// <summary>
-    /// Indicates a fatal error in configuration
-    /// </summary>
-    public class ConfigurationException : Exception
-    {
-        public ConfigurationException(string message) : base(message) { }
-
-        public ConfigurationException(string message, Exception innerException) : base(message, innerException) { }
-
-        public ConfigurationException() { }
     }
     /// <summary>
     /// Indicates a fatal error in some system

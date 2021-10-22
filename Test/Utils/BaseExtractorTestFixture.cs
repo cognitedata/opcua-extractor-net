@@ -1,4 +1,5 @@
 ﻿using AdysTech.InfluxDB.Client.Net;
+using Cognite.Extractor.Common;
 using Cognite.Extractor.Configuration;
 using Cognite.Extractor.Logging;
 using Cognite.Extractor.StateStorage;
@@ -10,6 +11,7 @@ using Opc.Ua;
 using Server;
 using System;
 using System.IO;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
@@ -119,7 +121,10 @@ namespace Test.Utils
                 Client.Browser.IgnoreFilters = null;
                 Client.ObjectTypeManager.Reset();
             }
-            return new UAExtractor(Config, pushers, Client, stateStore, Source.Token);
+            var ext = new UAExtractor(Config, Provider, pushers, Client, stateStore);
+            ext.InitExternal(Source.Token);
+
+            return ext;
         }
 
 
@@ -138,7 +143,7 @@ namespace Test.Utils
             {
                 ClearLiteDB(client).Wait();
             }
-            var pusher = Config.Influx.ToPusher(null) as InfluxPusher;
+            var pusher = new InfluxPusher(Config.Influx);
             return (pusher, client);
         }
 
@@ -163,7 +168,8 @@ namespace Test.Utils
             CommonTestUtils.AddDummyProvider(handler, Services);
             Services.AddCogniteClient("appid", null, true, true, false);
             var provider = Services.BuildServiceProvider();
-            var pusher = Config.Cognite.ToPusher(provider) as CDFPusher;
+            var destination = provider.GetRequiredService<CogniteDestination>();
+            var pusher = new CDFPusher(Config.Extraction, Config.Cognite, destination);
             return (handler, pusher);
         }
 
@@ -208,7 +214,7 @@ namespace Test.Utils
         public static async Task TerminateRunTask(Task runTask, UAExtractor extractor)
         {
             if (extractor == null) throw new ArgumentNullException(nameof(extractor));
-            extractor.Close(false);
+            await extractor.Close(false);
             try
             {
                 await runTask;

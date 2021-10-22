@@ -55,7 +55,7 @@ namespace Cognite.OpcUa.PubSub
             this.pubSubConfig = pubSubConfig;
         }
 
-        private bool LoadNodeValues(CancellationToken token)
+        private async Task<bool> LoadNodeValues(CancellationToken token)
         {
             var toRead = nodeMap.Values.Where(node => node.NodeClass == NodeClass.Variable).ToList();
             // Some nodes can get _very_ large, we should read these separately.
@@ -65,10 +65,10 @@ namespace Cognite.OpcUa.PubSub
                 log.Warning("Not enough information to configure pubsub based on server hierarchy");
                 return false;
             }
-            var values = client.ReadRawValues(bySize.First(group => !group.Key).Select(node => node.NodeId), token).ToList();
+            var values = (await client.ReadRawValues(bySize.First(group => !group.Key).Select(node => node.NodeId), token)).ToList();
             foreach (var node in bySize.First(group => group.Key))
             {
-                values.AddRange(client.ReadRawValues(new[] { node.NodeId }, token));
+                values.AddRange(await client.ReadRawValues(new[] { node.NodeId }, token));
             }
 
             foreach (var val in values)
@@ -336,7 +336,7 @@ namespace Cognite.OpcUa.PubSub
         {
             config = new PubSubConfigurationDataType();
 
-            var root = client.Browser.GetRootNodes(new[] { ObjectIds.PublishSubscribe }, token);
+            var root = await client.Browser.GetRootNodes(new[] { ObjectIds.PublishSubscribe }, token);
             HandleNode(root.First(), NodeId.Null);
 
             await client.Browser.BrowseDirectory(
@@ -348,7 +348,7 @@ namespace Cognite.OpcUa.PubSub
                 readVariableChildren: true);
 
             // Read values
-            if (!LoadNodeValues(token)) return null;
+            if (!await LoadNodeValues(token)) return null;
             await CorrectWriterParents(token);
             BuildConnections();
             BuildDataSetMetadata();

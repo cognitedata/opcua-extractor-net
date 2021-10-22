@@ -16,11 +16,6 @@ namespace Test.Utils
         public bool Debug { get; set; }
         public bool ReadExtractedRanges { get; set; } = true;
         public double? NonFiniteReplacement { get; set; }
-
-        public IPusher ToPusher(IServiceProvider provider)
-        {
-            return new DummyPusher(this);
-        }
     }
     public sealed class DummyPusher : IPusher
     {

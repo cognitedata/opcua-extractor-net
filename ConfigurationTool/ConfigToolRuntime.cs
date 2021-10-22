@@ -18,6 +18,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using Serilog;
 using System;
 using System.IO;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -43,11 +44,17 @@ namespace Cognite.OpcUa.Config
         /// Start the config tool, then sequentially run the tests.
         /// Produces a generated config file if it does not fail.
         /// </summary>
-        public async Task Run()
+        public async Task Run(CancellationToken token)
         {
             using var explorer = new UAServerExplorer(config, baseConfig);
 
-            using var source = new CancellationTokenSource();
+            using var source = CancellationTokenSource.CreateLinkedTokenSource(token);
+
+            log.Information("Starting OPC UA Extractor Config tool version {version}",
+                Extractor.Metrics.Version.GetVersion(Assembly.GetExecutingAssembly()));
+            log.Information("Revision information: {status}",
+                Extractor.Metrics.Version.GetDescription(Assembly.GetExecutingAssembly()));
+
             try
             {
                 await explorer.GetEndpoints(source.Token);

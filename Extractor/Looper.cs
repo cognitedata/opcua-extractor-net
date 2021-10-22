@@ -71,7 +71,7 @@ namespace Cognite.OpcUa
             return TimeSpan.FromSeconds(t);
         }
 
-        public Task Run(IEnumerable<Func<CancellationToken, Task>> synchTasks)
+        public void Run()
         {
             failingPushers = pushers.Where(pusher => pusher.DataFailing || pusher.EventsFailing || !pusher.Initialized).ToList();
             passingPushers = pushers.Except(failingPushers).ToList();
@@ -79,10 +79,6 @@ namespace Cognite.OpcUa
             Scheduler.SchedulePeriodicTask(nameof(Pushers), ToTimespan(config.Extraction.DataPushDelay, true, "ms"), Pushers, true);
             Scheduler.SchedulePeriodicTask(nameof(ExtraTasks), Timeout.InfiniteTimeSpan, ExtraTasks, false);
 
-            foreach (var task in synchTasks)
-            {
-                Scheduler.ScheduleTask(null, task);
-            }
             Scheduler.SchedulePeriodicTask(nameof(Rebrowse), ToTimespan(config.Extraction.AutoRebrowsePeriod, false, "m"), Rebrowse, false);
             if (extractor.StateStorage != null)
             {
@@ -90,8 +86,6 @@ namespace Cognite.OpcUa
                     config.StateStorage.Interval > 0);
             }
             Scheduler.SchedulePeriodicTask(nameof(HistoryRestart), ToTimespan(config.History.RestartPeriod, false, "s"), HistoryRestart, false);
-
-            return Scheduler.WaitForAll();
         }
 
         /// <summary>

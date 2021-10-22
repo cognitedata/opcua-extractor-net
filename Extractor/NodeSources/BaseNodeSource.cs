@@ -121,7 +121,7 @@ namespace Cognite.OpcUa.NodeSources
             var maxLengthProperties = nodes
                 .SelectNonNull(node => node.Properties?.FirstOrDefault(prop => prop.DisplayName == "MaxArrayLength") as UAVariable);
 
-            Client.ReadNodeValues(maxLengthProperties, token);
+            await Client.ReadNodeValues(maxLengthProperties, token);
 
             foreach (var node in nodes)
             {
@@ -143,7 +143,7 @@ namespace Cognite.OpcUa.NodeSources
             }
             if (!toReadValues.Any()) return;
 
-            Client.ReadNodeValues(toReadValues, token);
+            await Client.ReadNodeValues(toReadValues, token);
 
             foreach (var node in toReadValues)
             {
