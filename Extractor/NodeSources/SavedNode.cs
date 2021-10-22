@@ -16,7 +16,6 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using Opc.Ua;
-using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace Cognite.OpcUa.NodeSources

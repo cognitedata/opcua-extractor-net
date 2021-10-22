@@ -410,6 +410,7 @@ namespace Cognite.OpcUa
         {
             get => RestartPeriodValue.RawValue; set => RestartPeriodValue.RawValue = value!;
         }
+
         public ContinuationPointThrottlingConfig Throttling
         {
             get => throttling; set => throttling = value ?? throttling;

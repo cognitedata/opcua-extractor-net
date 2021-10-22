@@ -455,7 +455,6 @@ namespace Cognite.OpcUa.NodeSources
             if (!FinalDestinationObjects.Any() && !FinalDestinationVariables.Any() && !FinalSourceVariables.Any() && !FinalReferences.Any())
             {
                 Log.LogInformation("Mapping resulted in no new nodes");
-
                 return null;
             }
 

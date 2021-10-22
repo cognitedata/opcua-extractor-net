@@ -80,11 +80,9 @@ namespace Test.Unit
             public List<LogEvent> Events { get; } = new List<LogEvent>();
             private readonly object mutex = new object();
 
-
             public void Log<TState>(LogLevel logLevel, EventId eventId, TState state,
                 Exception exception, Func<TState, Exception, string> formatter)
             {
-
                 lock (mutex)
                 {
                     Events.Add(new LogEvent

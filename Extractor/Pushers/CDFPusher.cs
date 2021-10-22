@@ -156,8 +156,8 @@ namespace Cognite.OpcUa.Pushers
                 }
 
                 result.ThrowOnFatal();
-
                 log.LogDebug("Successfully pushed {Real} / {Total} points to CDF", realCount, count);
+
                 dataPointPushes.Inc();
                 dataPointsCounter.Inc(realCount);
 

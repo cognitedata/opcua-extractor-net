@@ -8,6 +8,9 @@
     <AnalysisMode>AllEnabledByDefault</AnalysisMode>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <Nullable>enable</Nullable>
+    <EnableSingleFileAnalysis>true</EnableSingleFileAnalysis>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
   </PropertyGroup>
 
   <ItemGroup>

@@ -50,6 +50,7 @@ namespace Cognite.OpcUa
         public FullConfig? Config { get; set; }
         public FullConfig? BaseConfig { get; set; }
     }
+
     /// <summary>
     /// Console launcher for the OPC-UA extractor and Configuration tool. Includes basic setup of logging/config/metrics and
     /// parsing of command-line arguments

@@ -40,6 +40,13 @@ dotnet_diagnostic.CA1002.severity = none
 
 # LoggerDelegates might be good, but are way too verbose for now.
 dotnet_diagnostic.CA1848.severity = none
+<<<<<<< HEAD
 
 # IDE0090: Use 'new(...)' - avoiding this.
 dotnet_diagnostic.IDE0090.severity = none
+
+dotnet_diagnostic.CA1727.severity = none
+csharp_prefer_simple_using_statement=true:warning
+[*.{cs,vb}]
+dotnet_style_readonly_field=true:warning
+dotnet_code_quality_unused_parameters=all:warning

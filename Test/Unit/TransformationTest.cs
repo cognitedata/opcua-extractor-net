@@ -13,6 +13,7 @@ namespace Test.Unit
     {
         private readonly NamespaceTable nss;
         private readonly ILogger log;
+
         public TransformationTest()
         {
             nss = new NamespaceTable();
