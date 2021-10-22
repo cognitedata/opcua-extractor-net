@@ -43,7 +43,7 @@ namespace Cognite.OpcUa
             {
                 if (node is UAVariable variable)
                 {
-                    if (variable.IsArray && variable.Index == -1)
+                    if (variable.IsObject)
                     {
                         objects.Add(variable);
                     }

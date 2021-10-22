@@ -737,7 +737,7 @@ namespace Test.Unit
                 // Array root
                 arrayVar,
                 // Array element
-                arrayVar.CreateArrayChildren().First(),
+                arrayVar.CreateTimeseries().First(),
                 // Variable with properties
                 new UAVariable(tester.Server.Ids.Custom.MysteryVar, "NumberVar", tester.Server.Ids.Custom.Root),
                 // object with no children

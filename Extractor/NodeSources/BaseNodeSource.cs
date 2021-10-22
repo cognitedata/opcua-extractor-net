@@ -78,13 +78,9 @@ namespace Cognite.OpcUa.NodeSources
         /// <param name="node">Variable to write</param>
         protected virtual void AddVariableToLists(UAVariable node)
         {
-            if (node.IsArray)
+            if (node.IsObject)
             {
-                FinalDestinationVariables.AddRange(node.CreateArrayChildren());
-            }
-
-            if (node.IsArray || node.NodeClass != NodeClass.Variable)
-            {
+                FinalDestinationVariables.AddRange(node.CreateTimeseries());
                 FinalDestinationObjects.Add(node);
             }
             else
@@ -208,9 +204,9 @@ namespace Cognite.OpcUa.NodeSources
                 }
 
 
-                if (variable.IsArray)
+                if (variable.IsObject)
                 {
-                    foreach (var child in variable.CreateArrayChildren())
+                    foreach (var child in variable.CreateTimeseries())
                     {
                         var uniqueId = Extractor.GetUniqueId(child.Id, child.Index);
                         if (setState && state != null) Extractor.State.SetNodeState(state, uniqueId);
