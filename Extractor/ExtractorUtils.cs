@@ -22,11 +22,27 @@ using Serilog;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 
 namespace Cognite.OpcUa
 {
     public static class ExtractorUtils
     {
+        private static Dictionary<uint, string> statusCodeNames = new Dictionary<uint, string>();
+        static ExtractorUtils()
+        {
+            var fields = typeof(StatusCodes).GetFields(BindingFlags.Public | BindingFlags.Static);
+            foreach (var field in fields)
+            {
+                statusCodeNames.Add((uint)field.GetValue(typeof(StatusCodes)), field.Name);
+            }
+        }
+
+        public static string GetStatusCodeName(uint code)
+        {
+            return statusCodeNames.GetValueOrDefault(code);
+        }
+
         /// <summary>
         /// Divide a list of BufferedNodes into lists of nodes mapped to destination context objects and
         /// data variables respectively.
