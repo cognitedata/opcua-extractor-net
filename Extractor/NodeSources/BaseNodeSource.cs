@@ -230,7 +230,8 @@ namespace Cognite.OpcUa.NodeSources
             {
                 node.Parent = parent;
                 node.Attributes.Ignore |= node.Parent.Ignore;
-                node.Attributes.IsProperty |= node.Parent.IsProperty || node.Parent.NodeClass == NodeClass.Variable;
+                node.Attributes.IsProperty |= node.Parent.IsProperty
+                    || !Config.Extraction.MapVariableChildren && node.Parent.NodeClass == NodeClass.Variable;
             }
 
             if (Extractor.Transformations != null)
@@ -240,6 +241,19 @@ namespace Cognite.OpcUa.NodeSources
                     trns.ApplyTransformation(node, Client.NamespaceTable!);
                     if (node.Ignore) return;
                 }
+            }
+
+            if (node.NodeClass == NodeClass.Variable && Config.Extraction.MapVariableChildren)
+            {
+                node.Attributes.PropertiesRead = true;
+            }
+
+            if (node.Parent != null
+                && node.Parent.NodeClass == NodeClass.Variable
+                && !node.IsProperty
+                && (node.Parent is UAVariable varParent))
+            {
+                varParent.IsObject = true;
             }
 
             if (node.IsProperty)

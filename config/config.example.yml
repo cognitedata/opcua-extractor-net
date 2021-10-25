@@ -590,12 +590,6 @@ extraction:
             context: false
             metadata: false
 
-    # Regex on node DisplayName for treating variables as properties.
-    # Variable nodes with a name that matches this regex will be treated as metadata instead of as a timeseries
-    # Nodes with property type definition will always be treated as properties
-    property-name-filter:
-    # Equivalent filter, but on node id if the node has a string identifier
-    property-id-filter:
     # Map OPC-UA non-hierarchical references to relationships in CDF.
     # The generated relationships will have external-id
     # [prefix][reference type name (or inverse-name)];[namespace source][id source];[namespace target][id target]
@@ -620,6 +614,10 @@ extraction:
         # Allow reading object- and vairable types as normal nodes and map them to destinations.
         # They will need to be in the mapped hierarchy.
         as-nodes: false
+
+    # By default children of variables are treated as properties, if this is set to true,
+    # they can be treated as objects or variables instead.
+    map-variable-children: false
 
     # A list of transformations to be applied to the source nodes before pushing
     # The possible transformations are
