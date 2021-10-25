@@ -275,7 +275,7 @@ namespace Cognite.OpcUa.Types
         Variable
     }
 
-    internal class NodeSerializer : System.Text.Json.Serialization.JsonConverter<UANode>
+    internal class NodeSerializer : JsonConverter<UANode>
     {
         private readonly StringConverter converter;
         private readonly FullConfig config;
