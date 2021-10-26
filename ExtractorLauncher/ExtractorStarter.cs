@@ -52,6 +52,8 @@ namespace Cognite.OpcUa
             if (string.IsNullOrEmpty(config.Extraction.IdPrefix)) log.LogWarning("No id-prefix specified in config file");
             if (config.Cognite == null && config.Influx == null && config.Mqtt == null) log.LogWarning("No destination system specified");
             if (config.Extraction.IdPrefix == "events.") return "Do not use events. as id-prefix, as it is used internally";
+            // Verify that all intervals are empty or resolve to valid timestamps
+
             return null;
         }
 
@@ -232,7 +234,7 @@ namespace Cognite.OpcUa
                 true,
                 !(setup.Exit || (config?.Source?.ExitOnFailure ?? false)),
                 token,
-                configCallback: config => VerifyAndBuildConfig(log, config, setup, configDir),
+                configCallback: (config, options) => VerifyAndBuildConfig(log, config, setup, configDir),
                 extServices: services,
                 startupLogger: log,
                 config: config,

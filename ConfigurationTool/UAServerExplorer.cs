@@ -993,7 +993,9 @@ namespace Cognite.OpcUa.Config
                 return;
             }
 
-            var earliestTime = DateTimeOffset.FromUnixTimeMilliseconds(config.History.StartTime).DateTime;
+            DateTime earliestTime;
+            if (config.History.StartTime == null) earliestTime = CogniteTime.DateTimeEpoch;
+            else earliestTime = CogniteTime.ParseTimestampString(config.History.StartTime).Value;
 
             var details = new ReadRawModifiedDetails
             {

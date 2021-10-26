@@ -92,7 +92,8 @@ namespace Cognite.OpcUa.History
 
             nodeCount = count;
 
-            historyStartTime = CogniteTime.FromUnixTimeMilliseconds(config.StartTime);
+            historyStartTime = config.StartTime == null ? CogniteTime.DateTimeEpoch : CogniteTime.ParseTimestampString(config.StartTime)
+                ?? CogniteTime.DateTimeEpoch;
             historyGranularity = config.Granularity <= 0
                 ? TimeSpan.Zero
                 : TimeSpan.FromSeconds(config.Granularity);
@@ -104,12 +105,13 @@ namespace Cognite.OpcUa.History
             IEnumerable<UAHistoryExtractionState> states,
             ILogger log,
             HistoryReadType type,
-            long historyStart,
+            string? historyStart,
             out int count)
         {
             var nodes = states.Select(state => new HistoryReadNode(type, state)).ToList();
 
-            var startTime = CogniteTime.FromUnixTimeMilliseconds(historyStart);
+            var startTime = historyStart == null ? CogniteTime.DateTimeEpoch : CogniteTime.ParseTimestampString(historyStart);
+
             if (type == HistoryReadType.BackfillData || type == HistoryReadType.BackfillEvents)
             {
                 var toTerminate = nodes.Where(node => node.Time <= startTime).ToList();
