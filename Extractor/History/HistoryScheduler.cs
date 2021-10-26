@@ -153,7 +153,7 @@ namespace Cognite.OpcUa.History
                 else
                 {
                     max = min + maxReadLength.Value;
-                    if (max > (historyEndTime ?? DateTime.UtcNow)) max = DateTime.MinValue;
+                    if (max > (historyEndTime ?? DateTime.UtcNow)) max = historyEndTime ?? DateTime.MinValue;
                 }
             }
             else
@@ -433,7 +433,7 @@ namespace Cognite.OpcUa.History
             {
                 if (Frontfill)
                 {
-                    node.Completed &= node.EndTime == DateTime.MinValue;
+                    node.Completed &= historyEndTime != null && node.EndTime >= historyEndTime || node.EndTime == DateTime.MinValue;
                 }
                 else
                 {
@@ -578,7 +578,7 @@ namespace Cognite.OpcUa.History
             {
                 if (Frontfill)
                 {
-                    node.Completed &= node.EndTime == DateTime.MinValue;
+                    node.Completed &= historyEndTime != null && node.EndTime >= historyEndTime || node.EndTime == DateTime.MinValue;
                 }
                 else
                 {

@@ -64,8 +64,8 @@ namespace Cognite.OpcUa.History
                 if (StartTime != null)
                 {
                     // If no new datapoints have been read since last time, return end of last period.
-                    // This can cause issues if combined with ignore-continuation-points. In those cases 
-                    // MaxReadLength must be set lower.
+                    // This can cause issues if the server does not use continuation points and reports
+                    // datapoints weirdly. In that case MaxReadLength can be set lower, or nodes chunk can be reduced.
                     if (backfill)
                     {
                         if (time >= StartTime && ContinuationPoint == null) return EndTime;
