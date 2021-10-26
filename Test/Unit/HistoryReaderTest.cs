@@ -843,7 +843,8 @@ namespace Test.Unit
             var cfg = new HistoryConfig
             {
                 Backfill = false,
-                Data = true
+                Data = true,
+                EndTime = tester.HistoryStart.AddSeconds(20).ToUnixTimeMilliseconds()
             };
 
 
@@ -885,9 +886,67 @@ namespace Test.Unit
                 // 100 for each of the 7 nodes, then 1 extra every second of read, so 11.
                 Assert.Equal(7077, queue.Count);
                 var metric = CommonTestUtils.GetMetricValue("opcua_frontfill_data_count");
-                // first 5 reads to catch up to history, then 3 reads per 100 10 times, then at least 10 reads to catch up to the present
-                Assert.True(metric >= 45);
+                // first 5 reads to catch up to history, then 3 reads per 100 10 times, then 10 reads to catch up to the present
+                Assert.Equal(45, metric);
                 Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_points", 7077));
+            }
+        }
+        [Fact(Timeout = 10000)]
+        public async Task TestReadHistoryMaxLengthIgnoreCps()
+        {
+            using var extractor = tester.BuildExtractor();
+
+            var cfg = new HistoryConfig
+            {
+                Backfill = false,
+                Data = true,
+                EndTime = tester.HistoryStart.AddSeconds(20).ToUnixTimeMilliseconds()
+            };
+
+
+            var dt = new UADataType(DataTypeIds.Double);
+            var dt2 = new UADataType(DataTypeIds.String);
+
+            var states = new[] { tester.Server.Ids.Custom.MysteryVar, tester.Server.Ids.Custom.Array,
+                tester.Server.Ids.Base.DoubleVar1, tester.Server.Ids.Base.StringVar }
+                .Select((id, idx) => new VariableExtractionState(
+                    extractor,
+                    CommonTestUtils.GetSimpleVariable("state",
+                        idx == 3 ? dt2 : dt,
+                        idx == 1 ? 4 : 0,
+                        id),
+                    true, true))
+                .ToList();
+
+            var start = tester.HistoryStart.AddSeconds(-5);
+
+            foreach (var state in states)
+            {
+                state.InitExtractedRange(start, start);
+                state.FinalizeRangeInit();
+                extractor.State.SetNodeState(state);
+            }
+
+            var queue = (Queue<UADataPoint>)extractor.Streamer.GetType()
+                .GetField("dataPointQueue", BindingFlags.NonPublic | BindingFlags.Instance)
+                .GetValue(extractor.Streamer);
+
+            CommonTestUtils.ResetMetricValues("opcua_frontfill_data_count", "opcua_frontfill_data_points");
+
+            cfg.MaxReadLength = 1;
+            cfg.DataChunk = 50;
+            cfg.IgnoreContinuationPoints = true;
+
+            using (var reader = new HistoryReader(tester.Client, extractor, cfg, tester.Source.Token))
+            {
+                await reader.FrontfillData(states);
+                // 100 for each of the 7 nodes, then 2 extra every second of read.
+                Assert.Equal(7154, queue.Count);
+                var metric = CommonTestUtils.GetMetricValue("opcua_frontfill_data_count");
+                // first 5 reads to catch up to history, then 2 reads per 100 10 times, then two extra due to overlap,
+                // then 10 reads to catch up to the present
+                Assert.Equal(37, metric);
+                Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_points", 7154));
             }
         }
         [Fact(Timeout = 1000)]

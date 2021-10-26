@@ -115,6 +115,13 @@ history:
     event-nodes-chunk: 100
     # The earliest timestamp to be read from history on the OPC-UA server, in milliseconds since 1/1/1970.
     start-time: 0
+    # Timestamp to be considered the end of forward history. Only relevant if max-read-length is set.
+    # In milliseconds since 1/1/1970. Default is current time, if this is 0.
+    end-time: 0
+    # Maximum length of each read of history, in seconds.
+    # If this is set greater than zero, history will be read in chunks of this size.
+    # This can potentially take a very long time if end-time is much larger than start-time.
+    max-history-length: 0
     # Granularity to use when doing historyRead, in seconds. Nodes with last known timestamp within this range of eachother will
     # be read together. Should not be smaller than usual average update rate
     # Leave at 0 to always read a single node each time.

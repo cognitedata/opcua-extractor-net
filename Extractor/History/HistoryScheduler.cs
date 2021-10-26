@@ -51,6 +51,7 @@ namespace Cognite.OpcUa.History
 
         private readonly HistoryReadType type;
         private readonly DateTime historyStartTime;
+        private readonly DateTime? historyEndTime;
         private readonly TimeSpan historyGranularity;
         private readonly ILogger log = Log.Logger.ForContext<HistoryScheduler>();
 
@@ -97,6 +98,7 @@ namespace Cognite.OpcUa.History
 
             nodeCount = count;
 
+            if (config.EndTime > 0) historyEndTime = CogniteTime.FromUnixTimeMilliseconds(config.EndTime);
             historyStartTime = CogniteTime.FromUnixTimeMilliseconds(config.StartTime);
             historyGranularity = config.Granularity <= 0
                 ? TimeSpan.Zero
@@ -151,7 +153,7 @@ namespace Cognite.OpcUa.History
                 else
                 {
                     max = min + maxReadLength.Value;
-                    if (max > DateTime.UtcNow) max = DateTime.MinValue;
+                    if (max > (historyEndTime ?? DateTime.UtcNow)) max = DateTime.MinValue;
                 }
             }
             else

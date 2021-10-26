@@ -380,6 +380,7 @@ namespace Cognite.OpcUa
         public int EventNodesChunk { get => eventNodesChunk; set => eventNodesChunk = Math.Max(1, value); }
         private int eventNodesChunk = 100;
         public long StartTime { get; set; }
+        public long EndTime { get; set; }
         public int Granularity { get; set; } = 600;
         public int MaxReadLength { get; set; }
         public bool IgnoreContinuationPoints { get; set; }
