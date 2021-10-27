@@ -389,7 +389,8 @@ namespace Cognite.OpcUa
         public int EventNodesChunk { get => eventNodesChunk; set => eventNodesChunk = Math.Max(1, value); }
         private int eventNodesChunk = 100;
         public string? StartTime { get; set; } = "0";
-        public int Granularity { get; set; } = 600;
+        public TimeSpanWrapper GranularityValue { get; } = new TimeSpanWrapper(true, "s", "600");
+        public string? Granularity { get => GranularityValue.RawValue; set => GranularityValue.RawValue = value!; }
         public bool IgnoreContinuationPoints { get; set; }
 
         public TimeSpanWrapper RestartPeriodValue { get; } = new TimeSpanWrapper(false, "s", "0");

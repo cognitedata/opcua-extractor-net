@@ -92,13 +92,18 @@ namespace Cognite.OpcUa.History
 
             nodeCount = count;
 
-            historyStartTime = config.StartTime == null ? CogniteTime.DateTimeEpoch : CogniteTime.ParseTimestampString(config.StartTime)
-                ?? CogniteTime.DateTimeEpoch;
-            historyGranularity = config.Granularity <= 0
-                ? TimeSpan.Zero
-                : TimeSpan.FromSeconds(config.Granularity);
+            historyStartTime = GetStartTime(config.StartTime);
+            historyGranularity = config.GranularityValue.Value;
 
             metrics = new HistoryMetrics(type);
+        }
+
+        private static DateTime GetStartTime(string? start)
+        {
+            if (string.IsNullOrWhiteSpace(start)) return CogniteTime.DateTimeEpoch;
+            var parsed = CogniteTime.ParseTimestampString(start);
+            if (parsed == null) throw new ArgumentException($"Invalid history start time: {start}");
+            return parsed!.Value;
         }
 
         private static IEnumerable<HistoryReadNode> GetNodes(
@@ -110,7 +115,7 @@ namespace Cognite.OpcUa.History
         {
             var nodes = states.Select(state => new HistoryReadNode(type, state)).ToList();
 
-            var startTime = historyStart == null ? CogniteTime.DateTimeEpoch : CogniteTime.ParseTimestampString(historyStart);
+            var startTime = GetStartTime(historyStart);
 
             if (type == HistoryReadType.BackfillData || type == HistoryReadType.BackfillEvents)
             {

@@ -1103,7 +1103,7 @@ namespace Cognite.OpcUa.Config
                 TimeSpan.FromTicks(totalAvgDistance));
             var granularity = TimeSpan.FromTicks(totalAvgDistance * 10).Seconds + 1;
             log.Information("Suggested granularity is: {gran} seconds", granularity);
-            config.History.Granularity = granularity;
+            config.History.Granularity = granularity.ToString();
             summary.HistoryGranularity = TimeSpan.FromSeconds(granularity);
 
             bool backfillCapable = false;
