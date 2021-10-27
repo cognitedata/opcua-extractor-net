@@ -3,7 +3,6 @@ using Cognite.Extractor.Logging;
 using Cognite.OpcUa;
 using Cognite.OpcUa.Types;
 using Opc.Ua;
-using Serilog;
 using Serilog.Events;
 using System;
 using System.Collections.Generic;
@@ -68,18 +67,6 @@ namespace Test.Unit
             // 3 layer
             var aex2 = new AggregateException(new AggregateException(aex1));
             Assert.Equal(root, ExtractorUtils.GetRootExceptionOfType<ExtractorFailureException>(aex2));
-        }
-        class DummyLogger : ILogger
-        {
-            public List<LogEvent> Events { get; } = new List<LogEvent>();
-            private object mutex = new object();
-            public void Write(LogEvent logEvent)
-            {
-                lock (mutex)
-                {
-                    Events.Add(logEvent);
-                }
-            }
         }
         [Theory]
         [InlineData(typeof(Exception), 0, 1, false)]

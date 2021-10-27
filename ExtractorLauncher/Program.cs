@@ -135,23 +135,23 @@ namespace Cognite.OpcUa
                 return true;
             }
 
-            rootCommand.Handler = CommandHandler.Create((ExtractorParams setup) =>
+            rootCommand.Handler = CommandHandler.Create(async (ExtractorParams setup) =>
             {
                 if (!OnLaunchCommon(setup)) return;
                 if (setup.Service)
                 {
-                    RunService(services, setup);
+                    await RunService(services, setup);
                 }
                 else
                 {
-                    RunStandalone(services, setup);
+                    await RunStandalone(services, setup);
                 }
             });
-            toolCmd.Handler = CommandHandler.Create((ExtractorParams setup) =>
+            toolCmd.Handler = CommandHandler.Create(async (ExtractorParams setup) =>
             {
                 setup.ConfigTool = true;
                 if (!OnLaunchCommon(setup)) return;
-                RunStandalone(services, setup);
+                await RunStandalone(services, setup);
             });
 
             return new CommandLineBuilder(rootCommand)
@@ -160,7 +160,7 @@ namespace Cognite.OpcUa
                 .Build();
         }
 
-        private static void RunService(ServiceCollection extServices, ExtractorParams setup)
+        private static async Task RunService(ServiceCollection extServices, ExtractorParams setup)
         {
             var builder = Host.CreateDefaultBuilder()
                 .ConfigureServices((hostContext, services) =>
@@ -177,17 +177,17 @@ namespace Cognite.OpcUa
             {
                 builder = builder.UseSystemd();
             }
-            builder.Build().Run();
+            await builder.Build().RunAsync();
         }
-        private static void RunStandalone(ServiceCollection services, ExtractorParams setup)
+        private static async Task RunStandalone(ServiceCollection services, ExtractorParams setup)
         {
             if (setup.ConfigTool)
             {
-                ExtractorStarter.RunConfigTool(null, setup, services, CancellationToken.None).Wait();
+                await ExtractorStarter.RunConfigTool(null, setup, services, CancellationToken.None);
             }
             else
             {
-                ExtractorStarter.RunExtractor(null, setup, services, CancellationToken.None).Wait();
+                await ExtractorStarter.RunExtractor(null, setup, services, CancellationToken.None);
             }
         }
     }
