@@ -1,6 +1,8 @@
 ﻿using Cognite.OpcUa;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
@@ -31,7 +33,8 @@ namespace Test.Unit
         public void TestDataTypeManagerConfigure()
         {
             var config = new DataTypeConfig();
-            var mgr = new DataTypeManager(tester.Client, config);
+            var log = tester.Provider.GetRequiredService<ILogger<DataTypeManager>>();
+            var mgr = new DataTypeManager(log, tester.Client, config);
             var types = (Dictionary<NodeId, UADataType>)mgr.GetType()
                 .GetField("dataTypes", BindingFlags.NonPublic | BindingFlags.Instance)
                 .GetValue(mgr);
@@ -69,7 +72,8 @@ namespace Test.Unit
         public void TestGetDataType()
         {
             var config = new DataTypeConfig();
-            var mgr = new DataTypeManager(tester.Client, config);
+            var log = tester.Provider.GetRequiredService<ILogger<DataTypeManager>>();
+            var mgr = new DataTypeManager(log, tester.Client, config);
             var types = (Dictionary<NodeId, UADataType>)mgr.GetType()
                 .GetField("dataTypes", BindingFlags.NonPublic | BindingFlags.Instance)
                 .GetValue(mgr);
@@ -163,7 +167,8 @@ namespace Test.Unit
             };
             var node = new UAVariable(new NodeId("node"), "node", NodeId.Null);
             node.VariableAttributes.ValueRank = ValueRanks.Scalar;
-            var mgr = new DataTypeManager(tester.Client, config);
+            var log = tester.Provider.GetRequiredService<ILogger<DataTypeManager>>();
+            var mgr = new DataTypeManager(log, tester.Client, config);
             mgr.Configure();
 
             // Basic, passing
@@ -226,7 +231,8 @@ namespace Test.Unit
         {
             var config = new DataTypeConfig();
             var node = new UAVariable(new NodeId("node"), "node", NodeId.Null);
-            var mgr = new DataTypeManager(tester.Client, config);
+            var log = tester.Provider.GetRequiredService<ILogger<DataTypeManager>>();
+            var mgr = new DataTypeManager(log, tester.Client, config);
             var customTypeNames = (Dictionary<NodeId, string>)mgr.GetType()
                 .GetField("customTypeNames", BindingFlags.NonPublic | BindingFlags.Instance)
                 .GetValue(mgr);
@@ -279,7 +285,8 @@ namespace Test.Unit
             {
                 new ProtoDataType { NodeId = tester.Server.Ids.Custom.NumberType.ToProtoNodeId(tester.Client) }
             };
-            var mgr = new DataTypeManager(tester.Client, config);
+            var log = tester.Provider.GetRequiredService<ILogger<DataTypeManager>>();
+            var mgr = new DataTypeManager(log, tester.Client, config);
             var customTypeNames = (Dictionary<NodeId, string>)mgr.GetType()
                 .GetField("customTypeNames", BindingFlags.NonPublic | BindingFlags.Instance)
                 .GetValue(mgr);
@@ -502,7 +509,8 @@ namespace Test.Unit
         [Fact]
         public async Task TestNodeTypeManager()
         {
-            var mgr = new NodeTypeManager(tester.Client);
+            var log = tester.Provider.GetRequiredService<ILogger<NodeTypeManager>>();
+            var mgr = new NodeTypeManager(log, tester.Client);
             var type1 = mgr.GetObjectType(ObjectTypeIds.BaseObjectType, false);
             var type2 = mgr.GetObjectType(ObjectTypeIds.FolderType, false);
             var type3 = mgr.GetObjectType(VariableTypeIds.AudioVariableType, true);
@@ -523,7 +531,8 @@ namespace Test.Unit
         public async Task TestReferenceTypeMeta()
         {
             using var extractor = tester.BuildExtractor();
-            var mgr = new ReferenceTypeManager(tester.Client, extractor);
+            var log = tester.Provider.GetRequiredService<ILogger<ReferenceTypeManager>>();
+            var mgr = new ReferenceTypeManager(log, tester.Client, extractor);
             var type1 = mgr.GetReferenceType(ReferenceTypeIds.Organizes);
             var type2 = mgr.GetReferenceType(ReferenceTypeIds.HasComponent);
             var type3 = mgr.GetReferenceType(tester.Server.Ids.Custom.RefType1);
@@ -544,7 +553,8 @@ namespace Test.Unit
         private async Task TestGetReferencesGroup(NodeId referenceTypeId, int results, params NodeId[] ids)
         {
             using var extractor = tester.BuildExtractor();
-            var mgr = new ReferenceTypeManager(tester.Client, extractor);
+            var log = tester.Provider.GetRequiredService<ILogger<ReferenceTypeManager>>();
+            var mgr = new ReferenceTypeManager(log, tester.Client, extractor);
 
             var nodes = ids.Select(id => new UANode(id, "Node", NodeId.Null, NodeClass.Object)).ToList();
             foreach (var node in nodes)

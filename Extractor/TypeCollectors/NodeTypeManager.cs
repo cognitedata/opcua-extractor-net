@@ -16,8 +16,8 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using Cognite.OpcUa.Types;
+using Microsoft.Extensions.Logging;
 using Opc.Ua;
-using Serilog;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -30,12 +30,13 @@ namespace Cognite.OpcUa.TypeCollectors
     /// </summary>
     public class NodeTypeManager
     {
-        private readonly ILogger log = Log.Logger.ForContext<NodeTypeManager>();
+        private readonly ILogger<NodeTypeManager> log;
         private readonly UAClient uaClient;
         private readonly Dictionary<NodeId, UANodeType> mappedTypes = new Dictionary<NodeId, UANodeType>();
 
-        public NodeTypeManager(UAClient client)
+        public NodeTypeManager(ILogger<NodeTypeManager> log, UAClient client)
         {
+            this.log = log;
             uaClient = client;
         }
         /// <summary>
@@ -58,7 +59,7 @@ namespace Cognite.OpcUa.TypeCollectors
         public async Task GetObjectTypeMetadataAsync(CancellationToken token)
         {
             var toRead = mappedTypes.Values.Where(type => !type.Id.IsNullNodeId && type.Name == null).ToList();
-            log.Information("Get object type metadata for {cnt} types", toRead.Count);
+            log.LogInformation("Get object type metadata for {Count} types", toRead.Count);
             if (!toRead.Any()) return;
 
             var readValueIds = toRead.Select(read => new ReadValueId

@@ -18,6 +18,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using Cognite.OpcUa.Pushers;
 using Cognite.OpcUa.TypeCollectors;
 using CogniteSdk;
+using Microsoft.Extensions.Logging.Abstractions;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
@@ -97,7 +98,7 @@ namespace Cognite.OpcUa.Types
 
             if (Properties != null && Properties.Any())
             {
-                var meta = BuildMetadataBase(null, new StringConverter(null, null));
+                var meta = BuildMetadataBase(null, new StringConverter(new NullLogger<StringConverter>(), null, null));
                 builder.Append("Properties: {\n");
                 foreach (var prop in meta)
                 {

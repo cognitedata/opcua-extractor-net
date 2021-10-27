@@ -16,8 +16,8 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using Cognite.OpcUa.Types;
+using Microsoft.Extensions.Logging;
 using Opc.Ua;
-using Serilog;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -32,15 +32,13 @@ namespace Cognite.OpcUa.NodeSources
     /// </summary>
     public class UANodeSource : BaseNodeSource
     {
-        protected override ILogger Log { get; set; } = Serilog.Log.Logger.ForContext(typeof(UAExtractor));
-
         private bool parsed;
 
         private List<(ReferenceDescription Node, NodeId ParentId)> references = new List<(ReferenceDescription, NodeId)>();
         public Action<ReferenceDescription, NodeId> Callback => HandleNode;
 
-        public UANodeSource(FullConfig config, UAExtractor extractor, UAClient client)
-            : base(config, extractor, client)
+        public UANodeSource(ILogger<UANodeSource> log, FullConfig config, UAExtractor extractor, UAClient client)
+            : base(log, config, extractor, client)
         {
         }
 
@@ -93,17 +91,17 @@ namespace Cognite.OpcUa.NodeSources
 
             if (!FinalDestinationObjects.Any() && !FinalDestinationVariables.Any() && !FinalSourceVariables.Any() && !FinalReferences.Any())
             {
-                Log.Information("Mapping resulted in no new nodes");
+                Log.LogInformation("Mapping resulted in no new nodes");
                 return null;
             }
 
-            Log.Information("Mapping resulted in {obj} destination objects and {ts} destination timeseries," +
-                " {robj} objects and {var} variables.",
+            Log.LogInformation("Mapping resulted in {ObjCount} destination objects and {TsCount} destination timeseries," +
+                " {SourceObj} objects and {SourceVar} variables.",
                 FinalDestinationObjects.Count, FinalDestinationVariables.Count,
                 FinalSourceObjects.Count, FinalSourceVariables.Count);
             if (FinalReferences.Any())
             {
-                Log.Information("Found a total of {cnt} references", FinalReferences.Count);
+                Log.LogInformation("Found a total of {Count} references", FinalReferences.Count);
             }
 
             return new NodeSourceResult(
@@ -120,7 +118,7 @@ namespace Cognite.OpcUa.NodeSources
         /// <param name="update">UpdateConfig used to determine what should be fetched</param>
         private async Task GetExtraNodeData(UpdateConfig update, CancellationToken token)
         {
-            Log.Information("Getting data for {NumVariables} variables and {NumObjects} objects",
+            Log.LogInformation("Getting data for {NumVariables} variables and {NumObjects} objects",
                 RawVariables.Count, RawObjects.Count);
 
             var nodes = RawObjects.Concat(RawVariables);
@@ -177,14 +175,14 @@ namespace Cognite.OpcUa.NodeSources
             {
                 FinalReferences.Add(reference);
             }
-            Log.Information("Found {cnt} non-hierarchical references", FinalReferences.Count);
+            Log.LogInformation("Found {Count} non-hierarchical references", FinalReferences.Count);
 
             if (Config.Extraction.Relationships.Hierarchical)
             {
                 var nodeMap = FinalSourceObjects.Concat(FinalSourceVariables)
                     .ToDictionary(node => node.Id);
 
-                Log.Information("Mapping {cnt} hierarchical references", references.Count);
+                Log.LogInformation("Mapping {Count} hierarchical references", references.Count);
 
                 foreach (var pair in references)
                 {
@@ -238,7 +236,7 @@ namespace Cognite.OpcUa.NodeSources
                 mapped = !uaNode.IsProperty;
 
                 Extractor.State.RegisterNode(uaNode.Id, Extractor.GetUniqueId(uaNode.Id));
-                Log.Verbose("HandleNode {class} {name}", uaNode.NodeClass, uaNode.DisplayName);
+                Log.LogTrace("HandleNode {Class} {Name}", uaNode.NodeClass, uaNode.DisplayName);
 
                 NodeMap[uaNode.Id] = uaNode;
             }
@@ -250,13 +248,13 @@ namespace Cognite.OpcUa.NodeSources
                 mapped = !variable.IsProperty;
 
                 Extractor.State.RegisterNode(variable.Id, Extractor.GetUniqueId(variable.Id));
-                Log.Verbose("HandleNode Variable {name}", variable.DisplayName);
+                Log.LogTrace("HandleNode Variable {Name}", variable.DisplayName);
 
                 NodeMap[variable.Id] = variable;
             }
             else
             {
-                Log.Warning("Node of unknown type received: {type}, {id}", node.NodeClass, node.NodeId);
+                Log.LogWarning("Node of unknown type received: {Type}, {Id}", node.NodeClass, node.NodeId);
             }
 
             if (mapped && Config.Extraction.Relationships.Enabled && Config.Extraction.Relationships.Hierarchical)

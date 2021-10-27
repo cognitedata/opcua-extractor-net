@@ -23,6 +23,7 @@ namespace Test.Unit
         public FullConfig BaseConfig { get; }
         public ServerController Server { get; }
         public CancellationTokenSource Source { get; protected set; }
+        public IServiceProvider Provider { get; }
         public ConfigToolTestFixture()
         {
             var services = new ServiceCollection();
@@ -37,12 +38,14 @@ namespace Test.Unit
             services.AddLogger();
             LoggingUtils.Configure(Config.Logger);
 
+            Provider = services.BuildServiceProvider();
+
             Server = new ServerController(new[] {
                 PredefinedSetup.Base, PredefinedSetup.Full, PredefinedSetup.Auditing,
                 PredefinedSetup.Custom, PredefinedSetup.Events, PredefinedSetup.Wrong }, port);
             Server.Start().Wait();
 
-            Explorer = new UAServerExplorer(Config, BaseConfig);
+            Explorer = new UAServerExplorer(Provider, Config, BaseConfig);
             Source = new CancellationTokenSource();
             Explorer.Run(Source.Token).Wait();
         }
@@ -488,7 +491,7 @@ namespace Test.Unit
             fullConfig.Source.EndpointUrl = tester.Config.Source.EndpointUrl;
             baseConfig.Source.EndpointUrl = tester.Config.Source.EndpointUrl;
 
-            var runTime = new ConfigToolRuntime(fullConfig, baseConfig, "config.config-tool-output.yml");
+            var runTime = new ConfigToolRuntime(tester.Provider, fullConfig, baseConfig, "config.config-tool-output.yml");
 
             var runTask = runTime.Run(CancellationToken.None);
 

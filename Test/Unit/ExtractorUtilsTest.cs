@@ -2,11 +2,12 @@
 using Cognite.Extractor.Logging;
 using Cognite.OpcUa;
 using Cognite.OpcUa.Types;
+using Microsoft.Extensions.Logging;
 using Opc.Ua;
-using Serilog.Events;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Test.Utils;
 using Xunit;
 using Xunit.Abstractions;
 using SourceOp = Cognite.OpcUa.ExtractorUtils.SourceOp;
@@ -68,6 +69,7 @@ namespace Test.Unit
             var aex2 = new AggregateException(new AggregateException(aex1));
             Assert.Equal(root, ExtractorUtils.GetRootExceptionOfType<ExtractorFailureException>(aex2));
         }
+
         [Theory]
         [InlineData(typeof(Exception), 0, 1, false)]
         [InlineData(typeof(Exception), 0, 1, true)]
@@ -95,8 +97,8 @@ namespace Test.Unit
 
             var logger = new DummyLogger();
             ExtractorUtils.LogException(logger, ex, "message", "silentMessage");
-            Assert.Equal(dbgC, logger.Events.Count(evt => evt.Level == LogEventLevel.Debug));
-            Assert.Equal(errC, logger.Events.Count(evt => evt.Level == LogEventLevel.Error));
+            Assert.Equal(dbgC, logger.Events.Count(evt => evt.LogLevel == LogLevel.Debug));
+            Assert.Equal(errC, logger.Events.Count(evt => evt.LogLevel == LogLevel.Error));
             Assert.Equal(dbgC + errC, logger.Events.Count);
         }
         [Theory]
@@ -139,13 +141,13 @@ namespace Test.Unit
             var logger = new DummyLogger();
             var serviceException = new ServiceResultException(code);
             var exc = ExtractorUtils.HandleServiceResult(logger, serviceException, sourceOp);
-            Assert.Equal(errC, logger.Events.Count(evt => evt.Level == LogEventLevel.Error));
+            Assert.Equal(errC, logger.Events.Count(evt => evt.LogLevel == LogLevel.Error));
             Assert.Equal(errC, logger.Events.Count);
             var serviceEx = Assert.IsType<SilentServiceException>(exc);
             if (isHandled) Assert.NotNull(serviceEx.InnerServiceException);
 
             exc = ExtractorUtils.HandleServiceResult(logger, new AggregateException(serviceException), sourceOp);
-            Assert.Equal(errC * 2, logger.Events.Count(evt => evt.Level == LogEventLevel.Error));
+            Assert.Equal(errC * 2, logger.Events.Count(evt => evt.LogLevel == LogLevel.Error));
             Assert.Equal(errC * 2, logger.Events.Count);
             serviceEx = Assert.IsType<SilentServiceException>(exc);
             if (isHandled) Assert.NotNull(serviceEx.InnerServiceException);
@@ -159,11 +161,6 @@ namespace Test.Unit
             var exception = new ServiceResultException(StatusCodes.BadRequestInterrupted, inner);
 
             var exc = ExtractorUtils.HandleServiceResult(logger, exception, SourceOp.CreateSubscription);
-            var dLog = LoggingUtils.GetSerilogDefault();
-            foreach (var evt in logger.Events)
-            {
-                dLog.Write(evt);
-            }
             Assert.Equal(3, logger.Events.Count);
             
             var serviceEx = Assert.IsType<SilentServiceException>(exc);

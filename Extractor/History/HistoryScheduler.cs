@@ -1,8 +1,25 @@
-﻿using Cognite.Extractor.Common;
+﻿/* Cognite Extractor for OPC-UA
+Copyright (C) 2021 Cognite AS
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
+
+using Cognite.Extractor.Common;
 using Cognite.OpcUa.Types;
+using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using Prometheus;
-using Serilog;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -52,7 +69,7 @@ namespace Cognite.OpcUa.History
         private readonly HistoryReadType type;
         private readonly DateTime historyStartTime;
         private readonly TimeSpan historyGranularity;
-        private readonly ILogger log = Log.Logger.ForContext<HistoryScheduler>();
+        private readonly ILogger log;
 
         private bool Frontfill => type == HistoryReadType.FrontfillData || type == HistoryReadType.FrontfillEvents;
         private bool Data => type == HistoryReadType.FrontfillData || type == HistoryReadType.BackfillData;
@@ -67,6 +84,7 @@ namespace Cognite.OpcUa.History
         private readonly List<Exception> exceptions = new List<Exception>();
 
         public HistoryScheduler(
+            ILogger log,
             UAClient uaClient,
             UAExtractor extractor,
             HistoryConfig config,
@@ -76,7 +94,7 @@ namespace Cognite.OpcUa.History
             IEnumerable<UAHistoryExtractionState> states,
             CancellationToken token)
             : base(
-                  GetNodes(states, Log.Logger.ForContext<HistoryScheduler>(), type, config.StartTime, out var count),
+                  GetNodes(states, log, type, config.StartTime, out var count),
                   throttler,
                   (type == HistoryReadType.FrontfillData || type == HistoryReadType.BackfillData)
                     ? config.DataNodesChunk
@@ -84,6 +102,7 @@ namespace Cognite.OpcUa.History
                   resource,
                   token)
         {
+            this.log = log;
             this.uaClient = uaClient;
             this.extractor = extractor;
             this.config = config;
@@ -232,10 +251,10 @@ namespace Cognite.OpcUa.History
 
         public new async Task RunAsync()
         {
-            log.Information("Begin reading history of type {type} for {cnt} nodes", type, nodeCount);
+            log.LogInformation("Begin reading history of type {Type} for {Count} nodes", type, nodeCount);
             await base.RunAsync();
-            log.Information("Finish reading history of type {type} for {cnt} nodes. " +
-                "Took a total of {op} operations", type, nodeCount, numReads);
+            log.LogInformation("Finish reading history of type {Type} for {Count} nodes. " +
+                "Took a total of {NumOps} operations", type, nodeCount, numReads);
             if (exceptions.Any())
             {
                 throw new AggregateException(exceptions);
@@ -246,10 +265,9 @@ namespace Cognite.OpcUa.History
 
         private void LogReadFailure(IChunk<HistoryReadNode> finishedRead)
         {
-            log.Error("HistoryRead {type} failed for nodes {nodes}: {msg}",
-                type,
-                string.Join(',', finishedRead.Items.Select(node => node.State.Id)),
-                finishedRead.Exception?.Message);
+            log.LogError("HistoryRead {Type} failed for nodes {Nodes}: {ErrorMessage}",
+                type, string.Join(", ", finishedRead.Items.Select(node => node.State.Id)), finishedRead.Exception?.Message);
+
             ExtractorUtils.LogException(log, finishedRead.Exception, "Critical failure in HistoryRead", "Failure in HistoryRead");
         }
 
@@ -272,7 +290,6 @@ namespace Cognite.OpcUa.History
             if (!toTerminate.Any()) return;
             string name = GetResourceName(type);
             var builder = new StringBuilder();
-            builder.AppendFormat("Finish reading {0}. Retrieved:", type);
             bool frontfill = type == HistoryReadType.FrontfillData || type == HistoryReadType.FrontfillEvents;
             foreach (var node in toTerminate)
             {
@@ -282,7 +299,7 @@ namespace Cognite.OpcUa.History
                     node.State.Id,
                     frontfill ? node.State.SourceExtractedRange.Last : node.State.SourceExtractedRange.First);
             }
-            log.Debug(builder.ToString());
+            log.LogDebug("Finish reading {Type}. Retrieved: {Data}", name, builder);
         }
 
         protected override IEnumerable<HistoryReadNode> HandleTaskResult(IChunk<HistoryReadNode> chunk, CancellationToken token)
@@ -326,7 +343,7 @@ namespace Cognite.OpcUa.History
 
         protected override void OnIteration(int pending, int operations, int finished, int total)
         {
-            log.Debug("Read history of type {type}: {pend} pending, {op} total operations. {fin}/{tot}",
+            log.LogDebug("Read history of type {Type}: {Pending} pending, {Op} total operations. {Finished}/{Total}",
                 type, pending, operations, finished, total);
         }
 
@@ -348,7 +365,7 @@ namespace Cognite.OpcUa.History
 
             if (node.State == null)
             {
-                log.Warning("History data for unknown node received: {id}", node.Id);
+                log.LogWarning("History data for unknown node received: {Id}", node.Id);
                 return;
             }
 
@@ -360,7 +377,8 @@ namespace Cognite.OpcUa.History
                     if (StatusCode.IsNotGood(dp.StatusCode))
                     {
                         UAExtractor.BadDataPoints.Inc();
-                        log.Debug("Bad history datapoint: {BadDatapointExternalId} {SourceTimestamp}. Value: {Value}, Status: {Status}",
+
+                        log.LogDebug("Bad history datapoint: {BadDatapointExternalId} {SourceTimestamp}. Value: {Value}, Status: {Status}",
                             node.State.Id, dp.SourceTimestamp, dp.Value, ExtractorUtils.GetStatusCodeName((uint)dp.StatusCode));
                         continue;
                     }
@@ -404,7 +422,7 @@ namespace Cognite.OpcUa.History
                 var buffDps = extractor.Streamer.ToDataPoint(datapoint, nodeState);
                 foreach (var buffDp in buffDps)
                 {
-                    log.Verbose("History DataPoint {dp}", buffDp.ToDebugDescription());
+                    log.LogTrace("History DataPoint {DataPoint}", buffDp);
                     cnt++;
                 }
                 extractor.Streamer.Enqueue(buffDps);
@@ -418,7 +436,7 @@ namespace Cognite.OpcUa.History
             var buffered = nodeState.FlushBuffer();
             if (buffered.Any())
             {
-                log.Debug("Read {cnt} datapoints from buffer of state {id}", buffered.Count(), node.State.Id);
+                log.LogDebug("Read {Count} datapoints from buffer of state {Id}", buffered.Count(), node.State.Id);
                 nodeState.UpdateFromStream(buffered);
                 extractor.Streamer.Enqueue(buffered);
             }
@@ -452,13 +470,13 @@ namespace Cognite.OpcUa.History
 
             if (!(details is ReadEventDetails eventDetails))
             {
-                log.Warning("Incorrect details type of history read events");
+                log.LogWarning("Incorrect details type of history read events");
                 return;
             }
             var filter = eventDetails.Filter;
             if (filter == null || filter.SelectClauses == null)
             {
-                log.Warning("No event filter when reading from history, ignoring");
+                log.LogWarning("No event filter when reading from history, ignoring");
                 return;
             }
             if (node.State == null)
@@ -468,7 +486,7 @@ namespace Cognite.OpcUa.History
 
             if (node.State == null)
             {
-                log.Warning("History events for unknown emitter received: {id}", node.Id);
+                log.LogWarning("History events for unknown emitter received: {Id}", node.Id);
                 return;
             }
 
@@ -542,7 +560,7 @@ namespace Cognite.OpcUa.History
             {
                 var (smin, smax) = buffered.MinMax(dp => dp.Time);
                 emitterState.UpdateFromStream(smin, smax);
-                log.Debug("Read {cnt} events from buffer of state {id}", buffered.Count(), node.State.Id);
+                log.LogDebug("Read {Count} events from buffer of state {Id}", buffered.Count(), node.State.Id);
                 extractor.Streamer.Enqueue(buffered);
             }
         }

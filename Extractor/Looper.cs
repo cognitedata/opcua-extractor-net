@@ -16,13 +16,12 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using Cognite.Extractor.Common;
+using Microsoft.Extensions.Logging;
 using Prometheus;
-using Serilog;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -36,7 +35,7 @@ namespace Cognite.OpcUa
         public PeriodicScheduler Scheduler { get; }
 
         private readonly IEnumerable<IPusher> pushers;
-        private readonly ILogger log = Log.Logger.ForContext(typeof(Looper));
+        private readonly ILogger<Looper> log;
 
         private TaskCompletionSource<bool>? pushWaiterSource;
         private bool restart;
@@ -47,8 +46,14 @@ namespace Cognite.OpcUa
         private static readonly Counter numPushes = Metrics.CreateCounter("opcua_num_pushes",
             "Increments by one after each push to destination systems");
 
-        public Looper(PeriodicScheduler scheduler, UAExtractor extractor, FullConfig config, IEnumerable<IPusher> pushers)
+        public Looper(
+            ILogger<Looper> log, 
+            PeriodicScheduler scheduler,
+            UAExtractor extractor,
+            FullConfig config,
+            IEnumerable<IPusher> pushers)
         {
+            this.log = log;
             Scheduler = scheduler;
             this.extractor = extractor;
             this.config = config;
@@ -108,7 +113,7 @@ namespace Cognite.OpcUa
             if (task != waitTask) throw new TimeoutException("Waiting for push timed out");
             t.Stop();
 
-            log.Debug("Waited {s} milliseconds for push", t.ElapsedMilliseconds);
+            log.LogDebug("Waited {MS} milliseconds for push", t.ElapsedMilliseconds);
         }
 
 
@@ -123,7 +128,7 @@ namespace Cognite.OpcUa
 
                 if (recovered.Any())
                 {
-                    log.Information("Pushers {names} recovered", string.Join(", ", recovered.Select(val => val.pusher.GetType())));
+                    log.LogInformation("Pushers {Names} recovered", string.Join(", ", recovered.Select(val => val.pusher.GetType())));
                 }
 
 
@@ -229,7 +234,7 @@ namespace Cognite.OpcUa
         private async Task HistoryRestart(CancellationToken token)
         {
             if (token.IsCancellationRequested) return;
-            log.Information("Restarting history...");
+            log.LogInformation("Restarting history...");
             bool success = await extractor.TerminateHistory(30);
             if (!success) throw new ExtractorFailureException("Failed to terminate history");
             if (config.History.Enabled && config.History.Data)

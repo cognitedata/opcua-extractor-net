@@ -16,8 +16,8 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using Cognite.OpcUa.Types;
+using Microsoft.Extensions.Logging;
 using Opc.Ua;
-using Serilog;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -208,7 +208,6 @@ namespace Cognite.OpcUa
     {
         public NodeFilter Filter { get; }
         public TransformationType Type { get; }
-        private readonly ILogger log = Log.Logger.ForContext(typeof(UAExtractor));
         private readonly int index;
         public NodeTransformation(RawNodeTransformation raw, int index)
         {
@@ -221,7 +220,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="node">Node to test</param>
         /// <param name="ns">Active NamespaceTable</param>
-        public void ApplyTransformation(UANode node, NamespaceTable ns)
+        public void ApplyTransformation(ILogger log, UANode node, NamespaceTable ns)
         {
             if (node == null) return;
             if (node.Ignore || node.IsProperty && Type == TransformationType.Property || !node.ShouldSubscribe && Type == TransformationType.DropSubscriptions) return;
@@ -231,15 +230,15 @@ namespace Cognite.OpcUa
                 {
                     case TransformationType.Ignore:
                         node.Attributes.Ignore = true;
-                        log.Verbose("Ignoring node {name} {id} due to matching ignore filter {idx}", node.DisplayName, node.Id, index);
+                        log.LogTrace("Ignoring node {Name} {Id} due to matching ignore filter {Idx}", node.DisplayName, node.Id, index);
                         break;
                     case TransformationType.Property:
                         node.Attributes.IsProperty = true;
-                        log.Verbose("Treating node {name} {id} as property due to matching filter {idx}", node.DisplayName, node.Id, index);
+                        log.LogTrace("Treating node {Name} {Id} as property due to matching filter {Idx}", node.DisplayName, node.Id, index);
                         break;
                     case TransformationType.DropSubscriptions:
                         node.Attributes.ShouldSubscribe = false;
-                        log.Debug("Dropping subscriptions on node {name} {id} due to matching filter {idx}", node.DisplayName, node.Id, index);
+                        log.LogDebug("Dropping subscriptions on node {Name} {Id} due to matching filter {Idx}", node.DisplayName, node.Id, index);
                         break;
                 }
             }
