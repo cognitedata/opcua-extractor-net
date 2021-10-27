@@ -584,7 +584,7 @@ namespace Test.Unit
             // and we get duplicates between each read, since we cannot guarantee that all in a given time chunk have been retrieved.
             // Really, when using this config option, you should read a single node per request.
             cfg.IgnoreContinuationPoints = true;
-            cfg.Granularity = 1;
+            cfg.Granularity = "1s";
             foreach (var state in states) state.RestartHistory();
             CommonTestUtils.ResetMetricValues("opcua_frontfill_events_count", "opcua_frontfill_events");
             await Task.WhenAny(reader.FrontfillEvents(states), Task.Delay(10000));
@@ -681,7 +681,7 @@ namespace Test.Unit
             // We expect this to give the exact same results as normal chunking, except we get one extra read,
             // and we get duplicates between each read, since we cannot guarantee that all in a given time chunk have been retrieved.
             cfg.IgnoreContinuationPoints = true;
-            cfg.Granularity = 1;
+            cfg.Granularity = "1";
             foreach (var state in states) state.RestartHistory();
             CommonTestUtils.ResetMetricValues("opcua_backfill_events_count", "opcua_backfill_events");
             await Task.WhenAny(reader.BackfillEvents(states), Task.Delay(10000));
@@ -706,7 +706,7 @@ namespace Test.Unit
             {
                 Backfill = true,
                 Data = true,
-                Granularity = granularity
+                Granularity = granularity.ToString()
             };
 
             using var reader = new HistoryReader(tester.Client, extractor, cfg, tester.Source.Token);
