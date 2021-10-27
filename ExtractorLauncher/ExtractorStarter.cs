@@ -39,6 +39,8 @@ namespace Cognite.OpcUa
                 $"version: {Extractor.Metrics.Version.GetVersion(Assembly.GetExecutingAssembly())}"
                 + $", status: {Extractor.Metrics.Version.GetDescription(Assembly.GetExecutingAssembly())}");
 
+        public static Action<CogniteDestination, UAExtractor> OnCreateExtractor { get; set; }
+
         private static string VerifyConfig(ILogger log, FullConfig config)
         {
             if (string.IsNullOrEmpty(config.Source.EndpointUrl)) return "Missing endpoint-url";
@@ -61,7 +63,12 @@ namespace Cognite.OpcUa
             return null;
         }
 
-        private static void VerifyAndBuildConfig(ILogger log, FullConfig config, ExtractorParams setup, string configRoot)
+        private static void VerifyAndBuildConfig(
+            ILogger log,
+            FullConfig config,
+            ExtractorParams setup,
+            ExtractorRunnerParams<FullConfig, UAExtractor> options,
+            string configRoot)
         {
             config.Source.ConfigRoot = configRoot;
             if (!string.IsNullOrEmpty(setup.EndpointUrl)) config.Source.EndpointUrl = setup.EndpointUrl;
@@ -83,6 +90,11 @@ namespace Cognite.OpcUa
             }
             config.Source.AutoAccept |= setup.AutoAccept;
             config.Source.ExitOnFailure |= setup.Exit;
+
+            if (options != null)
+            {
+                options.Restart |= config.Source.ExitOnFailure;
+            }
 
             string configResult = VerifyConfig(log, config);
             if (configResult != null)
@@ -117,9 +129,8 @@ namespace Cognite.OpcUa
             }
         }
 
-        public static async Task RunConfigTool(ILogger log, ExtractorParams setup, CancellationToken token)
+        public static async Task RunConfigTool(ILogger log, ExtractorParams setup, ServiceCollection services, CancellationToken token)
         {
-            var services = new ServiceCollection();
             string configDir = setup.ConfigDir ?? Environment.GetEnvironmentVariable("OPCUA_CONFIG_DIR") ?? "config/";
 
             SetWorkingDir(setup);
@@ -145,7 +156,7 @@ namespace Cognite.OpcUa
                 setup.BaseConfig = ConfigurationUtils.TryReadConfigFromFile<FullConfig>(configFile, 1);
             }
 
-            VerifyAndBuildConfig(log, setup.Config, setup, configDir);
+            VerifyAndBuildConfig(log, setup.Config, setup, null, configDir);
 
             if (setup.NoConfig)
             {
@@ -165,9 +176,8 @@ namespace Cognite.OpcUa
             await runTime.Run(token);
         }
 
-        public static async Task RunExtractor(ILogger log, ExtractorParams setup, CancellationToken token)
+        public static async Task RunExtractor(ILogger log, ExtractorParams setup, ServiceCollection services, CancellationToken token)
         {
-            var services = new ServiceCollection();
             string configDir = setup.ConfigDir ?? Environment.GetEnvironmentVariable("OPCUA_CONFIG_DIR") ?? "config/";
 
             SetWorkingDir(setup);
@@ -228,22 +238,26 @@ namespace Cognite.OpcUa
 
             services.AddSingleton<UAClient>();
 
-            await ExtractorRunner.Run<FullConfig, UAExtractor>(
-                setup.ConfigFile ?? Path.Join(configDir, "config.yml"),
-                new[] { 1 },
-                $"OPC-UA Extractor:{ver}",
-                $"CogniteOPCUAExtractor/{ver}",
-                true,
-                true,
-                true,
-                !(setup.Exit || (config?.Source?.ExitOnFailure ?? false)),
-                token,
-                configCallback: (config, options) => VerifyAndBuildConfig(log, config, setup, configDir),
-                extServices: services,
-                startupLogger: log,
-                config: config,
-                requireDestination: false,
-                logException: (log, e, msg) => ExtractorUtils.LogException(log, e, msg, msg));
+            var options = new ExtractorRunnerParams<FullConfig, UAExtractor>
+            {
+                ConfigPath = setup.ConfigFile ?? Path.Join(configDir, "config.yml"),
+                AcceptedConfigVersions = new[] { 1 },
+                AppId = $"OPC-UA Extractor:{ver}",
+                UserAgent = $"CogniteOPCUAExtractor/{ver}",
+                AddStateStore = true,
+                AddLogger = true,
+                AddMetrics = true,
+                Restart = !setup.Exit,
+                ConfigCallback = (config, options) => VerifyAndBuildConfig(log, config, setup, options, configDir),
+                ExtServices = services,
+                StartupLogger = log,
+                Config = config,
+                RequireDestination = false,
+                LogException = (log, e, msg) => ExtractorUtils.LogException(log, e, msg, msg),
+                OnCreateExtractor = OnCreateExtractor
+            };
+
+            await ExtractorRunner.Run(options, token);
         }
     }
 }

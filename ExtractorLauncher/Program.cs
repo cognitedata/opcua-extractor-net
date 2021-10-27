@@ -56,6 +56,9 @@ namespace Cognite.OpcUa
     /// </summary>
     public static class Program
     {
+        // For testing
+        public static bool CommandDryRun { get; set; }
+        public static Action<ServiceCollection, ExtractorParams> OnLaunch { get; set; }
         public static async Task<int> Main(string[] args)
         {
             return await GetCommandLineOptions().InvokeAsync(args);
@@ -63,6 +66,8 @@ namespace Cognite.OpcUa
 
         private static Parser GetCommandLineOptions()
         {
+            var services = new ServiceCollection();
+
             var rootCommand = new RootCommand();
             rootCommand.Description = "Cognite OPC-UA Extractor";
             var toolCmd = new Command("tool", "Run the configuration tool");
@@ -122,21 +127,31 @@ namespace Cognite.OpcUa
             flag.AddAlias("-x");
             rootCommand.AddOption(flag);
 
+            bool OnLaunchCommon(ExtractorParams setup)
+            {
+                services.AddSingleton(setup);
+                OnLaunch?.Invoke(services, setup);
+                if (CommandDryRun) return false;
+                return true;
+            }
+
             rootCommand.Handler = CommandHandler.Create((ExtractorParams setup) =>
             {
+                if (!OnLaunchCommon(setup)) return;
                 if (setup.Service)
                 {
-                    RunService(setup);
+                    RunService(services, setup);
                 }
                 else
                 {
-                    RunStandalone(setup);
+                    RunStandalone(services, setup);
                 }
             });
             toolCmd.Handler = CommandHandler.Create((ExtractorParams setup) =>
             {
                 setup.ConfigTool = true;
-                RunStandalone(setup);
+                if (!OnLaunchCommon(setup)) return;
+                RunStandalone(services, setup);
             });
 
             return new CommandLineBuilder(rootCommand)
@@ -145,13 +160,13 @@ namespace Cognite.OpcUa
                 .Build();
         }
 
-        private static void RunService(ExtractorParams setup)
+        private static void RunService(ServiceCollection extServices, ExtractorParams setup)
         {
             var builder = Host.CreateDefaultBuilder()
                 .ConfigureServices((hostContext, services) =>
                 {
-                    services.AddSingleton(setup);
-                    services.AddHostedService<Worker>();
+                    services.AddHostedService(provider =>
+                        new Worker(provider.GetRequiredService<ILogger<Worker>>(), extServices, setup));
                 });
             if (OperatingSystem.IsWindows())
             {
@@ -164,15 +179,15 @@ namespace Cognite.OpcUa
             }
             builder.Build().Run();
         }
-        private static void RunStandalone(ExtractorParams setup)
+        private static void RunStandalone(ServiceCollection services, ExtractorParams setup)
         {
             if (setup.ConfigTool)
             {
-                ExtractorStarter.RunConfigTool(null, setup, CancellationToken.None).Wait();
+                ExtractorStarter.RunConfigTool(null, setup, services, CancellationToken.None).Wait();
             }
             else
             {
-                ExtractorStarter.RunExtractor(null, setup, CancellationToken.None).Wait();
+                ExtractorStarter.RunExtractor(null, setup, services, CancellationToken.None).Wait();
             }
         }
     }
