@@ -12,6 +12,9 @@ using Cognite.OpcUa;
 using Test.Utils;
 using System.IO;
 using System.Reflection;
+using Cognite.Extractor.Logging;
+using Cognite.Extractor.Utils;
+using Cognite.Extractor.Configuration;
 
 namespace Test.Integration
 {
@@ -181,7 +184,11 @@ version: 1
                 "--auto-accept",
                 "--config-file",
                 "config-test-1.yml",
-                "--service"
+                "--service",
+                "--working-dir",
+                Directory.GetCurrentDirectory(),
+                "--config-root",
+                "config"
             };
             File.WriteAllText("config-test-1.yml", GetConfigToolOutput());
 
@@ -199,7 +206,7 @@ version: 1
             }
             finally
             {
-                await extractor?.Close();
+                if (extractor != null) await extractor.Close();
                 await Task.WhenAny(task, Task.Delay(5000));
             }
         }
@@ -372,11 +379,97 @@ version: 1
         }
 
         [Fact]
-        public async Task TestVerifyAndBuildConfig()
+        public void TestVerifyAndBuildConfig()
         {
             var log = new DummyLogger();
             var method = typeof(ExtractorStarter).GetMethod("VerifyAndBuildConfig", BindingFlags.Static | BindingFlags.NonPublic);
 
+            // Just plain run
+            var config = new FullConfig();
+            config.GenerateDefaults();
+            config.Source.EndpointUrl = tester.EndpointUrl;
+            var setup = new ExtractorParams();
+            method.Invoke(typeof(ExtractorStarter), new object[] { log, config, setup, null, "config" });
+
+            // Bind setup
+            setup.EndpointUrl = "opc.tcp://localhost:60000";
+            setup.User = "user";
+            setup.Password = "password";
+            setup.Secure = true;
+            setup.LogLevel = "information";
+            setup.LogDir = "logs";
+            setup.AutoAccept = true;
+            setup.Exit = true;
+
+            method.Invoke(typeof(ExtractorStarter), new object[] { log, config, setup, null, "config" });
+            Assert.Equal("config", config.Source.ConfigRoot);
+            Assert.Equal("opc.tcp://localhost:60000", config.Source.EndpointUrl);
+            Assert.Equal("user", config.Source.Username);
+            Assert.Equal("password", config.Source.Password);
+            Assert.True(config.Source.Secure);
+            Assert.Equal("information", config.Logger.Console.Level);
+            Assert.Equal("information", config.Logger.File.Level);
+            Assert.Equal("logs", config.Logger.File.Path);
+            Assert.True(config.Source.AutoAccept);
+            Assert.True(config.Source.ExitOnFailure);
+
+            // Alternate paths
+            config = new FullConfig();
+            config.GenerateDefaults();
+            config.Logger.File = new FileConfig { Level = "debug" };
+            config.Source.EndpointUrl = tester.EndpointUrl;
+            setup = new ExtractorParams();
+            setup.NoConfig = true;
+            setup.LogDir = "logs2";
+            setup.Exit = true;
+            var options = new ExtractorRunnerParams<FullConfig, UAExtractor>();
+
+            method.Invoke(typeof(ExtractorStarter), new object[] { log, config, setup, options, "config" });
+
+            Assert.Equal("logs2", config.Logger.File.Path);
+            Assert.Equal("debug", config.Logger.File.Level);
+            Assert.True(config.Source.ExitOnFailure);
+            Assert.True(options.Restart);
+            Assert.Equal("information", config.Logger.Console.Level);
+
+            // Invalid configs
+            config = new FullConfig();
+            config.GenerateDefaults();
+            setup = new ExtractorParams();
+
+            var exc = Assert.Throws<TargetInvocationException>(() =>
+                method.Invoke(typeof(ExtractorStarter), new object[] { log, config, setup, options, "config" }));
+            Assert.Equal("Invalid config: Missing endpoint-url", exc.InnerException.Message);
+
+            config.Source.EndpointUrl = "invalidurl";
+            exc = Assert.Throws<TargetInvocationException>(() =>
+                method.Invoke(typeof(ExtractorStarter), new object[] { log, config, setup, options, "config" }));
+            Assert.Equal("Invalid config: EndpointUrl is not a valid URI", exc.InnerException.Message);
+
+            // Get warnings
+            log.Events.Clear();
+            config.Source.EndpointUrl = tester.EndpointUrl;
+            method.Invoke(typeof(ExtractorStarter), new object[] { log, config, setup, options, "config" });
+            Assert.Equal(2, log.Events.Where(evt => evt.LogLevel == Microsoft.Extensions.Logging.LogLevel.Warning).Count());
+
+            // events idprefix
+            config.Extraction.IdPrefix = "events.";
+            exc = Assert.Throws<TargetInvocationException>(() =>
+                method.Invoke(typeof(ExtractorStarter), new object[] { log, config, setup, options, "config" }));
+            Assert.Equal("Invalid config: Do not use events. as id-prefix, as it is used internally", exc.InnerException.Message);
+
+            // Invalid history start time
+            config.Extraction.IdPrefix = null;
+            config.History.StartTime = "2d-agoo";
+            exc = Assert.Throws<TargetInvocationException>(() =>
+                method.Invoke(typeof(ExtractorStarter), new object[] { log, config, setup, options, "config" }));
+            Assert.Equal("Invalid config: Invalid history start time: 2d-agoo", exc.InnerException.Message);
+
+            // Missing opc-ua xml config
+            config.History.StartTime = null;
+            exc = Assert.Throws<TargetInvocationException>(() =>
+                method.Invoke(typeof(ExtractorStarter), new object[] { log, config, setup, options, "." }));
+            Assert.Equal("Missing opc.ua.net.extractor.Config.xml in config folder .", exc.InnerException.Message);
         }
     }
 }
