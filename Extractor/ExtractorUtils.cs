@@ -18,7 +18,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
-using Serilog;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -27,11 +26,27 @@ using System.Text.RegularExpressions;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 using YamlDotNet.Serialization.TypeInspectors;
+using System.Reflection;
 
 namespace Cognite.OpcUa
 {
     public static class ExtractorUtils
     {
+        private static Dictionary<uint, string> statusCodeNames = new Dictionary<uint, string>();
+        static ExtractorUtils()
+        {
+            var fields = typeof(StatusCodes).GetFields(BindingFlags.Public | BindingFlags.Static);
+            foreach (var field in fields)
+            {
+                statusCodeNames.Add((uint)field.GetValue(typeof(StatusCodes)), field.Name);
+            }
+        }
+
+        public static string GetStatusCodeName(uint code)
+        {
+            return statusCodeNames.GetValueOrDefault(code);
+        }
+
         /// <summary>
         /// Divide a list of BufferedNodes into lists of nodes mapped to destination context objects and
         /// data variables respectively.

@@ -353,7 +353,8 @@ namespace Cognite.OpcUa.History
                     if (StatusCode.IsNotGood(dp.StatusCode))
                     {
                         UAExtractor.BadDataPoints.Inc();
-                        log.Debug("Bad history datapoint: {BadDatapointExternalId} {SourceTimestamp}", node.State.Id, dp.SourceTimestamp);
+                        log.Debug("Bad history datapoint: {BadDatapointExternalId} {SourceTimestamp}. Value: {Value}, Status: {Status}",
+                            node.State.Id, dp.SourceTimestamp, dp.Value, ExtractorUtils.GetStatusCodeName((uint)dp.StatusCode));
                         continue;
                     }
                     dataPoints.Add(dp);
