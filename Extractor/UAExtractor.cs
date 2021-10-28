@@ -109,6 +109,7 @@ namespace Cognite.OpcUa
         {
             this.uaClient = uaClient;
             this.pushers = pushers.Where(pusher => pusher != null).ToList();
+            log = provider.GetRequiredService<ILogger<UAExtractor>>();
 
             log.LogDebug("Config:{NewLine}{Config}", Environment.NewLine, ExtractorUtils.ConfigToString(Config));
 
@@ -129,7 +130,6 @@ namespace Cognite.OpcUa
                     config, this, pushers.OfType<InfluxPusher>().FirstOrDefault());
             }
             if (run != null) run.Continuous = true;
-            log = provider.GetRequiredService<ILogger<UAExtractor>>();
             log.LogInformation("Building extractor with {NumPushers} pushers", pushers.Count());
             foreach (var pusher in this.pushers)
             {
