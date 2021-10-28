@@ -228,6 +228,7 @@ namespace Cognite.OpcUa.History
             {
                 foreach (var node in items)
                 {
+                    if (node.ContinuationPoint != null) continue;
                     node.StartTime = startTime;
                     node.EndTime = endTime;
                 }
