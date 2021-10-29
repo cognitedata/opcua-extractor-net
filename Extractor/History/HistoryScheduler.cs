@@ -92,24 +92,31 @@ namespace Cognite.OpcUa.History
 
             nodeCount = count;
 
-            historyStartTime = CogniteTime.FromUnixTimeMilliseconds(config.StartTime);
-            historyGranularity = config.Granularity <= 0
-                ? TimeSpan.Zero
-                : TimeSpan.FromSeconds(config.Granularity);
+            historyStartTime = GetStartTime(config.StartTime);
+            historyGranularity = config.GranularityValue.Value;
 
             metrics = new HistoryMetrics(type);
+        }
+
+        private static DateTime GetStartTime(string? start)
+        {
+            if (string.IsNullOrWhiteSpace(start)) return CogniteTime.DateTimeEpoch;
+            var parsed = CogniteTime.ParseTimestampString(start);
+            if (parsed == null) throw new ArgumentException($"Invalid history start time: {start}");
+            return parsed!.Value;
         }
 
         private static IEnumerable<HistoryReadNode> GetNodes(
             IEnumerable<UAHistoryExtractionState> states,
             ILogger log,
             HistoryReadType type,
-            long historyStart,
+            string? historyStart,
             out int count)
         {
             var nodes = states.Select(state => new HistoryReadNode(type, state)).ToList();
 
-            var startTime = CogniteTime.FromUnixTimeMilliseconds(historyStart);
+            var startTime = GetStartTime(historyStart);
+
             if (type == HistoryReadType.BackfillData || type == HistoryReadType.BackfillEvents)
             {
                 var toTerminate = nodes.Where(node => node.Time <= startTime).ToList();
