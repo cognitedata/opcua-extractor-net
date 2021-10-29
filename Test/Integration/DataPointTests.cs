@@ -35,7 +35,7 @@ namespace Test.Integration
             this.tester = tester;
             tester.ResetConfig();
             tester.Config.Source.PublishingInterval = 400;
-            tester.Config.Extraction.DataPushDelay = 400;
+            tester.Config.Extraction.DataPushDelay = "400";
             tester.Config.History.Enabled = false;
 
             tester.ResetCustomServerValues();
@@ -483,7 +483,7 @@ namespace Test.Integration
             var ids = tester.Ids.Custom;
 
             tester.Config.History.Enabled = true;
-            tester.Config.StateStorage.Interval = 1000000;
+            tester.Config.StateStorage.Interval = "1000000";
             tester.Config.History.Data = true;
             tester.Config.History.Backfill = backfill;
             var dataTypes = tester.Config.Extraction.DataTypes;

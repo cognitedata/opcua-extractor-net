@@ -91,32 +91,37 @@ namespace Cognite.OpcUa.History
             this.config = config;
             this.type = type;
             chunkSize = Data ? config.DataNodesChunk : config.EventNodesChunk;
-            if (config.MaxReadLength > 0)
-            {
-                maxReadLength = TimeSpan.FromSeconds(config.MaxReadLength);
-            }
+            maxReadLength = config.MaxReadLengthValue.Value;
+            if (maxReadLength == TimeSpan.Zero || maxReadLength == Timeout.InfiniteTimeSpan) maxReadLength = null;
 
             nodeCount = count;
 
-            if (config.EndTime > 0) historyEndTime = CogniteTime.FromUnixTimeMilliseconds(config.EndTime);
-            historyStartTime = CogniteTime.FromUnixTimeMilliseconds(config.StartTime);
-            historyGranularity = config.Granularity <= 0
-                ? TimeSpan.Zero
-                : TimeSpan.FromSeconds(config.Granularity);
+            historyStartTime = GetStartTime(config.StartTime);
+            if (!string.IsNullOrWhiteSpace(config.EndTime)) historyEndTime = CogniteTime.ParseTimestampString(config.EndTime)!;
+            historyGranularity = config.GranularityValue.Value;
 
             metrics = new HistoryMetrics(type);
+        }
+
+        private static DateTime GetStartTime(string? start)
+        {
+            if (string.IsNullOrWhiteSpace(start)) return CogniteTime.DateTimeEpoch;
+            var parsed = CogniteTime.ParseTimestampString(start);
+            if (parsed == null) throw new ArgumentException($"Invalid history start time: {start}");
+            return parsed!.Value;
         }
 
         private static IEnumerable<HistoryReadNode> GetNodes(
             IEnumerable<UAHistoryExtractionState> states,
             ILogger log,
             HistoryReadType type,
-            long historyStart,
+            string? historyStart,
             out int count)
         {
             var nodes = states.Select(state => new HistoryReadNode(type, state)).ToList();
 
-            var startTime = CogniteTime.FromUnixTimeMilliseconds(historyStart);
+            var startTime = GetStartTime(historyStart);
+
             if (type == HistoryReadType.BackfillData || type == HistoryReadType.BackfillEvents)
             {
                 var toTerminate = nodes.Where(node => node.Time <= startTime).ToList();
@@ -224,7 +229,7 @@ namespace Cognite.OpcUa.History
         protected override IChunk<HistoryReadNode> GetChunk(IEnumerable<HistoryReadNode> items)
         {
             var (details, startTime, endTime) = GetReadDetails(items);
-            if (config.MaxReadLength > 0)
+            if (maxReadLength != null)
             {
                 foreach (var node in items)
                 {
