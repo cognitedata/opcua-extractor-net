@@ -58,6 +58,11 @@ namespace Cognite.OpcUa
                 var parsed = CogniteTime.ParseTimestampString(config.History.StartTime);
                 if (parsed == null) return $"Invalid history start time: {config.History.StartTime}";
             }
+            if (!string.IsNullOrWhiteSpace(config.History?.EndTime))
+            {
+                var parsed = CogniteTime.ParseTimestampString(config.History.EndTime);
+                if (parsed == null) return $"Invalid history end time: {config.History.EndTime}";
+            }
             return null;
         }
 

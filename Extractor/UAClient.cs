@@ -948,6 +948,7 @@ namespace Cognite.OpcUa
                     if (data.ContinuationPoint == null)
                     {
                         node.Completed = true;
+                        node.ContinuationPoint = null;
                     }
                     else
                     {

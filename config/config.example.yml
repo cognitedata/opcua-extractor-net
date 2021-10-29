@@ -118,6 +118,13 @@ history:
     # Alternatively, use syntax N[timeunit](-ago) where timeunit is w, d, h, m, s or ms. In past if -ago is added,
     # future if not.
     start-time: 0
+    # Timestamp to be considered the end of forward history. Only relevant if max-read-length is set.
+    # In milliseconds since 1/1/1970. Default is current time, if this is 0.
+    end-time: 0
+    # Maximum length of each read of history, in seconds.
+    # If this is set greater than zero, history will be read in chunks of maximum this size, until the end.
+    # This can potentially take a very long time if end-time is much larger than start-time.
+    max-history-length: 0
     # Granularity to use when doing historyRead, in seconds. Nodes with last known timestamp within this range of eachother will
     # be read together. Should not be smaller than usual average update rate
     # Leave at 0 to always read a single node each time.
@@ -125,9 +132,6 @@ history:
     granularity: 600
     # Set to true to attempt to read history without using continationPoints, instead using the Time of events, and
     # SourceTimestamp of datapoints to incrementally change the start time of the request until no points are returned.
-    # Since history reads are chunked, this can cause a lot of duplicated points unless all timeseries are very well synced.
-    # It is therefore recommended to set data-nodes-chunk and event-nodes-chunk to 1 if this is used, although it will work without.
-    # If points/events are generated at close to the same rate for all nodes, using a larger chunk size may work fine.
     ignore-continuation-points: false
     # Configuration for throttling history reads. This applies to both events and datapoints separately. So the maximum load on the server
     # is effectively twice the configured values. This is worth noting if the server restricts the number of available continuation points,
