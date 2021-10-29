@@ -135,6 +135,8 @@ history:
         max-parallelism: 0
         # Maximum number of nodes to read in parallel. This should be set equal to or lower than the maximum number of continuation points set by the server.
         max-node-parallelism: 0
+    # Log bad history datapoints, count per read at debug and each datapoint at verbose
+    log-bad-values: true
 
 
 # Configuration for the pusher to CDF.
@@ -673,6 +675,8 @@ subscriptions:
         deadband-type: "None"
         # Double value of the deadband.
         deadband-value: 0
+    # Log bad subscription datapoints
+    log-bad-values: true
 
 events:
     # Events are extracted with the following rules: By default all events are extracted.
