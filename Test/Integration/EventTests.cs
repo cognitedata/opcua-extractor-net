@@ -22,7 +22,7 @@ namespace Test.Integration
         public EventTestFixture() : base()
         {
             Config.Source.PublishingInterval = 200;
-            Config.Extraction.DataPushDelay = 200;
+            Config.Extraction.DataPushDelay = "200";
             Config.History.Enabled = false;
             Config.Events.Enabled = true;
             Config.Extraction.RootNode = Server.Ids.Event.Root.ToProtoNodeId(Client);
@@ -37,7 +37,7 @@ namespace Test.Integration
             this.tester = tester;
             tester.ResetConfig();
             tester.Config.Source.PublishingInterval = 200;
-            tester.Config.Extraction.DataPushDelay = 200;
+            tester.Config.Extraction.DataPushDelay = "200";
             tester.Config.History.Enabled = false;
             tester.Config.Events.Enabled = true;
             tester.Config.Extraction.RootNode = tester.Ids.Event.Root.ToProtoNodeId(tester.Client);
@@ -375,7 +375,7 @@ namespace Test.Integration
             var ids = tester.Server.Ids.Event;
 
             tester.Config.History.Enabled = true;
-            tester.Config.StateStorage.Interval = 1000000;
+            tester.Config.StateStorage.Interval = "1000000";
             tester.Config.History.Backfill = backfill;
             tester.Config.Events.History = true;
             tester.Config.Events.ExcludeEventFilter = "2$";

@@ -19,9 +19,9 @@ using Cognite.Extractor.Configuration;
 using Cognite.OpcUa.Pushers;
 using Cognite.OpcUa.Types;
 using CogniteSdk;
+using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Opc.Ua;
-using Serilog;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -35,11 +35,10 @@ namespace Cognite.OpcUa.NodeSources
     {
         private readonly CDFPusher pusher;
         private readonly CDFNodeSourceConfig sourceConfig;
-        protected override ILogger Log { get; set; } = Serilog.Log.Logger.ForContext(typeof(CDFNodeSource));
         private readonly string database;
 
-        public CDFNodeSource(FullConfig config, UAExtractor extractor, UAClient client, CDFPusher pusher)
-            : base(config, extractor, client)
+        public CDFNodeSource(ILogger<CDFNodeSource> log, FullConfig config, UAExtractor extractor, UAClient client, CDFPusher pusher)
+            : base(log, config, extractor, client)
         {
             if (config.Cognite?.RawNodeBuffer == null) throw new InvalidOperationException("RawNodeBuffer config required");
             if (config.Cognite.RawNodeBuffer.Database == null) throw new ConfigurationException("Database must be set");
@@ -83,7 +82,7 @@ namespace Cognite.OpcUa.NodeSources
                 }
                 catch (Exception ex)
                 {
-                    Log.Error("Failed to retrieve and deserialize raw timeseries from CDF: {msg}", ex.Message);
+                    Log.LogError("Failed to retrieve and deserialize raw timeseries from CDF: {Message}", ex.Message);
                     return;
                 }
 
@@ -129,7 +128,7 @@ namespace Cognite.OpcUa.NodeSources
                 }
                 catch (Exception ex)
                 {
-                    Log.Error("Failed to retrieve and deserialize raw assets from CDF: {msg}", ex.Message);
+                    Log.LogError("Failed to retrieve and deserialize raw assets from CDF: {Message}", ex.Message);
                     return;
                 }
 
@@ -150,7 +149,7 @@ namespace Cognite.OpcUa.NodeSources
                     readNodes.Add(obj);
                 }
             }
-            Log.Information("Retrieved {as} objects and {ts} variables from CDF Raw", readNodes.Count, readVariables.Count);
+            Log.LogInformation("Retrieved {Obj} objects and {Var} variables from CDF Raw", readNodes.Count, readVariables.Count);
         }
 
         public override async Task<NodeSourceResult?> ParseResults(CancellationToken token)
@@ -172,7 +171,7 @@ namespace Cognite.OpcUa.NodeSources
 
             if (!FinalDestinationObjects.Any() && !FinalDestinationVariables.Any() && !FinalSourceVariables.Any() && !FinalReferences.Any())
             {
-                Log.Information("Mapping resulted in no new nodes");
+                Log.LogInformation("Mapping resulted in no new nodes");
                 return null;
             }
 
@@ -181,8 +180,8 @@ namespace Cognite.OpcUa.NodeSources
                 InitNodeState(Config.Extraction.Update, node);
             }
 
-            Log.Information("Mapping resulted in {obj} destination objects and {ts} destination timeseries," +
-                " {robj} objects and {var} variables.",
+            Log.LogInformation("Mapping resulted in {ObjCount} destination objects and {TsCount} destination timeseries," +
+                " {SourceObj} objects and {SourceVar} variables.",
                 FinalDestinationObjects.Count, FinalDestinationVariables.Count,
                 FinalSourceObjects.Count, FinalSourceVariables.Count);
 

@@ -4,6 +4,7 @@ using Cognite.OpcUa;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using Opc.Ua.Client;
 using Server;
@@ -50,7 +51,7 @@ namespace Test.Unit
 
             Server.Start().Wait();
 
-            Client = new UAClient(Config);
+            Client = new UAClient(Provider, Config);
             Source = new CancellationTokenSource();
             Client.Run(Source.Token).Wait();
         }
@@ -370,7 +371,7 @@ namespace Test.Unit
             // Best case, it takes 91 reads: 1 read at level 0, 3 reads for each of the 30 remaining.
             // Timing might cause nodes to be read in a sligthly different order, so we might read 2 more times.
             // In practice this slight variance is irrelevant.
-            Assert.True(reads >= 91 && reads <= 93);
+            Assert.True(reads >= 90 && reads <= 93);
             Assert.True(CommonTestUtils.TestMetricValue("opcua_tree_depth", 31));
         }
         [Theory]
@@ -399,7 +400,8 @@ namespace Test.Unit
             var (callback, nodes) = UAClientTestFixture.GetCallback();
             tester.Config.Source.BrowseThrottling.MaxNodeParallelism = 2;
             tester.Config.Source.BrowseThrottling.MaxParallelism = 1;
-            using var browser = new Cognite.OpcUa.Browser(tester.Client, tester.Config);
+            var log = tester.Provider.GetRequiredService<ILogger<Cognite.OpcUa.Browser>>();
+            using var browser = new Cognite.OpcUa.Browser(log, tester.Client, tester.Config);
             try
             {
                 await browser.BrowseNodeHierarchy(tester.Server.Ids.Full.DeepRoot, callback, tester.Source.Token);
@@ -737,7 +739,7 @@ namespace Test.Unit
                 // Array root
                 arrayVar,
                 // Array element
-                arrayVar.CreateArrayChildren().First(),
+                arrayVar.CreateTimeseries().First(),
                 // Variable with properties
                 new UAVariable(tester.Server.Ids.Custom.MysteryVar, "NumberVar", tester.Server.Ids.Custom.Root),
                 // object with no children

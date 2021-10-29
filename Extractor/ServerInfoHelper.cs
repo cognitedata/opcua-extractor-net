@@ -15,8 +15,8 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using Microsoft.Extensions.Logging;
 using Opc.Ua;
-using Serilog;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -26,7 +26,7 @@ namespace Cognite.OpcUa
     public class ServerInfoHelper
     {
         private readonly UAClient client;
-        private readonly ILogger log = Log.Logger.ForContext(typeof(ServerInfoHelper));
+        private readonly ILogger log;
         private readonly NodeId[] idsToRead = new[]
         {
             VariableIds.Server_ServerCapabilities_MaxBrowseContinuationPoints,
@@ -37,8 +37,9 @@ namespace Cognite.OpcUa
             VariableIds.Server_ServerCapabilities_OperationLimits_MaxNodesPerHistoryReadEvents,
             VariableIds.Server_ServerCapabilities_OperationLimits_MaxNodesPerRead
         };
-        public ServerInfoHelper(UAClient client)
+        public ServerInfoHelper(ILogger<ServerInfoHelper> log, UAClient client)
         {
+            this.log = log;
             this.client = client;
         }
 
@@ -51,7 +52,7 @@ namespace Cognite.OpcUa
         {
             if (!config.Source.LimitToServerConfig) return;
 
-            log.Information("Reading values from server configuration to determine upper limits");
+            log.LogInformation("Reading values from server configuration to determine upper limits");
 
             var values = await client.ReadRawValues(idsToRead, token);
 
@@ -65,12 +66,12 @@ namespace Cognite.OpcUa
                 } catch { }
                 if ((cVal > val || cVal == 0) && val > 0)
                 {
-                    log.Information("Max {name} is restricted to {val}", name, val);
+                    log.LogInformation("Max {Name} is restricted to {Val}", name, val);
                     return val;
                 }
                 else if (val > 0 && val > cVal)
                 {
-                    log.Information("Upper limit on {name} is {val}, but configured to {cVal}", name, val, cVal);
+                    log.LogInformation("Upper limit on {Name} is {Val}, but configured to {CVal}", name, val, cVal);
                 }
                 return cVal;
             }

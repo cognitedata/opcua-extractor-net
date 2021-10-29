@@ -2,6 +2,8 @@
 using Cognite.OpcUa;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.Types;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using Server;
 using System;
@@ -99,15 +101,17 @@ namespace Test.Unit
                 Backfill = backfill,
                 Data = true,
                 IgnoreContinuationPoints = ignoreCps,
-                MaxReadLength = maxReadLength,
+                MaxReadLength = maxReadLength.ToString(),
                 DataNodesChunk = nodesChunk,
                 DataChunk = resultChunk
             };
 
-            cfg.Throttling.MaxNodeParallelism = nodeParallelism;
-            cfg.StartTime = tester.HistoryStart.AddSeconds(-10).ToUnixTimeMilliseconds();
+            var logger = tester.Provider.GetRequiredService<ILogger<HistoryReader>>();
 
-            using var reader = new HistoryReader(tester.Client, extractor, cfg, tester.Source.Token);
+            cfg.Throttling.MaxNodeParallelism = nodeParallelism;
+            cfg.StartTime = tester.HistoryStart.AddSeconds(-10).ToUnixTimeMilliseconds().ToString();
+
+            using var reader = new HistoryReader(logger, tester.Client, extractor, cfg, tester.Source.Token);
 
             var dt = new UADataType(DataTypeIds.Double);
             var dt2 = new UADataType(DataTypeIds.String);
@@ -179,15 +183,17 @@ namespace Test.Unit
                 Backfill = backfill,
                 Data = true,
                 IgnoreContinuationPoints = ignoreCps,
-                MaxReadLength = maxReadLength,
+                MaxReadLength = maxReadLength.ToString(),
                 DataNodesChunk = nodesChunk,
                 DataChunk = resultChunk
             };
 
-            cfg.Throttling.MaxNodeParallelism = nodeParallelism;
-            cfg.StartTime = tester.HistoryStart.AddSeconds(-10).ToUnixTimeMilliseconds();
+            var logger = tester.Provider.GetRequiredService<ILogger<HistoryReader>>();
 
-            using var reader = new HistoryReader(tester.Client, extractor, cfg, tester.Source.Token);
+            cfg.Throttling.MaxNodeParallelism = nodeParallelism;
+            cfg.StartTime = tester.HistoryStart.AddSeconds(-10).ToUnixTimeMilliseconds().ToString();
+
+            using var reader = new HistoryReader(logger, tester.Client, extractor, cfg, tester.Source.Token);
 
             var states = new[]
             {

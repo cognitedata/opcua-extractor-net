@@ -1,5 +1,7 @@
 ﻿using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.Types;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Opc.Ua;
 using System;
@@ -31,7 +33,8 @@ namespace Test.Unit
         [Fact]
         public void TestConvertToString()
         {
-            var converter = new StringConverter(tester.Client, tester.Config);
+            var log = tester.Provider.GetRequiredService<ILogger<StringConverter>>();
+            var converter = new StringConverter(log, tester.Client, tester.Config);
 
             Assert.Equal("", converter.ConvertToString(null));
             Assert.Equal("gp.tl:s=abc", converter.ConvertToString(new NodeId("abc", 2)));
@@ -75,7 +78,8 @@ namespace Test.Unit
         [Fact]
         public void TestConvertToStringJson()
         {
-            var converter = new StringConverter(tester.Client, tester.Config);
+            var log = tester.Provider.GetRequiredService<ILogger<StringConverter>>();
+            var converter = new StringConverter(log, tester.Client, tester.Config);
 
             Assert.Equal("null", converter.ConvertToString(null, null, null, true));
             Assert.Equal(@"""gp.tl:s=abc""", converter.ConvertToString(new NodeId("abc", 2), null, null, true));
@@ -125,7 +129,8 @@ namespace Test.Unit
         {
             // The OPC-UA JsonEncoder can be a bit unreliable, this is a brute-force way to check that it behaves properly
             // for all types, or they are handled externally.
-            var converter = new StringConverter(tester.Client, tester.Config);
+            var log = tester.Provider.GetRequiredService<ILogger<StringConverter>>();
+            var converter = new StringConverter(log, tester.Client, tester.Config);
             var failedTypes = new List<Type>();
             void TestJsonEncoder(Type type, Variant variant)
             {

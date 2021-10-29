@@ -20,6 +20,7 @@ using Cognite.Extractor.Common;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
 using CogniteSdk;
+using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
@@ -59,13 +60,14 @@ namespace Cognite.OpcUa.Pushers
         }
 
         public static JsonElement? CreateRawUpdate(
+            ILogger log,
             StringConverter converter,
             UANode node,
             RawRow? raw,
             ConverterType type)
         {
             if (node == null) return null;
-            var newObj = node.ToJson(converter, type);
+            var newObj = node.ToJson(log, converter, type);
 
             if (newObj == null || newObj.RootElement.ValueKind != JsonValueKind.Object) return null;
             if (raw == null) return newObj.RootElement;

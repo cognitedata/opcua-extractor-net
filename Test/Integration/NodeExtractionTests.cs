@@ -1,5 +1,7 @@
 ﻿using Cognite.OpcUa;
 using Cognite.OpcUa.Types;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
@@ -527,6 +529,30 @@ namespace Test.Integration
             Assert.Equal(7, pusher.PushedNodes.Count);
             Assert.Equal(21, pusher.PushedVariables.Count);
         }
+        [Fact]
+        public async Task TestMapVariableChildren()
+        {
+            using var pusher = new DummyPusher(new DummyPusherConfig());
+            var extraction = tester.Config.Extraction;
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+
+            var ids = tester.Server.Ids.Custom;
+            tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Custom.Root, tester.Client);
+
+            extraction.DataTypes.AllowStringVariables = true;
+            extraction.DataTypes.MaxArraySize = -1;
+            extraction.DataTypes.AutoIdentifyTypes = true;
+            extraction.MapVariableChildren = true;
+
+            await extractor.RunExtractor(true);
+
+            Assert.Equal(9, pusher.PushedNodes.Count);
+            Assert.Equal(16, pusher.PushedVariables.Count);
+
+            var numberVar = pusher.PushedVariables[(ids.NumberVar, -1)];
+            var numberVarObj = pusher.PushedNodes[ids.NumberVar];
+            Assert.Equal(ids.NumberVar, numberVar.ParentId);
+        }
         #endregion
 
         #region custommetadata
@@ -1003,8 +1029,10 @@ namespace Test.Integration
             Assert.Equal("[0,0,0,0]", meta["CustomRoot_Variable Array"]);
             Assert.Equal("String prop value", meta["CustomRoot_ChildObject2_StringProp"]);
 
+            var log = tester.Provider.GetRequiredService<ILogger<NodeExtractionTests>>();
+
             // ... and that the JSON looks right
-            var metaElem = root.ToJson(extractor.StringConverter, ConverterType.Node);
+            var metaElem = root.ToJson(log, extractor.StringConverter, ConverterType.Node);
             var metaString = CommonTestUtils.JsonElementToString(metaElem.RootElement.GetProperty("metadata"));
             // This wouldn't work in clean, since there is only a single very large metadata field, but it is a much more useful input to Raw.
             Assert.Equal(@"{""CustomRoot"":{""ChildObject"":null,""ChildObject2"":{""NumericProp"":1234,""StringProp"":""String prop value""},"
@@ -1048,8 +1076,10 @@ namespace Test.Integration
             Assert.Equal("[0,0,0,0]", meta["CustomRoot_Variable Array"]);
             Assert.Equal("String prop value", meta["CustomRoot_ChildObject2_StringProp"]);
 
+            var log = tester.Provider.GetRequiredService<ILogger<NodeExtractionTests>>();
+
             // ... and that the JSON looks right
-            var metaElem = root.ToJson(extractor.StringConverter, ConverterType.Node);
+            var metaElem = root.ToJson(log, extractor.StringConverter, ConverterType.Node);
             var metaString = CommonTestUtils.JsonElementToString(metaElem.RootElement.GetProperty("metadata"));
             // This wouldn't work in clean, since there is only a single very large metadata field, but it is a much more useful input to Raw.
             Assert.Equal(@"{""CustomRoot"":{""ChildObject"":null,""ChildObject2"":{""NumericProp"":1234,""StringProp"":""String prop value""},"
