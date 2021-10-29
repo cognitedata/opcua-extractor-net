@@ -322,8 +322,11 @@ namespace Cognite.OpcUa
                 {
                     UAExtractor.BadDataPoints.Inc();
 
-                    log.LogDebug("Bad streaming datapoint: {BadDatapointExternalId} {SourceTimestamp}. Value: {Value}, Status: {Status}",
-                        node.Id, datapoint.SourceTimestamp, datapoint.Value, ExtractorUtils.GetStatusCodeName((uint)datapoint.StatusCode));
+                    if (config.Subscriptions.LogBadValues)
+                    {
+                        log.LogDebug("Bad streaming datapoint: {BadDatapointExternalId} {SourceTimestamp}. Value: {Value}, Status: {Status}",
+                            node.Id, datapoint.SourceTimestamp, datapoint.Value, ExtractorUtils.GetStatusCodeName((uint)datapoint.StatusCode));
+                    }
                     continue;
                 }
                 var buffDps = ToDataPoint(datapoint, node);

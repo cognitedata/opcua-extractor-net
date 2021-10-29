@@ -63,6 +63,7 @@ namespace Test.Unit
 
             // Enable arrays
             tester.Config.Extraction.DataTypes.MaxArraySize = 4;
+            source.BuildNodes(new[] { tester.Ids.Custom.Root });
             result = await source.ParseResults(tester.Source.Token);
             Assert.Equal(5, result.SourceVariables.Count());
             Assert.Equal(11, result.DestinationVariables.Count());
@@ -72,6 +73,7 @@ namespace Test.Unit
 
             // Enable strings
             tester.Config.Extraction.DataTypes.AllowStringVariables = true;
+            source.BuildNodes(new[] { tester.Ids.Custom.Root });
             result = await source.ParseResults(tester.Source.Token);
             Assert.Equal(9, result.SourceVariables.Count());
             Assert.Equal(16, result.DestinationVariables.Count());
@@ -85,6 +87,7 @@ namespace Test.Unit
                 CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Custom.IgnoreType, tester.Client)
             };
             extractor.DataTypeManager.Configure();
+            source.BuildNodes(new[] { tester.Ids.Custom.Root });
             result = await source.ParseResults(tester.Source.Token);
             Assert.Equal(8, result.SourceVariables.Count());
             Assert.Equal(15, result.DestinationVariables.Count());
@@ -92,8 +95,21 @@ namespace Test.Unit
             Assert.Equal(3, result.SourceObjects.Count());
             Assert.Empty(result.DestinationReferences);
 
+            // Map variable children to objects
+            tester.Config.Extraction.MapVariableChildren = true;
+            source.BuildNodes(new[] { tester.Ids.Custom.Root });
+            result = await source.ParseResults(tester.Source.Token);
+            Assert.Equal(8, result.SourceVariables.Count());
+            Assert.Equal(15, result.DestinationVariables.Count());
+            Assert.Equal(9, result.DestinationObjects.Count());
+            Assert.Equal(5, result.SourceObjects.Count());
+            Assert.Empty(result.DestinationReferences);
+
+            tester.Config.Extraction.MapVariableChildren = false;
+
             // Enable non-hierarchical relations
             tester.Config.Extraction.Relationships.Enabled = true;
+            source.BuildNodes(new[] { tester.Ids.Custom.Root });
             result = await source.ParseResults(tester.Source.Token);
             Assert.Equal(8, result.DestinationReferences.Count());
             Assert.Equal(4, result.DestinationReferences.Count(rel => rel.IsForward));
@@ -113,6 +129,7 @@ namespace Test.Unit
 
             // Enable forward hierarchical relations
             tester.Config.Extraction.Relationships.Hierarchical = true;
+            source.BuildNodes(new[] { tester.Ids.Custom.Root });
             result = await source.ParseResults(tester.Source.Token);
             Assert.Equal(18, result.DestinationReferences.Count());
             Assert.Equal(14, result.DestinationReferences.Count(rel => rel.IsForward));
@@ -129,6 +146,7 @@ namespace Test.Unit
 
             // Enable inverse hierarchical relations
             tester.Config.Extraction.Relationships.InverseHierarchical = true;
+            source.BuildNodes(new[] { tester.Ids.Custom.Root });
             result = await source.ParseResults(tester.Source.Token);
             Assert.Equal(28, result.DestinationReferences.Count());
             Assert.Equal(14, result.DestinationReferences.Count(rel => rel.IsForward));

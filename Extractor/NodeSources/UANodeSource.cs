@@ -191,7 +191,7 @@ namespace Cognite.OpcUa.NodeSources
                     if (!nodeMap.TryGetValue(nodeId, out var childNode)) continue;
                     if (childNode == null || childNode is UAVariable childVar && childVar.IsProperty) continue;
 
-                    bool childIsTs = childNode is UAVariable cVar && !cVar.IsArray && cVar.NodeClass == NodeClass.Variable;
+                    bool childIsTs = childNode is UAVariable cVar && !cVar.IsObject;
 
                     FinalReferences.Add(new UAReference(
                         pair.Node.ReferenceTypeId,

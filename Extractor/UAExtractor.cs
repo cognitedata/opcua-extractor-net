@@ -109,7 +109,6 @@ namespace Cognite.OpcUa
         {
             this.uaClient = uaClient;
             this.pushers = pushers.Where(pusher => pusher != null).ToList();
-
             log = provider.GetRequiredService<ILogger<UAExtractor>>();
 
             log.LogDebug("Config:{NewLine}{Config}", Environment.NewLine, ExtractorUtils.ConfigToString(Config));

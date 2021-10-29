@@ -37,7 +37,7 @@ namespace Test.Unit
             var arrParent = new UAVariable(new NodeId("arr1"), "arr1", NodeId.Null);
             arrParent.VariableAttributes.ValueRank = 1;
             arrParent.VariableAttributes.ArrayDimensions = new[] { 2 };
-            var children = arrParent.CreateArrayChildren();
+            var children = arrParent.CreateTimeseries();
             // Populated
             var nodes = new UANode[]
             {
@@ -68,6 +68,45 @@ namespace Test.Unit
             // 3 layer
             var aex2 = new AggregateException(new AggregateException(aex1));
             Assert.Equal(root, ExtractorUtils.GetRootExceptionOfType<ExtractorFailureException>(aex2));
+        }
+
+        class LogEvent
+        {
+            public LogLevel LogLevel { get; set; }
+            public EventId EventId { get; set; }
+            public Exception Exception { get; set; }
+        }
+
+        class DummyLogger : ILogger
+        {
+            public List<LogEvent> Events { get; } = new List<LogEvent>();
+            private object mutex = new object();
+
+
+            public void Log<TState>(LogLevel logLevel, EventId eventId, TState state,
+                Exception exception, Func<TState, Exception, string> formatter)
+            {
+
+                lock (mutex)
+                {
+                    Events.Add(new LogEvent
+                    {
+                        LogLevel = logLevel,
+                        EventId = eventId,
+                        Exception = exception
+                    });
+                }
+            }
+
+            public bool IsEnabled(LogLevel logLevel)
+            {
+                return true;
+            }
+
+            public IDisposable BeginScope<TState>(TState state)
+            {
+                throw new NotImplementedException();
+            }
         }
 
         [Theory]

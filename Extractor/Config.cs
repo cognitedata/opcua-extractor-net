@@ -123,6 +123,7 @@ namespace Cognite.OpcUa
         private RelationshipConfig relationships = new RelationshipConfig();
         public NodeTypeConfig NodeTypes { get => nodeTypes; set => nodeTypes = value ?? nodeTypes; }
         private NodeTypeConfig nodeTypes = new NodeTypeConfig();
+        public bool MapVariableChildren { get; set; }
         public IEnumerable<RawNodeTransformation>? Transformations { get; set; }
         public IEnumerable<NodeId> GetRootNodes(UAClient client)
         {
@@ -207,6 +208,7 @@ namespace Cognite.OpcUa
         public bool DataPoints { get; set; } = true;
         public bool Events { get; set; } = true;
         public bool IgnoreAccessLevel { get; set; }
+        public bool LogBadValues { get; set; } = true;
     }
     public interface IPusherConfig
     {
@@ -388,7 +390,12 @@ namespace Cognite.OpcUa
         private int eventPointsChunk = 1000;
         public int EventNodesChunk { get => eventNodesChunk; set => eventNodesChunk = Math.Max(1, value); }
         private int eventNodesChunk = 100;
+
+        public TimeSpanWrapper MaxReadLengthValue { get; } = new TimeSpanWrapper(true, "s", "0");
+        public string? MaxReadLength { get => MaxReadLengthValue.RawValue; set => MaxReadLengthValue.RawValue = value!; }
         public string? StartTime { get; set; } = "0";
+        public string? EndTime { get; set; }
+
         public TimeSpanWrapper GranularityValue { get; } = new TimeSpanWrapper(true, "s", "600");
         public string? Granularity { get => GranularityValue.RawValue; set => GranularityValue.RawValue = value!; }
         public bool IgnoreContinuationPoints { get; set; }
@@ -401,6 +408,7 @@ namespace Cognite.OpcUa
         public ContinuationPointThrottlingConfig Throttling {
             get => throttling; set => throttling = value ?? throttling; }
         private ContinuationPointThrottlingConfig throttling = new ContinuationPointThrottlingConfig();
+        public bool LogBadValues { get; set; } = true;
     }
     public class UAThrottlingConfig
     {

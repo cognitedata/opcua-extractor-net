@@ -54,15 +54,39 @@ namespace Cognite.OpcUa.History
         public HistoryReadType Type { get; }
         [NotNull, AllowNull]
         public UAHistoryExtractionState? State { get; set; }
-        public DateTime Time =>
-            Type == HistoryReadType.BackfillData || Type == HistoryReadType.BackfillEvents
-            ? State.SourceExtractedRange.First : State.SourceExtractedRange.Last;
+        public DateTime Time
+        {
+            get
+            {
+                bool backfill = Type == HistoryReadType.BackfillData || Type == HistoryReadType.BackfillEvents;
+                var time = backfill
+                    ? State.SourceExtractedRange.First : State.SourceExtractedRange.Last;
+                if (StartTime != null)
+                {
+                    // If no new datapoints have been read since last time, return end of last period.
+                    // This can cause issues if the server does not use continuation points and reports
+                    // datapoints weirdly. In that case MaxReadLength can be set lower, or nodes chunk can be reduced.
+                    if (backfill)
+                    {
+                        if (time >= StartTime && ContinuationPoint == null) return EndTime;
+                    }
+                    else
+                    {
+                        if (time <= StartTime && ContinuationPoint == null) return EndTime;
+                    }
+                }
+                return time;
+            }
+        }
+            
         public NodeId Id { get; }
         public byte[]? ContinuationPoint { get; set; }
         public bool Completed { get; set; }
         public int LastRead { get; set; }
         public int TotalRead { get; set; }
         public IEncodeable? LastResult { get; set; }
+        public DateTime EndTime { get; set; }
+        public DateTime? StartTime { get; set; }
     }
     /// <summary>
     /// Parameter class containing the state of a single history read operation.

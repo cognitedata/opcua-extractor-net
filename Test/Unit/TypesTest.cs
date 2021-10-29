@@ -533,7 +533,7 @@ namespace Test.Unit
         {
             var id = new NodeId("test");
             var node = new UAVariable(id, "name", NodeId.Null);
-            Assert.Empty(node.CreateArrayChildren());
+            Assert.Empty(node.CreateTimeseries());
             Assert.Null(node.ArrayChildren);
 
             node.VariableAttributes.AccessLevel = AccessLevels.CurrentRead | AccessLevels.HistoryRead;
@@ -543,7 +543,7 @@ namespace Test.Unit
             node.VariableAttributes.ValueRank = ValueRanks.OneDimension;
             node.VariableAttributes.ArrayDimensions = new int[] { 4 };
 
-            var children = node.CreateArrayChildren().ToList();
+            var children = node.CreateTimeseries().ToList();
             Assert.Equal(4, children.Count);
             Assert.Equal(children, node.ArrayChildren);
 
@@ -561,8 +561,37 @@ namespace Test.Unit
                 Assert.Equal(node.ArrayDimensions, child.ArrayDimensions);
                 Assert.Equal(i, child.Index);
             }
-
         }
+        [Fact]
+        public void TestGetTimeseries()
+        {
+            var id = new NodeId("test");
+            var node = new UAVariable(id, "name", NodeId.Null);
+
+            node.VariableAttributes.AccessLevel = AccessLevels.CurrentRead | AccessLevels.HistoryRead;
+            node.VariableAttributes.ReadHistory = true;
+            node.VariableAttributes.DataType = new UADataType(DataTypeIds.Double);
+            node.VariableAttributes.NodeType = new UANodeType(new NodeId("test"), true);
+            node.VariableAttributes.ValueRank = ValueRanks.OneDimension;
+
+            node.IsObject = true;
+
+            var children = node.CreateTimeseries().ToList();
+            Assert.Single(children);
+
+            var child = children.Single();
+            Assert.True(child.ReadHistory);
+            Assert.Equal(node.DisplayName, child.DisplayName);
+            Assert.Equal(node.Id, child.ParentId);
+            Assert.Equal(node.AccessLevel, child.AccessLevel);
+            Assert.Equal(node.TimeSeries, child);
+            Assert.Equal(node.DataType, child.DataType);
+            Assert.Equal(node.NodeType, child.NodeType);
+            Assert.Equal(node.ValueRank, child.ValueRank);
+
+            Assert.Equal(child, node.CreateTimeseries().First());
+        }
+
         [Fact]
         public void TestToStatelessTimeseries()
         {
