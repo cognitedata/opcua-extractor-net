@@ -300,6 +300,10 @@ cognite:
         level: debug
         # Format of the log message
         format: "CDF ({Message}): {HttpMethod} {Url} - {Elapsed} ms"
+    # Configure an extraction pipeline manager
+    extraction-pipeline:
+        # ExternalId of extraction pipeline
+        # pipeline-id: 
 
 
 # Push to an influx-database. Data-variables are mapped to series with the given id.
