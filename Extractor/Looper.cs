@@ -16,13 +16,12 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using Cognite.Extractor.Common;
+using Microsoft.Extensions.Logging;
 using Prometheus;
-using Serilog;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -36,7 +35,7 @@ namespace Cognite.OpcUa
         public PeriodicScheduler Scheduler { get; }
 
         private readonly IEnumerable<IPusher> pushers;
-        private readonly ILogger log = Log.Logger.ForContext(typeof(Looper));
+        private readonly ILogger<Looper> log;
 
         private TaskCompletionSource<bool>? pushWaiterSource;
         private bool restart;
@@ -47,28 +46,26 @@ namespace Cognite.OpcUa
         private static readonly Counter numPushes = Metrics.CreateCounter("opcua_num_pushes",
             "Increments by one after each push to destination systems");
 
-        public Looper(PeriodicScheduler scheduler, UAExtractor extractor, FullConfig config, IEnumerable<IPusher> pushers)
+        public Looper(
+            ILogger<Looper> log, 
+            PeriodicScheduler scheduler,
+            UAExtractor extractor,
+            FullConfig config,
+            IEnumerable<IPusher> pushers)
         {
+            this.log = log;
             Scheduler = scheduler;
             this.extractor = extractor;
             this.config = config;
             this.pushers = pushers;
         }
 
-        private static TimeSpan ToTimespan(int t, bool allowZero, string unit)
+        private static TimeSpan ToTimespan(string? t, bool allowZero, string unit)
         {
-            if (t < 0) return Timeout.InfiniteTimeSpan;
-            if (t == 0 && !allowZero) return Timeout.InfiniteTimeSpan;
-            switch (unit)
-            {
-                case "s":
-                    return TimeSpan.FromSeconds(t);
-                case "ms":
-                    return TimeSpan.FromMilliseconds(t);
-                case "m":
-                    return TimeSpan.FromMinutes(t);
-            }
-            return TimeSpan.FromSeconds(t);
+            if (t == null) return Timeout.InfiniteTimeSpan;
+            var conv = CogniteTime.ParseTimeSpanString(t, unit);
+            if (conv == TimeSpan.Zero && !allowZero) return Timeout.InfiniteTimeSpan;
+            return conv ?? Timeout.InfiniteTimeSpan;
         }
 
         public void Run()
@@ -76,16 +73,16 @@ namespace Cognite.OpcUa
             failingPushers = pushers.Where(pusher => pusher.DataFailing || pusher.EventsFailing || !pusher.Initialized).ToList();
             passingPushers = pushers.Except(failingPushers).ToList();
 
-            Scheduler.SchedulePeriodicTask(nameof(Pushers), ToTimespan(config.Extraction.DataPushDelay, true, "ms"), Pushers, true);
+            Scheduler.SchedulePeriodicTask(nameof(Pushers), config.Extraction.DataPushDelayValue.Value, Pushers, true);
             Scheduler.SchedulePeriodicTask(nameof(ExtraTasks), Timeout.InfiniteTimeSpan, ExtraTasks, false);
 
-            Scheduler.SchedulePeriodicTask(nameof(Rebrowse), ToTimespan(config.Extraction.AutoRebrowsePeriod, false, "m"), Rebrowse, false);
+            Scheduler.SchedulePeriodicTask(nameof(Rebrowse), config.Extraction.AutoRebrowsePeriodValue.Value, Rebrowse, false);
             if (extractor.StateStorage != null)
             {
-                Scheduler.SchedulePeriodicTask(nameof(StoreState), ToTimespan(config.StateStorage.Interval, false, "s"), StoreState, 
-                    config.StateStorage.Interval > 0);
+                var interval = config.StateStorage.IntervalValue.Value;
+                Scheduler.SchedulePeriodicTask(nameof(StoreState), interval, StoreState, interval != Timeout.InfiniteTimeSpan);
             }
-            Scheduler.SchedulePeriodicTask(nameof(HistoryRestart), ToTimespan(config.History.RestartPeriod, false, "s"), HistoryRestart, false);
+            Scheduler.SchedulePeriodicTask(nameof(HistoryRestart), config.History.RestartPeriodValue.Value, HistoryRestart, false);
         }
 
         /// <summary>
@@ -116,7 +113,7 @@ namespace Cognite.OpcUa
             if (task != waitTask) throw new TimeoutException("Waiting for push timed out");
             t.Stop();
 
-            log.Debug("Waited {s} milliseconds for push", t.ElapsedMilliseconds);
+            log.LogDebug("Waited {MS} milliseconds for push", t.ElapsedMilliseconds);
         }
 
 
@@ -131,7 +128,7 @@ namespace Cognite.OpcUa
 
                 if (recovered.Any())
                 {
-                    log.Information("Pushers {names} recovered", string.Join(", ", recovered.Select(val => val.pusher.GetType())));
+                    log.LogInformation("Pushers {Names} recovered", string.Join(", ", recovered.Select(val => val.pusher.GetType())));
                 }
 
 
@@ -237,7 +234,7 @@ namespace Cognite.OpcUa
         private async Task HistoryRestart(CancellationToken token)
         {
             if (token.IsCancellationRequested) return;
-            log.Information("Restarting history...");
+            log.LogInformation("Restarting history...");
             bool success = await extractor.TerminateHistory(30);
             if (!success) throw new ExtractorFailureException("Failed to terminate history");
             if (config.History.Enabled && config.History.Data)

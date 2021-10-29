@@ -46,7 +46,8 @@ namespace Test.Unit
             var provider = Services.BuildServiceProvider();
             Config.Mqtt.ClientId = $"opcua-mqtt-pusher-test-{idCounter}";
             idCounter++;
-            var pusher = new MQTTPusher(provider, Config.Mqtt);
+            var log = Provider.GetRequiredService<ILogger<MQTTPusher>>();
+            var pusher = new MQTTPusher(log, provider, Config.Mqtt);
             var bridge = new MQTTBridge(new Destination(mqttConfig.Cognite, provider), mqttConfig);
             return (handler, bridge, pusher);
         }
@@ -476,7 +477,8 @@ namespace Test.Unit
         public async Task TestCreateRelationships()
         {
             using var extractor = tester.BuildExtractor(true, null, pusher);
-            var mgr = new ReferenceTypeManager(tester.Client, extractor);
+            var log = tester.Provider.GetRequiredService<ILogger<ReferenceTypeManager>>();
+            var mgr = new ReferenceTypeManager(log, tester.Client, extractor);
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_mqtt");
 
             // Push none
@@ -529,7 +531,8 @@ namespace Test.Unit
         public async Task TestCreateRawRelationships()
         {
             using var extractor = tester.BuildExtractor(true, null, pusher);
-            var mgr = new ReferenceTypeManager(tester.Client, extractor);
+            var log = tester.Provider.GetRequiredService<ILogger<ReferenceTypeManager>>();
+            var mgr = new ReferenceTypeManager(log, tester.Client, extractor);
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_mqtt");
 
             tester.Config.Mqtt.RawMetadata = new RawMetadataConfig
@@ -657,7 +660,8 @@ namespace Test.Unit
             using var stateStore = new LiteDBStateStore(stateStoreConfig, tester.Provider.GetRequiredService<ILogger<LiteDBStateStore>>());
 
             using var extractor = tester.BuildExtractor(true, stateStore, pusher);
-            var mgr = new ReferenceTypeManager(tester.Client, extractor);
+            var log = tester.Provider.GetRequiredService<ILogger<ReferenceTypeManager>>();
+            var mgr = new ReferenceTypeManager(log, tester.Client, extractor);
             CommonTestUtils.ResetMetricValues("opcua_node_ensure_failures_mqtt", "opcua_created_relationships_mqtt");
             tester.Config.Mqtt.LocalState = "mqtt_state";
 

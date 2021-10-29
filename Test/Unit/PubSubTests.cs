@@ -2,6 +2,8 @@
 using Cognite.OpcUa;
 using Cognite.OpcUa.PubSub;
 using Cognite.OpcUa.Types;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using Server;
 using System;
@@ -55,7 +57,10 @@ namespace Test.Unit
                 Enabled = true,
                 PreferUadp = uadp
             };
-            var configurator = new ServerPubSubConfigurator(tester.Client, config);
+
+            var logger = tester.Provider.GetRequiredService<ILogger<PubSubTests>>();
+
+            var configurator = new ServerPubSubConfigurator(logger, tester.Client, config);
             var built = await configurator.Build(tester.Source.Token);
             Assert.NotNull(built);
 
@@ -107,13 +112,15 @@ namespace Test.Unit
             tester.Config.PubSub.PreferUadp = uadp;
             using var extractor = tester.BuildExtractor();
 
+            var logger = tester.Provider.GetRequiredService<ILogger<Cognite.OpcUa.PubSub.PubSubManager>>();
+
             await extractor.RunExtractor(true);
 
             var queue = (Queue<UADataPoint>)extractor.Streamer.GetType()
                 .GetField("dataPointQueue", BindingFlags.NonPublic | BindingFlags.Instance)
                 .GetValue(extractor.Streamer);
 
-            using var manager = new Cognite.OpcUa.PubSub.PubSubManager(tester.Client, extractor, tester.Config.PubSub);
+            using var manager = new Cognite.OpcUa.PubSub.PubSubManager(logger, tester.Client, extractor, tester.Config.PubSub);
 
             var startTask = manager.Start(tester.Source.Token);
             var result = await Task.WhenAny(startTask, Task.Delay(20000));

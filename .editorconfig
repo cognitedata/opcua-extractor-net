@@ -38,6 +38,5 @@ dotnet_diagnostic.CA1062.severity = none
 # Nice in theory, but IList or other basic interfaces do not support AddRange, which means that this has a potentially serious performance cost.
 dotnet_diagnostic.CA1002.severity = none
 
-# For logging
+# LoggerDelegates might be good, but are way too verbose for now.
 dotnet_diagnostic.CA1848.severity = none
-dotnet_diagnostic.CA1727.severity = none

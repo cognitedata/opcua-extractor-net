@@ -6,6 +6,7 @@ using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
@@ -311,7 +312,8 @@ namespace Test.Unit
         [Fact]
         public async Task TestServerConfigLimit()
         {
-            var helper = new ServerInfoHelper(tester.Client);
+            var log = tester.Provider.GetRequiredService<ILogger<ServerInfoHelper>>();
+            var helper = new ServerInfoHelper(log, tester.Client);
             tester.Config.History.Throttling.MaxNodeParallelism = 100;
             tester.Config.Source.BrowseThrottling.MaxNodeParallelism = 10000;
             await helper.LimitConfigValues(tester.Config, tester.Source.Token);

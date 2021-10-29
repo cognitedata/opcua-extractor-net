@@ -15,7 +15,8 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
-using Serilog;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using System;
 using System.IO;
 using System.Reflection;
@@ -29,16 +30,19 @@ namespace Cognite.OpcUa.Config
     /// </summary>
     public class ConfigToolRuntime
     {
-        private readonly ILogger log = Log.Logger.ForContext(typeof(ConfigToolRuntime));
+        private readonly ILogger<ConfigToolRuntime> log;
+        private readonly IServiceProvider provider;
 
         private readonly string output;
         private readonly FullConfig config;
         private readonly FullConfig baseConfig;
-        public ConfigToolRuntime(FullConfig config, FullConfig baseConfig, string output)
+        public ConfigToolRuntime(IServiceProvider provider, FullConfig config, FullConfig baseConfig, string output)
         {
+            this.provider = provider;
             this.config = config;
             this.baseConfig = baseConfig;
             this.output = output;
+            log = provider.GetRequiredService<ILogger<ConfigToolRuntime>>();
         }
         /// <summary>
         /// Start the config tool, then sequentially run the tests.
@@ -46,13 +50,13 @@ namespace Cognite.OpcUa.Config
         /// </summary>
         public async Task Run(CancellationToken token)
         {
-            using var explorer = new UAServerExplorer(config, baseConfig);
+            using var explorer = new UAServerExplorer(provider, config, baseConfig);
 
             using var source = CancellationTokenSource.CreateLinkedTokenSource(token);
 
-            log.Information("Starting OPC UA Extractor Config tool version {version}",
+            log.LogInformation("Starting OPC UA Extractor Config tool version {Version}",
                 Extractor.Metrics.Version.GetVersion(Assembly.GetExecutingAssembly()));
-            log.Information("Revision information: {status}",
+            log.LogInformation("Revision information: {Status}",
                 Extractor.Metrics.Version.GetDescription(Assembly.GetExecutingAssembly()));
 
             try
@@ -70,16 +74,16 @@ namespace Cognite.OpcUa.Config
             }
             catch (Exception e)
             {
-                log.Error(e, "ConfigurationTool failed fatally");
+                log.LogError(e, "ConfigurationTool failed fatally");
                 throw;
             }
             explorer.Close();
 
             var result = ToolUtil.ConfigResultToString(explorer.FinalConfig);
 
-            log.Information("");
+            log.LogInformation("");
             File.WriteAllText(output, result);
-            log.Information("Emitted suggested config file to {path}", output);
+            log.LogInformation("Emitted suggested config file to {Path}", output);
         }
     }
 }

@@ -1,12 +1,27 @@
-﻿using Opc.Ua;
+﻿/* Cognite Extractor for OPC-UA
+Copyright (C) 2021 Cognite AS
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
+
+using Microsoft.Extensions.Logging;
+using Opc.Ua;
 using Opc.Ua.PubSub;
 using Opc.Ua.PubSub.Encoding;
-using Serilog;
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Runtime.Serialization;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Xml;
@@ -17,14 +32,15 @@ namespace Cognite.OpcUa.PubSub
     {
         private readonly ServerPubSubConfigurator configurator;
         private UaPubSubApplication? app;
-        private readonly ILogger log = Log.Logger.ForContext(typeof(PubSubManager));
+        private readonly ILogger<PubSubManager> log;
         private readonly PubSubConfig config;
         private readonly UAExtractor extractor;
-        public PubSubManager(UAClient client, UAExtractor extractor, PubSubConfig config)
+        public PubSubManager(ILogger<PubSubManager> logger, UAClient client, UAExtractor extractor, PubSubConfig config)
         {
             this.config = config;
-            configurator = new ServerPubSubConfigurator(client, config);
+            configurator = new ServerPubSubConfigurator(logger, client, config);
             this.extractor = extractor;
+            log = logger;
         }
 
         public async Task Start(CancellationToken token)
@@ -38,29 +54,29 @@ namespace Cognite.OpcUa.PubSub
             var config = await GetConfig(token);
             if (config == null)
             {
-                log.Error("Configuring subscriber failed");
+                log.LogError("Configuring subscriber failed");
                 return;
             }
 
             app = UaPubSubApplication.Create(config);
 
-            log.Information("Starting pubsub server with {cnt} connections", config.Connections.Count);
+            log.LogInformation("Starting pubsub server with {Count} connections", config.Connections.Count);
 
             foreach (var conn in config.Connections)
             {
-                log.Debug("Connection: {name}, with {cnt} groups", conn.Name, conn.ReaderGroups.Count);
-                log.Debug("Profile: {name}", conn.TransportProfileUri);
-                log.Debug("Address: {addr}", (conn.Address.Body as NetworkAddressUrlDataType)?.Url);
+                log.LogDebug("Connection: {Name}, with {Count} groups", conn.Name, conn.ReaderGroups.Count);
+                log.LogDebug("Profile: {Name}", conn.TransportProfileUri);
+                log.LogDebug("Address: {Address}", (conn.Address.Body as NetworkAddressUrlDataType)?.Url);
                 foreach (var group in conn.ReaderGroups)
                 {
-                    log.Debug("    Group: {name}, with {cnt} readers", group.Name, group.DataSetReaders.Count);
+                    log.LogDebug("    Group: {Name}, with {Count} readers", group.Name, group.DataSetReaders.Count);
                     foreach (var reader in group.DataSetReaders)
                     {
-                        log.Debug("        Reader: {name}, with {cnt} targets", reader.Name, (reader.SubscribedDataSet?.Body
+                        log.LogDebug("        Reader: {Name}, with {Count} targets", reader.Name, (reader.SubscribedDataSet?.Body
                             as TargetVariablesDataType)?.TargetVariables.Count);
-                        log.Debug("        Queue: {name}", (reader.TransportSettings.Body as BrokerDataSetReaderTransportDataType)
+                        log.LogDebug("        Queue: {Name}", (reader.TransportSettings.Body as BrokerDataSetReaderTransportDataType)
                             ?.QueueName);
-                        log.Debug("        Writer: {group}:{name}", reader.WriterGroupId, reader.DataSetWriterId);
+                        log.LogDebug("        Writer: {Group}:{Name}", reader.WriterGroupId, reader.DataSetWriterId);
                     }
                 }
             }
@@ -102,7 +118,7 @@ namespace Cognite.OpcUa.PubSub
             }
             catch (Exception ex)
             {
-                log.Error("Failed to deserialize pubsub config file: {msg}", ex.Message);
+                log.LogError("Failed to deserialize pubsub config file: {Message}", ex.Message);
                 return null;
             }
         }
@@ -110,7 +126,7 @@ namespace Cognite.OpcUa.PubSub
         private void SaveConfig(PubSubConfigurationDataType config)
         {
             if (string.IsNullOrWhiteSpace(this.config.FileName)) return;
-            log.Information("Saving PubSub configuration to {name}", this.config.FileName);
+            log.LogInformation("Saving PubSub configuration to {Name}", this.config.FileName);
             using (var stream = new FileStream(this.config.FileName, FileMode.Create, FileAccess.Write))
             {
                 var s = new DataContractSerializer(typeof(PubSubConfigurationDataType));
@@ -124,25 +140,25 @@ namespace Cognite.OpcUa.PubSub
         {
             if (e.NetworkMessage is UadpNetworkMessage uadpMessage)
             {
-                log.Verbose("UADP Network DataSetMessage ({0} DataSets): Source={1}, SequenceNumber={2}",
+                log.LogTrace("UADP Network DataSetMessage ({DataSets} DataSets): Source={Source}, SequenceNumber={SequenceNumber}",
                         e.NetworkMessage.DataSetMessages.Count, e.Source, uadpMessage.SequenceNumber);
             }
             else if (e.NetworkMessage is JsonNetworkMessage jsonMessage)
             {
-                log.Verbose("JSON Network DataSetMessage ({0} DataSets): Source={1}, MessageId={2}",
+                log.LogTrace("JSON Network DataSetMessage ({DataSets} DataSets): Source={Source}, MessageId={MessageId}",
                         e.NetworkMessage.DataSetMessages.Count, e.Source, jsonMessage.MessageId);
             }
 
             foreach (var dataSetMessage in e.NetworkMessage.DataSetMessages)
             {
                 var dataSet = dataSetMessage.DataSet;
-                log.Verbose("\tDataSet.Name={0}, DataSetWriterId={1}, SequenceNumber={2}", dataSet.Name,
+                log.LogTrace("\tDataSet.Name={DataSetName}, DataSetWriterId={DataSetWriterId}, SequenceNumber={SequenceNumber}", dataSet.Name,
                     dataSet.DataSetWriterId, dataSetMessage.SequenceNumber);
 
                 for (int i = 0; i < dataSet.Fields.Length; i++)
                 {
                     var field = dataSet.Fields[i];
-                    log.Verbose("\t\tTargetNodeId:{0}, Attribute:{1}, Value:{2}, TS:{3}",
+                    log.LogTrace("\t\tTargetNodeId:{TargetNodeId}, Attribute:{Attribute}, Value:{Value}, TS:{TimeStamp}",
                         field.TargetNodeId, field.TargetAttribute, field.Value, field.Value.SourceTimestamp);
 
                     if (field.TargetAttribute != Attributes.Value) continue;
@@ -150,7 +166,7 @@ namespace Cognite.OpcUa.PubSub
                     var variable = extractor.State.GetNodeState(field.TargetNodeId);
                     if (variable == null)
                     {
-                        log.Verbose("\t\tMissing state for pub-sub node: {id}", field.TargetNodeId);
+                        log.LogTrace("\t\tMissing state for pub-sub node: {Id}", field.TargetNodeId);
                         continue;
                     }
 

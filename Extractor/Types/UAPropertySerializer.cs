@@ -15,10 +15,10 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Opc.Ua;
-using Serilog;
 using System;
 using System.Collections;
 using System.Collections.Concurrent;
@@ -37,10 +37,11 @@ namespace Cognite.OpcUa.Types
     {
         private readonly UAClient? uaClient;
         private readonly FullConfig? config;
-        private readonly ILogger log = Log.Logger.ForContext(typeof(UAClient));
+        private readonly ILogger<StringConverter> log;
 
-        public StringConverter(UAClient? uaClient, FullConfig? config)
+        public StringConverter(ILogger<StringConverter> log, UAClient? uaClient, FullConfig? config)
         {
+            this.log = log;
             this.uaClient = uaClient;
             this.config = config;
             if (uaClient != null)
@@ -97,7 +98,7 @@ namespace Cognite.OpcUa.Types
                 }
                 catch (Exception ex)
                 {
-                    log.Warning("Failed to serialize built in type: {err}", ex.Message);
+                    log.LogWarning("Failed to serialize built in type: {Message}", ex.Message);
                 }
             }
 

@@ -19,12 +19,12 @@ using Cognite.Extractor.Common;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using Opc.Ua.Client;
 using Opc.Ua.Configuration;
 using Prometheus;
-using Serilog;
-using Serilog.Events;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -82,7 +82,9 @@ namespace Cognite.OpcUa
 
         private readonly NodeMetricsManager? metricsManager;
 
-        private readonly ILogger log = Log.Logger.ForContext(typeof(UAClient));
+        private readonly ILogger<UAClient> log;
+        private readonly ILogger<Tracing> traceLog;
+        private LogLevel? traceLevel;
 
         public StringConverter StringConverter { get; } 
         public Browser Browser { get; }
@@ -91,17 +93,20 @@ namespace Cognite.OpcUa
         /// Constructor, does not start the client.
         /// </summary>
         /// <param name="config">Full configuartion object</param>
-        public UAClient(FullConfig config)
+        public UAClient(IServiceProvider provider, FullConfig config)
         {
             this.config = config;
-            DataTypeManager = new DataTypeManager(this, config.Extraction.DataTypes);
-            ObjectTypeManager = new NodeTypeManager(this);
+            log = provider.GetRequiredService<ILogger<UAClient>>();
+            traceLog = provider.GetRequiredService<ILogger<Tracing>>();
+            DataTypeManager = new DataTypeManager(provider.GetRequiredService<ILogger<DataTypeManager>>(),
+                this, config.Extraction.DataTypes);
+            ObjectTypeManager = new NodeTypeManager(provider.GetRequiredService<ILogger<NodeTypeManager>>(), this);
             if (config.Metrics.Nodes != null)
             {
                 metricsManager = new NodeMetricsManager(this, config.Source, config.Metrics.Nodes);
             }
-            StringConverter = new StringConverter(this, config);
-            Browser = new Browser(this, config);
+            StringConverter = new StringConverter(provider.GetRequiredService<ILogger<StringConverter>>(), this, config);
+            Browser = new Browser(provider.GetRequiredService<ILogger<Browser>>(), this, config);
         }
         #region Session management
         /// <summary>
@@ -130,27 +135,34 @@ namespace Cognite.OpcUa
             Started = false;
         }
 
-        private LogEventLevel? traceLevel;
-        private ILogger traceLogger = Log.Logger.ForContext(typeof(Tracing));
-
         private void ConfigureUtilsTrace()
         {
             if (config.Logger?.UaTraceLevel == null) return;
             Utils.SetTraceMask(Utils.TraceMasks.All);
             if (traceLevel != null) return;
             Utils.Tracing.TraceEventHandler += TraceEventHandler;
-            traceLevel = Enum.Parse<LogEventLevel>(config.Logger?.UaTraceLevel, true);
+            switch (config.Logger.UaTraceLevel)
+            {
+                case "verbose": traceLevel = LogLevel.Trace; break;
+                case "debug": traceLevel = LogLevel.Debug; break;
+                case "information": traceLevel = LogLevel.Information; break;
+                case "warning": traceLevel = LogLevel.Warning; break;
+                case "error": traceLevel = LogLevel.Error; break;
+                case "fatal": traceLevel = LogLevel.Critical; break;
+            }
         }
 
         private void TraceEventHandler(object sender, TraceEventArgs e)
         {
             if (e.Exception != null)
             {
-                traceLogger.Write(traceLevel!.Value, e.Exception, e.Format, e.Arguments);
+#pragma warning disable CA2254 // Template should be a static expression - we are injecting format from a different logger
+                traceLog.Log(traceLevel!.Value, e.Exception, e.Format, e.Arguments);
             }
             else
             {
-                traceLogger.Write(traceLevel!.Value, e.Format, e.Arguments);
+                traceLog.Log(traceLevel!.Value, e.Format, e.Arguments);
+#pragma warning restore CA2254 // Template should be a static expression
             }
         }
 
@@ -165,7 +177,7 @@ namespace Cognite.OpcUa
                 ApplicationType = ApplicationType.Client,
                 ConfigSectionName = "opc.ua.net.extractor"
             };
-            log.Information("Load OPC-UA Configuration from {root}/opc.ua.net.extractor.Config.xml", config.Source.ConfigRoot);
+            log.LogInformation("Load OPC-UA Configuration from {Root}/opc.ua.net.extractor.Config.xml", config.Source.ConfigRoot);
             try
             {
                 AppConfig = await application.LoadApplicationConfiguration($"{config.Source.ConfigRoot}/opc.ua.net.extractor.Config.xml", false);
@@ -199,7 +211,7 @@ namespace Cognite.OpcUa
             bool validAppCert = await application.CheckApplicationInstanceCertificate(false, 0);
             if (!validAppCert)
             {
-                log.Warning("Missing application certificate, using insecure connection.");
+                log.LogWarning("Missing application certificate, using insecure connection.");
             }
             else
             {
@@ -214,7 +226,7 @@ namespace Cognite.OpcUa
 
         private async Task CreateSessionDirect()
         {
-            log.Information("Attempt to select endpoint from: {EndpointURL}", config.Source.EndpointUrl);
+            log.LogInformation("Attempt to select endpoint from: {EndpointURL}", config.Source.EndpointUrl);
             EndpointDescription selectedEndpoint;
             try
             {
@@ -227,7 +239,7 @@ namespace Cognite.OpcUa
             var endpointConfiguration = EndpointConfiguration.Create(AppConfig);
             var endpoint = new ConfiguredEndpoint(null, selectedEndpoint, endpointConfiguration);
             var identity = AuthenticationUtils.GetUserIdentity(config.Source);
-            log.Information("Attempt to connect to endpoint with security: {SecurityPolicyUri} using user identity {idt}",
+            log.LogInformation("Attempt to connect to endpoint with security: {SecurityPolicyUri} using user identity {Identity}",
                 endpoint.Description.SecurityPolicyUri,
                 identity.DisplayName);
             try
@@ -271,11 +283,11 @@ namespace Cognite.OpcUa
             reverseConnectManager.AddEndpoint(reverseUrl);
             reverseConnectManager.StartService(AppConfig);
 
-            log.Information("Waiting for reverse connection from: {EndpointURL}", config.Source.EndpointUrl);
+            log.LogInformation("Waiting for reverse connection from: {EndpointURL}", config.Source.EndpointUrl);
             var connection = await reverseConnectManager.WaitForConnection(endpointUrl, null);
             if (connection == null)
             {
-                log.Error("Reverse connect failed, no connection established");
+                log.LogError("Reverse connect failed, no connection established");
                 throw new ExtractorFailureException("Failed to obtain reverse connection from server");
             }
             EndpointDescription selectedEndpoint;
@@ -290,7 +302,7 @@ namespace Cognite.OpcUa
             var endpointConfiguration = EndpointConfiguration.Create(AppConfig);
             var endpoint = new ConfiguredEndpoint(null, selectedEndpoint, endpointConfiguration);
             var identity = AuthenticationUtils.GetUserIdentity(config.Source);
-            log.Information("Attempt to connect to endpoint with security: {SecurityPolicyUri} using user identity {idt}",
+            log.LogInformation("Attempt to connect to endpoint with security: {SecurityPolicyUri} using user identity {Identity}",
                 endpoint.Description.SecurityPolicyUri,
                 identity.DisplayName);
 
@@ -305,7 +317,7 @@ namespace Cognite.OpcUa
                 connection = await reverseConnectManager.WaitForConnection(endpointUrl, null);
                 if (connection == null)
                 {
-                    log.Error("Reverse connect failed, no connection established");
+                    log.LogError("Reverse connect failed, no connection established");
                     throw new ExtractorFailureException("Failed to obtain reverse connection from server");
                 }
 
@@ -354,7 +366,7 @@ namespace Cognite.OpcUa
             Started = true;
             connects.Inc();
             connected.Set(1);
-            log.Information("Successfully connected to server at {EndpointURL}", config.Source.EndpointUrl);
+            log.LogInformation("Successfully connected to server at {EndpointURL}", config.Source.EndpointUrl);
         }
 
         /// <summary>
@@ -366,7 +378,7 @@ namespace Cognite.OpcUa
             if (reconnectHandler == null) return;
             Session = reconnectHandler.Session;
             reconnectHandler.Dispose();
-            log.Warning("--- RECONNECTED ---");
+            log.LogWarning("--- RECONNECTED ---");
 
             OnServerReconnect?.Invoke(this, EventArgs.Empty);
 
@@ -381,10 +393,10 @@ namespace Cognite.OpcUa
         private void ClientKeepAlive(Session sender, KeepAliveEventArgs eventArgs)
         {
             if (eventArgs.Status == null || !ServiceResult.IsNotGood(eventArgs.Status)) return;
-            log.Warning(eventArgs.Status.ToString());
+            log.LogWarning("Keep alive failed: {Status}", eventArgs.Status);
             if (reconnectHandler != null) return;
             connected.Set(0);
-            log.Warning("--- RECONNECTING ---");
+            log.LogWarning("--- RECONNECTING ---");
             if (!config.Source.ForceRestart && !liveToken.IsCancellationRequested)
             {
                 reconnectHandler = new SessionReconnectHandler();
@@ -405,7 +417,7 @@ namespace Cognite.OpcUa
                 }
                 catch
                 {
-                    log.Warning("Client failed to close, quitting");
+                    log.LogWarning("Client failed to close, quitting");
                 }
             }
             OnServerDisconnect?.Invoke(this, EventArgs.Empty);
@@ -423,17 +435,17 @@ namespace Cognite.OpcUa
             }
             else if (!StatusCode.IsGood(eventArgs.Error.StatusCode) && config.Source.IgnoreCertificateIssues)
             {
-                log.Warning("Ignoring bad certificate: {err}", eventArgs.Error.StatusCode);
+                log.LogWarning("Ignoring bad certificate: {Err}", eventArgs.Error.StatusCode);
                 eventArgs.Accept = true;
             }
 
             if (eventArgs.Accept)
             {
-                log.Warning("Accepted Certificate {CertificateSubject}", eventArgs.Certificate.Subject);
+                log.LogWarning("Accepted Certificate {CertificateSubject}", eventArgs.Certificate.Subject);
             }
             else
             {
-                log.Error("Rejected Bad Certificate {CertificateSubject}, {err}",
+                log.LogError("Rejected Bad Certificate {CertificateSubject}, {Err}",
                     eventArgs.Certificate.Subject, eventArgs.Error.StatusCode);
             }
         }
@@ -660,9 +672,9 @@ namespace Cognite.OpcUa
                     attributeRequests.Inc();
                     values.AddRange(lvalues);
                     attrCount += lvalues.Count;
-                    log.Debug("Read {NumAttributesRead} / {total} attributes", attrCount, total);
+                    log.LogDebug("Read {NumAttributesRead} / {Total} attributes", attrCount, total);
                 }
-                log.Information("Read {TotalAttributesRead} attributes with {NumAttributeReadOperations} operations for {nodeCount} nodes",
+                log.LogInformation("Read {TotalAttributesRead} attributes with {NumAttributeReadOperations} operations for {NodeCount} nodes",
                     values.Count, count, distinctNodeCount);
             }
             catch (OperationCanceledException) when (token.IsCancellationRequested) { }
@@ -703,7 +715,7 @@ namespace Cognite.OpcUa
             }
             int total = values.Count;
 
-            log.Information("Retrieved {total}/{expected} attributes", total, expected);
+            log.LogInformation("Retrieved {Total}/{Expected} attributes", total, expected);
             if (total < expected && !token.IsCancellationRequested)
             {
                 throw new ExtractorFailureException(
@@ -774,7 +786,7 @@ namespace Cognite.OpcUa
             if (nodes == null || !nodes.Any()) return;
 
             var properties = new HashSet<UAVariable>();
-            log.Information("Get properties for {NumNodesToPropertyRead} nodes", nodes.Count());
+            log.LogInformation("Get properties for {NumNodesToPropertyRead} nodes", nodes.Count());
             var idsToCheck = new HashSet<NodeId>();
             var nodeDict = new Dictionary<NodeId, UANode>();
             foreach (var node in nodes)
@@ -836,8 +848,9 @@ namespace Cognite.OpcUa
             await Browser.BrowseDirectory(idsToCheck, cb, token, ReferenceTypeIds.HierarchicalReferences,
                 (uint)NodeClass.Object | (uint)NodeClass.Variable, false, true, true);
 
-            log.Information("Read attributes for {cnt} properties", properties.Count);
+            log.LogInformation("Read attributes for {Count} properties", properties.Count);
             await ReadNodeData(properties, token);
+
             var toGetValue = properties.Where(node => DataTypeManager.AllowTSMap(node, 10, true)).ToList();
             await DataTypeManager.GetDataTypeMetadataAsync(toGetValue.SelectNonNull(prop => prop.DataType?.Raw), token);
             await ReadNodeValues(toGetValue, token);
@@ -952,6 +965,7 @@ namespace Cognite.OpcUa
                     if (data.ContinuationPoint == null)
                     {
                         node.Completed = true;
+                        node.ContinuationPoint = null;
                     }
                     else
                     {
@@ -959,9 +973,9 @@ namespace Cognite.OpcUa
                     }
                 }
 
-                log.Debug("Fetched historical "
-                          + (readParams.Details is ReadEventDetails ? "events" : "datapoints")
-                          + " for {nodeCount} nodes", readParams.Nodes.Count);
+                log.LogDebug("Fetched historical {Type} for {NodeCount} nodes",
+                        readParams.Details is ReadEventDetails ? "events" : "datapoints",
+                        readParams.Nodes.Count);
             }
             catch (OperationCanceledException) when (token.IsCancellationRequested) { }
             catch (Exception ex)
@@ -1030,7 +1044,7 @@ namespace Cognite.OpcUa
                             return monitor;
                         })
                     );
-                    log.Debug("Add subscriptions for {numnodes} nodes, {subscribed} / {total} done.", lcount, count, total);
+                    log.LogDebug("Add subscriptions for {NumNodes} nodes, {Subscribed} / {Total} done.", lcount, count, total);
                     count += lcount;
 
                     if (lcount > 0 && subscription.Created)
@@ -1061,7 +1075,9 @@ namespace Cognite.OpcUa
             }
             finally
             {
+#pragma warning disable CA1508 // Avoid dead conditional code - the warning is due to a dotnet bug
                 if (subscription != null && !subscription.Created)
+#pragma warning restore CA1508 // Avoid dead conditional code
                 {
                     subscription.Dispose();
                 }
@@ -1176,10 +1192,10 @@ namespace Cognite.OpcUa
             eventFields = await source.GetEventIdFields(token);
             foreach (var pair in eventFields)
             {
-                log.Verbose("Collected event field: {id}", pair.Key);
+                log.LogTrace("Collected event field: {Id}", pair.Key);
                 foreach (var fields in pair.Value.CollectedFields)
                 {
-                    log.Verbose("    {browse}", fields.Name);
+                    log.LogTrace("    {Name}", fields.Name);
                 }
             }
             return eventFields;
@@ -1209,7 +1225,7 @@ namespace Cognite.OpcUa
 
             if (eventFields.Keys.Any() && ((config.Events.EventIds?.Any() ?? false) || !config.Events.AllEvents))
             {
-                log.Debug("Limit event results to the following ids: {ids}", string.Join(", ", eventFields.Keys));
+                log.LogDebug("Limit event results to the following ids: {Ids}", string.Join(", ", eventFields.Keys));
                 var eventListOperand = new SimpleAttributeOperand
                 {
                     TypeDefinitionId = ObjectTypeIds.BaseEventType,
@@ -1232,7 +1248,7 @@ namespace Cognite.OpcUa
 
             if (!fieldList.Any())
             {
-                log.Warning("Missing valid event fields, no results will be returned");
+                log.LogWarning("Missing valid event fields, no results will be returned");
             }
             var selectClauses = new SimpleAttributeOperandCollection();
             foreach (var field in fieldList)
@@ -1334,7 +1350,7 @@ namespace Cognite.OpcUa
                 };
                 item.Notification += callback;
                 subscription.AddItem(item);
-                log.Information("Subscribe to auditing events on the server node");
+                log.LogInformation("Subscribe to auditing events on the server node");
 
                 using var operation = waiter.GetInstance();
 
@@ -1344,19 +1360,21 @@ namespace Cognite.OpcUa
                 }
                 else if (!subscription.Created)
                 {
-                    log.Information("Add subscription to the Session");
+                    log.LogInformation("Add subscription to the Session");
                     Session.AddSubscription(subscription);
                     await subscription.CreateAsync(token);
                 }
             }
             catch (Exception)
             {
-                log.Error("Failed to create audit subscription");
+                log.LogError("Failed to create audit subscription");
                 throw;
             }
             finally
             {
+#pragma warning disable CA1508 // Avoid dead conditional code - the warning is due to a dotnet bug
                 if (subscription != null && !subscription.Created)
+#pragma warning restore CA1508
                 {
                     subscription.Dispose();
                 }
@@ -1588,7 +1606,7 @@ namespace Cognite.OpcUa
             }
             catch (Exception ex)
             {
-                log.Warning("Failed to close UAClient: {msg}", ex.Message);
+                log.LogWarning("Failed to close UAClient: {Message}", ex.Message);
             }
             reconnectHandler?.Dispose();
             reverseConnectManager?.Dispose();

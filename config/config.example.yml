@@ -104,6 +104,7 @@ history:
     backfill: false
     # Time in seconds to wait between each restart of history. Setting this too low may impact performance.
     # Leave at 0 to disable periodic restarts.
+    # Alternatively, use N[timeunit] where timeunit is w, d, h, m, s or ms.
     restart-period: 0
     # Max number of datapoints per history read request, 0 for server specified
     data-chunk: 1000
@@ -114,16 +115,23 @@ history:
     # Max number of simultaneous nodes per historyRead request for events
     event-nodes-chunk: 100
     # The earliest timestamp to be read from history on the OPC-UA server, in milliseconds since 1/1/1970.
+    # Alternatively, use syntax N[timeunit](-ago) where timeunit is w, d, h, m, s or ms. In past if -ago is added,
+    # future if not.
     start-time: 0
+    # Timestamp to be considered the end of forward history. Only relevant if max-read-length is set.
+    # In milliseconds since 1/1/1970. Default is current time, if this is 0.
+    end-time: 0
+    # Maximum length of each read of history, in seconds.
+    # If this is set greater than zero, history will be read in chunks of maximum this size, until the end.
+    # This can potentially take a very long time if end-time is much larger than start-time.
+    max-history-length: 0
     # Granularity to use when doing historyRead, in seconds. Nodes with last known timestamp within this range of eachother will
     # be read together. Should not be smaller than usual average update rate
     # Leave at 0 to always read a single node each time.
+    # Alternatively, use N[timeunit] where timeunit is w, d, h, m, s or ms.
     granularity: 600
     # Set to true to attempt to read history without using continationPoints, instead using the Time of events, and
     # SourceTimestamp of datapoints to incrementally change the start time of the request until no points are returned.
-    # Since history reads are chunked, this can cause a lot of duplicated points unless all timeseries are very well synced.
-    # It is therefore recommended to set data-nodes-chunk and event-nodes-chunk to 1 if this is used, although it will work without.
-    # If points/events are generated at close to the same rate for all nodes, using a larger chunk size may work fine.
     ignore-continuation-points: false
     # Configuration for throttling history reads. This applies to both events and datapoints separately. So the maximum load on the server
     # is effectively twice the configured values. This is worth noting if the server restricts the number of available continuation points,
@@ -135,6 +143,8 @@ history:
         max-parallelism: 0
         # Maximum number of nodes to read in parallel. This should be set equal to or lower than the maximum number of continuation points set by the server.
         max-node-parallelism: 0
+    # Log bad history datapoints, count per read at debug and each datapoint at verbose
+    log-bad-values: true
 
 
 # Configuration for the pusher to CDF.
@@ -422,6 +432,7 @@ state-storage:
     influx-variable-store: influx_variable_states
     influx-event-store: influx_event_states
     # Interval between each write to the buffer file, in seconds. 0 or less disables the state storage.
+    # Alternatively, use N[timeunit] where timeunit is w, d, h, m, s or ms.
     interval: 10
 
 
@@ -470,6 +481,7 @@ extraction:
     id-prefix: # ex: "gp:"
 
     # Delay in ms between each push of data points to targets
+    # Alternatively, use N[timeunit] where timeunit is w, d, h, m, s or ms.
     data-push-delay: 1000
     
     # Source node in the OPC-UA server. Leave empty to use the top level Objects node.
@@ -568,6 +580,7 @@ extraction:
 
     # Time in minutes between each call to browse the OPC-UA directory, then push new nodes to destinations.
     # Note that this is a heavy operation, so this number should not be set too low.
+    # Alternatively, use N[timeunit] where timeunit is w, d, h, m, s or ms.
     auto-rebrowse-period: 0
     # Enable using audit events to discover new nodes. If this is set to true, the client will expect AuditAddNodes/AuditAddReferences
     # events on the server node. These will be used to add new nodes automatically, by recursively browsing from each given ParentId.
@@ -590,12 +603,6 @@ extraction:
             context: false
             metadata: false
 
-    # Regex on node DisplayName for treating variables as properties.
-    # Variable nodes with a name that matches this regex will be treated as metadata instead of as a timeseries
-    # Nodes with property type definition will always be treated as properties
-    property-name-filter:
-    # Equivalent filter, but on node id if the node has a string identifier
-    property-id-filter:
     # Map OPC-UA non-hierarchical references to relationships in CDF.
     # The generated relationships will have external-id
     # [prefix][reference type name (or inverse-name)];[namespace source][id source];[namespace target][id target]
@@ -620,6 +627,10 @@ extraction:
         # Allow reading object- and vairable types as normal nodes and map them to destinations.
         # They will need to be in the mapped hierarchy.
         as-nodes: false
+
+    # By default children of variables are treated as properties, if this is set to true,
+    # they can be treated as objects or variables instead.
+    map-variable-children: false
 
     # A list of transformations to be applied to the source nodes before pushing
     # The possible transformations are
@@ -673,6 +684,8 @@ subscriptions:
         deadband-type: "None"
         # Double value of the deadband.
         deadband-value: 0
+    # Log bad subscription datapoints
+    log-bad-values: true
 
 events:
     # Events are extracted with the following rules: By default all events are extracted.

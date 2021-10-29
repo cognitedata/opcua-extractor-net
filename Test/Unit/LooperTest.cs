@@ -26,15 +26,15 @@ namespace Test.Unit
             if (tester == null) throw new ArgumentNullException(nameof(tester));
             this.tester = tester;
             tester.ResetConfig();
-            tester.Config.Extraction.DataPushDelay = -1;
-            tester.Config.Extraction.AutoRebrowsePeriod = 1000;
+            tester.Config.Extraction.DataPushDelay = "-1";
+            tester.Config.Extraction.AutoRebrowsePeriod = "1000";
         }
         [Fact]
         public async Task TestScheduleTasks()
         {
             tester.Config.StateStorage = new StateStorageConfig
             {
-                Interval = 1000000
+                Interval = "1000000"
             };
             using var stateStore = new DummyStateStore();
             using var extractor = tester.BuildExtractor(true, stateStore, new DummyPusher(new DummyPusherConfig()));
@@ -154,7 +154,7 @@ namespace Test.Unit
             var evts1 = pusher1.Events[new NodeId("id")] = new List<UAEvent>();
             var evts2 = pusher2.Events[new NodeId("id")] = new List<UAEvent>();
 
-            tester.Config.Extraction.DataPushDelay = 100;
+            tester.Config.Extraction.DataPushDelay = "100";
             extractor.Looper.Run();
             var loopTask = extractor.Looper.Scheduler.WaitForAll();
 

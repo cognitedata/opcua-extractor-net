@@ -1,12 +1,27 @@
-﻿using System;
+﻿/* Cognite Extractor for OPC-UA
+Copyright (C) 2021 Cognite AS
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
+
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using Opc.Ua;
-using Opc.Ua.PubSub;
-using Serilog;
 
 namespace Cognite.OpcUa.PubSub
 {
@@ -43,16 +58,17 @@ namespace Cognite.OpcUa.PubSub
         private readonly UAClient client;
         private PubSubConfigurationDataType config;
         private readonly Dictionary<NodeId, InternalNode> nodeMap = new Dictionary<NodeId, InternalNode>();
-        private readonly ILogger log = Log.Logger.ForContext(typeof(ServerPubSubConfigurator));
+        private readonly ILogger log;
         private readonly Dictionary<NodeId, ReaderWrapper> readers = new Dictionary<NodeId, ReaderWrapper>();
         private readonly Dictionary<NodeId, ConnectionWrapper> connections = new Dictionary<NodeId, ConnectionWrapper>();
         private readonly PubSubConfig pubSubConfig;
 
-        public ServerPubSubConfigurator(UAClient client, PubSubConfig pubSubConfig)
+        public ServerPubSubConfigurator(ILogger log, UAClient client, PubSubConfig pubSubConfig)
         {
             this.client = client;
             config = new PubSubConfigurationDataType();
             this.pubSubConfig = pubSubConfig;
+            this.log = log;
         }
 
         private async Task<bool> LoadNodeValues(CancellationToken token)
@@ -62,7 +78,7 @@ namespace Cognite.OpcUa.PubSub
             var bySize = toRead.GroupBy(node => node.BrowseName == "DataSetMetaData" || node.BrowseName == "PublishedData");
             if (bySize.Count() != 2)
             {
-                log.Warning("Not enough information to configure pubsub based on server hierarchy");
+                log.LogWarning("Not enough information to configure pubsub based on server hierarchy");
                 return false;
             }
             var values = (await client.ReadRawValues(bySize.First(group => !group.Key).Select(node => node.NodeId), token)).ToList();
@@ -148,7 +164,7 @@ namespace Cognite.OpcUa.PubSub
 
                 if (metaData.Fields.Count != publishedItems.Length)
                 {
-                    log.Error("Incorrect number of fields in data set {set}: {f} fields {p} items",
+                    log.LogError("Incorrect number of fields in data set {BrowseName}: {FieldCount} fields {ItemCount} items",
                         dataSet.BrowseName, metaData.Fields.Count, publishedItems.Length);
                     continue;
                 }

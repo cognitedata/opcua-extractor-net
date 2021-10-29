@@ -17,8 +17,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.Types;
+using Microsoft.Extensions.Logging;
 using Opc.Ua;
-using Serilog;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -39,7 +39,7 @@ namespace Cognite.OpcUa.NodeSources
     /// </summary>
     public abstract class BaseNodeSource
     {
-        protected virtual ILogger Log { get; set; } = Serilog.Log.Logger.ForContext(typeof(BaseNodeSource));
+        protected virtual ILogger Log { get; }
         // Initial collection of nodes, in a map.
         protected Dictionary<NodeId, UANode> NodeMap { get; } = new Dictionary<NodeId, UANode>();
         protected List<UANode> RawObjects { get; } = new List<UANode>();
@@ -63,8 +63,9 @@ namespace Cognite.OpcUa.NodeSources
         protected UAExtractor Extractor { get; }
         protected UAClient Client { get; }
 
-        protected BaseNodeSource(FullConfig config, UAExtractor extractor, UAClient client)
+        protected BaseNodeSource(ILogger log, FullConfig config, UAExtractor extractor, UAClient client)
         {
+            Log = log;
             Config = config;
             Extractor = extractor;
             Client = client;
@@ -78,13 +79,9 @@ namespace Cognite.OpcUa.NodeSources
         /// <param name="node">Variable to write</param>
         protected virtual void AddVariableToLists(UAVariable node)
         {
-            if (node.IsArray)
+            if (node.IsObject)
             {
-                FinalDestinationVariables.AddRange(node.CreateArrayChildren());
-            }
-
-            if (node.IsArray || node.NodeClass != NodeClass.Variable)
-            {
+                FinalDestinationVariables.AddRange(node.CreateTimeseries());
                 FinalDestinationObjects.Add(node);
             }
             else
@@ -113,7 +110,7 @@ namespace Cognite.OpcUa.NodeSources
             // Start by looking for "MaxArrayLength" standard property. This is defined in OPC-UA 5/6.3.2
             if (!nodes.Any()) return;
 
-            Log.Information("Estimating array length for {cnt} nodes", nodes.Count());
+            Log.LogInformation("Estimating array length for {Count} nodes", nodes.Count());
 
             await Extractor.ReadProperties(nodes);
             var toReadValues = new List<UAVariable>();
@@ -210,9 +207,9 @@ namespace Cognite.OpcUa.NodeSources
                 }
 
 
-                if (variable.IsArray)
+                if (variable.IsObject)
                 {
-                    foreach (var child in variable.CreateArrayChildren())
+                    foreach (var child in variable.CreateTimeseries())
                     {
                         var uniqueId = Extractor.GetUniqueId(child.Id, child.Index);
                         if (setState && state != null) Extractor.State.SetNodeState(state, uniqueId);
@@ -236,16 +233,30 @@ namespace Cognite.OpcUa.NodeSources
             {
                 node.Parent = parent;
                 node.Attributes.Ignore |= node.Parent.Ignore;
-                node.Attributes.IsProperty |= node.Parent.IsProperty || node.Parent.NodeClass == NodeClass.Variable;
+                node.Attributes.IsProperty |= node.Parent.IsProperty
+                    || !Config.Extraction.MapVariableChildren && node.Parent.NodeClass == NodeClass.Variable;
             }
 
             if (Extractor.Transformations != null)
             {
                 foreach (var trns in Extractor.Transformations)
                 {
-                    trns.ApplyTransformation(node, Client.NamespaceTable!);
+                    trns.ApplyTransformation(Log, node, Client.NamespaceTable!);
                     if (node.Ignore) return;
                 }
+            }
+
+            if (node.NodeClass == NodeClass.Variable && Config.Extraction.MapVariableChildren)
+            {
+                node.Attributes.PropertiesRead = true;
+            }
+
+            if (node.Parent != null
+                && node.Parent.NodeClass == NodeClass.Variable
+                && !node.IsProperty
+                && (node.Parent is UAVariable varParent))
+            {
+                varParent.IsObject = true;
             }
 
             if (node.IsProperty)
@@ -300,7 +311,7 @@ namespace Cognite.OpcUa.NodeSources
                     return node.Changed;
                 }
             }
-            Log.Verbose(node.ToString());
+            Log.LogTrace("{Node}", node.ToString());
 
             return true;
         }

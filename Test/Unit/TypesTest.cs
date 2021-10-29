@@ -4,6 +4,8 @@ using Cognite.OpcUa.History;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
 using CogniteSdk;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
@@ -340,9 +342,9 @@ namespace Test.Unit
             Assert.Equal(3, poco.Metadata.Count);
         }
 
-        private static string MetadataToJson(UANode node, UAExtractor extractor)
+        private static string MetadataToJson(ILogger log, UANode node, UAExtractor extractor)
         {
-            var json = node.ToJson(extractor.StringConverter, ConverterType.Node);
+            var json = node.ToJson(log, extractor.StringConverter, ConverterType.Node);
             return json.RootElement.GetProperty("metadata").ToString();
         }
 
@@ -352,12 +354,13 @@ namespace Test.Unit
             using var extractor = tester.BuildExtractor();
             var node = new UANode(new NodeId("test"), "test", NodeId.Null, NodeClass.Object);
             var converter = tester.Client.StringConverter;
-            Assert.Equal("", MetadataToJson(node, extractor));
+            var log = tester.Provider.GetRequiredService<ILogger<TypesTest>>();
+            Assert.Equal("", MetadataToJson(log, node, extractor));
 
             // Extras only
             tester.Config.Extraction.NodeTypes.Metadata = true;
             node.Attributes.NodeType = new UANodeType(new NodeId("type"), false) { Name = "SomeType" };
-            Assert.Equal(@"{""TypeDefinition"":""SomeType""}", MetadataToJson(node, extractor));
+            Assert.Equal(@"{""TypeDefinition"":""SomeType""}", MetadataToJson(log, node, extractor));
 
             // Properties only
             var pdt = new UADataType(DataTypeIds.String);
@@ -373,10 +376,10 @@ namespace Test.Unit
             {
                 propA, propB
             };
-            Assert.Equal(@"{""propA"":""valueA"",""propB"":""valueB""}", MetadataToJson(node, extractor));
+            Assert.Equal(@"{""propA"":""valueA"",""propB"":""valueB""}", MetadataToJson(log, node, extractor));
 
             tester.Config.Extraction.NodeTypes.Metadata = true;
-            Assert.Equal(@"{""TypeDefinition"":""SomeType"",""propA"":""valueA"",""propB"":""valueB""}", MetadataToJson(node, extractor));
+            Assert.Equal(@"{""TypeDefinition"":""SomeType"",""propA"":""valueA"",""propB"":""valueB""}", MetadataToJson(log, node, extractor));
 
             // Test nested properties
             var nestedProp = CommonTestUtils.GetSimpleVariable("nestedProp", pdt); ;
@@ -387,7 +390,7 @@ namespace Test.Unit
             };
             Assert.Equal(@"{""TypeDefinition"":""SomeType"",""propA"":""valueA"","
                 + @"""propB"":{""Value"":""valueB"",""nestedProp"":""nestedValue""}}",
-                MetadataToJson(node, extractor));
+                MetadataToJson(log, node, extractor));
 
             // Test null name
             var nullNameProp = new UAVariable(new NodeId("nullName"), null, NodeId.Null);
@@ -395,7 +398,7 @@ namespace Test.Unit
             node.AddProperty(nullNameProp);
             Assert.Equal(@"{""TypeDefinition"":""SomeType"",""propA"":""valueA"","
                 + @"""propB"":{""Value"":""valueB"",""nestedProp"":""nestedValue""}}",
-                MetadataToJson(node, extractor));
+                MetadataToJson(log, node, extractor));
 
             // Test null value
             var nullValueProp = new UAVariable(new NodeId("nullValue"), "nullValue", NodeId.Null);
@@ -403,7 +406,7 @@ namespace Test.Unit
             node.AddProperty(nullValueProp);
             Assert.Equal(@"{""TypeDefinition"":""SomeType"",""propA"":""valueA"","
                 + @"""propB"":{""Value"":""valueB"",""nestedProp"":""nestedValue""},""nullValue"":null}",
-                MetadataToJson(node, extractor));
+                MetadataToJson(log, node, extractor));
 
             // Test duplicated properties
             var propA2 = new UAVariable(new NodeId("propA2"), "propA", NodeId.Null);
@@ -412,7 +415,7 @@ namespace Test.Unit
             propA2.SetDataPoint("valueA2");
             Assert.Equal(@"{""TypeDefinition"":""SomeType"",""propA"":""valueA"","
                 + @"""propB"":{""Value"":""valueB"",""nestedProp"":""nestedValue""},""nullValue"":null,""propA0"":""valueA2""}",
-                MetadataToJson(node, extractor));
+                MetadataToJson(log, node, extractor));
         }
         [Fact]
         public void TestToJsonComplexTypes()
@@ -420,6 +423,7 @@ namespace Test.Unit
             using var extractor = tester.BuildExtractor();
             var node = new UANode(new NodeId("test"), "test", NodeId.Null, NodeClass.Object);
             var converter = tester.Client.StringConverter;
+            var log = tester.Provider.GetRequiredService<ILogger<TypesTest>>();
 
             var pdt = new UADataType(DataTypeIds.ReadValueId);
             var prop = new UAVariable(new NodeId("readvalueid"), "readvalueid", NodeId.Null);
@@ -431,7 +435,7 @@ namespace Test.Unit
             node.AddProperty(prop);
 
             Assert.Equal(@"{""readvalueid"":{""NodeId"":{""IdType"":1,""Id"":""test""},""AttributeId"":13}}",
-                MetadataToJson(node, extractor));
+                MetadataToJson(log, node, extractor));
 
             // Test nested
             node.Attributes.Properties.Clear();
@@ -439,14 +443,14 @@ namespace Test.Unit
             outerProp.AddProperty(prop);
             node.AddProperty(outerProp);
             Assert.Equal(@"{""outer"":{""readvalueid"":{""NodeId"":{""IdType"":1,""Id"":""test""},""AttributeId"":13}}}",
-                MetadataToJson(node, extractor));
+                MetadataToJson(log, node, extractor));
 
             // Test array
             prop.SetDataPoint(new Variant(new ReadValueIdCollection(new[] { value, value })));
             Assert.Equal(@"{""outer"":{""readvalueid"":["
             + @"{""NodeId"":{""IdType"":1,""Id"":""test""},""AttributeId"":13},"
             + @"{""NodeId"":{""IdType"":1,""Id"":""test""},""AttributeId"":13}]}}",
-                MetadataToJson(node, extractor));
+                MetadataToJson(log, node, extractor));
         }
         #endregion
 
@@ -529,7 +533,7 @@ namespace Test.Unit
         {
             var id = new NodeId("test");
             var node = new UAVariable(id, "name", NodeId.Null);
-            Assert.Empty(node.CreateArrayChildren());
+            Assert.Empty(node.CreateTimeseries());
             Assert.Null(node.ArrayChildren);
 
             node.VariableAttributes.AccessLevel = AccessLevels.CurrentRead | AccessLevels.HistoryRead;
@@ -539,7 +543,7 @@ namespace Test.Unit
             node.VariableAttributes.ValueRank = ValueRanks.OneDimension;
             node.VariableAttributes.ArrayDimensions = new int[] { 4 };
 
-            var children = node.CreateArrayChildren().ToList();
+            var children = node.CreateTimeseries().ToList();
             Assert.Equal(4, children.Count);
             Assert.Equal(children, node.ArrayChildren);
 
@@ -557,8 +561,37 @@ namespace Test.Unit
                 Assert.Equal(node.ArrayDimensions, child.ArrayDimensions);
                 Assert.Equal(i, child.Index);
             }
-
         }
+        [Fact]
+        public void TestGetTimeseries()
+        {
+            var id = new NodeId("test");
+            var node = new UAVariable(id, "name", NodeId.Null);
+
+            node.VariableAttributes.AccessLevel = AccessLevels.CurrentRead | AccessLevels.HistoryRead;
+            node.VariableAttributes.ReadHistory = true;
+            node.VariableAttributes.DataType = new UADataType(DataTypeIds.Double);
+            node.VariableAttributes.NodeType = new UANodeType(new NodeId("test"), true);
+            node.VariableAttributes.ValueRank = ValueRanks.OneDimension;
+
+            node.IsObject = true;
+
+            var children = node.CreateTimeseries().ToList();
+            Assert.Single(children);
+
+            var child = children.Single();
+            Assert.True(child.ReadHistory);
+            Assert.Equal(node.DisplayName, child.DisplayName);
+            Assert.Equal(node.Id, child.ParentId);
+            Assert.Equal(node.AccessLevel, child.AccessLevel);
+            Assert.Equal(node.TimeSeries, child);
+            Assert.Equal(node.DataType, child.DataType);
+            Assert.Equal(node.NodeType, child.NodeType);
+            Assert.Equal(node.ValueRank, child.ValueRank);
+
+            Assert.Equal(child, node.CreateTimeseries().First());
+        }
+
         [Fact]
         public void TestToStatelessTimeseries()
         {
@@ -748,12 +781,12 @@ namespace Test.Unit
         {
             var ts = DateTime.UtcNow;
             var dt = new UADataPoint(ts, "id", 123.123);
-            var str = dt.ToDebugDescription();
+            var str = dt.ToString();
             var refStr = $"Update timeseries id to 123.123 at {ts.ToString(CultureInfo.InvariantCulture)}";
             Assert.Equal(refStr, str);
 
             dt = new UADataPoint(ts, "id", "value");
-            str = dt.ToDebugDescription();
+            str = dt.ToString();
             refStr = $"Update timeseries id to \"value\" at {ts.ToString(CultureInfo.InvariantCulture)}";
             Assert.Equal(refStr, str);
         }
@@ -1197,8 +1230,9 @@ namespace Test.Unit
         public void TestReferenceDebugDescription()
         {
             using var extractor = tester.BuildExtractor();
+            var log = tester.Provider.GetRequiredService<ILogger<ReferenceTypeManager>>();
             // asset - asset
-            var mgr = new ReferenceTypeManager(tester.Client, extractor);
+            var mgr = new ReferenceTypeManager(log, tester.Client, extractor);
             var reference = new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target"), false, false, mgr);
             reference.Type.SetNames("Organizes", "IsOrganizedBy");
             Assert.Equal("Reference: Asset s=source Organizes Asset s=target", reference.ToString());
@@ -1223,7 +1257,8 @@ namespace Test.Unit
         public void TestReferenceEquality()
         {
             using var extractor = tester.BuildExtractor();
-            var mgr = new ReferenceTypeManager(tester.Client, extractor);
+            var log = tester.Provider.GetRequiredService<ILogger<ReferenceTypeManager>>();
+            var mgr = new ReferenceTypeManager(log, tester.Client, extractor);
             var reference = new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target"), false, false, mgr);
             Assert.Equal(reference, reference);
             // Different due to different type only
@@ -1247,7 +1282,8 @@ namespace Test.Unit
         public void TestToRelationship()
         {
             using var extractor = tester.BuildExtractor();
-            var manager = new ReferenceTypeManager(tester.Client, extractor);
+            var log = tester.Provider.GetRequiredService<ILogger<ReferenceTypeManager>>();
+            var manager = new ReferenceTypeManager(log, tester.Client, extractor);
             var reference = new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target"), false, true, manager);
             reference.Type.SetNames("Organizes", "OrganizedBy");
             var rel = reference.ToRelationship(123, extractor);

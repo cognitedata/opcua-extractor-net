@@ -16,16 +16,18 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using Cognite.Extensions;
+using Cognite.Extractor.Common;
 using Cognite.Extractor.Configuration;
 using Cognite.Extractor.Logging;
 using Cognite.Extractor.Metrics;
 using Cognite.Extractor.StateStorage;
 using Cognite.Extractor.Utils;
-using Cognite.OpcUa.Pushers;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
+using System.Threading;
 
 namespace Cognite.OpcUa
 {
@@ -96,14 +98,21 @@ namespace Cognite.OpcUa
         public IEnumerable<string>? IgnoreNamePrefix { get; set; }
         public IEnumerable<string>? IgnoreName { get; set; }
         public ProtoNodeId? RootNode { get; set; }
-
         public IEnumerable<ProtoNodeId>? RootNodes { get; set; }
         public Dictionary<string, ProtoNodeId>? NodeMap { get; set; }
         public Dictionary<string, string> NamespaceMap { get => namespaceMap; set => namespaceMap = value ?? namespaceMap; }
         private Dictionary<string, string> namespaceMap = new Dictionary<string, string>();
-        public int AutoRebrowsePeriod { get; set; }
+        public TimeSpanWrapper AutoRebrowsePeriodValue { get; } = new TimeSpanWrapper(false, "m", "0");
+        public string? AutoRebrowsePeriod
+        {
+            get => AutoRebrowsePeriodValue.RawValue; set => AutoRebrowsePeriodValue.RawValue = value!;
+        }
         public bool EnableAuditDiscovery { get; set; }
-        public int DataPushDelay { get; set; } = 1000;
+        public TimeSpanWrapper DataPushDelayValue { get; } = new TimeSpanWrapper(true, "ms", "1000");
+        public string? DataPushDelay
+        {
+            get => DataPushDelayValue.RawValue; set => DataPushDelayValue.RawValue = value!;
+        }
         public UpdateConfig Update { get => update; set => update = value ?? update; }
         private UpdateConfig update = new UpdateConfig();
         public DataTypeConfig DataTypes { get => dataTypes; set => dataTypes = value ?? dataTypes; }
@@ -114,6 +123,7 @@ namespace Cognite.OpcUa
         private RelationshipConfig relationships = new RelationshipConfig();
         public NodeTypeConfig NodeTypes { get => nodeTypes; set => nodeTypes = value ?? nodeTypes; }
         private NodeTypeConfig nodeTypes = new NodeTypeConfig();
+        public bool MapVariableChildren { get; set; }
         public IEnumerable<RawNodeTransformation>? Transformations { get; set; }
         public IEnumerable<NodeId> GetRootNodes(UAClient client)
         {
@@ -198,6 +208,7 @@ namespace Cognite.OpcUa
         public bool DataPoints { get; set; } = true;
         public bool Events { get; set; } = true;
         public bool IgnoreAccessLevel { get; set; }
+        public bool LogBadValues { get; set; } = true;
     }
     public interface IPusherConfig
     {
@@ -381,13 +392,25 @@ namespace Cognite.OpcUa
         private int eventPointsChunk = 1000;
         public int EventNodesChunk { get => eventNodesChunk; set => eventNodesChunk = Math.Max(1, value); }
         private int eventNodesChunk = 100;
-        public long StartTime { get; set; }
-        public int Granularity { get; set; } = 600;
+
+        public TimeSpanWrapper MaxReadLengthValue { get; } = new TimeSpanWrapper(true, "s", "0");
+        public string? MaxReadLength { get => MaxReadLengthValue.RawValue; set => MaxReadLengthValue.RawValue = value!; }
+
+        public string? StartTime { get; set; } = "0";
+        public string? EndTime { get; set; }
+        public TimeSpanWrapper GranularityValue { get; } = new TimeSpanWrapper(true, "s", "600");
+        public string? Granularity { get => GranularityValue.RawValue; set => GranularityValue.RawValue = value!; }
         public bool IgnoreContinuationPoints { get; set; }
-        public int RestartPeriod { get; set; }
+
+        public TimeSpanWrapper RestartPeriodValue { get; } = new TimeSpanWrapper(false, "s", "0");
+        public string? RestartPeriod
+        {
+            get => RestartPeriodValue.RawValue; set => RestartPeriodValue.RawValue = value!;
+        }
         public ContinuationPointThrottlingConfig Throttling {
             get => throttling; set => throttling = value ?? throttling; }
         private ContinuationPointThrottlingConfig throttling = new ContinuationPointThrottlingConfig();
+        public bool LogBadValues { get; set; } = true;
     }
     public class UAThrottlingConfig
     {
@@ -422,7 +445,11 @@ namespace Cognite.OpcUa
 
     public class StateStorageConfig : StateStoreConfig
     {
-        public int Interval { get; set; }
+        public TimeSpanWrapper IntervalValue { get; } = new TimeSpanWrapper(false, "s", "0");
+        public string? Interval
+        {
+            get => IntervalValue.RawValue; set => IntervalValue.RawValue = value!;
+        }
         public string VariableStore { get; set; } = "variable_states";
         public string EventStore { get; set; } = "event_states";
         public string InfluxVariableStore { get; set; } = "influx_variable_states";
@@ -459,5 +486,43 @@ namespace Cognite.OpcUa
         public bool Enabled { get; set; }
         public bool PreferUadp { get; set; } = true;
         public string? FileName { get; set; }
+    }
+
+    public class TimeSpanWrapper
+    {
+        private static readonly Regex isNegative = new Regex("^-[0-9]+");
+
+        private readonly bool allowZero;
+        private readonly string defaultUnit;
+        private readonly TimeSpan defaultValue;
+
+        public TimeSpan Value { get; private set; }
+        private string rawValue;
+        public string RawValue { get => rawValue; set
+            {
+                rawValue = value;
+                if (string.IsNullOrWhiteSpace(value))
+                {
+                    Value = defaultValue;
+                    return;
+                }
+                var conv = CogniteTime.ParseTimeSpanString(value, defaultUnit);
+                if (conv == null)
+                {
+                    if (isNegative.IsMatch(value)) conv = Timeout.InfiniteTimeSpan;
+                    else throw new ArgumentException($"Invalid timespan string: {value}");
+                }
+                if (conv == TimeSpan.Zero && !allowZero) Value = Timeout.InfiniteTimeSpan;
+                else Value = conv.Value;
+            }
+        }
+        public TimeSpanWrapper(bool allowZero, string defaultUnit, string defaultValue)
+        {
+            this.allowZero = allowZero;
+            this.defaultUnit = defaultUnit;
+            RawValue = defaultValue;
+            rawValue = defaultValue;
+            this.defaultValue = Value;
+        }
     }
 }
