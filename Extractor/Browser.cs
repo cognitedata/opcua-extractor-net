@@ -94,7 +94,7 @@ namespace Cognite.OpcUa
             {
                 classMask |= (uint)NodeClass.VariableType | (uint)NodeClass.ObjectType;
             }
-            await BrowseDirectory(roots, callback, token, null, classMask, ignoreVisited);
+            await BrowseDirectory(roots, callback, token, null, classMask, ignoreVisited, true, config.Extraction.MapVariableChildren);
         }
         public async Task<IEnumerable<ReferenceDescription>> GetRootNodes(IEnumerable<NodeId> ids, CancellationToken token)
         {

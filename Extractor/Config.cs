@@ -123,6 +123,7 @@ namespace Cognite.OpcUa
         private RelationshipConfig relationships = new RelationshipConfig();
         public NodeTypeConfig NodeTypes { get => nodeTypes; set => nodeTypes = value ?? nodeTypes; }
         private NodeTypeConfig nodeTypes = new NodeTypeConfig();
+        public bool MapVariableChildren { get; set; }
         public IEnumerable<RawNodeTransformation>? Transformations { get; set; }
         public IEnumerable<NodeId> GetRootNodes(UAClient client)
         {

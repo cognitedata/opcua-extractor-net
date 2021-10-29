@@ -468,7 +468,7 @@ namespace Cognite.OpcUa.NodeSources
                 if (!NodeMap.TryGetValue(id, out var node)) continue;
                 if (!validNodeIds.Contains(id)) continue;
                 if (node.IsProperty) continue;
-                bool sourceIsTs = node is UAVariable variable && !variable.IsArray && variable.NodeClass == NodeClass.Variable;
+                bool sourceIsTs = node is UAVariable variable && !variable.IsObject;
                 foreach (var rf in refs)
                 {
                     bool isHierarchical = IsOfType(rf.ReferenceTypeId, ReferenceTypeIds.HierarchicalReferences);
@@ -477,7 +477,7 @@ namespace Cognite.OpcUa.NodeSources
                     if (!NodeMap.TryGetValue(Client.ToNodeId(rf.TargetId), out var target)) continue;
                     if (!validNodeIds.Contains(target.Id)) continue;
                     if (target.IsProperty) continue;
-                    bool targetIsTs = target is UAVariable targetVariable && !targetVariable.IsArray && targetVariable.NodeClass == NodeClass.Variable;
+                    bool targetIsTs = target is UAVariable targetVariable && !targetVariable.IsObject;
 
                     var reference = new UAReference(
                         Client.ToNodeId(rf.ReferenceTypeId),

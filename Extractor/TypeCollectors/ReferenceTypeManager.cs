@@ -130,7 +130,7 @@ namespace Cognite.OpcUa.TypeCollectors
                         child.IsForward,
                         parentId,
                         childId,
-                        parentNode is UAVariable pVar && !pVar.IsArray,
+                        parentNode is UAVariable pVar && !pVar.IsObject,
                         childState != null && !childState.IsArray,
                         this));
                 }

@@ -833,7 +833,7 @@ namespace Test.Unit
             variable.VariableAttributes.ValueRank = 1;
             variable.VariableAttributes.ArrayDimensions = new[] { 4 };
             NodeToRaw(extractor, variable, ConverterType.Node, false);
-            foreach (var child in variable.CreateArrayChildren())
+            foreach (var child in variable.CreateTimeseries())
             {
                 NodeToRaw(extractor, child, ConverterType.Variable, true);
             }

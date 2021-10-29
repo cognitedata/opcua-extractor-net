@@ -527,6 +527,30 @@ namespace Test.Integration
             Assert.Equal(7, pusher.PushedNodes.Count);
             Assert.Equal(21, pusher.PushedVariables.Count);
         }
+        [Fact]
+        public async Task TestMapVariableChildren()
+        {
+            using var pusher = new DummyPusher(new DummyPusherConfig());
+            var extraction = tester.Config.Extraction;
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+
+            var ids = tester.Server.Ids.Custom;
+            tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Custom.Root, tester.Client);
+
+            extraction.DataTypes.AllowStringVariables = true;
+            extraction.DataTypes.MaxArraySize = -1;
+            extraction.DataTypes.AutoIdentifyTypes = true;
+            extraction.MapVariableChildren = true;
+
+            await extractor.RunExtractor(true);
+
+            Assert.Equal(9, pusher.PushedNodes.Count);
+            Assert.Equal(16, pusher.PushedVariables.Count);
+
+            var numberVar = pusher.PushedVariables[(ids.NumberVar, -1)];
+            var numberVarObj = pusher.PushedNodes[ids.NumberVar];
+            Assert.Equal(ids.NumberVar, numberVar.ParentId);
+        }
         #endregion
 
         #region custommetadata
