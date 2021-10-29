@@ -59,7 +59,7 @@ namespace Cognite.OpcUa
         public static async Task<int> Main(string[] args)
         {
             return await GetCommandLineOptions().InvokeAsync(args);
-        }        
+        }
 
         private static Parser GetCommandLineOptions()
         {

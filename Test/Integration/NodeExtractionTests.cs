@@ -1,5 +1,7 @@
 ﻿using Cognite.OpcUa;
 using Cognite.OpcUa.Types;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
@@ -1027,8 +1029,10 @@ namespace Test.Integration
             Assert.Equal("[0,0,0,0]", meta["CustomRoot_Variable Array"]);
             Assert.Equal("String prop value", meta["CustomRoot_ChildObject2_StringProp"]);
 
+            var log = tester.Provider.GetRequiredService<ILogger<NodeExtractionTests>>();
+
             // ... and that the JSON looks right
-            var metaElem = root.ToJson(extractor.StringConverter, ConverterType.Node);
+            var metaElem = root.ToJson(log, extractor.StringConverter, ConverterType.Node);
             var metaString = CommonTestUtils.JsonElementToString(metaElem.RootElement.GetProperty("metadata"));
             // This wouldn't work in clean, since there is only a single very large metadata field, but it is a much more useful input to Raw.
             Assert.Equal(@"{""CustomRoot"":{""ChildObject"":null,""ChildObject2"":{""NumericProp"":1234,""StringProp"":""String prop value""},"
@@ -1072,8 +1076,10 @@ namespace Test.Integration
             Assert.Equal("[0,0,0,0]", meta["CustomRoot_Variable Array"]);
             Assert.Equal("String prop value", meta["CustomRoot_ChildObject2_StringProp"]);
 
+            var log = tester.Provider.GetRequiredService<ILogger<NodeExtractionTests>>();
+
             // ... and that the JSON looks right
-            var metaElem = root.ToJson(extractor.StringConverter, ConverterType.Node);
+            var metaElem = root.ToJson(log, extractor.StringConverter, ConverterType.Node);
             var metaString = CommonTestUtils.JsonElementToString(metaElem.RootElement.GetProperty("metadata"));
             // This wouldn't work in clean, since there is only a single very large metadata field, but it is a much more useful input to Raw.
             Assert.Equal(@"{""CustomRoot"":{""ChildObject"":null,""ChildObject2"":{""NumericProp"":1234,""StringProp"":""String prop value""},"

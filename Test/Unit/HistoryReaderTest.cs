@@ -2,6 +2,8 @@
 using Cognite.OpcUa;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.Types;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
@@ -51,9 +53,11 @@ namespace Test.Unit
 
             var dummyState = new UAHistoryExtractionState(tester.Client, new NodeId("test"), true, true);
 
-            using var reader = new HistoryScheduler(tester.Client, extractor, cfg, HistoryReadType.FrontfillData,
+            var log = tester.Provider.GetRequiredService<ILogger<HistoryReaderTest>>();
+
+            using var reader = new HistoryScheduler(log, tester.Client, extractor, cfg, HistoryReadType.FrontfillData,
                 throttler, cps, new [] { dummyState }, tester.Source.Token);
-            using var backfillReader = new HistoryScheduler(tester.Client, extractor, cfg, HistoryReadType.BackfillData,
+            using var backfillReader = new HistoryScheduler(log, tester.Client, extractor, cfg, HistoryReadType.BackfillData,
                 throttler, cps, new[] { dummyState }, tester.Source.Token);
 
             var dt = new UADataType(DataTypeIds.Double);
@@ -176,14 +180,16 @@ namespace Test.Unit
                 Backfill = true
             };
 
+            var log = tester.Provider.GetRequiredService<ILogger<HistoryReaderTest>>();
+
             using var throttler = new TaskThrottler(2, false);
             var cps = new BlockingResourceCounter(1000);
 
             var dummyState = new UAHistoryExtractionState(tester.Client, new NodeId("test"), true, true);
 
-            using var reader = new HistoryScheduler(tester.Client, extractor, cfg, HistoryReadType.FrontfillEvents,
+            using var reader = new HistoryScheduler(log, tester.Client, extractor, cfg, HistoryReadType.FrontfillEvents,
                 throttler, cps, new[] { dummyState }, tester.Source.Token);
-            using var backfillReader = new HistoryScheduler(tester.Client, extractor, cfg, HistoryReadType.BackfillEvents,
+            using var backfillReader = new HistoryScheduler(log, tester.Client, extractor, cfg, HistoryReadType.BackfillEvents,
                 throttler, cps, new[] { dummyState }, tester.Source.Token);
 
             var state = EventUtils.PopulateEventData(extractor, tester, false);
@@ -315,7 +321,9 @@ namespace Test.Unit
                 Data = true
             };
 
-            using var reader = new HistoryReader(tester.Client, extractor, cfg, tester.Source.Token);
+            var log = tester.Provider.GetRequiredService<ILogger<HistoryReader>>();
+
+            using var reader = new HistoryReader(log, tester.Client, extractor, cfg, tester.Source.Token);
 
             var dt = new UADataType(DataTypeIds.Double);
             var dt2 = new UADataType(DataTypeIds.String);
@@ -412,7 +420,9 @@ namespace Test.Unit
                 Backfill = true
             };
 
-            using var reader = new HistoryReader(tester.Client, extractor, cfg, tester.Source.Token);
+            var log = tester.Provider.GetRequiredService<ILogger<HistoryReader>>();
+
+            using var reader = new HistoryReader(log, tester.Client, extractor, cfg, tester.Source.Token);
 
             var dt = new UADataType(DataTypeIds.Double);
             var dt2 = new UADataType(DataTypeIds.String);
@@ -509,7 +519,9 @@ namespace Test.Unit
                 Data = true
             };
 
-            using var reader = new HistoryReader(tester.Client, extractor, cfg, tester.Source.Token);
+            var log = tester.Provider.GetRequiredService<ILogger<HistoryReader>>();
+
+            using var reader = new HistoryReader(log, tester.Client, extractor, cfg, tester.Source.Token);
 
             var states = new[]
             {
@@ -608,7 +620,9 @@ namespace Test.Unit
                 Backfill = true,
             };
 
-            using var reader = new HistoryReader(tester.Client, extractor, cfg, tester.Source.Token);
+            var log = tester.Provider.GetRequiredService<ILogger<HistoryReader>>();
+
+            using var reader = new HistoryReader(log, tester.Client, extractor, cfg, tester.Source.Token);
 
             var states = new[]
             {
@@ -709,7 +723,9 @@ namespace Test.Unit
                 Granularity = granularity.ToString()
             };
 
-            using var reader = new HistoryReader(tester.Client, extractor, cfg, tester.Source.Token);
+            var log = tester.Provider.GetRequiredService<ILogger<HistoryReader>>();
+
+            using var reader = new HistoryReader(log, tester.Client, extractor, cfg, tester.Source.Token);
 
             var dt = new UADataType(DataTypeIds.Double);
             var dt2 = new UADataType(DataTypeIds.String);
@@ -793,7 +809,9 @@ namespace Test.Unit
             {
                 MaxNodeParallelism = 1,
             };
-            using (var reader = new HistoryReader(tester.Client, extractor, cfg, tester.Source.Token))
+            var log = tester.Provider.GetRequiredService<ILogger<HistoryReader>>();
+
+            using (var reader = new HistoryReader(log, tester.Client, extractor, cfg, tester.Source.Token))
             {
                 await reader.FrontfillData(states);
                 Assert.Equal(3500, queue.Count);
@@ -805,8 +823,7 @@ namespace Test.Unit
                 cfg.Throttling.MaxNodeParallelism = 2;
             }
 
-
-            using (var reader = new HistoryReader(tester.Client, extractor, cfg, tester.Source.Token))
+            using (var reader = new HistoryReader(log, tester.Client, extractor, cfg, tester.Source.Token))
             {
                 queue.Clear();
                 foreach (var state in states) state.RestartHistory();
@@ -839,6 +856,8 @@ namespace Test.Unit
         public async Task TestReadHistoryMaxLength()
         {
             using var extractor = tester.BuildExtractor();
+
+            var logger = tester.Provider.GetRequiredService<ILogger<HistoryReader>>();
 
             var cfg = new HistoryConfig
             {
@@ -880,7 +899,7 @@ namespace Test.Unit
             cfg.MaxReadLength = "1s";
             cfg.DataChunk = 50;
 
-            using (var reader = new HistoryReader(tester.Client, extractor, cfg, tester.Source.Token))
+            using (var reader = new HistoryReader(logger, tester.Client, extractor, cfg, tester.Source.Token))
             {
                 await reader.FrontfillData(states);
                 // 100 for each of the 7 nodes, then 1 extra every second of read, so 11.
@@ -895,6 +914,8 @@ namespace Test.Unit
         public async Task TestReadHistoryMaxLengthIgnoreCps()
         {
             using var extractor = tester.BuildExtractor();
+
+            var logger = tester.Provider.GetRequiredService<ILogger<HistoryReader>>();
 
             var cfg = new HistoryConfig
             {
@@ -937,7 +958,7 @@ namespace Test.Unit
             cfg.DataChunk = 50;
             cfg.IgnoreContinuationPoints = true;
 
-            using (var reader = new HistoryReader(tester.Client, extractor, cfg, tester.Source.Token))
+            using (var reader = new HistoryReader(logger, tester.Client, extractor, cfg, tester.Source.Token))
             {
                 await reader.FrontfillData(states);
                 // 100 for each of the 7 nodes, then 2 extra every second of read.
@@ -953,6 +974,8 @@ namespace Test.Unit
         public async Task TestReadHistoryMaxLengthBackfill()
         {
             using var extractor = tester.BuildExtractor();
+
+            var logger = tester.Provider.GetRequiredService<ILogger<HistoryReader>>();
 
             var cfg = new HistoryConfig
             {
@@ -994,7 +1017,7 @@ namespace Test.Unit
             cfg.MaxReadLength = "1s";
             cfg.DataChunk = 50;
 
-            using (var reader = new HistoryReader(tester.Client, extractor, cfg, tester.Source.Token))
+            using (var reader = new HistoryReader(logger, tester.Client, extractor, cfg, tester.Source.Token))
             {
                 await reader.BackfillData(states);
                 // 100 for each of the 7 nodes, then 1 extra per read of data

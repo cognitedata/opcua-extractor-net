@@ -16,19 +16,19 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using Opc.Ua;
-using Serilog;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Threading;
 using Cognite.Extractor.Common;
+using Microsoft.Extensions.Logging;
 
 namespace Cognite.OpcUa
 {
     public sealed class Browser : IDisposable
     {
-        private static readonly ILogger log = Log.Logger.ForContext(typeof(Browser));
+        private readonly ILogger<Browser> log;
         private readonly UAClient uaClient;
         private readonly FullConfig config;
         private readonly object visitedNodesLock = new object();
@@ -41,8 +41,9 @@ namespace Cognite.OpcUa
 
         public IEnumerable<NodeFilter>? IgnoreFilters { get; set; }
 
-        public Browser(UAClient client, FullConfig config)
+        public Browser(ILogger<Browser> log, UAClient client, FullConfig config)
         {
+            this.log = log;
             uaClient = client ?? throw new ArgumentNullException(nameof(client));
             this.config = config ?? throw new ArgumentNullException(nameof(config));
             throttling = config.Source.BrowseThrottling;
@@ -75,8 +76,10 @@ namespace Cognite.OpcUa
             bool ignoreVisited = true)
         {
             if (roots == null) throw new ArgumentNullException(nameof(roots));
-            log.Debug("Browse node tree for nodes {nodes}", string.Join(", ", roots));
+
+            log.LogDebug("Browse node tree for nodes {Nodes}", string.Join(", ", roots));
             var rootRefs = await GetRootNodes(roots, token);
+
             foreach (var root in rootRefs)
             {
                 bool docb = true;
@@ -205,7 +208,7 @@ namespace Cognite.OpcUa
                 MaxDepth = 0
             };
 
-            using var scheduler = new BrowseScheduler(throttler, uaClient, continuationPoints, options, token);
+            using var scheduler = new BrowseScheduler(log, throttler, uaClient, continuationPoints, options, token);
             await scheduler.RunAsync();
 
             foreach (var node in baseParams.Nodes)
@@ -259,7 +262,7 @@ namespace Cognite.OpcUa
                 VisitedNodes = ignoreVisited ? visitedNodes : null
             };
 
-            using var scheduler = new BrowseScheduler(throttler, uaClient, continuationPoints, options, token);
+            using var scheduler = new BrowseScheduler(log, throttler, uaClient, continuationPoints, options, token);
             await scheduler.RunAsync();
         }
         /// <summary>

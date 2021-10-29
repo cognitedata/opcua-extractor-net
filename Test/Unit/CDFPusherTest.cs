@@ -7,6 +7,8 @@ using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
 using CogniteSdk;
 using Com.Cognite.V1.Timeseries.Proto;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Opc.Ua;
 using System;
@@ -661,7 +663,8 @@ namespace Test.Unit
         public async Task TestCreateRelationships()
         {
             using var extractor = tester.BuildExtractor(true, null, pusher);
-            var mgr = new ReferenceTypeManager(tester.Client, extractor);
+            var log = tester.Provider.GetRequiredService<ILogger<ReferenceTypeManager>>();
+            var mgr = new ReferenceTypeManager(log, tester.Client, extractor);
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_cdf");
 
             // Push none
@@ -711,7 +714,8 @@ namespace Test.Unit
         public async Task TestCreateRawRelationships()
         {
             using var extractor = tester.BuildExtractor(true, null, pusher);
-            var mgr = new ReferenceTypeManager(tester.Client, extractor);
+            var log = tester.Provider.GetRequiredService<ILogger<ReferenceTypeManager>>();
+            var mgr = new ReferenceTypeManager(log, tester.Client, extractor);
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_cdf");
 
             tester.Config.Cognite.RawMetadata = new RawMetadataConfig
@@ -806,7 +810,8 @@ namespace Test.Unit
             tester.Config.Extraction.DataTypes.AllowStringVariables = true;
             tester.Config.Extraction.DataTypes.MaxArraySize = 10;
 
-            var source = new CDFNodeSource(tester.Config, extractor, tester.Client, pusher);
+            var log = tester.Provider.GetRequiredService<ILogger<CDFNodeSource>>();
+            var source = new CDFNodeSource(log, tester.Config, extractor, tester.Client, pusher);
 
             // Nothing in CDF
             await source.ReadRawNodes(tester.Source.Token);
@@ -838,7 +843,7 @@ namespace Test.Unit
                 NodeToRaw(extractor, child, ConverterType.Variable, true);
             }
 
-            source = new CDFNodeSource(tester.Config, extractor, tester.Client, pusher);
+            source = new CDFNodeSource(log, tester.Config, extractor, tester.Client, pusher);
             await source.ReadRawNodes(tester.Source.Token);
             result = await source.ParseResults(tester.Source.Token);
             Assert.Single(result.DestinationObjects);
@@ -855,7 +860,7 @@ namespace Test.Unit
             // First, try disabling timeseries subscriptions and seeing that no results are returned
             tester.Config.Subscriptions.DataPoints = false;
             tester.Config.History.Enabled = false;
-            source = new CDFNodeSource(tester.Config, extractor, tester.Client, pusher);
+            source = new CDFNodeSource(log, tester.Config, extractor, tester.Client, pusher);
             await source.ReadRawNodes(tester.Source.Token);
             result = await source.ParseResults(tester.Source.Token);
             Assert.Null(result);
@@ -863,7 +868,7 @@ namespace Test.Unit
 
             // Enable events, but no states should be created
             tester.Config.Events.Enabled = true;
-            source = new CDFNodeSource(tester.Config, extractor, tester.Client, pusher);
+            source = new CDFNodeSource(log, tester.Config, extractor, tester.Client, pusher);
             await source.ReadRawNodes(tester.Source.Token);
             result = await source.ParseResults(tester.Source.Token);
             Assert.Equal(2, result.DestinationObjects.Count());
@@ -884,7 +889,7 @@ namespace Test.Unit
             variable.VariableAttributes.EventNotifier = EventNotifiers.HistoryRead | EventNotifiers.SubscribeToEvents;
             NodeToRaw(extractor, variable, ConverterType.Variable, true);
 
-            source = new CDFNodeSource(tester.Config, extractor, tester.Client, pusher);
+            source = new CDFNodeSource(log, tester.Config, extractor, tester.Client, pusher);
             await source.ReadRawNodes(tester.Source.Token);
             result = await source.ParseResults(tester.Source.Token);
             Assert.Equal(3, result.DestinationObjects.Count());

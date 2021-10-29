@@ -1,5 +1,7 @@
 ﻿using Cognite.OpcUa;
 using Cognite.OpcUa.Types;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Opc.Ua;
 using System.Collections.Generic;
 using System.Linq;
@@ -9,13 +11,16 @@ namespace Test.Unit
 {
     public class TransformationTest
     {
-        private NamespaceTable nss;
+        private readonly NamespaceTable nss;
+        private readonly ILogger log;
         public TransformationTest()
         {
             nss = new NamespaceTable();
             nss.Append("opc.tcp://test-namespace.one");
             nss.Append("https://some-namespace.org");
             nss.Append("my:namespace:uri");
+
+            log = new NullLogger<NodeTransformation>();
         }
         [Fact]
         public void TestNameFilter()
@@ -325,7 +330,7 @@ namespace Test.Unit
             var trans = new NodeTransformation(raw, 0);
             foreach (var node in nodes)
             {
-                trans.ApplyTransformation(node, nss);
+                trans.ApplyTransformation(log, node, nss);
             }
             Assert.False(nodes[0].Ignore);
             Assert.True(nodes[1].Ignore);
@@ -354,7 +359,7 @@ namespace Test.Unit
             var trans = new NodeTransformation(raw, 0);
             foreach (var node in nodes)
             {
-                trans.ApplyTransformation(node, nss);
+                trans.ApplyTransformation(log, node, nss);
             }
             Assert.False(nodes[0].IsProperty);
             Assert.True(nodes[1].IsProperty);

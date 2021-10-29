@@ -2,6 +2,8 @@
 using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
@@ -47,7 +49,8 @@ namespace Test.Unit
             tester.Config.Extraction.Relationships.Enabled = true;
             using var extractor = tester.BuildExtractor();
             tester.Config.Extraction.Relationships.Enabled = false;
-            var source = new NodeSetSource(tester.Config, extractor, tester.Client);
+            var log = tester.Provider.GetRequiredService<ILogger<NodeSetSource>>();
+            var source = new NodeSetSource(log, tester.Config, extractor, tester.Client);
             
             // Base, nothing enabled
             source.BuildNodes(new[] { tester.Ids.Custom.Root });
@@ -166,7 +169,8 @@ namespace Test.Unit
         public async Task TestNodeSetSourceEvents()
         {
             using var extractor = tester.BuildExtractor();
-            var source = new NodeSetSource(tester.Config, extractor, tester.Client);
+            var log = tester.Provider.GetRequiredService<ILogger<NodeSetSource>>();
+            var source = new NodeSetSource(log, tester.Config, extractor, tester.Client);
 
             source.BuildNodes(new[] { ObjectIds.ObjectsFolder });
 
@@ -234,7 +238,8 @@ namespace Test.Unit
         public async Task TestNodeSetEstimateArraySize()
         {
             using var extractor = tester.BuildExtractor();
-            var source = new NodeSetSource(tester.Config, extractor, tester.Client);
+            var log = tester.Provider.GetRequiredService<ILogger<NodeSetSource>>();
+            var source = new NodeSetSource(log, tester.Config, extractor, tester.Client);
 
             source.BuildNodes(new[] { tester.Ids.Wrong.Root });
             var extConfig = tester.Config.Extraction;

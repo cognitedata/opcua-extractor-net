@@ -1,8 +1,24 @@
-﻿using Cognite.OpcUa.TypeCollectors;
+﻿/* Cognite Extractor for OPC-UA
+Copyright (C) 2021 Cognite AS
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
+
+using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
+using Microsoft.Extensions.Logging;
 using Opc.Ua;
-using Serilog;
-using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -58,7 +74,6 @@ namespace Cognite.OpcUa.NodeSources
 
     public class NodeSetSource : BaseNodeSource, IEventFieldSource
     {
-        protected override ILogger Log { get; set; } = Serilog.Log.Logger.ForContext<NodeSetSource>();
         private readonly NodeStateCollection nodes = new NodeStateCollection();
         private readonly Dictionary<NodeId, NodeState> nodeDict = new Dictionary<NodeId, NodeState>();
 
@@ -67,7 +82,8 @@ namespace Cognite.OpcUa.NodeSources
         private Dictionary<NodeId, IList<IReference>> references = new Dictionary<NodeId, IList<IReference>>();
         private readonly object buildLock = new object();
         private bool built;
-        public NodeSetSource(FullConfig config, UAExtractor extractor, UAClient client) : base(config, extractor, client)
+        public NodeSetSource(ILogger<NodeSetSource> log, FullConfig config, UAExtractor extractor, UAClient client)
+            : base(log, config, extractor, client)
         {
         }
 
@@ -86,7 +102,7 @@ namespace Cognite.OpcUa.NodeSources
                 }
                 set.FileName = fileName;
             }
-            Log.Information("Loading nodeset from {file}", set.FileName);
+            Log.LogInformation("Loading nodeset from {File}", set.FileName);
             LoadNodeSet(set.FileName!);
         }
 
@@ -157,9 +173,8 @@ namespace Cognite.OpcUa.NodeSources
                     }
                 }
             }
-            Log.Information("Found or created {cnt} references in nodeset files", cnt);
+            Log.LogInformation("Found or created {Count} references in nodeset files", cnt);
         }
-
 
         private void LoadTypeTree()
         {
@@ -437,19 +452,19 @@ namespace Cognite.OpcUa.NodeSources
 
             if (!FinalDestinationObjects.Any() && !FinalDestinationVariables.Any() && !FinalSourceVariables.Any() && !FinalReferences.Any())
             {
-                Log.Information("Mapping resulted in no new nodes");
+                Log.LogInformation("Mapping resulted in no new nodes");
                 
                 return null;
             }
 
-            Log.Information("Mapping resulted in {obj} destination objects and {ts} destination timeseries," +
-                " {robj} objects and {var} variables.",
+            Log.LogInformation("Mapping resulted in {ObjCount} destination objects and {TsCount} destination timeseries," +
+                " {SourceObj} objects and {SourceVar} variables.",
                 FinalDestinationObjects.Count, FinalDestinationVariables.Count,
                 FinalSourceObjects.Count, FinalSourceVariables.Count);
 
             if (FinalReferences.Any())
             {
-                Log.Information("Found a total of {cnt} references", FinalReferences.Count);
+                Log.LogInformation("Found a total of {Count} references", FinalReferences.Count);
             }
 
             return new NodeSourceResult(
