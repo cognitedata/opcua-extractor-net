@@ -401,15 +401,26 @@ namespace Cognite.OpcUa.History
             List<DataValue> dataPoints = new List<DataValue>(data?.DataValues?.Count ?? 0);
             if (data?.DataValues != null)
             {
+                int badDps = 0;
                 foreach (var dp in data.DataValues)
                 {
                     if (StatusCode.IsNotGood(dp.StatusCode))
                     {
                         UAExtractor.BadDataPoints.Inc();
-                        log.Debug("Bad history datapoint: {BadDatapointExternalId} {SourceTimestamp}", node.State.Id, dp.SourceTimestamp);
+                        badDps++;
+                        if (config.LogBadValues)
+                        {
+                            log.Verbose("Bad history datapoint: {BadDatapointExternalId} {SourceTimestamp}. Value: {Value}, Status: {Status}",
+                                node.State.Id, dp.SourceTimestamp, dp.Value, ExtractorUtils.GetStatusCodeName((uint)dp.StatusCode));
+                        }
                         continue;
                     }
                     dataPoints.Add(dp);
+                }
+                if (badDps > 0 && config.LogBadValues)
+                {
+                    log.Debug("Received {Count} bad history datapoints for {BadDatapointExternalId}",
+                        badDps, node.State.Id);
                 }
             }
 

@@ -183,32 +183,39 @@ namespace Cognite.OpcUa
             }
             else
             {
-                string configFile = setup.ConfigFile ?? Path.Join(configDir, "config.yml");
-                config = ConfigurationUtils.TryReadConfigFromFile<FullConfig>(configFile, 1);
-                config.GenerateDefaults();
+                try
+                {
+                    string configFile = setup.ConfigFile ?? Path.Join(configDir, "config.yml");
+                    config = ConfigurationUtils.TryReadConfigFromFile<FullConfig>(configFile, 1);
+                    config.GenerateDefaults();
+                }
+                catch
+                {
+                    config = null;
+                }
             }
 
-            if (config.Cognite == null)
+            if (config != null && config.Cognite == null)
             {
                 config.Cognite = new CognitePusherConfig();
             }
 
             services.AddSingleton<IPusher, CDFPusher>(provider =>
             {
-                var conf = provider.GetService<FullConfig>();
+                var conf = provider.GetRequiredService<FullConfig>();
                 var dest = provider.GetService<CogniteDestination>();
                 if (conf.Cognite == null || dest == null || dest.CogniteClient == null) return null;
                 return new CDFPusher(conf.Extraction, conf.Cognite, dest);
             });
             services.AddSingleton<IPusher, InfluxPusher>(provider =>
             {
-                var conf = provider.GetService<FullConfig>();
+                var conf = provider.GetRequiredService<FullConfig>();
                 if (conf.Influx == null) return null;
                 return new InfluxPusher(conf.Influx);
             });
             services.AddSingleton<IPusher, MQTTPusher>(provider =>
             {
-                var conf = provider.GetService<FullConfig>();
+                var conf = provider.GetRequiredService<FullConfig>();
                 if (conf.Mqtt == null) return null;
                 return new MQTTPusher(provider, conf.Mqtt);
             });
@@ -223,7 +230,7 @@ namespace Cognite.OpcUa
                 true,
                 true,
                 true,
-                !(setup.Exit || config.Source.ExitOnFailure),
+                !(setup.Exit || (config?.Source?.ExitOnFailure ?? false)),
                 token,
                 configCallback: config => VerifyAndBuildConfig(log, config, setup, configDir),
                 extServices: services,
