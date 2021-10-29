@@ -106,6 +106,9 @@
     
     <ComponentGroup Id="OpcUaExtractorConfigFilesComponentGroup">
       <!--OpcUaExtractor config file-->
+      <Component Id="config_minimal_yml" Guid="41770C94-2F03-423C-B775-8D4B35FBCBED" Directory="ConfigFolder">
+        <File Id="config.minimal.yml" Name="config.minimal.yml" Source="..\config\config.minimal.yml" />
+      </Component>
       <Component Id="config_example_yml" Guid="BD4BFAD2-3D5E-4718-BF38-04ADE8209EAF" Directory="ConfigFolder">
         <File Id="config.example.yml" Name="config.example.yml" Source="..\config\config.example.yml" />
       </Component>

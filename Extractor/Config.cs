@@ -207,6 +207,7 @@ namespace Cognite.OpcUa
         public bool DataPoints { get; set; } = true;
         public bool Events { get; set; } = true;
         public bool IgnoreAccessLevel { get; set; }
+        public bool LogBadValues { get; set; } = true;
     }
     public interface IPusherConfig
     {
@@ -401,6 +402,7 @@ namespace Cognite.OpcUa
         public ContinuationPointThrottlingConfig Throttling {
             get => throttling; set => throttling = value ?? throttling; }
         private ContinuationPointThrottlingConfig throttling = new ContinuationPointThrottlingConfig();
+        public bool LogBadValues { get; set; } = true;
     }
     public class UAThrottlingConfig
     {
