@@ -15,6 +15,7 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using Cognite.Extractor.Common;
 using Cognite.Extractor.Configuration;
 using Cognite.Extractor.Logging;
 using Cognite.Extractor.Utils;
@@ -52,6 +53,16 @@ namespace Cognite.OpcUa
             if (string.IsNullOrEmpty(config.Extraction.IdPrefix)) log.LogWarning("No id-prefix specified in config file");
             if (config.Cognite == null && config.Influx == null && config.Mqtt == null) log.LogWarning("No destination system specified");
             if (config.Extraction.IdPrefix == "events.") return "Do not use events. as id-prefix, as it is used internally";
+            if (!string.IsNullOrWhiteSpace(config.History?.StartTime))
+            {
+                var parsed = CogniteTime.ParseTimestampString(config.History.StartTime);
+                if (parsed == null) return $"Invalid history start time: {config.History.StartTime}";
+            }
+            if (!string.IsNullOrWhiteSpace(config.History?.EndTime))
+            {
+                var parsed = CogniteTime.ParseTimestampString(config.History.EndTime);
+                if (parsed == null) return $"Invalid history end time: {config.History.EndTime}";
+            }
             return null;
         }
 
@@ -183,32 +194,39 @@ namespace Cognite.OpcUa
             }
             else
             {
-                string configFile = setup.ConfigFile ?? Path.Join(configDir, "config.yml");
-                config = ConfigurationUtils.TryReadConfigFromFile<FullConfig>(configFile, 1);
-                config.GenerateDefaults();
+                try
+                {
+                    string configFile = setup.ConfigFile ?? Path.Join(configDir, "config.yml");
+                    config = ConfigurationUtils.TryReadConfigFromFile<FullConfig>(configFile, 1);
+                    config.GenerateDefaults();
+                }
+                catch
+                {
+                    config = null;
+                }
             }
 
-            if (config.Cognite == null)
+            if (config != null && config.Cognite == null)
             {
                 config.Cognite = new CognitePusherConfig();
             }
 
             services.AddSingleton<IPusher, CDFPusher>(provider =>
             {
-                var conf = provider.GetService<FullConfig>();
+                var conf = provider.GetRequiredService<FullConfig>();
                 var dest = provider.GetService<CogniteDestination>();
                 if (conf.Cognite == null || dest == null || dest.CogniteClient == null) return null;
                 return new CDFPusher(conf.Extraction, conf.Cognite, dest);
             });
             services.AddSingleton<IPusher, InfluxPusher>(provider =>
             {
-                var conf = provider.GetService<FullConfig>();
+                var conf = provider.GetRequiredService<FullConfig>();
                 if (conf.Influx == null) return null;
                 return new InfluxPusher(conf.Influx);
             });
             services.AddSingleton<IPusher, MQTTPusher>(provider =>
             {
-                var conf = provider.GetService<FullConfig>();
+                var conf = provider.GetRequiredService<FullConfig>();
                 if (conf.Mqtt == null) return null;
                 return new MQTTPusher(provider, conf.Mqtt);
             });
@@ -223,9 +241,9 @@ namespace Cognite.OpcUa
                 true,
                 true,
                 true,
-                !(setup.Exit || config.Source.ExitOnFailure),
+                !(setup.Exit || (config?.Source?.ExitOnFailure ?? false)),
                 token,
-                configCallback: config => VerifyAndBuildConfig(log, config, setup, configDir),
+                configCallback: (config, options) => VerifyAndBuildConfig(log, config, setup, configDir),
                 extServices: services,
                 startupLogger: log,
                 config: config,

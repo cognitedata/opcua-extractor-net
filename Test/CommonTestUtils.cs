@@ -143,8 +143,7 @@ namespace Test
             };
             if (Math.Abs(val - value) > 0.01)
             {
-                log.Information("Expected {val} but got {value} for metric {name}",
-                    value, val, name);
+                Console.WriteLine($"Expected {val} but got {value} for metric {name}");
                 return false;
             }
 
