@@ -875,7 +875,7 @@ namespace Cognite.OpcUa
 
             var pushTasks = pushers.Select(pusher => PushNodes(objects, timeseries, references, pusher, initial));
 
-            if (StateStorage != null && Config.StateStorage.Interval > 0)
+            if (StateStorage != null && Config.StateStorage.IntervalValue.Value != Timeout.InfiniteTimeSpan)
             {
                 if (Streamer.AllowEvents)
                 {

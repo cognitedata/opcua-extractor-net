@@ -371,7 +371,7 @@ namespace Test.Unit
             // Best case, it takes 91 reads: 1 read at level 0, 3 reads for each of the 30 remaining.
             // Timing might cause nodes to be read in a sligthly different order, so we might read 2 more times.
             // In practice this slight variance is irrelevant.
-            Assert.True(reads >= 91 && reads <= 93);
+            Assert.True(reads >= 90 && reads <= 93);
             Assert.True(CommonTestUtils.TestMetricValue("opcua_tree_depth", 31));
         }
         [Theory]
@@ -739,7 +739,7 @@ namespace Test.Unit
                 // Array root
                 arrayVar,
                 // Array element
-                arrayVar.CreateArrayChildren().First(),
+                arrayVar.CreateTimeseries().First(),
                 // Variable with properties
                 new UAVariable(tester.Server.Ids.Custom.MysteryVar, "NumberVar", tester.Server.Ids.Custom.Root),
                 // object with no children

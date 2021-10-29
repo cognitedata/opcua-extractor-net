@@ -60,20 +60,12 @@ namespace Cognite.OpcUa
             this.pushers = pushers;
         }
 
-        private static TimeSpan ToTimespan(int t, bool allowZero, string unit)
+        private static TimeSpan ToTimespan(string? t, bool allowZero, string unit)
         {
-            if (t < 0) return Timeout.InfiniteTimeSpan;
-            if (t == 0 && !allowZero) return Timeout.InfiniteTimeSpan;
-            switch (unit)
-            {
-                case "s":
-                    return TimeSpan.FromSeconds(t);
-                case "ms":
-                    return TimeSpan.FromMilliseconds(t);
-                case "m":
-                    return TimeSpan.FromMinutes(t);
-            }
-            return TimeSpan.FromSeconds(t);
+            if (t == null) return Timeout.InfiniteTimeSpan;
+            var conv = CogniteTime.ParseTimeSpanString(t, unit);
+            if (conv == TimeSpan.Zero && !allowZero) return Timeout.InfiniteTimeSpan;
+            return conv ?? Timeout.InfiniteTimeSpan;
         }
 
         public void Run()
@@ -81,16 +73,16 @@ namespace Cognite.OpcUa
             failingPushers = pushers.Where(pusher => pusher.DataFailing || pusher.EventsFailing || !pusher.Initialized).ToList();
             passingPushers = pushers.Except(failingPushers).ToList();
 
-            Scheduler.SchedulePeriodicTask(nameof(Pushers), ToTimespan(config.Extraction.DataPushDelay, true, "ms"), Pushers, true);
+            Scheduler.SchedulePeriodicTask(nameof(Pushers), config.Extraction.DataPushDelayValue.Value, Pushers, true);
             Scheduler.SchedulePeriodicTask(nameof(ExtraTasks), Timeout.InfiniteTimeSpan, ExtraTasks, false);
 
-            Scheduler.SchedulePeriodicTask(nameof(Rebrowse), ToTimespan(config.Extraction.AutoRebrowsePeriod, false, "m"), Rebrowse, false);
+            Scheduler.SchedulePeriodicTask(nameof(Rebrowse), config.Extraction.AutoRebrowsePeriodValue.Value, Rebrowse, false);
             if (extractor.StateStorage != null)
             {
-                Scheduler.SchedulePeriodicTask(nameof(StoreState), ToTimespan(config.StateStorage.Interval, false, "s"), StoreState, 
-                    config.StateStorage.Interval > 0);
+                var interval = config.StateStorage.IntervalValue.Value;
+                Scheduler.SchedulePeriodicTask(nameof(StoreState), interval, StoreState, interval != Timeout.InfiniteTimeSpan);
             }
-            Scheduler.SchedulePeriodicTask(nameof(HistoryRestart), ToTimespan(config.History.RestartPeriod, false, "s"), HistoryRestart, false);
+            Scheduler.SchedulePeriodicTask(nameof(HistoryRestart), config.History.RestartPeriodValue.Value, HistoryRestart, false);
         }
 
         /// <summary>

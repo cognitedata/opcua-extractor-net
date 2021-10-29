@@ -1002,7 +1002,9 @@ namespace Cognite.OpcUa.Config
                 return;
             }
 
-            var earliestTime = DateTimeOffset.FromUnixTimeMilliseconds(config.History.StartTime).DateTime;
+            DateTime earliestTime;
+            if (config.History.StartTime == null) earliestTime = CogniteTime.DateTimeEpoch;
+            else earliestTime = CogniteTime.ParseTimestampString(config.History.StartTime).Value;
 
             var details = new ReadRawModifiedDetails
             {
@@ -1109,8 +1111,10 @@ namespace Cognite.OpcUa.Config
             log.LogInformation("Average distance between timestamps across all nodes with history: {Distance}",
                 TimeSpan.FromTicks(totalAvgDistance));
             var granularity = TimeSpan.FromTicks(totalAvgDistance * 10).Seconds + 1;
+
             log.LogInformation("Suggested granularity is: {Granularity} seconds", granularity);
-            config.History.Granularity = granularity;
+            config.History.Granularity = granularity.ToString();
+
             summary.HistoryGranularity = TimeSpan.FromSeconds(granularity);
 
             bool backfillCapable = false;

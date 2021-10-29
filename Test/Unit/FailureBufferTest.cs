@@ -71,7 +71,7 @@ namespace Test.Unit
                     EventStore = "events",
                     InfluxEventStore = "influx_events",
                     InfluxVariableStore = "influx_variables",
-                    Interval = -1,
+                    Interval = "-1",
                     Location = $"fb-store-{idx}.db",
                     VariableStore = "variables"
                 },

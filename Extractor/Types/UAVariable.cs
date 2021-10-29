@@ -113,6 +113,10 @@ namespace Cognite.OpcUa.Types
         /// </summary>
         public UAVariable? ArrayParent { get; }
         /// <summary>
+        /// If this is an object, this is the matching timeseries
+        /// </summary>
+        public UAVariable? TimeSeries { get; private set; }
+        /// <summary>
         /// Children if this represents the parent in an array
         /// </summary>
         public IEnumerable<UAVariable>? ArrayChildren { get; private set; }
@@ -120,6 +124,15 @@ namespace Cognite.OpcUa.Types
         /// Fixed dimensions of the array-type variable, if any
         /// </summary>
         public int[]? ArrayDimensions => VariableAttributes.ArrayDimensions;
+        /// <summary>
+        /// True if this node represents an array
+        /// </summary>
+        [MemberNotNullWhen(true, nameof(ArrayDimensions))]
+        public bool IsArray => ArrayDimensions != null && ArrayDimensions.Length == 1 && ArrayDimensions[0] > 0;
+
+        private bool isObject;
+
+        public bool IsObject { get => isObject || NodeClass != NodeClass.Variable || IsArray && Index == -1; set => isObject = value; }
         /// <summary>
         /// Index of the variable in array, if relevant. -1 if the variable is scalar.
         /// </summary>
@@ -132,11 +145,7 @@ namespace Cognite.OpcUa.Types
         {
             VariableAttributes = new VariableAttributes(nodeClass);
         }
-        /// <summary>
-        /// True if this node represents an array
-        /// </summary>
-        [MemberNotNullWhen(true, nameof(ArrayDimensions))]
-        public bool IsArray => ArrayDimensions != null && ArrayDimensions.Length == 1 && ArrayDimensions[0] > 0;
+        
         /// <summary>
         /// Sets the datapoint to provided DataValue.
         /// </summary>
@@ -160,10 +169,34 @@ namespace Cognite.OpcUa.Types
             Changed = other.Changed;
             VariableAttributes = other.VariableAttributes;
         }
+
+        private UAVariable(UAVariable other) : base(other.Id, other.DisplayName, other.Id)
+        {
+            Changed = other.Changed;
+            VariableAttributes = other.VariableAttributes;
+        }
+
+        public IEnumerable<UAVariable> CreateTimeseries()
+        {
+            if (IsArray)
+            {
+                return CreateArrayChildren();
+            }
+            else if (isObject)
+            {
+                if (TimeSeries == null)
+                {
+                    TimeSeries = new UAVariable(this);
+                }
+                return new[] { TimeSeries };
+            }
+            return Enumerable.Empty<UAVariable>();
+        }
+
         /// <summary>
         /// Create array child nodes
         /// </summary>
-        public IEnumerable<UAVariable> CreateArrayChildren()
+        private IEnumerable<UAVariable> CreateArrayChildren()
         {
             if (!IsArray) return Enumerable.Empty<UAVariable>();
             if (ArrayChildren != null) return ArrayChildren;

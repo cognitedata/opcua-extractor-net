@@ -36,7 +36,7 @@ namespace Test.Unit
             var arrParent = new UAVariable(new NodeId("arr1"), "arr1", NodeId.Null);
             arrParent.VariableAttributes.ValueRank = 1;
             arrParent.VariableAttributes.ArrayDimensions = new[] { 2 };
-            var children = arrParent.CreateArrayChildren();
+            var children = arrParent.CreateTimeseries();
             // Populated
             var nodes = new UANode[]
             {

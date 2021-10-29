@@ -322,8 +322,11 @@ namespace Cognite.OpcUa
                 {
                     UAExtractor.BadDataPoints.Inc();
 
-                    log.LogDebug("Bad streaming datapoint: {BadDatapointExternalId} {SourceTimestamp}. Value: {Value}, Status: {Status}",
-                        node.Id, datapoint.SourceTimestamp, datapoint.Value, ExtractorUtils.GetStatusCodeName((uint)datapoint.StatusCode));
+                    if (config.Subscriptions.LogBadValues)
+                    {
+                        log.LogDebug("Bad streaming datapoint: {BadDatapointExternalId} {SourceTimestamp}. Value: {Value}, Status: {Status}",
+                            node.Id, datapoint.SourceTimestamp, datapoint.Value, ExtractorUtils.GetStatusCodeName((uint)datapoint.StatusCode));
+                    }
                     continue;
                 }
                 var buffDps = ToDataPoint(datapoint, node);
@@ -331,7 +334,7 @@ namespace Cognite.OpcUa
 
                 timeToExtractorDps.Observe((DateTime.UtcNow - datapoint.SourceTimestamp).TotalSeconds);
 
-                if ((extractor.StateStorage == null || config.StateStorage.Interval <= 0)
+                if ((extractor.StateStorage == null || config.StateStorage.IntervalValue.Value == Timeout.InfiniteTimeSpan)
                     && (node.IsFrontfilling && datapoint.SourceTimestamp > node.SourceExtractedRange.Last
                         || node.IsBackfilling && datapoint.SourceTimestamp < node.SourceExtractedRange.First)) continue;
                 foreach (var buffDp in buffDps)
@@ -431,7 +434,7 @@ namespace Cognite.OpcUa
                 eventState.UpdateFromStream(buffEvent);
 
                 // Either backfill/frontfill is done, or we are not outside of each respective bound
-                if ((extractor.StateStorage == null || config.StateStorage.Interval <= 0)
+                if ((extractor.StateStorage == null || config.StateStorage.IntervalValue.Value == Timeout.InfiniteTimeSpan)
                     && (eventState.IsFrontfilling && buffEvent.Time > eventState.SourceExtractedRange.Last
                         || eventState.IsBackfilling && buffEvent.Time < eventState.SourceExtractedRange.First)) continue;
 
