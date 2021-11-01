@@ -77,7 +77,7 @@ namespace Cognite.OpcUa.History
 
         private int numReads;
 
-        private HistoryMetrics metrics;
+        private readonly HistoryMetrics metrics;
         private readonly int chunkSize;
         private readonly int nodeCount;
 
@@ -110,6 +110,7 @@ namespace Cognite.OpcUa.History
             this.config = config;
             this.type = type;
             chunkSize = Data ? config.DataNodesChunk : config.EventNodesChunk;
+
             maxReadLength = config.MaxReadLengthValue.Value;
             if (maxReadLength == TimeSpan.Zero || maxReadLength == Timeout.InfiniteTimeSpan) maxReadLength = null;
 
@@ -117,6 +118,7 @@ namespace Cognite.OpcUa.History
 
             historyStartTime = GetStartTime(config.StartTime);
             if (!string.IsNullOrWhiteSpace(config.EndTime)) historyEndTime = CogniteTime.ParseTimestampString(config.EndTime)!;
+
             historyGranularity = config.GranularityValue.Value;
 
             metrics = new HistoryMetrics(type);
@@ -248,10 +250,12 @@ namespace Cognite.OpcUa.History
         protected override IChunk<HistoryReadNode> GetChunk(IEnumerable<HistoryReadNode> items)
         {
             var (details, startTime, endTime) = GetReadDetails(items);
+
             if (maxReadLength != null)
             {
                 foreach (var node in items)
                 {
+                    if (node.ContinuationPoint != null) continue;
                     node.StartTime = startTime;
                     node.EndTime = endTime;
                 }
@@ -332,6 +336,8 @@ namespace Cognite.OpcUa.History
                 case HistoryReadType.FrontfillEvents:
                 case HistoryReadType.BackfillEvents:
                     return "events";
+                default:
+                    break;
             }
             throw new InvalidOperationException();
         }
@@ -486,9 +492,8 @@ namespace Cognite.OpcUa.History
 
             int cnt = 0;
 
-            var nodeState = node.State as VariableExtractionState;
 
-            if (nodeState == null) return;
+            if (node.State is not VariableExtractionState nodeState) return;
 
             foreach (var datapoint in dataPoints)
             {
@@ -526,7 +531,7 @@ namespace Cognite.OpcUa.History
 
             var raw = evt[index].Value;
 
-            if (!(raw is DateTime dt)) return null;
+            if (raw is not DateTime dt) return null;
             return dt;
         }
 
@@ -541,7 +546,7 @@ namespace Cognite.OpcUa.History
             var evts = node.LastResult as HistoryEvent;
             node.LastResult = null;
 
-            if (!(details is ReadEventDetails eventDetails))
+            if (details is not ReadEventDetails eventDetails)
             {
                 log.LogWarning("Incorrect details type of history read events");
                 return;
@@ -636,9 +641,7 @@ namespace Cognite.OpcUa.History
 
             if (!node.Completed || !Frontfill) return;
 
-            var emitterState = node.State as EventExtractionState;
-
-            if (emitterState == null) return;
+            if (node.State is not EventExtractionState emitterState) return;
 
             var buffered = emitterState.FlushBuffer();
             if (buffered.Any())

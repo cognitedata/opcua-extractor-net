@@ -19,7 +19,8 @@ namespace Cognite.Bridge
         private readonly ILogger log = Log.Logger.ForContext(typeof(MQTTBridge));
 
         private readonly Destination destination;
-        private bool recFlag;
+        private TaskCompletionSource waitSource;
+        private string waitTopic;
 
         private bool disconnected;
         public MQTTBridge(Destination destination, BridgeConfig config)
@@ -48,16 +49,14 @@ namespace Cognite.Bridge
         /// Wait for up to timeout seconds for a message to arrive over MQTT. Throws an exception if waiting timed out.
         /// </summary>
         /// <param name="timeout">Timeout in seconds</param>
-        public async Task WaitForNextMessage(int timeout = 10)
+        public async Task WaitForNextMessage(int timeout = 10, string topic = null)
         {
-            recFlag = false;
-            for (int i = 0; i < timeout * 10; i++)
-            {
-                if (recFlag) return;
-                await Task.Delay(100);
-            }
-
-            throw new TimeoutException("Waiting for next message timed out");
+            waitSource = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            waitTopic = topic;
+            var res = await Task.WhenAny(waitSource.Task, Task.Delay(timeout * 100));
+            if (res != waitSource.Task) throw new TimeoutException("Waiting for next message timed out");
+            waitSource = null;
+            waitTopic = null;
         }
         /// <summary>
         /// Start the bridge, adding handlers then connecting to the broker.
@@ -182,7 +181,10 @@ namespace Cognite.Bridge
                 }
 
                 msg.ProcessingFailed = !success;
-                recFlag = true;
+                if (waitSource != null)
+                {
+                    if (waitTopic == null || waitTopic == msg.ApplicationMessage.Topic) waitSource?.SetResult();
+                }
             });
             if (!client.IsConnected)
             {

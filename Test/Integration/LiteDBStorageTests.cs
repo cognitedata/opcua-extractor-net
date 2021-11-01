@@ -32,8 +32,7 @@ namespace Test.Integration
         // much simpler, which in the end makes it safer.
         public LiteDbStorageTests(ITestOutputHelper output, LiteDbStorageTestFixture tester) : base(output)
         {
-            if (tester == null) throw new ArgumentNullException(nameof(tester));
-            this.tester = tester;
+            this.tester = tester ?? throw new ArgumentNullException(nameof(tester));
             tester.ResetConfig();
             tester.WipeBaseHistory();
             tester.WipeEventHistory();

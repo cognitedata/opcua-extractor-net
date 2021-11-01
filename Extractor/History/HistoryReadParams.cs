@@ -78,7 +78,7 @@ namespace Cognite.OpcUa.History
                 return time;
             }
         }
-            
+
         public NodeId Id { get; }
         public byte[]? ContinuationPoint { get; set; }
         public bool Completed { get; set; }

@@ -326,7 +326,7 @@ namespace Cognite.OpcUa.Types
             {
                 foreach (var prop in Properties)
                 {
-                    if (!(prop is UAVariable propVar)) continue;
+                    if (prop is not UAVariable propVar) continue;
                     if (metaMap.TryGetValue(prop.DisplayName, out var mapped))
                     {
                         var value = converter.ConvertToString(propVar.Value, propVar.DataType.EnumValues);

@@ -34,7 +34,7 @@ namespace Cognite.OpcUa.NodeSources
     {
         private bool parsed;
 
-        private List<(ReferenceDescription Node, NodeId ParentId)> references = new List<(ReferenceDescription, NodeId)>();
+        private readonly List<(ReferenceDescription Node, NodeId ParentId)> references = new List<(ReferenceDescription, NodeId)>();
         public Action<ReferenceDescription, NodeId> Callback => HandleNode;
 
         public UANodeSource(ILogger<UANodeSource> log, FullConfig config, UAExtractor extractor, UAClient client)
@@ -55,7 +55,7 @@ namespace Cognite.OpcUa.NodeSources
             if (parsed) throw new InvalidOperationException("Browse result has already been parsed");
             if (!NodeMap.Any()) return null;
             await Client.ReadNodeData(NodeMap.Values, token);
-            
+
             foreach (var node in NodeMap.Values)
             {
                 SortNode(node);
@@ -127,7 +127,7 @@ namespace Cognite.OpcUa.NodeSources
             {
                 var toReadProperties = nodes
                     .Where(node => Extractor.State.IsMappedNode(node.Id)
-                        && (update.Objects.Metadata && !(node is UAVariable)
+                        && (update.Objects.Metadata && node is not UAVariable
                             || update.Variables.Metadata && (node is UAVariable)))
                     .ToList();
                 if (toReadProperties.Any())

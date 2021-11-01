@@ -42,7 +42,7 @@ namespace Cognite.OpcUa
     /// </summary>
     public class UAClient : IDisposable, IUAClientAccess
     {
-        protected FullConfig config { get; set; }
+        protected FullConfig Config { get; set; }
         protected Session? Session { get; set; }
         protected ApplicationConfiguration? AppConfig { get; set; }
         private ReverseConnectManager? reverseConnectManager;
@@ -56,7 +56,7 @@ namespace Cognite.OpcUa
         private CancellationToken liveToken;
         private Dictionary<NodeId, UAEventType>? eventFields;
 
-        private Dictionary<ushort, string> nsPrefixMap = new Dictionary<ushort, string>();
+        private readonly Dictionary<ushort, string> nsPrefixMap = new Dictionary<ushort, string>();
 
         public event EventHandler? OnServerDisconnect;
         public event EventHandler? OnServerReconnect;
@@ -86,7 +86,7 @@ namespace Cognite.OpcUa
         private readonly ILogger<Tracing> traceLog;
         private LogLevel? traceLevel;
 
-        public StringConverter StringConverter { get; } 
+        public StringConverter StringConverter { get; }
         public Browser Browser { get; }
 
         /// <summary>
@@ -95,7 +95,7 @@ namespace Cognite.OpcUa
         /// <param name="config">Full configuartion object</param>
         public UAClient(IServiceProvider provider, FullConfig config)
         {
-            this.config = config;
+            this.Config = config;
             log = provider.GetRequiredService<ILogger<UAClient>>();
             traceLog = provider.GetRequiredService<ILogger<Tracing>>();
             DataTypeManager = new DataTypeManager(provider.GetRequiredService<ILogger<DataTypeManager>>(),
@@ -137,11 +137,11 @@ namespace Cognite.OpcUa
 
         private void ConfigureUtilsTrace()
         {
-            if (config.Logger?.UaTraceLevel == null) return;
+            if (Config.Logger?.UaTraceLevel == null) return;
             Utils.SetTraceMask(Utils.TraceMasks.All);
             if (traceLevel != null) return;
             Utils.Tracing.TraceEventHandler += TraceEventHandler;
-            switch (config.Logger.UaTraceLevel)
+            switch (Config.Logger.UaTraceLevel)
             {
                 case "verbose": traceLevel = LogLevel.Trace; break;
                 case "debug": traceLevel = LogLevel.Debug; break;
@@ -177,10 +177,10 @@ namespace Cognite.OpcUa
                 ApplicationType = ApplicationType.Client,
                 ConfigSectionName = "opc.ua.net.extractor"
             };
-            log.LogInformation("Load OPC-UA Configuration from {Root}/opc.ua.net.extractor.Config.xml", config.Source.ConfigRoot);
+            log.LogInformation("Load OPC-UA Configuration from {Root}/opc.ua.net.extractor.Config.xml", Config.Source.ConfigRoot);
             try
             {
-                AppConfig = await application.LoadApplicationConfiguration($"{config.Source.ConfigRoot}/opc.ua.net.extractor.Config.xml", false);
+                AppConfig = await application.LoadApplicationConfiguration($"{Config.Source.ConfigRoot}/opc.ua.net.extractor.Config.xml", false);
             }
             catch (ServiceResultException exc)
             {
@@ -189,12 +189,16 @@ namespace Cognite.OpcUa
             catch (DirectoryNotFoundException dex)
             {
                 throw new ExtractorFailureException(
-                    $"Failed to load OPC-UA xml configuration, the {config.Source.ConfigRoot} directory does not exist", dex);
+                    $"Failed to load OPC-UA xml configuration, the {Config.Source.ConfigRoot} directory does not exist", dex);
             }
             catch (IOException exc)
             {
                 throw new ExtractorFailureException("Failed to load OPC-UA xml configuration file", exc);
             }
+
+            Utils.SetTraceOutput(Utils.TraceOutput.DebugAndFile);
+            Utils.SetTraceMask(Utils.TraceMasks.All);
+            Utils.SetTraceLog("./logs/opcua-client.log", true);
 
             string certificateDir = Environment.GetEnvironmentVariable("OPCUA_CERTIFICATE_DIR");
             if (!string.IsNullOrEmpty(certificateDir))
@@ -213,7 +217,7 @@ namespace Cognite.OpcUa
             {
                 AppConfig.ApplicationUri = X509Utils.GetApplicationUriFromCertificate(
                     AppConfig.SecurityConfiguration.ApplicationCertificate.Certificate);
-                config.Source.AutoAccept |= AppConfig.SecurityConfiguration.AutoAcceptUntrustedCertificates;
+                Config.Source.AutoAccept |= AppConfig.SecurityConfiguration.AutoAcceptUntrustedCertificates;
                 AppConfig.CertificateValidator.CertificateValidation += CertificateValidationHandler;
             }
 
@@ -222,11 +226,11 @@ namespace Cognite.OpcUa
 
         private async Task CreateSessionDirect()
         {
-            log.LogInformation("Attempt to select endpoint from: {EndpointURL}", config.Source.EndpointUrl);
+            log.LogInformation("Attempt to select endpoint from: {EndpointURL}", Config.Source.EndpointUrl);
             EndpointDescription selectedEndpoint;
             try
             {
-                selectedEndpoint = CoreClientUtils.SelectEndpoint(config.Source.EndpointUrl, config.Source.Secure);
+                selectedEndpoint = CoreClientUtils.SelectEndpoint(Config.Source.EndpointUrl, Config.Source.Secure);
             }
             catch (Exception ex)
             {
@@ -234,7 +238,7 @@ namespace Cognite.OpcUa
             }
             var endpointConfiguration = EndpointConfiguration.Create(AppConfig);
             var endpoint = new ConfiguredEndpoint(null, selectedEndpoint, endpointConfiguration);
-            var identity = AuthenticationUtils.GetUserIdentity(config.Source);
+            var identity = AuthenticationUtils.GetUserIdentity(Config.Source);
             log.LogInformation("Attempt to connect to endpoint with security: {SecurityPolicyUri} using user identity {Identity}",
                 endpoint.Description.SecurityPolicyUri,
                 identity.DisplayName);
@@ -274,12 +278,12 @@ namespace Cognite.OpcUa
             };
 
             reverseConnectManager = new ReverseConnectManager();
-            var endpointUrl = new Uri(config.Source.EndpointUrl);
-            var reverseUrl = new Uri(config.Source.ReverseConnectUrl);
+            var endpointUrl = new Uri(Config.Source.EndpointUrl);
+            var reverseUrl = new Uri(Config.Source.ReverseConnectUrl);
             reverseConnectManager.AddEndpoint(reverseUrl);
             reverseConnectManager.StartService(AppConfig);
 
-            log.LogInformation("Waiting for reverse connection from: {EndpointURL}", config.Source.EndpointUrl);
+            log.LogInformation("Waiting for reverse connection from: {EndpointURL}", Config.Source.EndpointUrl);
             var connection = await reverseConnectManager.WaitForConnection(endpointUrl, null);
             if (connection == null)
             {
@@ -289,7 +293,7 @@ namespace Cognite.OpcUa
             EndpointDescription selectedEndpoint;
             try
             {
-                selectedEndpoint = CoreClientUtils.SelectEndpoint(AppConfig, connection, config.Source.Secure, 30000);
+                selectedEndpoint = CoreClientUtils.SelectEndpoint(AppConfig, connection, Config.Source.Secure, 30000);
             }
             catch (Exception ex)
             {
@@ -297,7 +301,7 @@ namespace Cognite.OpcUa
             }
             var endpointConfiguration = EndpointConfiguration.Create(AppConfig);
             var endpoint = new ConfiguredEndpoint(null, selectedEndpoint, endpointConfiguration);
-            var identity = AuthenticationUtils.GetUserIdentity(config.Source);
+            var identity = AuthenticationUtils.GetUserIdentity(Config.Source);
             log.LogInformation("Attempt to connect to endpoint with security: {SecurityPolicyUri} using user identity {Identity}",
                 endpoint.Description.SecurityPolicyUri,
                 identity.DisplayName);
@@ -348,7 +352,7 @@ namespace Cognite.OpcUa
 
             await LoadAppConfig();
 
-            if (!string.IsNullOrEmpty(config.Source.ReverseConnectUrl))
+            if (!string.IsNullOrEmpty(Config.Source.ReverseConnectUrl))
             {
                 await WaitForReverseConnect();
             }
@@ -357,12 +361,12 @@ namespace Cognite.OpcUa
                 await CreateSessionDirect();
             }
             if (Session == null) return;
-            Session.KeepAliveInterval = config.Source.KeepAliveInterval;
+            Session.KeepAliveInterval = Config.Source.KeepAliveInterval;
             Session.KeepAlive += ClientKeepAlive;
             Started = true;
             connects.Inc();
             connected.Set(1);
-            log.LogInformation("Successfully connected to server at {EndpointURL}", config.Source.EndpointUrl);
+            log.LogInformation("Successfully connected to server at {EndpointURL}", Config.Source.EndpointUrl);
         }
 
         /// <summary>
@@ -393,7 +397,7 @@ namespace Cognite.OpcUa
             if (reconnectHandler != null) return;
             connected.Set(0);
             log.LogWarning("--- RECONNECTING ---");
-            if (!config.Source.ForceRestart && !liveToken.IsCancellationRequested)
+            if (!Config.Source.ForceRestart && !liveToken.IsCancellationRequested)
             {
                 reconnectHandler = new SessionReconnectHandler();
                 if (reverseConnectManager != null)
@@ -427,9 +431,9 @@ namespace Cognite.OpcUa
 
             if (eventArgs.Error.StatusCode == StatusCodes.BadCertificateUntrusted)
             {
-                eventArgs.Accept |= config.Source.AutoAccept;
+                eventArgs.Accept |= Config.Source.AutoAccept;
             }
-            else if (!StatusCode.IsGood(eventArgs.Error.StatusCode) && config.Source.IgnoreCertificateIssues)
+            else if (!StatusCode.IsGood(eventArgs.Error.StatusCode) && Config.Source.IgnoreCertificateIssues)
             {
                 log.LogWarning("Ignoring bad certificate: {Err}", eventArgs.Error.StatusCode);
                 eventArgs.Accept = true;
@@ -475,7 +479,7 @@ namespace Cognite.OpcUa
         {
             var desc = (await Browser.GetRootNodes(new[] { ObjectIds.Server }, token)).FirstOrDefault();
             if (desc == null) throw new ExtractorFailureException("Server node is null. Invalid server configuration");
-            
+
             var node = new UANode(ObjectIds.Server, desc.DisplayName.Text, NodeId.Null, NodeClass.Object);
             await ReadNodeData(new[] { node }, token);
             return node;
@@ -646,7 +650,7 @@ namespace Cognite.OpcUa
             try
             {
                 int count = 0;
-                foreach (var nextValues in readValueIds.ChunkBy(config.Source.AttributesChunk))
+                foreach (var nextValues in readValueIds.ChunkBy(Config.Source.AttributesChunk))
                 {
                     if (token.IsCancellationRequested) break;
                     count++;
@@ -689,13 +693,13 @@ namespace Cognite.OpcUa
         /// <param name="nodes">Nodes to be updated with data from the opcua server</param>
         public async Task ReadNodeData(IEnumerable<UANode> nodes, CancellationToken token)
         {
-            nodes = nodes.Where(node => (!(node is UAVariable variable) || variable.Index == -1) && !node.DataRead).ToList();
+            nodes = nodes.Where(node => (node is not UAVariable variable || variable.Index == -1) && !node.DataRead).ToList();
 
             int expected = 0;
             var readValueIds = new ReadValueIdCollection();
             foreach (var node in nodes)
             {
-                var attributes = node.Attributes.GetAttributeIds(config);
+                var attributes = node.Attributes.GetAttributeIds(Config);
                 readValueIds.AddRange(attributes.Select(attr => new ReadValueId { AttributeId = attr, NodeId = node.Id }));
                 expected += attributes.Count();
             }
@@ -721,7 +725,7 @@ namespace Cognite.OpcUa
             int idx = 0;
             foreach (var node in nodes)
             {
-                idx = node.Attributes.HandleAttributeRead(config, values, idx, this);
+                idx = node.Attributes.HandleAttributeRead(Config, values, idx, this);
             }
         }
 
@@ -1017,7 +1021,7 @@ namespace Cognite.OpcUa
 #pragma warning disable CA2000 // Dispose objects before losing scope
                     subscription = new Subscription(Session.DefaultSubscription)
                     {
-                        PublishingInterval = config.Source.PublishingInterval,
+                        PublishingInterval = Config.Source.PublishingInterval,
                         DisplayName = subName
                     };
 #pragma warning restore CA2000 // Dispose objects before losing scope
@@ -1026,7 +1030,7 @@ namespace Cognite.OpcUa
                 int count = 0;
                 var hasSubscription = subscription.MonitoredItems.Select(sub => sub.ResolvedNodeId).ToHashSet();
                 int total = nodeList.Count();
-                foreach (var chunk in nodeList.ChunkBy(config.Source.SubscriptionChunk))
+                foreach (var chunk in nodeList.ChunkBy(Config.Source.SubscriptionChunk))
                 {
                     if (token.IsCancellationRequested) break;
                     int lcount = 0;
@@ -1106,12 +1110,12 @@ namespace Cognite.OpcUa
                 {
                     StartNodeId = node.SourceId,
                     DisplayName = "Value: " + (node as VariableExtractionState)?.DisplayName,
-                    SamplingInterval = config.Source.SamplingInterval,
-                    QueueSize = (uint)Math.Max(0, config.Source.QueueLength),
+                    SamplingInterval = Config.Source.SamplingInterval,
+                    QueueSize = (uint)Math.Max(0, Config.Source.QueueLength),
                     AttributeId = Attributes.Value,
                     NodeClass = NodeClass.Variable,
-                    CacheQueueSize = Math.Max(0, config.Source.QueueLength),
-                    Filter = config.Subscriptions.DataChangeFilter?.Filter
+                    CacheQueueSize = Math.Max(0, Config.Source.QueueLength),
+                    Filter = Config.Subscriptions.DataChangeFilter?.Filter
                 }, token);
 
             numSubscriptions.Set(sub.MonitoredItemCount);
@@ -1140,8 +1144,8 @@ namespace Cognite.OpcUa
                     StartNodeId = node.SourceId,
                     AttributeId = Attributes.EventNotifier,
                     DisplayName = "Events: " + node.Id,
-                    SamplingInterval = config.Source.SamplingInterval,
-                    QueueSize = (uint)Math.Max(0, config.Source.QueueLength),
+                    SamplingInterval = Config.Source.SamplingInterval,
+                    QueueSize = (uint)Math.Max(0, Config.Source.QueueLength),
                     Filter = filter,
                     NodeClass = NodeClass.Object
                 },
@@ -1183,7 +1187,7 @@ namespace Cognite.OpcUa
             if (eventFields != null) return eventFields;
             if (source == null)
             {
-                source = new EventFieldCollector(this, config.Events);
+                source = new EventFieldCollector(this, Config.Events);
             }
             eventFields = await source.GetEventIdFields(token);
             foreach (var pair in eventFields)
@@ -1219,7 +1223,7 @@ namespace Cognite.OpcUa
 
             if (eventFields == null) eventFields = new Dictionary<NodeId, UAEventType>();
 
-            if (eventFields.Keys.Any() && ((config.Events.EventIds?.Any() ?? false) || !config.Events.AllEvents))
+            if (eventFields.Keys.Any() && ((Config.Events.EventIds?.Any() ?? false) || !Config.Events.AllEvents))
             {
                 log.LogDebug("Limit event results to the following ids: {Ids}", string.Join(", ", eventFields.Keys));
                 var eventListOperand = new SimpleAttributeOperand
@@ -1249,8 +1253,8 @@ namespace Cognite.OpcUa
             var selectClauses = new SimpleAttributeOperandCollection();
             foreach (var field in fieldList)
             {
-                if (config.Events.ExcludeProperties.Contains(field.Name)
-                    || config.Events.BaseExcludeProperties.Contains(field.Name)) continue;
+                if (Config.Events.ExcludeProperties.Contains(field.Name)
+                    || Config.Events.BaseExcludeProperties.Contains(field.Name)) continue;
                 var operand = new SimpleAttributeOperand
                 {
                     AttributeId = Attributes.Value,
@@ -1330,7 +1334,7 @@ namespace Cognite.OpcUa
                 subscription = Session.Subscriptions.FirstOrDefault(sub => sub.DisplayName.StartsWith("AuditListener", StringComparison.InvariantCulture))
                 ?? new Subscription(Session.DefaultSubscription)
                 {
-                    PublishingInterval = config.Source.PublishingInterval,
+                    PublishingInterval = Config.Source.PublishingInterval,
                     DisplayName = "AuditListener"
                 };
 
@@ -1340,8 +1344,8 @@ namespace Cognite.OpcUa
                     StartNodeId = ObjectIds.Server,
                     Filter = filter,
                     AttributeId = Attributes.EventNotifier,
-                    SamplingInterval = config.Source.SamplingInterval,
-                    QueueSize = (uint)Math.Max(0, config.Source.QueueLength),
+                    SamplingInterval = Config.Source.SamplingInterval,
+                    QueueSize = (uint)Math.Max(0, Config.Source.QueueLength),
                     NodeClass = NodeClass.Object
                 };
                 item.Notification += callback;
@@ -1405,9 +1409,9 @@ namespace Cognite.OpcUa
             int idx = Session.NamespaceUris.GetIndex(namespaceUri);
             if (idx < 0)
             {
-                if (config.Extraction.NamespaceMap.ContainsValue(namespaceUri))
+                if (Config.Extraction.NamespaceMap.ContainsValue(namespaceUri))
                 {
-                    string readNs = config.Extraction.NamespaceMap.First(kvp => kvp.Value == namespaceUri).Key;
+                    string readNs = Config.Extraction.NamespaceMap.First(kvp => kvp.Value == namespaceUri).Key;
                     idx = Session.NamespaceUris.GetIndex(readNs);
                     if (idx < 0) return NodeId.Null;
                 }
@@ -1470,12 +1474,12 @@ namespace Cognite.OpcUa
 
             // ExternalIds shorter than 32 chars are unlikely, this will generally avoid at least 1 re-allocation of the buffer,
             // and usually boost performance.
-            var buffer = new StringBuilder(config.Extraction.IdPrefix, 32);
+            var buffer = new StringBuilder(Config.Extraction.IdPrefix, 32);
 
             if (!nsPrefixMap.TryGetValue(nodeId.NamespaceIndex, out var prefix))
             {
                 var namespaceUri = id.NamespaceUri ?? Session!.NamespaceUris.GetString(nodeId.NamespaceIndex);
-                string newPrefix = config.Extraction.NamespaceMap.TryGetValue(namespaceUri, out string prefixNode) ? prefixNode : (namespaceUri + ":");
+                string newPrefix = Config.Extraction.NamespaceMap.TryGetValue(namespaceUri, out string prefixNode) ? prefixNode : (namespaceUri + ":");
                 nsPrefixMap[nodeId.NamespaceIndex] = prefix = newPrefix;
             }
 
@@ -1534,7 +1538,7 @@ namespace Cognite.OpcUa
             if (!nsPrefixMap.TryGetValue(nodeId.NamespaceIndex, out var prefix))
             {
                 var namespaceUri = Session!.NamespaceUris.GetString(nodeId.NamespaceIndex);
-                string newPrefix = config.Extraction.NamespaceMap.TryGetValue(namespaceUri, out string prefixNode) ? prefixNode : (namespaceUri + ":");
+                string newPrefix = Config.Extraction.NamespaceMap.TryGetValue(namespaceUri, out string prefixNode) ? prefixNode : (namespaceUri + ":");
                 nsPrefixMap[nodeId.NamespaceIndex] = prefix = newPrefix;
             }
 
@@ -1564,7 +1568,7 @@ namespace Cognite.OpcUa
         /// <returns>String reference id</returns>
         public string GetRelationshipId(UAReference reference)
         {
-            var buffer = new StringBuilder(config.Extraction.IdPrefix, 64);
+            var buffer = new StringBuilder(Config.Extraction.IdPrefix, 64);
             buffer.Append(reference.GetName());
             buffer.Append(';');
             AppendNodeId(buffer, reference.Source.Id);
@@ -1578,7 +1582,7 @@ namespace Cognite.OpcUa
                 // system.subsystem.sensor.measurement...
                 // so cutting from the start is less likely to cause conflicts
                 var overflow = (int)Math.Ceiling((buffer.Length - 255) / 2.0);
-                buffer = new StringBuilder(config.Extraction.IdPrefix, 255);
+                buffer = new StringBuilder(Config.Extraction.IdPrefix, 255);
                 buffer.Append(reference.GetName());
                 buffer.Append(';');
                 buffer.Append(GetNodeIdString(reference.Source.Id).AsSpan(overflow));

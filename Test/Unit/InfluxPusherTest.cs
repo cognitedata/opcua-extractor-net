@@ -25,13 +25,12 @@ namespace Test.Unit
     public class InfluxPusherTest : MakeConsoleWork, IClassFixture<InfluxPusherTestFixture>
     {
         private readonly InfluxPusherTestFixture tester;
-        private InfluxDBClient client;
-        private InfluxPusher pusher;
+        private readonly InfluxDBClient client;
+        private readonly InfluxPusher pusher;
         private static int ifIndex;
         public InfluxPusherTest(ITestOutputHelper output, InfluxPusherTestFixture tester) : base(output)
         {
-            if (tester == null) throw new ArgumentNullException(nameof(tester));
-            this.tester = tester;
+            this.tester = tester ?? throw new ArgumentNullException(nameof(tester));
             tester.ResetConfig();
 
             var ifSetup = tester.GetInfluxPusher($"testdb-pusher{ifIndex++}");

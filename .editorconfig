@@ -40,3 +40,6 @@ dotnet_diagnostic.CA1002.severity = none
 
 # LoggerDelegates might be good, but are way too verbose for now.
 dotnet_diagnostic.CA1848.severity = none
+
+# IDE0090: Use 'new(...)' - avoiding this.
+dotnet_diagnostic.IDE0090.severity = none

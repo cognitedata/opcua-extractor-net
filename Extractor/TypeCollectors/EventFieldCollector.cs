@@ -56,7 +56,7 @@ namespace Cognite.OpcUa.TypeCollectors
         }
         public override bool Equals(object obj)
         {
-            if (!(obj is EventField otherField)) return false;
+            if (obj is not EventField otherField) return false;
             if (BrowsePath.Count != otherField.BrowsePath.Count) return false;
 
             for (int i = 0; i < BrowsePath.Count; i++)
@@ -85,8 +85,8 @@ namespace Cognite.OpcUa.TypeCollectors
         private readonly Dictionary<NodeId, ChildNode> nodes = new Dictionary<NodeId, ChildNode>();
         private readonly EventConfig config;
         private readonly Regex? ignoreFilter;
-        private HashSet<string> excludeProperties;
-        private HashSet<string> baseExcludeProperties;
+        private readonly HashSet<string> excludeProperties;
+        private readonly HashSet<string> baseExcludeProperties;
         /// <summary>
         /// Construct the collector.
         /// </summary>

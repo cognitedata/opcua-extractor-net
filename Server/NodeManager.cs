@@ -14,22 +14,20 @@ namespace Server
     /// 
     /// Generating new nodes, History, and setting up the node hierarchy.
     /// </summary>
-    class TestNodeManager : CustomNodeManager2
+    internal class TestNodeManager : CustomNodeManager2
     {
-        private ApplicationConfiguration config;
         private readonly HistoryMemoryStore store;
         private uint nextId;
-        private IEnumerable<PredefinedSetup> predefinedNodes;
+        private readonly IEnumerable<PredefinedSetup> predefinedNodes;
         public NodeIdReference Ids { get; }
         private readonly ILogger log = Log.Logger.ForContext(typeof(TestNodeManager));
 
-        private PubSubManager pubSub;
+        private readonly PubSubManager pubSub;
 
         public TestNodeManager(IServerInternal server, ApplicationConfiguration configuration)
             : base(server, configuration, "opc.tcp://test.localhost")
         {
             SystemContext.NodeIdFactory = this;
-            config = configuration;
             store = new HistoryMemoryStore();
             Ids = new NodeIdReference();
         }
@@ -47,8 +45,7 @@ namespace Server
         public void UpdateNode(NodeId id, object value, DateTime? timestamp = null)
         {
             PredefinedNodes.TryGetValue(id, out var pstate);
-            var state = pstate as BaseDataVariableState;
-            if (state == null) return;
+            if (pstate is not BaseDataVariableState state) return;
             var ts = timestamp ?? DateTime.UtcNow;
             state.Value = value;
             state.Timestamp = ts;
@@ -190,8 +187,10 @@ namespace Server
                     TypeDefinition = ObjectTypeIds.BaseObjectType
                 };
                 var evt = new AuditAddNodesEventState(null);
-                evt.NodesToAdd = new PropertyState<AddNodesItem[]>(evt);
-                evt.NodesToAdd.Value = new[] { evtAdd };
+                evt.NodesToAdd = new PropertyState<AddNodesItem[]>(evt)
+                {
+                    Value = new[] { evtAdd }
+                };
                 evt.Initialize(SystemContext, null, EventSeverity.Medium, new LocalizedText($"Audit add: {name}"));
                 AddPredefinedNode(SystemContext, obj);
                 Server.ReportEvent(evt);
@@ -634,18 +633,18 @@ namespace Server
                 var enumVar1 = CreateVariable("EnumVar1", enumType1.NodeId);
                 enumVar1.Value = 1;
                 AddNodeRelation(enumVar1, root, ReferenceTypeIds.HasComponent);
-                pubSub.AddPubSubVariable(enumVar1, BuiltInType.Enumeration, 1);
+                pubSub.AddPubSubVariable(enumVar1, BuiltInType.Int32, 1);
 
                 var enumVar2 = CreateVariable("EnumVar2", enumType2.NodeId);
                 enumVar2.NodeId = new NodeId("enumvar", NamespaceIndex);
                 enumVar2.Value = 123;
                 AddNodeRelation(enumVar2, root, ReferenceTypeIds.HasComponent);
-                pubSub.AddPubSubVariable(enumVar2, BuiltInType.Enumeration, 1);
+                pubSub.AddPubSubVariable(enumVar2, BuiltInType.Int32, 1);
 
                 var enumVar3 = CreateVariable("EnumVar3", enumType2.NodeId, 4);
                 enumVar3.Value = new[] { 123, 123, 321, 123 };
                 AddNodeRelation(enumVar3, root, ReferenceTypeIds.HasComponent);
-                pubSub.AddPubSubVariable(enumVar3, BuiltInType.Enumeration, 1);
+                pubSub.AddPubSubVariable(enumVar3, BuiltInType.Int32, 1);
 
                 // Custom references
                 var refType1 = CreateReferenceType("HasCustomRelation", "IsCustomRelationOf",
@@ -907,7 +906,7 @@ namespace Server
 
                     }
                 }
-                
+
             }
         }
 
@@ -924,7 +923,7 @@ namespace Server
 
 
             var config = pubSub.Build();
-            
+
             foreach (var conn in config.Connections)
             {
                 var c = CreateObject<PubSubConnectionState>(conn.Name);
@@ -1025,7 +1024,7 @@ namespace Server
                         }
                         items.Add(w);
 
-                            AddProperty(w, "DataSetFieldContentMask", DataTypeIds.DataSetFieldContentMask, -1, writer.DataSetFieldContentMask);
+                        AddProperty(w, "DataSetFieldContentMask", DataTypeIds.DataSetFieldContentMask, -1, writer.DataSetFieldContentMask);
                         AddProperty(w, "DataSetWriterId", DataTypeIds.UInt16, -1, writer.DataSetWriterId);
                         AddProperty(w, "DataSetWriterProperties", DataTypeIds.KeyValuePair,
                             writer.DataSetWriterProperties.Count, writer.DataSetWriterProperties.ToArray());
@@ -1047,10 +1046,10 @@ namespace Server
                             AddProperty(wMSettings, "NetworkMessageNumber", DataTypeIds.UInt16, -1, mSettingsW.NetworkMessageNumber);
                             AddPredefinedNode(SystemContext, wMSettings);
                         }
-                        else if (group.MessageSettings?.Body is JsonDataSetWriterMessageDataType jmSettingsW)
+                        else if (writer.MessageSettings?.Body is JsonDataSetWriterMessageDataType jmSettingsW)
                         {
                             var gMSettings = CreateObject<JsonDataSetWriterMessageState>("MessageSettings");
-                            AddNodeRelation(gMSettings, g, ReferenceTypeIds.HasComponent);
+                            AddNodeRelation(gMSettings, w, ReferenceTypeIds.HasComponent);
                             AddProperty(gMSettings, "DataSetMessageContentMask", DataTypeIds.JsonDataSetMessageContentMask,
                                 -1, jmSettingsW.DataSetMessageContentMask);
                             AddPredefinedNode(SystemContext, gMSettings);
@@ -1095,9 +1094,10 @@ namespace Server
                 AddProperty(s, "ConfigurationVersion", DataTypeIds.ConfigurationVersionDataType, -1, set.DataSetMetaData.ConfigurationVersion);
                 AddProperty(s, "DataSetClassId", DataTypeIds.Guid, -1, set.DataSetMetaData.DataSetClassId);
                 AddProperty(s, "DataSetMetaData", DataTypeIds.DataSetMetaDataType, -1, set.DataSetMetaData);
-                if (set.DataSetSource?.Body is PublishedDataItemsDataTypeCollection items)
+                if (set.DataSetSource?.Body is PublishedDataItemsDataType items)
                 {
-                    AddProperty(s, "PublishedData", DataTypeIds.PublishedDataItemsDataType, items.Count, items.ToArray());
+                    AddProperty(s, "PublishedData", DataTypeIds.PublishedVariableDataType,
+                        items.PublishedData.Count, items.PublishedData.ToArray());
                 }
 
                 AddPredefinedNode(SystemContext, s);
@@ -1473,10 +1473,12 @@ namespace Server
 
                         serverHandle.Index = i;
 
-                        results[i] = new HistoryReadResult();
-                        results[i].HistoryData = null;
-                        results[i].ContinuationPoint = null;
-                        results[i].StatusCode = StatusCodes.Good;
+                        results[i] = new HistoryReadResult
+                        {
+                            HistoryData = null,
+                            ContinuationPoint = null,
+                            StatusCode = StatusCodes.Good
+                        };
                         if (edetails.NumValuesPerNode == 0)
                         {
                             if (edetails.StartTime == DateTime.MinValue || edetails.EndTime == DateTime.MinValue)
@@ -1677,7 +1679,7 @@ namespace Server
         #endregion
     }
 
-    class InternalHistoryRequest
+    internal class InternalHistoryRequest
     {
         public NodeId Id;
         public byte[] ContinuationPoint;
@@ -1688,7 +1690,7 @@ namespace Server
         public bool IsReverse;
     }
 
-    class InternalEventHistoryRequest : InternalHistoryRequest
+    internal class InternalEventHistoryRequest : InternalHistoryRequest
     {
         public FilterContext FilterContext;
         public EventFilter Filter;

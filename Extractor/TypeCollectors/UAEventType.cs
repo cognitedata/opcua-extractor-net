@@ -84,7 +84,7 @@ namespace Cognite.OpcUa.TypeCollectors
         public NodeId Id { get; }
         public LocalizedText DisplayName { get; }
         public UAEventType? Parent { get; set; }
-        private IList<ChildNode> children = new List<ChildNode>();
+        private readonly IList<ChildNode> children = new List<ChildNode>();
         public UAEventType(NodeId id, LocalizedText displayName)
         {
             Id = id;

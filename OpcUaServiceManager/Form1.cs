@@ -19,9 +19,9 @@ namespace OpcUaServiceManager
         private ServiceController[] _winServices;
         private List<ServiceController> _cogniteServices;
         private List<string> _serviceNamesInUse;
-        private string _opcuaExtractorDir;
-        private string _opcuaExtractorExe = @"OpcUaExtractor\bin\OpcuaExtractor.exe";
-        private bool _opcuaExtractorCanCreateService = false;
+        private readonly string _opcuaExtractorDir;
+        private readonly string _opcuaExtractorExe = @"OpcUaExtractor\bin\OpcuaExtractor.exe";
+        private readonly bool _opcuaExtractorCanCreateService = false;
         private int _nextServiceNumber;
 
         /// <summary>

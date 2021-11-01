@@ -24,11 +24,10 @@ namespace Test.Integration
     // Tests for various configurations for extracting nodes and pushing to dummy pusher
     public class NodeExtractionTests : MakeConsoleWork, IClassFixture<NodeExtractionTestFixture>
     {
-        NodeExtractionTestFixture tester;
+        private readonly NodeExtractionTestFixture tester;
         public NodeExtractionTests(ITestOutputHelper output, NodeExtractionTestFixture tester) : base(output)
         {
-            if (tester == null) throw new ArgumentNullException(nameof(tester));
-            this.tester = tester;
+            this.tester = tester ?? throw new ArgumentNullException(nameof(tester));
             tester.ResetConfig();
             tester.Config.History.Enabled = false;
         }
@@ -128,7 +127,7 @@ namespace Test.Integration
             var node = pusher.PushedNodes[ids.StringArray];
             Assert.Equal("Variable StringArray", node.DisplayName);
             var arr = Assert.IsType<UAVariable>(node);
-            Assert.True(arr is UAVariable);
+            Assert.NotNull(arr);
             Assert.True(arr.Properties == null || !arr.Properties.Any());
             Assert.True(arr.IsArray);
             Assert.Equal(2, arr.ArrayDimensions[0]);
@@ -171,7 +170,7 @@ namespace Test.Integration
             var node = pusher.PushedNodes[ids.Array];
             Assert.Equal("Variable Array", node.DisplayName);
             var arr = Assert.IsType<UAVariable>(node);
-            Assert.True(arr is UAVariable);
+            Assert.NotNull(arr);
             Assert.Equal(2, arr.Properties.Count());
             var prop = arr.Properties.First(prop => prop.DisplayName == "EngineeringUnits") as UAVariable;
             Assert.Equal(DataTypeIds.EUInformation, prop.DataType.Raw);
@@ -1243,8 +1242,8 @@ namespace Test.Integration
                     // .NET runtime, so an array can be uint under the hood, but int in code, which the language
                     // doesn't allow, but the runtime is fine with. Shouldn't matter when running, but we get this magic.
                     // Your IDE/compiler might complain about meaningless casts here, but it's wrong.
-                    Assert.Equal(other.ArrayDimensions?.Select(i => (int)i),
-                        other.ArrayDimensions?.Select(i => (int)i));
+                    Assert.Equal(other.ArrayDimensions?.Select(i => i),
+                        other.ArrayDimensions?.Select(i => i));
                     Assert.Equal(other.ReadHistory, node.ReadHistory);
                     Assert.Equal(other.Index, node.Index);
                     Assert.Equal(other.ValueRank, node.ValueRank);

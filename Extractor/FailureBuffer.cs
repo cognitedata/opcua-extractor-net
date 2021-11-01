@@ -259,7 +259,7 @@ namespace Cognite.OpcUa
                     var dps = await influxPusher.ReadDataPoints(nodeBufferStates, token);
                     log.LogInformation("Read {Count} points from influxdb failure buffer", dps.Count());
                     var result = await Task.WhenAll(pushers
-                        .Where(pusher => !(pusher is InfluxPusher))
+                        .Where(pusher => pusher is not InfluxPusher)
                         .Select(pusher => pusher.PushDataPoints(dps, token)));
 
                     if (result.All(res => res ?? true))
@@ -381,7 +381,7 @@ namespace Cognite.OpcUa
 
                     log.LogInformation("Read {Count} events from influxdb failure buffer", events.Count());
                     var result = await Task.WhenAll(pushers
-                        .Where(pusher => !(pusher is InfluxPusher))
+                        .Where(pusher => pusher is not InfluxPusher)
                         .Select(pusher => pusher.PushEvents(events, token)));
 
                     if (result.All(res => res ?? true))
