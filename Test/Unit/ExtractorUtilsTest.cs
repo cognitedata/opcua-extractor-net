@@ -6,7 +6,6 @@ using Opc.Ua;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Test.Utils;
 using Xunit;
 using Xunit.Abstractions;
 using SourceOp = Cognite.OpcUa.ExtractorUtils.SourceOp;

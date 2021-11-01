@@ -18,7 +18,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using Cognite.OpcUa;
 using Cognite.OpcUa.Types;
 using CogniteSdk;
-using LiteDB;
 using Microsoft.Extensions.DependencyInjection;
 using Opc.Ua;
 using Prometheus;

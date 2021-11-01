@@ -15,13 +15,13 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using Microsoft.Extensions.Logging;
+using Opc.Ua;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
-using Opc.Ua;
 
 namespace Cognite.OpcUa.PubSub
 {
@@ -151,16 +151,18 @@ namespace Cognite.OpcUa.PubSub
             {
                 var publishedItems = (dataSet.Children.GetValueOrDefault("PublishedData")?.Value?.Value as ExtensionObject[])
                     ?.SelectNonNull(ext => ext.Body as PublishedVariableDataType)?.ToArray();
-                var metaData = (dataSet.Children.GetValueOrDefault("DataSetMetaData")?.Value?.Value as ExtensionObject)
-                    ?.Body as DataSetMetaDataType;
-                var version = (dataSet.Children.GetValueOrDefault("ConfigurationVersion")?.Value?.Value as ExtensionObject)
-                    ?.Body as ConfigurationVersionDataType;
                 var id = dataSet.Children.GetValueOrDefault("DataSetClassId")?.Value?.Value as Uuid?;
 
-                if (publishedItems == null || metaData == null || version == null) continue;
+                if (publishedItems == null
+                    || (dataSet.Children.GetValueOrDefault("DataSetMetaData")?.Value?.Value as ExtensionObject)
+                    ?.Body is not DataSetMetaDataType metaData
+                    || (dataSet.Children.GetValueOrDefault("ConfigurationVersion")?.Value?.Value as ExtensionObject)
+                    ?.Body is not ConfigurationVersionDataType version) continue;
 
-                var subscribedDataSet = new TargetVariablesDataType();
-                subscribedDataSet.TargetVariables = new FieldTargetDataTypeCollection();
+                var subscribedDataSet = new TargetVariablesDataType
+                {
+                    TargetVariables = new FieldTargetDataTypeCollection()
+                };
 
                 if (metaData.Fields.Count != publishedItems.Length)
                 {
@@ -237,10 +239,12 @@ namespace Cognite.OpcUa.PubSub
             var connections = root.AllChildren.Where(child => child.TypeDefinition == ObjectTypeIds.PubSubConnectionType);
             foreach (var conn in connections)
             {
-                var cConn = new PubSubConnectionDataType();
-                cConn.Name = conn.BrowseName;
-                cConn.Enabled = true;
-                cConn.TransportProfileUri = conn.Children.GetValueOrDefault("TransportProfileUri")?.Value?.Value as string;
+                var cConn = new PubSubConnectionDataType
+                {
+                    Name = conn.BrowseName,
+                    Enabled = true,
+                    TransportProfileUri = conn.Children.GetValueOrDefault("TransportProfileUri")?.Value?.Value as string
+                };
                 if (cConn.TransportProfileUri != Profiles.PubSubMqttJsonTransport
                     && cConn.TransportProfileUri != Profiles.PubSubMqttUadpTransport) continue;
 
@@ -249,9 +253,11 @@ namespace Cognite.OpcUa.PubSub
 
                 if (conn.Children.TryGetValue("Address", out var addr))
                 {
-                    var cAddr = new NetworkAddressUrlDataType();
-                    cAddr.NetworkInterface = string.Empty;
-                    cAddr.Url = addr.Children.GetValueOrDefault("Url")?.Value?.Value as string;
+                    var cAddr = new NetworkAddressUrlDataType
+                    {
+                        NetworkInterface = string.Empty,
+                        Url = addr.Children.GetValueOrDefault("Url")?.Value?.Value as string
+                    };
                     cConn.Address = new ExtensionObject(cAddr);
                 }
                 if (conn.Children.TryGetValue("ConnectionProperties", out var cProps))
@@ -267,13 +273,15 @@ namespace Cognite.OpcUa.PubSub
 
                 foreach (var group in conn.AllChildren.Where(child => child.ReferenceType == ReferenceTypeIds.HasWriterGroup))
                 {
-                    var cGroup = new ReaderGroupDataType();
-                    cGroup.Name = group.BrowseName;
-                    cGroup.Enabled = true;
-                    cGroup.MaxNetworkMessageSize = group.Children.TryGetValue("MaxNetworkMessageSize", out var mSize)
-                        && mSize.Value?.Value is uint mSizeVal ? mSizeVal : 0;
-                    cGroup.MessageSettings = new ExtensionObject(new ReaderGroupMessageDataType());
-                    cGroup.TransportSettings = new ExtensionObject(new ReaderGroupTransportDataType());
+                    var cGroup = new ReaderGroupDataType
+                    {
+                        Name = group.BrowseName,
+                        Enabled = true,
+                        MaxNetworkMessageSize = group.Children.TryGetValue("MaxNetworkMessageSize", out var mSize)
+                        && mSize.Value?.Value is uint mSizeVal ? mSizeVal : 0,
+                        MessageSettings = new ExtensionObject(new ReaderGroupMessageDataType()),
+                        TransportSettings = new ExtensionObject(new ReaderGroupTransportDataType())
+                    };
 
                     var groupId = (ushort)ToNumeric(group.Children.GetValueOrDefault("WriterGroupId"));
 
@@ -292,10 +300,12 @@ namespace Cognite.OpcUa.PubSub
                     foreach (var writer in group.AllChildren.Where(child =>
                         child.ReferenceType == ReferenceTypeIds.HasDataSetWriter))
                     {
-                        var cReader = new DataSetReaderDataType();
-                        cReader.PublisherId = cConn.PublisherId;
-                        cReader.WriterGroupId = 0;
-                        cReader.DataSetWriterId = (ushort)ToNumeric(writer.Children.GetValueOrDefault("DataSetWriterId"));
+                        var cReader = new DataSetReaderDataType
+                        {
+                            PublisherId = cConn.PublisherId,
+                            WriterGroupId = 0,
+                            DataSetWriterId = (ushort)ToNumeric(writer.Children.GetValueOrDefault("DataSetWriterId"))
+                        };
 
                         if (writer.Children.TryGetValue("MessageSettings", out var wMessageSettings))
                         {
@@ -324,12 +334,13 @@ namespace Cognite.OpcUa.PubSub
                         }
 
                         var wTransportSettings = writer.Children["TransportSettings"];
-                        var tSettings = new BrokerDataSetReaderTransportDataType();
-
-                        tSettings.QueueName = wTransportSettings.Children.GetValueOrDefault("QueueName")?.Value?.Value as string;
-                        tSettings.MetaDataQueueName = wTransportSettings.Children.GetValueOrDefault("MetaDataQueueName")
-                            ?.Value?.Value as string;
-                        tSettings.RequestedDeliveryGuarantee = BrokerTransportQualityOfService.AtLeastOnce;
+                        var tSettings = new BrokerDataSetReaderTransportDataType
+                        {
+                            QueueName = wTransportSettings.Children.GetValueOrDefault("QueueName")?.Value?.Value as string,
+                            MetaDataQueueName = wTransportSettings.Children.GetValueOrDefault("MetaDataQueueName")
+                            ?.Value?.Value as string,
+                            RequestedDeliveryGuarantee = BrokerTransportQualityOfService.AtLeastOnce
+                        };
 
                         cReader.TransportSettings = new ExtensionObject(tSettings);
                         cReader.DataSetFieldContentMask =
@@ -403,7 +414,7 @@ namespace Cognite.OpcUa.PubSub
         public InternalNode? Parent { get; set; }
         public InternalNode? AltParent { get; set; }
         public Dictionary<string, InternalNode> Children = new Dictionary<string, InternalNode>();
-        private Dictionary<NodeId, InternalNode> childrenById = new Dictionary<NodeId, InternalNode>();
+        private readonly Dictionary<NodeId, InternalNode> childrenById = new Dictionary<NodeId, InternalNode>();
         public IEnumerable<InternalNode> AllChildren => childrenById.Values;
         public DataValue? Value { get; set; }
         public NodeId NodeId { get; }

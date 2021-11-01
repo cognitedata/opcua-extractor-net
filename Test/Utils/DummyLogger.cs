@@ -15,7 +15,7 @@ namespace Test.Utils
     public class DummyLogger : ILogger
     {
         public List<LogEvent> Events { get; } = new List<LogEvent>();
-        private object mutex = new object();
+        private readonly object mutex = new object();
 
 
         public void Log<TState>(LogLevel logLevel, EventId eventId, TState state,

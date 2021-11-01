@@ -1,20 +1,17 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+﻿using Cognite.Extractor.Logging;
+using Cognite.Extractor.Utils;
+using Cognite.OpcUa;
+using Microsoft.Extensions.DependencyInjection;
 using Server;
 using System;
-using System.Collections.Generic;
+using System.IO;
 using System.Linq;
-using System.Text;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
+using Test.Utils;
 using Xunit;
 using Xunit.Abstractions;
-using Cognite.OpcUa;
-using Test.Utils;
-using System.IO;
-using System.Reflection;
-using Cognite.Extractor.Logging;
-using Cognite.Extractor.Utils;
-using Cognite.Extractor.Configuration;
 
 namespace Test.Integration
 {

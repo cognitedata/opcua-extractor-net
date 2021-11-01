@@ -1029,7 +1029,7 @@ namespace Cognite.OpcUa
                 ExtractorUtils.LogException(log, ex, "Failed to launch PubSub client", "Failed to launch PubSub client");
             }
             log.LogInformation("PubSub manager started");
-        } 
+        }
 
         #endregion
 
