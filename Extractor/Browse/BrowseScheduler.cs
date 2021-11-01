@@ -230,9 +230,10 @@ namespace Cognite.OpcUa
             var builder = new StringBuilder();
             for (int i = 0; i < depthCounts.Count; i++)
             {
-                builder.AppendFormat("    {0}: {1}\n", i, depthCounts[i]);
+                builder.AppendFormat("    {0}: {1}", i, depthCounts[i]);
+                builder.Append(Environment.NewLine);
             }
-            log.LogDebug("Total results by depth: {Results}\n", builder);
+            log.LogDebug("Total results by depth:{NewLine}{Results}", Environment.NewLine, builder);
             depth.IncTo(depthCounts.Count);
         }
 
