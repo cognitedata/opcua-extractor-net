@@ -1,5 +1,4 @@
 ﻿using Cognite.Extractor.Common;
-using Cognite.Extractor.Logging;
 using Cognite.OpcUa;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.Logging;
@@ -70,17 +69,17 @@ namespace Test.Unit
             Assert.Equal(root, ExtractorUtils.GetRootExceptionOfType<ExtractorFailureException>(aex2));
         }
 
-        class LogEvent
+        private class LogEvent
         {
             public LogLevel LogLevel { get; set; }
             public EventId EventId { get; set; }
             public Exception Exception { get; set; }
         }
 
-        class DummyLogger : ILogger
+        private class DummyLogger : ILogger
         {
             public List<LogEvent> Events { get; } = new List<LogEvent>();
-            private object mutex = new object();
+            private readonly object mutex = new object();
 
 
             public void Log<TState>(LogLevel logLevel, EventId eventId, TState state,
@@ -201,7 +200,7 @@ namespace Test.Unit
 
             var exc = ExtractorUtils.HandleServiceResult(logger, exception, SourceOp.CreateSubscription);
             Assert.Equal(3, logger.Events.Count);
-            
+
             var serviceEx = Assert.IsType<SilentServiceException>(exc);
             Assert.NotNull(serviceEx.InnerServiceException);
         }

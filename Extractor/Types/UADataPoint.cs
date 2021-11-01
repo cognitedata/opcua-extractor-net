@@ -35,9 +35,7 @@ namespace Cognite.OpcUa.Types
         public string? StringValue { get; }
         [MemberNotNullWhen(false, nameof(DoubleValue))]
         [MemberNotNullWhen(true, nameof(StringValue))]
-#pragma warning disable CS8775 // Member must have a non-null value when exiting in some condition. - Implicit due to constructors.
         public bool IsString => !DoubleValue.HasValue;
-#pragma warning restore CS8775 // Member must have a non-null value when exiting in some condition.
         /// <param name="timestamp">Timestamp in ms since epoch</param>
         /// <param name="id">Converted id of node this belongs to, equal to externalId of timeseries in CDF</param>
         /// <param name="value">Value to set</param>

@@ -21,11 +21,10 @@ namespace Test.Unit
     }
     public class StreamerTest : MakeConsoleWork, IClassFixture<StreamerTestFixture>
     {
-        private StreamerTestFixture tester;
+        private readonly StreamerTestFixture tester;
         public StreamerTest(ITestOutputHelper output, StreamerTestFixture tester) : base(output)
         {
-            if (tester == null) throw new ArgumentNullException(nameof(tester));
-            this.tester = tester;
+            this.tester = tester ?? throw new ArgumentNullException(nameof(tester));
             tester.ResetConfig();
         }
 

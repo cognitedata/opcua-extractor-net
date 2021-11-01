@@ -40,8 +40,10 @@ namespace Test.Unit
 
             Server = new ServerController(new[] {
                 PredefinedSetup.Base, PredefinedSetup.Full, PredefinedSetup.Auditing,
-                PredefinedSetup.Custom, PredefinedSetup.Events, PredefinedSetup.Wrong }, 62000);
-            Server.ConfigRoot = "Server.Test.UaClient";
+                PredefinedSetup.Custom, PredefinedSetup.Events, PredefinedSetup.Wrong }, 62000)
+            {
+                ConfigRoot = "Server.Test.UaClient"
+            };
 
             if (Directory.Exists("./uaclienttestcerts/pki/"))
             {
@@ -79,11 +81,10 @@ namespace Test.Unit
     }
     public class UAClientTest : MakeConsoleWork, IClassFixture<UAClientTestFixture>
     {
-        private UAClientTestFixture tester;
+        private readonly UAClientTestFixture tester;
         public UAClientTest(ITestOutputHelper output, UAClientTestFixture tester) : base(output)
         {
-            if (tester == null) throw new ArgumentNullException(nameof(tester));
-            this.tester = tester;
+            this.tester = tester ?? throw new ArgumentNullException(nameof(tester));
         }
         #region session
         [Fact]

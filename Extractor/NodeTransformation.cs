@@ -139,7 +139,7 @@ namespace Cognite.OpcUa
         {
             if (node == null || !MatchBasic(node.DisplayName, node.Id, node.NodeType?.Id, ns, node.NodeClass)) return false;
             if (Description != null && (string.IsNullOrEmpty(node.Description) || !Description.IsMatch(node.Description))) return false;
-            if (IsArray != null && (!(node is UAVariable variable) || variable.IsArray != IsArray)) return false;
+            if (IsArray != null && (node is not UAVariable variable || variable.IsArray != IsArray)) return false;
             if (Parent != null && (node.Parent == null || !Parent.IsMatch(node.Parent, ns))) return false;
             return true;
         }

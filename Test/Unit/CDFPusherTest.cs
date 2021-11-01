@@ -33,13 +33,12 @@ namespace Test.Unit
     }
     public class CDFPusherTest : MakeConsoleWork, IClassFixture<CDFPusherTestFixture>
     {
-        private CDFPusherTestFixture tester;
-        private CDFMockHandler handler;
-        private CDFPusher pusher;
+        private readonly CDFPusherTestFixture tester;
+        private readonly CDFMockHandler handler;
+        private readonly CDFPusher pusher;
         public CDFPusherTest(ITestOutputHelper output, CDFPusherTestFixture tester) : base(output)
         {
-            if (tester == null) throw new ArgumentNullException(nameof(tester));
-            this.tester = tester;
+            this.tester = tester ?? throw new ArgumentNullException(nameof(tester));
             tester.ResetConfig();
             (handler, pusher) = tester.GetCDFPusher();
         }
@@ -771,7 +770,7 @@ namespace Test.Unit
 
         #region node-source
 
-        void NodeToRaw(UAExtractor extractor, UANode node, ConverterType type, bool ts)
+        private void NodeToRaw(UAExtractor extractor, UANode node, ConverterType type, bool ts)
         {
             var serializer = new Newtonsoft.Json.JsonSerializer();
             extractor.StringConverter.AddConverters(serializer, type);

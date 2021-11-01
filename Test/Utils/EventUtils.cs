@@ -9,7 +9,7 @@ namespace Test.Utils
 {
     public static class EventUtils
     {
-        private static string[] baseFields = new[]
+        private static readonly string[] baseFields = new[]
 {
             "EventId", "SourceNode", "EventType", "Message", "Time"
         };

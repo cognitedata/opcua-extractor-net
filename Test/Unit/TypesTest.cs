@@ -27,8 +27,7 @@ namespace Test.Unit
         private readonly TypesTestFixture tester;
         public TypesTest(ITestOutputHelper output, TypesTestFixture tester) : base(output)
         {
-            if (tester == null) throw new ArgumentNullException(nameof(tester));
-            this.tester = tester;
+            this.tester = tester ?? throw new ArgumentNullException(nameof(tester));
             tester.ResetConfig();
         }
         #region uanode
@@ -522,7 +521,6 @@ namespace Test.Unit
             var node = new UAVariable(new NodeId("test"), "name", NodeId.Null);
             node.Attributes.IsProperty = true;
             node.VariableAttributes.DataType = sdt;
-            var now = DateTime.UtcNow;
             node.SetDataPoint(123.4);
             Assert.Equal(new Variant(123.4), node.Value);
             node.SetDataPoint("test");
@@ -766,15 +764,15 @@ namespace Test.Unit
                 dt = new UADataPoint(ts, id, UAClient.ConvertToDouble(value));
             }
             var bytes = dt.ToStorableBytes();
-            using (var stream = new MemoryStream(bytes))
-            {
-                var convDt = UADataPoint.FromStream(stream);
-                Assert.Equal(dt.Timestamp, convDt.Timestamp);
-                Assert.Equal(dt.Id, convDt.Id);
-                Assert.Equal(dt.IsString, convDt.IsString);
-                Assert.Equal(dt.StringValue, convDt.StringValue);
-                Assert.Equal(dt.DoubleValue, convDt.DoubleValue);
-            }
+
+            using var stream = new MemoryStream(bytes);
+
+            var convDt = UADataPoint.FromStream(stream);
+            Assert.Equal(dt.Timestamp, convDt.Timestamp);
+            Assert.Equal(dt.Id, convDt.Id);
+            Assert.Equal(dt.IsString, convDt.IsString);
+            Assert.Equal(dt.StringValue, convDt.StringValue);
+            Assert.Equal(dt.DoubleValue, convDt.DoubleValue);
         }
         [Fact]
         public void TestDataPointDebugDescription()
@@ -859,8 +857,10 @@ namespace Test.Unit
             Assert.True(dt.IsStep);
             Assert.False(dt.IsString);
 
-            rootDt.EnumValues = new Dictionary<long, string>();
-            rootDt.EnumValues[123] = "test";
+            rootDt.EnumValues = new Dictionary<long, string>
+            {
+                [123] = "test"
+            };
             dt = new UADataType(new NodeId("test"), rootDt);
             Assert.Equal(new NodeId("test"), dt.Raw);
             Assert.True(dt.IsStep);
@@ -938,14 +938,16 @@ namespace Test.Unit
             Assert.Equal(refStr, str);
 
             // full
-            dt = new UADataType(new NodeId("test"));
-            dt.IsString = false;
-            dt.IsStep = true;
-            dt.EnumValues = new Dictionary<long, string>
+            dt = new UADataType(new NodeId("test"))
             {
-                { 123, "test" },
-                { 321, "test2" },
-                { 1, "test3" }
+                IsString = false,
+                IsStep = true,
+                EnumValues = new Dictionary<long, string>
+                {
+                    { 123, "test" },
+                    { 321, "test2" },
+                    { 1, "test3" }
+                }
             };
             str = dt.ToString();
             refStr = "DataType: {\n"

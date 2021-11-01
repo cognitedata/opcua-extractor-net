@@ -20,7 +20,7 @@ using System.Security.Cryptography.X509Certificates;
 
 namespace Cognite.OpcUa
 {
-    static class AuthenticationUtils
+    internal static class AuthenticationUtils
     {
         private static X509Certificate2? GetCertificate(X509CertConfig certConf)
         {

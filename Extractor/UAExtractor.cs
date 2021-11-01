@@ -696,7 +696,7 @@ namespace Cognite.OpcUa
             {
                 log.LogDebug("{Transformation}", trans.ToString());
             }
-            
+
             uaClient.Browser.IgnoreFilters = transformations.Where(trans => trans.Type == TransformationType.Ignore).Select(trans => trans.Filter).ToList();
             Transformations = transformations;
         }
@@ -1039,14 +1039,14 @@ namespace Cognite.OpcUa
         /// </summary>
         private void AuditEventSubscriptionHandler(MonitoredItem item, MonitoredItemNotificationEventArgs eventArgs)
         {
-            if (!(eventArgs.NotificationValue is EventFieldList triggeredEvent))
+            if (eventArgs.NotificationValue is not EventFieldList triggeredEvent)
             {
                 log.LogWarning("No event in event subscription notification: {}", item.StartNodeId);
                 return;
             }
 
             var eventFields = triggeredEvent.EventFields;
-            if (!(item.Filter is EventFilter filter))
+            if (item.Filter is not EventFilter filter)
             {
                 log.LogWarning("Triggered event without filter");
                 return;

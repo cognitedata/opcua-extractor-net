@@ -21,14 +21,11 @@ using Opc.Ua;
 using Opc.Ua.Client;
 using Serilog;
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
-using YamlDotNet.Serialization.TypeInspectors;
 
 namespace Cognite.OpcUa.Config
 {
@@ -201,7 +198,6 @@ namespace Cognite.OpcUa.Config
         /// <param name="states">Overview of states to use</param>
         /// <param name="client">UAClient for namespaces</param>
         /// <returns>Subscription handler for datapoints</returns>
-        [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1002:Do not expose generic lists", Justification = "IList lacks AddRange")]
         public static MonitoredItemNotificationEventHandler GetSimpleListWriterHandler(
             List<UADataPoint> points,
             IDictionary<NodeId, VariableExtractionState> states,

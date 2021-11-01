@@ -22,17 +22,17 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Text.RegularExpressions;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 using YamlDotNet.Serialization.TypeInspectors;
-using System.Reflection;
 
 namespace Cognite.OpcUa
 {
     public static class ExtractorUtils
     {
-        private static Dictionary<uint, string> statusCodeNames = new Dictionary<uint, string>();
+        private static readonly Dictionary<uint, string> statusCodeNames = new Dictionary<uint, string>();
         static ExtractorUtils()
         {
             var fields = typeof(StatusCodes).GetFields(BindingFlags.Public | BindingFlags.Static);
@@ -519,7 +519,7 @@ namespace Cognite.OpcUa
             var serializer = new SerializerBuilder()
                 .WithTypeInspector(insp => new DefaultFilterTypeInspector(insp,
                     Enumerable.Empty<string>(),
-                    new [] { "ConfigDir", "BaseExcludeProperties", "IdpAuthentication", "ApiKey", "Password" }))
+                    new[] { "ConfigDir", "BaseExcludeProperties", "IdpAuthentication", "ApiKey", "Password" }))
                 .WithNamingConvention(HyphenatedNamingConvention.Instance)
                 .Build();
 

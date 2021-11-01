@@ -38,8 +38,8 @@ namespace Test
 {
     public class CDFMockHandler
     {
-        readonly object handlerLock = new object();
-        readonly string project;
+        private readonly object handlerLock = new object();
+        private readonly string project;
         public Dictionary<string, AssetDummy> Assets { get; } = new Dictionary<string, AssetDummy>();
         public Dictionary<string, TimeseriesDummy> Timeseries { get; } = new Dictionary<string, TimeseriesDummy>();
         public Dictionary<string, EventDummy> Events { get; } = new Dictionary<string, EventDummy>();
@@ -51,9 +51,10 @@ namespace Test
         public Dictionary<string, RelationshipDummy> Relationships { get; } = new Dictionary<string, RelationshipDummy>();
         public Dictionary<string, RelationshipDummy> RelationshipsRaw { get; } = new Dictionary<string, RelationshipDummy>();
         public Dictionary<string, DataSet> DataSets { get; } = new Dictionary<string, DataSet>();
-        long assetIdCounter = 1;
-        long timeseriesIdCounter = 1;
-        long eventIdCounter = 1;
+
+        private long assetIdCounter = 1;
+        private long timeseriesIdCounter = 1;
+        private long eventIdCounter = 1;
         private long requestIdCounter = 1;
         public long RequestCount { get; private set; }
         public bool BlockAllConnections { get; set; }
@@ -731,8 +732,10 @@ namespace Test
         }
         private HttpResponseMessage HandleGetRawAssets()
         {
-            var data = new RawListWrapper<JsonElement>();
-            data.items = AssetRaw.Select(kvp => new RawWrapper<JsonElement> { columns = kvp.Value, key = kvp.Key, lastUpdatedTime = 0 });
+            var data = new RawListWrapper<JsonElement>
+            {
+                items = AssetRaw.Select(kvp => new RawWrapper<JsonElement> { columns = kvp.Value, key = kvp.Key, lastUpdatedTime = 0 })
+            };
             var content = System.Text.Json.JsonSerializer.Serialize(data);
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
@@ -741,8 +744,10 @@ namespace Test
         }
         private HttpResponseMessage HandleGetRawTimeseries()
         {
-            var data = new RawListWrapper<JsonElement>();
-            data.items = TimeseriesRaw.Select(kvp => new RawWrapper<JsonElement> { columns = kvp.Value, key = kvp.Key, lastUpdatedTime = 0 });
+            var data = new RawListWrapper<JsonElement>
+            {
+                items = TimeseriesRaw.Select(kvp => new RawWrapper<JsonElement> { columns = kvp.Value, key = kvp.Key, lastUpdatedTime = 0 })
+            };
             var content = System.Text.Json.JsonSerializer.Serialize(data);
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
@@ -751,8 +756,10 @@ namespace Test
         }
         private HttpResponseMessage HandleGetRawRelationships()
         {
-            var data = new RawListWrapper<RelationshipDummy>();
-            data.items = RelationshipsRaw.Select(kvp => new RawWrapper<RelationshipDummy> { columns = kvp.Value, key = kvp.Key, lastUpdatedTime = 0 });
+            var data = new RawListWrapper<RelationshipDummy>
+            {
+                items = RelationshipsRaw.Select(kvp => new RawWrapper<RelationshipDummy> { columns = kvp.Value, key = kvp.Key, lastUpdatedTime = 0 })
+            };
             var content = JsonConvert.SerializeObject(data);
             return new HttpResponseMessage(HttpStatusCode.OK)
             {

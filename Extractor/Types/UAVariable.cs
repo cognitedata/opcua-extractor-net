@@ -145,7 +145,7 @@ namespace Cognite.OpcUa.Types
         {
             VariableAttributes = new VariableAttributes(nodeClass);
         }
-        
+
         /// <summary>
         /// Sets the datapoint to provided DataValue.
         /// </summary>
@@ -225,7 +225,7 @@ namespace Cognite.OpcUa.Types
             if (Properties == null || !Properties.Any() || metaMap == null || !metaMap.Any()) return;
             foreach (var prop in Properties)
             {
-                if (!(prop is UAVariable propVar)) continue;
+                if (prop is not UAVariable propVar) continue;
                 if (metaMap.TryGetValue(prop.DisplayName, out var mapped))
                 {
                     var value = converter.ConvertToString(propVar.Value, propVar.DataType.EnumValues);

@@ -7,7 +7,7 @@ namespace OpcUaServiceManager
     /// <summary>
     /// Runs a command
     /// </summary>
-    class RunCommand
+    internal class RunCommand
     {
         /// <summary>
         /// Runs a command in cmd.exe - timeout will occur after 1 minute
