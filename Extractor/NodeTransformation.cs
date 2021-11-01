@@ -215,6 +215,21 @@ namespace Cognite.OpcUa
             Type = raw.Type;
             this.index = index;
         }
+
+        private bool ShouldSkip(UANode node)
+        {
+            if (node == null) return true;
+            // No reason to transform ignored nodes.
+            if (node.Ignore) return true;
+            // Already a property
+            if (node.IsProperty && Type == TransformationType.Property) return true;
+            // Not a property or not a variable can't be turned into timeseries
+            if ((!node.IsProperty || node.NodeClass != NodeClass.Variable) && Type == TransformationType.TimeSeries) return true;
+            // No reason to drop subscriptions if ShouldSubscribe is already false
+            if (!node.ShouldSubscribe && Type == TransformationType.DropSubscriptions) return true;
+            return false;
+        }
+
         /// <summary>
         /// Modify the given node if it passes the filter.
         /// </summary>
@@ -222,11 +237,8 @@ namespace Cognite.OpcUa
         /// <param name="ns">Active NamespaceTable</param>
         public void ApplyTransformation(ILogger log, UANode node, NamespaceTable ns)
         {
-            if (node == null) return;
-            if (node.Ignore
-                || node.IsProperty && Type == TransformationType.Property
-                || (!node.IsProperty || node.NodeClass != NodeClass.Variable) && Type == TransformationType.TimeSeries
-                || !node.ShouldSubscribe && Type == TransformationType.DropSubscriptions) return;
+            if (ShouldSkip(node)) return;
+
             if (Filter.IsMatch(node, ns))
             {
                 switch (Type)
