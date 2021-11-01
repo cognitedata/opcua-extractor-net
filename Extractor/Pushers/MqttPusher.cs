@@ -62,9 +62,9 @@ namespace Cognite.OpcUa.Pushers
 
         private HashSet<string> existingNodes = new HashSet<string>();
 
-        private Dictionary<NodeId, string?> eventParents = new Dictionary<NodeId, string?>();
+        private readonly Dictionary<NodeId, string?> eventParents = new Dictionary<NodeId, string?>();
 
-        private ExtractionConfig extractionConfig;
+        private readonly ExtractionConfig extractionConfig;
 
         private static readonly Counter createdAssets = Metrics
             .CreateCounter("opcua_created_assets_mqtt", "Number of assets pushed over mqtt");
@@ -873,13 +873,13 @@ namespace Cognite.OpcUa.Pushers
 
         #endregion
 
-        class MqttState : BaseStorableState
+        private class MqttState : BaseStorableState
         {
             [StateStoreProperty("created")]
             public DateTime CreatedAt { get; set; }
         }
 
-        class ExistingState : IExtractionState
+        private class ExistingState : IExtractionState
         {
             public bool Existing { get; set; }
             public string Id { get; }
@@ -890,7 +890,8 @@ namespace Cognite.OpcUa.Pushers
                 Id = id;
             }
         }
-        class RawRequestWrapper<T>
+
+        private class RawRequestWrapper<T>
         {
             public string Database { get; }
             public string Table { get; }
@@ -903,7 +904,7 @@ namespace Cognite.OpcUa.Pushers
             }
         }
 
-        class RawRowCreateDto<T>
+        private class RawRowCreateDto<T>
         {
             public string Key { get; set; }
             public T Columns { get; set; }

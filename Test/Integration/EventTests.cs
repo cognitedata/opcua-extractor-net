@@ -33,8 +33,7 @@ namespace Test.Integration
         private readonly EventTestFixture tester;
         public EventTests(ITestOutputHelper output, EventTestFixture tester) : base(output)
         {
-            if (tester == null) throw new ArgumentNullException(nameof(tester));
-            this.tester = tester;
+            this.tester = tester ?? throw new ArgumentNullException(nameof(tester));
             tester.ResetConfig();
             tester.Config.Source.PublishingInterval = 200;
             tester.Config.Extraction.DataPushDelay = "200";

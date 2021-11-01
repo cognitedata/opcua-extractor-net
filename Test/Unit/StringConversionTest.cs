@@ -23,11 +23,10 @@ namespace Test.Unit
     }
     public class StringConversionTest : MakeConsoleWork, IClassFixture<StringConversionTestFixture>
     {
-        private StringConversionTestFixture tester;
+        private readonly StringConversionTestFixture tester;
         public StringConversionTest(ITestOutputHelper output, StringConversionTestFixture tester) : base(output)
         {
-            if (tester == null) throw new ArgumentNullException(nameof(tester));
-            this.tester = tester;
+            this.tester = tester ?? throw new ArgumentNullException(nameof(tester));
             tester.ResetConfig();
         }
         [Fact]

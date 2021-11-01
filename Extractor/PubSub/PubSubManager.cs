@@ -104,11 +104,10 @@ namespace Cognite.OpcUa.PubSub
             if (!File.Exists(config.FileName)) return null;
             try
             {
-                using (var stream = new FileStream(config.FileName, FileMode.Open, FileAccess.Read))
-                {
-                    var s = new DataContractSerializer(typeof(PubSubConfigurationDataType));
-                    return (PubSubConfigurationDataType)s.ReadObject(stream);
-                }
+                using var stream = new FileStream(config.FileName, FileMode.Open, FileAccess.Read);
+
+                var s = new DataContractSerializer(typeof(PubSubConfigurationDataType));
+                return (PubSubConfigurationDataType)s.ReadObject(stream);
             }
             catch (Exception ex)
             {
@@ -121,13 +120,13 @@ namespace Cognite.OpcUa.PubSub
         {
             if (string.IsNullOrWhiteSpace(this.config.FileName)) return;
             log.LogInformation("Saving PubSub configuration to {Name}", this.config.FileName);
-            using (var stream = new FileStream(this.config.FileName, FileMode.Create, FileAccess.Write))
-            {
-                var s = new DataContractSerializer(typeof(PubSubConfigurationDataType));
-                var settings = new XmlWriterSettings { Indent = true };
+            using var stream = new FileStream(this.config.FileName, FileMode.Create, FileAccess.Write);
 
-                using (var w = XmlWriter.Create(stream, settings)) s.WriteObject(w, config);
-            }
+            var s = new DataContractSerializer(typeof(PubSubConfigurationDataType));
+            var settings = new XmlWriterSettings { Indent = true };
+
+            using var w = XmlWriter.Create(stream, settings);
+            s.WriteObject(w, config);
         }
 
         private void DataReceived(object sender, SubscribedDataEventArgs e)

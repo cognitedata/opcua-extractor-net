@@ -10,7 +10,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using System.Text;
 using System.Threading.Tasks;
 using Test.Utils;
 using Xunit;
@@ -20,11 +19,11 @@ namespace Test.Unit
 {
     public sealed class PubSubTestFixture : BaseExtractorTestFixture
     {
-        public PubSubTestFixture() : base(new [] { PredefinedSetup.Base, PredefinedSetup.Custom, PredefinedSetup.PubSub }) { }
+        public PubSubTestFixture() : base(new[] { PredefinedSetup.Base, PredefinedSetup.Custom, PredefinedSetup.PubSub }) { }
     }
     public class PubSubTests : MakeConsoleWork, IClassFixture<PubSubTestFixture>
     {
-        private PubSubTestFixture tester;
+        private readonly PubSubTestFixture tester;
         public PubSubTests(ITestOutputHelper output, PubSubTestFixture tester) : base(output)
         {
             if (tester == null) throw new ArgumentNullException(nameof(tester));

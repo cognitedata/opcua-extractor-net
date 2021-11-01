@@ -22,7 +22,7 @@ namespace Server
     /// </summary>
     public class DebugMasterNodeManager : MasterNodeManager
     {
-        private ServerIssueConfig issues;
+        private readonly ServerIssueConfig issues;
         public DebugMasterNodeManager(
             IServerInternal server,
             ApplicationConfiguration config,

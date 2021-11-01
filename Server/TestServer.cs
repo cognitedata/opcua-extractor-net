@@ -6,7 +6,7 @@ using System.Security.Cryptography.X509Certificates;
 
 namespace Server
 {
-    class DummyValidator : ICertificateValidator
+    internal class DummyValidator : ICertificateValidator
     {
         public void Validate(X509Certificate2 certificate)
         {
@@ -24,7 +24,7 @@ namespace Server
         public NodeIdReference Ids => custom.Ids;
         public ServerIssueConfig Issues { get; } = new ServerIssueConfig();
 
-        private IEnumerable<PredefinedSetup> setups;
+        private readonly IEnumerable<PredefinedSetup> setups;
 
         private ICertificateValidator certificateValidator;
         private ApplicationConfiguration fullConfig;
@@ -159,11 +159,9 @@ namespace Server
         public void TriggerEvent<T>(NodeId eventId, NodeId emitter, NodeId source, string message, Action<T> builder = null)
             where T : ManagedEvent
         {
-            custom.TriggerEvent<T>(eventId, emitter, source, message, builder);
+            custom.TriggerEvent(eventId, emitter, source, message, builder);
         }
 
-        [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1062:Validate arguments of public methods",
-            Justification = "valueBuilder is not used here")]
         public void PopulateHistory(NodeId id, int count, DateTime start, string type = "int", int msdiff = 10, Func<int, object> valueBuilder = null)
         {
             custom.PopulateHistory(id, count, start, type, msdiff, valueBuilder);

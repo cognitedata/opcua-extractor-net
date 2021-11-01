@@ -17,8 +17,6 @@ namespace Server
         protected ServerSystemContext Context { get; }
         public BaseObjectTypeState EventType { get; }
 
-        [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1056:Uri properties should not be strings",
-            Justification = "NamespaceUris are not necessarily Uris")]
         public string NamespaceUri { get; }
         public TestEventManager(ServerSystemContext systemContext, BaseObjectTypeState eventType, string namespaceUri)
         {
@@ -48,7 +46,7 @@ namespace Server
     /// </summary>
     public abstract class ManagedEvent : BaseEventState
     {
-        private TestEventManager manager;
+        private readonly TestEventManager manager;
 
         protected ManagedEvent(NodeState parent, TestEventManager manager) : base(parent)
         {
@@ -82,8 +80,7 @@ namespace Server
             foreach (var prop in GetType().GetProperties().Where(prop =>
                 typeof(BaseInstanceState).IsAssignableFrom(prop.PropertyType)))
             {
-                var value = prop.GetValue(this, null) as BaseInstanceState;
-                if (value != null)
+                if (prop.GetValue(this, null) is BaseInstanceState value)
                 {
                     children.Add(value);
                 }

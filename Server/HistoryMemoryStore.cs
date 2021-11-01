@@ -9,7 +9,7 @@ namespace Server
     /// <summary>
     /// Class managing history in memory. Contains methods for reading and writing both datapoint and event history.
     /// </summary>
-    class HistoryMemoryStore
+    internal class HistoryMemoryStore
     {
         private const int maxHistoryDatapoints = 100000;
         private const int maxHistoryEvents = 10000;
@@ -114,7 +114,7 @@ namespace Server
             if (idx < 0)
             {
                 idx = data.FindIndex(vl => vl.SourceTimestamp >= request.StartTime);
-                log.Information("Read data from index {id} {idx}/{cnt}, time {start} {end}", 
+                log.Information("Read data from index {id} {idx}/{cnt}, time {start} {end}",
                     request.Id, idx, data.Count - 1, request.StartTime, request.EndTime);
             }
             else

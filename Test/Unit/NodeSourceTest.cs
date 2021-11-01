@@ -6,9 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 using Test.Utils;
 using Xunit;
@@ -51,7 +49,7 @@ namespace Test.Unit
             tester.Config.Extraction.Relationships.Enabled = false;
             var log = tester.Provider.GetRequiredService<ILogger<NodeSetSource>>();
             var source = new NodeSetSource(log, tester.Config, extractor, tester.Client);
-            
+
             // Base, nothing enabled
             source.BuildNodes(new[] { tester.Ids.Custom.Root });
             var result = await source.ParseResults(tester.Source.Token);
