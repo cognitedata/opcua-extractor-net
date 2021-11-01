@@ -45,11 +45,8 @@ namespace Cognite.OpcUa.PubSub
 
         public async Task Start(CancellationToken token)
         {
-            if (app != null)
-            {
-                app.Dispose();
-                app = null;
-            }
+            app?.Dispose();
+            app = null;
 
             var config = await GetConfig(token);
             if (config == null)
@@ -87,10 +84,7 @@ namespace Cognite.OpcUa.PubSub
 
         public void Stop()
         {
-            if (app != null)
-            {
-                app.Stop();
-            }
+            app?.Stop();
         }
 
         private async Task<PubSubConfigurationDataType?> GetConfig(CancellationToken token)

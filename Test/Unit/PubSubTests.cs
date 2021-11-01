@@ -126,13 +126,16 @@ namespace Test.Unit
             var result = await Task.WhenAny(startTask, Task.Delay(20000));
             Assert.Equal(startTask, result);
 
-            await CommonTestUtils.WaitForCondition(() => queue.Count >= 22, 10);
+            int dpsPerBatch = 21;
+
+            // At least two batches
+            await CommonTestUtils.WaitForCondition(() => queue.Count > dpsPerBatch, 10);
 
             manager.Stop();
 
             var dps = queue.ToArray();
 
-            Assert.Equal(21, dps.DistinctBy(dp => dp.Id).Count());
+            Assert.Equal(dpsPerBatch, dps.DistinctBy(dp => dp.Id).Count());
         }
     }
 }
