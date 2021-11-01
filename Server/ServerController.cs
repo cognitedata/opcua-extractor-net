@@ -17,8 +17,8 @@ namespace Server
         public NodeIdReference Ids => Server.Ids;
         private readonly ILogger log = Log.Logger.ForContext(typeof(ServerController));
         public TestServer Server { get; private set; }
-        private IEnumerable<PredefinedSetup> setups;
-        private int port;
+        private readonly IEnumerable<PredefinedSetup> setups;
+        private readonly int port;
         public ServerIssueConfig Issues => Server.Issues;
         public string ConfigRoot { get; set; } = "Server.Test";
         private readonly string mqttUrl;
@@ -39,15 +39,17 @@ namespace Server
 
         public async Task Start()
         {
-            ApplicationInstance app = new ApplicationInstance();
-            app.ConfigSectionName = ConfigRoot;
+            var app = new ApplicationInstance
+            {
+                ConfigSectionName = ConfigRoot
+            };
             try
             {
                 var cfg = await app.LoadApplicationConfiguration(Path.Join("config", $"{ConfigRoot}.Config.xml"), false);
                 cfg.ServerConfiguration.BaseAddresses[0] = $"opc.tcp://localhost:{port}";
                 await app.CheckApplicationInstanceCertificate(false, 0);
                 Server = new TestServer(setups, mqttUrl);
-                await app.Start(Server);
+                await Task.Run(async () => await app.Start(Server));
                 log.Information("Server started");
             }
             catch (Exception e)
@@ -101,21 +103,21 @@ namespace Server
             // Test emitters and properties
             Server.TriggerEvent<PropertyEvent>(Ids.Event.PropType, ObjectIds.Server, Ids.Event.Obj1, "prop " + idx, evt =>
             {
-                var revt = evt as PropertyEvent;
+                var revt = evt;
                 revt.PropertyString.Value = "str " + idx;
                 revt.PropertyNum.Value = idx;
                 revt.SubType.Value = "sub-type";
             });
             Server.TriggerEvent<PropertyEvent>(Ids.Event.PropType, Ids.Event.Obj1, Ids.Event.Obj1, "prop-e2 " + idx, evt =>
             {
-                var revt = evt as PropertyEvent;
+                var revt = evt;
                 revt.PropertyString.Value = "str o2 " + idx;
                 revt.PropertyNum.Value = idx;
                 revt.SubType.Value = "sub-type";
             });
             Server.TriggerEvent<PropertyEvent>(Ids.Event.PropType, Ids.Event.Obj2, Ids.Event.Obj1, "prop-e3 " + idx, evt =>
             {
-                var revt = evt as PropertyEvent;
+                var revt = evt;
                 revt.PropertyString.Value = "str o3 - " + idx;
                 revt.PropertyNum.Value = idx;
                 revt.SubType.Value = "sub-type";
@@ -125,7 +127,7 @@ namespace Server
             Server.TriggerEvent<BasicEvent2>(Ids.Event.BasicType2, ObjectIds.Server, Ids.Event.Obj1, "basic-block " + idx);
             Server.TriggerEvent<CustomEvent>(Ids.Event.CustomType, ObjectIds.Server, Ids.Event.Obj1, "mapped " + idx, evt =>
             {
-                var revt = evt as CustomEvent;
+                var revt = evt;
                 revt.TypeProp.Value = "CustomType";
             });
 
@@ -206,26 +208,22 @@ namespace Server
 
             Server.MutateNode(Ids.Custom.RangeProp, node =>
             {
-                var prop = node as PropertyState;
-                if (prop == null) return;
+                if (node is not PropertyState prop) return;
                 prop.Value = new Opc.Ua.Range(200, 0);
             });
             Server.MutateNode(Ids.Custom.ObjProp, node =>
             {
-                var prop = node as PropertyState;
-                if (prop == null) return;
+                if (node is not PropertyState prop) return;
                 prop.Value = 4321L;
             });
             Server.MutateNode(Ids.Custom.EUProp, node =>
             {
-                var prop = node as PropertyState;
-                if (prop == null) return;
+                if (node is not PropertyState prop) return;
                 prop.DisplayName = new LocalizedText("EngineeringUnits updated");
             });
             Server.MutateNode(Ids.Custom.ObjProp2, node =>
             {
-                var prop = node as PropertyState;
-                if (prop == null) return;
+                if (node is not PropertyState prop) return;
                 prop.DisplayName = new LocalizedText("StringProp updated");
             });
         }
@@ -249,26 +247,22 @@ namespace Server
 
             Server.MutateNode(Ids.Custom.RangeProp, node =>
             {
-                var prop = node as PropertyState;
-                if (prop == null) return;
+                if (node is not PropertyState prop) return;
                 prop.Value = new Opc.Ua.Range(100, 0);
             });
             Server.MutateNode(Ids.Custom.ObjProp, node =>
             {
-                var prop = node as PropertyState;
-                if (prop == null) return;
+                if (node is not PropertyState prop) return;
                 prop.Value = 1234L;
             });
             Server.MutateNode(Ids.Custom.EUProp, node =>
             {
-                var prop = node as PropertyState;
-                if (prop == null) return;
+                if (node is not PropertyState prop) return;
                 prop.DisplayName = new LocalizedText("EngineeringUnits");
             });
             Server.MutateNode(Ids.Custom.ObjProp2, node =>
             {
-                var prop = node as PropertyState;
-                if (prop == null) return;
+                if (node is not PropertyState prop) return;
                 prop.DisplayName = new LocalizedText("StringProp");
             });
         }

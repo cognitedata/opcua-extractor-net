@@ -1,9 +1,5 @@
-﻿using Cognite.Extractor.Configuration;
-using Cognite.Extractor.Utils;
-using Cognite.OpcUa;
+﻿using Cognite.OpcUa;
 using Cognite.OpcUa.History;
-using Cognite.OpcUa.NodeSources;
-using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -11,7 +7,6 @@ using Opc.Ua;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 using Test.Utils;
 using Xunit;
@@ -25,11 +20,10 @@ namespace Test.Unit
     }
     public class UAExtractorTest : MakeConsoleWork, IClassFixture<ExtractorTestFixture>
     {
-        private ExtractorTestFixture tester;
+        private readonly ExtractorTestFixture tester;
         public UAExtractorTest(ITestOutputHelper output, ExtractorTestFixture tester) : base(output)
         {
-            if (tester == null) throw new ArgumentNullException(nameof(tester));
-            this.tester = tester;
+            this.tester = tester ?? throw new ArgumentNullException(nameof(tester));
             tester.ResetConfig();
         }
         [Fact]
@@ -129,8 +123,10 @@ namespace Test.Unit
         [InlineData(5, 0, 0, 0, 4, 1)]
         public async Task TestPushNodes(int failAt, int pushedObjects, int pushedVariables, int pushedRefs, int failedNodes, int failedRefs)
         {
-            var pusher = new DummyPusher(new DummyPusherConfig());
-            pusher.ReadProperties = false;
+            var pusher = new DummyPusher(new DummyPusherConfig())
+            {
+                ReadProperties = false
+            };
             tester.Config.Extraction.Relationships.Enabled = true;
             using var extractor = tester.BuildExtractor(pushers: pusher);
 
@@ -260,7 +256,7 @@ namespace Test.Unit
                 }
             }
         }
-        
+
         [Fact]
         public void TestGetExtraMetadata()
         {

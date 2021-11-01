@@ -77,9 +77,9 @@ namespace Cognite.OpcUa.NodeSources
         private readonly NodeStateCollection nodes = new NodeStateCollection();
         private readonly Dictionary<NodeId, NodeState> nodeDict = new Dictionary<NodeId, NodeState>();
 
-        private Dictionary<NodeId, PlainType> types = new Dictionary<NodeId, PlainType>();
+        private readonly Dictionary<NodeId, PlainType> types = new Dictionary<NodeId, PlainType>();
 
-        private Dictionary<NodeId, IList<IReference>> references = new Dictionary<NodeId, IList<IReference>>();
+        private readonly Dictionary<NodeId, IList<IReference>> references = new Dictionary<NodeId, IList<IReference>>();
         private readonly object buildLock = new object();
         private bool built;
         public NodeSetSource(ILogger<NodeSetSource> log, FullConfig config, UAExtractor extractor, UAClient client)
@@ -95,10 +95,8 @@ namespace Cognite.OpcUa.NodeSources
                 string fileName = set.FileName ?? set.Url.Segments.Last();
                 if (!File.Exists(fileName))
                 {
-                    using (var client = new WebClient())
-                    {
-                        client.DownloadFile(set.Url, fileName);
-                    }
+                    using var client = new WebClient();
+                    client.DownloadFile(set.Url, fileName);
                 }
                 set.FileName = fileName;
             }
@@ -185,9 +183,13 @@ namespace Cognite.OpcUa.NodeSources
                     && node.NodeClass != NodeClass.ObjectType
                     && node.NodeClass != NodeClass.ReferenceType
                     && node.NodeClass != NodeClass.DataType) continue;
-                types[node.NodeId] = new PlainType(node.NodeId, node.DisplayName?.Text) { NodeClass = node.NodeClass,
-                    NodeId = node.NodeId, DisplayName = node.DisplayName?.Text };
-                
+                types[node.NodeId] = new PlainType(node.NodeId, node.DisplayName?.Text)
+                {
+                    NodeClass = node.NodeClass,
+                    NodeId = node.NodeId,
+                    DisplayName = node.DisplayName?.Text
+                };
+
             }
             foreach (var (id, type) in types)
             {
@@ -209,7 +211,7 @@ namespace Cognite.OpcUa.NodeSources
                         enumVarNode = node as PropertyState;
                         break;
                     }
-                    
+
 
                     Client.DataTypeManager.RegisterType(type.NodeId,
                         type.Parent?.NodeId ?? NodeId.Null, type.DisplayName);
@@ -453,7 +455,7 @@ namespace Cognite.OpcUa.NodeSources
             if (!FinalDestinationObjects.Any() && !FinalDestinationVariables.Any() && !FinalSourceVariables.Any() && !FinalReferences.Any())
             {
                 Log.LogInformation("Mapping resulted in no new nodes");
-                
+
                 return null;
             }
 
@@ -532,7 +534,7 @@ namespace Cognite.OpcUa.NodeSources
             }
             foreach (var child in children)
             {
-                
+
                 var childFields = ToFields(state.NodeId, child);
                 foreach (var childField in childFields)
                 {

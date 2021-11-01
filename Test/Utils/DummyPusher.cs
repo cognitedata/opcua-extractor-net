@@ -35,8 +35,8 @@ namespace Test.Utils
 
         public ManualResetEvent OnReset { get; } = new ManualResetEvent(false);
 
-        private object dpLock = new object();
-        private object eventLock = new object();
+        private readonly object dpLock = new object();
+        private readonly object eventLock = new object();
         public Dictionary<(NodeId, int), List<UADataPoint>> DataPoints { get; }
             = new Dictionary<(NodeId, int), List<UADataPoint>>();
         public Dictionary<NodeId, List<UAEvent>> Events { get; }
@@ -45,7 +45,7 @@ namespace Test.Utils
         public Dictionary<string, (NodeId, int)> UniqueToNodeId { get; } = new Dictionary<string, (NodeId, int)>();
 
         public IPusherConfig BaseConfig => config;
-        private DummyPusherConfig config;
+        private readonly DummyPusherConfig config;
 
         public UAExtractor Extractor { get; set; }
 

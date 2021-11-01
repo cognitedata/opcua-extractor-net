@@ -67,7 +67,7 @@ namespace Cognite.OpcUa.Types
         }
         public override bool Equals(object obj)
         {
-            if (!(obj is UAReference other)) return false;
+            if (obj is not UAReference other) return false;
             return other.Source.Equals(Source)
                 && other.Target.Equals(Target)
                 && other.Type.Id == Type.Id
@@ -116,7 +116,7 @@ namespace Cognite.OpcUa.Types
         }
         public override bool Equals(object obj)
         {
-            if (!(obj is ReferenceVertex other)) return false;
+            if (obj is not ReferenceVertex other) return false;
             return other.Id == Id && other.IsTimeSeries == IsTimeSeries;
         }
 

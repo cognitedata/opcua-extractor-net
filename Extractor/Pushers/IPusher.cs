@@ -24,7 +24,6 @@ using System.Threading.Tasks;
 
 namespace Cognite.OpcUa
 {
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1002:Do not expose generic lists", Justification = "IList lacks AddRange")]
     public interface IPusher : IDisposable
     {
         bool DataFailing { get; set; }

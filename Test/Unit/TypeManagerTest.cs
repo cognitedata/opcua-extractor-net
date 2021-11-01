@@ -24,8 +24,7 @@ namespace Test.Unit
         private readonly TypeManagerTestFixture tester;
         public TypeManagerTest(ITestOutputHelper output, TypeManagerTestFixture tester) : base(output)
         {
-            if (tester == null) throw new ArgumentNullException(nameof(tester));
-            this.tester = tester;
+            this.tester = tester ?? throw new ArgumentNullException(nameof(tester));
             tester.ResetConfig();
         }
         #region datatypemanager
@@ -160,10 +159,12 @@ namespace Test.Unit
         [Fact]
         public void TestAllowTsMap()
         {
-            var config = new DataTypeConfig();
-            config.IgnoreDataTypes = new List<ProtoNodeId>
+            var config = new DataTypeConfig
             {
-                new NodeId("ignore").ToProtoNodeId(tester.Client)
+                IgnoreDataTypes = new List<ProtoNodeId>
+                {
+                    new NodeId("ignore").ToProtoNodeId(tester.Client)
+                }
             };
             var node = new UAVariable(new NodeId("node"), "node", NodeId.Null);
             node.VariableAttributes.ValueRank = ValueRanks.Scalar;
@@ -280,10 +281,12 @@ namespace Test.Unit
         [Fact]
         public async Task TestReadDataTypes()
         {
-            var config = new DataTypeConfig();
-            config.CustomNumericTypes = new List<ProtoDataType>
+            var config = new DataTypeConfig
             {
-                new ProtoDataType { NodeId = tester.Server.Ids.Custom.NumberType.ToProtoNodeId(tester.Client) }
+                CustomNumericTypes = new List<ProtoDataType>
+                {
+                    new ProtoDataType { NodeId = tester.Server.Ids.Custom.NumberType.ToProtoNodeId(tester.Client) }
+                }
             };
             var log = tester.Provider.GetRequiredService<ILogger<DataTypeManager>>();
             var mgr = new DataTypeManager(log, tester.Client, config);

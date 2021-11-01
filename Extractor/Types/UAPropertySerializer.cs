@@ -103,7 +103,7 @@ namespace Cognite.OpcUa.Types
             }
 
             // If the type is enumerable we can write it to a JSON array.
-            if (value is IEnumerable enumerableVal && !(value is System.Xml.XmlElement))
+            if (value is IEnumerable enumerableVal && value is not System.Xml.XmlElement)
             {
                 var builder = new StringBuilder("[");
                 int count = 0;
@@ -275,7 +275,7 @@ namespace Cognite.OpcUa.Types
         Variable
     }
 
-    class NodeSerializer : JsonConverter<UANode>
+    internal class NodeSerializer : JsonConverter<UANode>
     {
         private readonly StringConverter converter;
         private readonly FullConfig config;
@@ -464,7 +464,8 @@ namespace Cognite.OpcUa.Types
             throw new NotImplementedException();
         }
     }
-    class NodeIdConverter : JsonConverter<NodeId>
+
+    internal class NodeIdConverter : JsonConverter<NodeId>
     {
         private readonly UAClient uaClient;
         public NodeIdConverter(UAClient uaClient)

@@ -24,7 +24,6 @@ namespace Cognite.Bridge
     /// </summary>
     public class Destination
     {
-        private readonly IServiceProvider provider;
         private readonly CogniteDestConfig config;
 
         private readonly ConcurrentDictionary<string, long?> assetIds = new ConcurrentDictionary<string, long?>();
@@ -37,7 +36,6 @@ namespace Cognite.Bridge
         public Destination(CogniteDestConfig config, IServiceProvider provider)
         {
             this.config = config;
-            this.provider = provider;
             destination = provider.GetRequiredService<CogniteDestination>();
         }
 
@@ -461,8 +459,7 @@ namespace Cognite.Bridge
             }
             catch (AggregateException aex)
             {
-                var ex = aex.InnerException as ResponseException;
-                return ex != null && (ex.Code == 400 || ex.Code == 409);
+                return aex.InnerException is ResponseException ex && (ex.Code == 400 || ex.Code == 409);
             }
             return true;
         }

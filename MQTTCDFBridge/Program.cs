@@ -10,11 +10,11 @@ using System.Threading.Tasks;
 [assembly: CLSCompliant(false)]
 namespace Cognite.Bridge
 {
-    class Program
+    internal class Program
     {
         private static readonly ILogger log = Log.Logger.ForContext(typeof(Program));
 
-        static void Main(string[] args)
+        private static void Main(string[] args)
         {
             var configPath = Environment.GetEnvironmentVariable("MQTT_BRIDGE_CONFIG_DIR");
             if (configPath == null)

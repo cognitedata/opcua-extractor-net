@@ -114,7 +114,7 @@ namespace Cognite.OpcUa.Config
             log = provider.GetRequiredService<ILogger<UAServerExplorer>>();
             this.provider = provider;
             this.baseConfig = baseConfig ?? new FullConfig();
-            this.config = config ?? throw new ArgumentNullException(nameof(config));
+            this.Config = config ?? throw new ArgumentNullException(nameof(config));
 
             this.baseConfig.Source.EndpointUrl = config.Source.EndpointUrl;
             this.baseConfig.Source.Password = config.Source.Password;
@@ -151,7 +151,7 @@ namespace Cognite.OpcUa.Config
             var context = AppConfig.CreateMessageContext();
             var endpointConfig = EndpointConfiguration.Create(AppConfig);
             var endpoints = new EndpointDescriptionCollection();
-            using (var channel = DiscoveryChannel.Create(new Uri(config.Source.EndpointUrl), endpointConfig, context))
+            using (var channel = DiscoveryChannel.Create(new Uri(Config.Source.EndpointUrl), endpointConfig, context))
             {
                 using var disc = new DiscoveryClient(channel);
                 try
@@ -198,18 +198,18 @@ namespace Cognite.OpcUa.Config
                 {
                     log.LogInformation("No endpoint found, make sure the given discovery url is correct");
                 }
-                else if (!secureExists && config.Source.Secure)
+                else if (!secureExists && Config.Source.Secure)
                 {
                     log.LogInformation("No secure endpoint exists, so connection will fail if Secure is true");
                 }
-                else if (openExists && config.Source.Secure)
+                else if (openExists && Config.Source.Secure)
                 {
                     log.LogInformation("Secure connection failed, username or password may be wrong, or the client" +
                                     "may need to be added to a trusted list in the server.");
                     log.LogInformation("An open endpoint exists, so if secure is set to false and no username/password is provided" +
                                     "connection may succeed");
                 }
-                else if (!config.Source.Secure && !openExists)
+                else if (!Config.Source.Secure && !openExists)
                 {
                     log.LogInformation("Secure is set to false, but no open endpoint exists. Either set secure to true," +
                                     "or add an open endpoint to the server");
@@ -218,7 +218,7 @@ namespace Cognite.OpcUa.Config
                 throw new FatalException("Fatal: Provided configuration failed to connect to the server");
             }
 
-            Session.KeepAliveInterval = Math.Max(config.Source.KeepAliveInterval, 30000);
+            Session.KeepAliveInterval = Math.Max(Config.Source.KeepAliveInterval, 30000);
         }
         /// <summary>
         /// Try to get at least 10k nodes using the given node chunk when browsing.
@@ -235,8 +235,10 @@ namespace Cognite.OpcUa.Config
 
             var nextIds = new List<NodeId> { root };
 
-            var localVisitedNodes = new HashSet<NodeId>();
-            localVisitedNodes.Add(root);
+            var localVisitedNodes = new HashSet<NodeId>
+            {
+                root
+            };
 
             int totalChildCount = 0;
 
@@ -297,15 +299,15 @@ namespace Cognite.OpcUa.Config
         private async Task LimitConfigValues(CancellationToken token)
         {
             var helper = new ServerInfoHelper(provider.GetRequiredService<ILogger<ServerInfoHelper>>(), this);
-            await helper.LimitConfigValues(config, token);
+            await helper.LimitConfigValues(Config, token);
 
-            baseConfig.Source.BrowseThrottling.MaxNodeParallelism = config.Source.BrowseThrottling.MaxNodeParallelism;
-            baseConfig.History.Throttling.MaxNodeParallelism = config.History.Throttling.MaxNodeParallelism;
-            baseConfig.Source.SubscriptionChunk = config.Source.SubscriptionChunk;
-            baseConfig.Source.BrowseNodesChunk = config.Source.BrowseNodesChunk;
-            baseConfig.History.DataNodesChunk = config.History.DataNodesChunk;
-            baseConfig.History.EventNodesChunk = config.History.EventNodesChunk;
-            baseConfig.Source.AttributesChunk = config.Source.AttributesChunk;
+            baseConfig.Source.BrowseThrottling.MaxNodeParallelism = Config.Source.BrowseThrottling.MaxNodeParallelism;
+            baseConfig.History.Throttling.MaxNodeParallelism = Config.History.Throttling.MaxNodeParallelism;
+            baseConfig.Source.SubscriptionChunk = Config.Source.SubscriptionChunk;
+            baseConfig.Source.BrowseNodesChunk = Config.Source.BrowseNodesChunk;
+            baseConfig.History.DataNodesChunk = Config.History.DataNodesChunk;
+            baseConfig.History.EventNodesChunk = Config.History.EventNodesChunk;
+            baseConfig.Source.AttributesChunk = Config.Source.AttributesChunk;
         }
 
         /// <summary>
@@ -328,7 +330,7 @@ namespace Cognite.OpcUa.Config
             int browseChunkSize = 0;
 
             // First try to find a chunk size that works
-            foreach (int chunkSize in new[] { 1000, 100, 10, 1 }.Where(chunk => chunk <= config.Source.BrowseNodesChunk))
+            foreach (int chunkSize in new[] { 1000, 100, 10, 1 }.Where(chunk => chunk <= Config.Source.BrowseNodesChunk))
             {
                 try
                 {
@@ -382,7 +384,7 @@ namespace Cognite.OpcUa.Config
             summary.BrowseNodesChunk = browseChunkSize;
 
             // Test if there are issues with BrowseNext.
-            int originalChunkSize = config.Source.BrowseChunk;
+            int originalChunkSize = Config.Source.BrowseChunk;
             foreach (int chunkSize in new[] { 10000, 1000, 100, 10, 1 })
             {
                 var nodesByParent = testNodes.GroupBy(node => node.ParentId).OrderByDescending(group => group.Count()).Take(browseChunkSize);
@@ -399,7 +401,7 @@ namespace Cognite.OpcUa.Config
 
                 if (total < chunkSize) continue;
 
-                config.Source.BrowseChunk = chunkSize;
+                Config.Source.BrowseChunk = chunkSize;
                 Dictionary<NodeId, BrowseResult> children;
                 try
                 {
@@ -434,8 +436,8 @@ namespace Cognite.OpcUa.Config
                 summary.BrowseChunk = Math.Min(chunkSize, originalChunkSize);
                 break;
             }
-            config.Source.BrowseChunk = summary.BrowseChunk;
-            config.Source.BrowseNodesChunk = summary.BrowseNodesChunk;
+            Config.Source.BrowseChunk = summary.BrowseChunk;
+            Config.Source.BrowseNodesChunk = summary.BrowseNodesChunk;
             baseConfig.Source.BrowseChunk = summary.BrowseChunk;
             baseConfig.Source.BrowseNodesChunk = summary.BrowseNodesChunk;
         }
@@ -447,7 +449,7 @@ namespace Cognite.OpcUa.Config
             if (nodesRead) return;
             nodeList = new List<UANode>();
             log.LogInformation("Mapping out node hierarchy");
-            var roots = config.Extraction.GetRootNodes(this);
+            var roots = Config.Extraction.GetRootNodes(this);
             try
             {
                 await Browser.BrowseNodeHierarchy(roots, ToolUtil.GetSimpleListWriterCallback(nodeList, this), token, false);
@@ -494,19 +496,19 @@ namespace Cognite.OpcUa.Config
         private async Task ReadNodeData(CancellationToken token)
         {
             if (nodeDataRead) return;
-            int oldArraySize = config.Extraction.DataTypes.MaxArraySize;
-            bool oldEvents = config.Events.Enabled;
-            bool oldHistory = config.History.Enabled;
-            bool oldHistoryData = config.History.Data;
-            config.Extraction.DataTypes.MaxArraySize = 10;
-            config.Events.Enabled = true;
-            config.History.Enabled = true;
-            config.History.Data = true;
+            int oldArraySize = Config.Extraction.DataTypes.MaxArraySize;
+            bool oldEvents = Config.Events.Enabled;
+            bool oldHistory = Config.History.Enabled;
+            bool oldHistoryData = Config.History.Data;
+            Config.Extraction.DataTypes.MaxArraySize = 10;
+            Config.Events.Enabled = true;
+            Config.History.Enabled = true;
+            Config.History.Data = true;
             await ReadNodeData(nodeList, token);
-            config.Extraction.DataTypes.MaxArraySize = oldArraySize;
-            config.Events.Enabled = oldEvents;
-            config.History.Enabled = oldHistory;
-            config.History.Data = oldHistoryData;
+            Config.Extraction.DataTypes.MaxArraySize = oldArraySize;
+            Config.Events.Enabled = oldEvents;
+            Config.History.Enabled = oldHistory;
+            Config.History.Data = oldHistoryData;
         }
 
         /// <summary>
@@ -669,10 +671,10 @@ namespace Cognite.OpcUa.Config
 
             await PopulateNodes(token);
 
-            int oldArraySize = config.Extraction.DataTypes.MaxArraySize;
-            int expectedAttributeReads = nodeList.Sum(node => node.Attributes.GetAttributeIds(config).Count());
-            config.History.Enabled = true;
-            config.Extraction.DataTypes.MaxArraySize = 10;
+            int oldArraySize = Config.Extraction.DataTypes.MaxArraySize;
+            int expectedAttributeReads = nodeList.Sum(node => node.Attributes.GetAttributeIds(Config).Count());
+            Config.History.Enabled = true;
+            Config.Extraction.DataTypes.MaxArraySize = 10;
 
             var testChunks = testAttributeChunkSizes.Where(chunkSize =>
                 chunkSize <= expectedAttributeReads || chunkSize <= 1000);
@@ -691,12 +693,12 @@ namespace Cognite.OpcUa.Config
                 int count = 0;
                 var toCheck = nodeList.TakeWhile(node =>
                 {
-                    count += node.Attributes.GetAttributeIds(config).Count();
+                    count += node.Attributes.GetAttributeIds(Config).Count();
                     return count < chunkSize + 10;
                 }).ToList();
                 log.LogInformation("Total {Total}", nodeList.Count);
                 log.LogInformation("Attempting to read attributes for {Cnt} nodes with ChunkSize {ChunkSize}", toCheck.Count, chunkSize);
-                config.Source.AttributesChunk = chunkSize;
+                Config.Source.AttributesChunk = chunkSize;
                 try
                 {
                     await ToolUtil.RunWithTimeout(ReadNodeData(toCheck, token), 120);
@@ -723,7 +725,7 @@ namespace Cognite.OpcUa.Config
 
             summary.AttributeChunkSize = baseConfig.Source.AttributesChunk;
 
-            config.Extraction.DataTypes.MaxArraySize = oldArraySize;
+            Config.Extraction.DataTypes.MaxArraySize = oldArraySize;
 
             if (!succeeded)
             {
@@ -735,13 +737,13 @@ namespace Cognite.OpcUa.Config
         /// </summary>
         public async Task IdentifyDataTypeSettings(CancellationToken token)
         {
-            var roots = config.Extraction.GetRootNodes(this);
+            var roots = Config.Extraction.GetRootNodes(this);
 
-            int oldArraySize = config.Extraction.DataTypes.MaxArraySize;
-            int arrayLimit = config.Extraction.DataTypes.MaxArraySize == 0 ? 10 : config.Extraction.DataTypes.MaxArraySize;
+            int oldArraySize = Config.Extraction.DataTypes.MaxArraySize;
+            int arrayLimit = Config.Extraction.DataTypes.MaxArraySize == 0 ? 10 : Config.Extraction.DataTypes.MaxArraySize;
             if (arrayLimit < 0) arrayLimit = int.MaxValue;
 
-            config.Extraction.DataTypes.MaxArraySize = 10;
+            Config.Extraction.DataTypes.MaxArraySize = 10;
 
             await PopulateNodes(token);
             await PopulateDataTypes(token);
@@ -849,7 +851,7 @@ namespace Cognite.OpcUa.Config
                 log.LogInformation("No historizing variables were found, tests on history chunkSizes will be skipped");
             }
 
-            config.Extraction.DataTypes.MaxArraySize = oldArraySize;
+            Config.Extraction.DataTypes.MaxArraySize = oldArraySize;
 
             baseConfig.Extraction.DataTypes.AllowStringVariables = baseConfig.Extraction.DataTypes.AllowStringVariables || stringVariables;
             baseConfig.Extraction.DataTypes.MaxArraySize = maxLimitedArrayLength > 0 ? maxLimitedArrayLength : oldArraySize;
@@ -872,7 +874,7 @@ namespace Cognite.OpcUa.Config
 
             int length = node.ArrayDimensions.First();
 
-            return config.Extraction.DataTypes.MaxArraySize < 0 || length > 0 && length <= config.Extraction.DataTypes.MaxArraySize;
+            return Config.Extraction.DataTypes.MaxArraySize < 0 || length > 0 && length <= Config.Extraction.DataTypes.MaxArraySize;
 
         }
         /// <summary>
@@ -912,7 +914,7 @@ namespace Cognite.OpcUa.Config
 
             foreach (int chunkSize in testChunks)
             {
-                config.Source.SubscriptionChunk = chunkSize;
+                Config.Source.SubscriptionChunk = chunkSize;
                 try
                 {
                     await ToolUtil.RunWithTimeout(SubscribeToNodes(
@@ -1003,15 +1005,15 @@ namespace Cognite.OpcUa.Config
             }
 
             DateTime earliestTime;
-            if (config.History.StartTime == null) earliestTime = CogniteTime.DateTimeEpoch;
-            else earliestTime = CogniteTime.ParseTimestampString(config.History.StartTime).Value;
+            if (Config.History.StartTime == null) earliestTime = CogniteTime.DateTimeEpoch;
+            else earliestTime = CogniteTime.ParseTimestampString(Config.History.StartTime).Value;
 
             var details = new ReadRawModifiedDetails
             {
                 IsReadModified = false,
                 EndTime = DateTime.UtcNow.AddDays(10),
                 StartTime = earliestTime,
-                NumValuesPerNode = (uint)config.History.DataChunk
+                NumValuesPerNode = (uint)Config.History.DataChunk
             };
 
             long largestEstimate = 0;
@@ -1064,7 +1066,7 @@ namespace Cognite.OpcUa.Config
 
                     failed = false;
                     baseConfig.History.DataNodesChunk = chunkSize;
-                    config.History.DataNodesChunk = chunkSize;
+                    Config.History.DataNodesChunk = chunkSize;
                     done = true;
                 }
                 catch (Exception e)
@@ -1113,7 +1115,7 @@ namespace Cognite.OpcUa.Config
             var granularity = TimeSpan.FromTicks(totalAvgDistance * 10).Seconds + 1;
 
             log.LogInformation("Suggested granularity is: {Granularity} seconds", granularity);
-            config.History.Granularity = granularity.ToString();
+            Config.History.Granularity = granularity.ToString();
 
             summary.HistoryGranularity = TimeSpan.FromSeconds(granularity);
 
@@ -1125,7 +1127,7 @@ namespace Cognite.OpcUa.Config
                 IsReadModified = false,
                 StartTime = DateTime.UtcNow,
                 EndTime = earliestTime,
-                NumValuesPerNode = (uint)config.History.DataChunk
+                NumValuesPerNode = (uint)Config.History.DataChunk
             };
 
             nodeWithData.ContinuationPoint = null;
@@ -1167,7 +1169,7 @@ namespace Cognite.OpcUa.Config
 
             summary.BackfillRecommended = largestEstimate > 100000 && backfillCapable;
 
-            if ((largestEstimate > 100000 || config.History.Backfill) && backfillCapable)
+            if ((largestEstimate > 100000 || Config.History.Backfill) && backfillCapable)
             {
                 log.LogInformation("Backfill is recommended or manually enabled, and the server is capable");
                 baseConfig.History.Backfill = true;
@@ -1195,8 +1197,8 @@ namespace Cognite.OpcUa.Config
 
             try
             {
-                config.Events.AllEvents = true;
-                config.Events.Enabled = true;
+                Config.Events.AllEvents = true;
+                Config.Events.Enabled = true;
                 await GetEventFields(null, token);
             }
             catch (Exception ex)

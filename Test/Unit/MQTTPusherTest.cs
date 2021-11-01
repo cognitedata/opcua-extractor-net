@@ -54,15 +54,14 @@ namespace Test.Unit
     }
     public class MQTTPusherTest : MakeConsoleWork, IClassFixture<MQTTPusherTestFixture>
     {
-        private MQTTPusherTestFixture tester;
-        private MQTTBridge bridge;
-        private CDFMockHandler handler;
-        private MQTTPusher pusher;
+        private readonly MQTTPusherTestFixture tester;
+        private readonly MQTTBridge bridge;
+        private readonly CDFMockHandler handler;
+        private readonly MQTTPusher pusher;
 
         public MQTTPusherTest(ITestOutputHelper output, MQTTPusherTestFixture tester) : base(output)
         {
-            if (tester == null) throw new ArgumentNullException(nameof(tester));
-            this.tester = tester;
+            this.tester = tester ?? throw new ArgumentNullException(nameof(tester));
             tester.ResetConfig();
             (handler, bridge, pusher) = tester.GetPusher();
             bridge.StartBridge(tester.Source.Token).Wait();
@@ -436,7 +435,7 @@ namespace Test.Unit
             node.VariableAttributes.DataType = dt;
 
             // Create one
-            var waitTask = bridge.WaitForNextMessage();
+            var waitTask = bridge.WaitForNextMessage(topic: tester.Config.Mqtt.RawTopic);
             Assert.True(await pusher.PushNodes(assets, new[] { node }, update, tester.Source.Token));
             await waitTask;
             Assert.Single(handler.TimeseriesRaw);
@@ -446,7 +445,7 @@ namespace Test.Unit
             var node2 = new UAVariable(tester.Server.Ids.Custom.MysteryVar, "MysteryVar", new NodeId("parent"));
             node2.VariableAttributes.DataType = dt;
             node.Attributes.Description = "description";
-            waitTask = bridge.WaitForNextMessage();
+            waitTask = bridge.WaitForNextMessage(topic: tester.Config.Mqtt.RawTopic);
             Assert.True(await pusher.PushNodes(assets, new[] { node, node2 }, update, tester.Source.Token));
             await waitTask;
             Assert.Equal(2, handler.TimeseriesRaw.Count);
@@ -454,7 +453,7 @@ namespace Test.Unit
             Assert.Null(handler.TimeseriesRaw.Last().Value.GetProperty("description").GetString());
 
             // Try to create again, skip both
-            waitTask = bridge.WaitForNextMessage(1);
+            waitTask = bridge.WaitForNextMessage(5, tester.Config.Mqtt.RawTopic);
             Assert.True(await pusher.PushNodes(assets, new[] { node, node2 }, update, tester.Source.Token));
             await Assert.ThrowsAsync<TimeoutException>(() => waitTask);
             Assert.Equal(2, handler.TimeseriesRaw.Count);
@@ -464,7 +463,7 @@ namespace Test.Unit
             // Update due to update settings
             update.Variables.Description = true;
             node2.Attributes.Description = "description";
-            waitTask = bridge.WaitForNextMessage();
+            waitTask = bridge.WaitForNextMessage(topic: tester.Config.Mqtt.RawTopic);
             Assert.True(await pusher.PushNodes(assets, new[] { node, node2 }, update, tester.Source.Token));
             await waitTask;
             Assert.Equal(2, handler.TimeseriesRaw.Count);

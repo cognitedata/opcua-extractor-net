@@ -318,32 +318,41 @@ namespace Cognite.OpcUa
 
             foreach (var datapoint in item.DequeueValues())
             {
-                if (StatusCode.IsNotGood(datapoint.StatusCode))
-                {
-                    UAExtractor.BadDataPoints.Inc();
-
-                    if (config.Subscriptions.LogBadValues)
-                    {
-                        log.LogDebug("Bad streaming datapoint: {BadDatapointExternalId} {SourceTimestamp}. Value: {Value}, Status: {Status}",
-                            node.Id, datapoint.SourceTimestamp, datapoint.Value, ExtractorUtils.GetStatusCodeName((uint)datapoint.StatusCode));
-                    }
-                    continue;
-                }
-                var buffDps = ToDataPoint(datapoint, node);
-                node.UpdateFromStream(buffDps);
-
-                timeToExtractorDps.Observe((DateTime.UtcNow - datapoint.SourceTimestamp).TotalSeconds);
-
-                if ((extractor.StateStorage == null || config.StateStorage.IntervalValue.Value == Timeout.InfiniteTimeSpan)
-                    && (node.IsFrontfilling && datapoint.SourceTimestamp > node.SourceExtractedRange.Last
-                        || node.IsBackfilling && datapoint.SourceTimestamp < node.SourceExtractedRange.First)) continue;
-                foreach (var buffDp in buffDps)
-                {
-                    log.LogTrace("Subscription DataPoint {DataPoint}", buffDp);
-                    Enqueue(buffDp);
-                }
+                HandleStreamedDatapoint(datapoint, node);
             }
         }
+
+
+        public void HandleStreamedDatapoint(DataValue datapoint, VariableExtractionState node)
+        {
+            if (StatusCode.IsNotGood(datapoint.StatusCode))
+            {
+                UAExtractor.BadDataPoints.Inc();
+
+                if (config.Subscriptions.LogBadValues)
+                {
+                    log.LogDebug("Bad streaming datapoint: {BadDatapointExternalId} {SourceTimestamp}. Value: {Value}, Status: {Status}",
+                        node.Id, datapoint.SourceTimestamp, datapoint.Value, ExtractorUtils.GetStatusCodeName((uint)datapoint.StatusCode));
+                }
+                return;
+            }
+            var buffDps = ToDataPoint(datapoint, node);
+            node.UpdateFromStream(buffDps);
+
+            timeToExtractorDps.Observe((DateTime.UtcNow - datapoint.SourceTimestamp).TotalSeconds);
+
+            if ((extractor.StateStorage == null || config.StateStorage.IntervalValue.Value == Timeout.InfiniteTimeSpan)
+                 && (node.IsFrontfilling && datapoint.SourceTimestamp > node.SourceExtractedRange.Last
+                    || node.IsBackfilling && datapoint.SourceTimestamp < node.SourceExtractedRange.First)) return;
+
+            foreach (var buffDp in buffDps)
+            {
+                log.LogTrace("Subscription DataPoint {DataPoint}", buffDp);
+                Enqueue(buffDp);
+            }
+        }
+
+
         private static string GetArrayUniqueId(string baseId, int index)
         {
             if (index < 0) return baseId;
@@ -407,7 +416,7 @@ namespace Cognite.OpcUa
         public void EventSubscriptionHandler(MonitoredItem item, MonitoredItemNotificationEventArgs _)
         {
             if (item == null) return;
-            if (!(item.Filter is EventFilter filter))
+            if (item.Filter is not EventFilter filter)
             {
                 log.LogWarning("Triggered event without filter");
                 return;
@@ -487,19 +496,19 @@ namespace Cognite.OpcUa
                 }
             }
 
-            if (!extractedProperties.TryGetValue("EventId", out var rawEventId) || !(rawEventId.Value.Value is byte[] byteEventId))
+            if (!extractedProperties.TryGetValue("EventId", out var rawEventId) || rawEventId.Value.Value is not byte[] byteEventId)
             {
                 log.LogTrace("Event of type {Type} lacks id", typeId);
                 return null;
             }
 
             string eventId = Convert.ToBase64String(byteEventId);
-            if (!extractedProperties.TryGetValue("SourceNode", out var rawSourceNode) || !(rawSourceNode.Value.Value is NodeId sourceNode))
+            if (!extractedProperties.TryGetValue("SourceNode", out var rawSourceNode) || rawSourceNode.Value.Value is not NodeId sourceNode)
             {
                 sourceNode = NodeId.Null;
             }
 
-            if (!extractedProperties.TryGetValue("Time", out var rawTime) || !(rawTime.Value.Value is DateTime time))
+            if (!extractedProperties.TryGetValue("Time", out var rawTime) || rawTime.Value.Value is not DateTime time)
             {
                 log.LogTrace("Event lacks specified time, type: {Type}", typeId);
                 return null;

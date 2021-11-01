@@ -47,7 +47,7 @@ namespace Cognite.OpcUa
             "Increments by one after each push to destination systems");
 
         public Looper(
-            ILogger<Looper> log, 
+            ILogger<Looper> log,
             PeriodicScheduler scheduler,
             UAExtractor extractor,
             FullConfig config,
@@ -170,7 +170,8 @@ namespace Cognite.OpcUa
                 try
                 {
                     Scheduler.TryTriggerTask(nameof(HistoryRestart));
-                } catch { }
+                }
+                catch { }
             }
 
             var failedPushers = passingPushers.Where(pusher =>

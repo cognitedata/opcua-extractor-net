@@ -61,8 +61,10 @@ namespace Cognite.OpcUa
         public string? ReverseConnectUrl { get; set; }
         public bool IgnoreCertificateIssues { get; set; }
         private ContinuationPointThrottlingConfig browseThrottling = new ContinuationPointThrottlingConfig();
-        public ContinuationPointThrottlingConfig BrowseThrottling {
-            get => browseThrottling; set => browseThrottling = value ?? browseThrottling; }
+        public ContinuationPointThrottlingConfig BrowseThrottling
+        {
+            get => browseThrottling; set => browseThrottling = value ?? browseThrottling;
+        }
         public NodeSetSourceConfig? NodeSetSource { get; set; }
         public bool LimitToServerConfig { get; set; } = true;
         public bool AltSourceBackgroundBrowse { get; set; }
@@ -194,7 +196,7 @@ namespace Cognite.OpcUa
         public DataChangeTrigger Trigger { get => filter.Trigger; set => filter.Trigger = value; }
         public DeadbandType DeadbandType { get => (DeadbandType)filter.DeadbandType; set => filter.DeadbandType = (uint)value; }
         public double DeadbandValue { get => filter.DeadbandValue; set => filter.DeadbandValue = value; }
-        private DataChangeFilter filter = new DataChangeFilter()
+        private readonly DataChangeFilter filter = new DataChangeFilter()
         {
             Trigger = DataChangeTrigger.StatusValue,
             DeadbandType = (uint)DeadbandType.None,
@@ -335,6 +337,7 @@ namespace Cognite.OpcUa
         public HistoryConfig History { get; set; } = null!;
         public StateStorageConfig StateStorage { get; set; } = null!;
         public SubscriptionConfig Subscriptions { get; set; } = null!;
+        public PubSubConfig PubSub { get; set; } = null!;
         public override void GenerateDefaults()
         {
             if (Source == null) Source = new UAClientConfig();
@@ -353,6 +356,7 @@ namespace Cognite.OpcUa
             if (History == null) History = new HistoryConfig();
             if (StateStorage == null) StateStorage = new StateStorageConfig();
             if (Subscriptions == null) Subscriptions = new SubscriptionConfig();
+            if (PubSub == null) PubSub = new PubSubConfig();
         }
     }
     public class EventConfig
@@ -393,11 +397,12 @@ namespace Cognite.OpcUa
 
         public TimeSpanWrapper MaxReadLengthValue { get; } = new TimeSpanWrapper(true, "s", "0");
         public string? MaxReadLength { get => MaxReadLengthValue.RawValue; set => MaxReadLengthValue.RawValue = value!; }
-
         public string? StartTime { get; set; } = "0";
         public string? EndTime { get; set; }
+
         public TimeSpanWrapper GranularityValue { get; } = new TimeSpanWrapper(true, "s", "600");
         public string? Granularity { get => GranularityValue.RawValue; set => GranularityValue.RawValue = value!; }
+
         public bool IgnoreContinuationPoints { get; set; }
 
         public TimeSpanWrapper RestartPeriodValue { get; } = new TimeSpanWrapper(false, "s", "0");
@@ -405,8 +410,10 @@ namespace Cognite.OpcUa
         {
             get => RestartPeriodValue.RawValue; set => RestartPeriodValue.RawValue = value!;
         }
-        public ContinuationPointThrottlingConfig Throttling {
-            get => throttling; set => throttling = value ?? throttling; }
+        public ContinuationPointThrottlingConfig Throttling
+        {
+            get => throttling; set => throttling = value ?? throttling;
+        }
         private ContinuationPointThrottlingConfig throttling = new ContinuationPointThrottlingConfig();
         public bool LogBadValues { get; set; } = true;
     }
@@ -479,6 +486,12 @@ namespace Cognite.OpcUa
         public bool ServerMetrics { get; set; }
         public IEnumerable<ProtoNodeId>? OtherMetrics { get; set; }
     }
+    public class PubSubConfig
+    {
+        public bool Enabled { get; set; }
+        public bool PreferUadp { get; set; } = true;
+        public string? FileName { get; set; }
+    }
 
     public class TimeSpanWrapper
     {
@@ -490,7 +503,9 @@ namespace Cognite.OpcUa
 
         public TimeSpan Value { get; private set; }
         private string rawValue;
-        public string RawValue { get => rawValue; set
+        public string RawValue
+        {
+            get => rawValue; set
             {
                 rawValue = value;
                 if (string.IsNullOrWhiteSpace(value))

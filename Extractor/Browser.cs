@@ -15,14 +15,14 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using Cognite.Extractor.Common;
+using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
 using System.Threading;
-using Cognite.Extractor.Common;
-using Microsoft.Extensions.Logging;
+using System.Threading.Tasks;
 
 namespace Cognite.OpcUa
 {
@@ -177,7 +177,7 @@ namespace Cognite.OpcUa
             object lck = new object();
             return (rd, nodeId) =>
             {
-                lock(lck)
+                lock (lck)
                 {
                     if (!dict.TryGetValue(nodeId, out var refs))
                     {
@@ -275,7 +275,7 @@ namespace Cognite.OpcUa
                 visitedNodes.Clear();
             }
         }
-        
+
 
         public void Dispose()
         {
