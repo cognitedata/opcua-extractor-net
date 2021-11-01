@@ -20,6 +20,7 @@ using Cognite.Extractor.StateStorage;
 using Cognite.Extractor.Utils;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.NodeSources;
+using Cognite.OpcUa.PubSub;
 using Cognite.OpcUa.Pushers;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
@@ -65,6 +66,7 @@ namespace Cognite.OpcUa
         private readonly List<Task> propertyReadTasks = new List<Task>();
         public IEnumerable<NodeTransformation>? Transformations { get; private set; }
         public StringConverter StringConverter => uaClient.StringConverter;
+        private readonly PubSubManager? pubSubManager;
 
         public bool ShouldStartLooping { get; set; } = true;
 
@@ -130,7 +132,14 @@ namespace Cognite.OpcUa
                     config, this, pushers.OfType<InfluxPusher>().FirstOrDefault());
             }
             if (run != null) run.Continuous = true;
+
             log.LogInformation("Building extractor with {NumPushers} pushers", pushers.Count());
+
+            if (Config.PubSub.Enabled)
+            {
+                pubSubManager = new PubSubManager(provider.GetRequiredService<ILogger<PubSubManager>>(), uaClient, this, Config.PubSub);
+            }
+
             foreach (var pusher in this.pushers)
             {
                 pusher.Extractor = this;
@@ -233,6 +242,11 @@ namespace Cognite.OpcUa
             foreach (var task in synchTasks)
             {
                 Scheduler.ScheduleTask(null, task);
+            }
+
+            if (pubSubManager != null)
+            {
+                Looper.Scheduler.ScheduleTask(null, StartPubSub);
             }
         }
 
@@ -1003,6 +1017,20 @@ namespace Cognite.OpcUa
             return tasks;
         }
 
+        private async Task StartPubSub(CancellationToken token)
+        {
+            if (pubSubManager == null) return;
+            try
+            {
+                await pubSubManager.Start(token);
+            }
+            catch (Exception ex)
+            {
+                ExtractorUtils.LogException(log, ex, "Failed to launch PubSub client", "Failed to launch PubSub client");
+            }
+            log.LogInformation("PubSub manager started");
+        } 
+
         #endregion
 
         #region Handlers
@@ -1116,6 +1144,7 @@ namespace Cognite.OpcUa
                 historyReader?.Dispose();
                 uaClient.OnServerDisconnect -= UaClient_OnServerDisconnect;
                 uaClient.OnServerReconnect -= UaClient_OnServerReconnect;
+                pubSubManager?.Dispose();
             }
             base.Dispose(disposing);
         }

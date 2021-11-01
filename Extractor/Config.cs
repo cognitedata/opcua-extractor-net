@@ -335,6 +335,7 @@ namespace Cognite.OpcUa
         public HistoryConfig History { get; set; } = null!;
         public StateStorageConfig StateStorage { get; set; } = null!;
         public SubscriptionConfig Subscriptions { get; set; } = null!;
+        public PubSubConfig PubSub { get; set; } = null!;
         public override void GenerateDefaults()
         {
             if (Source == null) Source = new UAClientConfig();
@@ -353,6 +354,7 @@ namespace Cognite.OpcUa
             if (History == null) History = new HistoryConfig();
             if (StateStorage == null) StateStorage = new StateStorageConfig();
             if (Subscriptions == null) Subscriptions = new SubscriptionConfig();
+            if (PubSub == null) PubSub = new PubSubConfig();
         }
     }
     public class EventConfig
@@ -479,6 +481,12 @@ namespace Cognite.OpcUa
     {
         public bool ServerMetrics { get; set; }
         public IEnumerable<ProtoNodeId>? OtherMetrics { get; set; }
+    }
+    public class PubSubConfig
+    {
+        public bool Enabled { get; set; }
+        public bool PreferUadp { get; set; } = true;
+        public string? FileName { get; set; }
     }
 
     public class TimeSpanWrapper

@@ -1,8 +1,8 @@
 Microsoft.CSharp
+Microsoft.NetCore.Platforms
 OPCFoundation.NetStandard.Opc.Ua.Server
 OPCFoundation.NetStandard.Opc.Ua.Configuration
 OPCFoundation.NetStandard.Opc.Ua.PubSub
-Microsoft.NetCore.Platforms
 YamlDotNet
 LiteDB
 Cognite.Extractor.Logging

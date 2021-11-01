@@ -755,3 +755,18 @@ events:
     historizing-emitter-ids:
         #-   NamespaceUri:
         #    NodeId:
+
+# Configure the extractor to read from MQTT using OPC-UA pubsub
+# This requires the server pubsub configuration to be exposed through the Server object.
+# You should consider setting subscriptions: data-points: false to avoid duplicate datapoints if this is enabled.
+
+# This is a proof of concept, for experimentation with OPC-UA pubsub.
+pub-sub:
+    # Enable pubsub
+    enabled: false
+    # Default true, prefer using the UADP binary format, if false, will prefer JSON
+    prefer-uadp: true
+    # Save or read configuration from a file. If the file does not exist, it will be created
+    # from server configuration. If this is pre-created manually, the server does not need to expose
+    # pubsub configuration.
+    file-name:

@@ -13,6 +13,7 @@ using System;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using Xunit;
 
 namespace Test.Utils
 {
@@ -20,13 +21,13 @@ namespace Test.Utils
     {
         public int Port { get; }
         public NodeIdReference Ids => Server.Ids;
-        public UAClient Client { get; }
+        public UAClient Client { get; private set; }
         public FullConfig Config { get; }
-        public ServerController Server { get; }
+        public ServerController Server { get; private set; }
         public CancellationTokenSource Source { get; protected set; }
         public IServiceProvider Provider { get; protected set; }
         protected ServiceCollection Services { get; }
-        protected BaseExtractorTestFixture()
+        protected BaseExtractorTestFixture(PredefinedSetup[] setups = null)
         {
             Port = CommonTestUtils.NextPort;
             // Set higher min thread count, this is required due to running both server and client in the same process.
@@ -40,15 +41,26 @@ namespace Test.Utils
             LoggingUtils.Configure(Config.Logger);
             Provider = Services.BuildServiceProvider();
 
-            Server = new ServerController(new[] {
-                PredefinedSetup.Custom, PredefinedSetup.Base, PredefinedSetup.Events,
-                PredefinedSetup.Wrong, PredefinedSetup.Full, PredefinedSetup.Auditing }, Port);
-            Server.Start().Wait();
+            var resultTask = Task.WaitAny(Start(setups), Task.Delay(20000));
+            Assert.Equal(0, resultTask);
+        }
+
+        private async Task Start(PredefinedSetup[] setups)
+        {
+            if (setups == null)
+            {
+                setups = new[] {
+                    PredefinedSetup.Custom, PredefinedSetup.Base, PredefinedSetup.Events,
+                    PredefinedSetup.Wrong, PredefinedSetup.Full, PredefinedSetup.Auditing };
+            }
+            Server = new ServerController(setups, Port);
+            await Server.Start();
 
             Client = new UAClient(Provider, Config);
             Source = new CancellationTokenSource();
-            Client.Run(Source.Token).Wait();
+            await Client.Run(Source.Token);
         }
+
         private void ResetType(object obj, object reference)
         {
             if (obj == null) return;

@@ -1,7 +1,8 @@
 Microsoft.CSharp
+AdysTech.InfluxDB.Client.Net.Core
 OPCFoundation.NetStandard.Opc.Ua.Client
 OPCFoundation.NetStandard.Opc.Ua.Configuration
-AdysTech.InfluxDB.Client.Net.Core
+OPCFoundation.NetStandard.Opc.Ua.PubSub
 MQTTnet
 Cognite.Extractor.Configuration
 Cognite.Extractor.Logging
