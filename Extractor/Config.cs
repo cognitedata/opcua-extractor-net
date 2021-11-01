@@ -395,11 +395,12 @@ namespace Cognite.OpcUa
 
         public TimeSpanWrapper MaxReadLengthValue { get; } = new TimeSpanWrapper(true, "s", "0");
         public string? MaxReadLength { get => MaxReadLengthValue.RawValue; set => MaxReadLengthValue.RawValue = value!; }
-
         public string? StartTime { get; set; } = "0";
         public string? EndTime { get; set; }
+
         public TimeSpanWrapper GranularityValue { get; } = new TimeSpanWrapper(true, "s", "600");
         public string? Granularity { get => GranularityValue.RawValue; set => GranularityValue.RawValue = value!; }
+
         public bool IgnoreContinuationPoints { get; set; }
 
         public TimeSpanWrapper RestartPeriodValue { get; } = new TimeSpanWrapper(false, "s", "0");

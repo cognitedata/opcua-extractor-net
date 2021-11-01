@@ -7,6 +7,7 @@ using Opc.Ua;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Test.Utils;
 using Xunit;
 using Xunit.Abstractions;
 using SourceOp = Cognite.OpcUa.ExtractorUtils.SourceOp;
@@ -107,6 +108,7 @@ namespace Test.Unit
                 throw new NotImplementedException();
             }
         }
+
         [Theory]
         [InlineData(typeof(Exception), 0, 1, false)]
         [InlineData(typeof(Exception), 0, 1, true)]
