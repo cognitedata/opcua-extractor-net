@@ -79,7 +79,7 @@ namespace Server
             {
                 Name = "Connection UADP",
                 Enabled = true,
-                PublisherId = 1,
+                PublisherId = 1u,
                 TransportProfileUri = Profiles.PubSubMqttUadpTransport,
                 Address = new ExtensionObject(new NetworkAddressUrlDataType
                 {
@@ -108,9 +108,10 @@ namespace Server
 
             var writerGroup = new WriterGroupDataType
             {
-                Name = "Writer group 1",
+                Name = "Writer group 1 UADP",
                 Enabled = true,
                 PublishingInterval = 500,
+                WriterGroupId = 1,
                 KeepAliveTime = 5000,
                 MaxNetworkMessageSize = 1500,
                 HeaderLayoutUri = "UADP-Cyclic-Fixed",
@@ -125,33 +126,41 @@ namespace Server
             {
                 QueueName = topQueueName
             };
-            var writerMessage = new UadpDataSetWriterMessageDataType
-            {
-                DataSetMessageContentMask = (uint)(UadpDataSetMessageContentMask.Status | UadpDataSetMessageContentMask.SequenceNumber)
-            };
 
             writers[0] = new DataSetWriterDataType
             {
-                Name = "Basic Writer",
+                Name = "Basic Writer UADP",
                 DataSetWriterId = 1,
                 Enabled = true,
-                DataSetFieldContentMask = (uint)(DataSetFieldContentMask.RawData | DataSetFieldContentMask.SourceTimestamp),
+                DataSetFieldContentMask = (uint)(DataSetFieldContentMask.None | DataSetFieldContentMask.SourceTimestamp),
                 DataSetName = "Basic",
                 KeyFrameCount = 1,
-                MessageSettings = new ExtensionObject(writerMessage),
+                MessageSettings = new ExtensionObject(new UadpDataSetWriterMessageDataType
+                {
+                    DataSetMessageContentMask = (uint)(UadpDataSetMessageContentMask.Status | UadpDataSetMessageContentMask.SequenceNumber),
+                    DataSetOffset = 15, // Header size
+                    ConfiguredSize = 32,
+                    NetworkMessageNumber = 1
+                }),
                 TransportSettings = new ExtensionObject(writerTransport)
             };
             writerGroup.DataSetWriters.Add(writers[0]);
 
             writers[1] = new DataSetWriterDataType
             {
-                Name = "Custom Writer",
+                Name = "Custom Writer UADP",
                 DataSetWriterId = 2,
                 Enabled = true,
-                DataSetFieldContentMask = (uint)(DataSetFieldContentMask.RawData | DataSetFieldContentMask.SourceTimestamp),
+                DataSetFieldContentMask = (uint)(DataSetFieldContentMask.None | DataSetFieldContentMask.SourceTimestamp),
                 DataSetName = "Custom",
                 KeyFrameCount = 1,
-                MessageSettings = new ExtensionObject(writerMessage),
+                MessageSettings = new ExtensionObject(new UadpDataSetWriterMessageDataType
+                {
+                    DataSetMessageContentMask = (uint)(UadpDataSetMessageContentMask.Status | UadpDataSetMessageContentMask.SequenceNumber),
+                    DataSetOffset = 47, // Header size + previous packet
+                    ConfiguredSize = 32,
+                    NetworkMessageNumber = 1
+                }),
                 TransportSettings = new ExtensionObject(writerTransport)
             };
             writerGroup.DataSetWriters.Add(writers[1]);
@@ -166,7 +175,7 @@ namespace Server
             {
                 Name = "Connection JSON",
                 Enabled = true,
-                PublisherId = 2,
+                PublisherId = 2u,
                 TransportProfileUri = Profiles.PubSubMqttJsonTransport,
                 Address = new ExtensionObject(new NetworkAddressUrlDataType
                 {
@@ -191,9 +200,10 @@ namespace Server
 
             var writerGroup = new WriterGroupDataType
             {
-                Name = "Writer group 1",
+                Name = "Writer group 1 JSON",
                 Enabled = true,
                 PublishingInterval = 500,
+                WriterGroupId = 2,
                 KeepAliveTime = 5000,
                 MaxNetworkMessageSize = 1500,
                 MessageSettings = new ExtensionObject(msgSettings),
@@ -210,15 +220,16 @@ namespace Server
             var writerMessage = new JsonDataSetWriterMessageDataType
             {
                 DataSetMessageContentMask = (uint)(JsonDataSetMessageContentMask.Status
-                    | JsonDataSetMessageContentMask.SequenceNumber)
+                    | JsonDataSetMessageContentMask.SequenceNumber
+                    | JsonDataSetMessageContentMask.DataSetWriterId)
             };
 
             writers[2] = new DataSetWriterDataType
             {
-                Name = "Basic Writer",
-                DataSetWriterId = 1,
+                Name = "Basic Writer JSON",
+                DataSetWriterId = 3,
                 Enabled = true,
-                DataSetFieldContentMask = (uint)(DataSetFieldContentMask.RawData | DataSetFieldContentMask.SourceTimestamp),
+                DataSetFieldContentMask = (uint)(DataSetFieldContentMask.None | DataSetFieldContentMask.SourceTimestamp),
                 DataSetName = "Basic",
                 KeyFrameCount = 1,
                 MessageSettings = new ExtensionObject(writerMessage),
@@ -228,8 +239,8 @@ namespace Server
 
             writers[3] = new DataSetWriterDataType
             {
-                Name = "Custom Writer",
-                DataSetWriterId = 2,
+                Name = "Custom Writer JSON",
+                DataSetWriterId = 4,
                 Enabled = true,
                 DataSetFieldContentMask = (uint)(DataSetFieldContentMask.None | DataSetFieldContentMask.SourceTimestamp),
                 DataSetName = "Custom",

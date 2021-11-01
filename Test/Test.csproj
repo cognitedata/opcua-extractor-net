@@ -12,6 +12,7 @@
     <ProjectReference Include="..\Extractor\Extractor.csproj" />
     <ProjectReference Include="..\MQTTCDFBridge\MQTTCDFBridge.csproj" />
     <ProjectReference Include="..\Server\Server.csproj" />
+    <ProjectReference Include="..\ExtractorLauncher\ExtractorLauncher.csproj" />
   </ItemGroup>
   <ItemGroup>
     <None Include="$(SolutionDir)config\**" CopyToOutputDirectory="Always" LinkBase="config\" />

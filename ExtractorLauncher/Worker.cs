@@ -31,15 +31,17 @@ namespace Cognite.OpcUa.Service
     {
         private readonly ExtractorParams setup;
         private Microsoft.Extensions.Logging.ILogger eventLog;
-        public Worker(ILogger<Worker> eventLog, ExtractorParams setup)
+        private ServiceCollection services;
+        public Worker(ILogger<Worker> eventLog, ServiceCollection services, ExtractorParams setup)
         {
             this.setup = setup;
             this.eventLog = eventLog;
+            this.services = services;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            await ExtractorStarter.RunExtractor(eventLog, setup, stoppingToken);
+            await ExtractorStarter.RunExtractor(eventLog, setup, services, stoppingToken);
         }
     }
 }

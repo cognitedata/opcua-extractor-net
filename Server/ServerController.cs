@@ -47,7 +47,7 @@ namespace Server
                 cfg.ServerConfiguration.BaseAddresses[0] = $"opc.tcp://localhost:{port}";
                 await app.CheckApplicationInstanceCertificate(false, 0);
                 Server = new TestServer(setups, mqttUrl);
-                await app.Start(Server);
+                await Task.Run(async () => await app.Start(Server));
                 log.Information("Server started");
             }
             catch (Exception e)

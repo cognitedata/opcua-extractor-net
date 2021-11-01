@@ -192,7 +192,9 @@ namespace Cognite.OpcUa.NodeSources
                 var state = Extractor.State.GetNodeState(node.Id);
                 if (state != null) return;
 
-                bool setState = Config.Subscriptions.DataPoints || Config.History.Enabled && Config.History.Data;
+                bool setState = Config.Subscriptions.DataPoints
+                    || Config.History.Enabled && Config.History.Data
+                    || Config.PubSub.Enabled;
 
 
                 if (setState)

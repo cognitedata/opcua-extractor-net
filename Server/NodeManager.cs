@@ -634,18 +634,18 @@ namespace Server
                 var enumVar1 = CreateVariable("EnumVar1", enumType1.NodeId);
                 enumVar1.Value = 1;
                 AddNodeRelation(enumVar1, root, ReferenceTypeIds.HasComponent);
-                pubSub.AddPubSubVariable(enumVar1, BuiltInType.Enumeration, 1);
+                pubSub.AddPubSubVariable(enumVar1, BuiltInType.Int32, 1);
 
                 var enumVar2 = CreateVariable("EnumVar2", enumType2.NodeId);
                 enumVar2.NodeId = new NodeId("enumvar", NamespaceIndex);
                 enumVar2.Value = 123;
                 AddNodeRelation(enumVar2, root, ReferenceTypeIds.HasComponent);
-                pubSub.AddPubSubVariable(enumVar2, BuiltInType.Enumeration, 1);
+                pubSub.AddPubSubVariable(enumVar2, BuiltInType.Int32, 1);
 
                 var enumVar3 = CreateVariable("EnumVar3", enumType2.NodeId, 4);
                 enumVar3.Value = new[] { 123, 123, 321, 123 };
                 AddNodeRelation(enumVar3, root, ReferenceTypeIds.HasComponent);
-                pubSub.AddPubSubVariable(enumVar3, BuiltInType.Enumeration, 1);
+                pubSub.AddPubSubVariable(enumVar3, BuiltInType.Int32, 1);
 
                 // Custom references
                 var refType1 = CreateReferenceType("HasCustomRelation", "IsCustomRelationOf",
@@ -1047,10 +1047,10 @@ namespace Server
                             AddProperty(wMSettings, "NetworkMessageNumber", DataTypeIds.UInt16, -1, mSettingsW.NetworkMessageNumber);
                             AddPredefinedNode(SystemContext, wMSettings);
                         }
-                        else if (group.MessageSettings?.Body is JsonDataSetWriterMessageDataType jmSettingsW)
+                        else if (writer.MessageSettings?.Body is JsonDataSetWriterMessageDataType jmSettingsW)
                         {
                             var gMSettings = CreateObject<JsonDataSetWriterMessageState>("MessageSettings");
-                            AddNodeRelation(gMSettings, g, ReferenceTypeIds.HasComponent);
+                            AddNodeRelation(gMSettings, w, ReferenceTypeIds.HasComponent);
                             AddProperty(gMSettings, "DataSetMessageContentMask", DataTypeIds.JsonDataSetMessageContentMask,
                                 -1, jmSettingsW.DataSetMessageContentMask);
                             AddPredefinedNode(SystemContext, gMSettings);
@@ -1095,9 +1095,10 @@ namespace Server
                 AddProperty(s, "ConfigurationVersion", DataTypeIds.ConfigurationVersionDataType, -1, set.DataSetMetaData.ConfigurationVersion);
                 AddProperty(s, "DataSetClassId", DataTypeIds.Guid, -1, set.DataSetMetaData.DataSetClassId);
                 AddProperty(s, "DataSetMetaData", DataTypeIds.DataSetMetaDataType, -1, set.DataSetMetaData);
-                if (set.DataSetSource?.Body is PublishedDataItemsDataTypeCollection items)
+                if (set.DataSetSource?.Body is PublishedDataItemsDataType items)
                 {
-                    AddProperty(s, "PublishedData", DataTypeIds.PublishedDataItemsDataType, items.Count, items.ToArray());
+                    AddProperty(s, "PublishedData", DataTypeIds.PublishedVariableDataType,
+                        items.PublishedData.Count, items.PublishedData.ToArray());
                 }
 
                 AddPredefinedNode(SystemContext, s);
