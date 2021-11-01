@@ -1,5 +1,27 @@
 # OPC-UA Extractor Changelog
 
+2.5.0 2021-10-29
+------------------
+* Wait for config file to exist when starting extractor.
+* Use NodeSet2 files as source for nodes instead of the server.
+* Throttle browse operations.
+* Add name of event type to CDF event metadata.
+* Correctly handle nodes that are discovered during browse but do not actually exist.
+* Limit config values based on server capabilities, if reported.
+* Improve logging of exceptions.
+* Add support for extraction pipelines.
+* History node parallelism is now properly shared, so that the configuration option can reflect available continuation points directly.
+* Add PoC for OPC-UA PubSub using exposed server configuration.
+* Log modified config on startup.
+* Specify timestamps using relative syntax like "2d-ago", and timespans like "2m".
+* Optionally map nested variables to CDF, instead of treating them as metadata.
+* Optionally estimate size of OPC-UA arrays based on value on startup.
+* Optionally log OPC-UA SDK trace.
+* Optionally browse in background when reading from CDF.
+* Fix issues with the service manager.
+* Fix logging of transformations. 
+* Considerable internal changes, using new ExtractorUtils infrastructure.
+
 2.4.0 2021-08-26
 ------------------
 * Option to store additional metadata in Raw.

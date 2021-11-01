@@ -3,8 +3,8 @@
 This tool can create new OpcUa extractor services, to extract data from multiple OpcUa servers using one server.
 The installer creates a default service, which you will not see using this tool.
 
-It will check for a registry entry made by the installer and try and locate the PiExtractorService.exe
-If this file isnt found you wont be able to create new services.
+It will check for a registry entry made by the installer and try and locate the OpcuaExtractor.exe
+If this file isn't found you won't be able to create new services.
 
 Explanation of the tool:
 
