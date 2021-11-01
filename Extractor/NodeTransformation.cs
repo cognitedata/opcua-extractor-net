@@ -223,7 +223,10 @@ namespace Cognite.OpcUa
         public void ApplyTransformation(ILogger log, UANode node, NamespaceTable ns)
         {
             if (node == null) return;
-            if (node.Ignore || node.IsProperty && Type == TransformationType.Property || !node.ShouldSubscribe && Type == TransformationType.DropSubscriptions) return;
+            if (node.Ignore
+                || node.IsProperty && Type == TransformationType.Property
+                || (!node.IsProperty || node.NodeClass != NodeClass.Variable) && Type == TransformationType.TimeSeries
+                || !node.ShouldSubscribe && Type == TransformationType.DropSubscriptions) return;
             if (Filter.IsMatch(node, ns))
             {
                 switch (Type)
@@ -239,6 +242,10 @@ namespace Cognite.OpcUa
                     case TransformationType.DropSubscriptions:
                         node.Attributes.ShouldSubscribe = false;
                         log.LogDebug("Dropping subscriptions on node {Name} {Id} due to matching filter {Idx}", node.DisplayName, node.Id, index);
+                        break;
+                    case TransformationType.TimeSeries:
+                        node.Attributes.IsProperty = false;
+                        log.LogTrace("Treating node {Name} {Id} as timeseries due to matching filter {Idx}", node.DisplayName, node.Id, index);
                         break;
                 }
             }
@@ -258,6 +265,7 @@ namespace Cognite.OpcUa
     {
         Ignore,
         Property,
-        DropSubscriptions
+        DropSubscriptions,
+        TimeSeries
     }
 }

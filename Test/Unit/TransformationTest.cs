@@ -367,6 +367,45 @@ namespace Test.Unit
             Assert.False(nodes[3].IsProperty);
         }
         [Fact]
+        public void TestTimeSeriesTransformation()
+        {
+            var raw = new RawNodeTransformation
+            {
+                Filter = new RawNodeFilter
+                {
+                    Name = "Test"
+                },
+                Type = TransformationType.Property
+            };
+            var raw2 = new RawNodeTransformation
+            {
+                Filter = new RawNodeFilter
+                {
+                    Name = "Other"
+                },
+                Type = TransformationType.TimeSeries
+            };
+            var nodes = new[]
+            {
+                new UANode(new NodeId(1), null, new NodeId("parent"), NodeClass.Variable),
+                new UANode(new NodeId(2), "OtherTest", new NodeId("parent"), NodeClass.Variable),
+                new UANode(new NodeId(3), "Test", new NodeId("parent"), NodeClass.Variable),
+                new UANode(new NodeId(4), "Other", new NodeId("parent"), NodeClass.Object),
+            };
+            var trans = new NodeTransformation(raw, 0);
+            var trans2 = new NodeTransformation(raw2, 0);
+            foreach (var node in nodes)
+            {
+                trans.ApplyTransformation(log, node, nss);
+                trans2.ApplyTransformation(log, node, nss);
+            }
+            Assert.False(nodes[0].IsProperty);
+            Assert.False(nodes[1].IsProperty);
+            Assert.True(nodes[2].IsProperty);
+            Assert.False(nodes[3].IsProperty);
+        }
+
+        [Fact]
         public void TestLogTransformation()
         {
             var raw = new RawNodeTransformation
