@@ -226,14 +226,12 @@ namespace Cognite.OpcUa.NodeSources
         /// <param name="parentId">Id of the parent node</param>
         private void HandleNode(ReferenceDescription node, NodeId parentId)
         {
-            bool mapped = false;
+            bool mapped = true;
 
             if (node.NodeClass == NodeClass.Object || Config.Extraction.NodeTypes.AsNodes && node.NodeClass == NodeClass.ObjectType)
             {
                 var uaNode = new UANode(Client.ToNodeId(node.NodeId), node.DisplayName.Text, parentId, node.NodeClass);
                 uaNode.SetNodeType(Client, node.TypeDefinition);
-
-                mapped = !uaNode.IsProperty;
 
                 Extractor.State.RegisterNode(uaNode.Id, Extractor.GetUniqueId(uaNode.Id));
                 Log.LogTrace("HandleNode {Class} {Name}", uaNode.NodeClass, uaNode.DisplayName);
@@ -245,8 +243,6 @@ namespace Cognite.OpcUa.NodeSources
                 var variable = new UAVariable(Client.ToNodeId(node.NodeId), node.DisplayName.Text, parentId, node.NodeClass);
                 variable.SetNodeType(Client, node.TypeDefinition);
 
-                mapped = !variable.IsProperty;
-
                 Extractor.State.RegisterNode(variable.Id, Extractor.GetUniqueId(variable.Id));
                 Log.LogTrace("HandleNode Variable {Name}", variable.DisplayName);
 
@@ -254,6 +250,7 @@ namespace Cognite.OpcUa.NodeSources
             }
             else
             {
+                mapped = false;
                 Log.LogWarning("Node of unknown type received: {Type}, {Id}", node.NodeClass, node.NodeId);
             }
 
