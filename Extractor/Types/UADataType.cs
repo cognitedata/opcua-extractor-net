@@ -102,16 +102,20 @@ namespace Cognite.OpcUa.Types
 
         public override string ToString()
         {
-            var builder = new StringBuilder("DataType: {\n");
-            builder.AppendFormat(CultureInfo.InvariantCulture, "    NodeId: {0}\n", Raw);
+            var builder = new StringBuilder("DataType: {");
+            builder.AppendLine();
+            builder.AppendFormat(CultureInfo.InvariantCulture, "    NodeId: {0}", Raw);
+            builder.AppendLine();
             if (IsStep)
             {
-                builder.Append("    Step: True\n");
+                builder.AppendLine("    Step: True");
             }
-            builder.AppendFormat(CultureInfo.InvariantCulture, "    String: {0}\n", IsString);
+            builder.AppendFormat(CultureInfo.InvariantCulture, "    String: {0}", IsString);
+            builder.AppendLine();
             if (EnumValues != null)
             {
-                builder.AppendFormat(CultureInfo.InvariantCulture, "    EnumValues: [{0}]\n", string.Join(", ", EnumValues));
+                builder.AppendFormat(CultureInfo.InvariantCulture, "    EnumValues: [{0}]", string.Join(", ", EnumValues));
+                builder.AppendLine();
             }
             builder.Append('}');
             return builder.ToString();

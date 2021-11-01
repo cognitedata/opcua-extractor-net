@@ -63,46 +63,55 @@ namespace Cognite.OpcUa.Types
         public override string ToString()
         {
             var builder = new StringBuilder();
-            builder.AppendFormat(CultureInfo.InvariantCulture, "Variable: {0}\n", DisplayName);
-            builder.AppendFormat(CultureInfo.InvariantCulture, "Id: {0}\n", Id);
+            builder.AppendFormat(CultureInfo.InvariantCulture, "Variable: {0}", DisplayName);
+            builder.AppendLine();
+            builder.AppendFormat(CultureInfo.InvariantCulture, "Id: {0}", Id);
+            builder.AppendLine();
             if (ParentId != null && !ParentId.IsNullNodeId)
             {
-                builder.AppendFormat(CultureInfo.InvariantCulture, "ParentId: {0}\n", ParentId);
+                builder.AppendFormat(CultureInfo.InvariantCulture, "ParentId: {0}", ParentId);
+                builder.AppendLine();
             }
             if (Description != null)
             {
-                builder.AppendFormat(CultureInfo.InvariantCulture, "Description: {0}\n", Description);
+                builder.AppendFormat(CultureInfo.InvariantCulture, "Description: {0}", Description);
+                builder.AppendLine();
             }
             if (DataType != null)
             {
                 builder.Append(DataType);
-                builder.Append('\n');
+                builder.AppendLine();
             }
             if (ReadHistory)
             {
-                builder.Append("History: True\n");
+                builder.AppendLine("History: True");
             }
-            builder.AppendFormat(CultureInfo.InvariantCulture, "AccessLevel: {0}\n", AccessLevel);
+            builder.AppendFormat(CultureInfo.InvariantCulture, "AccessLevel: {0}", AccessLevel);
+            builder.AppendLine();
             if (ValueRank != ValueRanks.Scalar)
             {
-                builder.AppendFormat(CultureInfo.InvariantCulture, "ValueRank: {0}\n", ValueRank);
+                builder.AppendFormat(CultureInfo.InvariantCulture, "ValueRank: {0}", ValueRank);
+                builder.AppendLine();
             }
             if (ArrayDimensions != null && ArrayDimensions.Length == 1)
             {
-                builder.AppendFormat(CultureInfo.InvariantCulture, "Dimension: {0}\n", ArrayDimensions[0]);
+                builder.AppendFormat(CultureInfo.InvariantCulture, "Dimension: {0}", ArrayDimensions[0]);
+                builder.AppendLine();
             }
             if (NodeType != null)
             {
-                builder.AppendFormat(CultureInfo.InvariantCulture, "NodeType: {0}\n", NodeType.Name ?? NodeType.Id);
+                builder.AppendFormat(CultureInfo.InvariantCulture, "NodeType: {0}", NodeType.Name ?? NodeType.Id);
+                builder.AppendLine();
             }
 
             if (Properties != null && Properties.Any())
             {
                 var meta = BuildMetadataBase(null, new StringConverter(new NullLogger<StringConverter>(), null, null));
-                builder.Append("Properties: {\n");
+                builder.AppendLine("Properties: {");
                 foreach (var prop in meta)
                 {
-                    builder.AppendFormat(CultureInfo.InvariantCulture, "    {0}: {1}\n", prop.Key, prop.Value ?? "??");
+                    builder.AppendFormat(CultureInfo.InvariantCulture, "    {0}: {1}", prop.Key, prop.Value ?? "??");
+                    builder.AppendLine();
                 }
                 builder.Append('}');
             }

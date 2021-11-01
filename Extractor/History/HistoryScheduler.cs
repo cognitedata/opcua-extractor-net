@@ -350,7 +350,8 @@ namespace Cognite.OpcUa.History
             bool frontfill = type == HistoryReadType.FrontfillData || type == HistoryReadType.FrontfillEvents;
             foreach (var node in toTerminate)
             {
-                builder.AppendFormat("\n    {0} {1} total for {2}. End is now at {3}",
+                builder.AppendLine();
+                builder.AppendFormat("    {0} {1} total for {2}. End is now at {3}",
                     node.TotalRead,
                     name,
                     node.State.Id,

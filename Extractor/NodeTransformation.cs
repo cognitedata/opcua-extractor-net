@@ -153,42 +153,50 @@ namespace Cognite.OpcUa
             if (Name != null)
             {
                 builder.Append(' ', (idx + 1) * 4);
-                builder.AppendFormat("Name: {0}\n", Name);
+                builder.AppendFormat("Name: {0}", Name);
+                builder.AppendLine();
             }
             if (Description != null)
             {
                 builder.Append(' ', (idx + 1) * 4);
-                builder.AppendFormat("Description: {0}\n", Description);
+                builder.AppendFormat("Description: {0}", Description);
+                builder.AppendLine();
             }
             if (Id != null)
             {
                 builder.Append(' ', (idx + 1) * 4);
-                builder.AppendFormat("Id: {0}\n", Id);
+                builder.AppendFormat("Id: {0}", Id);
+                builder.AppendLine();
             }
             if (IsArray != null)
             {
                 builder.Append(' ', (idx + 1) * 4);
-                builder.AppendFormat("IsArray: {0}\n", IsArray);
+                builder.AppendFormat("IsArray: {0}", IsArray);
+                builder.AppendLine();
             }
             if (Namespace != null)
             {
                 builder.Append(' ', (idx + 1) * 4);
-                builder.AppendFormat("Namespace: {0}\n", Namespace);
+                builder.AppendFormat("Namespace: {0}", Namespace);
+                builder.AppendLine();
             }
             if (TypeDefinition != null)
             {
                 builder.Append(' ', (idx + 1) * 4);
-                builder.AppendFormat("TypeDefinition: {0}\n", TypeDefinition);
+                builder.AppendFormat("TypeDefinition: {0}", TypeDefinition);
+                builder.AppendLine();
             }
             if (NodeClass != null)
             {
                 builder.Append(' ', (idx + 1) * 4);
-                builder.AppendFormat("NodeClass: {0}\n", NodeClass);
+                builder.AppendFormat("NodeClass: {0}", NodeClass);
+                builder.AppendLine();
             }
             if (Parent != null)
             {
                 builder.Append(' ', (idx + 1) * 4);
-                builder.Append("Parent:\n");
+                builder.Append("Parent:");
+                builder.AppendLine();
                 Parent.Format(builder, idx + 1);
             }
         }
@@ -265,9 +273,12 @@ namespace Cognite.OpcUa
         public override string ToString()
         {
             var builder = new StringBuilder();
-            builder.AppendFormat("Transformation {0}:\n", index);
-            builder.AppendFormat("Type: {0}\n", Type);
-            builder.Append("Filter:\n");
+            builder.AppendFormat("Transformation {0}:", index);
+            builder.AppendLine();
+            builder.AppendFormat("Type: {0}", Type);
+            builder.AppendLine();
+            builder.Append("Filter:");
+            builder.AppendLine();
             Filter.Format(builder, 0);
             return builder.ToString();
         }
