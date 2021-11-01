@@ -15,13 +15,8 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
-using Cognite.Extractor.Metrics;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Prometheus;
-using Serilog;
-using System;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -30,7 +25,7 @@ namespace Cognite.OpcUa.Service
     public class Worker : BackgroundService
     {
         private readonly ExtractorParams setup;
-        private Microsoft.Extensions.Logging.ILogger eventLog;
+        private readonly Microsoft.Extensions.Logging.ILogger eventLog;
         public Worker(ILogger<Worker> eventLog, ExtractorParams setup)
         {
             this.setup = setup;

@@ -63,7 +63,8 @@ namespace Cognite.OpcUa
                 try
                 {
                     val = Convert.ToInt32(sVal.Value);
-                } catch { }
+                }
+                catch { }
                 if ((cVal > val || cVal == 0) && val > 0)
                 {
                     log.LogInformation("Max {Name} is restricted to {Val}", name, val);

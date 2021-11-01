@@ -23,7 +23,7 @@ namespace Test.Unit
     }
     public class PusherUtilsTest : MakeConsoleWork, IClassFixture<PusherUtilsTestFixture>
     {
-        private PusherUtilsTestFixture tester;
+        private readonly PusherUtilsTestFixture tester;
         public PusherUtilsTest(ITestOutputHelper output, PusherUtilsTestFixture tester) : base(output)
         {
             if (tester == null) throw new ArgumentNullException(nameof(tester));

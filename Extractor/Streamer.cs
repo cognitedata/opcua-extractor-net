@@ -407,7 +407,7 @@ namespace Cognite.OpcUa
         public void EventSubscriptionHandler(MonitoredItem item, MonitoredItemNotificationEventArgs _)
         {
             if (item == null) return;
-            if (!(item.Filter is EventFilter filter))
+            if (item.Filter is not EventFilter filter)
             {
                 log.LogWarning("Triggered event without filter");
                 return;
@@ -487,19 +487,19 @@ namespace Cognite.OpcUa
                 }
             }
 
-            if (!extractedProperties.TryGetValue("EventId", out var rawEventId) || !(rawEventId.Value.Value is byte[] byteEventId))
+            if (!extractedProperties.TryGetValue("EventId", out var rawEventId) || rawEventId.Value.Value is not byte[] byteEventId)
             {
                 log.LogTrace("Event of type {Type} lacks id", typeId);
                 return null;
             }
 
             string eventId = Convert.ToBase64String(byteEventId);
-            if (!extractedProperties.TryGetValue("SourceNode", out var rawSourceNode) || !(rawSourceNode.Value.Value is NodeId sourceNode))
+            if (!extractedProperties.TryGetValue("SourceNode", out var rawSourceNode) || rawSourceNode.Value.Value is not NodeId sourceNode)
             {
                 sourceNode = NodeId.Null;
             }
 
-            if (!extractedProperties.TryGetValue("Time", out var rawTime) || !(rawTime.Value.Value is DateTime time))
+            if (!extractedProperties.TryGetValue("Time", out var rawTime) || rawTime.Value.Value is not DateTime time)
             {
                 log.LogTrace("Event lacks specified time, type: {Type}", typeId);
                 return null;

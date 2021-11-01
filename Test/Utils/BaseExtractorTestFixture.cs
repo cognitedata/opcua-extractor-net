@@ -66,7 +66,7 @@ namespace Test.Utils
                         if (!hasSet) continue;
                         prop.SetValue(obj, old);
                     }
-                    else if (current is null && !(old is null) || !(current is null) && old is null)
+                    else if (current is null && old is not null || current is not null && old is null)
                     {
                         if (!hasSet) continue;
                         prop.SetValue(obj, old);
@@ -150,8 +150,10 @@ namespace Test.Utils
 
         public (CDFMockHandler, CDFPusher) GetCDFPusher()
         {
-            var handler = new CDFMockHandler("test", CDFMockHandler.MockMode.None);
-            handler.StoreDatapoints = true;
+            var handler = new CDFMockHandler("test", CDFMockHandler.MockMode.None)
+            {
+                StoreDatapoints = true
+            };
             CommonTestUtils.AddDummyProvider(handler, Services);
             Services.AddCogniteClient("appid", null, true, true, false);
             var provider = Services.BuildServiceProvider();

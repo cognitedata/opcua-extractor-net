@@ -17,13 +17,11 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using Cognite.Extensions;
 using Cognite.Extractor.Common;
-using Cognite.Extractor.Logging;
 using Cognite.Extractor.Utils;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.Types;
 using CogniteSdk;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using Prometheus;
@@ -158,7 +156,7 @@ namespace Cognite.OpcUa.Pushers
                 }
 
                 result.ThrowOnFatal();
-                
+
                 log.LogDebug("Successfully pushed {Real} / {Total} points to CDF", realCount, count);
                 dataPointPushes.Inc();
                 dataPointsCounter.Inc(realCount);
@@ -540,7 +538,7 @@ namespace Cognite.OpcUa.Pushers
                 await Extractor.ReadProperties(assets.Select(pair => pair.Item1));
                 return assets.Select(pair => (pair.Item1.ToJson(log, Extractor.StringConverter, ConverterType.Node), pair.id))
                     .Where(pair => pair.Item1 != null)
-                    .ToDictionary(pair => pair.Item2, pair => pair.Item1!.RootElement);
+                    .ToDictionary(pair => pair.id, pair => pair.Item1!.RootElement);
             }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }, token);
         }
         /// <summary>

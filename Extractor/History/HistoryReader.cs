@@ -29,7 +29,7 @@ namespace Cognite.OpcUa.History
         private readonly UAClient uaClient;
         private readonly UAExtractor extractor;
         private readonly HistoryConfig config;
-        private CancellationTokenSource source;
+        private readonly CancellationTokenSource source;
         // private ILogger log = Log.Logger.ForContext<HistoryReader>();
         private readonly TaskThrottler throttler;
         private readonly BlockingResourceCounter continuationPoints;
@@ -58,10 +58,9 @@ namespace Cognite.OpcUa.History
             using var scheduler = new HistoryScheduler(log, uaClient, extractor, config, type,
                 throttler, continuationPoints, states, source.Token);
 
-            using (var op = waiter.GetInstance())
-            {
-                await scheduler.RunAsync();
-            }
+            using var op = waiter.GetInstance();
+
+            await scheduler.RunAsync();
         }
 
         /// <summary>

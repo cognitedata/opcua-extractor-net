@@ -5,9 +5,9 @@ using System.Threading.Tasks;
 [assembly: CLSCompliant(false)]
 namespace Server
 {
-    class Program
+    internal class Program
     {
-        static void Main()
+        private static void Main()
         {
             var logConfig = new LoggerConfiguration();
             logConfig.MinimumLevel.Verbose();

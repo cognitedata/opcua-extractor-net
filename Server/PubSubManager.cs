@@ -1,13 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Opc.Ua;
+﻿using Opc.Ua;
 using Opc.Ua.PubSub;
 using Opc.Ua.PubSub.Transport;
 using Serilog;
+using System;
 
 namespace Server
 {
@@ -23,8 +18,10 @@ namespace Server
 
         public PubSubManager(string mqttUrl)
         {
-            config = new PubSubConfigurationDataType();
-            config.Connections = new PubSubConnectionDataTypeCollection();
+            config = new PubSubConfigurationDataType
+            {
+                Connections = new PubSubConnectionDataTypeCollection()
+            };
             CreateUADPMQTTConnection(mqttUrl);
             CreateJSONMQTTConnection(mqttUrl);
             CreateDataSets();

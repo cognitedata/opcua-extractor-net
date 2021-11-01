@@ -5,7 +5,6 @@ using Opc.Ua;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Test.Utils;
@@ -20,11 +19,10 @@ namespace Test.Unit
     }
     public class LooperTest : MakeConsoleWork, IClassFixture<LooperTestFixture>
     {
-        private LooperTestFixture tester;
+        private readonly LooperTestFixture tester;
         public LooperTest(ITestOutputHelper output, LooperTestFixture tester) : base(output)
         {
-            if (tester == null) throw new ArgumentNullException(nameof(tester));
-            this.tester = tester;
+            this.tester = tester ?? throw new ArgumentNullException(nameof(tester));
             tester.ResetConfig();
             tester.Config.Extraction.DataPushDelay = "-1";
             tester.Config.Extraction.AutoRebrowsePeriod = "1000";

@@ -834,24 +834,25 @@ namespace Test.Unit
             Assert.Equal(3, tester.Handler.Relationships.Count);
             Assert.True(tester.Handler.Relationships.ContainsKey("test-3"));
         }
-        class StatelessEventCreate : EventCreate
+
+        private class StatelessEventCreate : EventCreate
         {
             public IEnumerable<string> AssetExternalIds { get; set; }
         }
 
-        class StatelessTimeSeriesCreate : TimeSeriesCreate
+        private class StatelessTimeSeriesCreate : TimeSeriesCreate
         {
             public string AssetExternalId { get; set; }
         }
 
-        class RawRequestWrapper<T>
+        private class RawRequestWrapper<T>
         {
             public string Database { get; set; }
             public string Table { get; set; }
             public IEnumerable<RawRowCreateDto<T>> Rows { get; set; }
         }
 
-        class RawRowCreateDto<T>
+        private class RawRowCreateDto<T>
         {
             public string Key { get; set; }
             public T Columns { get; set; }

@@ -9,7 +9,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using System.Threading;
 using System.Threading.Tasks;
 using Test.Utils;
 using Xunit;
@@ -33,8 +32,7 @@ namespace Test.Unit
         private readonly HistoryReaderTestFixture tester;
         public HistoryReaderTest(ITestOutputHelper output, HistoryReaderTestFixture tester) : base(output)
         {
-            if (tester == null) throw new ArgumentNullException(nameof(tester));
-            this.tester = tester;
+            this.tester = tester ?? throw new ArgumentNullException(nameof(tester));
             tester.ResetConfig();
         }
 
@@ -56,7 +54,7 @@ namespace Test.Unit
             var log = tester.Provider.GetRequiredService<ILogger<HistoryReaderTest>>();
 
             using var reader = new HistoryScheduler(log, tester.Client, extractor, cfg, HistoryReadType.FrontfillData,
-                throttler, cps, new [] { dummyState }, tester.Source.Token);
+                throttler, cps, new[] { dummyState }, tester.Source.Token);
             using var backfillReader = new HistoryScheduler(log, tester.Client, extractor, cfg, HistoryReadType.BackfillData,
                 throttler, cps, new[] { dummyState }, tester.Source.Token);
 
@@ -899,16 +897,15 @@ namespace Test.Unit
             cfg.MaxReadLength = "1s";
             cfg.DataChunk = 50;
 
-            using (var reader = new HistoryReader(logger, tester.Client, extractor, cfg, tester.Source.Token))
-            {
-                await reader.FrontfillData(states);
-                // 100 for each of the 7 nodes, then 1 extra every second of read, so 11.
-                Assert.Equal(7077, queue.Count);
-                var metric = CommonTestUtils.GetMetricValue("opcua_frontfill_data_count");
-                // first 5 reads to catch up to history, then 3 reads per 100 10 times, then 10 reads to catch up to the present
-                Assert.Equal(45, metric);
-                Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_points", 7077));
-            }
+            using var reader = new HistoryReader(logger, tester.Client, extractor, cfg, tester.Source.Token);
+
+            await reader.FrontfillData(states);
+            // 100 for each of the 7 nodes, then 1 extra every second of read, so 11.
+            Assert.Equal(7077, queue.Count);
+            var metric = CommonTestUtils.GetMetricValue("opcua_frontfill_data_count");
+            // first 5 reads to catch up to history, then 3 reads per 100 10 times, then 10 reads to catch up to the present
+            Assert.Equal(45, metric);
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_points", 7077));
         }
         [Fact(Timeout = 10000)]
         public async Task TestReadHistoryMaxLengthIgnoreCps()
@@ -958,17 +955,16 @@ namespace Test.Unit
             cfg.DataChunk = 50;
             cfg.IgnoreContinuationPoints = true;
 
-            using (var reader = new HistoryReader(logger, tester.Client, extractor, cfg, tester.Source.Token))
-            {
-                await reader.FrontfillData(states);
-                // 100 for each of the 7 nodes, then 2 extra every second of read.
-                Assert.Equal(7154, queue.Count);
-                var metric = CommonTestUtils.GetMetricValue("opcua_frontfill_data_count");
-                // first 5 reads to catch up to history, then 2 reads per 100 10 times, then two extra due to overlap,
-                // then 10 reads to catch up to the present
-                Assert.Equal(37, metric);
-                Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_points", 7154));
-            }
+            using var reader = new HistoryReader(logger, tester.Client, extractor, cfg, tester.Source.Token);
+
+            await reader.FrontfillData(states);
+            // 100 for each of the 7 nodes, then 2 extra every second of read.
+            Assert.Equal(7154, queue.Count);
+            var metric = CommonTestUtils.GetMetricValue("opcua_frontfill_data_count");
+            // first 5 reads to catch up to history, then 2 reads per 100 10 times, then two extra due to overlap,
+            // then 10 reads to catch up to the present
+            Assert.Equal(37, metric);
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_points", 7154));
         }
         [Fact(Timeout = 1000)]
         public async Task TestReadHistoryMaxLengthBackfill()
@@ -1017,16 +1013,15 @@ namespace Test.Unit
             cfg.MaxReadLength = "1s";
             cfg.DataChunk = 50;
 
-            using (var reader = new HistoryReader(logger, tester.Client, extractor, cfg, tester.Source.Token))
-            {
-                await reader.BackfillData(states);
-                // 100 for each of the 7 nodes, then 1 extra per read of data
-                Assert.Equal(7070, queue.Count);
-                var metric = CommonTestUtils.GetMetricValue("opcua_backfill_data_count");
-                // first 15 reads to catch up to history, then 3 reads per 100 10 times, then 5 reads to reach the start point
-                Assert.Equal(50, metric);
-                Assert.True(CommonTestUtils.TestMetricValue("opcua_backfill_data_points", 7070));
-            }
+            using var reader = new HistoryReader(logger, tester.Client, extractor, cfg, tester.Source.Token);
+
+            await reader.BackfillData(states);
+            // 100 for each of the 7 nodes, then 1 extra per read of data
+            Assert.Equal(7070, queue.Count);
+            var metric = CommonTestUtils.GetMetricValue("opcua_backfill_data_count");
+            // first 15 reads to catch up to history, then 3 reads per 100 10 times, then 5 reads to reach the start point
+            Assert.Equal(50, metric);
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_backfill_data_points", 7070));
         }
     }
 }

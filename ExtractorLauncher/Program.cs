@@ -63,8 +63,10 @@ namespace Cognite.OpcUa
 
         private static Parser GetCommandLineOptions()
         {
-            var rootCommand = new RootCommand();
-            rootCommand.Description = "Cognite OPC-UA Extractor";
+            var rootCommand = new RootCommand
+            {
+                Description = "Cognite OPC-UA Extractor"
+            };
             var toolCmd = new Command("tool", "Run the configuration tool");
             rootCommand.Add(toolCmd);
 

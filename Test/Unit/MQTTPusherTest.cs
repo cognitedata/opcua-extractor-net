@@ -54,15 +54,14 @@ namespace Test.Unit
     }
     public class MQTTPusherTest : MakeConsoleWork, IClassFixture<MQTTPusherTestFixture>
     {
-        private MQTTPusherTestFixture tester;
-        private MQTTBridge bridge;
-        private CDFMockHandler handler;
-        private MQTTPusher pusher;
+        private readonly MQTTPusherTestFixture tester;
+        private readonly MQTTBridge bridge;
+        private readonly CDFMockHandler handler;
+        private readonly MQTTPusher pusher;
 
         public MQTTPusherTest(ITestOutputHelper output, MQTTPusherTestFixture tester) : base(output)
         {
-            if (tester == null) throw new ArgumentNullException(nameof(tester));
-            this.tester = tester;
+            this.tester = tester ?? throw new ArgumentNullException(nameof(tester));
             tester.ResetConfig();
             (handler, bridge, pusher) = tester.GetPusher();
             bridge.StartBridge(tester.Source.Token).Wait();

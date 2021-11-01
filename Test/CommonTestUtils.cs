@@ -33,7 +33,6 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
-using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
 using Xunit.Abstractions;
@@ -85,7 +84,7 @@ namespace Test
     }
     public static class CommonTestUtils
     {
-        private static object portCounterLock = new object();
+        private static readonly object portCounterLock = new object();
         private static int portCounter = 62100;
         public static int NextPort
         {
@@ -256,20 +255,9 @@ namespace Test
 
         public static void StopProxyProcess()
         {
-            using (var process = Bash($"kill $(ps aux | grep '[n]cat' | awk '{{print $2}}')"))
-            {
-                process.WaitForExit();
-            }
-        }
+            using var process = Bash($"kill $(ps aux | grep '[n]cat' | awk '{{print $2}}')");
 
-        private static bool EventSourceIs(EventDummy ev, CDFMockHandler handler, string name, bool rawSource)
-        {
-            var asset = handler.Assets.Values.FirstOrDefault(ast => ast.name == name);
-            var timeseries = handler.Timeseries.Values.FirstOrDefault(ts => ts.name == name);
-            if (asset == null && timeseries == null) return false;
-            return rawSource
-                ? asset != null && asset.externalId == ev.metadata["SourceNode"] || timeseries != null && timeseries.externalId == ev.metadata["SourceNode"]
-                : asset != null && ev.assetIds.Contains(asset.id);
+            process.WaitForExit();
         }
 
         private static Dictionary<string, string> MetaToDict(JsonElement elem)

@@ -184,7 +184,7 @@ namespace Cognite.OpcUa
 
             version.Set(0);
             var ver = Extractor.Metrics.Version.GetVersion(Assembly.GetExecutingAssembly());
-            
+
 
             FullConfig config;
             if (setup.NoConfig)

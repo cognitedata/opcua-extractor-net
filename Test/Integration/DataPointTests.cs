@@ -31,8 +31,7 @@ namespace Test.Integration
         private readonly DataPointTestFixture tester;
         public DataPointTests(ITestOutputHelper output, DataPointTestFixture tester) : base(output)
         {
-            if (tester == null) throw new ArgumentNullException(nameof(tester));
-            this.tester = tester;
+            this.tester = tester ?? throw new ArgumentNullException(nameof(tester));
             tester.ResetConfig();
             tester.Config.Source.PublishingInterval = 400;
             tester.Config.Extraction.DataPushDelay = "400";
@@ -154,7 +153,7 @@ namespace Test.Integration
                     kvp.Value.Clear();
                 }
             }
-            
+
             // enum
             tester.Server.UpdateNode(ids.EnumVar1, 2);
             // enum array

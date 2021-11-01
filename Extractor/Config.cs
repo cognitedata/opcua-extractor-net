@@ -61,8 +61,10 @@ namespace Cognite.OpcUa
         public string? ReverseConnectUrl { get; set; }
         public bool IgnoreCertificateIssues { get; set; }
         private ContinuationPointThrottlingConfig browseThrottling = new ContinuationPointThrottlingConfig();
-        public ContinuationPointThrottlingConfig BrowseThrottling {
-            get => browseThrottling; set => browseThrottling = value ?? browseThrottling; }
+        public ContinuationPointThrottlingConfig BrowseThrottling
+        {
+            get => browseThrottling; set => browseThrottling = value ?? browseThrottling;
+        }
         public NodeSetSourceConfig? NodeSetSource { get; set; }
         public bool LimitToServerConfig { get; set; } = true;
         public bool AltSourceBackgroundBrowse { get; set; }
@@ -194,7 +196,7 @@ namespace Cognite.OpcUa
         public DataChangeTrigger Trigger { get => filter.Trigger; set => filter.Trigger = value; }
         public DeadbandType DeadbandType { get => (DeadbandType)filter.DeadbandType; set => filter.DeadbandType = (uint)value; }
         public double DeadbandValue { get => filter.DeadbandValue; set => filter.DeadbandValue = value; }
-        private DataChangeFilter filter = new DataChangeFilter()
+        private readonly DataChangeFilter filter = new DataChangeFilter()
         {
             Trigger = DataChangeTrigger.StatusValue,
             DeadbandType = (uint)DeadbandType.None,
@@ -405,8 +407,10 @@ namespace Cognite.OpcUa
         {
             get => RestartPeriodValue.RawValue; set => RestartPeriodValue.RawValue = value!;
         }
-        public ContinuationPointThrottlingConfig Throttling {
-            get => throttling; set => throttling = value ?? throttling; }
+        public ContinuationPointThrottlingConfig Throttling
+        {
+            get => throttling; set => throttling = value ?? throttling;
+        }
         private ContinuationPointThrottlingConfig throttling = new ContinuationPointThrottlingConfig();
         public bool LogBadValues { get; set; } = true;
     }
@@ -490,7 +494,9 @@ namespace Cognite.OpcUa
 
         public TimeSpan Value { get; private set; }
         private string rawValue;
-        public string RawValue { get => rawValue; set
+        public string RawValue
+        {
+            get => rawValue; set
             {
                 rawValue = value;
                 if (string.IsNullOrWhiteSpace(value))
