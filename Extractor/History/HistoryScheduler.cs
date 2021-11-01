@@ -118,6 +118,7 @@ namespace Cognite.OpcUa.History
 
             historyStartTime = GetStartTime(config.StartTime);
             if (!string.IsNullOrWhiteSpace(config.EndTime)) historyEndTime = CogniteTime.ParseTimestampString(config.EndTime)!;
+
             historyGranularity = config.GranularityValue.Value;
 
             metrics = new HistoryMetrics(type);
