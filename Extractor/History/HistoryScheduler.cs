@@ -110,6 +110,7 @@ namespace Cognite.OpcUa.History
             this.config = config;
             this.type = type;
             chunkSize = Data ? config.DataNodesChunk : config.EventNodesChunk;
+
             maxReadLength = config.MaxReadLengthValue.Value;
             if (maxReadLength == TimeSpan.Zero || maxReadLength == Timeout.InfiniteTimeSpan) maxReadLength = null;
 
@@ -249,10 +250,12 @@ namespace Cognite.OpcUa.History
         protected override IChunk<HistoryReadNode> GetChunk(IEnumerable<HistoryReadNode> items)
         {
             var (details, startTime, endTime) = GetReadDetails(items);
+
             if (maxReadLength != null)
             {
                 foreach (var node in items)
                 {
+                    if (node.ContinuationPoint != null) continue;
                     node.StartTime = startTime;
                     node.EndTime = endTime;
                 }
