@@ -120,10 +120,13 @@ history:
     start-time: 0
     # Timestamp to be considered the end of forward history. Only relevant if max-read-length is set.
     # In milliseconds since 1/1/1970. Default is current time, if this is 0.
+    # Alternatively, use syntax N[timeunit](-ago) where timeunit is w, d, h, m, s or ms. In past if -ago is added,
+    # future if not.
     end-time: 0
     # Maximum length of each read of history, in seconds.
     # If this is set greater than zero, history will be read in chunks of maximum this size, until the end.
     # This can potentially take a very long time if end-time is much larger than start-time.
+    # Alternatively, use N[timeunit] where timeunit is w, d, h, m, s or ms.
     max-history-length: 0
     # Granularity to use when doing historyRead, in seconds. Nodes with last known timestamp within this range of eachother will
     # be read together. Should not be smaller than usual average update rate
@@ -297,6 +300,10 @@ cognite:
         level: debug
         # Format of the log message
         format: "CDF ({Message}): {HttpMethod} {Url} - {Elapsed} ms"
+    # Configure an extraction pipeline manager
+    extraction-pipeline:
+        # ExternalId of extraction pipeline
+        # pipeline-id: 
 
 
 # Push to an influx-database. Data-variables are mapped to series with the given id.
