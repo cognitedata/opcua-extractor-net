@@ -10,7 +10,7 @@ OPC-UA extractor using libraries from OPCFoundation see [here](https://github.co
 Install .net 5.0 from [here](https://dotnet.microsoft.com/download).
 
 To run:
-`dotnet run -- project ExtractorLauncher/`.
+`dotnet run --project ExtractorLauncher/`.
 
 There are a few environment variables that may be used:
  - OPCUA_CONFIG_DIR
@@ -23,20 +23,23 @@ For `CONFIG_DIR`, default is `[application dir]/config`. `CERTIFICATE_DIR` is us
 See the [example configuration](config/config.example.yml) for a config template.
 
 ### Using Docker
-Simply download and run the latest build from [here](https://console.cloud.google.com/gcr/images/cognitedata/EU/opcua-extractor-net?gcrImageListsize=30)
+Simply download and run the latest build from [here](https://console.cloud.google.com/gcr/images/cognitedata/EU/opcua-extractor-net?gcrImageListsize=30).
+
+There are docker images of each release at: eu.gcr.io/cognitedata/opcua-extractor-net and eu.gcr.io/cognite-registry/opcua-extractor-net.
 
 Config, both opcua config `opc.ua.extractor.Config.xml` and `config.yml` are located in a volume /config and certificates are located in subfolders of the volume /certificates. Example:
 
 `docker run -v "$(pwd)/config:/config" -v "$(pwd)/certificates:/certificates eu.gcr.io/cognitedata/opcua-extractor-net:tag`
 
-which would run the build tagged with `tag` using config stored in `current_dir/config`, and output logs to `current_dir/logs`
+which would run the build tagged with `tag` using config stored in `current_dir/config`.
 
 ### Binaries
-There will be binaries for the most recent release here on github. There are three different builds:
- - windows81 x64, which should work for windows server 2012.
+There will be binaries for the most recent release here on github. There are two different builds:
  - windows x64, which should work for newer versions of windows (the 81 version will probably work for newer versions as well)
  - linux x64, which should work on linux and osx.
 There should be a system specific executable at the top level, which launches the extractor. These should be able to run with no extra setup.
+
+In addition there are .deb, .rpm and .msi installers.
 
 ### Command line arguments
 The extractor also takes a few command line arguments for convenience, use `OpcuaExtractor -h` for documentation.
