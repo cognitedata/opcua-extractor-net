@@ -215,6 +215,21 @@ namespace Cognite.OpcUa
             Type = raw.Type;
             this.index = index;
         }
+
+        private bool ShouldSkip(UANode node)
+        {
+            if (node == null) return true;
+            // No reason to transform ignored nodes.
+            if (node.Ignore) return true;
+            // Already a property
+            if (node.IsProperty && Type == TransformationType.Property) return true;
+            // Not a property or not a variable can't be turned into timeseries
+            if ((!node.IsProperty || node.NodeClass != NodeClass.Variable) && Type == TransformationType.TimeSeries) return true;
+            // No reason to drop subscriptions if ShouldSubscribe is already false
+            if (!node.ShouldSubscribe && Type == TransformationType.DropSubscriptions) return true;
+            return false;
+        }
+
         /// <summary>
         /// Modify the given node if it passes the filter.
         /// </summary>
@@ -222,8 +237,8 @@ namespace Cognite.OpcUa
         /// <param name="ns">Active NamespaceTable</param>
         public void ApplyTransformation(ILogger log, UANode node, NamespaceTable ns)
         {
-            if (node == null) return;
-            if (node.Ignore || node.IsProperty && Type == TransformationType.Property || !node.ShouldSubscribe && Type == TransformationType.DropSubscriptions) return;
+            if (ShouldSkip(node)) return;
+
             if (Filter.IsMatch(node, ns))
             {
                 switch (Type)
@@ -239,6 +254,10 @@ namespace Cognite.OpcUa
                     case TransformationType.DropSubscriptions:
                         node.Attributes.ShouldSubscribe = false;
                         log.LogDebug("Dropping subscriptions on node {Name} {Id} due to matching filter {Idx}", node.DisplayName, node.Id, index);
+                        break;
+                    case TransformationType.TimeSeries:
+                        node.Attributes.IsProperty = false;
+                        log.LogTrace("Treating node {Name} {Id} as timeseries due to matching filter {Idx}", node.DisplayName, node.Id, index);
                         break;
                 }
             }
@@ -258,6 +277,7 @@ namespace Cognite.OpcUa
     {
         Ignore,
         Property,
-        DropSubscriptions
+        DropSubscriptions,
+        TimeSeries
     }
 }

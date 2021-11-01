@@ -34,9 +34,9 @@ podTemplate(
             envVar(key: 'LC_ALL', value: 'C.UTF-8'),
             envVar(key: 'LANG', value: 'C.UTF-8')
         ],
-        resourceRequestCpu: '1500m',
+        resourceRequestCpu: '2000m',
         resourceRequestMemory: '3000Mi',
-        resourceLimitCpu: '1500m',
+        resourceLimitCpu: '2000m',
         resourceLimitMemory: '3000Mi',
         ttyEnabled: true),
     containerTemplate(name: 'influxdb',
