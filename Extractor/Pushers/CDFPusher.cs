@@ -131,7 +131,7 @@ namespace Cognite.OpcUa.Pushers
                 if (result.Errors != null)
                 {
                     var missing = result.Errors.FirstOrDefault(err => err.Type == ErrorType.ItemMissing);
-                    if (missing != null)
+                    if (missing?.Skipped != null)
                     {
                         log.LogError("Failed to push datapoints to CDF, missing ids: {Ids}", missing.Skipped.Select(ms => ms.Id));
                         foreach (var skipped in missing.Skipped)
@@ -143,7 +143,7 @@ namespace Cognite.OpcUa.Pushers
                     }
 
                     var mismatched = result.Errors.FirstOrDefault(err => err.Type == ErrorType.MismatchedType);
-                    if (mismatched != null)
+                    if (mismatched?.Skipped != null)
                     {
                         log.LogError("Failed to push datapoints to CDF, mismatched timeseries: {Ids}", mismatched.Skipped.Select(ms => ms.Id));
                         foreach (var skipped in mismatched.Skipped)
@@ -210,7 +210,7 @@ namespace Cognite.OpcUa.Pushers
                     var fatalError = result.Errors.FirstOrDefault(err => err.Type == ErrorType.FatalFailure);
                     if (fatalError != null)
                     {
-                        log.LogError("Failed to push {NumFailedEvents} events to CDF: {Message}", count, fatalError.Exception.Message);
+                        log.LogError("Failed to push {NumFailedEvents} events to CDF: {Message}", count, fatalError.Exception?.Message);
                         eventPushFailures.Inc();
                         return fatalError.Exception is ResponseException rex && (rex.Code == 400 || rex.Code == 409);
                     }
@@ -550,7 +550,7 @@ namespace Cognite.OpcUa.Pushers
             var assets = new List<Asset>();
             foreach (var chunk in Chunking.ChunkByHierarchy(assetMap.Values, config.CdfChunking.Assets, node => node.Id, node => node.ParentId))
             {
-                var assetChunk = await destination.GetOrCreateAssetsAsync(chunk.Select(node => Extractor.GetUniqueId(node.Id)), async ids =>
+                var assetChunk = await destination.GetOrCreateAssetsAsync(chunk.Select(node => Extractor.GetUniqueId(node.Id)!), async ids =>
                 {
                     var assets = ids.Select(id => assetMap[id]);
                     await Extractor.ReadProperties(assets);
@@ -562,7 +562,7 @@ namespace Cognite.OpcUa.Pushers
 
                 var fatalError = assetChunk.Errors?.FirstOrDefault(err => err.Type == ErrorType.FatalFailure
                     || err.Type == ErrorType.ItemMissing);
-                if (fatalError != null) throw fatalError.Exception;
+                if (fatalError != null) throw fatalError.Exception ?? new FatalException("Unknown fatal error in assets");
 
                 if (assetChunk.Results == null) continue;
 
@@ -745,7 +745,7 @@ namespace Cognite.OpcUa.Pushers
             }, RetryMode.None, SanitationMode.Clean, token);
 
             var fatalError = timeseries.Errors?.FirstOrDefault(err => err.Type == ErrorType.FatalFailure);
-            if (fatalError != null) throw fatalError.Exception;
+            if (fatalError != null) throw fatalError.Exception ?? new FatalException("Unknown fatal error in timeseries");
 
             if (timeseries.Results == null) return Array.Empty<TimeSeries>();
 

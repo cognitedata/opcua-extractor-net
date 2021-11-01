@@ -903,7 +903,7 @@ namespace Cognite.OpcUa
                 if (Streamer.AllowData)
                 {
                     pushTasks = pushTasks.Append(StateStorage.RestoreExtractionState(
-                        newStates.Where(state => state != null && state.FrontfillEnabled).ToDictionary(state => state?.Id),
+                        newStates.Where(state => state != null && state.FrontfillEnabled).ToDictionary(state => state?.Id!, state => state!),
                         Config.StateStorage.VariableStore,
                         false,
                         Source.Token));

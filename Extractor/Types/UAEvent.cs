@@ -207,9 +207,10 @@ namespace Cognite.OpcUa.Types
 
             for (int i = 0; i < count; i++)
             {
-                string key = CogniteUtils.StringFromStream(stream);
-                string value = CogniteUtils.StringFromStream(stream);
-                evt.MetaData[key] = value;
+                string? key = CogniteUtils.StringFromStream(stream);
+                string? value = CogniteUtils.StringFromStream(stream);
+                if (key == null) continue;
+                evt.MetaData[key] = value ?? "";
             }
 
             return evt;
