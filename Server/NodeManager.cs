@@ -418,7 +418,7 @@ namespace Server
             }
             catch (Exception ex)
             {
-                log.Error(ex, "Failed to create address space");
+                log.Error(ex, "Failed to create address space: {Message}", ex.Message);
             }
         }
 

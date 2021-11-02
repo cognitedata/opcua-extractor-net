@@ -131,6 +131,8 @@ namespace Cognite.OpcUa.PubSub
 
         private void DataReceived(object sender, SubscribedDataEventArgs e)
         {
+            log.LogTrace("PubSub message received");
+
             if (e.NetworkMessage is UadpNetworkMessage uadpMessage)
             {
                 log.LogTrace("UADP Network DataSetMessage ({DataSets} DataSets): Source={Source}, SequenceNumber={SequenceNumber}",

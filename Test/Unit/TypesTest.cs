@@ -999,7 +999,7 @@ namespace Test.Unit
                    + "    key: value1\n"
                    + "    key2: 123\n"
                    + "    key3: value2\n"
-                   + "}\n";
+                   + "}";
             Assert.Equal(refStr, str);
         }
         [Fact]

@@ -341,7 +341,7 @@ NUGET
       System.Text.Encoding.CodePages (>= 5.0) - restriction: || (&& (>= netcoreapp2.0) (< netcoreapp2.1) (< netstandard2.1)) (&& (< netcoreapp2.0) (>= netstandard2.0) (< netstandard2.1)) (&& (< netcoreapp2.0) (>= netstandard2.1)) (&& (>= netcoreapp2.1) (< netstandard2.1)) (>= netcoreapp3.0)
       System.Threading.AccessControl (>= 5.0) - restriction: || (&& (>= netcoreapp2.0) (< netcoreapp2.1) (< netstandard2.1)) (&& (< netcoreapp2.0) (>= netstandard2.0) (< netstandard2.1)) (&& (< netcoreapp2.0) (>= netstandard2.1)) (&& (>= netcoreapp2.1) (< netstandard2.1)) (>= netcoreapp3.0)
     Microsoft.Windows.Compatibility.Shims (2.0.1) - restriction: && (>= netcoreapp2.0) (< netcoreapp2.1) (< netstandard2.1)
-    MQTTnet (3.0.17)
+    MQTTnet (3.0.16)
       Microsoft.NETCore.UniversalWindowsPlatform (>= 6.2.10) - restriction: && (< netstandard2.0) (>= uap10.0)
       NETStandard.Library (>= 1.6.1) - restriction: && (< net452) (>= netstandard1.3) (< netstandard2.0) (< uap10.0)
       System.Net.Security (>= 4.3.2) - restriction: && (< net452) (>= netstandard1.3) (< netstandard2.0) (< uap10.0)

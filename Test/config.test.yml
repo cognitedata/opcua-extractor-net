@@ -3,11 +3,12 @@
 source:
     # The URL of the OPC-UA server to connect to
     endpoint-url: "opc.tcp://localhost:4840"
+    keep-alive-interval: 10000
 
 
 logger:
     console:
-        level: "debug"
+        level: "verbose"
 
 cognite:
     project: test
