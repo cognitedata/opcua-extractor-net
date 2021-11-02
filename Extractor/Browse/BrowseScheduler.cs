@@ -107,7 +107,11 @@ namespace Cognite.OpcUa
             }
             catch (Exception e)
             {
-                ExtractorUtils.LogException(log, e, "Failed to abort browse chunk", "Failed to abort browse chunk");
+                ExtractorUtils.LogException(log, e, "Failed to abort browse chunk");
+            }
+            foreach (var item in chunk.Items)
+            {
+                item.ContinuationPoint = null;
             }
         }
 
@@ -150,6 +154,7 @@ namespace Cognite.OpcUa
                 ExtractorUtils.LogException(log, chunk.Exception, "Unexpected failure during browse", "Unexpected failure during browse");
                 failed = true;
                 exceptions.Add(chunk.Exception);
+                AbortChunk(chunk, token);
                 return Enumerable.Empty<BrowseNode>();
             }
 

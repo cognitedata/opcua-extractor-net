@@ -161,7 +161,19 @@ namespace Cognite.OpcUa.History
         protected override void AbortChunk(IChunk<HistoryReadNode> chunk, CancellationToken token)
         {
             var readChunk = (HistoryReadParams)chunk;
-            uaClient.AbortHistoryRead(readChunk, CancellationToken.None).Wait(CancellationToken.None);
+            try
+            {
+                uaClient.AbortHistoryRead(readChunk, CancellationToken.None).Wait(CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                ExtractorUtils.LogException(log, ex, "Failed to abort history read");
+            }
+            foreach (var item in chunk.Items)
+            {
+                item.Completed = true;
+                item.ContinuationPoint = null;
+            }
         }
 
         private static DateTime Max(DateTime t1, DateTime t2)
@@ -371,6 +383,7 @@ namespace Cognite.OpcUa.History
             {
                 LogReadFailure(chunk);
                 exceptions.Add(chunk.Exception);
+                AbortChunk(chunk, token);
                 return Enumerable.Empty<HistoryReadNode>();
             }
 
