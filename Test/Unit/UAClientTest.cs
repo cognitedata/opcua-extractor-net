@@ -70,7 +70,6 @@ namespace Test.Unit
             Client = new UAClient(Provider, Config);
             Source = new CancellationTokenSource();
             await Client.Run(Source.Token);
-            throw new NotImplementedException();
         }
 
         public async Task DisposeAsync()

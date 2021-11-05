@@ -25,6 +25,11 @@ namespace Test.Integration
             Config.Extraction.DataPushDelay = "200";
             Config.History.Enabled = false;
             Config.Events.Enabled = true;
+        }
+
+        public override async Task InitializeAsync()
+        {
+            await base.InitializeAsync();
             Config.Extraction.RootNode = Server.Ids.Event.Root.ToProtoNodeId(Client);
         }
     }

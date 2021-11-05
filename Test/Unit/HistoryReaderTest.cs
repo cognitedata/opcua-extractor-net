@@ -22,6 +22,11 @@ namespace Test.Unit
         public HistoryReaderTestFixture() : base()
         {
             HistoryStart = DateTime.UtcNow.AddSeconds(-20);
+        }
+
+        public override async Task InitializeAsync()
+        {
+            await base.InitializeAsync();
             Server.PopulateCustomHistory(HistoryStart);
             Server.PopulateBaseHistory(HistoryStart);
             Server.PopulateEvents(HistoryStart);
