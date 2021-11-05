@@ -16,14 +16,14 @@ using Xunit.Abstractions;
 
 namespace Test.Unit
 {
-    public class ConfigToolTestFixture
+    public class ConfigToolTestFixture : IAsyncLifetime
     {
-        public UAServerExplorer Explorer { get; }
+        public UAServerExplorer Explorer { get; private set; }
         public FullConfig Config { get; }
         public FullConfig BaseConfig { get; }
         public ServerController Server { get; }
         public CancellationTokenSource Source { get; protected set; }
-        public IServiceProvider Provider { get; }
+        public ServiceProvider Provider { get; }
         public ConfigToolTestFixture()
         {
             var services = new ServiceCollection();
@@ -43,11 +43,28 @@ namespace Test.Unit
             Server = new ServerController(new[] {
                 PredefinedSetup.Base, PredefinedSetup.Full, PredefinedSetup.Auditing,
                 PredefinedSetup.Custom, PredefinedSetup.Events, PredefinedSetup.Wrong }, port);
-            Server.Start().Wait();
+            
+        }
+
+        public async Task InitializeAsync()
+        {
+            await Server.Start();
 
             Explorer = new UAServerExplorer(Provider, Config, BaseConfig);
             Source = new CancellationTokenSource();
-            Explorer.Run(Source.Token).Wait();
+            await Explorer.Run(Source.Token);
+        }
+
+        public async Task DisposeAsync()
+        {
+            Source?.Cancel();
+            Explorer?.Close();
+            Explorer?.Dispose();
+            Source?.Dispose();
+            Server?.Stop();
+            Server?.Dispose();
+
+            await Provider.DisposeAsync();
         }
     }
     public class ConfigToolTest : MakeConsoleWork, IClassFixture<ConfigToolTestFixture>
