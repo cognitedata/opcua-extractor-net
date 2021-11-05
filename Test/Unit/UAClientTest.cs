@@ -167,7 +167,7 @@ namespace Test.Unit
             {
                 tester.Config.Source.EndpointUrl = "opc.tcp://localhost:62000";
                 tester.Client.Close();
-                tester.Config.Source.KeepAliveInterval = 5000;
+                tester.Config.Source.KeepAliveInterval = 10000;
                 await tester.Client.Run(tester.Source.Token);
                 CommonTestUtils.StopProxyProcess();
             }

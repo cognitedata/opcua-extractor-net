@@ -30,7 +30,7 @@ namespace Cognite.OpcUa.History
             IUAClientAccess client,
             NodeId id,
             bool frontfill, bool backfill)
-            : base(client.GetUniqueId(id), frontfill, backfill)
+            : base(client.GetUniqueId(id)!, frontfill, backfill)
         {
             SourceId = id;
         }

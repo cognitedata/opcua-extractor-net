@@ -127,7 +127,7 @@ history:
     # If this is set greater than zero, history will be read in chunks of maximum this size, until the end.
     # This can potentially take a very long time if end-time is much larger than start-time.
     # Alternatively, use N[timeunit] where timeunit is w, d, h, m, s or ms.
-    max-history-length: 0
+    max-read-length: 0
     # Granularity to use when doing historyRead, in seconds. Nodes with last known timestamp within this range of eachother will
     # be read together. Should not be smaller than usual average update rate
     # Leave at 0 to always read a single node each time.

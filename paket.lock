@@ -3,45 +3,45 @@ NUGET
   remote: https://www.nuget.org/api/v2
     AdysTech.InfluxDB.Client.Net.Core (0.25)
       Newtonsoft.Json (>= 10.0.3) - restriction: || (>= net46) (>= netstandard2.0)
-    Cognite.Extensions (1.0.0-beta-015) - restriction: >= netstandard2.0
-      Cognite.Extractor.Common (>= 1.0.0-beta-015) - restriction: >= netstandard2.0
+    Cognite.Extensions (1.0.0-beta-017) - restriction: >= netstandard2.0
+      Cognite.Extractor.Common (>= 1.0.0-beta-017) - restriction: >= netstandard2.0
       CogniteSdk (>= 1.6.5) - restriction: >= netstandard2.0
       Microsoft.Extensions.Http (>= 5.0) - restriction: >= netstandard2.0
       Microsoft.Extensions.Http.Polly (>= 5.0.1) - restriction: >= netstandard2.0
       Polly.Extensions.Http (>= 3.0) - restriction: >= netstandard2.0
       prometheus-net (>= 5.0.1) - restriction: >= netstandard2.0
-    Cognite.Extractor.Common (1.0.0-beta-015) - restriction: >= netstandard2.0
+    Cognite.Extractor.Common (1.0.0-beta-017) - restriction: >= netstandard2.0
       System.Text.Json (>= 5.0.2) - restriction: >= netstandard2.0
-    Cognite.Extractor.Configuration (1.0.0-beta-015)
+    Cognite.Extractor.Configuration (1.0.0-beta-017)
       Microsoft.CSharp (>= 4.7) - restriction: >= netstandard2.0
       Microsoft.Extensions.DependencyInjection (>= 5.0.2) - restriction: >= netstandard2.0
       YamlDotNet (>= 11.2.1) - restriction: >= netstandard2.0
-    Cognite.Extractor.Logging (1.0.0-beta-015)
+    Cognite.Extractor.Logging (1.0.0-beta-017)
       Microsoft.Extensions.DependencyInjection (>= 5.0.2) - restriction: >= netstandard2.0
       Serilog (>= 2.10) - restriction: >= netstandard2.0
       Serilog.Extensions.Logging (>= 3.0.1) - restriction: >= netstandard2.0
       Serilog.Sinks.Async (>= 1.5) - restriction: >= netstandard2.0
       Serilog.Sinks.Console (>= 4.0) - restriction: >= netstandard2.0
       Serilog.Sinks.File (>= 5.0) - restriction: >= netstandard2.0
-    Cognite.Extractor.Metrics (1.0.0-beta-015)
-      Cognite.Extractor.Common (>= 1.0.0-beta-015) - restriction: >= netstandard2.0
-      Cognite.Extractor.Logging (>= 1.0.0-beta-015) - restriction: >= netstandard2.0
+    Cognite.Extractor.Metrics (1.0.0-beta-017)
+      Cognite.Extractor.Common (>= 1.0.0-beta-017) - restriction: >= netstandard2.0
+      Cognite.Extractor.Logging (>= 1.0.0-beta-017) - restriction: >= netstandard2.0
       Microsoft.Extensions.Http (>= 5.0) - restriction: >= netstandard2.0
       Microsoft.Extensions.Http.Polly (>= 5.0.1) - restriction: >= netstandard2.0
       Polly.Extensions.Http (>= 3.0) - restriction: >= netstandard2.0
       prometheus-net (>= 5.0.1) - restriction: >= netstandard2.0
-    Cognite.Extractor.StateStorage (1.0.0-beta-015) - restriction: >= netstandard2.0
-      Cognite.Extractor.Common (>= 1.0.0-beta-015) - restriction: >= netstandard2.0
-      Cognite.Extractor.Logging (>= 1.0.0-beta-015) - restriction: >= netstandard2.0
-      Cognite.Extractor.Metrics (>= 1.0.0-beta-015) - restriction: >= netstandard2.0
+    Cognite.Extractor.StateStorage (1.0.0-beta-017) - restriction: >= netstandard2.0
+      Cognite.Extractor.Common (>= 1.0.0-beta-017) - restriction: >= netstandard2.0
+      Cognite.Extractor.Logging (>= 1.0.0-beta-017) - restriction: >= netstandard2.0
+      Cognite.Extractor.Metrics (>= 1.0.0-beta-017) - restriction: >= netstandard2.0
       LiteDB (>= 5.0.11) - restriction: >= netstandard2.0
-    Cognite.ExtractorUtils (1.0.0-beta-015)
-      Cognite.Extensions (>= 1.0.0-beta-015) - restriction: >= netstandard2.0
-      Cognite.Extractor.Common (>= 1.0.0-beta-015) - restriction: >= netstandard2.0
-      Cognite.Extractor.Configuration (>= 1.0.0-beta-015) - restriction: >= netstandard2.0
-      Cognite.Extractor.Logging (>= 1.0.0-beta-015) - restriction: >= netstandard2.0
-      Cognite.Extractor.Metrics (>= 1.0.0-beta-015) - restriction: >= netstandard2.0
-      Cognite.Extractor.StateStorage (>= 1.0.0-beta-015) - restriction: >= netstandard2.0
+    Cognite.ExtractorUtils (1.0.0-beta-017)
+      Cognite.Extensions (>= 1.0.0-beta-017) - restriction: >= netstandard2.0
+      Cognite.Extractor.Common (>= 1.0.0-beta-017) - restriction: >= netstandard2.0
+      Cognite.Extractor.Configuration (>= 1.0.0-beta-017) - restriction: >= netstandard2.0
+      Cognite.Extractor.Logging (>= 1.0.0-beta-017) - restriction: >= netstandard2.0
+      Cognite.Extractor.Metrics (>= 1.0.0-beta-017) - restriction: >= netstandard2.0
+      Cognite.Extractor.StateStorage (>= 1.0.0-beta-017) - restriction: >= netstandard2.0
       Microsoft.Bcl.AsyncInterfaces (>= 5.0) - restriction: >= netstandard2.0
       Microsoft.CSharp (>= 4.7) - restriction: >= netstandard2.0
       Microsoft.Extensions.DependencyInjection (>= 5.0.2) - restriction: >= netstandard2.0
@@ -56,7 +56,7 @@ NUGET
     CogniteSdk.Types (1.6.5) - restriction: >= netstandard2.0
       System.Text.Json (>= 5.0.2) - restriction: >= netstandard2.0
     coverlet.msbuild (3.1)
-    FSharp.Core (6.0) - restriction: >= netstandard2.0
+    FSharp.Core (6.0.1) - restriction: >= netstandard2.0
     FsToolkit.ErrorHandling (2.7.1) - restriction: >= netstandard2.0
       FSharp.Core (>= 4.6.2) - restriction: >= netstandard2.0
     Google.Protobuf (3.19.1) - restriction: >= netstandard2.0
@@ -526,9 +526,9 @@ NUGET
     runtime.win10-x86.Microsoft.Net.Native.SharedLibrary (2.2.8-rel-30601-02) - restriction: >= uap10.1
     runtime.win10-x86.Microsoft.Net.UWPCoreRuntimeSdk (2.2.13) - restriction: >= uap10.1
     Serilog (2.10) - restriction: >= netstandard2.0
-    Serilog.Extensions.Logging (3.0.1) - restriction: >= netstandard2.0
+    Serilog.Extensions.Logging (3.1) - restriction: >= netstandard2.0
       Microsoft.Extensions.Logging (>= 2.0) - restriction: >= netstandard2.0
-      Serilog (>= 2.8) - restriction: >= netstandard2.0
+      Serilog (>= 2.9) - restriction: >= netstandard2.0
     Serilog.Sinks.Async (1.5) - restriction: >= netstandard2.0
       Serilog (>= 2.9) - restriction: || (&& (>= net45) (< netstandard2.0)) (&& (< net45) (>= netstandard1.1) (< netstandard2.0)) (&& (< net45) (>= netstandard2.0)) (>= net461)
     Serilog.Sinks.Console (4.0) - restriction: >= netstandard2.0

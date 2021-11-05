@@ -79,7 +79,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="externalId">ExternalId for lookup</param>
         /// <returns>State if it exists</returns>
-        public EventExtractionState? GetEmitterState(string externalId)
+        public EventExtractionState? GetEmitterState(string? externalId)
         {
             if (externalId == null) return null;
             return emitterStatesByExtId.GetValueOrDefault(externalId);
@@ -121,7 +121,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="uniqueId">Id to map</param>
         /// <returns>NodeId if it exists</returns>
-        public NodeId GetNodeId(string uniqueId)
+        public NodeId GetNodeId(string? uniqueId)
         {
             if (string.IsNullOrEmpty(uniqueId)) return NodeId.Null;
             return externalToNodeId.GetValueOrDefault(uniqueId) ?? NodeId.Null;

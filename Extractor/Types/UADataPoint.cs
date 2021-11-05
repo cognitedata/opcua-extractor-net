@@ -48,7 +48,7 @@ namespace Cognite.OpcUa.Types
         /// <param name="timestamp">Timestamp in ms since epoch</param>
         /// <param name="id">Converted id of node this belongs to, equal to externalId of timeseries in CDF</param>
         /// <param name="value">Value to set</param>
-        public UADataPoint(DateTime timestamp, string id, string value)
+        public UADataPoint(DateTime timestamp, string id, string? value)
         {
             Timestamp = timestamp;
             Id = id;
@@ -111,7 +111,7 @@ namespace Cognite.OpcUa.Types
         /// <param name="stream">Stream to read bytes from</param>
         public static UADataPoint? FromStream(Stream stream)
         {
-            string id = CogniteUtils.StringFromStream(stream);
+            string? id = CogniteUtils.StringFromStream(stream);
             if (id == null) return null;
             var buffer = new byte[sizeof(long)];
             if (stream.Read(buffer, 0, sizeof(long)) < sizeof(long)) return null;

@@ -125,8 +125,9 @@ namespace Cognite.OpcUa
             return null;
         }
 
-        public static void LogException(ILogger log, Exception? e, string message, string silentMessage)
+        public static void LogException(ILogger log, Exception? e, string message, string? silentMessage = null)
         {
+            if (silentMessage == null) silentMessage = message;
             if (e == null)
             {
                 log.LogError("Unknown error: {Message}", message);
@@ -163,55 +164,6 @@ namespace Cognite.OpcUa
             }
         }
 
-        /// <summary>
-        /// Log exception, silencing SilentServiceExceptions and formatting results properly.
-        /// </summary>
-        /// <param name="e">Exception to log</param>
-        /// <param name="message">Message to give with normal exceptions</param>
-        /// <param name="silentMessage">Message to give with silent exceptions</param>
-        public static void LogException(Serilog.ILogger log, Exception? e, string message, string? silentMessage = null)
-        {
-            if (silentMessage == null) silentMessage = message;
-            if (e == null)
-            {
-                log.Error(message);
-            }
-            else if (e is AggregateException aex)
-            {
-                var flat = aex.Flatten();
-                foreach (var exc in flat.InnerExceptions)
-                {
-                    LogException(log, exc, message, silentMessage);
-                }
-                if (!flat.InnerExceptions.Any())
-                {
-                    log.Error(e, message + " - {msg}", e.Message);
-                }
-            }
-            else if (e is SilentServiceException silent)
-            {
-                log.Debug("Silenced service exception: {msg} - {info}", silentMessage,
-                    silent.InnerServiceException?.AdditionalInfo);
-            }
-            else if (e is ServiceResultException service)
-            {
-                log.Error(e, message + " - {msg}: {info}", service.Message, service.AdditionalInfo);
-            }
-            else if (e is ExtractorFailureException failure)
-            {
-                log.Error(message + " - {msg}", failure.Message);
-                log.Debug(failure, message);
-            }
-            else if (e is FatalException fatal)
-            {
-                log.Fatal(message + " - {msg}", fatal.Message);
-                log.Debug(fatal, message);
-            }
-            else
-            {
-                log.Error(e, message + " - {msg}", e.Message);
-            }
-        }
         public static Exception HandleServiceResult(ILogger log, Exception ex, SourceOp op)
         {
             if (ex is AggregateException aex)

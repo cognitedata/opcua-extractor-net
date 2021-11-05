@@ -107,7 +107,7 @@ namespace Cognite.OpcUa.History
 
         public bool Completed(HistoryReadNode item)
         {
-            return item.Completed;
+            return item.Completed || Exception != null;
         }
     }
 }

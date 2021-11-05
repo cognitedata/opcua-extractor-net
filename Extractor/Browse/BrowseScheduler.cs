@@ -107,7 +107,11 @@ namespace Cognite.OpcUa
             }
             catch (Exception e)
             {
-                ExtractorUtils.LogException(log, e, "Failed to abort browse chunk", "Failed to abort browse chunk");
+                ExtractorUtils.LogException(log, e, "Failed to abort browse chunk");
+            }
+            foreach (var item in chunk.Items)
+            {
+                item.ContinuationPoint = null;
             }
         }
 
@@ -150,6 +154,7 @@ namespace Cognite.OpcUa
                 ExtractorUtils.LogException(log, chunk.Exception, "Unexpected failure during browse", "Unexpected failure during browse");
                 failed = true;
                 exceptions.Add(chunk.Exception);
+                AbortChunk(chunk, token);
                 return Enumerable.Empty<BrowseNode>();
             }
 
@@ -230,9 +235,10 @@ namespace Cognite.OpcUa
             var builder = new StringBuilder();
             for (int i = 0; i < depthCounts.Count; i++)
             {
-                builder.AppendFormat("    {0}: {1}\n", i, depthCounts[i]);
+                builder.AppendFormat("    {0}: {1}", i, depthCounts[i]);
+                builder.Append(Environment.NewLine);
             }
-            log.LogDebug("Total results by depth: {Results}\n", builder);
+            log.LogDebug("Total results by depth:{NewLine}{Results}", Environment.NewLine, builder);
             depth.IncTo(depthCounts.Count);
         }
 

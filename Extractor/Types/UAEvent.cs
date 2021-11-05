@@ -69,26 +69,34 @@ namespace Cognite.OpcUa.Types
         public override string ToString()
         {
             var builder = new StringBuilder();
-            builder.AppendFormat(CultureInfo.InvariantCulture, "Event: {0}\n", EventId);
-            builder.AppendFormat(CultureInfo.InvariantCulture, "Time: {0}\n", Time);
-            builder.AppendFormat(CultureInfo.InvariantCulture, "Type: {0}\n", EventType?.DisplayName);
-            builder.AppendFormat(CultureInfo.InvariantCulture, "Emitter: {0}\n", EmittingNode);
+            builder.AppendFormat(CultureInfo.InvariantCulture, "Event: {0}", EventId);
+            builder.AppendLine();
+            builder.AppendFormat(CultureInfo.InvariantCulture, "Time: {0}", Time);
+            builder.AppendLine();
+            builder.AppendFormat(CultureInfo.InvariantCulture, "Type: {0}", EventType?.DisplayName);
+            builder.AppendLine();
+            builder.AppendFormat(CultureInfo.InvariantCulture, "Emitter: {0}", EmittingNode);
+            builder.AppendLine();
             if (Message != null)
             {
-                builder.AppendFormat(CultureInfo.InvariantCulture, "Message: {0}\n", Message);
+                builder.AppendFormat(CultureInfo.InvariantCulture, "Message: {0}", Message);
+                builder.AppendLine();
             }
             if (SourceNode != null && !SourceNode.IsNullNodeId)
             {
-                builder.AppendFormat(CultureInfo.InvariantCulture, "SourceNode: {0}\n", SourceNode);
+                builder.AppendFormat(CultureInfo.InvariantCulture, "SourceNode: {0}", SourceNode);
+                builder.AppendLine();
             }
             if (MetaData != null && MetaData.Any())
             {
-                builder.Append("MetaData: {\n");
+                builder.Append("MetaData: {");
+                builder.AppendLine();
                 foreach (var kvp in MetaData)
                 {
-                    builder.AppendFormat(CultureInfo.InvariantCulture, "    {0}: {1}\n", kvp.Key, kvp.Value);
+                    builder.AppendFormat(CultureInfo.InvariantCulture, "    {0}: {1}", kvp.Key, kvp.Value);
+                    builder.AppendLine();
                 }
-                builder.Append("}\n");
+                builder.Append('}');
             }
 
             return builder.ToString();
@@ -199,9 +207,10 @@ namespace Cognite.OpcUa.Types
 
             for (int i = 0; i < count; i++)
             {
-                string key = CogniteUtils.StringFromStream(stream);
-                string value = CogniteUtils.StringFromStream(stream);
-                evt.MetaData[key] = value;
+                string? key = CogniteUtils.StringFromStream(stream);
+                string? value = CogniteUtils.StringFromStream(stream);
+                if (key == null) continue;
+                evt.MetaData[key] = value ?? "";
             }
 
             return evt;
