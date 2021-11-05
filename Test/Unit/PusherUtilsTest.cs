@@ -17,14 +17,11 @@ using Xunit.Abstractions;
 
 namespace Test.Unit
 {
-    public sealed class PusherUtilsTestFixture : BaseExtractorTestFixture
+    [Collection("Shared server tests")]
+    public class PusherUtilsTest : MakeConsoleWork
     {
-        public PusherUtilsTestFixture() : base() { }
-    }
-    public class PusherUtilsTest : MakeConsoleWork, IClassFixture<PusherUtilsTestFixture>
-    {
-        private readonly PusherUtilsTestFixture tester;
-        public PusherUtilsTest(ITestOutputHelper output, PusherUtilsTestFixture tester) : base(output)
+        private readonly StaticServerTestFixture tester;
+        public PusherUtilsTest(ITestOutputHelper output, StaticServerTestFixture tester) : base(output)
         {
             if (tester == null) throw new ArgumentNullException(nameof(tester));
             tester.ResetConfig();

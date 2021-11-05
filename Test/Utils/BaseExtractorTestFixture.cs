@@ -17,7 +17,7 @@ using Xunit;
 
 namespace Test.Utils
 {
-    public abstract class BaseExtractorTestFixture : IDisposable
+    public abstract class BaseExtractorTestFixture : IAsyncLifetime
     {
         public int Port { get; }
         public NodeIdReference Ids => Server.Ids;
@@ -25,8 +25,9 @@ namespace Test.Utils
         public FullConfig Config { get; }
         public ServerController Server { get; private set; }
         public CancellationTokenSource Source { get; protected set; }
-        public IServiceProvider Provider { get; protected set; }
+        public ServiceProvider Provider { get; protected set; }
         protected ServiceCollection Services { get; }
+        protected PredefinedSetup[] Setups { get; }
         protected BaseExtractorTestFixture(PredefinedSetup[] setups = null)
         {
             Port = CommonTestUtils.NextPort;
@@ -41,19 +42,18 @@ namespace Test.Utils
             LoggingUtils.Configure(Config.Logger);
             Provider = Services.BuildServiceProvider();
 
-            var resultTask = Task.WaitAny(Start(setups), Task.Delay(20000));
-            Assert.Equal(0, resultTask);
-        }
-
-        private async Task Start(PredefinedSetup[] setups)
-        {
             if (setups == null)
             {
                 setups = new[] {
                     PredefinedSetup.Custom, PredefinedSetup.Base, PredefinedSetup.Events,
                     PredefinedSetup.Wrong, PredefinedSetup.Full, PredefinedSetup.Auditing };
             }
-            Server = new ServerController(setups, Port);
+            Setups = setups;
+        }
+
+        private async Task Start()
+        {
+            Server = new ServerController(Setups, Port);
             await Server.Start();
 
             Client = new UAClient(Provider, Config);
@@ -197,22 +197,6 @@ namespace Test.Utils
             }
         }
 
-        protected virtual void Dispose(bool disposing)
-        {
-            if (disposing)
-            {
-                Source.Cancel();
-                Source.Dispose();
-            }
-        }
-
-        public void Dispose()
-        {
-            // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
-            Dispose(disposing: true);
-            GC.SuppressFinalize(this);
-        }
-
         public static async Task TerminateRunTask(Task runTask, UAExtractor extractor)
         {
             if (extractor == null) throw new ArgumentNullException(nameof(extractor));
@@ -253,6 +237,29 @@ namespace Test.Utils
         {
             Server.WipeEventHistory(Server.Ids.Event.Obj1);
             Server.WipeEventHistory(ObjectIds.Server);
+        }
+
+        public virtual async Task InitializeAsync()
+        {
+            var startTask = Start();
+            var resultTask = await Task.WhenAny(startTask, Task.Delay(20000));
+            Assert.Equal(startTask, resultTask);
+        }
+
+        public virtual async Task DisposeAsync()
+        {
+            Source?.Cancel();
+            Source?.Dispose();
+            Source = null;
+            Client?.Close();
+            Client?.Dispose();
+            Client = null;
+            Server?.Dispose();
+            if (Provider != null)
+            {
+                await Provider.DisposeAsync();
+                Provider = null;
+            }
         }
     }
 }

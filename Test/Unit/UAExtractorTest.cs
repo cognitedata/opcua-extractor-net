@@ -14,14 +14,11 @@ using Xunit.Abstractions;
 
 namespace Test.Unit
 {
-    public sealed class ExtractorTestFixture : BaseExtractorTestFixture
+    [Collection("Shared server tests")]
+    public class UAExtractorTest : MakeConsoleWork
     {
-        public ExtractorTestFixture() : base() { }
-    }
-    public class UAExtractorTest : MakeConsoleWork, IClassFixture<ExtractorTestFixture>
-    {
-        private readonly ExtractorTestFixture tester;
-        public UAExtractorTest(ITestOutputHelper output, ExtractorTestFixture tester) : base(output)
+        private readonly StaticServerTestFixture tester;
+        public UAExtractorTest(ITestOutputHelper output, StaticServerTestFixture tester) : base(output)
         {
             this.tester = tester ?? throw new ArgumentNullException(nameof(tester));
             tester.ResetConfig();

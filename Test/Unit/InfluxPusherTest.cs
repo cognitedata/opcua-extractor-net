@@ -15,20 +15,14 @@ using Xunit.Abstractions;
 
 namespace Test.Unit
 {
-    public sealed class InfluxPusherTestFixture : BaseExtractorTestFixture
+    [Collection("Shared server tests")]
+    public class InfluxPusherTest : MakeConsoleWork
     {
-        public InfluxPusherTestFixture() : base()
-        {
-            DeleteFiles("fb-");
-        }
-    }
-    public class InfluxPusherTest : MakeConsoleWork, IClassFixture<InfluxPusherTestFixture>
-    {
-        private readonly InfluxPusherTestFixture tester;
+        private readonly StaticServerTestFixture tester;
         private readonly InfluxDBClient client;
         private readonly InfluxPusher pusher;
         private static int ifIndex;
-        public InfluxPusherTest(ITestOutputHelper output, InfluxPusherTestFixture tester) : base(output)
+        public InfluxPusherTest(ITestOutputHelper output, StaticServerTestFixture tester) : base(output)
         {
             this.tester = tester ?? throw new ArgumentNullException(nameof(tester));
             tester.ResetConfig();
