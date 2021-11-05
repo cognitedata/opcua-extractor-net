@@ -17,14 +17,11 @@ using JsonSerializer = Newtonsoft.Json.JsonSerializer;
 
 namespace Test.Unit
 {
-    public sealed class StringConversionTestFixture : BaseExtractorTestFixture
+    [Collection("Shared server tests")]
+    public class StringConversionTest : MakeConsoleWork
     {
-        public StringConversionTestFixture() : base() { }
-    }
-    public class StringConversionTest : MakeConsoleWork, IClassFixture<StringConversionTestFixture>
-    {
-        private readonly StringConversionTestFixture tester;
-        public StringConversionTest(ITestOutputHelper output, StringConversionTestFixture tester) : base(output)
+        private readonly StaticServerTestFixture tester;
+        public StringConversionTest(ITestOutputHelper output, StaticServerTestFixture tester) : base(output)
         {
             this.tester = tester ?? throw new ArgumentNullException(nameof(tester));
             tester.ResetConfig();

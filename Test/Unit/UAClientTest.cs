@@ -22,13 +22,13 @@ using Xunit.Abstractions;
 
 namespace Test.Unit
 {
-    public sealed class UAClientTestFixture : IDisposable
+    public sealed class UAClientTestFixture : IAsyncLifetime
     {
-        public UAClient Client { get; }
-        public ServerController Server { get; }
+        public UAClient Client { get; private set; }
+        public ServerController Server { get; private set; }
         public FullConfig Config { get; }
-        public CancellationTokenSource Source { get; }
-        public IServiceProvider Provider { get; }
+        public CancellationTokenSource Source { get; private set; }
+        public ServiceProvider Provider { get; }
         public UAClientTestFixture()
         {
             var services = new ServiceCollection();
@@ -49,13 +49,6 @@ namespace Test.Unit
             {
                 Directory.Delete("./uaclienttestcerts/pki/", true);
             }
-
-
-            Server.Start().Wait();
-
-            Client = new UAClient(Provider, Config);
-            Source = new CancellationTokenSource();
-            Client.Run(Source.Token).Wait();
         }
         public static (Action<ReferenceDescription, NodeId>, IDictionary<NodeId, ReferenceDescriptionCollection>) GetCallback()
         {
@@ -71,12 +64,22 @@ namespace Test.Unit
             }, toWrite);
         }
 
-        public void Dispose()
+        public async Task InitializeAsync()
+        {
+            await Server.Start();
+            Client = new UAClient(Provider, Config);
+            Source = new CancellationTokenSource();
+            await Client.Run(Source.Token);
+            throw new NotImplementedException();
+        }
+
+        public async Task DisposeAsync()
         {
             Source.Cancel();
             Client.Close();
             Source.Dispose();
             Server.Stop();
+            await Provider.DisposeAsync();
         }
     }
     public class UAClientTest : MakeConsoleWork, IClassFixture<UAClientTestFixture>

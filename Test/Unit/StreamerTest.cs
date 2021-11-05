@@ -15,14 +15,11 @@ using Xunit.Abstractions;
 
 namespace Test.Unit
 {
-    public sealed class StreamerTestFixture : BaseExtractorTestFixture
+    [Collection("Shared server tests")]
+    public class StreamerTest : MakeConsoleWork
     {
-        public StreamerTestFixture() : base() { }
-    }
-    public class StreamerTest : MakeConsoleWork, IClassFixture<StreamerTestFixture>
-    {
-        private readonly StreamerTestFixture tester;
-        public StreamerTest(ITestOutputHelper output, StreamerTestFixture tester) : base(output)
+        private readonly StaticServerTestFixture tester;
+        public StreamerTest(ITestOutputHelper output, StaticServerTestFixture tester) : base(output)
         {
             this.tester = tester ?? throw new ArgumentNullException(nameof(tester));
             tester.ResetConfig();
