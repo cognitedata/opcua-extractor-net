@@ -84,7 +84,7 @@ namespace Test.Unit
             tester.ResetConfig();
         }
 
-        [Theory(Timeout = 5000)]
+        [Theory(Timeout = 20000)]
         [InlineData(4, 1000, 0, false, 0, false)]
         [InlineData(4, 1000, 0, false, 0, true)]
         [InlineData(4, 1000, 2, false, 0, true)]
@@ -166,7 +166,7 @@ namespace Test.Unit
         }
 
 
-        [Theory(Timeout = 5000)]
+        [Theory(Timeout = 20000)]
         [InlineData(4, 1000, 0, false, 0, false)]
         [InlineData(4, 1000, 0, false, 0, true)]
         [InlineData(4, 1000, 2, false, 0, true)]
