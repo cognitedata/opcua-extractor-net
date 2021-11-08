@@ -251,9 +251,12 @@ namespace Test.Utils
             Source?.Cancel();
             Source?.Dispose();
             Source = null;
-            Client?.Close();
-            Client?.Dispose();
-            Client = null;
+            if (Client != null)
+            {
+                await Client.Close(CancellationToken.None);
+                Client.Dispose();
+                Client = null;
+            }
             Server?.Dispose();
             if (Provider != null)
             {

@@ -121,18 +121,30 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Close the Session, cleaning up any client data on the server
         /// </summary>
-        public void Close()
+        public async Task Close(CancellationToken token)
         {
             reconnectHandler?.Dispose();
             reconnectHandler = null;
-            if (Session != null && !Session.Disposed)
+            try
             {
-                Session.Close(1000);
-                Session.Dispose();
-                Session = null;
+                if (Session != null && !Session.Disposed)
+                {
+                    var closeTask = Session.CloseSessionAsync(null, true, token);
+                    var resultTask = await Task.WhenAny(Task.Delay(5000, token), closeTask);
+                    if (closeTask != resultTask)
+                    {
+                        log.LogWarning("Failed to close session, timed out");
+                    }
+                    Session.Dispose();
+                    Session = null;
+                }
             }
-            connected.Set(0);
-            Started = false;
+            finally
+            {
+                connected.Set(0);
+                Started = false;
+            }
+
         }
 
         private void ConfigureUtilsTrace()
@@ -1602,7 +1614,7 @@ namespace Cognite.OpcUa
         {
             try
             {
-                Close();
+                Close(CancellationToken.None).Wait();
             }
             catch (Exception ex)
             {

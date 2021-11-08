@@ -7,6 +7,7 @@ using Opc.Ua;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Test.Utils;
 using Xunit;
@@ -28,7 +29,7 @@ namespace Test.Unit
         {
             var oldEP = tester.Config.Source.EndpointUrl;
             tester.Config.Source.EndpointUrl = "opc.tcp://localhost:60000";
-            tester.Client.Close();
+            await tester.Client.Close(tester.Source.Token);
 
             try
             {
