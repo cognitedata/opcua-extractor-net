@@ -7,6 +7,7 @@
     <AssemblyName>OpcuaExtractor</AssemblyName>
     <AnalysisMode>AllEnabledByDefault</AnalysisMode>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <Nullable>enable</Nullable>
   </PropertyGroup>
 
   <ItemGroup>

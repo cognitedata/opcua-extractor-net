@@ -65,11 +65,11 @@ namespace Cognite.OpcUa.Config
     public class UAServerExplorer : UAClient
     {
         private readonly FullConfig baseConfig;
-        private List<UANode> dataTypes;
-        private List<ProtoDataType> customNumericTypes;
-        private List<UANode> nodeList;
-        private List<UANode> eventTypes;
-        private Dictionary<string, string> namespaceMap;
+        private readonly HashSet<UANode> dataTypes = new HashSet<UANode>();
+        private readonly List<ProtoDataType> customNumericTypes = new List<ProtoDataType>();
+        private readonly List<UANode> nodeList = new List<UANode>();
+        private readonly List<UANode> eventTypes = new List<UANode>();
+        private Dictionary<string, string>? namespaceMap;
 
         private bool history;
 
@@ -129,9 +129,9 @@ namespace Cognite.OpcUa.Config
         public void ResetNodes()
         {
             nodesRead = false;
-            nodeList = new List<UANode>();
+            nodeList.Clear();
             dataTypesRead = false;
-            dataTypes = new List<UANode>();
+            dataTypes.Clear();
             nodeDataRead = false;
             ClearEventFields();
         }
@@ -148,7 +148,7 @@ namespace Cognite.OpcUa.Config
                 await LoadAppConfig();
             }
 
-            var context = AppConfig.CreateMessageContext();
+            var context = AppConfig!.CreateMessageContext();
             var endpointConfig = EndpointConfiguration.Create(AppConfig);
             var endpoints = new EndpointDescriptionCollection();
             using (var channel = DiscoveryChannel.Create(new Uri(Config.Source.EndpointUrl), endpointConfig, context))
@@ -325,7 +325,7 @@ namespace Cognite.OpcUa.Config
                 await LimitConfigValues(token);
             }
 
-            IEnumerable<UANode> testNodes = null;
+            IEnumerable<UANode>? testNodes = null;
 
             int browseChunkSize = 0;
 
@@ -402,7 +402,7 @@ namespace Cognite.OpcUa.Config
                 if (total < chunkSize) continue;
 
                 Config.Source.BrowseChunk = chunkSize;
-                Dictionary<NodeId, BrowseResult> children;
+                Dictionary<NodeId, BrowseResult?> children;
                 try
                 {
                     log.LogInformation("Try to get the children of the {Count} largest parent nodes, with return chunk size {Size}",
@@ -421,7 +421,7 @@ namespace Cognite.OpcUa.Config
                     log.LogDebug(ex, "Failed to browse nodes");
                     continue;
                 }
-                int childCount = children.Aggregate(0, (seed, kvp) => seed + kvp.Value.References.Count);
+                int childCount = children.Aggregate(0, (seed, kvp) => seed + kvp.Value?.References?.Count ?? 0);
                 if (childCount < total)
                 {
                     log.LogWarning("Expected to receive {Count} nodes but only got {ChildCount}!", total, childCount);
@@ -447,7 +447,7 @@ namespace Cognite.OpcUa.Config
         private async Task PopulateNodes(CancellationToken token)
         {
             if (nodesRead) return;
-            nodeList = new List<UANode>();
+            nodeList.Clear();
             log.LogInformation("Mapping out node hierarchy");
             var roots = Config.Extraction.GetRootNodes(this);
             try
@@ -467,7 +467,7 @@ namespace Cognite.OpcUa.Config
         private async Task PopulateDataTypes(CancellationToken token)
         {
             if (dataTypesRead) return;
-            dataTypes = new List<UANode>();
+            dataTypes.Clear();
             nodeDataRead = false;
             log.LogInformation("Mapping out data type hierarchy");
             try
@@ -486,7 +486,6 @@ namespace Cognite.OpcUa.Config
                 log.LogError(ex, "Failed to populate node hierarchy");
                 throw;
             }
-            dataTypes = dataTypes.Distinct().ToList();
         }
         /// <summary>
         /// Read node data for the contents of the nodeList, if it has not already been read.
@@ -528,7 +527,7 @@ namespace Cognite.OpcUa.Config
             }
             return new ProtoNodeId
             {
-                NamespaceUri = Session.NamespaceUris.GetString(id.NamespaceIndex),
+                NamespaceUri = Session!.NamespaceUris.GetString(id.NamespaceIndex),
                 NodeId = nodeidstr
             };
         }
@@ -641,7 +640,7 @@ namespace Cognite.OpcUa.Config
             }
             await PopulateDataTypes(token);
 
-            customNumericTypes = new List<ProtoDataType>();
+            customNumericTypes.Clear();
             foreach (var type in dataTypes)
             {
                 TestDataType(type);
@@ -764,6 +763,7 @@ namespace Cognite.OpcUa.Config
             var missingTypes = new HashSet<NodeId>();
             foreach (var variable in variables)
             {
+                if (variable == null) continue;
                 if (variable.ArrayDimensions != null
                     && variable.ArrayDimensions.Length == 1
                     && variable.ArrayDimensions[0] <= arrayLimit
@@ -799,7 +799,7 @@ namespace Cognite.OpcUa.Config
                                 "this may mean that some datatypes are defined outside of the main datatype hierarchy: {Type}", variable.DataType);
                     continue;
                 }
-
+                if (dataType == null) continue;
                 if (identifiedTypes.Contains(dataType)) continue;
                 identifiedTypes.Add(dataType);
             }
@@ -890,7 +890,7 @@ namespace Cognite.OpcUa.Config
             var states = nodeList.Where(node =>
                     (node is UAVariable variable) && !variable.IsProperty
                     && AllowTSMap(variable))
-                .Select(node => new VariableExtractionState(this, node as UAVariable, false, false)).ToList();
+                .Select(node => new VariableExtractionState(this, (node as UAVariable)!, false, false)).ToList();
 
             log.LogInformation("Get chunkSizes for subscribing to variables");
 
@@ -931,7 +931,7 @@ namespace Cognite.OpcUa.Config
                     bool critical = false;
                     try
                     {
-                        await ToolUtil.RunWithTimeout(() => Session.RemoveSubscriptions(Session.Subscriptions.ToList()), 120);
+                        await ToolUtil.RunWithTimeout(() => Session!.RemoveSubscriptions(Session.Subscriptions.ToList()), 120);
                     }
                     catch (Exception ex)
                     {
@@ -978,7 +978,7 @@ namespace Cognite.OpcUa.Config
                 summary.SilentSubscriptionsWarning = true;
             }
 
-            await Session.RemoveSubscriptionsAsync(Session.Subscriptions.ToList());
+            await Session!.RemoveSubscriptionsAsync(Session.Subscriptions.ToList());
         }
         /// <summary>
         /// Attempts history read if possible, getting chunk sizes. It also determines granularity, 
@@ -991,7 +991,7 @@ namespace Cognite.OpcUa.Config
 
             var historizingStates = nodeList.Where(node =>
                     (node is UAVariable variable) && !variable.IsProperty && variable.ReadHistory)
-                .Select(node => new VariableExtractionState(this, node as UAVariable, true, true)).ToList();
+                .Select(node => new VariableExtractionState(this, (node as UAVariable)!, true, true)).ToList();
 
             var stateMap = historizingStates.ToDictionary(state => state.SourceId);
 
@@ -1006,7 +1006,7 @@ namespace Cognite.OpcUa.Config
 
             DateTime earliestTime;
             if (Config.History.StartTime == null) earliestTime = CogniteTime.DateTimeEpoch;
-            else earliestTime = CogniteTime.ParseTimestampString(Config.History.StartTime).Value;
+            else earliestTime = CogniteTime.ParseTimestampString(Config.History.StartTime)!.Value;
 
             var details = new ReadRawModifiedDetails
             {
@@ -1021,7 +1021,7 @@ namespace Cognite.OpcUa.Config
             long sumDistance = 0;
             int count = 0;
 
-            HistoryReadNode nodeWithData = null;
+            HistoryReadNode? nodeWithData = null;
 
             bool failed = true;
             bool done = false;
@@ -1037,6 +1037,7 @@ namespace Cognite.OpcUa.Config
 
                     foreach (var node in historyParams.Items)
                     {
+                        if (node.LastResult == null) continue;
                         var data = ToolUtil.ReadResultToDataPoints(node.LastResult, stateMap[node.Id], this);
                         // If we want to do analysis of how best to read history, we need some number of datapoints
                         // If this number is too low, it typically means that there is no real history to read.
@@ -1138,7 +1139,7 @@ namespace Cognite.OpcUa.Config
             {
                 await ToolUtil.RunWithTimeout(DoHistoryRead(backfillParams, token), 10);
 
-                var data = ToolUtil.ReadResultToDataPoints(nodeWithData.LastResult, stateMap[nodeWithData.Id], this);
+                var data = ToolUtil.ReadResultToDataPoints(nodeWithData.LastResult!, stateMap[nodeWithData.Id], this);
 
                 log.LogInformation("Last ts: {TimeStamp}", data.First().Timestamp);
 
@@ -1193,7 +1194,7 @@ namespace Cognite.OpcUa.Config
             await ReadNodeData(token);
 
             log.LogInformation("Test for event configuration");
-            eventTypes = new List<UANode>();
+            eventTypes.Clear();
 
             try
             {
@@ -1268,7 +1269,7 @@ namespace Cognite.OpcUa.Config
             {
                 try
                 {
-                    Session.Read(
+                    Session!.Read(
                         null,
                         0,
                         TimestampsToReturn.Neither,
@@ -1310,7 +1311,7 @@ namespace Cognite.OpcUa.Config
                 return;
             }
 
-            await Session.RemoveSubscriptionsAsync(Session.Subscriptions.ToList());
+            await Session!.RemoveSubscriptionsAsync(Session.Subscriptions.ToList());
         }
 
 
@@ -1367,7 +1368,7 @@ namespace Cognite.OpcUa.Config
         {
             var indices = nodeList.Concat(dataTypes).Concat(eventTypes).Select(node => node.Id.NamespaceIndex).Distinct();
 
-            var namespaces = indices.Select(idx => Session.NamespaceUris.GetString(idx));
+            var namespaces = indices.Select(idx => Session!.NamespaceUris.GetString(idx));
 
             namespaceMap = GenerateNamespaceMap(namespaces);
 
