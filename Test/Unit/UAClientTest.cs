@@ -75,7 +75,7 @@ namespace Test.Unit
         public async Task DisposeAsync()
         {
             Source.Cancel();
-            Client.Close();
+            await Client.Close(CancellationToken.None);
             Source.Dispose();
             Server.Stop();
             await Provider.DisposeAsync();
@@ -101,7 +101,7 @@ namespace Test.Unit
         public async Task TestConnectionFailure()
         {
             string oldEP = tester.Config.Source.EndpointUrl;
-            tester.Client.Close();
+            await tester.Client.Close(tester.Source.Token);
             tester.Config.Source.EndpointUrl = "opc.tcp://localhost:62009";
             try
             {
@@ -118,7 +118,7 @@ namespace Test.Unit
         [Fact]
         public async Task TestConfigFailure()
         {
-            tester.Client.Close();
+            await tester.Client.Close(tester.Source.Token);
             tester.Config.Source.ConfigRoot = "wrong";
             try
             {
@@ -134,7 +134,7 @@ namespace Test.Unit
         public async Task TestReconnect()
         {
             Assert.True(RuntimeInformation.IsOSPlatform(OSPlatform.Linux), "This test only runs on Linux");
-            tester.Client.Close();
+            await tester.Client.Close(tester.Source.Token);
             tester.Config.Source.EndpointUrl = "opc.tcp://localhost:62001";
             tester.Config.Source.KeepAliveInterval = 1000;
 
@@ -168,7 +168,7 @@ namespace Test.Unit
             finally
             {
                 tester.Config.Source.EndpointUrl = "opc.tcp://localhost:62000";
-                tester.Client.Close();
+                await tester.Client.Close(tester.Source.Token);
                 tester.Config.Source.KeepAliveInterval = 10000;
                 await tester.Client.Run(tester.Source.Token);
                 CommonTestUtils.StopProxyProcess();
@@ -181,7 +181,7 @@ namespace Test.Unit
             {
                 Directory.Delete("./certificates-test/", true);
             }
-            tester.Client.Close();
+            await tester.Client.Close(tester.Source.Token);
             try
             {
                 Environment.SetEnvironmentVariable("OPCUA_CERTIFICATE_DIR", "certificates-test");
@@ -191,7 +191,7 @@ namespace Test.Unit
             }
             finally
             {
-                tester.Client.Close();
+                await tester.Client.Close(tester.Source.Token);
                 Environment.SetEnvironmentVariable("OPCUA_CERTIFICATE_DIR", null);
                 Directory.Delete("./certificates-test/", true);
                 await tester.Client.Run(tester.Source.Token);
@@ -203,7 +203,7 @@ namespace Test.Unit
             // Slightly hacky test. Use the server application certificate, and validate it using the built-in systems in
             // the SDK.
 
-            tester.Client.Close();
+            await tester.Client.Close(tester.Source.Token);
             tester.Server.Server.AllowAnonymous = false;
             try
             {
@@ -233,7 +233,7 @@ namespace Test.Unit
         [Fact]
         public async Task TestPasswordAuthentication()
         {
-            tester.Client.Close();
+            await tester.Client.Close(tester.Source.Token);
             tester.Server.Server.AllowAnonymous = false;
 
             try
@@ -258,7 +258,7 @@ namespace Test.Unit
         [Fact]
         public async Task TestReverseConnect()
         {
-            tester.Client.Close();
+            await tester.Client.Close(tester.Source.Token);
             tester.Server.Server.AddReverseConnection(new Uri("opc.tcp://localhost:61000"));
             tester.Config.Source.ReverseConnectUrl = "opc.tcp://localhost:61000";
             try

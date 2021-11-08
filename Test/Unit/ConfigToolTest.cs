@@ -58,7 +58,7 @@ namespace Test.Unit
         public async Task DisposeAsync()
         {
             Source?.Cancel();
-            Explorer?.Close();
+            await Explorer?.Close(CancellationToken.None);
             Explorer?.Dispose();
             Source?.Dispose();
             Server?.Stop();
@@ -85,7 +85,7 @@ namespace Test.Unit
 
             var oldEP = tester.Config.Source.EndpointUrl;
             // Test failure to connect at all
-            tester.Explorer.Close();
+            await tester.Explorer.Close(CancellationToken.None);
             tester.Explorer.ResetSummary();
             tester.Config.Source.EndpointUrl = "opc.tcp://localhost:60000";
             await Assert.ThrowsAsync<FatalException>(() => tester.Explorer.GetEndpoints(tester.Source.Token));

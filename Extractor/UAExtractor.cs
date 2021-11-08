@@ -374,7 +374,7 @@ namespace Cognite.OpcUa
             if (!uaClient.Started || !closeClient) return;
             try
             {
-                uaClient.Close();
+                await uaClient.Close(CancellationToken.None);
             }
             catch (Exception e)
             {
