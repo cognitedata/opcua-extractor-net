@@ -1611,6 +1611,7 @@ namespace Cognite.OpcUa
             reconnectHandler?.Dispose();
             reverseConnectManager?.Dispose();
             waiter.Dispose();
+            Utils.Tracing.TraceEventHandler -= TraceEventHandler;
             if (AppConfig != null)
             {
                 AppConfig.CertificateValidator.CertificateValidation -= CertificateValidationHandler;
