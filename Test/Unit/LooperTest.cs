@@ -13,14 +13,11 @@ using Xunit.Abstractions;
 
 namespace Test.Unit
 {
-    public sealed class LooperTestFixture : BaseExtractorTestFixture
+    [Collection("Shared server tests")]
+    public class LooperTest : MakeConsoleWork
     {
-        public LooperTestFixture() : base() { }
-    }
-    public class LooperTest : MakeConsoleWork, IClassFixture<LooperTestFixture>
-    {
-        private readonly LooperTestFixture tester;
-        public LooperTest(ITestOutputHelper output, LooperTestFixture tester) : base(output)
+        private readonly StaticServerTestFixture tester;
+        public LooperTest(ITestOutputHelper output, StaticServerTestFixture tester) : base(output)
         {
             this.tester = tester ?? throw new ArgumentNullException(nameof(tester));
             tester.ResetConfig();

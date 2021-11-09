@@ -15,7 +15,7 @@ using Xunit.Abstractions;
 
 namespace Test.Integration
 {
-    public class LauncherTestFixture
+    public class LauncherTestFixture : IAsyncLifetime
     {
         public int Port { get; }
         public ServerController Server { get; }
@@ -30,7 +30,17 @@ namespace Test.Integration
             Server = new ServerController(new[] {
                 PredefinedSetup.Custom, PredefinedSetup.Base, PredefinedSetup.Events,
                 PredefinedSetup.Wrong, PredefinedSetup.Full, PredefinedSetup.Auditing }, Port);
-            Server.Start().Wait();
+        }
+
+        public async Task InitializeAsync()
+        {
+            await Server.Start();
+        }
+
+        public Task DisposeAsync()
+        {
+            Server?.Dispose();
+            return Task.CompletedTask;
         }
     }
 

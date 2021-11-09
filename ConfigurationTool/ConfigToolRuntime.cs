@@ -77,7 +77,7 @@ namespace Cognite.OpcUa.Config
                 log.LogError(e, "ConfigurationTool failed fatally");
                 throw;
             }
-            explorer.Close();
+            await explorer.Close(source.Token);
 
             var result = ToolUtil.ConfigResultToString(explorer.FinalConfig);
 

@@ -20,34 +20,12 @@ using Xunit.Abstractions;
 
 namespace Test.Unit
 {
-    public sealed class FailureBufferTestFixture : BaseExtractorTestFixture
-    {
-        public FailureBufferTestFixture() : base()
-        {
-            try
-            {
-                var files = Directory.GetFiles(".");
-                foreach (var file in files)
-                {
-                    if (file.Contains("fb-", StringComparison.InvariantCulture)
-                        && (file.EndsWith(".bin", StringComparison.InvariantCulture)
-                        || file.EndsWith(".db", StringComparison.InvariantCulture)))
-                    {
-                        File.Delete(file);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Failed to clear files: {ex.Message}");
-            }
-        }
-    }
-    public class FailureBufferTest : MakeConsoleWork, IClassFixture<FailureBufferTestFixture>
+    [Collection("Shared server tests")]
+    public class FailureBufferTest : MakeConsoleWork
     {
         private static int idx;
-        private readonly FailureBufferTestFixture tester;
-        public FailureBufferTest(ITestOutputHelper output, FailureBufferTestFixture tester) : base(output)
+        private readonly StaticServerTestFixture tester;
+        public FailureBufferTest(ITestOutputHelper output, StaticServerTestFixture tester) : base(output)
         {
             this.tester = tester ?? throw new ArgumentNullException(nameof(tester));
             tester.ResetConfig();

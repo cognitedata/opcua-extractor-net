@@ -15,14 +15,11 @@ using Xunit.Abstractions;
 
 namespace Test.Unit
 {
-    public sealed class TypeManagerTestFixture : BaseExtractorTestFixture
+    [Collection("Shared server tests")]
+    public class TypeManagerTest : MakeConsoleWork
     {
-        public TypeManagerTestFixture() : base() { }
-    }
-    public class TypeManagerTest : MakeConsoleWork, IClassFixture<TypeManagerTestFixture>
-    {
-        private readonly TypeManagerTestFixture tester;
-        public TypeManagerTest(ITestOutputHelper output, TypeManagerTestFixture tester) : base(output)
+        private readonly StaticServerTestFixture tester;
+        public TypeManagerTest(ITestOutputHelper output, StaticServerTestFixture tester) : base(output)
         {
             this.tester = tester ?? throw new ArgumentNullException(nameof(tester));
             tester.ResetConfig();
