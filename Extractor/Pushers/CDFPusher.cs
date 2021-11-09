@@ -502,7 +502,7 @@ namespace Cognite.OpcUa.Pushers
                     .ToDictionary(pair => pair.Key, pair => pair.update!.Value);
                 }
 
-                var toWrite = new List<(string key, RawRow row, UANode node)>();
+                var toWrite = new List<(string key, RawRow<Dictionary<string, JsonElement>> row, UANode node)>();
 
                 foreach (var row in rows)
                 {
@@ -674,7 +674,7 @@ namespace Cognite.OpcUa.Pushers
                     .ToDictionary(pair => pair.Key, pair => pair.update!.Value);
                 }
 
-                var toWrite = new List<(string key, RawRow row, UAVariable node)>();
+                var toWrite = new List<(string key, RawRow<Dictionary<string, JsonElement>> row, UAVariable node)>();
 
                 foreach (var row in rows)
                 {
@@ -891,12 +891,12 @@ namespace Cognite.OpcUa.Pushers
         private async Task UpsertRawRows<T>(
             string dbName,
             string tableName,
-            Func<IEnumerable<RawRow>?, IDictionary<string, T>> dtoBuilder,
+            Func<IEnumerable<RawRow<Dictionary<string, JsonElement>>>?, IDictionary<string, T>> dtoBuilder,
             JsonSerializerOptions? options,
             CancellationToken token)
         {
             int count = 0;
-            async Task CallAndCreate(IEnumerable<RawRow>? rows)
+            async Task CallAndCreate(IEnumerable<RawRow<Dictionary<string, JsonElement>>>? rows)
             {
                 var toUpsert = dtoBuilder(rows);
                 count += toUpsert.Count;
@@ -908,8 +908,8 @@ namespace Cognite.OpcUa.Pushers
             {
                 try
                 {
-                    var result = await destination.CogniteClient.Raw.ListRowsAsync(dbName, tableName,
-                        new RawRowQuery { Cursor = cursor, Limit = 10_000 }, token);
+                    var result = await destination.CogniteClient.Raw.ListRowsAsync<Dictionary<string, JsonElement>>(dbName, tableName,
+                        new RawRowQuery { Cursor = cursor, Limit = 10_000 }, null, token);
                     cursor = result.NextCursor;
 
                     await CallAndCreate(result.Items);
@@ -926,20 +926,20 @@ namespace Cognite.OpcUa.Pushers
             log.LogInformation("Updated or created {Count} rows in CDF Raw", count);
         }
 
-        public async Task<IEnumerable<RawRow>> GetRawRows(
+        public async Task<IEnumerable<RawRow<Dictionary<string, JsonElement>>>> GetRawRows(
             string dbName,
             string tableName,
             IEnumerable<string>? columns,
             CancellationToken token)
         {
             string? cursor = null;
-            var rows = new List<RawRow>();
+            var rows = new List<RawRow<Dictionary<string, JsonElement>>>();
             do
             {
                 try
                 {
-                    var result = await destination.CogniteClient.Raw.ListRowsAsync(dbName, tableName,
-                        new RawRowQuery { Cursor = cursor, Limit = 10_000, Columns = columns }, token);
+                    var result = await destination.CogniteClient.Raw.ListRowsAsync<Dictionary<string, JsonElement>>(dbName, tableName,
+                        new RawRowQuery { Cursor = cursor, Limit = 10_000, Columns = columns }, null, token);
                     rows.AddRange(result.Items);
                     cursor = result.NextCursor;
                 }

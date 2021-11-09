@@ -554,13 +554,13 @@ namespace Cognite.Bridge
         {
             if (!toUpsert.Any()) return;
             string cursor = null;
-            var existing = new List<RawRow>();
+            var existing = new List<RawRow<Dictionary<string, JsonElement>>>();
             do
             {
                 try
                 {
-                    var result = await destination.CogniteClient.Raw.ListRowsAsync(dbName, tableName,
-                        new RawRowQuery { Cursor = cursor, Limit = 10_000 }, token);
+                    var result = await destination.CogniteClient.Raw.ListRowsAsync<Dictionary<string, JsonElement>>(dbName, tableName,
+                        new RawRowQuery { Cursor = cursor, Limit = 10_000 }, null, token);
                     foreach (var item in result.Items)
                     {
                         existing.Add(item);
@@ -705,7 +705,7 @@ namespace Cognite.Bridge
         {
             public string Database { get; set; }
             public string Table { get; set; }
-            public IEnumerable<RawRowCreateJson> Rows { get; set; }
+            public IEnumerable<RawRow<JsonElement>> Rows { get; set; }
         }
     }
 }

@@ -49,7 +49,7 @@ namespace Cognite.OpcUa.NodeSources
         private readonly List<UAVariable> readVariables = new List<UAVariable>();
         private readonly List<UANode> readNodes = new List<UANode>();
 
-        private static async Task<IEnumerable<SavedNode>?> DeserializeRawData(IEnumerable<RawRow> rows, JsonSerializerOptions options, CancellationToken token)
+        private static async Task<IEnumerable<SavedNode>?> DeserializeRawData(IEnumerable<RawRow<Dictionary<string, JsonElement>>> rows, JsonSerializerOptions options, CancellationToken token)
         {
             using var stream = new MemoryStream();
             await JsonSerializer.SerializeAsync(stream, rows.Select(row => row.Columns), options, token);
