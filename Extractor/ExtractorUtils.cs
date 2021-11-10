@@ -136,7 +136,7 @@ namespace Cognite.OpcUa
             else if (e is AggregateException aex)
             {
                 var flat = aex.Flatten();
-                log.LogError("{Count} errors caught", flat.InnerExceptions.Count);
+                if (flat.InnerExceptions.Count > 1) log.LogError("{Count} errors caught", flat.InnerExceptions.Count);
                 foreach (var exc in flat.InnerExceptions)
                 {
                     LogException(log, exc, message, silentMessage);
