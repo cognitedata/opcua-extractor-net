@@ -91,6 +91,14 @@ source:
     # start browsing for updates immediately in the background.
     # This setup does not reduce load on the server, but can speed up startup.
     alt-source-background-browse: false
+    # Configuration for throttling browse operations.
+    browse-throttling:
+        # Maximum number of browse requests per type per minute.
+        max-per-minute: 0
+        # Maximum number of parallel browse requests.
+        max-parallelism: 0
+        # Maximum number of nodes to read in parallel. This should be set equal to or lower than the maximum number of continuation points set by the server.
+        max-node-parallelism: 0
 
 # Config for reading of history from the server
 history:
@@ -136,9 +144,7 @@ history:
     # Set to true to attempt to read history without using continationPoints, instead using the Time of events, and
     # SourceTimestamp of datapoints to incrementally change the start time of the request until no points are returned.
     ignore-continuation-points: false
-    # Configuration for throttling history reads. This applies to both events and datapoints separately. So the maximum load on the server
-    # is effectively twice the configured values. This is worth noting if the server restricts the number of available continuation points,
-    # and both events and datapoints are enabled. In this case max-node-parallelism should be set to half the maximum number of continuation points.
+    # Configuration for throttling history reads.
     throttling:
         # Maximum number of history requests per type per minute.
         max-per-minute: 0
