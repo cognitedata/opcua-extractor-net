@@ -120,7 +120,7 @@ namespace Test.Unit
             Exception ex;
             if (type == typeof(SilentServiceException))
             {
-                ex = new SilentServiceException("msg", new ServiceResultException(), ExtractorUtils.SourceOp.Browse);
+                ex = new SilentServiceException("msg", new ServiceResultException(), SourceOp.Browse);
             }
             else
             {

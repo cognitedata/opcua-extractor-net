@@ -383,7 +383,7 @@ namespace Cognite.OpcUa
                     "",
                     "");
             }
-            await uaClient.WaitForOperations(Source.Token);
+            await uaClient.WaitForOperations(CancellationToken.None);
             log.LogInformation("Extractor closed");
         }
 
