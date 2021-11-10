@@ -991,7 +991,7 @@ namespace Cognite.OpcUa.Config
 
             var historizingStates = nodeList.Where(node =>
                     (node is UAVariable variable) && !variable.IsProperty && variable.ReadHistory)
-                .Select(node => new VariableExtractionState(this, (node as UAVariable)!, true, true)).ToList();
+                .Select(node => new VariableExtractionState(this, (UAVariable)node, true, true)).ToList();
 
             var stateMap = historizingStates.ToDictionary(state => state.SourceId);
 
