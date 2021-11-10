@@ -136,6 +136,7 @@ namespace Cognite.OpcUa
             else if (e is AggregateException aex)
             {
                 var flat = aex.Flatten();
+                if (flat.InnerExceptions.Count > 1) log.LogError("{Count} errors caught", flat.InnerExceptions.Count);
                 foreach (var exc in flat.InnerExceptions)
                 {
                     LogException(log, exc, message, silentMessage);
@@ -147,8 +148,15 @@ namespace Cognite.OpcUa
             }
             else if (e is SilentServiceException silent)
             {
-                log.LogDebug("Silenced service exception: {Message} - {Info}", silentMessage,
-                    silent.InnerServiceException?.AdditionalInfo);
+                if (silent.InnerServiceException is not null)
+                {
+                    log.LogDebug("Silenced service exception: {Message} - {Info}", silentMessage, GetExcDesc(silent.InnerServiceException, silent.Operation));
+                }
+                else
+                {
+                    log.LogDebug("Silenced service exception: {Message} - {Op} {IMsg}", silentMessage,
+                        silent.Operation, silent.InnerException?.Message);
+                }
             }
             else if (e is ServiceResultException service)
             {
@@ -294,6 +302,10 @@ namespace Cognite.OpcUa
                     log.LogError("Failed to send request due to too large request size: {Message}", GetExcDesc(ex, op));
                     log.LogError("This might be solvable by increasing request limits in the xml config file, or by reducing chunk sizes");
                     return new SilentServiceException("Too large request", ex, op);
+                case StatusCodes.BadSecureChannelClosed:
+                case StatusCodes.BadConnectionClosed:
+                    log.LogError("Failed to send request due to loss of connection to the server: {Message}", GetExcDesc(ex, op));
+                    return new SilentServiceException("Failed to send request", ex, op);
                 default:
                     switch (op)
                     {
