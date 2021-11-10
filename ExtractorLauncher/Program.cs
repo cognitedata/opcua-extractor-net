@@ -32,23 +32,23 @@ namespace Cognite.OpcUa
 {
     public class ExtractorParams
     {
-        public string EndpointUrl { get; set; }
-        public string User { get; set; }
-        public string Password { get; set; }
+        public string? EndpointUrl { get; set; }
+        public string? User { get; set; }
+        public string? Password { get; set; }
         public bool AutoAccept { get; set; }
         public bool Secure { get; set; }
-        public string ConfigFile { get; set; }
-        public string ConfigDir { get; set; }
-        public string LogDir { get; set; }
-        public string ConfigTarget { get; set; }
+        public string? ConfigFile { get; set; }
+        public string? ConfigDir { get; set; }
+        public string? LogDir { get; set; }
+        public string? ConfigTarget { get; set; }
         public bool NoConfig { get; set; }
-        public string LogLevel { get; set; }
+        public string? LogLevel { get; set; }
         public bool Service { get; set; }
-        public string WorkingDir { get; set; }
+        public string? WorkingDir { get; set; }
         public bool Exit { get; set; }
         public bool ConfigTool { get; set; }
-        public FullConfig Config { get; set; }
-        public FullConfig BaseConfig { get; set; }
+        public FullConfig? Config { get; set; }
+        public FullConfig? BaseConfig { get; set; }
     }
     /// <summary>
     /// Console launcher for the OPC-UA extractor and Configuration tool. Includes basic setup of logging/config/metrics and
@@ -58,7 +58,7 @@ namespace Cognite.OpcUa
     {
         // For testing
         public static bool CommandDryRun { get; set; }
-        public static Action<ServiceCollection, ExtractorParams> OnLaunch { get; set; }
+        public static Action<ServiceCollection, ExtractorParams>? OnLaunch { get; set; }
         public static async Task<int> Main(string[] args)
         {
             return await GetCommandLineOptions().InvokeAsync(args);

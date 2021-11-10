@@ -5,6 +5,7 @@
     <RootNamespace>Cognite.OpcUa.Config</RootNamespace>
 	  <AssemblyName>ConfigurationTool</AssemblyName>
     <AnalysisMode>AllEnabledByDefault</AnalysisMode>
+    <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\Extractor\Extractor.csproj" />

@@ -7,16 +7,12 @@
     <AssemblyName>OpcuaExtractor</AssemblyName>
     <AnalysisMode>AllEnabledByDefault</AnalysisMode>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <Nullable>enable</Nullable>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\ConfigurationTool\ConfigurationTool.csproj" />
     <ProjectReference Include="..\Extractor\Extractor.csproj" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Remove="App.config" />
-    <None Remove="Properties\GitCommitHash" />
-    <None Remove="Properties\GitCommitTime" />
   </ItemGroup>
   <ItemGroup>
     <None Include="$(SolutionDir)config\**" CopyToOutputDirectory="Always" LinkBase="config\" />
