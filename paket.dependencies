@@ -23,4 +23,3 @@ nuget Microsoft.Extensions.Hosting.Systemd
 nuget Microsoft.Extensions.Hosting
 nuget Microsoft.Extensions.Hosting.Abstractions
 nuget Microsoft.Extensions.Logging.EventLog
-nuget System.Text.Json >= 6.0.0-rc.2.21480.5
