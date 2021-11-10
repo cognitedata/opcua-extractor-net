@@ -147,8 +147,6 @@ namespace Cognite.OpcUa
         {
             var result = new List<BrowseNode>();
 
-            if (failed) return Enumerable.Empty<BrowseNode>();
-
             if (chunk.Exception != null)
             {
                 ExtractorUtils.LogException(log, chunk.Exception, "Unexpected failure during browse", "Unexpected failure during browse");
@@ -157,6 +155,8 @@ namespace Cognite.OpcUa
                 AbortChunk(chunk, token);
                 return Enumerable.Empty<BrowseNode>();
             }
+
+            if (failed) return Enumerable.Empty<BrowseNode>();
 
             foreach (var node in chunk.Items)
             {
