@@ -21,7 +21,7 @@ podTemplate(
         resourceLimitMemory: '500Mi',
         ttyEnabled: true),
     containerTemplate(name: 'dotnet',
-        image: 'mcr.microsoft.com/dotnet/sdk:5.0-bullseye-slim',
+        image: 'mcr.microsoft.com/dotnet/sdk:6.0-bullseye-slim',
         envVars: [
             secretEnvVar(key: 'CODECOV_TOKEN', secretName: 'codecov-tokens', secretKey: 'opcua-extractor-net'),
             // /codecov-script/upload-report.sh relies on the following
