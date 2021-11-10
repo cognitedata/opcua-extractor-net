@@ -141,7 +141,7 @@ namespace Cognite.OpcUa.Types
                 }
                 results[kvp.Key] = result;
             }
-            
+
             return results;
         }
         /// <summary>

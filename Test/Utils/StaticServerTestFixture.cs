@@ -1,15 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Xunit;
-using Xunit.Abstractions;
+﻿using Xunit;
 
 namespace Test.Utils
 {
     [CollectionDefinition("Shared server tests")]
-    public class SharedServerTests: ICollectionFixture<StaticServerTestFixture>
+    public class SharedServerTests : ICollectionFixture<StaticServerTestFixture>
     {
     }
 
