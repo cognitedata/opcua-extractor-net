@@ -39,9 +39,9 @@ namespace Cognite.OpcUa
                 $"version: {Extractor.Metrics.Version.GetVersion(Assembly.GetExecutingAssembly())}"
                 + $", status: {Extractor.Metrics.Version.GetDescription(Assembly.GetExecutingAssembly())}");
 
-        public static Action<CogniteDestination, UAExtractor> OnCreateExtractor { get; set; }
+        public static Action<CogniteDestination?, UAExtractor>? OnCreateExtractor { get; set; }
 
-        private static string VerifyConfig(ILogger log, FullConfig config)
+        private static string? VerifyConfig(ILogger log, FullConfig config)
         {
             if (string.IsNullOrEmpty(config.Source.EndpointUrl)) return "Missing endpoint-url";
             try
@@ -72,7 +72,7 @@ namespace Cognite.OpcUa
             ILogger log,
             FullConfig config,
             ExtractorParams setup,
-            ExtractorRunnerParams<FullConfig, UAExtractor> options,
+            ExtractorRunnerParams<FullConfig, UAExtractor>? options,
             string configRoot)
         {
             config.Source.ConfigRoot = configRoot;
@@ -101,7 +101,7 @@ namespace Cognite.OpcUa
                 options.Restart |= config.Source.ExitOnFailure;
             }
 
-            string configResult = VerifyConfig(log, config);
+            string? configResult = VerifyConfig(log, config);
             if (configResult != null)
             {
                 throw new ConfigurationException($"Invalid config: {configResult}");
@@ -115,14 +115,14 @@ namespace Cognite.OpcUa
 
         private static void SetWorkingDir(ExtractorParams setup)
         {
-            string path = null;
+            string? path = null;
             if (setup.WorkingDir != null)
             {
                 path = setup.WorkingDir;
             }
             else if (setup.Service)
             {
-                path = Directory.GetParent(AppContext.BaseDirectory).Parent.FullName;
+                path = Directory.GetParent(AppContext.BaseDirectory)?.Parent?.FullName;
             }
             if (path != null)
             {
@@ -134,7 +134,7 @@ namespace Cognite.OpcUa
             }
         }
 
-        public static async Task RunConfigTool(ILogger log, ExtractorParams setup, ServiceCollection services, CancellationToken token)
+        public static async Task RunConfigTool(ILogger? log, ExtractorParams setup, ServiceCollection services, CancellationToken token)
         {
             string configDir = setup.ConfigDir ?? Environment.GetEnvironmentVariable("OPCUA_CONFIG_DIR") ?? "config/";
 
@@ -181,7 +181,7 @@ namespace Cognite.OpcUa
             await runTime.Run(token);
         }
 
-        public static async Task RunExtractor(ILogger log, ExtractorParams setup, ServiceCollection services, CancellationToken token)
+        public static async Task RunExtractor(ILogger? log, ExtractorParams setup, ServiceCollection services, CancellationToken token)
         {
             string configDir = setup.ConfigDir ?? Environment.GetEnvironmentVariable("OPCUA_CONFIG_DIR") ?? "config/";
 
@@ -196,7 +196,7 @@ namespace Cognite.OpcUa
             var ver = Extractor.Metrics.Version.GetVersion(Assembly.GetExecutingAssembly());
 
 
-            FullConfig config;
+            FullConfig? config;
             if (setup.NoConfig)
             {
                 config = new FullConfig();
@@ -226,21 +226,21 @@ namespace Cognite.OpcUa
                 var conf = provider.GetRequiredService<FullConfig>();
                 var dest = provider.GetService<CogniteDestination>();
                 var log = provider.GetRequiredService<ILogger<CDFPusher>>();
-                if (conf.Cognite == null || dest == null || dest.CogniteClient == null) return null;
+                if (conf.Cognite == null || dest == null || dest.CogniteClient == null) return null!;
                 return new CDFPusher(log, conf.Extraction, conf.Cognite, dest);
             });
             services.AddSingleton<IPusher, InfluxPusher>(provider =>
             {
                 var conf = provider.GetService<FullConfig>();
                 var log = provider.GetRequiredService<ILogger<InfluxPusher>>();
-                if (conf?.Influx == null) return null;
+                if (conf?.Influx == null) return null!;
                 return new InfluxPusher(log, conf.Influx);
             });
             services.AddSingleton<IPusher, MQTTPusher>(provider =>
             {
                 var conf = provider.GetService<FullConfig>();
                 var log = provider.GetRequiredService<ILogger<MQTTPusher>>();
-                if (conf?.Mqtt == null) return null;
+                if (conf?.Mqtt == null) return null!;
                 return new MQTTPusher(log, provider, conf.Mqtt);
             });
 

@@ -113,7 +113,7 @@ namespace Cognite.OpcUa.Config
         /// <param name="target">List to write to</param>
         /// <param name="client">UAClient instance for namespaces</param>
         /// <returns>Callback for Browse in UAClient</returns>
-        public static Action<ReferenceDescription, NodeId> GetSimpleListWriterCallback(IList<UANode> target, UAClient client)
+        public static Action<ReferenceDescription, NodeId> GetSimpleListWriterCallback(ICollection<UANode> target, UAClient client)
         {
             return (node, parentId) =>
             {
@@ -310,7 +310,7 @@ namespace Cognite.OpcUa.Config
         public static bool NodeNameStartsWith(UANode node, string str)
         {
             if (node == null) return false;
-            string identifier = node.Id.IdType == IdType.String ? (string)node.Id.Identifier : null;
+            string? identifier = node.Id.IdType == IdType.String ? (string)node.Id.Identifier : null;
             return identifier != null && identifier.StartsWith(str, StringComparison.InvariantCultureIgnoreCase)
                 || node.DisplayName != null && node.DisplayName.StartsWith(str, StringComparison.InvariantCultureIgnoreCase);
         }
@@ -324,7 +324,7 @@ namespace Cognite.OpcUa.Config
         public static bool NodeNameContains(UANode node, string str)
         {
             if (node == null) return false;
-            string identifier = node.Id.IdType == IdType.String ? (string)node.Id.Identifier : null;
+            string? identifier = node.Id.IdType == IdType.String ? (string)node.Id.Identifier : null;
             return identifier != null && identifier.Contains(str, StringComparison.InvariantCultureIgnoreCase)
                         || node.DisplayName != null && node.DisplayName.Contains(str, StringComparison.InvariantCultureIgnoreCase);
         }
