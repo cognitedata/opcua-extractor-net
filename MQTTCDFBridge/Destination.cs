@@ -46,7 +46,7 @@ namespace Cognite.Bridge
         /// <param name="update">New asset</param>
         /// <param name="old">Old asset</param>
         /// <returns>Asset update or null if no updates are necessary</returns>
-        private static AssetUpdateItem GetAssetUpdate(AssetCreate update, Asset old)
+        private static AssetUpdateItem? GetAssetUpdate(AssetCreate? update, Asset? old)
         {
             if (update == null || old == null) return null;
 
@@ -71,7 +71,7 @@ namespace Cognite.Bridge
         /// </summary>
         /// <param name="doc">Document to convert</param>
         /// <returns>A dictionary</returns>
-        private static Dictionary<string, string> JsonDocumentToDictionary(JsonDocument doc)
+        private static Dictionary<string, string>? JsonDocumentToDictionary(JsonDocument? doc)
         {
             if (doc == null || doc.RootElement.ValueKind != JsonValueKind.Object) return null;
             var result = new Dictionary<string, string>();
@@ -89,7 +89,7 @@ namespace Cognite.Bridge
         /// <param name="update">New timeseries</param>
         /// <param name="old">Old timeseries</param>
         /// <returns>Asset update or null if no updates are necessary</returns>
-        private static TimeSeriesUpdateItem GetTimeSeriesUpdate(StatelessTimeSeriesCreate update, TimeSeries old)
+        private static TimeSeriesUpdateItem? GetTimeSeriesUpdate(StatelessTimeSeriesCreate? update, TimeSeries? old)
         {
             if (update == null || old == null) return null;
 
@@ -99,14 +99,14 @@ namespace Cognite.Bridge
 
             var meta = JsonDocumentToDictionary(update.Metadata);
             if (meta != null && meta
-                .Any(kvp => old.Metadata == null || !old.Metadata.TryGetValue(kvp.Key, out string value) || value != kvp.Value))
+                .Any(kvp => old.Metadata == null || !old.Metadata.TryGetValue(kvp.Key, out string? value) || value != kvp.Value))
                 upd.Metadata = new UpdateDictionary<string>(meta, Enumerable.Empty<string>());
 
             if (update.Name != null && update.Name != old.Name) upd.Name = new UpdateNullable<string>(update.Name);
             if (update.AssetId != null && update.AssetId != old.AssetId)
                 upd.AssetId = new UpdateNullable<long?>(update.AssetId);
 
-            if (update.Unit != null & update.Unit != old.Unit) upd.Unit = new UpdateNullable<string>(update.Unit);
+            if (update.Unit != null && update.Unit != old.Unit) upd.Unit = new UpdateNullable<string>(update.Unit);
 
             if (upd.DataSetId == null && upd.Description == null && upd.Metadata == null && upd.Name == null
                 && upd.Unit == null && upd.AssetId == null) return null;
@@ -128,7 +128,7 @@ namespace Cognite.Bridge
                 return true;
             }
             var assets = JsonSerializer.Deserialize<IEnumerable<AssetCreate>>(Encoding.UTF8.GetString(msg.Payload));
-            if (!assets.Any()) return true;
+            if (assets == null || !assets.Any()) return true;
 
             var idsToTest = assets.Select(asset => asset.ExternalId).ToList();
 
@@ -146,7 +146,7 @@ namespace Cognite.Bridge
 
                 if (found.Errors != null && found.Errors.Any(err => err.Type == ErrorType.FatalFailure)) return false;
 
-                foreach (var asset in found.Results)
+                foreach (var asset in found.Results!)
                 {
                     assetIds[asset.ExternalId] = asset.Id;
                 }
@@ -161,7 +161,7 @@ namespace Cognite.Bridge
                 var createdIdsSet = new HashSet<string>(createdIds);
 
                 var newAssetsMap = assets.ToDictionary(asset => asset.ExternalId);
-                var toUpdate = found.Results
+                var toUpdate = found.Results!
                     .Where(asset => !createdIdsSet.Contains(asset.ExternalId))
                     .Select(old => GetAssetUpdate(newAssetsMap.GetValueOrDefault(old.ExternalId), old))
                     .Where(update => update != null)
@@ -247,7 +247,9 @@ namespace Cognite.Bridge
             var str = Encoding.UTF8.GetString(msg.Payload);
             var timeseries = JsonSerializer.Deserialize<IEnumerable<StatelessTimeSeriesCreate>>(Encoding.UTF8.GetString(msg.Payload));
 
-            var assetExternalIds = timeseries.Select(ts => ts.AssetExternalId).Where(id => id != null).ToHashSet();
+            if (timeseries == null || !timeseries.Any()) return true;
+
+            var assetExternalIds = timeseries.Select(ts => ts.AssetExternalId!).Where(id => id != null).ToHashSet();
 
             var missingAssetIds = assetExternalIds.Except(assetIds.Keys);
 
@@ -290,7 +292,7 @@ namespace Cognite.Bridge
 
                 if (found.Errors != null && found.Errors.Any(err => err.Type == ErrorType.FatalFailure)) return false;
 
-                foreach (var ts in found.Results)
+                foreach (var ts in found.Results!)
                 {
                     tsIsString[ts.ExternalId] = ts.IsString;
                 }
@@ -396,7 +398,9 @@ namespace Cognite.Bridge
             }
             var events = JsonSerializer.Deserialize<IEnumerable<StatelessEventCreate>>(Encoding.UTF8.GetString(msg.Payload));
 
-            var assetExternalIds = events.SelectMany(evt => evt.AssetExternalIds).Where(id => id != null);
+            if (events == null || !events.Any()) return true;
+
+            var assetExternalIds = events.SelectMany(evt => evt?.AssetExternalIds ?? Enumerable.Empty<string>()).Where(id => id != null);
             var missingAssetIds = assetExternalIds.Except(assetIds.Keys);
 
             if (missingAssetIds.Any())
@@ -409,6 +413,7 @@ namespace Cognite.Bridge
 
             foreach (var evt in events)
             {
+                if (evt.AssetExternalIds == null) continue;
                 evt.AssetIds = evt.AssetExternalIds.Where(id => id != null && assetIds.ContainsKey(id) && assetIds[id] != null)
                     .Select(id => assetIds[id] ?? 0);
             }
@@ -445,6 +450,8 @@ namespace Cognite.Bridge
                 return true;
             }
             var relationships = JsonSerializer.Deserialize<IEnumerable<RelationshipCreate>>(Encoding.UTF8.GetString(msg.Payload));
+
+            if (relationships == null || !relationships.Any()) return true;
 
             var tasks = relationships.ChunkBy(1000).Select(chunk => PushRelationshipsChunk(chunk, token));
             try
@@ -483,7 +490,7 @@ namespace Cognite.Bridge
                     {
                         if (dict.TryGetValue("externalId", out var value))
                         {
-                            existing.Add((value as MultiValue.String).Value);
+                            existing.Add((value as MultiValue.String)!.Value);
                         }
                     }
                     if (!existing.Any()) throw;
@@ -517,6 +524,8 @@ namespace Cognite.Bridge
             {
                 PropertyNamingPolicy = JsonNamingPolicy.CamelCase
             });
+
+            if (rows?.Rows == null || !rows.Rows.Any() || rows.Database == null || rows.Table == null) return true;
 
             try
             {
@@ -553,7 +562,7 @@ namespace Cognite.Bridge
             CancellationToken token)
         {
             if (!toUpsert.Any()) return;
-            string cursor = null;
+            string? cursor = null;
             var existing = new List<RawRow<Dictionary<string, JsonElement>>>();
             do
             {
@@ -692,20 +701,20 @@ namespace Cognite.Bridge
         [SuppressMessage("Microsoft.Performance", "CA1812")]
         internal class StatelessEventCreate : EventCreate
         {
-            public IEnumerable<string> AssetExternalIds { get; set; }
+            public IEnumerable<string>? AssetExternalIds { get; set; }
         }
         [SuppressMessage("Microsoft.Performance", "CA1812")]
         internal class StatelessTimeSeriesCreate : TimeSeriesCreate
         {
-            public string AssetExternalId { get; set; }
-            public new JsonDocument Metadata { get; set; }
+            public string? AssetExternalId { get; set; }
+            public new JsonDocument? Metadata { get; set; }
         }
         [SuppressMessage("Microsoft.Performance", "CA1812")]
         internal class RawRequestWrapper
         {
-            public string Database { get; set; }
-            public string Table { get; set; }
-            public IEnumerable<RawRow<JsonElement>> Rows { get; set; }
+            public string? Database { get; set; }
+            public string? Table { get; set; }
+            public IEnumerable<RawRow<JsonElement>>? Rows { get; set; }
         }
     }
 }

@@ -6,10 +6,10 @@ namespace Cognite.Bridge
 {
     public class MQTTConfig
     {
-        public string Host { get; set; }
+        public string? Host { get; set; }
         public int? Port { get; set; }
-        public string Username { get; set; }
-        public string Password { get; set; }
+        public string? Username { get; set; }
+        public string? Password { get; set; }
         public bool UseTls { get; set; }
         public string ClientId { get; set; } = "cognite-cdf-bridge";
         public string AssetTopic { get; set; } = "cognite/opcua/assets";
@@ -27,9 +27,9 @@ namespace Cognite.Bridge
 
     public class BridgeConfig : VersionedConfig
     {
-        public LoggerConfig Logger { get; set; }
-        public CogniteDestConfig Cognite { get; set; }
-        public MQTTConfig Mqtt { get; set; }
+        public LoggerConfig Logger { get; set; } = null!;
+        public CogniteDestConfig Cognite { get; set; } = null!;
+        public MQTTConfig Mqtt { get; set; } = null!;
 
         public override void GenerateDefaults()
         {

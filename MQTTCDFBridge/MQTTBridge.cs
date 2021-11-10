@@ -19,8 +19,8 @@ namespace Cognite.Bridge
         private readonly ILogger log = Log.Logger.ForContext(typeof(MQTTBridge));
 
         private readonly Destination destination;
-        private TaskCompletionSource waitSource;
-        private string waitTopic;
+        private TaskCompletionSource? waitSource;
+        private string? waitTopic;
 
         private bool disconnected;
         public MQTTBridge(Destination destination, BridgeConfig config)
@@ -49,7 +49,7 @@ namespace Cognite.Bridge
         /// Wait for up to timeout seconds for a message to arrive over MQTT. Throws an exception if waiting timed out.
         /// </summary>
         /// <param name="timeout">Timeout in seconds</param>
-        public async Task WaitForNextMessage(int timeout = 50, string topic = null)
+        public async Task WaitForNextMessage(int timeout = 50, string? topic = null)
         {
             waitSource = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             waitTopic = topic;
