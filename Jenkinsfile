@@ -95,6 +95,7 @@ podTemplate(
                 echo "${env.BRANCH_NAME}"
             }
         }
+        if (false) {
         container('dotnet') {
             stage('Install dependencies') {
                 sh('apt-get update && apt-get -y install gnupg curl procps gawk grep')
@@ -153,6 +154,7 @@ podTemplate(
                 }
             }
         }
+        }
         if ("$lastTag" == "$version" && env.BRANCH_NAME == "master") {
             container('docker') {
                 stage("Build Docker images") {
@@ -186,10 +188,13 @@ podTemplate(
         node('windows') {
             stage('Building MSI on windows node') {
                 powershell('echo $env:Path')
+                powershell('dotnet --list-sdks')
+                powershell('ls C:\\ProgramData\\chocolatey\\lib\\')
             }
         
             stage('Checkout') {
                 checkout(scm)
+                version = "2.5.1"
                 echo "$version"
                 echo "$lastTag"
                 echo "${env.BRANCH_NAME}"
