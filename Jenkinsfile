@@ -182,7 +182,7 @@ podTemplate(
             }
         }
     }
-    if ("$lastTag" == "$version" && env.BRANCH_NAME == "master") {
+    if ("$lastTag" == "$version" && env.BRANCH_NAME == "master" || true) {
         node('windows') {
             stage('Building MSI on windows node') {
                 powershell('echo $env:Path')
