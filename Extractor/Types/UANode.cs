@@ -54,10 +54,6 @@ namespace Cognite.OpcUa.Types
         public NodeId ParentId { get; }
         public virtual NodeAttributes Attributes { get; }
         /// <summary>
-        /// True if the properties of this object has been read.
-        /// </summary>
-        public bool PropertiesRead => Attributes.PropertiesRead;
-        /// <summary>
         /// True if node data has been read
         /// </summary>
         public bool DataRead => Attributes.DataRead;
@@ -418,7 +414,6 @@ namespace Cognite.OpcUa.Types
             if (NodeClass == NodeClass.Variable && id == VariableTypeIds.PropertyType)
             {
                 Attributes.IsProperty = true;
-                Attributes.PropertiesRead = true;
             }
         }
     }

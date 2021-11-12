@@ -59,11 +59,6 @@ namespace Cognite.OpcUa
         public IEnumerable<NodeId> RootNodes { get; private set; } = null!;
         private readonly IEnumerable<IPusher> pushers;
         private readonly ConcurrentQueue<NodeId> extraNodesToBrowse = new ConcurrentQueue<NodeId>();
-
-        // Concurrent reading of properties
-        private readonly HashSet<NodeId> pendingProperties = new HashSet<NodeId>();
-        private readonly object propertySetLock = new object();
-        private readonly List<Task> propertyReadTasks = new List<Task>();
         public IEnumerable<NodeTransformation>? Transformations { get; private set; }
         public StringConverter StringConverter => uaClient.StringConverter;
         private readonly PubSubManager? pubSubManager;
@@ -129,11 +124,11 @@ namespace Cognite.OpcUa
             if (config.FailureBuffer.Enabled)
             {
                 FailureBuffer = new FailureBuffer(provider.GetRequiredService<ILogger<FailureBuffer>>(),
-                    config, this, pushers.OfType<InfluxPusher>().FirstOrDefault());
+                    config, this, this.pushers.OfType<InfluxPusher>().FirstOrDefault());
             }
             if (run != null) run.Continuous = true;
 
-            log.LogInformation("Building extractor with {NumPushers} pushers", pushers.Count());
+            log.LogInformation("Building extractor with {NumPushers} pushers", this.pushers.Count());
 
             if (Config.PubSub.Enabled)
             {
@@ -409,51 +404,6 @@ namespace Cognite.OpcUa
         }
 
         /// <summary>
-        /// Read properties for the given list of BufferedNode. This is intelligent,
-        /// and keeps track of which properties are in the process of being read,
-        /// to prevent multiple pushers from starting PropertyRead operations at the same time.
-        /// If this is called on a given node twice in short time, the second call
-        /// waits on the first.
-        /// </summary>
-        /// <param name="nodes">Nodes to get properties for</param>
-        public async Task ReadProperties(IEnumerable<UANode> nodes)
-        {
-            Task? newTask = null;
-            List<Task> tasksToWaitFor;
-            lock (propertySetLock)
-            {
-                nodes = nodes.Where(node => !pendingProperties.Contains(node.Id) && !node.PropertiesRead).ToList();
-                if (nodes.Any())
-                {
-                    newTask = uaClient.GetNodeProperties(nodes, Source.Token);
-                    propertyReadTasks.Add(newTask);
-                }
-
-                foreach (var node in nodes)
-                {
-                    pendingProperties.Add(node.Id);
-                }
-
-                tasksToWaitFor = propertyReadTasks.ToList();
-            }
-
-            await Task.WhenAll(tasksToWaitFor);
-            lock (propertySetLock)
-            {
-                if (newTask != null)
-                {
-                    propertyReadTasks.Remove(newTask);
-                }
-                if (!pendingProperties.Any()) return;
-                foreach (var node in nodes)
-                {
-                    node.Attributes.PropertiesRead = true;
-                    pendingProperties.Remove(node.Id);
-                }
-            }
-        }
-
-        /// <summary>
         /// Returns a task running history for both data and events.
         /// </summary>
         public async Task RestartHistory()
@@ -569,7 +519,7 @@ namespace Cognite.OpcUa
 
             if (readFromOpc)
             {
-                log.LogDebug("Begin mapping directory");
+                log.LogInformation("Begin mapping main directory");
                 var handler = new UANodeSource(Provider.GetRequiredService<ILogger<UANodeSource>>(), Config, this, uaClient);
                 try
                 {
@@ -582,7 +532,7 @@ namespace Cognite.OpcUa
                     throw;
                 }
                 result = await handler.ParseResults(Source.Token);
-                log.LogDebug("End mapping directory");
+                log.LogInformation("End mapping main directory");
             }
 
             try

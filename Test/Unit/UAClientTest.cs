@@ -388,7 +388,7 @@ namespace Test.Unit
             tester.Client.Browser.ResetVisitedNodes();
             var (callback, nodes) = UAClientTestFixture.GetCallback();
             await tester.Client.Browser.BrowseDirectory(new[] { tester.Server.Ids.Full.DeepRoot }, callback, tester.Source.Token,
-                null, 3, true, true, false, depth);
+                null, 3, true, true, depth);
 
             Assert.Equal(numNodes, nodes.Sum(node => node.Value.Count));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_browse_operations", numBrowse));
@@ -508,7 +508,7 @@ namespace Test.Unit
             Assert.False(nodes.ContainsKey(tester.Server.Ids.Full.DeepRoot));
             Assert.True(nodes.ContainsKey(tester.Server.Ids.Full.WideRoot));
             Assert.Equal(2001, nodes.Aggregate(0, (seed, kvp) => seed + kvp.Value.Count));
-            Assert.True(CommonTestUtils.TestMetricValue("opcua_browse_operations", 32 + 32 + 1));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_browse_operations", 32 + 32 + 3));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_tree_depth", 32));
             tester.Client.Browser.ResetVisitedNodes();
         }
@@ -536,7 +536,7 @@ namespace Test.Unit
             }
 
             Assert.Equal(distinctNodes.Count(), nodes.Sum(kvp => kvp.Value.Count));
-            Assert.Equal(1502, nodes.Sum(kvp => kvp.Value.Count));
+            Assert.Equal(2377, nodes.Sum(kvp => kvp.Value.Count));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_browse_operations", 10));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_tree_depth", 11));
         }
@@ -727,55 +727,6 @@ namespace Test.Unit
             Assert.Equal(new Variant(new[] { "test1", "test2" }), nodes[2].Value);
             Assert.Equal("°C: degree Celsius", tester.Client.StringConverter.ConvertToString(nodes[3].Value));
             Assert.Equal("(0, 100)", tester.Client.StringConverter.ConvertToString(nodes[4].Value));
-        }
-
-        [Fact]
-        public async Task TestGetNodeProperties()
-        {
-            CommonTestUtils.ResetMetricValues("opcua_attribute_requests", "opcua_browse_operations");
-            var arrayVar = new UAVariable(tester.Server.Ids.Custom.Array, "Array", tester.Server.Ids.Custom.Root);
-            arrayVar.VariableAttributes.ArrayDimensions = new[] { 4 };
-            var nodes = new[]
-            {
-                // Normal variable
-                new UAVariable(tester.Server.Ids.Base.DoubleVar1, "DoubleVar", tester.Server.Ids.Base.Root),
-                // Array root
-                arrayVar,
-                // Array element
-                arrayVar.CreateTimeseries().First(),
-                // Variable with properties
-                new UAVariable(tester.Server.Ids.Custom.MysteryVar, "NumberVar", tester.Server.Ids.Custom.Root),
-                // object with no children
-                new UANode(tester.Server.Ids.Custom.Root, "CustomRoot", ObjectIds.ObjectsFolder, NodeClass.Object),
-                // object with properties
-                new UANode(tester.Server.Ids.Custom.Obj2, "Object", tester.Server.Ids.Custom.Root, NodeClass.Object),
-                // variable with nested properties
-                new UAVariable(tester.Server.Ids.Custom.NumberVar, "NumberVar2", tester.Server.Ids.Custom.Root)
-            };
-            nodes[5].Attributes.Properties = new List<UANode>
-            {
-                new UAVariable(tester.Server.Ids.Custom.ObjProp, "prop1", tester.Server.Ids.Custom.Obj2),
-                new UAVariable(tester.Server.Ids.Custom.ObjProp2, "prop2", tester.Server.Ids.Custom.Obj2)
-            };
-
-            await tester.Client.GetNodeProperties(nodes, tester.Source.Token);
-            Assert.Equal(2, nodes[0].Properties.Count());
-            Assert.Equal(2, nodes[1].Properties.Count());
-            Assert.Equal(2, nodes[2].Properties.Count());
-            Assert.Equal(nodes[1].Properties, nodes[2].Properties);
-            Assert.Equal(2, nodes[3].Properties.Count());
-            Assert.Null(nodes[4].Properties);
-            Assert.Equal(2, nodes[5].Properties.Count());
-            Assert.NotNull((nodes[5].Properties.First() as UAVariable).Value.Value);
-            Assert.NotNull((nodes[5].Properties.Last() as UAVariable).Value.Value);
-            Assert.Equal(4, nodes[6].GetAllProperties().Count());
-            var meta = nodes[6].BuildMetadata(tester.Config.Extraction, tester.Client.DataTypeManager, tester.Client.StringConverter, false);
-            Assert.Equal(2, meta.Count);
-            Assert.Equal("value 1", meta["DeepProp_DeepProp2_val1"]);
-            Assert.Equal("value 2", meta["DeepProp_DeepProp2_val2"]);
-
-            Assert.True(CommonTestUtils.TestMetricValue("opcua_browse_operations", 3));
-            Assert.True(CommonTestUtils.TestMetricValue("opcua_attribute_requests", 2));
         }
 
         [Fact]

@@ -112,13 +112,10 @@ namespace Cognite.OpcUa.NodeSources
 
             Log.LogInformation("Estimating array length for {Count} nodes", nodes.Count());
 
-            await Extractor.ReadProperties(nodes);
             var toReadValues = new List<UAVariable>();
 
             var maxLengthProperties = nodes
                 .SelectNonNull(node => node.Properties?.FirstOrDefault(prop => prop.DisplayName == "MaxArrayLength") as UAVariable);
-
-            await Client.ReadNodeValues(maxLengthProperties, token);
 
             foreach (var node in nodes)
             {
@@ -244,11 +241,6 @@ namespace Cognite.OpcUa.NodeSources
                     trns.ApplyTransformation(Log, node, Client.NamespaceTable!);
                     if (node.Ignore) return;
                 }
-            }
-
-            if (node.NodeClass == NodeClass.Variable && Config.Extraction.MapVariableChildren)
-            {
-                node.Attributes.PropertiesRead = true;
             }
 
             if (node.Parent != null

@@ -105,6 +105,8 @@ namespace Cognite.OpcUa.PubSub
 
             foreach (var node in toCorrect) node.AltParent = node.Parent;
 
+            log.LogInformation("Browse data set writers in reverse to obtain their parents");
+
             var result = await client.Browser.BrowseLevel(
                 new BrowseParams
                 {
@@ -366,13 +368,13 @@ namespace Cognite.OpcUa.PubSub
             var root = await client.Browser.GetRootNodes(new[] { ObjectIds.PublishSubscribe }, token);
             HandleNode(root.First(), NodeId.Null);
 
+            log.LogInformation("Browse server PubSub hierarchy to identify settings");
             await client.Browser.BrowseDirectory(
                 new[] { ObjectIds.PublishSubscribe },
                 (desc, id) => HandleNode(desc, id),
                 token,
                 ignoreVisited: false,
-                doFilter: false,
-                readVariableChildren: true);
+                doFilter: false);
 
             // Read values
             if (!await LoadNodeValues(token)) return null;

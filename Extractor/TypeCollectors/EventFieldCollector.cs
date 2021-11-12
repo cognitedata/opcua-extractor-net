@@ -15,6 +15,7 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
@@ -87,13 +88,15 @@ namespace Cognite.OpcUa.TypeCollectors
         private readonly Regex? ignoreFilter;
         private readonly HashSet<string> excludeProperties;
         private readonly HashSet<string> baseExcludeProperties;
+        private readonly ILogger log;
         /// <summary>
         /// Construct the collector.
         /// </summary>
         /// <param name="parent">UAClient to be used for browse calls.</param>
         /// <param name="config">Event configuration to use</param>
-        public EventFieldCollector(UAClient parent, EventConfig config)
+        public EventFieldCollector(ILogger log, UAClient parent, EventConfig config)
         {
+            this.log = log;
             uaClient = parent;
             this.config = config;
             if (!string.IsNullOrEmpty(config.ExcludeEventFilter))
@@ -112,6 +115,7 @@ namespace Cognite.OpcUa.TypeCollectors
         {
             types[ObjectTypeIds.BaseEventType] = new UAEventType(ObjectTypeIds.BaseEventType, "BaseEventType");
 
+            log.LogInformation("Browse event type hierarchy to map out event types");
             await uaClient.Browser.BrowseDirectory(
                 new List<NodeId> { ObjectTypeIds.BaseEventType },
                 EventTypeCallback,
@@ -119,8 +123,7 @@ namespace Cognite.OpcUa.TypeCollectors
                 ReferenceTypeIds.HierarchicalReferences,
                 (uint)NodeClass.ObjectType | (uint)NodeClass.Variable | (uint)NodeClass.Object,
                 false,
-                false,
-                true);
+                false);
 
             var result = new Dictionary<NodeId, UAEventType>();
 

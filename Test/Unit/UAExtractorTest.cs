@@ -120,10 +120,7 @@ namespace Test.Unit
         [InlineData(5, 0, 0, 0, 4, 1)]
         public async Task TestPushNodes(int failAt, int pushedObjects, int pushedVariables, int pushedRefs, int failedNodes, int failedRefs)
         {
-            var pusher = new DummyPusher(new DummyPusherConfig())
-            {
-                ReadProperties = false
-            };
+            var pusher = new DummyPusher(new DummyPusherConfig());
             tester.Config.Extraction.Relationships.Enabled = true;
             using var extractor = tester.BuildExtractor(pushers: pusher);
 
@@ -192,65 +189,6 @@ namespace Test.Unit
             else
             {
                 Assert.False(pusher.Initialized);
-            }
-        }
-
-        [Fact]
-        public async Task TestGetProperties()
-        {
-            // Create multiple partially overlapping tasks to read properties, then wait for the last one to complete.
-            // This should result in all tasks being completed and all properties being read.
-            using var extractor = tester.BuildExtractor();
-
-            var custIds = tester.Server.Ids.Custom;
-            var var1 = new UAVariable(custIds.MysteryVar, "MysteryVar", custIds.Root);
-            var var2 = new UAVariable(custIds.Array, "Array", custIds.Root);
-            var obj1 = new UANode(custIds.Obj1, "Object1", custIds.Root, NodeClass.Object);
-            obj1.Attributes.Properties = new List<UANode>
-            {
-                new UAVariable(custIds.StringArray, "StringArray", custIds.Obj1),
-                new UAVariable(tester.Server.Ids.Base.DoubleVar1, "VarProp1", custIds.Obj1)
-            };
-            obj1.Attributes.Properties[0].Attributes.IsProperty = true;
-            obj1.Attributes.Properties[0].Attributes.PropertiesRead = true;
-            obj1.Attributes.Properties[1].Attributes.IsProperty = true;
-
-            var obj2 = new UANode(custIds.Obj2, "Object2", custIds.Root, NodeClass.Object);
-            obj2.Attributes.Properties = new List<UANode>
-            {
-                new UAVariable(custIds.ObjProp, "ObjProp1", custIds.Obj2),
-                new UAVariable(custIds.ObjProp2, "ObjProp2", custIds.Obj2)
-            };
-            obj2.Attributes.Properties[0].Attributes.IsProperty = true;
-            obj2.Attributes.Properties[0].Attributes.PropertiesRead = true;
-            obj2.Attributes.Properties[1].Attributes.IsProperty = true;
-            obj2.Attributes.Properties[1].Attributes.PropertiesRead = true;
-
-            var chunks = new List<List<UANode>>
-            {
-                new List<UANode> { var1, obj1 },
-                new List<UANode> { var2, obj2 },
-                new List<UANode> { var1, obj2, var2 }
-            };
-
-            var tasks = chunks.Select(chunk => extractor.ReadProperties(chunk)).ToList();
-
-            await tasks[2];
-
-            Assert.True(tasks[0].IsCompleted);
-            Assert.True(tasks[1].IsCompleted);
-
-            Assert.Equal(2, var1.Properties.Count());
-            Assert.Equal(2, var2.Properties.Count());
-            foreach (var node in chunks.SelectMany(chunk => chunk))
-            {
-                Assert.Equal(2, node.Properties.Count());
-                foreach (var prop in node.Properties)
-                {
-                    var propVar = prop as UAVariable;
-                    Assert.NotNull(propVar.Value.Value);
-                    Assert.False(string.IsNullOrEmpty(extractor.StringConverter.ConvertToString(propVar.Value)));
-                }
             }
         }
 

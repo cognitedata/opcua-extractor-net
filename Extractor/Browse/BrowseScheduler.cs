@@ -32,7 +32,6 @@ namespace Cognite.OpcUa
     {
         public IEnumerable<NodeFilter>? Filters { get; set; }
         public Action<ReferenceDescription, NodeId>? Callback { get; set; }
-        public bool ReadVariableChildren { get; set; }
         public int NodesChunk { get; set; }
         public int MaxNodeParallelism { get; set; }
         public BrowseParams? InitialParams { get; set; }
@@ -189,8 +188,7 @@ namespace Cognite.OpcUa
                     if (node.Depth + 1 == depthCounts.Count) depthCounts.Add(1);
                     else depthCounts[node.Depth + 1]++;
 
-                    if (!options.ReadVariableChildren && rd.NodeClass == NodeClass.Variable) continue;
-                    if (options.ReadVariableChildren && rd.TypeDefinition == VariableTypeIds.PropertyType) continue;
+                    if (rd.TypeDefinition == VariableTypeIds.PropertyType) continue;
                     if ((options.MaxDepth < 0 || node.Depth < options.MaxDepth) && localVisitedNodes.Add(nodeId))
                     {
                         result.Add(new BrowseNode(nodeId, node));

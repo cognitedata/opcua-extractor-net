@@ -766,6 +766,7 @@ namespace Cognite.OpcUa
         {
             nodes = nodes.Where(node => !node.ValueRead && node.Index == -1).ToList();
             if (!nodes.Any()) return;
+            log.LogInformation("Get the current values of {Count} variables", nodes.Count());
             var readValueIds = new ReadValueIdCollection(
                 nodes.Select(node => new ReadValueId { AttributeId = Attributes.Value, NodeId = node.Id }));
             IEnumerable<DataValue> values;
@@ -787,85 +788,6 @@ namespace Cognite.OpcUa
                 node.SetDataPoint(enumerator.Current?.WrappedValue ?? Variant.Null);
             }
             enumerator.Dispose();
-        }
-
-        /// <summary>
-        /// Gets properties for variables in nodes given, then updates all properties in given list of nodes with relevant data and values.
-        /// </summary>
-        /// <param name="nodes">Nodes to be updated with properties</param>
-        public async Task GetNodeProperties(IEnumerable<UANode> nodes, CancellationToken token)
-        {
-            if (nodes == null || !nodes.Any()) return;
-
-            var properties = new HashSet<UAVariable>();
-            log.LogInformation("Get properties for {NumNodesToPropertyRead} nodes", nodes.Count());
-            var idsToCheck = new HashSet<NodeId>();
-            var nodeDict = new Dictionary<NodeId, UANode>();
-            foreach (var node in nodes)
-            {
-                if ((node is UAVariable variable) && !node.PropertiesRead && variable.Index <= 0)
-                {
-                    idsToCheck.Add(node.Id);
-                    nodeDict[node.Id] = node;
-                }
-                if (node.Properties != null)
-                {
-                    foreach (var property in node.GetAllProperties())
-                    {
-                        if (property is UAVariable propertyVar)
-                        {
-                            properties.Add(propertyVar);
-                        }
-                        if (!property.PropertiesRead)
-                        {
-                            idsToCheck.Add(property.Id);
-                            nodeDict[property.Id] = property;
-                        }
-                    }
-                }
-            }
-
-            void cb(ReferenceDescription desc, NodeId parentId)
-            {
-                var id = ToNodeId(desc.NodeId);
-                var parent = nodeDict[parentId];
-                if (nodeDict.ContainsKey(id)) return;
-
-                UANode prop;
-
-                if (desc.NodeClass == NodeClass.Object || desc.NodeClass == NodeClass.ObjectType)
-                {
-                    prop = new UANode(id, desc.DisplayName.Text, parentId, desc.NodeClass);
-                }
-                else if (desc.NodeClass == NodeClass.Variable || desc.NodeClass == NodeClass.VariableType)
-                {
-                    var varProp = new UAVariable(id, desc.DisplayName.Text, parentId, desc.NodeClass);
-                    properties.Add(varProp);
-                    prop = varProp;
-                }
-                else return;
-
-                prop.SetNodeType(this, desc.TypeDefinition);
-
-                prop.Attributes.IsProperty = true;
-                prop.Attributes.PropertiesRead = true;
-
-                parent.AddProperty(prop);
-                if (desc.TypeDefinition != VariableTypeIds.PropertyType)
-                {
-                    nodeDict[id] = prop;
-                }
-            }
-
-            await Browser.BrowseDirectory(idsToCheck, cb, token, ReferenceTypeIds.HierarchicalReferences,
-                (uint)NodeClass.Object | (uint)NodeClass.Variable, false, true, true);
-
-            log.LogInformation("Read attributes for {Count} properties", properties.Count);
-            await ReadNodeData(properties, token);
-
-            var toGetValue = properties.Where(node => DataTypeManager.AllowTSMap(node, 10, true)).ToList();
-            await DataTypeManager.GetDataTypeMetadataAsync(toGetValue.SelectNonNull(prop => prop.DataType?.Raw), token);
-            await ReadNodeValues(toGetValue, token);
         }
         #endregion
 
@@ -1199,7 +1121,7 @@ namespace Cognite.OpcUa
             if (eventFields != null) return eventFields;
             if (source == null)
             {
-                source = new EventFieldCollector(this, Config.Events);
+                source = new EventFieldCollector(log, this, Config.Events);
             }
             eventFields = await source.GetEventIdFields(token);
             foreach (var pair in eventFields)

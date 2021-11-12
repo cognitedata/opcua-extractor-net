@@ -31,8 +31,6 @@ namespace Test.Utils
         public bool? PushDataPointResult { get; set; } = true;
         public bool? PushEventResult { get; set; } = true;
         public bool PushReferenceResult { get; set; } = true;
-        public bool ReadProperties { get; set; } = true;
-
         public ManualResetEvent OnReset { get; } = new ManualResetEvent(false);
 
         private readonly object dpLock = new object();
@@ -75,17 +73,13 @@ namespace Test.Utils
             return Task.FromResult(TestConnectionResult);
         }
 
-        public async Task<bool> PushNodes(
+        public Task<bool> PushNodes(
             IEnumerable<UANode> objects,
             IEnumerable<UAVariable> variables,
             UpdateConfig update,
             CancellationToken token)
         {
-            if (!PushNodesResult) return false;
-            if (ReadProperties)
-            {
-                await Extractor.ReadProperties(objects.Concat(variables));
-            }
+            if (!PushNodesResult) return Task.FromResult(false);
             if (objects != null)
             {
                 foreach (var obj in objects)
@@ -110,7 +104,7 @@ namespace Test.Utils
                 }
             }
 
-            return PushNodesResult;
+            return Task.FromResult(PushNodesResult);
         }
 
         public Task<bool> InitExtractedRanges(

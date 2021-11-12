@@ -253,7 +253,6 @@ namespace Cognite.OpcUa.Pushers
             log.LogInformation("Testing {TotalNodesToTest} nodes against CDF", variables.Count() + objects.Count());
             if (config.Debug)
             {
-                await Extractor.ReadProperties(objects.Concat(variables));
                 foreach (var node in objects.Concat(variables))
                 {
                     log.LogTrace("{Node}", node);
@@ -489,8 +488,6 @@ namespace Cognite.OpcUa.Pushers
         private async Task UpdateRawAssets(IDictionary<string, UANode> assetMap, CancellationToken token)
         {
             if (config.RawMetadata?.Database == null || config.RawMetadata?.AssetsTable == null) return;
-            await Extractor.ReadProperties(assetMap.Select(kvp => kvp.Value));
-
             await UpsertRawRows<JsonElement>(config.RawMetadata.Database, config.RawMetadata.AssetsTable, rows =>
             {
                 if (rows == null)
@@ -532,10 +529,9 @@ namespace Cognite.OpcUa.Pushers
         {
             if (config.RawMetadata?.Database == null || config.RawMetadata?.AssetsTable == null) return;
 
-            await EnsureRawRows<JsonElement>(config.RawMetadata.Database, config.RawMetadata.AssetsTable, assetMap.Keys, async ids =>
+            await EnsureRawRows<JsonElement>(config.RawMetadata.Database, config.RawMetadata.AssetsTable, assetMap.Keys, ids =>
             {
                 var assets = ids.Select(id => (assetMap[id], id));
-                await Extractor.ReadProperties(assets.Select(pair => pair.Item1));
                 return assets.Select(pair => (pair.Item1.ToJson(log, Extractor.StringConverter, ConverterType.Node), pair.id))
                     .Where(pair => pair.Item1 != null)
                     .ToDictionary(pair => pair.id, pair => pair.Item1!.RootElement);
@@ -550,10 +546,9 @@ namespace Cognite.OpcUa.Pushers
             var assets = new List<Asset>();
             foreach (var chunk in Chunking.ChunkByHierarchy(assetMap.Values, config.CdfChunking.Assets, node => node.Id, node => node.ParentId))
             {
-                var assetChunk = await destination.GetOrCreateAssetsAsync(chunk.Select(node => Extractor.GetUniqueId(node.Id)!), async ids =>
+                var assetChunk = await destination.GetOrCreateAssetsAsync(chunk.Select(node => Extractor.GetUniqueId(node.Id)!), ids =>
                 {
                     var assets = ids.Select(id => assetMap[id]);
-                    await Extractor.ReadProperties(assets);
                     return assets
                         .Select(node => node.ToCDFAsset(extractionConfig, Extractor,
                             Extractor.StringConverter, Extractor.DataTypeManager, config.DataSetId, config.MetadataMapping?.Assets))
@@ -661,7 +656,6 @@ namespace Cognite.OpcUa.Pushers
             CancellationToken token)
         {
             if (config.RawMetadata?.Database == null || config.RawMetadata.TimeseriesTable == null) return;
-            await Extractor.ReadProperties(tsMap.Select(kvp => kvp.Value));
 
             await UpsertRawRows<JsonElement>(config.RawMetadata.Database, config.RawMetadata.TimeseriesTable, rows =>
             {
@@ -706,10 +700,9 @@ namespace Cognite.OpcUa.Pushers
         {
             if (config.RawMetadata?.Database == null || config.RawMetadata.TimeseriesTable == null) return;
 
-            await EnsureRawRows<JsonElement>(config.RawMetadata.Database, config.RawMetadata.TimeseriesTable, tsMap.Keys, async ids =>
+            await EnsureRawRows<JsonElement>(config.RawMetadata.Database, config.RawMetadata.TimeseriesTable, tsMap.Keys, ids =>
             {
                 var timeseries = ids.Select(id => (tsMap[id], id));
-                await Extractor.ReadProperties(timeseries.Select(pair => pair.Item1));
                 return timeseries.Select(pair => (pair.Item1.ToJson(log, Extractor.StringConverter, ConverterType.Variable), pair.id))
                     .Where(pair => pair.Item1 != null)
                     .ToDictionary(pair => pair.id, pair => pair.Item1!.RootElement);
@@ -725,13 +718,9 @@ namespace Cognite.OpcUa.Pushers
             bool createMinimalTimeseries,
             CancellationToken token)
         {
-            var timeseries = await destination.GetOrCreateTimeSeriesAsync(tsMap.Keys, async ids =>
+            var timeseries = await destination.GetOrCreateTimeSeriesAsync(tsMap.Keys, ids =>
             {
                 var tss = ids.Select(id => tsMap[id]);
-                if (!createMinimalTimeseries)
-                {
-                    await Extractor.ReadProperties(tss);
-                }
                 return tss.Select(ts => ts.ToTimeseries(
                     extractionConfig,
                     Extractor,
@@ -863,7 +852,7 @@ namespace Cognite.OpcUa.Pushers
             string dbName,
             string tableName,
             IEnumerable<string> keys,
-            Func<IEnumerable<string>, Task<IDictionary<string, T>>> dtoBuilder,
+            Func<IEnumerable<string>, IDictionary<string, T>> dtoBuilder,
             JsonSerializerOptions options,
             CancellationToken token)
         {
@@ -874,7 +863,7 @@ namespace Cognite.OpcUa.Pushers
             if (!toCreate.Any()) return;
             log.LogInformation("Creating {Count} raw rows in CDF", toCreate.Count());
 
-            var createDtos = await dtoBuilder(toCreate);
+            var createDtos = dtoBuilder(toCreate);
 
             await destination.InsertRawRowsAsync(dbName, tableName, createDtos, options, token);
         }
@@ -1006,8 +995,7 @@ namespace Cognite.OpcUa.Pushers
                 ids =>
                 {
                     var idSet = ids.ToHashSet();
-                    return Task.FromResult((IDictionary<string, RelationshipCreate>)
-                        relationships.Where(rel => idSet.Contains(rel.ExternalId)).ToDictionary(rel => rel.ExternalId));
+                    return relationships.Where(rel => idSet.Contains(rel.ExternalId)).ToDictionary(rel => rel.ExternalId);
                 },
                 new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase },
                 token);

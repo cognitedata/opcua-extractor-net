@@ -56,12 +56,20 @@ namespace Cognite.OpcUa.NodeSources
             if (!NodeMap.Any()) return null;
             await Client.ReadNodeData(NodeMap.Values, token);
 
+            var properties = new HashSet<UAVariable>();
             foreach (var node in NodeMap.Values)
             {
                 SortNode(node);
+                if ((node.IsProperty || Config.Extraction.NodeTypes.AsNodes && node.NodeClass == NodeClass.VariableType)
+                    && (node is UAVariable variable))
+                {
+                    properties.Add(variable);
+                }
             }
             parsed = true;
             NodeMap.Clear();
+
+            await Client.ReadNodeValues(properties, token);
 
             if (Config.Extraction.DataTypes.MaxArraySize != 0 && Config.Extraction.DataTypes.EstimateArraySizes == true)
             {
@@ -69,7 +77,7 @@ namespace Cognite.OpcUa.NodeSources
             }
 
             var update = Config.Extraction.Update;
-            await GetExtraNodeData(update, token);
+            await GetExtraNodeData(token);
 
             var mappedObjects = RawObjects.Where(obj => FilterObject(update.Objects, obj)).ToList();
             FinalDestinationObjects.AddRange(mappedObjects);
@@ -116,25 +124,12 @@ namespace Cognite.OpcUa.NodeSources
         /// Retrieve extra node data for the sorted raw variables and objects.
         /// </summary>
         /// <param name="update">UpdateConfig used to determine what should be fetched</param>
-        private async Task GetExtraNodeData(UpdateConfig update, CancellationToken token)
+        private async Task GetExtraNodeData(CancellationToken token)
         {
             Log.LogInformation("Getting data for {NumVariables} variables and {NumObjects} objects",
                 RawVariables.Count, RawObjects.Count);
 
             var nodes = RawObjects.Concat(RawVariables);
-
-            if (update.Objects.Metadata || update.Variables.Metadata)
-            {
-                var toReadProperties = nodes
-                    .Where(node => Extractor.State.IsMappedNode(node.Id)
-                        && (update.Objects.Metadata && node is not UAVariable
-                            || update.Variables.Metadata && (node is UAVariable)))
-                    .ToList();
-                if (toReadProperties.Any())
-                {
-                    await Extractor.ReadProperties(toReadProperties);
-                }
-            }
 
             var extraMetaTasks = new List<Task>();
 

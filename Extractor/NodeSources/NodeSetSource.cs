@@ -423,7 +423,6 @@ namespace Cognite.OpcUa.NodeSources
                 {
                     properties.Add(variable);
                 }
-                node.Attributes.PropertiesRead = true;
             }
 
             if (Config.Extraction.DataTypes.MaxArraySize != 0 && Config.Extraction.DataTypes.EstimateArraySizes == true)
