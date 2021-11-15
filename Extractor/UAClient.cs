@@ -707,6 +707,8 @@ namespace Cognite.OpcUa
         {
             nodes = nodes.Where(node => (node is not UAVariable variable || variable.Index == -1) && !node.DataRead).ToList();
 
+            if (!nodes.Any()) return;
+
             int expected = 0;
             var readValueIds = new ReadValueIdCollection();
             foreach (var node in nodes)

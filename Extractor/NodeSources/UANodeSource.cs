@@ -69,7 +69,9 @@ namespace Cognite.OpcUa.NodeSources
             parsed = true;
             NodeMap.Clear();
 
-            await Client.ReadNodeValues(properties, token);
+            await Client.ReadNodeData(properties, token);
+            var propsToReadValues = properties.Where(prop => Extractor.DataTypeManager.AllowTSMap(prop, 10, true)).ToList();
+            await Client.ReadNodeValues(propsToReadValues, token);
 
             if (Config.Extraction.DataTypes.MaxArraySize != 0 && Config.Extraction.DataTypes.EstimateArraySizes == true)
             {

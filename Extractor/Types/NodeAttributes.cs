@@ -168,7 +168,7 @@ namespace Cognite.OpcUa.Types
             ValueRank = values[idx++].GetValue(ValueRanks.Any);
             if (IsProperty || config.Extraction.DataTypes.MaxArraySize != 0)
             {
-                if (values[idx++].GetValue(typeof(int[])) is int[] dimVal)
+                if (values[idx++].Value is int[] dimVal)
                 {
                     ArrayDimensions = dimVal;
                 }
