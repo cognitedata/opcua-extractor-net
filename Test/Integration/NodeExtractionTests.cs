@@ -965,12 +965,20 @@ namespace Test.Integration
                 }
             };
 
+            tester.Server.Server.MutateNode(tester.Server.Ids.Wrong.TooLargeProp, state =>
+            {
+                var varState = state as PropertyState;
+                varState.ArrayDimensions = new ReadOnlyList<uint>(new List<uint> { 5 });
+                varState.Value = null;
+            });
+
             var runTask = extractor.RunExtractor();
 
             await CommonTestUtils.WaitForCondition(() => handler.Assets.Any() && handler.Timeseries.Any(), 5);
 
             var id = tester.Client.GetUniqueId(tester.Server.Ids.Wrong.RankImprecise);
 
+            Console.WriteLine(handler.Assets[id].metadata["TooLargeDim"]);
             Assert.True(string.IsNullOrEmpty(handler.Assets[id].metadata["TooLargeDim"]));
 
             await extractor.Rebrowse();

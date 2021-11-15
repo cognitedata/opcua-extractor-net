@@ -131,22 +131,19 @@ namespace Cognite.OpcUa.NodeSources
 
             var nodes = RawObjects.Concat(RawVariables);
 
+            var allVariables = nodes
+                .SelectMany(node => node.GetAllProperties())
+                .OfType<UAVariable>()
+                .Concat(RawVariables);
+
             var extraMetaTasks = new List<Task>();
 
-            var distinctDataTypes = RawVariables.Select(variable => variable.DataType.Raw).ToHashSet();
+            var distinctDataTypes = allVariables.Select(variable => variable.DataType.Raw).ToHashSet();
             extraMetaTasks.Add(Extractor.DataTypeManager.GetDataTypeMetadataAsync(distinctDataTypes, token));
 
             if (Config.Extraction.NodeTypes.Metadata)
             {
                 extraMetaTasks.Add(Client.ObjectTypeManager.GetObjectTypeMetadataAsync(token));
-            }
-
-            if (Config.Extraction.NodeTypes.AsNodes)
-            {
-                var toRead = nodes.Where(node => node.NodeClass == NodeClass.VariableType)
-                    .SelectNonNull(node => node as UAVariable)
-                    .ToList();
-                extraMetaTasks.Add(Client.ReadNodeValues(toRead, token));
             }
 
             await Task.WhenAll(extraMetaTasks);

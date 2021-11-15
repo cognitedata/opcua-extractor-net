@@ -113,9 +113,10 @@ namespace Cognite.OpcUa.TypeCollectors
                     IsString = !config.NullAsNumeric
                 };
             }
-
+            log.LogInformation("Create data type with id: {Id}", id);
             foreach (var parent in GetAncestors(id))
             {
+                log.LogInformation("Parent: {Parent}", parent);
                 if (parent != DataTypeIds.BaseDataType && dataTypes.TryGetValue(parent, out var dt))
                     return new UADataType(id, dt);
 
@@ -247,6 +248,16 @@ namespace Cognite.OpcUa.TypeCollectors
                 dataTypes.TryGetValue(type, out var dt)
                 && dt.EnumValues != null
                 && !dt.EnumValues.Any()));
+
+            foreach (var type in types)
+            {
+                if (dataTypes.TryGetValue(type, out var dt))
+                {
+                    log.LogInformation("Type: {Name} {Enums}", dt.Raw, dt.EnumValues != null);
+                }
+                log.LogInformation("Type: {Type}", type);
+            }
+
             if (!typeSet.Any()) return;
 
             log.LogInformation("Browse types to get enum properties for {Count} enum types", typeSet.Count);
