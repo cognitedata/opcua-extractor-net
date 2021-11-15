@@ -386,6 +386,7 @@ namespace Cognite.OpcUa
         public bool Enabled { get; set; }
         public bool Data { get; set; } = true;
         public bool Backfill { get; set; }
+        public bool RequireHistorizing { get; set; }
         public int DataChunk { get => dataChunk; set => dataChunk = Math.Max(0, value); }
         private int dataChunk = 1000;
         public int DataNodesChunk { get => dataNodesChunk; set => dataNodesChunk = Math.Max(1, value); }

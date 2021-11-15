@@ -105,11 +105,14 @@ history:
     # Enable/disable history synchronization from the OPC-UA server to CDF.
     # This is a master switch covering both events and data
     enabled: false
-    # Enable or disable data history on historizing nodes. "Enabled" must be true.
+    # Enable or disable data history on nodes with history. "Enabled" must be true.
+    # By default nodes with AccessLevel ReadHistory are read.
     data: true
     # Enable/disable backfill behavior. If this is false, data is read using frontfill only. (Pre 1.1 behavior)
     # This applied to both datapoints and events.
     backfill: false
+    # True to require Historizing to be set on timeseries to read history
+    require-historizing: false
     # Time in seconds to wait between each restart of history. Setting this too low may impact performance.
     # Leave at 0 to disable periodic restarts.
     # Alternatively, use N[timeunit] where timeunit is w, d, h, m, s or ms.
@@ -701,6 +704,8 @@ subscriptions:
         deadband-value: 0
     # Log bad subscription datapoints
     log-bad-values: true
+    # Ignore the access level parameter for history and datapoints.
+    ignore-access-level: false
 
 events:
     # Events are extracted with the following rules: By default all events are extracted.
