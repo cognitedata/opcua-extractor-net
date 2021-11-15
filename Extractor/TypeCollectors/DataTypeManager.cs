@@ -261,7 +261,7 @@ namespace Cognite.OpcUa.TypeCollectors
                 ReferenceTypeId = ReferenceTypes.HierarchicalReferences,
                 Nodes = nodes
             };
-            var children = await uaClient.Browser.BrowseLevel(baseParams, token);
+            var children = await uaClient.Browser.BrowseLevel(baseParams, token, purpose: "data type enum properties");
 
             foreach (var id in typeSet)
             {
@@ -310,7 +310,8 @@ namespace Cognite.OpcUa.TypeCollectors
                 ReferenceTypeIds.HasSubtype,
                 (uint)NodeClass.DataType,
                 false,
-                false);
+                false,
+                purpose: "the data type hierarchy");
         }
         /// <summary>
         /// Manually register a type in the manager, used when type hierarchy is obtained from file

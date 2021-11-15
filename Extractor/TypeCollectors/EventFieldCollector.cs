@@ -123,7 +123,8 @@ namespace Cognite.OpcUa.TypeCollectors
                 ReferenceTypeIds.HierarchicalReferences,
                 (uint)NodeClass.ObjectType | (uint)NodeClass.Variable | (uint)NodeClass.Object,
                 false,
-                false);
+                false,
+                purpose: "the event type hierarchy");
 
             var result = new Dictionary<NodeId, UAEventType>();
 

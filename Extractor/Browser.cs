@@ -60,9 +60,10 @@ namespace Cognite.OpcUa
         public Task BrowseNodeHierarchy(NodeId root,
             Action<ReferenceDescription, NodeId?> callback,
             CancellationToken token,
-            bool ignoreVisited = true)
+            bool ignoreVisited = true,
+            string purpose = "")
         {
-            return BrowseNodeHierarchy(new[] { root }, callback, token, ignoreVisited);
+            return BrowseNodeHierarchy(new[] { root }, callback, token, ignoreVisited, purpose);
         }
         /// <summary>
         /// Browse an opcua directory, calling callback for all relevant nodes found.
@@ -73,7 +74,8 @@ namespace Cognite.OpcUa
         public async Task BrowseNodeHierarchy(IEnumerable<NodeId> roots,
             Action<ReferenceDescription, NodeId> callback,
             CancellationToken token,
-            bool ignoreVisited = true)
+            bool ignoreVisited = true,
+            string purpose = "")
         {
             if (roots == null) throw new ArgumentNullException(nameof(roots));
 
@@ -97,7 +99,7 @@ namespace Cognite.OpcUa
             {
                 classMask |= (uint)NodeClass.VariableType | (uint)NodeClass.ObjectType;
             }
-            await BrowseDirectory(roots, callback, token, null, classMask, ignoreVisited, true);
+            await BrowseDirectory(roots, callback, token, null, classMask, ignoreVisited, true, purpose: purpose);
         }
         public async Task<IEnumerable<ReferenceDescription>> GetRootNodes(IEnumerable<NodeId> ids, CancellationToken token)
         {
@@ -115,7 +117,7 @@ namespace Cognite.OpcUa
             IList<DataValue> results;
             try
             {
-                results = await uaClient.ReadAttributes(new ReadValueIdCollection(readValueIds), 1, token);
+                results = await uaClient.ReadAttributes(new ReadValueIdCollection(readValueIds), 1, token, "root nodes");
             }
             catch (Exception ex)
             {
@@ -192,7 +194,8 @@ namespace Cognite.OpcUa
             BrowseParams baseParams,
             CancellationToken token,
             bool doFilter = true,
-            bool ignoreVisited = false)
+            bool ignoreVisited = false,
+            string purpose = "")
         {
             var result = new Dictionary<NodeId, ReferenceDescriptionCollection>();
             if (baseParams == null || baseParams.Nodes == null || !baseParams.Nodes.Any()) return result;
@@ -207,7 +210,7 @@ namespace Cognite.OpcUa
                 MaxDepth = 0
             };
 
-            using var scheduler = new BrowseScheduler(log, throttler, uaClient, continuationPoints, options, token);
+            using var scheduler = new BrowseScheduler(log, throttler, uaClient, continuationPoints, options, token, purpose);
             await scheduler.RunAsync();
 
             foreach (var node in baseParams.Nodes)
@@ -236,7 +239,8 @@ namespace Cognite.OpcUa
             uint nodeClassMask = (uint)NodeClass.Variable | (uint)NodeClass.Object,
             bool ignoreVisited = true,
             bool doFilter = true,
-            int maxDepth = -1)
+            int maxDepth = -1,
+            string purpose = "")
         {
             if (roots == null) throw new ArgumentNullException(nameof(roots));
             var nextIds = roots.ToList();
@@ -259,7 +263,7 @@ namespace Cognite.OpcUa
                 VisitedNodes = ignoreVisited ? visitedNodes : null
             };
 
-            using var scheduler = new BrowseScheduler(log, throttler, uaClient, continuationPoints, options, token);
+            using var scheduler = new BrowseScheduler(log, throttler, uaClient, continuationPoints, options, token, purpose);
             await scheduler.RunAsync();
         }
         /// <summary>

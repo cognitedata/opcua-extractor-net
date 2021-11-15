@@ -452,7 +452,8 @@ namespace Cognite.OpcUa.Config
             var roots = Config.Extraction.GetRootNodes(this);
             try
             {
-                await Browser.BrowseNodeHierarchy(roots, ToolUtil.GetSimpleListWriterCallback(nodeList, this), token, false);
+                await Browser.BrowseNodeHierarchy(roots, ToolUtil.GetSimpleListWriterCallback(nodeList, this), token, false,
+                    "populating the main node hierarchy");
                 nodesRead = true;
             }
             catch (Exception ex)
@@ -478,7 +479,8 @@ namespace Cognite.OpcUa.Config
                     token,
                     ReferenceTypeIds.HasSubtype,
                     (uint)NodeClass.DataType | (uint)NodeClass.ObjectType,
-                    false);
+                    false,
+                    purpose: "populating the data type hierarchy");
                 dataTypesRead = true;
             }
             catch (Exception ex)
@@ -804,7 +806,7 @@ namespace Cognite.OpcUa.Config
                 identifiedTypes.Add(dataType);
             }
 
-            log.LogInformation("Found {Count} distinct data-types in detected variables", identifiedTypes.Count);
+            log.LogInformation("Found {Count} distinct data types in detected variables", identifiedTypes.Count);
 
             foreach (var dataType in identifiedTypes)
             {
@@ -1236,7 +1238,7 @@ namespace Cognite.OpcUa.Config
                 await Browser.BrowseDirectory(nodeList.Select(node => node.Id).Append(ObjectIds.Server).ToList(),
                     ToolUtil.GetSimpleListWriterCallback(emitterReferences, this),
                     token,
-                    ReferenceTypeIds.GeneratesEvent, (uint)NodeClass.ObjectType, false);
+                    ReferenceTypeIds.GeneratesEvent, (uint)NodeClass.ObjectType, false, purpose: "identifying GeneratesEvent references");
             }
             catch (Exception ex)
             {

@@ -128,7 +128,7 @@ namespace Cognite.OpcUa
                 .SelectMany(node => attributes.Select(attr => new ReadValueId { AttributeId = attr, NodeId = node }))
             );
 
-            var results = await client.ReadAttributes(readValueIds, nodes.Count, token);
+            var results = await client.ReadAttributes(readValueIds, nodes.Count, token, "node metrics");
 
             int attrPerNode = attributes.Length;
 
@@ -165,7 +165,7 @@ namespace Cognite.OpcUa
                     AttributeId = Attributes.Value,
                     NodeClass = NodeClass.Variable,
                     CacheQueueSize = 1
-                }, token);
+                }, token, "metric");
 #pragma warning restore CA2000 // Dispose objects before losing scope
         }
         /// <summary>
