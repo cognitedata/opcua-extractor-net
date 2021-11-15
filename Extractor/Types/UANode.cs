@@ -20,7 +20,6 @@ using Cognite.OpcUa.TypeCollectors;
 using CogniteSdk;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using Newtonsoft.Json;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
@@ -374,16 +373,11 @@ namespace Cognite.OpcUa.Types
         }
         public JsonDocument? ToJson(ILogger log, StringConverter converter, ConverterType type)
         {
-            // This is inefficient. A better solution would use System.Text.Json directly, but that requires .NET 6
-            // for WriteRaw in Utf8JsonWriter.
-            var serializer = new Newtonsoft.Json.JsonSerializer();
-            converter.AddConverters(serializer, type);
-            using var stream = new MemoryStream();
-            var sw = new StreamWriter(stream);
-            using var writer = new JsonTextWriter(sw);
+            var options = new JsonSerializerOptions();
+            converter.AddConverters(options, type);
 
-            serializer.Serialize(writer, this);
-            writer.Flush();
+            using var stream = new MemoryStream();
+            JsonSerializer.Serialize(stream, this, options);
             stream.Seek(0, SeekOrigin.Begin);
 
             try

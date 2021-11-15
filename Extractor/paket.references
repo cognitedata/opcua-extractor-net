@@ -3,7 +3,6 @@ AdysTech.InfluxDB.Client.Net.Core
 OPCFoundation.NetStandard.Opc.Ua.Client
 OPCFoundation.NetStandard.Opc.Ua.Configuration
 OPCFoundation.NetStandard.Opc.Ua.PubSub
-MQTTnet
 Cognite.Extractor.Configuration
 Cognite.Extractor.Logging
 Cognite.Extractor.Metrics

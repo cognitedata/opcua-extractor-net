@@ -6,3 +6,4 @@ OPCFoundation.NetStandard.Opc.Ua.PubSub
 YamlDotNet
 LiteDB
 Cognite.Extractor.Logging
+MQTTNet

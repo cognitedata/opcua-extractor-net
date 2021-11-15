@@ -47,6 +47,7 @@ namespace Test.Unit
             tester.Config.Extraction.Relationships.Enabled = true;
             using var extractor = tester.BuildExtractor();
             tester.Config.Extraction.Relationships.Enabled = false;
+
             var log = tester.Provider.GetRequiredService<ILogger<NodeSetSource>>();
             var source = new NodeSetSource(log, tester.Config, extractor, tester.Client);
 

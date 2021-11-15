@@ -971,7 +971,7 @@ namespace Test.Unit
             Assert.Equal(37, metric);
             Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_points", 7154));
         }
-        [Fact(Timeout = 1000)]
+        [Fact(Timeout = 10000)]
         public async Task TestReadHistoryMaxLengthBackfill()
         {
             using var extractor = tester.BuildExtractor();

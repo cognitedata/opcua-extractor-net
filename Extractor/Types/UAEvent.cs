@@ -20,7 +20,6 @@ using Cognite.Extractor.Common;
 using Cognite.OpcUa.Pushers;
 using Cognite.OpcUa.TypeCollectors;
 using CogniteSdk;
-using Newtonsoft.Json;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
@@ -29,6 +28,8 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Cognite.OpcUa.Types
 {
@@ -127,23 +128,20 @@ namespace Cognite.OpcUa.Types
                     current.Value = field.Value;
                 }
             }
-            var sb = new StringBuilder();
-            var sw = new StringWriter(sb);
-            using var writer = new JsonTextWriter(sw) { Formatting = Formatting.None };
+            var options = new JsonSerializerOptions();
+            options.Converters.Add(new EventFieldConverter(converter));
+
             var results = new Dictionary<string, string>();
             foreach (var kvp in parents)
             {
-                kvp.Value.ToJson(converter, writer);
-                writer.Flush();
-                var result = sb.ToString();
-                // If what we produce is an escaped JSON string we'd like to remove the quotes.
+                string result = JsonSerializer.Serialize(kvp.Value, options);
                 if (result.StartsWith('"') && result.EndsWith('"'))
                 {
                     result = result[1..^1];
                 }
                 results[kvp.Key] = result;
-                sb.Clear();
             }
+
             return results;
         }
         /// <summary>
@@ -346,35 +344,50 @@ namespace Cognite.OpcUa.Types
     {
         public IDictionary<string, EventFieldNode> Children { get; } = new Dictionary<string, EventFieldNode>();
         public Variant? Value { get; set; }
-        public void ToJson(StringConverter converter, JsonWriter writer)
+    }
+
+    internal class EventFieldConverter : JsonConverter<EventFieldNode>
+    {
+        private readonly StringConverter converter;
+        public EventFieldConverter(StringConverter converter)
         {
-            if (Children.Any())
+            this.converter = converter;
+        }
+
+        public override EventFieldNode? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override void Write(Utf8JsonWriter writer, EventFieldNode value, JsonSerializerOptions options)
+        {
+            if (value.Children.Any())
             {
                 writer.WriteStartObject();
                 int valIdx = 1;
-                foreach (var child in Children)
+                foreach (var kvp in value.Children)
                 {
-                    string key = child.Key;
+                    string key = kvp.Key;
                     if (key == "Value")
                     {
                         do
                         {
                             key = $"Value{valIdx++}";
-                        } while (Children.ContainsKey(key));
+                        } while (value.Children.ContainsKey(key));
                     }
                     writer.WritePropertyName(key);
-                    child.Value.ToJson(converter, writer);
+                    JsonSerializer.Serialize(writer, kvp.Value, options);
                 }
-                if (Value.HasValue)
+                if (value.Value.HasValue)
                 {
                     writer.WritePropertyName("Value");
-                    writer.WriteRawValue(converter.ConvertToString(Value, null, null, true));
+                    writer.WriteRawValue(converter.ConvertToString(value.Value, null, null, true));
                 }
                 writer.WriteEndObject();
             }
-            else if (Value.HasValue)
+            else if (value.Value.HasValue)
             {
-                writer.WriteRawValue(converter.ConvertToString(Value, null, null, true));
+                writer.WriteRawValue(converter.ConvertToString(value.Value, null, null, true));
             }
         }
     }

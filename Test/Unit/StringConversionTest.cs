@@ -2,18 +2,15 @@
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Text;
 using System.Text.Json;
 using System.Xml;
 using Test.Utils;
 using Xunit;
 using Xunit.Abstractions;
-using JsonSerializer = Newtonsoft.Json.JsonSerializer;
 
 namespace Test.Unit
 {
@@ -181,24 +178,17 @@ namespace Test.Unit
         [Fact]
         public void TestNodeIdSerialization()
         {
-            var serializer = new JsonSerializer();
+            var options = new JsonSerializerOptions();
             var converter = tester.Client.StringConverter;
-            converter.AddConverters(serializer, ConverterType.Node);
+            converter.AddConverters(options, ConverterType.Node);
 
             void TestConvert(NodeId id, string expected)
             {
-                var sb = new StringBuilder();
-                using var sw = new StringWriter(sb);
-                using var writer = new JsonTextWriter(sw);
-                serializer.Serialize(writer, id);
-                writer.Flush();
-                var result = sb.ToString();
+                var result = JsonSerializer.Serialize(id, options);
 
                 Assert.Equal(expected, result);
 
-                using var sr = new StringReader(result);
-                using var reader = new JsonTextReader(sr);
-                var retId = serializer.Deserialize<NodeId>(reader);
+                var retId = JsonSerializer.Deserialize<NodeId>(result, options);
 
                 Assert.Equal(id, retId);
             }
@@ -227,9 +217,7 @@ namespace Test.Unit
             // Test bad conversions
             void TestBadConvert(string input)
             {
-                using var sr = new StringReader(input);
-                using var reader = new JsonTextReader(sr);
-                var retId = serializer.Deserialize<NodeId>(reader);
+                var retId = JsonSerializer.Deserialize<NodeId>(input);
 
                 Assert.True(retId.IsNullNodeId);
             }
@@ -246,18 +234,13 @@ namespace Test.Unit
         [Fact]
         public void TestWriteNodeIds()
         {
-            var serializer = new JsonSerializer();
+            var options = new JsonSerializerOptions();
             var converter = tester.Client.StringConverter;
-            converter.AddConverters(serializer, ConverterType.Node);
+            converter.AddConverters(options, ConverterType.Node);
 
             void TestConvert(UANode node, string expected)
             {
-                var sb = new StringBuilder();
-                using var sw = new StringWriter(sb);
-                using var writer = new JsonTextWriter(sw);
-                serializer.Serialize(writer, node);
-                writer.Flush();
-                var result = sb.ToString();
+                var result = JsonSerializer.Serialize(node, options);
 
                 Assert.Equal(expected, result);
             }
@@ -283,8 +266,8 @@ namespace Test.Unit
                 + @"""NodeId"":{""idType"":1,""identifier"":""test""},"
                 + @"""ParentNodeId"":{""idType"":1,""identifier"":""parent""}}");
 
-            serializer = new JsonSerializer();
-            converter.AddConverters(serializer, ConverterType.Variable);
+            options = new JsonSerializerOptions();
+            converter.AddConverters(options, ConverterType.Variable);
 
             var variable = new UAVariable(new NodeId("test"), "test", NodeId.Null, NodeClass.Variable);
             TestConvert(variable,
@@ -305,18 +288,13 @@ namespace Test.Unit
         [Fact]
         public void TestWriteInternals()
         {
-            var serializer = new JsonSerializer();
+            var options = new JsonSerializerOptions();
             var converter = tester.Client.StringConverter;
-            converter.AddConverters(serializer, ConverterType.Node);
+            converter.AddConverters(options, ConverterType.Node);
 
             void TestConvert(UANode node, string expected)
             {
-                var sb = new StringBuilder();
-                using var sw = new StringWriter(sb);
-                using var writer = new JsonTextWriter(sw);
-                serializer.Serialize(writer, node);
-                writer.Flush();
-                var result = sb.ToString();
+                var result = JsonSerializer.Serialize(node, options);
 
                 Assert.Equal(expected, result);
             }
@@ -335,8 +313,8 @@ namespace Test.Unit
                 + @"""InternalInfo"":{""EventNotifier"":5,""ShouldSubscribe"":true,""NodeClass"":1}}");
 
             var variable = new UAVariable(new NodeId("test"), "test", NodeId.Null, NodeClass.Variable);
-            serializer = new JsonSerializer();
-            converter.AddConverters(serializer, ConverterType.Variable);
+            options = new JsonSerializerOptions();
+            converter.AddConverters(options, ConverterType.Variable);
             variable.VariableAttributes.AccessLevel |= AccessLevels.CurrentRead | AccessLevels.HistoryRead;
             variable.VariableAttributes.Historizing = true;
             variable.VariableAttributes.ValueRank = -1;
@@ -361,9 +339,9 @@ namespace Test.Unit
         public void TestNodeDeserialization()
         {
             // Objects
-            var serializer = new JsonSerializer();
+            var options = new JsonSerializerOptions();
             var converter = tester.Client.StringConverter;
-            converter.AddConverters(serializer, ConverterType.Node);
+            converter.AddConverters(options, ConverterType.Node);
 
             var node = new UANode(new NodeId("test", 2), "test", new NodeId("parent"), NodeClass.Object);
             node.Attributes.EventNotifier = 5;
@@ -374,16 +352,11 @@ namespace Test.Unit
 
             SavedNode Convert(UANode node)
             {
-                var sb = new StringBuilder();
-                using var sw = new StringWriter(sb);
-                using var writer = new JsonTextWriter(sw);
-                serializer.Serialize(writer, node);
-                writer.Flush();
-                var json = sb.ToString();
+                var json = JsonSerializer.Serialize(node, options);
+
                 Console.WriteLine(json);
-                var sr = new StringReader(json);
-                using var reader = new JsonTextReader(sr);
-                return serializer.Deserialize<SavedNode>(reader);
+
+                return JsonSerializer.Deserialize<SavedNode>(json, options);
             }
 
             var saved = Convert(node);
@@ -394,8 +367,8 @@ namespace Test.Unit
             Assert.Equal(node.EventNotifier, saved.InternalInfo.EventNotifier);
 
             // Variables
-            serializer = new JsonSerializer();
-            converter.AddConverters(serializer, ConverterType.Variable);
+            options = new JsonSerializerOptions();
+            converter.AddConverters(options, ConverterType.Variable);
 
             var variable = new UAVariable(new NodeId("test", 2), "test", new NodeId("parent"), NodeClass.Variable);
             variable.VariableAttributes.AccessLevel = 5;

@@ -63,7 +63,7 @@ namespace Cognite.OpcUa.Pushers
             ILogger log,
             StringConverter converter,
             UANode node,
-            RawRow? raw,
+            RawRow<Dictionary<string, JsonElement>>? raw,
             ConverterType type)
         {
             if (node == null) return null;

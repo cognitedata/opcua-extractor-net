@@ -16,8 +16,6 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using Opc.Ua;
 using System;
 using System.Collections;
@@ -26,6 +24,8 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Cognite.OpcUa.Types
 {
@@ -75,7 +75,7 @@ namespace Cognite.OpcUa.Types
             }
             if (value is string strValue)
             {
-                return json ? JsonConvert.ToString(strValue) : strValue;
+                return json ? JsonSerializer.Serialize(strValue) : strValue;
             }
             // If this is true, the value should be converted using the built-in JsonEncoder.
             if (typeInfo != null && ShouldUseJson(value) && uaClient != null)
@@ -127,7 +127,7 @@ namespace Cognite.OpcUa.Types
                     {
                         if (json)
                         {
-                            return JsonConvert.ToString(enumVal);
+                            return JsonSerializer.Serialize(enumVal);
                         }
                         else
                         {
@@ -148,20 +148,20 @@ namespace Cognite.OpcUa.Types
             else if (value is EUInformation euInfo) returnStr = $"{euInfo.DisplayName?.Text}: {euInfo.Description?.Text}";
             else if (value is EnumValueType enumType)
             {
-                if (json) return $"{{{JsonConvert.ToString(enumType.DisplayName?.Text ?? "null")}:{enumType.Value}}}";
+                if (json) return $"{{{JsonSerializer.Serialize(enumType.DisplayName?.Text ?? "null")}:{enumType.Value}}}";
                 return $"{enumType.DisplayName?.Text}: {enumType.Value}";
             }
             else if (value.GetType().IsEnum) returnStr = Enum.GetName(value.GetType(), value);
             else if (value is Opc.Ua.KeyValuePair kvp)
             {
-                if (json) return $"{{{JsonConvert.ToString(kvp.Key?.Name ?? "null")}:{ConvertToString(kvp.Value, enumValues, typeInfo, json)}}}";
+                if (json) return $"{{{JsonSerializer.Serialize(kvp.Key?.Name ?? "null")}:{ConvertToString(kvp.Value, enumValues, typeInfo, json)}}}";
                 return $"{kvp.Key?.Name}: {ConvertToString(kvp.Value, enumValues, typeInfo, json)}";
             }
             else if (typeInfo != null && typeInfo.BuiltInType == BuiltInType.StatusCode && value is uint uintVal)
             {
                 returnStr = StatusCode.LookupSymbolicId(uintVal);
             }
-            else if (value is System.Xml.XmlElement xml) return JsonConvert.SerializeXmlNode(xml);
+            else if (value is System.Xml.XmlElement xml) return Newtonsoft.Json.JsonConvert.SerializeXmlNode(xml);
             else if (value is Uuid uuid) returnStr = uuid.GuidString;
             else if (value is DiagnosticInfo diagInfo)
             {
@@ -170,7 +170,7 @@ namespace Cognite.OpcUa.Types
                 builder.Append(@"""LocalizedText"":");
                 builder.Append(diagInfo.LocalizedText);
                 builder.Append(@",""AdditionalInfo"":");
-                builder.Append(diagInfo.AdditionalInfo == null ? "null" : JsonConvert.ToString(diagInfo.AdditionalInfo));
+                builder.Append(diagInfo.AdditionalInfo == null ? "null" : JsonSerializer.Serialize(diagInfo.AdditionalInfo));
                 builder.Append(@",""InnerStatusCode"":");
                 builder.Append(ConvertToString(diagInfo.InnerStatusCode, null, null, true));
                 builder.Append(@",""InnerDiagnosticInfo"":");
@@ -196,7 +196,7 @@ namespace Cognite.OpcUa.Types
             else if (IsNumber(value)) return value.ToString();
             else returnStr = value.ToString();
 
-            return json ? JsonConvert.ToString(returnStr) : returnStr;
+            return json ? JsonSerializer.Serialize(returnStr) : returnStr;
         }
 
         /// <summary>
@@ -260,12 +260,12 @@ namespace Cognite.OpcUa.Types
 
         private readonly ConcurrentDictionary<ConverterType, NodeSerializer> converters = new ConcurrentDictionary<ConverterType, NodeSerializer>();
         private readonly NodeIdConverter? nodeIdConverter;
-        public void AddConverters(Newtonsoft.Json.JsonSerializer serializer, ConverterType type)
+        public void AddConverters(JsonSerializerOptions options, ConverterType type)
         {
             if (config == null || uaClient == null || nodeIdConverter == null)
                 throw new InvalidOperationException("Config and UAClient must be supplied to create converters");
-            serializer.Converters.Add(converters.GetOrAdd(type, key => new NodeSerializer(this, config, uaClient, key)));
-            serializer.Converters.Add(nodeIdConverter);
+            options.Converters.Add(converters.GetOrAdd(type, key => new NodeSerializer(this, config, uaClient, key)));
+            options.Converters.Add(nodeIdConverter);
         }
     }
 
@@ -289,7 +289,12 @@ namespace Cognite.OpcUa.Types
             Type = type;
         }
 
-        private void WriteProperties(JsonWriter writer, UANode node, bool getExtras, bool writeValue)
+        public override UANode? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            throw new NotImplementedException();
+        }
+
+        private void WriteProperties(Utf8JsonWriter writer, UANode node, bool getExtras, bool writeValue)
         {
             Dictionary<string, string>? extras = null;
 
@@ -310,7 +315,7 @@ namespace Cognite.OpcUa.Types
             }
             else
             {
-                writer.WriteNull();
+                writer.WriteNullValue();
                 return;
             }
 
@@ -326,8 +331,7 @@ namespace Cognite.OpcUa.Types
             {
                 foreach (var kvp in extras)
                 {
-                    writer.WritePropertyName(kvp.Key);
-                    writer.WriteValue(kvp.Value);
+                    writer.WriteString(kvp.Key, kvp.Value);
                     fields.Add(kvp.Key);
                 }
             }
@@ -351,117 +355,91 @@ namespace Cognite.OpcUa.Types
             writer.WriteEndObject();
         }
 
-        private void WriteBaseValues(JsonWriter writer, UANode node)
+        private void WriteBaseValues(Utf8JsonWriter writer, UANode node)
         {
             var id = uaClient.GetUniqueId(node.Id);
-            writer.WritePropertyName("externalId");
-            writer.WriteValue(id);
-            writer.WritePropertyName("name");
-            writer.WriteValue(string.IsNullOrEmpty(node.DisplayName) ? id : node.DisplayName);
-            writer.WritePropertyName("description");
-            writer.WriteValue(node.Description);
+            writer.WriteString("externalId", id);
+            writer.WriteString("name", string.IsNullOrEmpty(node.DisplayName) ? id : node.DisplayName);
+            writer.WriteString("description", node.Description);
             writer.WritePropertyName("metadata");
             WriteProperties(writer, node, true, node.NodeClass == NodeClass.VariableType);
             if (Type == ConverterType.Variable && node is UAVariable variable)
             {
-                writer.WritePropertyName("assetExternalId");
-                writer.WriteValue(uaClient.GetUniqueId(node.ParentId));
-                writer.WritePropertyName("isString");
-                writer.WriteValue(variable.DataType?.IsString ?? false);
-                writer.WritePropertyName("isStep");
-                writer.WriteValue(variable.DataType?.IsStep ?? false);
+                writer.WriteString("assetExternalId", uaClient.GetUniqueId(node.ParentId));
+                writer.WriteBoolean("isString", variable.DataType?.IsString ?? false);
+                writer.WriteBoolean("isStep", variable.DataType?.IsStep ?? false);
             }
             else
             {
-                writer.WritePropertyName("parentExternalId");
-                writer.WriteValue(uaClient.GetUniqueId(node.ParentId));
+                writer.WriteString("parentExternalId", uaClient.GetUniqueId(node.ParentId));
             }
         }
-        private void WriteNodeIds(JsonWriter writer, UANode node, Newtonsoft.Json.JsonSerializer serializer)
+        private void WriteNodeIds(Utf8JsonWriter writer, UANode node, JsonSerializerOptions options)
         {
             writer.WritePropertyName("NodeId");
-            serializer.Serialize(writer, node.Id);
+            JsonSerializer.Serialize(writer, node.Id, options);
+
             if (node.ParentId != null && !node.ParentId.IsNullNodeId)
             {
                 writer.WritePropertyName("ParentNodeId");
-                serializer.Serialize(writer, node.ParentId);
+                JsonSerializer.Serialize(writer, node.ParentId, options);
             }
             if (node.NodeType != null && !node.NodeType.Id.IsNullNodeId)
             {
                 writer.WritePropertyName("TypeDefinitionId");
-                serializer.Serialize(writer, node.NodeType.Id);
+                JsonSerializer.Serialize(writer, node.NodeType.Id, options);
             }
             if (Type == ConverterType.Variable && node is UAVariable variable)
             {
                 if (variable.DataType != null && !variable.DataType.Raw.IsNullNodeId)
                 {
                     writer.WritePropertyName("DataTypeId");
-                    serializer.Serialize(writer, variable.DataType.Raw);
+                    JsonSerializer.Serialize(writer, variable.DataType.Raw, options);
                 }
             }
         }
 
-        private void WriteInternalInfo(JsonWriter writer, UANode node, Newtonsoft.Json.JsonSerializer serializer)
+        private void WriteInternalInfo(Utf8JsonWriter writer, UANode node, JsonSerializerOptions options)
         {
-            writer.WritePropertyName("InternalInfo");
-            writer.WriteStartObject();
+            writer.WriteStartObject("InternalInfo");
 
-            writer.WritePropertyName("EventNotifier");
-            writer.WriteValue(node.EventNotifier);
-            writer.WritePropertyName("ShouldSubscribe");
-            writer.WriteValue(node.ShouldSubscribe);
-            writer.WritePropertyName("NodeClass");
-            writer.WriteValue(node.NodeClass);
+            writer.WriteNumber("EventNotifier", node.EventNotifier);
+            writer.WriteBoolean("ShouldSubscribe", node.ShouldSubscribe);
+            writer.WriteNumber("NodeClass", (int)node.NodeClass);
             if (Type == ConverterType.Variable && node is UAVariable variable)
             {
-                writer.WritePropertyName("AccessLevel");
-                writer.WriteValue(variable.AccessLevel);
-                writer.WritePropertyName("Historizing");
-                writer.WriteValue(variable.VariableAttributes.Historizing);
-                writer.WritePropertyName("ValueRank");
-                writer.WriteValue(variable.ValueRank);
+                writer.WriteNumber("AccessLevel", variable.AccessLevel);
+                writer.WriteBoolean("Historizing", variable.VariableAttributes.Historizing);
+                writer.WriteNumber("ValueRank", variable.ValueRank);
                 if (variable.ArrayDimensions != null)
                 {
                     writer.WritePropertyName("ArrayDimensions");
-                    serializer.Serialize(writer, variable.ArrayDimensions.ToArray());
-                    writer.WritePropertyName("Index");
-                    writer.WriteValue(variable.Index);
+                    JsonSerializer.Serialize(writer, variable.ArrayDimensions, options);
+                    writer.WriteNumber("Index", variable.Index);
                 }
             }
             writer.WriteEndObject();
         }
 
-        public override void WriteJson(
-            JsonWriter writer,
-            UANode? value,
-            Newtonsoft.Json.JsonSerializer serializer)
+
+        public override void Write(Utf8JsonWriter writer, UANode value, JsonSerializerOptions options)
         {
             if (value == null)
             {
-                writer.WriteNull();
+                writer.WriteNullValue();
                 return;
             }
             writer.WriteStartObject();
             WriteBaseValues(writer, value);
             if (config.Extraction.DataTypes.ExpandNodeIds)
             {
-                WriteNodeIds(writer, value, serializer);
+                WriteNodeIds(writer, value, options);
             }
             if (config.Extraction.DataTypes.AppendInternalValues)
             {
-                WriteInternalInfo(writer, value, serializer);
+                WriteInternalInfo(writer, value, options);
             }
             writer.WriteEndObject();
-        }
-
-        public override UANode ReadJson(
-            JsonReader reader,
-            Type objectType,
-            UANode? existingValue,
-            bool hasExistingValue,
-            Newtonsoft.Json.JsonSerializer serializer)
-        {
-            throw new NotImplementedException();
         }
     }
 
@@ -472,18 +450,17 @@ namespace Cognite.OpcUa.Types
         {
             this.uaClient = uaClient;
         }
-        public override NodeId ReadJson(
-            JsonReader reader,
-            Type objectType,
-            NodeId? existingValue,
-            bool hasExistingValue,
-            Newtonsoft.Json.JsonSerializer serializer)
+
+        public override NodeId? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
         {
-            if (reader.TokenType != JsonToken.StartObject) return NodeId.Null;
-            var obj = JToken.ReadFrom(reader);
-            if (obj == null || obj.Type != JTokenType.Object) return NodeId.Null;
-            string? ns = obj.Value<string>("namespace");
-            int? idType = obj.Value<int?>("idType");
+            if (reader.TokenType != JsonTokenType.StartObject) return NodeId.Null;
+            var obj = JsonElement.ParseValue(ref reader);
+            if (obj.ValueKind != JsonValueKind.Object) return NodeId.Null;
+            string? ns = null;
+            if (obj.TryGetProperty("namespace", out var nsElem)) ns = nsElem.GetString();
+            int? idType = null;
+            if (obj.TryGetProperty("idType", out var idtElem)) idType = idtElem.GetInt32();
+
             if (idType == null || idType.Value > 3 || idType.Value < 0) return NodeId.Null;
 
             int nsIdx = 0;
@@ -498,22 +475,19 @@ namespace Cognite.OpcUa.Types
                 switch ((IdType)idType.Value)
                 {
                     case IdType.Numeric:
-                        uint? numIdf = obj.Value<uint?>("identifier");
-                        if (numIdf == null) return NodeId.Null;
+                        uint numIdf = obj.GetProperty("identifier").GetUInt32();
                         return new NodeId(numIdf, (ushort)nsIdx);
                     case IdType.String:
-                        string? strIdf = obj.Value<string>("identifier");
+                        string? strIdf = obj.GetProperty("identifier").GetString();
                         if (strIdf == null) return NodeId.Null;
                         return new NodeId(strIdf, (ushort)nsIdx);
                     case IdType.Guid:
-                        strIdf = obj.Value<string>("identifier");
+                        strIdf = obj.GetProperty("identifier").GetString();
                         if (strIdf == null) return NodeId.Null;
                         Guid guid = Guid.Parse(strIdf);
                         return new NodeId(guid, (ushort)nsIdx);
                     case IdType.Opaque:
-                        strIdf = obj.Value<string>("identifier");
-                        if (strIdf == null) return NodeId.Null;
-                        var opqIdf = Convert.FromBase64String(strIdf);
+                        var opqIdf = obj.GetProperty("identifier").GetBytesFromBase64();
                         return new NodeId(opqIdf, (ushort)nsIdx);
                 }
             }
@@ -521,40 +495,34 @@ namespace Cognite.OpcUa.Types
             return NodeId.Null;
         }
 
-        public override void WriteJson(
-            JsonWriter writer,
-            NodeId? value,
-            Newtonsoft.Json.JsonSerializer serializer)
+        public override void Write(Utf8JsonWriter writer, NodeId value, JsonSerializerOptions options)
         {
             if (value == null)
             {
-                writer.WriteNull();
+                writer.WriteNullValue();
                 return;
             }
             writer.WriteStartObject();
             if (value.NamespaceIndex != 0)
             {
-                writer.WritePropertyName("namespace");
                 var ns = uaClient.NamespaceTable!.GetString(value.NamespaceIndex);
-                writer.WriteValue(ns);
+                writer.WriteString("namespace", ns);
             }
 
-            writer.WritePropertyName("idType");
-            writer.WriteValue((int)value.IdType);
-            writer.WritePropertyName("identifier");
+            writer.WriteNumber("idType", (int)value.IdType);
             switch (value.IdType)
             {
                 case IdType.Numeric:
-                    writer.WriteValue(value.Identifier is uint iVal ? iVal : 0);
+                    writer.WriteNumber("identifier", value.Identifier is uint iVal ? iVal : 0);
                     break;
                 case IdType.Guid:
-                    writer.WriteValue(value.Identifier is Guid gVal ? gVal : Guid.Empty);
+                    writer.WriteString("identifier", value.Identifier is Guid gVal ? gVal : Guid.Empty);
                     break;
                 case IdType.Opaque:
-                    writer.WriteValue(value.Identifier as byte[]);
+                    writer.WriteBase64String("identifier", value.Identifier as byte[]);
                     break;
                 case IdType.String:
-                    writer.WriteValue(value.Identifier as string);
+                    writer.WriteString("identifier", value.Identifier as string);
                     break;
             }
             writer.WriteEndObject();

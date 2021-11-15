@@ -7,6 +7,9 @@
     <AnalysisMode>AllEnabledByDefault</AnalysisMode>
     <Nullable>enable</Nullable>
     <LangVersion>9.0</LangVersion>
+    <EnableSingleFileAnalysis>true</EnableSingleFileAnalysis>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
   </PropertyGroup>
   <!--ItemGroup>
     <None Include="$(SolutionDir)config\**" CopyToOutputDirectory="Always" LinkBase="config\" />

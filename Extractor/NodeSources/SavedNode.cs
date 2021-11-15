@@ -16,6 +16,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using Opc.Ua;
+using System.Text.Json.Serialization;
 
 namespace Cognite.OpcUa.NodeSources
 {
@@ -23,7 +24,7 @@ namespace Cognite.OpcUa.NodeSources
     {
         public NodeId? NodeId { get; set; }
         public NodeId? ParentNodeId { get; set; }
-        [Newtonsoft.Json.JsonProperty("name")]
+        [JsonPropertyName("name")]
         public string? Name { get; set; }
         public NodeId? DataTypeId { get; set; }
         public InternalInfo? InternalInfo { get; set; }

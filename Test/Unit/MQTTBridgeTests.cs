@@ -74,7 +74,7 @@ namespace Test.Unit
             public async Task PublishAssets(IEnumerable<AssetCreate> assets)
             {
                 if (!client.IsConnected) throw new InvalidOperationException("Client is not connected");
-                var data = JsonSerializer.SerializeToUtf8Bytes(assets, null);
+                var data = JsonSerializer.SerializeToUtf8Bytes(assets);
 
                 var msg = baseBuilder
                     .WithPayload(data)
@@ -89,7 +89,7 @@ namespace Test.Unit
             public async Task PublishTimeseries(IEnumerable<StatelessTimeSeriesCreate> timeseries)
             {
                 if (!client.IsConnected) throw new InvalidOperationException("Client is not connected");
-                var data = JsonSerializer.SerializeToUtf8Bytes(timeseries, null);
+                var data = JsonSerializer.SerializeToUtf8Bytes(timeseries);
 
                 var msg = baseBuilder
                     .WithPayload(data)
@@ -104,7 +104,7 @@ namespace Test.Unit
             public async Task PublishEvents(IEnumerable<StatelessEventCreate> events)
             {
                 if (!client.IsConnected) throw new InvalidOperationException("Client is not connected");
-                var data = JsonSerializer.SerializeToUtf8Bytes(events, null);
+                var data = JsonSerializer.SerializeToUtf8Bytes(events);
 
                 var msg = baseBuilder
                     .WithPayload(data)
@@ -157,7 +157,7 @@ namespace Test.Unit
             public async Task PublishRelationships(IEnumerable<RelationshipCreate> relationships)
             {
                 if (!client.IsConnected) throw new InvalidOperationException("Client is not connected");
-                var data = JsonSerializer.SerializeToUtf8Bytes(relationships, null);
+                var data = JsonSerializer.SerializeToUtf8Bytes(relationships);
 
                 var msg = baseBuilder
                     .WithPayload(data)

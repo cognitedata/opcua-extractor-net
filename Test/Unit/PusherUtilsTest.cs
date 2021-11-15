@@ -42,14 +42,14 @@ namespace Test.Unit
             return json.Value.GetProperty(name).GetString();
         }
 
-        private static RawRow ToRawRow(JsonElement raw)
+        private static RawRow<Dictionary<string, JsonElement>> ToRawRow(JsonElement raw)
         {
             var columns = new Dictionary<string, JsonElement>();
             foreach (var field in raw.EnumerateObject())
             {
                 columns[field.Name] = field.Value;
             }
-            return new RawRow
+            return new RawRow<Dictionary<string, JsonElement>>
             {
                 Columns = columns,
                 LastUpdatedTime = 0,

@@ -82,7 +82,7 @@ namespace Cognite.OpcUa
             return (objects, timeseries);
         }
         /// <summary>
-        /// Select elements from <typeparamref name="R"/> to <typeparamref name="T"/>,
+        /// Select elements from <typeparamref name="TIn"/> to <typeparamref name="TOut"/>,
         /// returning only when the result is not null.
         /// </summary>
         /// <typeparam name="TIn">Source type</typeparam>
