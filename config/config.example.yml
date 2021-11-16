@@ -705,6 +705,7 @@ subscriptions:
     # Log bad subscription datapoints
     log-bad-values: true
     # Ignore the access level parameter for history and datapoints.
+    # This means using the "Historizing" parameter for history, and subscribing to all timeseries, independent of AccessLevel.
     ignore-access-level: false
 
 events:
