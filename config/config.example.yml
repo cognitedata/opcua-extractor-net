@@ -679,6 +679,8 @@ extraction:
             # The OPC-UA node class, exact match. Should be one of
             # "Object", "ObjectType", "Variable", "VariableType". The other types will work, but do nothing, since we never read those.
             # node-class:
+            # The "historizing" attribute on variables. If this is set, the filter only matches variables.
+            # historizing:
             # Another instance of NodeFilter which is applied to the parent node.
             # parent:
 
