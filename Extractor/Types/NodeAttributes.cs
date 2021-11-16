@@ -158,6 +158,10 @@ namespace Cognite.OpcUa.Types
                     ShouldSubscribe = (AccessLevel & AccessLevels.CurrentRead) != 0;
                     ReadHistory = (AccessLevel & AccessLevels.HistoryRead) != 0 && config.History.Enabled && config.History.Data;
                 }
+                if (config.History.RequireHistorizing)
+                {
+                    ReadHistory = ReadHistory && Historizing;
+                }
                 else
                 {
                     ShouldSubscribe = true;
