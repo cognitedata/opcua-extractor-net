@@ -435,25 +435,26 @@ namespace Test.Unit
             };
             var trans = new NodeTransformation(raw, 0);
             var result = trans.ToString();
-            Assert.Equal("Transformation 0:\n"
-                       + "Type: Property\n"
-                       + "Filter:\n"
-                       + "    Name: name\n"
-                       + "    Description: description\n"
-                       + "    Id: id\n"
-                       + "    IsArray: True\n"
-                       + "    Namespace: namespace\n"
-                       + "    TypeDefinition: typeDefinition\n"
-                       + "    NodeClass: Variable\n"
-                       + "    Parent:\n"
-                       + "        Name: name2\n"
-                       + "        Description: description2\n"
-                       + "        Id: id2\n"
-                       + "        IsArray: False\n"
-                       + "        Namespace: namespace2\n"
-                       + "        TypeDefinition: typeDefinition2\n"
-                       + "        NodeClass: Object\n", result);
-
+            Assert.Equal(@"Transformation 0:
+Type: Property
+Filter:
+    Name: name
+    Description: description
+    Id: id
+    IsArray: True
+    Namespace: namespace
+    TypeDefinition: typeDefinition
+    NodeClass: Variable
+    Parent:
+        Name: name2
+        Description: description2
+        Id: id2
+        IsArray: False
+        Historizing: False
+        Namespace: namespace2
+        TypeDefinition: typeDefinition2
+        NodeClass: Object
+".ReplaceLineEndings(), result.ReplaceLineEndings());
         }
     }
 }
