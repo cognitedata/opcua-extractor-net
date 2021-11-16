@@ -36,6 +36,7 @@ namespace Cognite.OpcUa
         private Regex? Namespace { get; }
         private Regex? TypeDefinition { get; }
         private NodeFilter? Parent { get; }
+        private bool? Historizing { get; }
         public NodeFilter(RawNodeFilter? filter)
         {
             // Filter with no elements applies to everything, which may be bizarre, but that's on the user.
@@ -47,6 +48,7 @@ namespace Cognite.OpcUa
             TypeDefinition = CreateRegex(filter.TypeDefinition);
             IsArray = filter.IsArray;
             NodeClass = filter.NodeClass;
+            Historizing = filter.Historizing;
             if (filter.Parent != null)
             {
                 Parent = new NodeFilter(filter.Parent);
@@ -90,7 +92,7 @@ namespace Cognite.OpcUa
         /// <returns>True if match</returns>
         public bool IsBasicMatch(string name, NodeId id, NodeId typeDefinition, NamespaceTable namespaces, NodeClass nc)
         {
-            if (Description != null || IsArray != null || Parent != null) return false;
+            if (Description != null || IsArray != null || Parent != null || Historizing != null) return false;
             return MatchBasic(name, id ?? NodeId.Null, typeDefinition, namespaces, nc);
         }
         /// <summary>
@@ -139,7 +141,12 @@ namespace Cognite.OpcUa
         {
             if (node == null || !MatchBasic(node.DisplayName, node.Id, node.NodeType?.Id, ns, node.NodeClass)) return false;
             if (Description != null && (string.IsNullOrEmpty(node.Description) || !Description.IsMatch(node.Description))) return false;
-            if (IsArray != null && (node is not UAVariable variable || variable.IsArray != IsArray)) return false;
+            if (node is UAVariable variable)
+            {
+                if (IsArray != null && variable.IsArray != IsArray) return false;
+                if (Historizing != null && variable.VariableAttributes.Historizing != Historizing) return false;
+            }
+            else if (IsArray != null || Historizing != null) return false;
             if (Parent != null && (node.Parent == null || !Parent.IsMatch(node.Parent, ns))) return false;
             return true;
         }
@@ -172,6 +179,12 @@ namespace Cognite.OpcUa
             {
                 builder.Append(' ', (idx + 1) * 4);
                 builder.AppendFormat("IsArray: {0}", IsArray);
+                builder.AppendLine();
+            }
+            if (Historizing != null)
+            {
+                builder.Append(' ', (idx + 1) * 4);
+                builder.AppendFormat("Historizing: {0}", Historizing);
                 builder.AppendLine();
             }
             if (Namespace != null)
