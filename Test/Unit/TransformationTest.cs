@@ -255,6 +255,46 @@ namespace Test.Unit
             Assert.Contains(matched, node => (uint)node.Id.Identifier == 2u);
             Assert.Contains(matched, node => (uint)node.Id.Identifier == 3u);
         }
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void TestHistorizingFilter(bool historizing)
+        {
+            var raw = new RawNodeFilter
+            {
+                Historizing = historizing
+            };
+
+            var nodes = new[]
+            {
+                new UAVariable(new NodeId(1), "TestTest", new NodeId("parent")),
+                new UAVariable(new NodeId(2), "OtherTest", new NodeId("parent")),
+                new UAVariable(new NodeId(3), "Test", new NodeId("parent")),
+                new UANode(new NodeId(4), "Other", new NodeId("parent"), NodeClass.Object),
+                new UAVariable(new NodeId(5), "Test", new NodeId("parent"))
+            };
+            (nodes[2].Attributes as Cognite.OpcUa.Types.VariableAttributes).Historizing = true;
+            (nodes[4].Attributes as Cognite.OpcUa.Types.VariableAttributes).Historizing = true;
+
+            var filter = new NodeFilter(raw);
+            var matched = nodes.Where(node => filter.IsMatch(node, nss)).ToList();
+            var matchedBasic = nodes.Where(node =>
+                filter.IsBasicMatch(node.DisplayName, node.Id, node.NodeType?.Id, nss, node.NodeClass)).ToList();
+
+            Assert.Equal(2, matched.Count);
+            Assert.Empty(matchedBasic);
+
+            if (historizing)
+            {
+                Assert.Contains(matched, node => (uint)node.Id.Identifier == 3u);
+                Assert.Contains(matched, node => (uint)node.Id.Identifier == 5u);
+            }
+            else
+            {
+                Assert.Contains(matched, node => (uint)node.Id.Identifier == 1u);
+                Assert.Contains(matched, node => (uint)node.Id.Identifier == 2u);
+            }
+        }
         [Fact]
         public void TestMultipleFilter()
         {
@@ -264,6 +304,7 @@ namespace Test.Unit
                 Description = "target",
                 TypeDefinition = "i=1",
                 IsArray = true,
+                Historizing = true,
                 Name = "target",
                 Parent = new RawNodeFilter
                 {
@@ -276,7 +317,7 @@ namespace Test.Unit
             var parent2 = new UANode(new NodeId("parent2"), "parent2", NodeId.Null, NodeClass.Object);
             // Each node deviates on only one point.
             var nodes = new List<UANode>();
-            for (int i = 0; i < 9; i++)
+            for (int i = 0; i < 10; i++)
             {
                 NodeClass nodeClass = i == 7 ? NodeClass.VariableType : NodeClass.Variable;
 
@@ -298,6 +339,7 @@ namespace Test.Unit
                 node.Attributes.NodeType = new UANodeType(i == 2 ? new NodeId(2) : new NodeId(1), true);
                 node.VariableAttributes.ArrayDimensions = i == 3 ? null : new[] { 4 };
                 node.Parent = i == 5 ? parent2 : parent1;
+                node.VariableAttributes.Historizing = i == 8 ? true : false;
 
                 nodes.Add(node);
             }
@@ -420,6 +462,7 @@ namespace Test.Unit
                     TypeDefinition = "typeDefinition",
                     Id = "id",
                     IsArray = true,
+                    Historizing = true,
                     Parent = new RawNodeFilter
                     {
                         Name = "name2",
@@ -429,6 +472,7 @@ namespace Test.Unit
                         TypeDefinition = "typeDefinition2",
                         Id = "id2",
                         IsArray = false,
+                        Historizing = false
                     }
                 },
                 Type = TransformationType.Property
@@ -442,6 +486,7 @@ Filter:
     Description: description
     Id: id
     IsArray: True
+    Historizing: True
     Namespace: namespace
     TypeDefinition: typeDefinition
     NodeClass: Variable
