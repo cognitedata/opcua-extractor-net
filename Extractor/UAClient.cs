@@ -715,6 +715,8 @@ namespace Cognite.OpcUa
         {
             nodes = nodes.Where(node => (node is not UAVariable variable || variable.Index == -1) && !node.DataRead).ToList();
 
+            if (!nodes.Any()) return;
+
             int expected = 0;
             var readValueIds = new ReadValueIdCollection();
             foreach (var node in nodes)
@@ -746,7 +748,8 @@ namespace Cognite.OpcUa
             int idx = 0;
             foreach (var node in nodes)
             {
-                idx = node.Attributes.HandleAttributeRead(Config, values, idx, this);
+                var attributes = node.Attributes.GetAttributeIds(Config);
+                idx = node.Attributes.HandleAttributeRead(Config, values, attributes, idx, this);
             }
         }
 

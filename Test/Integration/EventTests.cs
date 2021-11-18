@@ -205,7 +205,7 @@ namespace Test.Integration
 
             // Test everything normal
             await extractor.RunExtractor(true);
-            Assert.All(extractor.State.NodeStates, state => { Assert.True(state.ShouldSubscribe); });
+            Assert.All(extractor.State.EmitterStates, state => { Assert.True(state.ShouldSubscribe); });
             await extractor.WaitForSubscriptions();
             Assert.Equal(3u, session.Subscriptions.First(sub => sub.DisplayName.StartsWith("EventListener", StringComparison.InvariantCulture)).MonitoredItemCount);
             await CommonTestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 1), 5);
@@ -215,9 +215,9 @@ namespace Test.Integration
             tester.Config.Subscriptions.Events = false;
             await extractor.RunExtractor(true);
             var state = extractor.State.GetEmitterState(ids.Obj1);
-            Assert.True(state.ShouldSubscribe);
+            Assert.False(state.ShouldSubscribe);
             state = extractor.State.GetEmitterState(ObjectIds.Server);
-            Assert.True(state.ShouldSubscribe);
+            Assert.False(state.ShouldSubscribe);
             await extractor.WaitForSubscriptions();
             Assert.DoesNotContain(session.Subscriptions, sub => sub.DisplayName.StartsWith("EventListener", StringComparison.InvariantCulture));
             await CommonTestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 2), 5);

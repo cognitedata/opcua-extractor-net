@@ -404,13 +404,14 @@ namespace Cognite.OpcUa.Types
             writer.WriteStartObject("InternalInfo");
 
             writer.WriteNumber("EventNotifier", node.EventNotifier);
-            writer.WriteBoolean("ShouldSubscribe", node.ShouldSubscribe);
+            writer.WriteBoolean("ShouldSubscribeEvents", node.ShouldSubscribeEvents);
             writer.WriteNumber("NodeClass", (int)node.NodeClass);
             if (Type == ConverterType.Variable && node is UAVariable variable)
             {
                 writer.WriteNumber("AccessLevel", variable.AccessLevel);
                 writer.WriteBoolean("Historizing", variable.VariableAttributes.Historizing);
                 writer.WriteNumber("ValueRank", variable.ValueRank);
+                writer.WriteBoolean("ShouldSubscribeData", variable.ShouldSubscribeData);
                 if (variable.ArrayDimensions != null)
                 {
                     writer.WritePropertyName("ArrayDimensions");

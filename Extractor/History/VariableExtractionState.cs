@@ -58,7 +58,7 @@ namespace Cognite.OpcUa.History
             DataType = variable.DataType;
             ArrayDimensions = variable.ArrayDimensions;
             DisplayName = variable.DisplayName;
-            ShouldSubscribe = variable.ShouldSubscribe;
+            ShouldSubscribe = variable.ShouldSubscribeData;
             if (frontfill)
             {
                 buffer = new List<UADataPoint>();

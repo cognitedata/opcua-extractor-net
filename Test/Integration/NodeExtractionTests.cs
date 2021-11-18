@@ -1227,7 +1227,7 @@ namespace Test.Integration
                     Console.WriteLine("Investigate object: " + node.Id + ", " + node.DisplayName);
                     Assert.True(assets.TryGetValue(node.Id, out var other));
                     Assert.Equal(other.DisplayName, node.DisplayName);
-                    Assert.Equal(other.ShouldSubscribe, node.ShouldSubscribe);
+                    Assert.Equal(other.ShouldSubscribeEvents, node.ShouldSubscribeEvents);
                     Assert.Equal(other.NodeType?.Id, node.NodeType?.Id);
                     Assert.False(node.IsProperty);
                     Assert.Equal(other.ParentId, node.ParentId);
@@ -1240,7 +1240,7 @@ namespace Test.Integration
                     Console.WriteLine("Investigate variable: " + node.Id + ", " + node.DisplayName);
                     Assert.True(tss.TryGetValue((node.Id, node.Index), out var other));
                     Assert.Equal(other.DisplayName, node.DisplayName);
-                    Assert.Equal(other.ShouldSubscribe, node.ShouldSubscribe);
+                    Assert.Equal(other.ShouldSubscribeData, node.ShouldSubscribeData);
                     Assert.Equal(other.NodeType?.Id, node.NodeType?.Id);
                     Assert.False(node.IsProperty);
                     Assert.Equal(other.ParentId, node.ParentId);

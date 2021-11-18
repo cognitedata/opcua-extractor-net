@@ -35,7 +35,7 @@ namespace Cognite.OpcUa.Types
         public IList<UANode>? Properties { get; set; }
         public NodeClass NodeClass { get; }
         public bool DataRead { get; set; }
-        public bool ShouldSubscribe { get; set; } = true;
+        public bool ShouldSubscribeEvents { get; set; }
         public NodeAttributes(NodeClass nc)
         {
             NodeClass = nc;
@@ -51,13 +51,13 @@ namespace Cognite.OpcUa.Types
             switch (NodeClass)
             {
                 case NodeClass.Object:
-                    if (config.Events.Enabled)
+                    if (config.Events.Enabled && config.Events.DiscoverEmitters)
                     {
                         result.Add(Attributes.EventNotifier);
                     }
                     break;
                 case NodeClass.Variable:
-                    if (config.History.Enabled && config.History.Data)
+                    if (config.History.Enabled)
                     {
                         result.Add(Attributes.Historizing);
                     }
@@ -65,7 +65,7 @@ namespace Cognite.OpcUa.Types
                     {
                         result.Add(Attributes.EventNotifier);
                     }
-                    if (!config.Subscriptions.IgnoreAccessLevel && (config.Subscriptions.DataPoints || config.History.Enabled && config.History.Data))
+                    if (!config.Subscriptions.IgnoreAccessLevel)
                     {
                         result.Add(Attributes.UserAccessLevel);
                     }
@@ -89,26 +89,37 @@ namespace Cognite.OpcUa.Types
         /// <param name="idx">Current index in the list</param>
         /// <param name="client">UAClient this is read from</param>
         /// <returns>New index in list</returns>
-        public virtual int HandleAttributeRead(FullConfig config, IList<DataValue> values, int idx, UAClient client)
+        public virtual int HandleAttributeRead(
+            FullConfig config,
+            IList<DataValue> values,
+            IEnumerable<uint> attributeIds,
+            int idx,
+            UAClient client)
         {
-            int startIdx = idx;
-            Description = values[idx++].GetValue<LocalizedText?>(null)?.Text;
-            if ((NodeClass == NodeClass.Object || NodeClass == NodeClass.Variable) && config.Events.Enabled && config.Events.DiscoverEmitters)
+            foreach (var attr in attributeIds)
             {
-                EventNotifier = values[idx++].GetValue(EventNotifiers.None);
-            }
-            if (NodeClass != NodeClass.Object && NodeClass != NodeClass.Variable)
-            {
-                ShouldSubscribe = false;
-            }
-            DataRead = true;
-            for (int i = startIdx; i < idx; i++)
-            {
-                if (values[i].StatusCode == StatusCodes.BadNodeIdUnknown)
+                switch (attr)
+                {
+                    case Attributes.Description:
+                        Description = values[idx].GetValue<LocalizedText?>(null)?.Text;
+                        break;
+                    case Attributes.EventNotifier:
+                        EventNotifier = values[idx].GetValue(EventNotifiers.None);
+                        break;
+                }
+
+                if (values[idx].StatusCode == StatusCodes.BadNodeIdUnknown)
                 {
                     Ignore = true;
                 }
+
+                idx++;
             }
+
+            ShouldSubscribeEvents = (EventNotifier & EventNotifiers.SubscribeToEvents) != 0;
+
+            DataRead = true;
+
             return idx;
         }
     }
@@ -125,6 +136,7 @@ namespace Cognite.OpcUa.Types
         public int[]? ArrayDimensions { get; set; }
         public byte AccessLevel { get; set; }
         public bool ReadHistory { get; set; }
+        public bool ShouldSubscribeData { get; set; } = true;
         public VariableAttributes(NodeClass nc) : base(nc) { }
         /// <summary>
         /// Handle attribute read result for a variable.
@@ -134,53 +146,74 @@ namespace Cognite.OpcUa.Types
         /// <param name="idx">Current index in the list</param>
         /// <param name="client">UAClient this is read from</param>
         /// <returns>New index in list</returns>
-        public override int HandleAttributeRead(FullConfig config, IList<DataValue> values, int idx, UAClient client)
+        public override int HandleAttributeRead(
+            FullConfig config,
+            IList<DataValue> values,
+            IEnumerable<uint> attributeIds,
+            int idx,
+            UAClient client)
         {
-            int startIdx = idx;
-            Description = values[idx++].GetValue<LocalizedText?>(null)?.Text;
-            if (NodeClass == NodeClass.Variable)
+            foreach (var attr in attributeIds)
             {
-                if (config.History.Enabled)
+                switch (attr)
                 {
-                    Historizing = values[idx++].GetValue(false);
-                    if (config.Subscriptions.IgnoreAccessLevel)
-                    {
-                        ReadHistory = Historizing;
-                    }
+                    case Attributes.Description:
+                        Description = values[idx].GetValue<LocalizedText?>(null)?.Text;
+                        break;
+                    case Attributes.Historizing:
+                        Historizing = values[idx].GetValue(false);
+                        break;
+                    case Attributes.EventNotifier:
+                        EventNotifier = values[idx].GetValue(EventNotifiers.None);
+                        break;
+                    case Attributes.UserAccessLevel:
+                        AccessLevel = values[idx].GetValue<byte>(0);
+                        break;
+                    case Attributes.DataType:
+                        var dt = values[idx].GetValue(NodeId.Null);
+                        DataType = client.DataTypeManager.GetDataType(dt) ?? new UADataType(dt);
+                        break;
+                    case Attributes.ValueRank:
+                        ValueRank = values[idx].GetValue(ValueRanks.Any);
+                        break;
+                    case Attributes.ArrayDimensions:
+                        if (values[idx].Value is int[] dimVal)
+                        {
+                            ArrayDimensions = dimVal;
+                        }
+                        break;
                 }
-                if (config.Events.Enabled)
-                {
-                    EventNotifier = values[idx++].GetValue(EventNotifiers.None);
-                }
-                if (!config.Subscriptions.IgnoreAccessLevel && (config.Subscriptions.DataPoints || config.History.Enabled && config.History.Data))
-                {
-                    AccessLevel = values[idx++].GetValue<byte>(0);
-                    ShouldSubscribe = (AccessLevel & AccessLevels.CurrentRead) != 0;
-                    ReadHistory = (AccessLevel & AccessLevels.HistoryRead) != 0 && config.History.Enabled && config.History.Data;
-                }
-                else
-                {
-                    ShouldSubscribe = true;
-                }
-            }
-            var dt = values[idx++].GetValue(NodeId.Null);
-            DataType = client.DataTypeManager.GetDataType(dt) ?? new UADataType(dt);
-            ValueRank = values[idx++].GetValue(ValueRanks.Any);
-            if (IsProperty || config.Extraction.DataTypes.MaxArraySize != 0)
-            {
-                if (values[idx++].GetValue(typeof(int[])) is int[] dimVal)
-                {
-                    ArrayDimensions = dimVal;
-                }
-            }
 
-            for (int i = startIdx; i < idx; i++)
-            {
-                if (values[i].StatusCode == StatusCodes.BadNodeIdUnknown)
+                if (values[idx].StatusCode == StatusCodes.BadNodeIdUnknown)
                 {
                     Ignore = true;
                 }
+
+                idx++;
             }
+
+            if (config.Subscriptions.IgnoreAccessLevel && config.History.Enabled && config.History.Data)
+            {
+                ReadHistory = Historizing;
+            }
+
+            if (!config.Subscriptions.IgnoreAccessLevel)
+            {
+                ShouldSubscribeData = (AccessLevel & AccessLevels.CurrentRead) != 0 && config.Subscriptions.DataPoints;
+                ReadHistory = (AccessLevel & AccessLevels.HistoryRead) != 0 && config.History.Enabled && config.History.Data;
+            }
+
+            if (config.Subscriptions.IgnoreAccessLevel)
+            {
+                ShouldSubscribeData = true;
+            }
+
+            if (config.History.RequireHistorizing)
+            {
+                ReadHistory = ReadHistory && Historizing;
+            }
+
+            ShouldSubscribeEvents = (EventNotifier & EventNotifiers.SubscribeToEvents) != 0;
 
             DataRead = true;
             return idx;

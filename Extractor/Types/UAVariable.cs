@@ -53,6 +53,10 @@ namespace Cognite.OpcUa.Types
         /// </summary>
         public int ValueRank => VariableAttributes.ValueRank;
         /// <summary>
+        /// Whether to subscribe to this node, independent of reading history.
+        /// </summary>
+        public bool ShouldSubscribeData => VariableAttributes.ShouldSubscribeData;
+        /// <summary>
         /// Value of variable as string or double
         /// </summary>
         public Variant Value { get; private set; }

@@ -304,13 +304,14 @@ namespace Test.Unit
             TestConvert(node,
                 @"{""externalId"":""gp.base:s=test"",""name"":""test"","
                 + @"""description"":null,""metadata"":null,""parentExternalId"":null,"
-                + @"""InternalInfo"":{""EventNotifier"":0,""ShouldSubscribe"":true,""NodeClass"":1}}");
+                + @"""InternalInfo"":{""EventNotifier"":0,""ShouldSubscribeEvents"":false,""NodeClass"":1}}");
 
             node.Attributes.EventNotifier |= EventNotifiers.HistoryRead | EventNotifiers.SubscribeToEvents;
+            node.Attributes.ShouldSubscribeEvents = true;
             TestConvert(node,
                 @"{""externalId"":""gp.base:s=test"",""name"":""test"","
                 + @"""description"":null,""metadata"":null,""parentExternalId"":null,"
-                + @"""InternalInfo"":{""EventNotifier"":5,""ShouldSubscribe"":true,""NodeClass"":1}}");
+                + @"""InternalInfo"":{""EventNotifier"":5,""ShouldSubscribeEvents"":true,""NodeClass"":1}}");
 
             var variable = new UAVariable(new NodeId("test"), "test", NodeId.Null, NodeClass.Variable);
             options = new JsonSerializerOptions();
@@ -322,8 +323,8 @@ namespace Test.Unit
                 @"{""externalId"":""gp.base:s=test"",""name"":""test"","
                 + @"""description"":null,""metadata"":null,""assetExternalId"":null,"
                 + @"""isString"":false,""isStep"":false,"
-                + @"""InternalInfo"":{""EventNotifier"":0,""ShouldSubscribe"":true,""NodeClass"":2,""AccessLevel"":5,"
-                + @"""Historizing"":true,""ValueRank"":-1}}");
+                + @"""InternalInfo"":{""EventNotifier"":0,""ShouldSubscribeEvents"":false,""NodeClass"":2,""AccessLevel"":5,"
+                + @"""Historizing"":true,""ValueRank"":-1,""ShouldSubscribeData"":true}}");
 
             variable.VariableAttributes.ValueRank = ValueRanks.OneDimension;
             variable.VariableAttributes.ArrayDimensions = new[] { 5 };
@@ -331,8 +332,8 @@ namespace Test.Unit
                 @"{""externalId"":""gp.base:s=test"",""name"":""test"","
                 + @"""description"":null,""metadata"":null,""assetExternalId"":null,"
                 + @"""isString"":false,""isStep"":false,"
-                + @"""InternalInfo"":{""EventNotifier"":0,""ShouldSubscribe"":true,""NodeClass"":2,""AccessLevel"":5,"
-                + @"""Historizing"":true,""ValueRank"":1,""ArrayDimensions"":[5],""Index"":-1}}"
+                + @"""InternalInfo"":{""EventNotifier"":0,""ShouldSubscribeEvents"":false,""NodeClass"":2,""AccessLevel"":5,"
+                + @"""Historizing"":true,""ValueRank"":1,""ShouldSubscribeData"":true,""ArrayDimensions"":[5],""Index"":-1}}"
                 );
         }
         [Fact]
@@ -345,7 +346,7 @@ namespace Test.Unit
 
             var node = new UANode(new NodeId("test", 2), "test", new NodeId("parent"), NodeClass.Object);
             node.Attributes.EventNotifier = 5;
-            node.Attributes.ShouldSubscribe = true;
+            node.Attributes.ShouldSubscribeEvents = true;
 
             tester.Config.Extraction.DataTypes.AppendInternalValues = true;
             tester.Config.Extraction.DataTypes.ExpandNodeIds = true;
@@ -363,7 +364,7 @@ namespace Test.Unit
             Assert.Equal(node.Id, saved.NodeId);
             Assert.Equal(node.NodeClass, saved.InternalInfo.NodeClass);
             Assert.Equal(node.ParentId, saved.ParentNodeId);
-            Assert.Equal(node.ShouldSubscribe, saved.InternalInfo.ShouldSubscribe);
+            Assert.Equal(node.ShouldSubscribeEvents, saved.InternalInfo.ShouldSubscribeEvents);
             Assert.Equal(node.EventNotifier, saved.InternalInfo.EventNotifier);
 
             // Variables
@@ -373,6 +374,8 @@ namespace Test.Unit
             var variable = new UAVariable(new NodeId("test", 2), "test", new NodeId("parent"), NodeClass.Variable);
             variable.VariableAttributes.AccessLevel = 5;
             variable.VariableAttributes.EventNotifier = 5;
+            variable.VariableAttributes.ShouldSubscribeEvents = true;
+            variable.VariableAttributes.ShouldSubscribeData = true;
             variable.VariableAttributes.DataType = new UADataType(DataTypeIds.Double);
             variable.VariableAttributes.ValueRank = -1;
 
@@ -380,7 +383,8 @@ namespace Test.Unit
             Assert.Equal(variable.Id, saved.NodeId);
             Assert.Equal(variable.NodeClass, saved.InternalInfo.NodeClass);
             Assert.Equal(variable.ParentId, saved.ParentNodeId);
-            Assert.Equal(variable.ShouldSubscribe, saved.InternalInfo.ShouldSubscribe);
+            Assert.Equal(variable.ShouldSubscribeData, saved.InternalInfo.ShouldSubscribeData);
+            Assert.Equal(variable.ShouldSubscribeEvents, saved.InternalInfo.ShouldSubscribeEvents);
             Assert.Equal(variable.EventNotifier, saved.InternalInfo.EventNotifier);
             Assert.Equal(variable.DisplayName, saved.Name);
             Assert.Equal(variable.DataType.Raw, saved.DataTypeId);

@@ -261,6 +261,7 @@ namespace Cognite.OpcUa.TypeCollectors
                 ReferenceTypeId = ReferenceTypes.HierarchicalReferences,
                 Nodes = nodes
             };
+
             var children = await uaClient.Browser.BrowseLevel(baseParams, token, purpose: "data type enum properties");
 
             foreach (var id in typeSet)
