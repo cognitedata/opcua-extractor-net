@@ -179,7 +179,7 @@ namespace Cognite.OpcUa.NodeSources
                 && Extractor.State.GetEmitterState(node.Id) == null)
             {
                 bool history = (node.EventNotifier & EventNotifiers.HistoryRead) != 0 && Config.Events.History;
-                bool subscription = (node.EventNotifier & EventNotifiers.SubscribeToEvents) != 0 && node.ShouldSubscribe;
+                bool subscription = (node.EventNotifier & EventNotifiers.SubscribeToEvents) != 0 && Config.Subscriptions.Events;
                 var eventState = new EventExtractionState(Extractor, node.Id, history, history && Config.History.Backfill, subscription);
                 Extractor.State.SetEmitterState(eventState);
             }
