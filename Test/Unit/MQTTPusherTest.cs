@@ -366,7 +366,6 @@ namespace Test.Unit
             var waitTask = bridge.WaitForNextMessage(1);
             Assert.True(await pusher.PushNodes(assets, new[] { node }, update, tester.Source.Token));
             await Assert.ThrowsAsync<TimeoutException>(() => waitTask);
-            Assert.Equal(2, node.Properties.Count());
             tester.Config.Mqtt.Debug = false;
             Assert.Empty(handler.Timeseries);
 

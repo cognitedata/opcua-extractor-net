@@ -97,7 +97,7 @@ namespace Cognite.OpcUa
             {
                 classMask |= (uint)NodeClass.VariableType | (uint)NodeClass.ObjectType;
             }
-            await BrowseDirectory(roots, callback, token, null, classMask, ignoreVisited, true, config.Extraction.MapVariableChildren);
+            await BrowseDirectory(roots, callback, token, null, classMask, ignoreVisited, true);
         }
         public async Task<IEnumerable<ReferenceDescription>> GetRootNodes(IEnumerable<NodeId> ids, CancellationToken token)
         {
@@ -203,7 +203,6 @@ namespace Cognite.OpcUa
                 InitialParams = baseParams,
                 MaxNodeParallelism = throttling.MaxNodeParallelism,
                 NodesChunk = config.Source.BrowseNodesChunk,
-                ReadVariableChildren = false,
                 VisitedNodes = ignoreVisited ? null : visitedNodes,
                 MaxDepth = 0
             };
@@ -237,7 +236,6 @@ namespace Cognite.OpcUa
             uint nodeClassMask = (uint)NodeClass.Variable | (uint)NodeClass.Object,
             bool ignoreVisited = true,
             bool doFilter = true,
-            bool readVariableChildren = false,
             int maxDepth = -1)
         {
             if (roots == null) throw new ArgumentNullException(nameof(roots));
@@ -254,7 +252,6 @@ namespace Cognite.OpcUa
             {
                 Callback = callback,
                 NodesChunk = config.Source.BrowseNodesChunk,
-                ReadVariableChildren = readVariableChildren,
                 MaxDepth = maxDepth,
                 Filters = doFilter ? IgnoreFilters : null,
                 InitialParams = baseParams,

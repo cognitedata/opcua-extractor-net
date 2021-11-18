@@ -34,7 +34,6 @@ namespace Cognite.OpcUa.Types
         public bool Ignore { get; set; }
         public IList<UANode>? Properties { get; set; }
         public NodeClass NodeClass { get; }
-        public bool PropertiesRead { get; set; }
         public bool DataRead { get; set; }
         public bool ShouldSubscribe { get; set; } = true;
         public NodeAttributes(NodeClass nc)
@@ -173,7 +172,7 @@ namespace Cognite.OpcUa.Types
             ValueRank = values[idx++].GetValue(ValueRanks.Any);
             if (IsProperty || config.Extraction.DataTypes.MaxArraySize != 0)
             {
-                if (values[idx++].GetValue(typeof(int[])) is int[] dimVal)
+                if (values[idx++].Value is int[] dimVal)
                 {
                     ArrayDimensions = dimVal;
                 }

@@ -172,7 +172,7 @@ namespace Test.Unit
             var str = node.ToString();
             var refStr = "Object: name\n"
                        + "Id: s=test\n";
-            Assert.Equal(refStr, str);
+            Assert.Equal(refStr.ReplaceLineEndings(), str.ReplaceLineEndings());
 
             // Full
             var pdt = new UADataType(DataTypeIds.String);
@@ -206,7 +206,7 @@ namespace Test.Unit
                    + "    propN_propA: valueA\n"
                    + "    propB: \n"
                    + "}";
-            Assert.Equal(refStr, str);
+            Assert.Equal(refStr.ReplaceLineEndings(), str.ReplaceLineEndings());
         }
 
         [Fact]
@@ -463,7 +463,7 @@ namespace Test.Unit
             var refStr = "Variable: name\n"
                        + "Id: s=test\n"
                        + "AccessLevel: 0\n";
-            Assert.Equal(refStr, str);
+            Assert.Equal(refStr.ReplaceLineEndings(), str.ReplaceLineEndings());
 
             // full
             node = new UAVariable(new NodeId("test"), "name", new NodeId("parent"));
@@ -508,7 +508,7 @@ namespace Test.Unit
                    + "    propN_propA: valueA\n"
                    + "    propB: \n"
                    + "}";
-            Assert.Equal(refStr, str);
+            Assert.Equal(refStr.ReplaceLineEndings(), str.ReplaceLineEndings());
         }
         [Fact]
         public void TestSetDatapoint()
@@ -778,12 +778,12 @@ namespace Test.Unit
             var dt = new UADataPoint(ts, "id", 123.123);
             var str = dt.ToString();
             var refStr = $"Update timeseries id to 123.123 at {ts.ToString(CultureInfo.InvariantCulture)}";
-            Assert.Equal(refStr, str);
+            Assert.Equal(refStr.ReplaceLineEndings(), str.ReplaceLineEndings());
 
             dt = new UADataPoint(ts, "id", "value");
             str = dt.ToString();
             refStr = $"Update timeseries id to \"value\" at {ts.ToString(CultureInfo.InvariantCulture)}";
-            Assert.Equal(refStr, str);
+            Assert.Equal(refStr.ReplaceLineEndings(), str.ReplaceLineEndings());
         }
         #endregion
 
@@ -932,7 +932,7 @@ namespace Test.Unit
                        + "    NodeId: i=12\n"
                        + "    String: True\n"
                        + "}";
-            Assert.Equal(refStr, str);
+            Assert.Equal(refStr.ReplaceLineEndings(), str.ReplaceLineEndings());
 
             // full
             dt = new UADataType(new NodeId("test"))
@@ -953,7 +953,7 @@ namespace Test.Unit
                    + "    String: False\n"
                    + "    EnumValues: [[123, test], [321, test2], [1, test3]]\n"
                    + "}";
-            Assert.Equal(refStr, str);
+            Assert.Equal(refStr.ReplaceLineEndings(), str.ReplaceLineEndings());
         }
         #endregion
 
@@ -974,7 +974,7 @@ namespace Test.Unit
                        + $"Time: {now.ToString(CultureInfo.InvariantCulture)}\n"
                        + "Type: EventType\n"
                        + "Emitter: s=emitter\n";
-            Assert.Equal(refStr, str);
+            Assert.Equal(refStr.ReplaceLineEndings(), str.ReplaceLineEndings());
 
             evt.Message = "message";
             evt.SourceNode = new NodeId("source");
@@ -997,7 +997,7 @@ namespace Test.Unit
                    + "    key2: 123\n"
                    + "    key3: value2\n"
                    + "}";
-            Assert.Equal(refStr, str);
+            Assert.Equal(refStr.ReplaceLineEndings(), str.ReplaceLineEndings());
         }
         [Fact]
         public void TestEventSerialization()

@@ -420,16 +420,14 @@ namespace Test.Unit
             node.VariableAttributes.DataType = dt;
             tester.Config.Cognite.Debug = true;
             Assert.True(await pusher.PushNodes(assets, new[] { node }, update, tester.Source.Token));
-            Assert.Equal(2, node.Properties.Count());
             tester.Config.Cognite.Debug = false;
             Assert.Empty(handler.Timeseries);
 
-            // Fail to create timeseries, should still result in properties being read.
+            // Fail to create timeseries
             node = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", new NodeId("parent"));
             node.VariableAttributes.DataType = dt;
             handler.FailedRoutes.Add("/timeseries");
             Assert.False(await pusher.PushNodes(assets, new[] { node }, update, tester.Source.Token));
-            Assert.Equal(2, node.Properties.Count());
             handler.FailedRoutes.Clear();
             Assert.Empty(handler.Timeseries);
 

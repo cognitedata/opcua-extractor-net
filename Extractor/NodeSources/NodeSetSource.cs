@@ -423,8 +423,8 @@ namespace Cognite.OpcUa.NodeSources
                 {
                     properties.Add(variable);
                 }
-                node.Attributes.PropertiesRead = true;
             }
+            await Client.ReadNodeValues(properties, token);
 
             if (Config.Extraction.DataTypes.MaxArraySize != 0 && Config.Extraction.DataTypes.EstimateArraySizes == true)
             {
@@ -445,12 +445,12 @@ namespace Cognite.OpcUa.NodeSources
                 InitNodeState(update, node);
             }
 
-            await Client.ReadNodeValues(properties, token);
-
             if (Config.Extraction.Relationships.Enabled)
             {
                 GetRelationshipData(FinalSourceObjects.Concat(FinalSourceVariables));
             }
+
+            NodeMap.Clear();
 
             if (!FinalDestinationObjects.Any() && !FinalDestinationVariables.Any() && !FinalSourceVariables.Any() && !FinalReferences.Any())
             {

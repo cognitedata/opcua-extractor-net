@@ -247,9 +247,10 @@ namespace Cognite.OpcUa.TypeCollectors
                 dataTypes.TryGetValue(type, out var dt)
                 && dt.EnumValues != null
                 && !dt.EnumValues.Any()));
+
             if (!typeSet.Any()) return;
 
-            log.LogInformation("Get enum properties for {Count} enum types", typeSet.Count);
+            log.LogInformation("Browse types to get enum properties for {Count} enum types", typeSet.Count);
             var enumPropMap = new Dictionary<NodeId, NodeId>();
 
             var nodes = typeSet.Select(id => new BrowseNode(id)).ToDictionary(node => node.Id);
@@ -260,7 +261,7 @@ namespace Cognite.OpcUa.TypeCollectors
                 ReferenceTypeId = ReferenceTypes.HierarchicalReferences,
                 Nodes = nodes
             };
-            var children = await Task.Run(() => uaClient.Browser.BrowseLevel(baseParams, token));
+            var children = await uaClient.Browser.BrowseLevel(baseParams, token);
 
             foreach (var id in typeSet)
             {
@@ -291,7 +292,7 @@ namespace Cognite.OpcUa.TypeCollectors
         {
             if (!config.AutoIdentifyTypes) return;
 
-            log.LogInformation("Map out datatype structure to automatically identify numeric datatypes");
+            log.LogInformation("Browse datatype hierarchy to map out variable datatypes");
 
             void Callback(ReferenceDescription child, NodeId parent)
             {

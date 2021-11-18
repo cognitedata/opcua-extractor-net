@@ -318,10 +318,6 @@ namespace Cognite.OpcUa.Pushers
             }
 
             if (!objects.Any() && !variables.Any()) return true;
-            if (!config.SkipMetadata)
-            {
-                await Extractor.ReadProperties(objects.Concat(variables));
-            }
 
             log.LogInformation("Pushing {ObjCount} assets and {VarCount} timeseries over MQTT", objects.Count(), variables.Count());
 

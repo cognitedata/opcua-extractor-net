@@ -384,9 +384,11 @@ namespace Test.Unit
         [Fact]
         public async Task TestCollectCustomOnly()
         {
+            var log = tester.Provider.GetRequiredService<ILogger<EventFieldCollector>>();
+
             tester.Client.Browser.ResetVisitedNodes();
             var config = new EventConfig() { Enabled = true, AllEvents = false };
-            var collector = new EventFieldCollector(tester.Client, config);
+            var collector = new EventFieldCollector(log, tester.Client, config);
 
             var fields = await collector.GetEventIdFields(tester.Source.Token);
             Assert.Equal(5, fields.Count);
@@ -420,9 +422,11 @@ namespace Test.Unit
         [Fact]
         public async Task TestCollectAllEvents()
         {
+            var log = tester.Provider.GetRequiredService<ILogger<EventFieldCollector>>();
+
             tester.Client.Browser.ResetVisitedNodes();
             var config = new EventConfig { Enabled = true, AllEvents = true };
-            var collector = new EventFieldCollector(tester.Client, config);
+            var collector = new EventFieldCollector(log, tester.Client, config);
 
             var fields = await collector.GetEventIdFields(tester.Source.Token);
 
@@ -449,11 +453,13 @@ namespace Test.Unit
         [Fact]
         public async Task TestIgnoreEvents()
         {
+            var log = tester.Provider.GetRequiredService<ILogger<EventFieldCollector>>();
+
             tester.Client.Browser.ResetVisitedNodes();
             // Audit and conditions/alarms account for most of the event types in the base namespace
             // Also check if we still get child events once the parent is excluded (should this be how it works?)
             var config = new EventConfig { Enabled = true, AllEvents = true, ExcludeEventFilter = "Audit|Condition|Alarm|SystemEventType" };
-            var collector = new EventFieldCollector(tester.Client, config);
+            var collector = new EventFieldCollector(log, tester.Client, config);
 
             var fields = await collector.GetEventIdFields(tester.Source.Token);
 
@@ -465,9 +471,11 @@ namespace Test.Unit
         [Fact]
         public async Task TestEventExcludeProperties()
         {
+            var log = tester.Provider.GetRequiredService<ILogger<EventFieldCollector>>();
+
             tester.Client.Browser.ResetVisitedNodes();
             var config = new EventConfig { Enabled = true, AllEvents = false, ExcludeProperties = new List<string> { "SubType" } };
-            var collector = new EventFieldCollector(tester.Client, config);
+            var collector = new EventFieldCollector(log, tester.Client, config);
 
             var fields = await collector.GetEventIdFields(tester.Source.Token);
 
@@ -482,6 +490,8 @@ namespace Test.Unit
         [Fact]
         public async Task TestEventWhitelist()
         {
+            var log = tester.Provider.GetRequiredService<ILogger<EventFieldCollector>>();
+
             tester.Client.Browser.ResetVisitedNodes();
             var eventIds = tester.Server.Ids.Event;
             var config = new EventConfig
@@ -495,7 +505,7 @@ namespace Test.Unit
                     ObjectTypeIds.AuditHistoryAtTimeDeleteEventType.ToProtoNodeId(tester.Client)
                 }
             };
-            var collector = new EventFieldCollector(tester.Client, config);
+            var collector = new EventFieldCollector(log, tester.Client, config);
 
             var fields = await collector.GetEventIdFields(tester.Source.Token);
 
