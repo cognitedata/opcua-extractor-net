@@ -739,7 +739,8 @@ namespace Cognite.OpcUa
             int idx = 0;
             foreach (var node in nodes)
             {
-                idx = node.Attributes.HandleAttributeRead(Config, values, idx, this);
+                var attributes = node.Attributes.GetAttributeIds(Config);
+                idx = node.Attributes.HandleAttributeRead(Config, values, attributes, idx, this);
             }
         }
 

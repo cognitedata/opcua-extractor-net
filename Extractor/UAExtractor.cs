@@ -702,7 +702,7 @@ namespace Cognite.OpcUa
                     if (serverNode.EventNotifier != 0)
                     {
                         var history = (serverNode.EventNotifier & EventNotifiers.HistoryRead) != 0 && Config.Events.History;
-                        var subscription = (serverNode.EventNotifier & EventNotifiers.SubscribeToEvents) != 0;
+                        var subscription = (serverNode.EventNotifier & EventNotifiers.SubscribeToEvents) != 0 && Config.Subscriptions.Events;
                         State.SetEmitterState(new EventExtractionState(this, serverNode.Id, history, history && Config.History.Backfill, subscription));
                     }
                 }
@@ -970,6 +970,7 @@ namespace Cognite.OpcUa
         private async Task StartPubSub(CancellationToken token)
         {
             if (pubSubManager == null) return;
+            log.LogInformation("Begin starting pubsub client");
             try
             {
                 await pubSubManager.Start(token);

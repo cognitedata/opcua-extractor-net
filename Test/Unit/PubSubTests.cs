@@ -111,26 +111,16 @@ namespace Test.Unit
             tester.Config.PubSub.PreferUadp = uadp;
             using var extractor = tester.BuildExtractor();
 
-            var logger = tester.Provider.GetRequiredService<ILogger<Cognite.OpcUa.PubSub.PubSubManager>>();
-
             await extractor.RunExtractor(true);
 
             var queue = (Queue<UADataPoint>)extractor.Streamer.GetType()
                 .GetField("dataPointQueue", BindingFlags.NonPublic | BindingFlags.Instance)
                 .GetValue(extractor.Streamer);
 
-            using var manager = new Cognite.OpcUa.PubSub.PubSubManager(logger, tester.Client, extractor, tester.Config.PubSub);
-
-            var startTask = manager.Start(tester.Source.Token);
-            var result = await Task.WhenAny(startTask, Task.Delay(20000));
-            Assert.Equal(startTask, result);
-
             int dpsPerBatch = 21;
 
             // At least two batches
-            await CommonTestUtils.WaitForCondition(() => queue.Count > dpsPerBatch, 10);
-
-            manager.Stop();
+            await CommonTestUtils.WaitForCondition(() => queue.Count > dpsPerBatch, 20);
 
             var dps = queue.ToArray();
 
