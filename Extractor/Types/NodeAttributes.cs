@@ -35,7 +35,7 @@ namespace Cognite.OpcUa.Types
         public IList<UANode>? Properties { get; set; }
         public NodeClass NodeClass { get; }
         public bool DataRead { get; set; }
-        public bool ShouldSubscribe { get; set; } = true;
+        public bool ShouldSubscribeEvents { get; set; }
         public NodeAttributes(NodeClass nc)
         {
             NodeClass = nc;
@@ -116,6 +116,8 @@ namespace Cognite.OpcUa.Types
                 idx++;
             }
 
+            ShouldSubscribeEvents = (EventNotifier & EventNotifiers.SubscribeToEvents) != 0;
+
             DataRead = true;
 
             return idx;
@@ -134,6 +136,7 @@ namespace Cognite.OpcUa.Types
         public int[]? ArrayDimensions { get; set; }
         public byte AccessLevel { get; set; }
         public bool ReadHistory { get; set; }
+        public bool ShouldSubscribeData { get; set; } = true;
         public VariableAttributes(NodeClass nc) : base(nc) { }
         /// <summary>
         /// Handle attribute read result for a variable.
@@ -196,19 +199,21 @@ namespace Cognite.OpcUa.Types
 
             if (!config.Subscriptions.IgnoreAccessLevel)
             {
-                ShouldSubscribe = (AccessLevel & AccessLevels.CurrentRead) != 0 && config.Subscriptions.DataPoints;
+                ShouldSubscribeData = (AccessLevel & AccessLevels.CurrentRead) != 0 && config.Subscriptions.DataPoints;
                 ReadHistory = (AccessLevel & AccessLevels.HistoryRead) != 0 && config.History.Enabled && config.History.Data;
             }
 
             if (config.Subscriptions.IgnoreAccessLevel)
             {
-                ShouldSubscribe = true;
+                ShouldSubscribeData = true;
             }
 
             if (config.History.RequireHistorizing)
             {
                 ReadHistory = ReadHistory && Historizing;
             }
+
+            ShouldSubscribeEvents = (EventNotifier & EventNotifiers.SubscribeToEvents) != 0;
 
             DataRead = true;
             return idx;

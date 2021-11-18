@@ -104,7 +104,8 @@ namespace Cognite.OpcUa.NodeSources
                             ArrayDimensions = node.InternalInfo.ArrayDimensions,
                             DataType = Extractor.DataTypeManager.GetDataType(node.DataTypeId),
                             EventNotifier = node.InternalInfo.EventNotifier,
-                            ShouldSubscribe = node.InternalInfo.ShouldSubscribe,
+                            ShouldSubscribeData = node.InternalInfo.ShouldSubscribeData,
+                            ShouldSubscribeEvents = node.InternalInfo.ShouldSubscribeEvents,
                             ValueRank = node.InternalInfo.ValueRank,
                         },
                         Source = NodeSource.CDF
@@ -140,7 +141,7 @@ namespace Cognite.OpcUa.NodeSources
                         Attributes =
                         {
                             EventNotifier = node.InternalInfo.EventNotifier,
-                            ShouldSubscribe = node.InternalInfo.ShouldSubscribe
+                            ShouldSubscribeEvents = node.InternalInfo.ShouldSubscribeEvents
                         },
                         Source = NodeSource.CDF
                     };

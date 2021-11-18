@@ -658,6 +658,7 @@ namespace Test.Unit
 
             Assert.Equal("FullRoot Description", nodes[0].Description);
             Assert.Equal(EventNotifiers.SubscribeToEvents | EventNotifiers.HistoryRead, nodes[1].EventNotifier);
+            Assert.True(nodes[1].ShouldSubscribeEvents);
             Assert.Equal(tester.Server.Ids.Custom.StringyType, (nodes[2] as UAVariable).DataType.Raw);
             Assert.Equal(4, (nodes[3] as UAVariable).ArrayDimensions[0]);
             Assert.Single((nodes[3] as UAVariable).ArrayDimensions);
@@ -676,9 +677,10 @@ namespace Test.Unit
             await tester.Client.ReadNodeData(nodes, tester.Source.Token);
 
             Assert.Equal(EventNotifiers.SubscribeToEvents | EventNotifiers.HistoryRead, nodes[1].EventNotifier);
+            Assert.True(nodes[1].ShouldSubscribeEvents);
             Assert.False((nodes[3] as UAVariable).ReadHistory);
             Assert.False((nodes[3] as UAVariable).VariableAttributes.Historizing);
-            Assert.True((nodes[3] as UAVariable).ShouldSubscribe);
+            Assert.True((nodes[3] as UAVariable).ShouldSubscribeData);
 
             // Disable event discovery
             tester.Config.History.Enabled = true;
@@ -688,9 +690,10 @@ namespace Test.Unit
             await tester.Client.ReadNodeData(nodes, tester.Source.Token);
 
             Assert.Equal(0, nodes[1].EventNotifier);
+            Assert.False(nodes[1].ShouldSubscribeEvents);
             Assert.True((nodes[3] as UAVariable).ReadHistory);
             Assert.True((nodes[3] as UAVariable).VariableAttributes.Historizing);
-            Assert.True((nodes[3] as UAVariable).ShouldSubscribe);
+            Assert.True((nodes[3] as UAVariable).ShouldSubscribeData);
 
             // Disable just data history
             tester.Config.Events.DiscoverEmitters = true;
@@ -700,9 +703,10 @@ namespace Test.Unit
             await tester.Client.ReadNodeData(nodes, tester.Source.Token);
 
             Assert.Equal(EventNotifiers.SubscribeToEvents | EventNotifiers.HistoryRead, nodes[1].EventNotifier);
+            Assert.True(nodes[1].ShouldSubscribeEvents);
             Assert.False((nodes[3] as UAVariable).ReadHistory);
             Assert.True((nodes[3] as UAVariable).VariableAttributes.Historizing);
-            Assert.True((nodes[3] as UAVariable).ShouldSubscribe);
+            Assert.True((nodes[3] as UAVariable).ShouldSubscribeData);
 
 
             // Enable require historizing
@@ -713,9 +717,10 @@ namespace Test.Unit
             await tester.Client.ReadNodeData(nodes, tester.Source.Token);
 
             Assert.Equal(EventNotifiers.SubscribeToEvents | EventNotifiers.HistoryRead, nodes[1].EventNotifier);
+            Assert.True(nodes[1].ShouldSubscribeEvents);
             Assert.True((nodes[3] as UAVariable).ReadHistory);
             Assert.True((nodes[3] as UAVariable).VariableAttributes.Historizing);
-            Assert.True((nodes[3] as UAVariable).ShouldSubscribe);
+            Assert.True((nodes[3] as UAVariable).ShouldSubscribeData);
 
             // Enable ignore access level
             tester.Config.History.RequireHistorizing = false;
@@ -725,9 +730,10 @@ namespace Test.Unit
             await tester.Client.ReadNodeData(nodes, tester.Source.Token);
 
             Assert.Equal(EventNotifiers.SubscribeToEvents | EventNotifiers.HistoryRead, nodes[1].EventNotifier);
+            Assert.True(nodes[1].ShouldSubscribeEvents);
             Assert.True((nodes[3] as UAVariable).ReadHistory);
             Assert.True((nodes[3] as UAVariable).VariableAttributes.Historizing);
-            Assert.True((nodes[3] as UAVariable).ShouldSubscribe);
+            Assert.True((nodes[3] as UAVariable).ShouldSubscribeData);
             Assert.Equal(0, (nodes[3] as UAVariable).AccessLevel);
 
             // Disable reading array dimensions

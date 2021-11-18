@@ -247,7 +247,8 @@ namespace Cognite.OpcUa
             // Not a property or not a variable can't be turned into timeseries
             if ((!node.IsProperty || node.NodeClass != NodeClass.Variable) && Type == TransformationType.TimeSeries) return true;
             // No reason to drop subscriptions if ShouldSubscribe is already false
-            if (!node.ShouldSubscribe && (node.EventNotifier & EventNotifiers.SubscribeToEvents) == 0
+            if ((node is not UAVariable variable || !variable.ShouldSubscribeData)
+                && !node.ShouldSubscribeEvents
                 && Type == TransformationType.DropSubscriptions) return true;
             return false;
         }
@@ -274,8 +275,11 @@ namespace Cognite.OpcUa
                         log.LogTrace("Treating node {Name} {Id} as property due to matching filter {Idx}", node.DisplayName, node.Id, index);
                         break;
                     case TransformationType.DropSubscriptions:
-                        node.Attributes.ShouldSubscribe = false;
-                        node.Attributes.EventNotifier &= ~EventNotifiers.SubscribeToEvents & 255;
+                        if (node is UAVariable variable)
+                        {
+                            variable.VariableAttributes.ShouldSubscribeData = false;
+                        }
+                        node.Attributes.ShouldSubscribeEvents = false;
                         log.LogDebug("Dropping subscriptions on node {Name} {Id} due to matching filter {Idx}", node.DisplayName, node.Id, index);
                         break;
                     case TransformationType.TimeSeries:

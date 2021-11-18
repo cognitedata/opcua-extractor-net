@@ -676,9 +676,9 @@ namespace Test.Integration
             tester.Config.Subscriptions.DataPoints = false;
             await extractor.RunExtractor(true);
             var state = extractor.State.GetNodeState(ids.DoubleVar1);
-            Assert.True(state.ShouldSubscribe);
+            Assert.False(state.ShouldSubscribe);
             state = extractor.State.GetNodeState(ids.IntVar);
-            Assert.True(state.ShouldSubscribe);
+            Assert.False(state.ShouldSubscribe);
             await extractor.WaitForSubscriptions();
             Assert.DoesNotContain(session.Subscriptions, sub => sub.DisplayName.StartsWith("DataChangeListener", StringComparison.InvariantCulture));
             await CommonTestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 2), 5);

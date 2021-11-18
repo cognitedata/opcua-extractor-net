@@ -62,10 +62,6 @@ namespace Cognite.OpcUa.Types
         /// </summary>
         public string? Description => Attributes.Description;
         /// <summary>
-        /// Whether to subscribe to this node, independent of reading history.
-        /// </summary>
-        public bool ShouldSubscribe => Attributes.ShouldSubscribe;
-        /// <summary>
         /// True if the node has been modified after pushing.
         /// </summary>
         public bool Changed { get; set; }
@@ -73,6 +69,10 @@ namespace Cognite.OpcUa.Types
         /// Raw OPC-UA EventNotifier attribute.
         /// </summary>
         public byte EventNotifier => Attributes.EventNotifier;
+        /// <summary>
+        /// True if the node should subscribe to events
+        /// </summary>
+        public bool ShouldSubscribeEvents => Attributes.ShouldSubscribeEvents;
         /// <summary>
         /// OPC-UA node type
         /// </summary>

@@ -32,7 +32,8 @@ namespace Cognite.OpcUa.NodeSources
     public class InternalInfo
     {
         public byte EventNotifier { get; set; }
-        public bool ShouldSubscribe { get; set; }
+        public bool ShouldSubscribeData { get; set; }
+        public bool ShouldSubscribeEvents { get; set; }
         public byte AccessLevel { get; set; }
         public bool Historizing { get; set; }
         public int ValueRank { get; set; }

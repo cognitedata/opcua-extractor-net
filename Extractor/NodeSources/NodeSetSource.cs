@@ -292,7 +292,7 @@ namespace Cognite.OpcUa.NodeSources
                             variable.VariableAttributes.ReadHistory = (varState.AccessLevel & AccessLevels.HistoryRead) != 0;
                         }
                     }
-                    variable.VariableAttributes.ShouldSubscribe = Config.Subscriptions.DataPoints && (
+                    variable.VariableAttributes.ShouldSubscribeData = Config.Subscriptions.DataPoints && (
                         Config.Subscriptions.IgnoreAccessLevel
                         || (varState.AccessLevel & AccessLevels.CurrentRead) != 0);
                 }
@@ -307,7 +307,7 @@ namespace Cognite.OpcUa.NodeSources
                     variable.SetDataPoint(new Variant(typeState.Value));
                     variable.ValueRead = true;
                     variable.VariableAttributes.DataType = Client.DataTypeManager.GetDataType(typeState.DataType);
-                    variable.VariableAttributes.ShouldSubscribe = false;
+                    variable.VariableAttributes.ShouldSubscribeData = false;
                 }
                 NodeMap[id] = variable;
                 return true;
