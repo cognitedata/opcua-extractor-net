@@ -172,8 +172,12 @@ namespace Cognite.OpcUa.PubSub
 
         public void Dispose()
         {
-            app?.Dispose();
-            app = null;
+            try
+            {
+                app?.Stop();
+                app?.Dispose();
+                app = null;
+            } catch { }
         }
     }
 }

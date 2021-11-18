@@ -970,6 +970,7 @@ namespace Cognite.OpcUa
         private async Task StartPubSub(CancellationToken token)
         {
             if (pubSubManager == null) return;
+            log.LogInformation("Begin starting pubsub client");
             try
             {
                 await pubSubManager.Start(token);
