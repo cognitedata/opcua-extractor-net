@@ -239,17 +239,23 @@ namespace Cognite.OpcUa
 
         private bool ShouldSkip(UANode node)
         {
-            if (node == null) return true;
             // No reason to transform ignored nodes.
-            if (node.Ignore) return true;
-            // Already a property
-            if (node.IsProperty && Type == TransformationType.Property) return true;
-            // Not a property or not a variable can't be turned into timeseries
-            if ((!node.IsProperty || node.NodeClass != NodeClass.Variable) && Type == TransformationType.TimeSeries) return true;
-            // No reason to drop subscriptions if ShouldSubscribe is already false
-            if ((node is not UAVariable variable || !variable.ShouldSubscribeData)
-                && !node.ShouldSubscribeEvents
-                && Type == TransformationType.DropSubscriptions) return true;
+            if (node == null || node.Ignore) return true;
+
+            switch (Type)
+            {
+                case TransformationType.Property:
+                    // Already a property
+                    return node.IsProperty;
+                case TransformationType.TimeSeries:
+                    // No need to transform to timeseries if node is not property, or node cannot be a timeseries.
+                    return !node.IsProperty || node.NodeClass != NodeClass.Variable;
+                case TransformationType.DropSubscriptions:
+                    // No need to drop subscriptions if we are not subscribing to this node.
+                    return !(node is UAVariable variable && variable.ShouldSubscribeData)
+                        && !node.ShouldSubscribeEvents;
+            }
+
             return false;
         }
 
