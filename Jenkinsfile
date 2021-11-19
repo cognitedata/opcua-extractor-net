@@ -130,7 +130,7 @@ podTemplate(
                     packBridge('linux-x64', "$version", true)
                 }
                 stage('Build linux installers') {
-                    sh('cp -r ExtractorLauncher/bin/Release/net5.0/linux-x64/publish/ linux/publish/')
+                    sh('cp -r ExtractorLauncher/bin/Release/net6.0/linux-x64/publish/ linux/publish/')
                     sh('cp LICENSE.md linux/')
                     sh('cp -r config/ linux/')
                     dir ('linux') {
@@ -237,7 +237,7 @@ podTemplate(
 void packBridge(String configuration, String version, boolean linux) {
     sh("dotnet publish -c Release -r $configuration --self-contained true /p:PublishSingleFile=\"true\" MQTTCDFBridge/")
     sh("mkdir -p ./${configuration}")
-    sh("mv MQTTCDFBridge/bin/Release/net5.0/${configuration}/publish/* ./${configuration}/")
+    sh("mv MQTTCDFBridge/bin/Release/net6.0/${configuration}/publish/* ./${configuration}/")
     sh("rm -f ./${configuration}/*.config ./${configuration}/*.pdb ./${configuration}/*.xml")
     sh("mkdir -p ./${configuration}/config")
     sh("cp ./config/config.bridge.example.yml ./${configuration}/config/")
@@ -255,9 +255,9 @@ void packProject(String configuration, String version, boolean linux) {
     sh("dotnet publish -c Release -r $configuration $publishArgs ExtractorLauncher/")
     sh("mkdir -p ./${configuration}/")
     if (linux) {
-        sh("cp -r ExtractorLauncher/bin/Release/net5.0/${configuration}/publish/* ./${configuration}/")
+        sh("cp -r ExtractorLauncher/bin/Release/net6.0/${configuration}/publish/* ./${configuration}/")
     } else {
-        sh("mv ExtractorLauncher/bin/Release/net5.0/${configuration}/publish/* ./${configuration}/")
+        sh("mv ExtractorLauncher/bin/Release/net6.0/${configuration}/publish/* ./${configuration}/")
     }
     sh("rm -f ./${configuration}/*.config ./${configuration}/*.pdb ./${configuration}/*.xml")
     sh("cp -r ./config ./${configuration}/")
