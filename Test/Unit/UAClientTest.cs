@@ -157,11 +157,11 @@ namespace Test.Unit
                 await tester.Client.Run(tester.Source.Token);
                 Assert.True(CommonTestUtils.TestMetricValue("opcua_connected", 1));
                 CommonTestUtils.StopProxyProcess();
-                await CommonTestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_connected", 0), 10,
+                await CommonTestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_connected", 0) && !connected, 20,
                     "Expected client to disconnect");
                 Assert.False(connected);
                 process.Start();
-                await CommonTestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_connected", 1), 10,
+                await CommonTestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_connected", 1) && connected, 20,
                     "Expected client to reconnect");
                 Assert.True(connected);
             }
@@ -1233,7 +1233,7 @@ namespace Test.Unit
 
             tester.Server.SetDiagnosticsEnabled(true);
 
-            await CommonTestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_node_CurrentSessionCount", 1), 5);
+            await CommonTestUtils.WaitForCondition(() => CommonTestUtils.GetMetricValue("opcua_node_CurrentSessionCount") >= 1, 20);
 
             tester.Client.RemoveSubscription("NodeMetrics");
             tester.Server.SetDiagnosticsEnabled(false);
