@@ -7,7 +7,7 @@ OPC-UA extractor using libraries from OPCFoundation see [here](https://github.co
 ## How to use
 
 ### Building
-Install .net 5.0 from [here](https://dotnet.microsoft.com/download).
+Install .net 6.0 from [here](https://dotnet.microsoft.com/download).
 
 To run:
 `dotnet run --project ExtractorLauncher/`.
