@@ -68,7 +68,8 @@ namespace Cognite.OpcUa.TypeCollectors
                 new ReadValueId { AttributeId = Attributes.InverseName, NodeId = type.Id }
             });
 
-            var values = await uaClient.ReadAttributes(new ReadValueIdCollection(readValueIds), toRead.Count, token);
+            var values = await uaClient.ReadAttributes(new ReadValueIdCollection(readValueIds), toRead.Count, token,
+                "reference types");
 
             for (int i = 0; i < toRead.Count; i++)
             {
@@ -106,7 +107,7 @@ namespace Cognite.OpcUa.TypeCollectors
                 Nodes = browseNodes
             };
 
-            var references = await Task.Run(() => uaClient.Browser.BrowseLevel(baseParams, token));
+            var references = await Task.Run(() => uaClient.Browser.BrowseLevel(baseParams, token, purpose: "references"));
 
             var results = new List<UAReference>();
 

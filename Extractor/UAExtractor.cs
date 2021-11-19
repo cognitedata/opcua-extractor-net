@@ -523,7 +523,8 @@ namespace Cognite.OpcUa
                 var handler = new UANodeSource(Provider.GetRequiredService<ILogger<UANodeSource>>(), Config, this, uaClient);
                 try
                 {
-                    await uaClient.Browser.BrowseNodeHierarchy(nodesToBrowse, handler.Callback, Source.Token, ignoreVisited);
+                    await uaClient.Browser.BrowseNodeHierarchy(nodesToBrowse, handler.Callback, Source.Token, ignoreVisited,
+                        "the main instance hierarchy");
                 }
                 catch (Exception ex)
                 {

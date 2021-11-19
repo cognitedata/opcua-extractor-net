@@ -649,13 +649,19 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="readValueIds">Attributes to read.</param>
         /// <param name="distinctNodeCount">Number of distinct nodes</param>
+        /// <param name="purpose">Purpose, for logging</param>
         /// <returns>List of retrieved datavalues,
         /// if the server is compliant this will have length equal to <paramref name="readValueIds"/></returns>
-        public async Task<IList<DataValue>> ReadAttributes(ReadValueIdCollection readValueIds, int distinctNodeCount, CancellationToken token)
+        public async Task<IList<DataValue>> ReadAttributes(ReadValueIdCollection readValueIds,
+            int distinctNodeCount,
+            CancellationToken token,
+            string purpose = "")
         {
             if (Session == null) throw new InvalidOperationException("Requires open session");
             var values = new List<DataValue>();
             if (readValueIds == null || !readValueIds.Any()) return values;
+            if (!string.IsNullOrEmpty(purpose)) purpose = $" for {purpose}";
+
             using var operation = waiter.GetInstance();
             int total = readValueIds.Count;
             int attrCount = 0;
@@ -684,10 +690,11 @@ namespace Cognite.OpcUa
                     attributeRequests.Inc();
                     values.AddRange(lvalues);
                     attrCount += lvalues.Count;
-                    log.LogDebug("Read {NumAttributesRead} / {Total} attributes", attrCount, total);
+                    log.LogDebug("Read {NumAttributesRead} / {Total} attributes{Purpose}", attrCount, total, purpose);
                 }
-                log.LogInformation("Read {TotalAttributesRead} attributes with {NumAttributeReadOperations} operations for {NodeCount} nodes",
-                    values.Count, count, distinctNodeCount);
+                log.LogInformation(
+                    "Read {TotalAttributesRead} attributes with {NumAttributeReadOperations} operations for {NodeCount} nodes{Purpose}",
+                    values.Count, count, distinctNodeCount, purpose);
             }
             catch (OperationCanceledException) when (token.IsCancellationRequested) { }
             catch (Exception ex)
@@ -703,6 +710,7 @@ namespace Cognite.OpcUa
         /// Gets attributes for the given list of nodes. The attributes retrieved for each node depends on its NodeClass.
         /// </summary>
         /// <param name="nodes">Nodes to be updated with data from the opcua server</param>
+        /// <param name="purpose">Purpose, for logging</param>
         public async Task ReadNodeData(IEnumerable<UANode> nodes, CancellationToken token)
         {
             nodes = nodes.Where(node => (node is not UAVariable variable || variable.Index == -1) && !node.DataRead).ToList();
@@ -721,7 +729,7 @@ namespace Cognite.OpcUa
             IList<DataValue> values;
             try
             {
-                values = await ReadAttributes(readValueIds, nodes.Count(), token);
+                values = await ReadAttributes(readValueIds, nodes.Count(), token, "node hierarchy information");
             }
             catch (Exception ex)
             {
@@ -729,7 +737,8 @@ namespace Cognite.OpcUa
             }
             int total = values.Count;
 
-            log.LogInformation("Retrieved {Total}/{Expected} attributes", total, expected);
+            log.LogInformation("Retrieved {Total}/{Expected} core attributes for {Count} nodes",
+                total, expected, nodes.Count());
             if (total < expected && !token.IsCancellationRequested)
             {
                 throw new ExtractorFailureException(
@@ -750,10 +759,11 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="ids">Nodes to get values for</param>
         /// <returns>A map from given nodeId to DataValue</returns>
-        public async Task<Dictionary<NodeId, DataValue>> ReadRawValues(IEnumerable<NodeId> ids, CancellationToken token)
+        public async Task<Dictionary<NodeId, DataValue>> ReadRawValues(IEnumerable<NodeId> ids, CancellationToken token,
+            string purpose = "")
         {
             var readValueIds = ids.Distinct().Select(id => new ReadValueId { AttributeId = Attributes.Value, NodeId = id }).ToList();
-            var values = await ReadAttributes(new ReadValueIdCollection(readValueIds), ids.Count(), token);
+            var values = await ReadAttributes(new ReadValueIdCollection(readValueIds), ids.Count(), token, purpose);
             return values.Select((dv, index) => (ids.ElementAt(index), dv)).ToDictionary(pair => pair.Item1, pair => pair.dv);
         }
 
@@ -776,7 +786,7 @@ namespace Cognite.OpcUa
             try
             {
                 var attributes = new List<uint> { Attributes.Value };
-                values = await ReadAttributes(readValueIds, nodes.Count(), token);
+                values = await ReadAttributes(readValueIds, nodes.Count(), token, "node values");
             }
             catch (Exception ex)
             {
@@ -938,11 +948,12 @@ namespace Cognite.OpcUa
             string subName,
             MonitoredItemNotificationEventHandler handler,
             Func<UAHistoryExtractionState, MonitoredItem> builder,
-            CancellationToken token)
+            CancellationToken token,
+            string purpose = "")
         {
             if (Session == null) throw new InvalidOperationException("Requires open session");
 
-
+            if (!string.IsNullOrEmpty(purpose)) purpose = $"{purpose} ";
             await subscriptionSem.WaitAsync(token);
 
             Subscription? subscription = null;
@@ -981,7 +992,8 @@ namespace Cognite.OpcUa
                             return monitor;
                         })
                     );
-                    log.LogDebug("Add subscriptions for {NumNodes} nodes, {Subscribed} / {Total} done.", lcount, count, total);
+                    log.LogDebug("Add {Purpose}subscriptions for {NumNodes} nodes, {Subscribed} / {Total} done.",
+                        purpose, lcount, count, total);
                     count += lcount;
 
                     if (lcount > 0 && subscription.Created)
@@ -1053,7 +1065,7 @@ namespace Cognite.OpcUa
                     NodeClass = NodeClass.Variable,
                     CacheQueueSize = Math.Max(0, Config.Source.QueueLength),
                     Filter = Config.Subscriptions.DataChangeFilter?.Filter
-                }, token);
+                }, token, "datapoint");
 
             numSubscriptions.Set(sub.MonitoredItemCount);
         }
@@ -1086,7 +1098,7 @@ namespace Cognite.OpcUa
                     Filter = filter,
                     NodeClass = NodeClass.Object
                 },
-                token);
+                token, "event");
         }
 
         /// <summary>
@@ -1297,7 +1309,7 @@ namespace Cognite.OpcUa
                 }
                 else if (!subscription.Created)
                 {
-                    log.LogInformation("Add subscription to the Session");
+                    log.LogInformation("Add audit events subscription to the Session");
                     Session.AddSubscription(subscription);
                     await subscription.CreateAsync(token);
                 }

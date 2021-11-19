@@ -61,6 +61,8 @@ namespace Cognite.OpcUa
 
         private bool failed;
 
+        private readonly string purpose = "";
+
         private static readonly Gauge depth = Metrics
             .CreateGauge("opcua_tree_depth", "Depth of node tree from rootnode");
 
@@ -70,7 +72,8 @@ namespace Cognite.OpcUa
             UAClient client,
             IResourceCounter resource,
             DirectoryBrowseParams options,
-            CancellationToken token
+            CancellationToken token,
+            string purpose = ""
             ) : base(options.InitialParams!.Items, throttler, options.NodesChunk, resource, token)
         {
             this.log = log;
@@ -94,6 +97,8 @@ namespace Cognite.OpcUa
                 }
             }
             depthCounts.Add(baseParams.Nodes.Count);
+
+            if (!string.IsNullOrEmpty(purpose)) this.purpose = $" for {purpose}";
         }
 
 
@@ -106,7 +111,7 @@ namespace Cognite.OpcUa
             }
             catch (Exception e)
             {
-                ExtractorUtils.LogException(log, e, "Failed to abort browse chunk");
+                ExtractorUtils.LogException(log, e, $"Failed to abort browse chunk{purpose}");
             }
             foreach (var item in chunk.Items)
             {
@@ -148,7 +153,7 @@ namespace Cognite.OpcUa
 
             if (chunk.Exception != null)
             {
-                ExtractorUtils.LogException(log, chunk.Exception, "Unexpected failure during browse", "Unexpected failure during browse");
+                ExtractorUtils.LogException(log, chunk.Exception, $"Unexpected failure during browse{purpose}");
                 failed = true;
                 exceptions.Add(chunk.Exception);
                 AbortChunk(chunk, token);
@@ -162,7 +167,7 @@ namespace Cognite.OpcUa
                 var refs = node.GetNextReferences();
                 if (!refs.Any()) continue;
 
-                log.LogTrace("Read {Count} children from node {Id}", refs.Count(), node.Id);
+                log.LogTrace("Read {Count} children from node {Id}{Purpose}", refs.Count(), node.Id, purpose);
                 foreach (var rd in refs)
                 {
                     var nodeId = client.ToNodeId(rd.NodeId);
@@ -202,17 +207,19 @@ namespace Cognite.OpcUa
         {
             if (options.MaxDepth < 0)
             {
-                log.LogInformation("Begin browsing {Count} nodes", baseParams.Nodes!.Count);
+                log.LogInformation("Begin browsing {Count} nodes{Purpose}", baseParams.Nodes!.Count, purpose);
             }
             else
             {
-                log.LogInformation("Begin browsing {Count} nodes to depth {Depth}", baseParams.Nodes!.Count, options.MaxDepth + 1);
+                log.LogInformation("Begin browsing {Count} nodes to depth {Depth}{Purpose}",
+                    baseParams.Nodes!.Count, options.MaxDepth + 1, purpose);
             }
 
             // If there is a reasonably low number of nodes...
             if (baseParams.Nodes!.Count < 40)
             {
-                log.LogDebug("Browse node hierarchy for {Nodes}", string.Join(", ", baseParams.Nodes!.Select(node => node.Key)));
+                log.LogDebug("Browse node hierarchy{Purpose} for {Nodes}",
+                    purpose, string.Join(", ", baseParams.Nodes!.Select(node => node.Key)));
             }
             await base.RunAsync();
             LogBrowseResult();
@@ -227,8 +234,8 @@ namespace Cognite.OpcUa
         private void LogBrowseResult()
         {
             int total = depthCounts.Sum();
-            log.LogInformation("Browsed a total of {FinishedCount} nodes in {ReadCount} operations, and found {TotalCount} nodes total",
-                currentFinished, numReads, total);
+            log.LogInformation("Browsed a total of {FinishedCount} nodes in {ReadCount} operations, and found {TotalCount} nodes total{Purpose}",
+                currentFinished, numReads, total, purpose);
 
             var builder = new StringBuilder();
             for (int i = 0; i < depthCounts.Count; i++)
@@ -236,14 +243,15 @@ namespace Cognite.OpcUa
                 builder.AppendFormat("    {0}: {1}", i, depthCounts[i]);
                 builder.Append(Environment.NewLine);
             }
-            log.LogDebug("Total results by depth:{NewLine}{Results}", Environment.NewLine, builder);
+            log.LogDebug("Total results{Purpose} by depth:{NewLine}{Results}", purpose, Environment.NewLine, builder);
             depth.IncTo(depthCounts.Count);
         }
 
         protected override void OnIteration(int pending, int operations, int finished, int total)
         {
             currentFinished = finished;
-            log.LogDebug("Browse node children: {Pending} pending, {OpCount} total operations. {Finished}/{Total}", pending, operations, finished, total);
+            log.LogDebug("Browse node children{Purpose}: {Pending} pending, {OpCount} total operations. {Finished}/{Total}",
+                purpose, pending, operations, finished, total);
         }
     }
 }

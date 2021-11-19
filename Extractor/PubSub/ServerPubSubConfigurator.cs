@@ -115,7 +115,7 @@ namespace Cognite.OpcUa.PubSub
                     ReferenceTypeId = ReferenceTypeIds.HasDataSetWriter,
                     Nodes = toCorrect.ToDictionary(node => node.NodeId, node => new BrowseNode(node.NodeId)),
                 },
-                token);
+                token, purpose: "data set writers");
 
             foreach (var kvp in result)
             {
@@ -374,7 +374,8 @@ namespace Cognite.OpcUa.PubSub
                 (desc, id) => HandleNode(desc, id),
                 token,
                 ignoreVisited: false,
-                doFilter: false);
+                doFilter: false,
+                purpose: "identifying PubSub settings");
 
             // Read values
             if (!await LoadNodeValues(token)) return null;
