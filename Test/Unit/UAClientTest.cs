@@ -34,7 +34,7 @@ namespace Test.Unit
             var services = new ServiceCollection();
             Config = services.AddConfig<FullConfig>("config.test.yml", 1);
             Config.Source.EndpointUrl = $"opc.tcp://localhost:62000";
-            services.AddLogging();
+            services.AddLogger();
             LoggingUtils.Configure(Config.Logger);
             Provider = services.BuildServiceProvider();
 
@@ -1012,6 +1012,75 @@ namespace Test.Unit
                 tester.Server.WipeHistory(tester.Server.Ids.Base.StringVar, null);
             }
         }
+
+        [Fact]
+        public async Task TestRecreateSubscriptions()
+        {
+            // Silently kill subscriptions, then wait for them to be recreated.
+            CommonTestUtils.ResetMetricValues("opcua_subscriptions");
+            var ids = tester.Server.Ids.Custom;
+            var nodes = new[] { tester.Server.Ids.Custom.Array, tester.Server.Ids.Custom.MysteryVar, tester.Server.Ids.Base.StringVar }
+                .Select(id =>
+                    new VariableExtractionState(tester.Client,
+                        new UAVariable(id, "somevar", NodeId.Null), false, false))
+                .ToList();
+
+            void update(int idx)
+            {
+                tester.Server.UpdateNode(tester.Server.Ids.Custom.Array, new[] { idx, idx + 1, idx + 2, idx + 3 });
+                tester.Server.UpdateNode(tester.Server.Ids.Custom.MysteryVar, idx);
+                tester.Server.UpdateNode(tester.Server.Ids.Base.StringVar, $"val{idx}");
+            }
+
+
+            var lck = new object();
+
+            var dps = new List<DataValue>();
+
+            void handler(MonitoredItem item, MonitoredItemNotificationEventArgs _)
+            {
+                var values = item.DequeueValues();
+                lock (lck)
+                {
+                    dps.AddRange(values);
+                }
+            }
+
+            tester.Config.Source.PublishingInterval = 200;
+
+            try
+            {
+                await tester.Client.SubscribeToNodes(nodes, handler, tester.Source.Token);
+
+                await CommonTestUtils.WaitForCondition(() => dps.Count == 3, 5,
+                    () => $"Expected to get 3 datapoints, but got {dps.Count}");
+
+                update(1);
+
+                await CommonTestUtils.WaitForCondition(() => dps.Count == 6, 5,
+                    () => $"Expected to get 6 datapoints, but got {dps.Count}");
+
+                tester.Server.Server.DropSubscriptions();
+
+                await CommonTestUtils.WaitForCondition(() => dps.Count == 9, 20,
+                    () => $"Expected to get 9 datapoints, but got {dps.Count}");
+
+                update(2);
+
+                await CommonTestUtils.WaitForCondition(() => dps.Count == 12, 5,
+                    () => $"Expected to get 12 datapoints, but got {dps.Count}");
+            }
+            finally
+            {
+                tester.Client.RemoveSubscription("DataChangeListener");
+                tester.Server.WipeHistory(tester.Server.Ids.Custom.Array, new double[] { 0, 0, 0, 0 });
+                tester.Server.WipeHistory(tester.Server.Ids.Custom.MysteryVar, null);
+                tester.Server.WipeHistory(tester.Server.Ids.Base.StringVar, null);
+
+                tester.Config.Source.PublishingInterval = 500;
+            }
+        }
+
         #endregion
         #region events
         // Just basic testing here, separate tests should be written for the event field collector itself.
