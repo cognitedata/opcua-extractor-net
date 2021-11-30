@@ -22,12 +22,18 @@ namespace Server
         public ServerIssueConfig Issues => Server.Issues;
         public string ConfigRoot { get; set; } = "Server.Test";
         private readonly string mqttUrl;
+        private readonly string endpointUrl;
 
-        public ServerController(IEnumerable<PredefinedSetup> setups, int port = 62546, string mqttUrl = "mqtt://localhost:4060")
+        public ServerController(
+            IEnumerable<PredefinedSetup> setups,
+            int port = 62546,
+            string mqttUrl = "mqtt://localhost:4060",
+            string endpointUrl = "opc.tcp://localhost")
         {
             this.setups = setups;
             this.port = port;
             this.mqttUrl = mqttUrl;
+            this.endpointUrl = endpointUrl;
         }
 
         public void Dispose()
@@ -46,7 +52,7 @@ namespace Server
             try
             {
                 var cfg = await app.LoadApplicationConfiguration(Path.Join("config", $"{ConfigRoot}.Config.xml"), false);
-                cfg.ServerConfiguration.BaseAddresses[0] = $"opc.tcp://localhost:{port}";
+                cfg.ServerConfiguration.BaseAddresses[0] = $"{endpointUrl}:{port}";
                 await app.CheckApplicationInstanceCertificate(false, 0);
                 Server = new TestServer(setups, mqttUrl);
                 await Task.Run(async () => await app.Start(Server));

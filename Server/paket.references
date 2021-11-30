@@ -7,3 +7,4 @@ YamlDotNet
 LiteDB
 Cognite.Extractor.Logging
 MQTTNet
+System.CommandLine
