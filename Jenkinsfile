@@ -234,14 +234,20 @@ podTemplate(
     }
 }
 
-void packBridge(String configuration, String version, boolean linux) {
-    sh("dotnet publish -c Release -r $configuration --self-contained true /p:PublishSingleFile=\"true\" MQTTCDFBridge/")
-    sh("mkdir -p ./${configuration}")
-    sh("mv MQTTCDFBridge/bin/Release/net6.0/${configuration}/publish/* ./${configuration}/")
-    sh("rm -f ./${configuration}/*.config ./${configuration}/*.pdb ./${configuration}/*.xml")
+void publish(String configuration, String project) {
+    sh("dotnet publish -c Release -r $configuration $publishArgs ${project}/")
+    sh("mkdir -p ./${configuration}/")
+    sh("mv ${project}/bin/Release/net6.0/${configuration}/publish/* ./${configuration}/")
+    sh("rm -f ./${configuration}/*.config ./${configuration}/*.pdb ./${configuration/*.xml")
     sh("mkdir -p ./${configuration}/config")
-    sh("cp ./config/config.bridge.example.yml ./${configuration}/config/")
     sh("cp ./LICENSE.md ./${configuration}/")
+}
+
+
+void packBridge(String configuration, String version, boolean linux) {
+    publish(configuration, "MQTTCDFBridge")
+
+    sh("cp ./config/config.bridge.example.yml ./${configuration}/config/")
     if (linux) {
         sh("chmod +x ./${configuration}/MQTTCDFBridge")
     }
@@ -252,17 +258,14 @@ void packBridge(String configuration, String version, boolean linux) {
 }
 
 void packProject(String configuration, String version, boolean linux) {
-    sh("dotnet publish -c Release -r $configuration $publishArgs ExtractorLauncher/")
-    sh("mkdir -p ./${configuration}/")
-    if (linux) {
-        sh("cp -r ExtractorLauncher/bin/Release/net6.0/${configuration}/publish/* ./${configuration}/")
-    } else {
-        sh("mv ExtractorLauncher/bin/Release/net6.0/${configuration}/publish/* ./${configuration}/")
-    }
-    sh("rm -f ./${configuration}/*.config ./${configuration}/*.pdb ./${configuration}/*.xml")
+    publish(configuration, "ExtractorLauncher")
+
     sh("cp -r ./config ./${configuration}/")
-    sh("cp ./LICENSE.md ./${configuration}/")
+    sh("cp ./config/config.example.yml ./${configuration}/config/")
+    sh("cp ./config/config.minimal.yml ./${configuration}/config/")
+    sh("cp ./config/opc.ua.net.extractor.Config.xml ./${configuration}/config/")
     sh("cp ./CHANGELOG.md ./${configuration}/")
+
     if (linux) {
         sh("chmod +x ./${configuration}/OpcuaExtractor")
     }
@@ -271,3 +274,4 @@ void packProject(String configuration, String version, boolean linux) {
     }
     sh("rm -r ./${configuration}")
 }
+
