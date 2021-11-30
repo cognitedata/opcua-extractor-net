@@ -39,12 +39,12 @@ namespace Server
             state.AccessLevel |= AccessLevels.HistoryRead;
             state.UserAccessLevel |= AccessLevels.HistoryRead;
             historyStorage[state.NodeId] = new List<DataValue>();
-            log.Information("Historizing node: {id}", state.NodeId);
+            log.Debug("Historizing node: {id}", state.NodeId);
         }
 
         public void AddEventHistorizingEmitter(NodeId emitter)
         {
-            log.Information("Historizing emitter: {id}", emitter);
+            log.Debug("Historizing emitter: {id}", emitter);
             eventHistoryStorage[emitter] = new List<BaseEventState>();
         }
 

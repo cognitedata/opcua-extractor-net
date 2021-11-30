@@ -53,6 +53,7 @@ namespace Server
         public int MaxSubscriptions { get; set; }
         public int MaxHistoryNodes { get; set; }
         public int RemainingBrowseCount { get; set; }
+        public string LogLevel { get; set; }
     }
 
 
@@ -60,11 +61,6 @@ namespace Server
     {
         private static async Task<int> Main(string[] args)
         {
-            var logConfig = new LoggerConfiguration();
-            logConfig.MinimumLevel.Verbose();
-            logConfig.WriteTo.Console();
-            Log.Logger = logConfig.CreateLogger();
-
             return await GetCommandLineOptions().InvokeAsync(args);
         }
 
@@ -214,8 +210,38 @@ namespace Server
                 "and once it reaches zero it results in BadTooManyOperations");
             root.AddOption(intOption);
 
+            option = new Option<string>("--log-level", "Level of logging to console. " +
+                "One of 'verbose', 'debug', 'information', 'warning', 'error' and 'fatal'");
+            option.AddAlias("-l");
+            root.AddOption(option);
+
             root.Handler = CommandHandler.Create(async (ServerOptions opt) =>
             {
+                var logConfig = new LoggerConfiguration();
+
+                if (opt.LogLevel != null)
+                {
+                    switch (opt.LogLevel)
+                    {
+                        case "verbose": logConfig.MinimumLevel.Verbose(); break;
+                        case "debug": logConfig.MinimumLevel.Debug(); break;
+                        case "information": logConfig.MinimumLevel.Information(); break;
+                        case "warning": logConfig.MinimumLevel.Warning(); break;
+                        case "error": logConfig.MinimumLevel.Error(); break;
+                        case "fatal": logConfig.MinimumLevel.Fatal(); break;
+                        default:
+                            logConfig.MinimumLevel.Information();
+                            break;
+                    }
+                }
+                else
+                {
+                    logConfig.MinimumLevel.Information();
+                }
+
+                logConfig.WriteTo.Console();
+                Log.Logger = logConfig.CreateLogger();
+
                 using var controller = BuildServer(opt);
                 await Run(opt, controller);
             });
