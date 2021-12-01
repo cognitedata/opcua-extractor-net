@@ -104,7 +104,7 @@ namespace Cognite.OpcUa
         /// <returns></returns>
         public async Task StartNodeMetrics(CancellationToken token)
         {
-            client.RemoveSubscription("NodeMetrics");
+            await client.RemoveSubscription("NodeMetrics");
             metrics.Clear();
 
             var nodes = new List<NodeId>();

@@ -969,7 +969,7 @@ namespace Test.Unit
             }
             finally
             {
-                tester.Client.RemoveSubscription("DataChangeListener");
+                await tester.Client.RemoveSubscription("DataChangeListener");
                 foreach (var node in nodes)
                 {
                     tester.Server.UpdateNode(node.SourceId, null);
@@ -1072,7 +1072,7 @@ namespace Test.Unit
             }
             finally
             {
-                tester.Client.RemoveSubscription("DataChangeListener");
+                await tester.Client.RemoveSubscription("DataChangeListener");
                 tester.Server.WipeHistory(tester.Server.Ids.Custom.Array, new double[] { 0, 0, 0, 0 });
                 tester.Server.WipeHistory(tester.Server.Ids.Custom.MysteryVar, null);
                 tester.Server.WipeHistory(tester.Server.Ids.Base.StringVar, null);
@@ -1148,7 +1148,7 @@ namespace Test.Unit
                 tester.Config.Source.SubscriptionChunk = 1000;
                 tester.Config.Events.Enabled = false;
                 tester.Client.ClearEventFields();
-                tester.Client.RemoveSubscription("EventListener");
+                await tester.Client.RemoveSubscription("EventListener");
                 tester.Server.WipeEventHistory();
             }
         }
@@ -1190,7 +1190,7 @@ namespace Test.Unit
                 tester.Config.Events.Enabled = false;
                 tester.Config.Events.EventIds = null;
                 tester.Client.ClearEventFields();
-                tester.Client.RemoveSubscription("EventListener");
+                await tester.Client.RemoveSubscription("EventListener");
                 tester.Server.WipeEventHistory();
             }
 
@@ -1223,7 +1223,7 @@ namespace Test.Unit
             }
             finally
             {
-                tester.Client.RemoveSubscription("AuditListener");
+                await tester.Client.RemoveSubscription("AuditListener");
             }
         }
         #endregion
@@ -1304,7 +1304,7 @@ namespace Test.Unit
 
             await CommonTestUtils.WaitForCondition(() => CommonTestUtils.GetMetricValue("opcua_node_CurrentSessionCount") >= 1, 20);
 
-            tester.Client.RemoveSubscription("NodeMetrics");
+            await tester.Client.RemoveSubscription("NodeMetrics");
             tester.Server.SetDiagnosticsEnabled(false);
             tester.Config.Metrics.Nodes = null;
         }
@@ -1336,7 +1336,7 @@ namespace Test.Unit
 
             tester.Server.UpdateNode(ids.DoubleVar1, 0);
             tester.Server.UpdateNode(ids.DoubleVar2, 0);
-            tester.Client.RemoveSubscription("NodeMetrics");
+            await tester.Client.RemoveSubscription("NodeMetrics");
             tester.Config.Metrics.Nodes = null;
         }
         #endregion

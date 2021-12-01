@@ -1003,14 +1003,30 @@ namespace Cognite.OpcUa
 
                 if (subscription == null)
                 {
-#pragma warning disable CA2000 // Dispose objects before losing scope
                     subscription = new Subscription(Session.DefaultSubscription)
                     {
                         PublishingInterval = Config.Source.PublishingInterval,
                         DisplayName = subName
                     };
                     subscription.PublishStatusChanged += OnSubscriptionPublishStatusChange;
-#pragma warning restore CA2000 // Dispose objects before losing scope
+                    try
+                    {
+                        Session.AddSubscription(subscription);
+                        await subscription.CreateAsync(token);
+                    }
+                    catch (Exception ex)
+                    {
+                        try
+                        {
+                            await Session.RemoveSubscriptionAsync(subscription);
+                        }
+                        finally
+                        {
+                            subscription.Dispose();
+                        }
+                        throw ExtractorUtils.HandleServiceResult(log, ex,
+                            ExtractorUtils.SourceOp.CreateSubscription);
+                    }
                 }
 
                 int count = 0;
@@ -1045,29 +1061,10 @@ namespace Cognite.OpcUa
                             throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.CreateMonitoredItems);
                         }
                     }
-                    else if (lcount > 0)
-                    {
-                        try
-                        {
-                            Session.AddSubscription(subscription);
-                            await subscription.CreateAsync(token);
-                        }
-                        catch (Exception ex)
-                        {
-                            throw ExtractorUtils.HandleServiceResult(log, ex,
-                                ExtractorUtils.SourceOp.CreateSubscription);
-                        }
-                    }
                 }
             }
             finally
             {
-#pragma warning disable CA1508 // Avoid dead conditional code - the warning is due to a dotnet bug
-                if (subscription != null && !subscription.Created)
-#pragma warning restore CA1508 // Avoid dead conditional code
-                {
-                    subscription.Dispose();
-                }
                 subscriptionSem.Release();
             }
             return subscription;
@@ -1125,6 +1122,10 @@ namespace Cognite.OpcUa
                     log.LogWarning("Error attempting to remove subscription from the server: {Err}. It has most likely been dropped. " +
                         "This is not legal behavior and likely to be a bug in the server. Attempting to recreate...", symId);
                 }
+                finally
+                {
+                    sub.Dispose();
+                }
 
                 // Create a new subscription with the same name and monitored items
                 var name = sub.DisplayName.Split(' ').First();
@@ -1136,9 +1137,25 @@ namespace Cognite.OpcUa
                 };
 #pragma warning restore CA2000 // Dispose objects before losing scope
                 newSub.PublishStatusChanged += OnSubscriptionPublishStatusChange;
-
-                Session.AddSubscription(newSub);
-                await newSub.CreateAsync(token);
+                try
+                {
+                    Session.AddSubscription(newSub);
+                    await newSub.CreateAsync(token);
+                }
+                catch (Exception ex)
+                {
+                    try
+                    {
+                        await Session.RemoveSubscriptionAsync(newSub);
+                    }
+                    finally
+                    {
+                        newSub.Dispose();
+                    }
+                    throw ExtractorUtils.HandleServiceResult(log, ex,
+                        ExtractorUtils.SourceOp.CreateSubscription);
+                }
+                
 
                 int count = 0;
                 uint total = sub.MonitoredItemCount;
@@ -1249,13 +1266,20 @@ namespace Cognite.OpcUa
         /// if the subscription does not exist, nothing happens.
         /// </summary>
         /// <param name="name"></param>
-        public void RemoveSubscription(string name)
+        public async Task RemoveSubscription(string name)
         {
             if (Session == null || Session.Subscriptions == null) return;
             var subscription = Session.Subscriptions.FirstOrDefault(sub =>
                                        sub.DisplayName.StartsWith(name, StringComparison.InvariantCulture));
             if (subscription == null || !subscription.Created) return;
-            Session.RemoveSubscription(subscription);
+            try
+            {
+                await Session.RemoveSubscriptionAsync(subscription);
+            }
+            finally
+            {
+                subscription.Dispose();
+            }
         }
         #endregion
 
