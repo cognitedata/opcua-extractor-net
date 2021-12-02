@@ -68,6 +68,7 @@ namespace Cognite.OpcUa
         public NodeSetSourceConfig? NodeSetSource { get; set; }
         public bool LimitToServerConfig { get; set; } = true;
         public bool AltSourceBackgroundBrowse { get; set; }
+        public ushort CertificateExpiry { get; set; } = 60;
     }
     public enum X509CertificateLocation
     {
