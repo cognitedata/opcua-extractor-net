@@ -1010,6 +1010,8 @@ namespace Test.Unit
             extractor.State.RegisterNode(new NodeId("type"), tester.Client.GetUniqueId(new NodeId("type")));
             var type = new UAEventType(new NodeId("type"), "EventType");
             extractor.State.ActiveEvents[type.Id] = type;
+
+            ILogger log = tester.Provider.GetRequiredService<ILogger<TypesTest>>();
             // No event should be created without all of these
             var evt = new UAEvent
             {
@@ -1044,7 +1046,7 @@ namespace Test.Unit
                 new EventFieldValue(new EventField("key1"), 123),
                 new EventFieldValue(new EventField("key1"), Variant.Null),
                 new EventFieldValue(new EventField("key1"), new NodeId("meta")),
-            });
+            }, log);
 
             bytes = evt.ToStorableBytes(extractor);
             using (var stream = new MemoryStream(bytes))
@@ -1202,6 +1204,8 @@ namespace Test.Unit
                 Time = ts
             };
 
+            ILogger log = tester.Provider.GetRequiredService<ILogger<TypesTest>>();
+
             var rawMeta = new[]
             {
                 new EventFieldValue(new EventField("test-simple"), new NodeId("test")),
@@ -1212,7 +1216,7 @@ namespace Test.Unit
                 new EventFieldValue(new EventField(new QualifiedNameCollection { "deep", "deep-2" }), new [] { 1, 2, 3, 4 }),
                 new EventFieldValue(new EventField(new QualifiedNameCollection { "deep", "deep-2", "Value" }), 123.321)
             };
-            evt.SetMetadata(extractor.StringConverter, rawMeta);
+            evt.SetMetadata(extractor.StringConverter, rawMeta, log);
             var meta = evt.MetaData;
 
             Assert.Equal(3, meta.Count);

@@ -20,6 +20,7 @@ using Cognite.Extractor.Common;
 using Cognite.OpcUa.Pushers;
 using Cognite.OpcUa.TypeCollectors;
 using CogniteSdk;
+using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
@@ -102,12 +103,12 @@ namespace Cognite.OpcUa.Types
 
             return builder.ToString();
         }
-        public void SetMetadata(StringConverter converter, IEnumerable<EventFieldValue> values)
+        public void SetMetadata(StringConverter converter, IEnumerable<EventFieldValue> values, ILogger log)
         {
-            MetaData = GetMetadata(converter, values);
+            MetaData = GetMetadata(converter, values, log);
         }
         [return: NotNullIfNotNull("values")]
-        private static Dictionary<string, string>? GetMetadata(StringConverter converter, IEnumerable<EventFieldValue> values)
+        private static Dictionary<string, string>? GetMetadata(StringConverter converter, IEnumerable<EventFieldValue> values, ILogger log)
         {
             if (values == null) return null;
             var parents = new Dictionary<string, EventFieldNode>();
@@ -129,7 +130,7 @@ namespace Cognite.OpcUa.Types
                 }
             }
             var options = new JsonSerializerOptions();
-            options.Converters.Add(new EventFieldConverter(converter));
+            options.Converters.Add(new EventFieldConverter(converter, log));
 
             var results = new Dictionary<string, string>();
             foreach (var kvp in parents)
@@ -348,15 +349,32 @@ namespace Cognite.OpcUa.Types
 
     internal class EventFieldConverter : JsonConverter<EventFieldNode>
     {
+        private readonly ILogger log;
         private readonly StringConverter converter;
-        public EventFieldConverter(StringConverter converter)
+        public EventFieldConverter(StringConverter converter, ILogger log)
         {
             this.converter = converter;
+            this.log = log;
         }
 
         public override EventFieldNode? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
         {
             throw new NotImplementedException();
+        }
+
+        private void WriteValueSafe(Utf8JsonWriter writer, EventFieldNode field)
+        {
+            var value = converter.ConvertToString(field.Value, null, null, true);
+            try
+            {
+                writer.WriteRawValue(value);
+            }
+            catch (Exception ex)
+            {
+                log.LogWarning("Serialization of value on event field: {Message}, {Json}",
+                    ex.Message, value);
+                writer.WriteNullValue();
+            }
         }
 
         public override void Write(Utf8JsonWriter writer, EventFieldNode value, JsonSerializerOptions options)
@@ -381,13 +399,13 @@ namespace Cognite.OpcUa.Types
                 if (value.Value.HasValue)
                 {
                     writer.WritePropertyName("Value");
-                    writer.WriteRawValue(converter.ConvertToString(value.Value, null, null, true));
+                    WriteValueSafe(writer, value);
                 }
                 writer.WriteEndObject();
             }
             else if (value.Value.HasValue)
             {
-                writer.WriteRawValue(converter.ConvertToString(value.Value, null, null, true));
+                WriteValueSafe(writer, value);
             }
         }
     }
