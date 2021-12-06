@@ -932,7 +932,7 @@ namespace Test.Unit
 
             await extractor.WaitForSubscriptions();
             tester.Client.Browser.ResetVisitedNodes();
-            tester.Client.RemoveSubscription("DataChangeListener");
+            await tester.Client.RemoveSubscription("DataChangeListener");
 
             extractor.State.Clear();
 
@@ -1005,7 +1005,7 @@ namespace Test.Unit
 
             await extractor.WaitForSubscriptions();
             tester.Client.Browser.ResetVisitedNodes();
-            tester.Client.RemoveSubscription("EventListener");
+            await tester.Client.RemoveSubscription("EventListener");
 
             extractor.State.Clear();
 
@@ -1076,7 +1076,7 @@ namespace Test.Unit
 
             await extractor.WaitForSubscriptions();
             tester.Client.Browser.ResetVisitedNodes();
-            tester.Client.RemoveSubscription("EventListener");
+            await tester.Client.RemoveSubscription("EventListener");
 
             extractor.State.Clear();
 

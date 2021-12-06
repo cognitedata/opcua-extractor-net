@@ -42,6 +42,7 @@ namespace Server
         public bool CustomPeriodic { get; set; }
         public bool EventsPeriodic { get; set; }
         public bool GrowthPeriodic { get; set; }
+        public int DropSubscriptions { get; set; }
         public bool LargeHierarchy { get; set; }
         public bool VeryLargeHierarchy { get; set; }
         public bool Pubsub { get; set; }
@@ -109,6 +110,11 @@ namespace Server
                 {
                     server.DirectGrowth(idx);
                     server.ReferenceGrowth(idx);
+                }
+
+                if (opt.DropSubscriptions > 0 && idx % opt.DropSubscriptions == 0)
+                {
+                    server.Server.DropSubscriptions();
                 }
 
                 idx++;
@@ -208,6 +214,10 @@ namespace Server
             intOption = new Option<int>("--remaining-browse-count", "Server issue: This " +
                 "number counts down for each browse operation, " +
                 "and once it reaches zero it results in BadTooManyOperations");
+            root.AddOption(intOption);
+
+            intOption = new Option<int>("--drop-subscriptions", "Server issue: Period in seconds between the server dropping all" +
+                " subscriptions from all connected sessions.");
             root.AddOption(intOption);
 
             option = new Option<string>("--log-level", "Level of logging to console. " +
