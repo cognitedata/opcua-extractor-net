@@ -114,9 +114,9 @@ namespace Test.Utils
                 Client.ClearEventFields();
                 Client.Browser.ResetVisitedNodes();
                 Client.DataTypeManager.Reset();
-                Client.RemoveSubscription("EventListener");
-                Client.RemoveSubscription("DataChangeListener");
-                Client.RemoveSubscription("AuditListener");
+                Client.RemoveSubscription("EventListener").Wait();
+                Client.RemoveSubscription("DataChangeListener").Wait();
+                Client.RemoveSubscription("AuditListener").Wait();
                 Client.Browser.IgnoreFilters = null;
                 Client.ObjectTypeManager.Reset();
             }

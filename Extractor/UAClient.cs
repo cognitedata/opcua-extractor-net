@@ -32,6 +32,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -164,16 +165,38 @@ namespace Cognite.OpcUa
             }
         }
 
+        private Regex traceGroups = new Regex("{([0-9]+)}");
+        private object[] ReOrderArguments(string format, object[] args)
+        {
+            // OPC-UA Trace uses the stringbuilder style of arguments, which allows them to be out of order
+            // If we want nice coloring in logs (we do), then we have to re-order arguments like this.
+            // There's a cost, but this is only enabled when debugging anyway.
+            if (!args.Any()) return args;
+
+            var matches = traceGroups.Matches(format);
+            var indices = matches.Select(m => Convert.ToInt32(m.Groups[1].Value)).ToArray();
+
+            return indices.Select(i => args[i]).ToArray();
+        }
+
         private void TraceEventHandler(object sender, TraceEventArgs e)
         {
+            object[] args = e.Arguments;
+            try
+            {
+                args = ReOrderArguments(e.Format, e.Arguments);
+            } catch
+            {
+            }
+
             if (e.Exception != null)
             {
 #pragma warning disable CA2254 // Template should be a static expression - we are injecting format from a different logger
-                traceLog.Log(traceLevel!.Value, e.Exception, e.Format, e.Arguments);
+                traceLog.Log(traceLevel!.Value, e.Exception, e.Format, args);
             }
             else
             {
-                traceLog.Log(traceLevel!.Value, e.Format, e.Arguments);
+                traceLog.Log(traceLevel!.Value, e.Format, args);
 #pragma warning restore CA2254 // Template should be a static expression
             }
         }
@@ -371,10 +394,26 @@ namespace Cognite.OpcUa
             if (Session == null) return;
             Session.KeepAliveInterval = Config.Source.KeepAliveInterval;
             Session.KeepAlive += ClientKeepAlive;
+            Session.PublishError += OnPublishError;
             Started = true;
             connects.Inc();
             connected.Set(1);
             log.LogInformation("Successfully connected to server at {EndpointURL}", Config.Source.EndpointUrl);
+        }
+
+        /// <summary>
+        /// Event triggered when a publish request fails.
+        /// </summary>
+        private void OnPublishError(Session session, PublishErrorEventArgs e)
+        {
+            string symId = StatusCode.LookupSymbolicId(e.Status.Code);
+
+            var sub = session.Subscriptions.FirstOrDefault(sub => sub.Id == e.SubscriptionId);
+
+            if (sub != null)
+            {
+                log.LogError("Unexpected error on publish: {Code}, subscription: {Name}", symId, sub.DisplayName);
+            }
         }
 
         /// <summary>
@@ -929,6 +968,7 @@ namespace Cognite.OpcUa
                     : ExtractorUtils.SourceOp.HistoryRead);
             }
         }
+
         /// <summary>
         /// Add MonitoredItems to the given list of states.
         /// </summary>
@@ -962,13 +1002,30 @@ namespace Cognite.OpcUa
 
                 if (subscription == null)
                 {
-#pragma warning disable CA2000 // Dispose objects before losing scope
                     subscription = new Subscription(Session.DefaultSubscription)
                     {
                         PublishingInterval = Config.Source.PublishingInterval,
                         DisplayName = subName
                     };
-#pragma warning restore CA2000 // Dispose objects before losing scope
+                    subscription.PublishStatusChanged += OnSubscriptionPublishStatusChange;
+                    try
+                    {
+                        Session.AddSubscription(subscription);
+                        await subscription.CreateAsync(token);
+                    }
+                    catch (Exception ex)
+                    {
+                        try
+                        {
+                            await Session.RemoveSubscriptionAsync(subscription);
+                        }
+                        finally
+                        {
+                            subscription.Dispose();
+                        }
+                        throw ExtractorUtils.HandleServiceResult(log, ex,
+                            ExtractorUtils.SourceOp.CreateSubscription);
+                    }
                 }
 
                 int count = 0;
@@ -1003,35 +1060,140 @@ namespace Cognite.OpcUa
                             throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.CreateMonitoredItems);
                         }
                     }
-                    else if (lcount > 0)
-                    {
-                        try
-                        {
-                            Session.AddSubscription(subscription);
-                            await subscription.CreateAsync(token);
-                        }
-                        catch (Exception ex)
-                        {
-                            throw ExtractorUtils.HandleServiceResult(log, ex,
-                                ExtractorUtils.SourceOp.CreateSubscription);
-                        }
-                    }
                 }
             }
             finally
             {
-#pragma warning disable CA1508 // Avoid dead conditional code - the warning is due to a dotnet bug
-                if (subscription != null && !subscription.Created)
-#pragma warning restore CA1508 // Avoid dead conditional code
-                {
-                    subscription.Dispose();
-                }
                 subscriptionSem.Release();
             }
             return subscription;
         }
 
+        private readonly HashSet<uint> pendingRecreates = new HashSet<uint>();
 
+        private async Task RecreateSubscription(Subscription sub, CancellationToken token)
+        {
+            if (Session == null || !Session.Connected || reconnectHandler != null || token.IsCancellationRequested) return;
+            
+            if (!sub.PublishingStopped) return;
+            try
+            {
+                using var operation = waiter.GetInstance();
+                // To avoid creating tons of blocking threads if this is very slow.
+                lock (pendingRecreates)
+                {
+                    if (!pendingRecreates.Add(sub.Id)) return;
+                }
+
+                await subscriptionSem.WaitAsync(token);
+                // The subscription might already have been deleted, best to check after receiving the lock.
+                if (!Session.Subscriptions.Any(s => s.Id == sub.Id)) return;
+
+                // Send keep-alive message to make sure the session isn't just down.
+                try
+                {
+                    var result = await Session.ReadAsync(null, 0, TimestampsToReturn.Neither, new ReadValueIdCollection {
+                        new ReadValueId {
+                            NodeId = Variables.Server_ServerStatus_State,
+                            AttributeId = Attributes.Value
+                        }
+                    }, token);
+                    var dv = result.Results.First();
+                    var state = (ServerState)(int)dv.Value;
+                    // If the server is in a bad state that is why the subscription is failing
+                    if (state != ServerState.Running) return;
+                }
+                catch (Exception ex)
+                {
+                    log.LogError("Failed to obtain server state. Server is likely down: ", ex.Message);
+                    return;
+                }
+
+                // Try to modify the subscription
+                try
+                {
+                    log.LogWarning("Subscription exists on server but is not responding to notifications. Attempting to recreate.");
+                    await Session.RemoveSubscriptionAsync(sub);
+                }
+                catch (ServiceResultException serviceEx)
+                {
+                    var symId = StatusCode.LookupSymbolicId(serviceEx.StatusCode);
+                    log.LogWarning("Error attempting to remove subscription from the server: {Err}. It has most likely been dropped. " +
+                        "This is not legal behavior and likely to be a bug in the server. Attempting to recreate...", symId);
+                }
+                finally
+                {
+                    sub.Dispose();
+                }
+
+                // Create a new subscription with the same name and monitored items
+                var name = sub.DisplayName.Split(' ').First();
+#pragma warning disable CA2000 // Dispose objects before losing scope
+                var newSub = new Subscription(Session.DefaultSubscription)
+                {
+                    PublishingInterval = Config.Source.PublishingInterval,
+                    DisplayName = name
+                };
+#pragma warning restore CA2000 // Dispose objects before losing scope
+                newSub.PublishStatusChanged += OnSubscriptionPublishStatusChange;
+                try
+                {
+                    Session.AddSubscription(newSub);
+                    await newSub.CreateAsync(token);
+                }
+                catch (Exception ex)
+                {
+                    try
+                    {
+                        await Session.RemoveSubscriptionAsync(newSub);
+                    }
+                    finally
+                    {
+                        newSub.Dispose();
+                    }
+                    throw ExtractorUtils.HandleServiceResult(log, ex,
+                        ExtractorUtils.SourceOp.CreateSubscription);
+                }
+                
+
+                int count = 0;
+                uint total = sub.MonitoredItemCount;
+
+                foreach (var chunk in sub.MonitoredItems.ChunkBy(Config.Source.SubscriptionChunk))
+                {
+                    if (token.IsCancellationRequested) return;
+                    var lcount = chunk.Count();
+                    log.LogDebug("Recreate subscriptions for {Name} for {NumNodes} nodes, {Subscribed} / {Total} done.",
+                        name, lcount, count, total);
+                    count += lcount;
+
+                    newSub.AddItems(chunk);
+                    await newSub.CreateItemsAsync(token);
+                }
+            }
+            catch (Exception ex)
+            {
+                ExtractorUtils.LogException(log, ex, "Failed to recreate subscription");
+            }
+            finally
+            {
+                subscriptionSem.Release();
+                lock (pendingRecreates)
+                {
+                    pendingRecreates.Remove(sub.Id);
+                }
+            }
+        }
+
+
+        private void OnSubscriptionPublishStatusChange(object sender, EventArgs e)
+        {
+            if (sender is not Subscription sub || !sub.PublishingStopped) return;
+
+            log.LogWarning("Subscription no longer responding: {Name}. Trying to re-enable.", sub.DisplayName);
+
+            _ = RecreateSubscription(sub, liveToken);
+        }
 
         /// <summary>
         /// Create datapoint subscriptions for given list of nodes
@@ -1103,13 +1265,20 @@ namespace Cognite.OpcUa
         /// if the subscription does not exist, nothing happens.
         /// </summary>
         /// <param name="name"></param>
-        public void RemoveSubscription(string name)
+        public async Task RemoveSubscription(string name)
         {
             if (Session == null || Session.Subscriptions == null) return;
             var subscription = Session.Subscriptions.FirstOrDefault(sub =>
                                        sub.DisplayName.StartsWith(name, StringComparison.InvariantCulture));
             if (subscription == null || !subscription.Created) return;
-            Session.RemoveSubscription(subscription);
+            try
+            {
+                await Session.RemoveSubscriptionAsync(subscription);
+            }
+            finally
+            {
+                subscription.Dispose();
+            }
         }
         #endregion
 
