@@ -406,7 +406,6 @@ namespace Cognite.OpcUa
         /// </summary>
         private void OnPublishError(Session session, PublishErrorEventArgs e)
         {
-            log.LogError("Test");
             string symId = StatusCode.LookupSymbolicId(e.Status.Code);
 
             var sub = session.Subscriptions.FirstOrDefault(sub => sub.Id == e.SubscriptionId);
