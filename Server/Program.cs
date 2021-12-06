@@ -15,7 +15,7 @@ namespace Server
             Log.Logger = logConfig.CreateLogger();
 
             using var server = new ServerController(new[] { PredefinedSetup.Custom, PredefinedSetup.Base,
-                    PredefinedSetup.Events, PredefinedSetup.Wrong, PredefinedSetup.Auditing, PredefinedSetup.PubSub
+                    PredefinedSetup.Events, PredefinedSetup.Wrong, PredefinedSetup.Auditing /*, PredefinedSetup.PubSub */
                     /*, PredefinedSetup.Full, PredefinedSetup.VeryLarge */ });
 
             server.Start().Wait();
@@ -45,6 +45,11 @@ namespace Server
 
                 idx++;
                 Task.Delay(1000).Wait();
+
+                if (idx % 20 == 0)
+                {
+                    server.Server.DropSubscriptions();
+                }
             }
         }
     }

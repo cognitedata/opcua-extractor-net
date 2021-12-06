@@ -1,6 +1,7 @@
 ﻿using Opc.Ua;
 using Opc.Ua.Server;
 using System;
+using System.Linq;
 using System.Collections.Generic;
 using System.Security.Cryptography.X509Certificates;
 
@@ -225,6 +226,31 @@ namespace Server
         public void SetDiagnosticsEnabled(bool value)
         {
             ServerInternal.NodeManager.DiagnosticsNodeManager.SetDiagnosticsEnabled(ServerInternal.DefaultSystemContext, value);
+        }
+
+        public void DropSubscriptions()
+        {
+            var subs = ServerInternal.SubscriptionManager.GetSubscriptions();
+
+            int cnt = 0;
+
+            foreach (var session in ServerInternal.SessionManager.GetSessions())
+            {
+                var context = new OperationContext(session, DiagnosticsMasks.All);
+
+                foreach (var sub in subs)
+                {
+                    if (sub.SessionId == session.Id)
+                    {
+                        ServerInternal.SubscriptionManager.DeleteSubscription(context, sub.Id);
+                        cnt++;
+                    }
+                }
+            }
+            if (cnt > 0)
+            {
+                Console.WriteLine($"Deleted {cnt} subscriptions manually");
+            }
         }
     }
 }
