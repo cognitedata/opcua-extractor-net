@@ -239,7 +239,7 @@ namespace Cognite.OpcUa
                 AppConfig.SecurityConfiguration.RejectedCertificateStore.StorePath = $"{certificateDir}/pki/rejected";
             }
 
-            bool validAppCert = await application.CheckApplicationInstanceCertificate(false, 0);
+            bool validAppCert = await application.CheckApplicationInstanceCertificate(false, 0, Config.Source.CertificateExpiry);
             if (!validAppCert)
             {
                 log.LogWarning("Missing application certificate, using insecure connection.");
