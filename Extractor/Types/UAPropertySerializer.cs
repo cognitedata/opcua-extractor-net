@@ -264,7 +264,7 @@ namespace Cognite.OpcUa.Types
         {
             if (config == null || uaClient == null || nodeIdConverter == null)
                 throw new InvalidOperationException("Config and UAClient must be supplied to create converters");
-            options.Converters.Add(converters.GetOrAdd(type, key => new NodeSerializer(this, config, uaClient, key)));
+            options.Converters.Add(converters.GetOrAdd(type, key => new NodeSerializer(this, config, uaClient, key, log)));
             options.Converters.Add(nodeIdConverter);
         }
     }
@@ -281,17 +281,34 @@ namespace Cognite.OpcUa.Types
         private readonly FullConfig config;
         private readonly UAClient uaClient;
         public ConverterType Type { get; }
-        public NodeSerializer(StringConverter converter, FullConfig config, UAClient uaClient, ConverterType type)
+        private readonly ILogger log;
+        public NodeSerializer(StringConverter converter, FullConfig config, UAClient uaClient, ConverterType type, ILogger log)
         {
             this.converter = converter;
             this.config = config;
             this.uaClient = uaClient;
             Type = type;
+            this.log = log;
         }
 
         public override UANode? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
         {
             throw new NotImplementedException();
+        }
+
+        private void WriteValueSafe(Utf8JsonWriter writer, UAVariable variable)
+        {
+            var value = converter.ConvertToString(variable.Value, variable.DataType?.EnumValues, null, true);
+            try
+            {
+                writer.WriteRawValue(value);
+            }
+            catch (Exception ex)
+            {
+                log.LogWarning("Serialization of value on variable: {Variable} resulted in invalid JSON: {Message}, {Json}",
+                    variable.DisplayName, ex.Message, value);
+                writer.WriteNullValue();
+            }
         }
 
         private void WriteProperties(Utf8JsonWriter writer, UANode node, bool getExtras, bool writeValue)
@@ -310,7 +327,7 @@ namespace Cognite.OpcUa.Types
             }
             else if (node is UAVariable variable && writeValue)
             {
-                writer.WriteRawValue(converter.ConvertToString(variable.Value, variable.DataType?.EnumValues, null, true));
+                WriteValueSafe(writer, variable);
                 return;
             }
             else
@@ -324,7 +341,7 @@ namespace Cognite.OpcUa.Types
             if (node is UAVariable variable2 && writeValue)
             {
                 writer.WritePropertyName("Value");
-                writer.WriteRawValue(converter.ConvertToString(variable2.Value, null, null, true));
+                WriteValueSafe(writer, variable2);
                 fields.Add("Value");
             }
             if (extras != null)

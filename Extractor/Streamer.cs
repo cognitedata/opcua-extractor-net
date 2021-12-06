@@ -525,7 +525,7 @@ namespace Cognite.OpcUa
                 EventType = eventType,
                 EmittingNode = emitter
             };
-            buffEvent.SetMetadata(extractor.StringConverter, finalProperties);
+            buffEvent.SetMetadata(extractor.StringConverter, finalProperties, log);
             return buffEvent;
         }
     }
