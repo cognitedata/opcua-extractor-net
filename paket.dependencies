@@ -17,7 +17,6 @@ nuget OPCFoundation.NetStandard.Opc.Ua.Server
 nuget OPCFoundation.NetStandard.Opc.Ua.PubSub prerelease
 nuget AdysTech.InfluxDB.Client.Net.Core
 nuget Microsoft.Windows.Compatibility
-nuget MQTTnet 3.0.16
 nuget Microsoft.Extensions.Hosting.WindowsServices
 nuget Microsoft.Extensions.Hosting.Systemd
 nuget Microsoft.Extensions.Hosting
