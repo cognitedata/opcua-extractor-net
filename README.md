@@ -56,7 +56,7 @@ Documentation can be found [here](https://cognitedata.atlassian.net/wiki/spaces/
 ## Local setup
 If you do not have access to an OPC-UA server, and wish to experiment with the extractor, you can run the test server, which is found in releases along with the version of the extractor it was used to test.
 
-You can also build and run it `by following the instructions in "Setup" above, then running `dotnet run --project Server`. Use `dotnet run --project Server -- [options]` to add command line options when running it this way.
+You can also build and run it by following the instructions in "Setup" above, then running `dotnet run --project Server`. Use `dotnet run --project Server -- [options]` to add command line options when running it this way.
 
 The server has a command line interface, and is capable of simulating a lot of different server behavior. Run Server -h for documentation.
 
