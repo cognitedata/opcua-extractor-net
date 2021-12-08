@@ -15,7 +15,9 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using Cognite.Extractor.Logging;
 using Serilog;
+using Serilog.Events;
 using System;
 using System.Collections.Generic;
 using System.CommandLine;
@@ -55,6 +57,8 @@ namespace Server
         public int MaxHistoryNodes { get; set; }
         public int RemainingBrowseCount { get; set; }
         public string LogLevel { get; set; }
+        public string LogFile { get; set; }
+        public bool LogTrace { get; set; }
     }
 
 
@@ -77,7 +81,7 @@ namespace Server
             string endpointUrl = opt.EndpointUrl ?? "opc.tcp://localhost";
             string mqttUrl = opt.MqttUrl ?? "mqtt://localhost:4060";
 
-            var controller = new ServerController(setups, port, mqttUrl, endpointUrl);
+            var controller = new ServerController(setups, port, mqttUrl, endpointUrl, opt.LogTrace);
 
             return controller;
         }
@@ -225,32 +229,32 @@ namespace Server
             option.AddAlias("-l");
             root.AddOption(option);
 
+            option = new Option<string>("--log-file", "Path to log files, this enables logging to file");
+            root.AddOption(option);
+
+            flag = new Option("--log-trace", "Write OPC-UA SDK trace to log at debug level");
+            root.AddOption(flag);
+
             root.Handler = CommandHandler.Create(async (ServerOptions opt) =>
             {
-                var logConfig = new LoggerConfiguration();
-
-                if (opt.LogLevel != null)
+                var loggerConfig = new LoggerConfig
                 {
-                    switch (opt.LogLevel)
+                    Console = new ConsoleConfig
                     {
-                        case "verbose": logConfig.MinimumLevel.Verbose(); break;
-                        case "debug": logConfig.MinimumLevel.Debug(); break;
-                        case "information": logConfig.MinimumLevel.Information(); break;
-                        case "warning": logConfig.MinimumLevel.Warning(); break;
-                        case "error": logConfig.MinimumLevel.Error(); break;
-                        case "fatal": logConfig.MinimumLevel.Fatal(); break;
-                        default:
-                            logConfig.MinimumLevel.Information();
-                            break;
+                        Level = opt.LogLevel ?? "information"
                     }
-                }
-                else
+                };
+
+                if (opt.LogFile != null)
                 {
-                    logConfig.MinimumLevel.Information();
+                    loggerConfig.File = new FileConfig
+                    {
+                        Level = opt.LogLevel ?? "information",
+                        Path = opt.LogFile
+                    };
                 }
 
-                logConfig.WriteTo.Console();
-                Log.Logger = logConfig.CreateLogger();
+                LoggingUtils.Configure(loggerConfig);
 
                 using var controller = BuildServer(opt);
                 await Run(opt, controller);
