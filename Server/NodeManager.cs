@@ -1,4 +1,21 @@
-﻿using Opc.Ua;
+﻿/* Cognite Extractor for OPC-UA
+Copyright (C) 2021 Cognite AS
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
+
+using Opc.Ua;
 using Opc.Ua.Server;
 using Serilog;
 using System;
@@ -174,6 +191,8 @@ namespace Server
             "NodeStates are disposed in CustomNodeManager2, so long as they are added to the list of predefined nodes")]
         public NodeId AddObject(NodeId parentId, string name, bool audit = false)
         {
+            log.Debug("Add object: Parent: {Parent}, Name: {Name}", parentId, name);
+
             var parent = PredefinedNodes[parentId];
             var obj = CreateObject(name);
             AddNodeRelation(obj, parent, ReferenceTypeIds.Organizes);
@@ -205,6 +224,8 @@ namespace Server
             "NodeStates are disposed in CustomNodeManager2, so long as they are added to the list of predefined nodes")]
         public NodeId AddVariable(NodeId parentId, string name, NodeId dataType, bool audit = false)
         {
+            log.Debug("Add variable: Parent: {Parent}, Name {Name}, DataType: {DataType}", parentId, name, dataType);
+
             var parent = PredefinedNodes[parentId];
             var obj = CreateVariable(name, dataType);
             AddNodeRelation(obj, parent, ReferenceTypeIds.HasComponent);
@@ -236,6 +257,8 @@ namespace Server
             "NodeStates are disposed in CustomNodeManager2, so long as they are added to the list of predefined nodes")]
         public void AddReference(NodeId targetId, NodeId parentId, NodeId type, bool audit = false)
         {
+            log.Debug("Add reference from {Parent} to {Target} of type {Type}", parentId, targetId, type);
+
             var target = PredefinedNodes[targetId];
             var parent = PredefinedNodes[parentId];
             if (audit)
@@ -269,6 +292,9 @@ namespace Server
         }
         public NodeId AddProperty<T>(NodeId parentId, string name, NodeId dataType, object value, int rank = -1)
         {
+            log.Debug("Add property of type {Type} name {Name} and DataType {DataType} to {Parent}",
+                typeof(T), name, dataType, parentId);
+
             var parent = PredefinedNodes[parentId];
             var prop = parent.AddProperty<T>(name, dataType, rank);
             prop.NodeId = GenerateNodeId();
@@ -278,6 +304,8 @@ namespace Server
         }
         public void RemoveProperty(NodeId parentId, string name)
         {
+            log.Debug("Remove property of {Parent} with name {Name}", parentId, name);
+
             var parent = PredefinedNodes[parentId];
             var children = new List<BaseInstanceState>();
             parent.GetChildren(SystemContext, children);
@@ -288,6 +316,9 @@ namespace Server
 
         public void ReContextualize(NodeId id, NodeId oldParentId, NodeId newParentId, NodeId referenceType)
         {
+            log.Debug("Move node {Id} from {Old} to {New} with reference type {Ref}",
+                id, oldParentId, newParentId, referenceType);
+
             var state = PredefinedNodes[id];
             var oldParent = PredefinedNodes[oldParentId];
             var newParent = PredefinedNodes[newParentId];
@@ -424,6 +455,8 @@ namespace Server
 
         private void CreateBaseSpace(IDictionary<NodeId, IList<IReference>> externalReferences)
         {
+            log.Information("Create base address space");
+
             lock (Lock)
             {
                 var myobj = CreateObject("BaseRoot");
@@ -484,6 +517,8 @@ namespace Server
             "NodeStates are disposed in CustomNodeManager2, so long as they are added to the list of predefined nodes")]
         private void CreateFullAddressSpace(IDictionary<NodeId, IList<IReference>> externalReferences)
         {
+            log.Information("Create large address space");
+
             lock (Lock)
             {
                 var root = CreateObject("FullRoot");
@@ -525,6 +560,8 @@ namespace Server
 
         private void CreateCustomAddressSpace(IDictionary<NodeId, IList<IReference>> externalReferences)
         {
+            log.Information("Create custom address space");
+
             lock (Lock)
             {
                 var root = CreateObject("CustomRoot");
@@ -715,6 +752,8 @@ namespace Server
 
         private void CreateEventAddressSpace(IDictionary<NodeId, IList<IReference>> externalReferences)
         {
+            log.Information("Create event address space");
+
             lock (Lock)
             {
                 var root = CreateObject("EventRoot");
@@ -795,6 +834,8 @@ namespace Server
 
         private void CreateAuditAddressSpace(IDictionary<NodeId, IList<IReference>> externalReferences)
         {
+            log.Information("Create audit address space");
+
             lock (Lock)
             {
                 var root = CreateObject("GrowingRoot");
@@ -828,6 +869,8 @@ namespace Server
 
         public void CreateWrongAddressSpace(IDictionary<NodeId, IList<IReference>> externalReferences)
         {
+            log.Information("Create wrong address space");
+
             lock (Lock)
             {
                 var root = CreateObject("WrongRoot");
@@ -882,6 +925,8 @@ namespace Server
             "NodeStates are disposed in CustomNodeManager2, so long as they are added to the list of predefined nodes")]
         public void CreateVeryLargeAddressSpace(IDictionary<NodeId, IList<IReference>> externalReferences)
         {
+            log.Information("Create very large address space");
+
             lock (Lock)
             {
                 var root = CreateObject("VeryLargeRoot");
@@ -1106,9 +1151,12 @@ namespace Server
         }
 
         // Utility methods to create nodes
-        private static void AddNodeToExt(NodeState state, NodeId id, NodeId typeId,
+        private void AddNodeToExt(NodeState state, NodeId id, NodeId typeId,
             IDictionary<NodeId, IList<IReference>> externalReferences)
         {
+            log.Verbose("Add node {Id} {Name} as child of external node {Parent} with reference type {Type}",
+                state.NodeId, state.DisplayName, id, typeId);
+
             if (!externalReferences.TryGetValue(id, out var references))
             {
                 externalReferences[id] = references = new List<IReference>();
@@ -1117,8 +1165,11 @@ namespace Server
             state.AddReference(typeId, true, id);
             references.Add(new NodeStateReference(typeId, false, state.NodeId));
         }
-        private static void AddNodeRelation(NodeState state, NodeState parent, NodeId typeId)
+        private void AddNodeRelation(NodeState state, NodeState parent, NodeId typeId)
         {
+            log.Verbose("Add reference of type {Type} from {Parent} {PName} to {Id} {Name}",
+                typeId, parent.NodeId, parent.DisplayName, state.NodeId, state.DisplayName);
+
             state.AddReference(typeId, true, parent.NodeId);
             parent.AddReference(typeId, false, state.NodeId);
         }
@@ -1144,6 +1195,9 @@ namespace Server
             state.DataType = dataType;
             state.Value = value;
 
+            log.Verbose("Create variable: Id: {Id}, Name: {Name}, VariableType: {Type}, DataType: {DataType} {ActualType}",
+                state.NodeId, state.DisplayName, typeof(TVar), dataType, typeof(TValue));
+
             return state;
         }
 
@@ -1157,6 +1211,9 @@ namespace Server
             prop.Value = value;
             prop.NodeId = GenerateNodeId();
 
+            log.Verbose("Create property {Name} of type {Type} for {Parent} {ParentName}",
+                name, typeof(T), parent.NodeId, parent.DisplayName);
+
             return prop;
         }
 
@@ -1167,6 +1224,10 @@ namespace Server
             state.BrowseName = new QualifiedName(name, NamespaceIndex);
             state.DisplayName = state.BrowseName.Name;
             state.TypeDefinitionId = state.GetDefaultTypeDefinitionId(SystemContext);
+
+            log.Verbose("Create object: Id: {Id}, Name: {Name}, ObjectType: {Type}",
+                state.NodeId, state.DisplayName, typeof(T));
+
             return state;
         }
 
@@ -1179,6 +1240,10 @@ namespace Server
             };
             state.DisplayName = state.BrowseName.Name;
             state.TypeDefinitionId = ObjectTypeIds.BaseObjectType;
+
+            log.Verbose("Create object: Id: {Id}, Name: {Name}",
+                state.NodeId, state.DisplayName);
+
             return state;
         }
 
@@ -1199,6 +1264,9 @@ namespace Server
                 state.ArrayDimensions = new[] { (uint)dim };
             }
 
+            log.Verbose("Create variable: Id: {Id}, Name: {Name}, DataType: {DataType}",
+                state.NodeId, state.DisplayName, dataType);
+
             return state;
         }
 
@@ -1217,6 +1285,8 @@ namespace Server
 
             type.AddReference(ReferenceTypeIds.HasSubtype, true, parent);
             references.Add(new NodeStateReference(ReferenceTypeIds.HasSubtype, false, type.NodeId));
+
+            log.Verbose("Create data type: Id: {Id}, Name: {Name}", type.NodeId, type.DisplayName);
 
             return type;
         }
@@ -1238,6 +1308,8 @@ namespace Server
             type.AddReference(ReferenceTypeIds.HasSubtype, true, parent);
             references.Add(new NodeStateReference(ReferenceTypeIds.HasSubtype, false, type.NodeId));
 
+            log.Verbose("Create object type: Id: {Id}, Name: {Name}", type.NodeId, type.DisplayName);
+
             return type;
         }
 
@@ -1257,6 +1329,8 @@ namespace Server
             }
             type.AddReference(ReferenceTypeIds.HasSubtype, true, parent);
             references.Add(new NodeStateReference(ReferenceTypeIds.HasSubtype, false, type.NodeId));
+
+            log.Verbose("Create variable type: Id: {Id}, Name: {Name}", type.NodeId, type.DisplayName);
 
             return type;
         }
@@ -1280,6 +1354,8 @@ namespace Server
 
             type.AddReference(ReferenceTypeIds.HasSubtype, true, parent);
             references.Add(new NodeStateReference(ReferenceTypeIds.HasSubtype, false, type.NodeId));
+
+            log.Verbose("Create reference type: Id: {Id}, Name: {Name}", type.NodeId, type.DisplayName);
 
             return type;
         }

@@ -1,4 +1,21 @@
-﻿using Opc.Ua;
+﻿/* Cognite Extractor for OPC-UA
+Copyright (C) 2021 Cognite AS
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
+
+using Opc.Ua;
 using Opc.Ua.Configuration;
 using Serilog;
 using System;
@@ -22,12 +39,21 @@ namespace Server
         public ServerIssueConfig Issues => Server.Issues;
         public string ConfigRoot { get; set; } = "Server.Test";
         private readonly string mqttUrl;
+        private readonly string endpointUrl;
+        private readonly bool logTrace;
 
-        public ServerController(IEnumerable<PredefinedSetup> setups, int port = 62546, string mqttUrl = "mqtt://localhost:4060")
+        public ServerController(
+            IEnumerable<PredefinedSetup> setups,
+            int port = 62546,
+            string mqttUrl = "mqtt://localhost:4060",
+            string endpointUrl = "opc.tcp://localhost",
+            bool logTrace = false)
         {
             this.setups = setups;
             this.port = port;
             this.mqttUrl = mqttUrl;
+            this.endpointUrl = endpointUrl;
+            this.logTrace = logTrace;
         }
 
         public void Dispose()
@@ -46,9 +72,9 @@ namespace Server
             try
             {
                 var cfg = await app.LoadApplicationConfiguration(Path.Join("config", $"{ConfigRoot}.Config.xml"), false);
-                cfg.ServerConfiguration.BaseAddresses[0] = $"opc.tcp://localhost:{port}";
+                cfg.ServerConfiguration.BaseAddresses[0] = $"{endpointUrl}:{port}";
                 await app.CheckApplicationInstanceCertificate(false, 0);
-                Server = new TestServer(setups, mqttUrl);
+                Server = new TestServer(setups, mqttUrl, logTrace);
                 await Task.Run(async () => await app.Start(Server));
                 log.Information("Server started");
             }
@@ -281,6 +307,29 @@ namespace Server
         public void SetDiagnosticsEnabled(bool value)
         {
             Server.SetDiagnosticsEnabled(value);
+        }
+
+        public void UpdateBaseNodes(int idx)
+        {
+            UpdateNode(Ids.Base.DoubleVar1, idx);
+            UpdateNode(Ids.Base.DoubleVar2, -idx);
+            UpdateNode(Ids.Base.BoolVar, idx % 2 == 0);
+            UpdateNode(Ids.Base.IntVar, idx);
+            UpdateNode(Ids.Base.StringVar, $"Idx: {idx}");
+        }
+
+        public void UpdateCustomNodes(int idx)
+        {
+            UpdateNode(Ids.Custom.Array, new double[] { idx, idx + 1, idx + 2, idx + 3 });
+            UpdateNode(Ids.Custom.StringArray, new string[] { $"str{idx}", $"str{-idx}" });
+            UpdateNode(Ids.Custom.StringyVar, $"Idx: {idx}");
+            UpdateNode(Ids.Custom.MysteryVar, idx);
+            UpdateNode(Ids.Custom.IgnoreVar, $"Idx: {idx}");
+            UpdateNode(Ids.Custom.NumberVar, idx);
+            UpdateNode(Ids.Custom.EnumVar1, idx % 3);
+            UpdateNode(Ids.Custom.EnumVar2, idx % 2 == 0 ? 123 : 321);
+            UpdateNode(Ids.Custom.EnumVar3, idx % 2 == 0
+                ? new[] { 123, 123, 321, 123 } : new[] { 123, 123, 123, 321 });
         }
     }
 }

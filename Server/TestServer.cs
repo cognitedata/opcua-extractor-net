@@ -1,9 +1,28 @@
-﻿using Opc.Ua;
+﻿/* Cognite Extractor for OPC-UA
+Copyright (C) 2021 Cognite AS
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
+
+using Opc.Ua;
 using Opc.Ua.Server;
 using System;
 using System.Linq;
 using System.Collections.Generic;
 using System.Security.Cryptography.X509Certificates;
+using Serilog;
+using System.Text.RegularExpressions;
 
 namespace Server
 {
@@ -21,7 +40,9 @@ namespace Server
     /// </summary>
     public sealed class TestServer : ReverseConnectServer
     {
+#pragma warning disable CA2213 // Disposable fields should be disposed - disposed in superclass
         private TestNodeManager custom;
+#pragma warning restore CA2213 // Disposable fields should be disposed
         public NodeIdReference Ids => custom.Ids;
         public ServerIssueConfig Issues { get; } = new ServerIssueConfig();
 
@@ -32,11 +53,14 @@ namespace Server
 
         public bool AllowAnonymous { get; set; } = true;
         private readonly string mqttUrl;
+        private readonly bool logTrace;
+        private readonly ILogger traceLog = Log.Logger.ForContext<Tracing>();
 
-        public TestServer(IEnumerable<PredefinedSetup> setups, string mqttUrl)
+        public TestServer(IEnumerable<PredefinedSetup> setups, string mqttUrl, bool logTrace = false)
         {
             this.setups = setups;
             this.mqttUrl = mqttUrl;
+            this.logTrace = logTrace;
         }
 
         protected override void OnServerStarting(ApplicationConfiguration configuration)
@@ -48,12 +72,53 @@ namespace Server
                 Clients = new ReverseConnectClientCollection()
             };
 
-            Utils.SetTraceOutput(Utils.TraceOutput.DebugAndFile);
-            Utils.SetTraceMask(Utils.TraceMasks.All);
-            Utils.SetTraceLog("./logs/opcua-server.log", true);
+            ConfigureUtilsTrace();
 
             base.OnServerStarting(configuration);
             fullConfig = configuration;
+        }
+
+        private void ConfigureUtilsTrace()
+        {
+            if (!logTrace) return;
+            Utils.SetTraceMask(Utils.TraceMasks.All);
+            Utils.Tracing.TraceEventHandler -= TraceEventHandler;
+            Utils.Tracing.TraceEventHandler += TraceEventHandler;
+        }
+
+        private Regex traceGroups = new Regex("{([0-9]+)}");
+        private object[] ReOrderArguments(string format, object[] args)
+        {
+            // OPC-UA Trace uses the stringbuilder style of arguments, which allows them to be out of order
+            // If we want nice coloring in logs (we do), then we have to re-order arguments like this.
+            // There's a cost, but this is only enabled when debugging anyway.
+            if (!args.Any()) return args;
+
+            var matches = traceGroups.Matches(format);
+            var indices = matches.Select(m => Convert.ToInt32(m.Groups[1].Value)).ToArray();
+
+            return indices.Select(i => args[i]).ToArray();
+        }
+
+        private void TraceEventHandler(object sender, TraceEventArgs e)
+        {
+            object[] args = e.Arguments;
+            try
+            {
+                args = ReOrderArguments(e.Format, e.Arguments);
+            }
+            catch
+            {
+            }
+
+            if (e.Exception != null)
+            {
+                traceLog.Debug(e.Exception, e.Format, args);
+            }
+            else
+            {
+                traceLog.Debug(e.Format, args);
+            }
         }
 
         public void SetValidator(bool failAlways)
@@ -250,6 +315,15 @@ namespace Server
             if (cnt > 0)
             {
                 Console.WriteLine($"Deleted {cnt} subscriptions manually");
+            }
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            base.Dispose(disposing);
+            if (disposing)
+            {
+                Utils.Tracing.TraceEventHandler -= TraceEventHandler;
             }
         }
     }
