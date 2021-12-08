@@ -6,6 +6,12 @@ OPC-UA extractor using libraries from OPCFoundation see [here](https://github.co
 
 ## How to use
 
+### Setup
+Install paket using `dotnet tool restore`. Then run `dotnet paket restore` to install packages.
+
+Now you can build projects using `dotnet build [Project]`. Using just `dotnet build` is likely to fail on "OpcUaServiceManager", since it cannot be built
+with the dotnet CLI.
+
 ### Building
 Install .net 6.0 from [here](https://dotnet.microsoft.com/download).
 
@@ -49,6 +55,8 @@ Documentation can be found [here](https://cognitedata.atlassian.net/wiki/spaces/
 
 ## Local setup
 If you do not have access to an OPC-UA server, and wish to experiment with the extractor, you can run the test server, which is found in releases along with the version of the extractor it was used to test.
+
+You can also build and run it `by following the instructions in "Setup" above, then running `dotnet run --project Server`. Use `dotnet run --project Server -- [options]` to add command line options when running it this way.
 
 The server has a command line interface, and is capable of simulating a lot of different server behavior. Run Server -h for documentation.
 
