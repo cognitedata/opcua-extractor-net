@@ -132,7 +132,7 @@ podTemplate(
                     packServer('linux-x64', "$version", true)
                 }
                 stage('Build linux installers') {
-                    sh('cp -r ExtractorLauncher/bin/Release/net6.0/linux-x64/publish/ linux/publish/')
+                    sh("dotnet publish -c Release -r linux-x64 $publishArgs ExtractorLauncher/ -o linux/publish/")
                     sh('cp LICENSE.md linux/')
                     sh('cp -r config/ linux/')
                     dir ('linux') {
