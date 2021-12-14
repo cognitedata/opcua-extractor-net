@@ -1114,7 +1114,7 @@ namespace Cognite.OpcUa
                 // Try to modify the subscription
                 try
                 {
-                    log.LogWarning("Subscription exists on server but is not responding to notifications. Attempting to recreate.");
+                    log.LogWarning("Server is available, but subscription is not responding to notifications. Attempting to recreate.");
                     await Session.RemoveSubscriptionAsync(sub);
                 }
                 catch (ServiceResultException serviceEx)
