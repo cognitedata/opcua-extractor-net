@@ -695,6 +695,7 @@ namespace Cognite.OpcUa
                         var history = (histEmitterIds.Contains(id)) && Config.Events.History;
                         var subscription = emitterIds.Contains(id);
                         State.SetEmitterState(new EventExtractionState(this, id, history, history && Config.History.Backfill, subscription));
+                        State.RegisterNode(id, uaClient.GetUniqueId(id));
                     }
                 }
                 if (Config.Events.ReadServer)
