@@ -1074,8 +1074,10 @@ namespace Cognite.OpcUa
         private async Task RecreateSubscription(Subscription sub, CancellationToken token)
         {
             if (Session == null || !Session.Connected || reconnectHandler != null || token.IsCancellationRequested) return;
-            
+
             if (!sub.PublishingStopped) return;
+
+            log.LogWarning("Subscription no longer responding: {Name}. Trying to re-enable.", sub.DisplayName);
             try
             {
                 using var operation = waiter.GetInstance();
@@ -1189,8 +1191,6 @@ namespace Cognite.OpcUa
         private void OnSubscriptionPublishStatusChange(object sender, EventArgs e)
         {
             if (sender is not Subscription sub || !sub.PublishingStopped) return;
-
-            log.LogWarning("Subscription no longer responding: {Name}. Trying to re-enable.", sub.DisplayName);
 
             _ = RecreateSubscription(sub, liveToken);
         }
