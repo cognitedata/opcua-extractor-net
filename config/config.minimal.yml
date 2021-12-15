@@ -24,8 +24,23 @@ source:
 cognite:
     # The project to connect to in the API, uses the environment variable COGNITE_PROJECT.
     project: "${COGNITE_PROJECT}"
-    # Cognite api key
-    api-key: "${COGNITE_API_KEY}"
+
+    # This is for microsoft as IdP, to use a different provider,
+    # set implementation: Basic, and use token-url instead of tenant.
+    # See the example config for the full list of options.
+    idp-authentication:
+        # Directory tenant
+        tenant: ${COGNITE_TENANT_ID}
+        # Application Id
+        client-id: ${COGNITE_CLIENT_ID}
+        # Client secret
+        secret: ${COGNITE_CLIENT_SECRET}
+        # List of resource scopes, ex:
+        # scopes:
+        #   - scopeA
+        #   - scopeB
+        scopes:
+          - ${COGNITE_SCOPE}
 
 extraction:
     # Global prefix for externalId in destinations. Should be unique to prevent name conflicts.
