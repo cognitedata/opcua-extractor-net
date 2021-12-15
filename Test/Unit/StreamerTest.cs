@@ -577,5 +577,37 @@ namespace Test.Unit
             Assert.Single(created.MetaData);
             Assert.True(created.MetaData.ContainsKey("unit"));
         }
+        [Fact]
+        public void TestDatapointAsEvent()
+        {
+            CommonTestUtils.ResetMetricValue("opcua_array_points_missed");
+            using var extractor = tester.BuildExtractor();
+            var var1 = new UAVariable(new NodeId("id"), "node", NodeId.Null);
+            var1.VariableAttributes.DataType = new UADataType(DataTypeIds.Double);
+            var1.AsEvents = true;
+            var node1 = new VariableExtractionState(tester.Client, var1, true, true);
+
+            extractor.Streamer.AllowEvents = true;
+
+            var now = new DateTime(1000);
+
+            var queue = (Queue<UAEvent>)extractor.Streamer.GetType()
+                .GetField("eventQueue", BindingFlags.NonPublic | BindingFlags.Instance)
+                .GetValue(extractor.Streamer);
+
+            extractor.Streamer.HandleStreamedDatapoint(new DataValue(new Variant("some-string"), StatusCodes.Uncertain, now), node1);
+
+            Assert.Single(queue);
+
+            var evt = queue.Dequeue();
+
+            Assert.Equal(node1.Id + "-1000", evt.EventId);
+            Assert.Equal(node1.SourceId, evt.SourceNode);
+            Assert.Equal(node1.SourceId, evt.EmittingNode);
+            Assert.Equal("some-string", evt.Message);
+            Assert.Single(evt.MetaData);
+            Assert.Equal("Uncertain", evt.MetaData["Status"]);
+            Assert.Equal(now, evt.Time);
+        }
     }
 }

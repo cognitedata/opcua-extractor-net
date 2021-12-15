@@ -678,6 +678,11 @@ namespace Cognite.OpcUa
             {
                 state.RestartHistory();
             }
+            if (Config.Extraction.Transformations?.Any(trans => trans.Type == TransformationType.AsEvents) ?? false)
+            {
+                Streamer.AllowEvents = true;
+            }
+
             if (Config.Events.Enabled)
             {
                 Streamer.AllowEvents = true;
