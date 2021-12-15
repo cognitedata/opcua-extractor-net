@@ -297,6 +297,50 @@ namespace Test.Integration
             Assert.Equal(0.0, dps[0].DoubleValue);
             Assert.Equal(1.0, dps[1].DoubleValue);
         }
+        [Fact]
+        public async Task TestDataPointsAsEvents()
+        {
+            using var pusher = new DummyPusher(new DummyPusherConfig());
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+
+            var ids = tester.Ids.Base;
+
+            tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(ids.Root, tester.Client);
+
+            tester.Config.Extraction.Transformations = new[]
+            {
+                new RawNodeTransformation
+                {
+                    Filter = new RawNodeFilter
+                    {
+                        Name = "Variable bool"
+                    },
+                    Type = TransformationType.AsEvents
+                }
+            };
+
+            var runTask = extractor.RunExtractor();
+
+            await extractor.WaitForSubscriptions();
+
+            tester.Server.UpdateNode(ids.BoolVar, true);
+            tester.Server.UpdateNode(ids.DoubleVar1, 1.0);
+            await Task.Delay(100);
+            tester.Server.UpdateNode(ids.BoolVar, false);
+            tester.Server.UpdateNode(ids.DoubleVar1, 2.0);
+
+            await CommonTestUtils.WaitForCondition(() =>
+                pusher.Events.ContainsKey(ids.BoolVar) && pusher.Events[ids.BoolVar].Count >= 2
+                && pusher.DataPoints[(ids.DoubleVar1, -1)].Count >= 2, 5);
+
+            var evts = pusher.Events[ids.BoolVar];
+            Assert.All(evts, evt =>
+            {
+                Assert.Equal(ids.BoolVar, evt.SourceNode);
+                Assert.Equal(ids.BoolVar, evt.EmittingNode);
+            });
+
+        }
         #endregion
         #region history
         private static void TestContinuity(IEnumerable<UADataPoint> dps, bool shouldBeString)
