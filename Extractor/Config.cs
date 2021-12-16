@@ -318,6 +318,7 @@ namespace Cognite.OpcUa
         public bool Influx { get; set; }
         public string? DatapointPath { get; set; }
         public string? EventPath { get; set; }
+        public long MaxBufferSize { get; set; }
     }
 
     public class UALoggerConfig : LoggerConfig

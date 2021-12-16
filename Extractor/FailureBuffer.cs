@@ -556,12 +556,20 @@ namespace Cognite.OpcUa
         {
             int count = 0;
 
+            long currentSize = 0;
+            if (config.MaxBufferSize > 0)
+            {
+                currentSize = new FileInfo(config.DatapointPath).Length;
+            }
+
             using (var fs = new FileStream(config.DatapointPath, FileMode.Append, FileAccess.Write, FileShare.None))
             {
                 foreach (var dp in dps)
                 {
                     if (token.IsCancellationRequested) break;
                     var bytes = dp.ToStorableBytes();
+                    if (config.MaxBufferSize > 0 && (currentSize + bytes.Length > config.MaxBufferSize)) break;
+                    currentSize += bytes.Length;
                     fs.Write(bytes, 0, bytes.Length);
                     count++;
                 }
@@ -581,12 +589,21 @@ namespace Cognite.OpcUa
         private void WriteEventsToFile(IEnumerable<UAEvent> evts, CancellationToken token)
         {
             int count = 0;
+
+            long currentSize = 0;
+            if (config.MaxBufferSize > 0)
+            {
+                currentSize = new FileInfo(config.EventPath).Length;
+            }
+
             using (var fs = new FileStream(config.EventPath, FileMode.Append, FileAccess.Write, FileShare.None))
             {
                 foreach (var evt in evts)
                 {
                     if (token.IsCancellationRequested) break;
                     var bytes = evt.ToStorableBytes(extractor);
+                    if (config.MaxBufferSize > 0 && (currentSize + bytes.Length > config.MaxBufferSize)) break;
+                    currentSize += bytes.Length;
                     fs.Write(bytes, 0, bytes.Length);
                     count++;
                 }
