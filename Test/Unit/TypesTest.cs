@@ -500,7 +500,7 @@ namespace Test.Unit
                    + "}\n"
                    + "History: True\n"
                    + "AccessLevel: 5\n"
-                   + "ValueRank: -2\n"
+                   + "ValueRank: Any\n"
                    + "Dimension: 4\n"
                    + "NodeType: s=type\n"
                    + "Written as events to destinations\n"

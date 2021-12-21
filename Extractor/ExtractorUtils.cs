@@ -515,6 +515,20 @@ namespace Cognite.OpcUa
 
             return raw;
         }
+
+        public static string GetValueRankString(int valueRank)
+        {
+            return valueRank switch
+            {
+                ValueRanks.Any => "Any",
+                ValueRanks.OneDimension => "OneDimension",
+                ValueRanks.OneOrMoreDimensions => "OneOrMoreDimensions",
+                ValueRanks.Scalar => "Scalar",
+                ValueRanks.ScalarOrOneDimension => "ScalarOrOneDimension",
+                ValueRanks.TwoDimensions => "TwoDimensions",
+                _ => $"{valueRank}Dimensions",
+            };
+        }
     }
 
     /// <summary>

@@ -98,7 +98,8 @@ namespace Cognite.OpcUa.Types
             builder.AppendLine();
             if (ValueRank != ValueRanks.Scalar)
             {
-                builder.AppendFormat(CultureInfo.InvariantCulture, "ValueRank: {0}", ValueRank);
+                builder.AppendFormat(CultureInfo.InvariantCulture, "ValueRank: {0}",
+                    ExtractorUtils.GetValueRankString(ValueRank));
                 builder.AppendLine();
             }
             if (ArrayDimensions != null && ArrayDimensions.Length == 1)
