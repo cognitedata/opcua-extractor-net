@@ -437,7 +437,7 @@ failure-buffer:
     # The two buffer file paths must be different.
     event-path:
     # Cap in bytes for each buffer file, default is uncapped. If the size exceeds this, no new datapoints will be written,
-    # and any further data is lost. Default is uncapped. Note that if both buffers are enabled, the potential disk usage
+    # and any further data is lost. Note that if both datapoint and event buffers are enabled, the potential disk usage
     # is twice this number.
     max-buffer-size: 0
 
