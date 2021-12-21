@@ -185,7 +185,7 @@ namespace Cognite.OpcUa.TypeCollectors
                 else
                 {
                     log.LogDebug("Skipping variable {Name} {Id} due to non-scalar ValueRank {Rank} and too large dimension {Dim}",
-                        node.DisplayName, node.Id, node.ValueRank, length);
+                        node.DisplayName, node.Id, ExtractorUtils.GetValueRankString(node.ValueRank), length);
                     return false;
                 }
             }
@@ -194,13 +194,13 @@ namespace Cognite.OpcUa.TypeCollectors
                 if (config.UnknownAsScalar && (node.ValueRank == ValueRanks.ScalarOrOneDimension
                     || node.ValueRank == ValueRanks.Any)) return true;
                 log.LogDebug("Skipping variable {Name} {Id} due to non-scalar ValueRank {Rank} and null ArrayDimensions",
-                    node.DisplayName, node.Id, node.ValueRank);
+                    node.DisplayName, node.Id, ExtractorUtils.GetValueRankString(node.ValueRank));
                 return false;
             }
             else
             {
                 log.LogDebug("Skipping variable {Name} {Id} due to non-scalar ValueRank {Rank} and too high dimensionality {Dim}",
-                    node.DisplayName, node.Id, node.ValueRank, node.ArrayDimensions.Length);
+                    node.DisplayName, node.Id, ExtractorUtils.GetValueRankString(node.ValueRank), node.ArrayDimensions.Length);
                 return false;
             }
         }
