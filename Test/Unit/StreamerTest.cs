@@ -595,7 +595,7 @@ namespace Test.Unit
                 .GetField("eventQueue", BindingFlags.NonPublic | BindingFlags.Instance)
                 .GetValue(extractor.Streamer);
 
-            extractor.Streamer.HandleStreamedDatapoint(new DataValue(new Variant("some-string"), StatusCodes.Uncertain, now), node1);
+            extractor.Streamer.HandleStreamedDatapoint(new DataValue(new Variant("some-string"), StatusCodes.Good, now), node1);
 
             Assert.Single(queue);
 
@@ -606,7 +606,7 @@ namespace Test.Unit
             Assert.Equal(node1.SourceId, evt.EmittingNode);
             Assert.Equal("some-string", evt.Message);
             Assert.Single(evt.MetaData);
-            Assert.Equal("Uncertain", evt.MetaData["Status"]);
+            Assert.Equal("Good", evt.MetaData["Status"]);
             Assert.Equal(now, evt.Time);
         }
     }
