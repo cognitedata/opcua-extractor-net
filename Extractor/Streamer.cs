@@ -325,16 +325,6 @@ namespace Cognite.OpcUa
 
         public void HandleStreamedDatapoint(DataValue datapoint, VariableExtractionState node)
         {
-            timeToExtractorDps.Observe((DateTime.UtcNow - datapoint.SourceTimestamp).TotalSeconds);
-
-            if (node.AsEvents)
-            {
-                var evt = DpAsEvent(datapoint, node);
-                log.LogTrace("Subscription DataPoint treated as event {Event}", node);
-                node.UpdateFromStream(DateTime.MaxValue, datapoint.SourceTimestamp);
-                Enqueue(evt);
-            }
-
             if (StatusCode.IsNotGood(datapoint.StatusCode))
             {
                 UAExtractor.BadDataPoints.Inc();
@@ -347,7 +337,16 @@ namespace Cognite.OpcUa
                 return;
             }
 
-            if (node.AsEvents) return;
+            timeToExtractorDps.Observe((DateTime.UtcNow - datapoint.SourceTimestamp).TotalSeconds);
+
+            if (node.AsEvents)
+            {
+                var evt = DpAsEvent(datapoint, node);
+                log.LogTrace("Subscription DataPoint treated as event {Event}", node);
+                node.UpdateFromStream(DateTime.MaxValue, datapoint.SourceTimestamp);
+                Enqueue(evt);
+                return;
+            }
 
             var buffDps = ToDataPoint(datapoint, node);
             node.UpdateFromStream(buffDps);
