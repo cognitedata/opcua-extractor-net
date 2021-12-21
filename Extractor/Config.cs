@@ -919,7 +919,7 @@ namespace Cognite.OpcUa
     public class UALoggerConfig : LoggerConfig
     {
         /// <summary>
-        /// Optionally capture OPC-UA trace. One of verbose, debug, information, warning, error fatal.
+        /// Optionally capture OPC-UA trace. One of verbose, debug, information, warning, error, fatal.
         /// </summary>
         public string? UaTraceLevel { get; set; }
     }
