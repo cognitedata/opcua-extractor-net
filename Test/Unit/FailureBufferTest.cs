@@ -471,8 +471,11 @@ namespace Test.Unit
             var estate3 = new EventExtractionState(extractor, new NodeId("emitter3"), true, true, true);
 
             extractor.State.SetEmitterState(estate1);
+            extractor.State.RegisterNode(estate1.SourceId, estate1.Id);
             extractor.State.SetEmitterState(estate2);
+            extractor.State.RegisterNode(estate2.SourceId, estate2.Id);
             extractor.State.SetEmitterState(estate3);
+            extractor.State.RegisterNode(estate3.SourceId, estate3.Id);
 
             var start = DateTime.UtcNow;
 
@@ -627,8 +630,11 @@ namespace Test.Unit
             var estate3 = new EventExtractionState(extractor, new NodeId("emitter3"), true, true, true);
 
             extractor.State.SetEmitterState(estate1);
+            extractor.State.RegisterNode(estate1.SourceId, estate1.Id);
             extractor.State.SetEmitterState(estate2);
+            extractor.State.RegisterNode(estate2.SourceId, estate2.Id);
             extractor.State.SetEmitterState(estate3);
+            extractor.State.RegisterNode(estate3.SourceId, estate3.Id);
 
             var start = DateTime.UtcNow;
 

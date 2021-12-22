@@ -254,6 +254,9 @@ namespace Cognite.OpcUa
                     // No need to drop subscriptions if we are not subscribing to this node.
                     return !(node is UAVariable variable && variable.ShouldSubscribeData)
                         && !node.ShouldSubscribeEvents;
+                case TransformationType.AsEvents:
+                    // If not a variable or already publishing values as events we skip here.
+                    return node is not UAVariable evtvariable || evtvariable.AsEvents;
             }
 
             return false;
@@ -292,6 +295,12 @@ namespace Cognite.OpcUa
                         node.Attributes.IsProperty = false;
                         log.LogTrace("Treating node {Name} {Id} as timeseries due to matching filter {Idx}", node.DisplayName, node.Id, index);
                         break;
+                    case TransformationType.AsEvents:
+                        if (node is UAVariable evtvariable)
+                        {
+                            evtvariable.AsEvents = true;
+                        }
+                        break;
                 }
             }
         }
@@ -314,6 +323,7 @@ namespace Cognite.OpcUa
         Ignore,
         Property,
         DropSubscriptions,
-        TimeSeries
+        TimeSeries,
+        AsEvents
     }
 }

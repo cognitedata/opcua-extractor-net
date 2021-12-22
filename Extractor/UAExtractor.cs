@@ -678,6 +678,11 @@ namespace Cognite.OpcUa
             {
                 state.RestartHistory();
             }
+            if (Config.Extraction.Transformations?.Any(trans => trans.Type == TransformationType.AsEvents) ?? false)
+            {
+                Streamer.AllowEvents = true;
+            }
+
             if (Config.Events.Enabled)
             {
                 Streamer.AllowEvents = true;
@@ -695,6 +700,7 @@ namespace Cognite.OpcUa
                         var history = (histEmitterIds.Contains(id)) && Config.Events.History;
                         var subscription = emitterIds.Contains(id);
                         State.SetEmitterState(new EventExtractionState(this, id, history, history && Config.History.Backfill, subscription));
+                        State.RegisterNode(id, uaClient.GetUniqueId(id));
                     }
                 }
                 if (Config.Events.ReadServer)

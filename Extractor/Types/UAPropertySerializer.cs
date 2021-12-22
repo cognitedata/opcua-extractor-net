@@ -435,6 +435,10 @@ namespace Cognite.OpcUa.Types
                     JsonSerializer.Serialize(writer, variable.ArrayDimensions, options);
                     writer.WriteNumber("Index", variable.Index);
                 }
+                if (variable.AsEvents)
+                {
+                    writer.WriteBoolean("AsEvents", variable.AsEvents);
+                }
             }
             writer.WriteEndObject();
         }

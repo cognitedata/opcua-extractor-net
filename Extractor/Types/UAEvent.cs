@@ -197,7 +197,7 @@ namespace Cognite.OpcUa.Types
             evt.Time = DateTime.FromBinary(dt);
             var typeId = extractor.State.GetNodeId(CogniteUtils.StringFromStream(stream));
             evt.EventType = extractor.State.ActiveEvents.GetValueOrDefault(typeId);
-            evt.EmittingNode = extractor.State.GetEmitterState(CogniteUtils.StringFromStream(stream))?.SourceId ?? NodeId.Null;
+            evt.EmittingNode = extractor.State.GetNodeId(CogniteUtils.StringFromStream(stream));
 
             if (stream.Read(buffer, 0, sizeof(ushort)) < sizeof(ushort)) return null;
             ushort count = BitConverter.ToUInt16(buffer, 0);
