@@ -42,6 +42,7 @@ namespace Cognite.OpcUa.History
         public int[]? ArrayDimensions { get; }
         public bool ShouldSubscribe { get; }
         public string DisplayName { get; }
+        public bool AsEvents { get; }
 
         private readonly List<UADataPoint>? buffer;
 
@@ -59,6 +60,7 @@ namespace Cognite.OpcUa.History
             ArrayDimensions = variable.ArrayDimensions;
             DisplayName = variable.DisplayName;
             ShouldSubscribe = variable.ShouldSubscribeData;
+            AsEvents = variable.AsEvents;
             if (frontfill)
             {
                 buffer = new List<UADataPoint>();

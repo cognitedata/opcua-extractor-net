@@ -328,12 +328,14 @@ namespace Test.Unit
 
             variable.VariableAttributes.ValueRank = ValueRanks.OneDimension;
             variable.VariableAttributes.ArrayDimensions = new[] { 5 };
+            variable.AsEvents = true;
             TestConvert(variable,
                 @"{""externalId"":""gp.base:s=test"",""name"":""test"","
                 + @"""description"":null,""metadata"":null,""assetExternalId"":null,"
                 + @"""isString"":false,""isStep"":false,"
                 + @"""InternalInfo"":{""EventNotifier"":0,""ShouldSubscribeEvents"":false,""NodeClass"":2,""AccessLevel"":5,"
-                + @"""Historizing"":true,""ValueRank"":1,""ShouldSubscribeData"":true,""ArrayDimensions"":[5],""Index"":-1}}"
+                + @"""Historizing"":true,""ValueRank"":1,""ShouldSubscribeData"":true,""ArrayDimensions"":[5],""Index"":-1,"
+                + @"""AsEvents"":true}}"
                 );
         }
         [Fact]

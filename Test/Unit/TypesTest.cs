@@ -474,6 +474,7 @@ namespace Test.Unit
             node.VariableAttributes.ValueRank = ValueRanks.Any;
             node.VariableAttributes.ArrayDimensions = new int[] { 4 };
             node.VariableAttributes.NodeType = new UANodeType(new NodeId("type"), false);
+            node.AsEvents = true;
 
             var propA = CommonTestUtils.GetSimpleVariable("propA", pdt);
             propA.SetDataPoint("valueA");
@@ -502,6 +503,7 @@ namespace Test.Unit
                    + "ValueRank: Any\n"
                    + "Dimension: 4\n"
                    + "NodeType: s=type\n"
+                   + "Written as events to destinations\n"
                    + "Properties: {\n"
                    + "    propA: valueA\n"
                    + "    propN: nProp\n"
@@ -1010,6 +1012,7 @@ namespace Test.Unit
             extractor.State.RegisterNode(new NodeId("type"), tester.Client.GetUniqueId(new NodeId("type")));
             var type = new UAEventType(new NodeId("type"), "EventType");
             extractor.State.ActiveEvents[type.Id] = type;
+            extractor.State.RegisterNode(new NodeId("emitter"), tester.Client.GetUniqueId(new NodeId("emitter")));
 
             ILogger log = tester.Provider.GetRequiredService<ILogger<TypesTest>>();
             // No event should be created without all of these

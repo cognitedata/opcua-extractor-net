@@ -449,6 +449,35 @@ namespace Test.Unit
         }
 
         [Fact]
+        public void TestAsEventTransformation()
+        {
+            var raw = new RawNodeTransformation
+            {
+                Filter = new RawNodeFilter
+                {
+                    Name = "Test"
+                },
+                Type = TransformationType.AsEvents
+            };
+            var nodes = new[]
+            {
+                new UAVariable(new NodeId(1), null, new NodeId("parent"), NodeClass.Variable),
+                new UAVariable(new NodeId(2), "OtherTest", new NodeId("parent"), NodeClass.Variable),
+                new UAVariable(new NodeId(3), "Test", new NodeId("parent"), NodeClass.Variable),
+                new UANode(new NodeId(4), "TestTest", new NodeId("parent"), NodeClass.Object),
+            };
+            var trans = new NodeTransformation(raw, 0);
+            foreach (var node in nodes)
+            {
+                trans.ApplyTransformation(log, node, nss);
+            }
+            Assert.False((nodes[0] as UAVariable)?.AsEvents ?? false);
+            Assert.True((nodes[1] as UAVariable)?.AsEvents ?? false);
+            Assert.True((nodes[2] as UAVariable)?.AsEvents ?? false);
+            Assert.False((nodes[3] as UAVariable)?.AsEvents ?? false);
+        }
+
+        [Fact]
         public void TestLogTransformation()
         {
             var raw = new RawNodeTransformation

@@ -914,6 +914,7 @@ namespace Cognite.OpcUa
         /// The two buffer file paths must be different.
         /// </summary>
         public string? EventPath { get; set; }
+        public long MaxBufferSize { get; set; }
     }
 
     public class UALoggerConfig : LoggerConfig
