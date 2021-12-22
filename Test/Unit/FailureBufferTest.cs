@@ -613,6 +613,30 @@ namespace Test.Unit
 
             Assert.Equal(0, new FileInfo(cfg.FailureBuffer.DatapointPath).Length);
         }
+
+        [Fact]
+        public void TestWriteDatapointsCap()
+        {
+            var log = tester.Provider.GetRequiredService<ILogger<FailureBuffer>>();
+            var cfg = BuildConfig();
+            cfg.FailureBuffer.MaxBufferSize = 2000;
+            using var extractor = tester.BuildExtractor();
+            var fb = new FailureBuffer(log, cfg, extractor, null);
+
+            var writeDps = fb.GetType().GetMethod("WriteDatapointsToFile", BindingFlags.Instance | BindingFlags.NonPublic);
+
+            var dps = Enumerable.Range(0, 200).Select(idx => new UADataPoint(DateTime.UtcNow, "id", idx));
+
+            writeDps.Invoke(fb, new object[] { dps.Take(10), tester.Source.Token });
+
+            var size = new FileInfo(cfg.FailureBuffer.DatapointPath).Length;
+            Assert.True(size > 0 && size < 2000);
+
+            writeDps.Invoke(fb, new object[] { dps.Skip(10), tester.Source.Token });
+            size = new FileInfo(cfg.FailureBuffer.DatapointPath).Length;
+            Assert.True(size <= 2000 && size > 1900, $"Expected size between 1900 and 2000 bytes, got {size}");
+        }
+
         [Fact]
         public async Task TestWriteEventsToFile()
         {
@@ -671,6 +695,35 @@ namespace Test.Unit
 
             Assert.Equal(0, new FileInfo(cfg.FailureBuffer.EventPath).Length);
 
+        }
+
+        [Fact]
+        public void TestWriteEventsCap()
+        {
+            var log = tester.Provider.GetRequiredService<ILogger<FailureBuffer>>();
+            var cfg = BuildConfig();
+            cfg.FailureBuffer.MaxBufferSize = 2000;
+            using var extractor = tester.BuildExtractor();
+            var fb = new FailureBuffer(log, cfg, extractor, null);
+
+            var writeEvents = fb.GetType().GetMethod("WriteEventsToFile", BindingFlags.Instance | BindingFlags.NonPublic);
+
+            var dps = Enumerable.Range(0, 200).Select(idx => new UAEvent
+            {
+                EventId = $"id-{idx}",
+                Message = $"message-{idx}",
+                SourceNode = ObjectIds.Server,
+                EmittingNode = ObjectIds.Server
+            });
+
+            writeEvents.Invoke(fb, new object[] { dps.Take(10), tester.Source.Token });
+
+            var size = new FileInfo(cfg.FailureBuffer.EventPath).Length;
+            Assert.True(size > 0 && size < 2000);
+
+            writeEvents.Invoke(fb, new object[] { dps.Skip(10), tester.Source.Token });
+            size = new FileInfo(cfg.FailureBuffer.EventPath).Length;
+            Assert.True(size <= 2000 && size > 1900, $"Expected size between 1900 and 2000 bytes, got {size}");
         }
     }
 }

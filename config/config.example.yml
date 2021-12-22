@@ -440,6 +440,10 @@ failure-buffer:
     # Path to a local binary buffer file for events.
     # The two buffer file paths must be different.
     event-path:
+    # Cap in bytes for each buffer file, default is uncapped. If the size exceeds this, no new datapoints will be written,
+    # and any further data is lost. Note that if both datapoint and event buffers are enabled, the potential disk usage
+    # is twice this number.
+    max-buffer-size: 0
 
 # Periodically store state in a local database to speed up starting, by not having to read state from destinations
 # This allows you to set the read-extracted-ranges option to false on the pushers without having to read all of history on startup.
