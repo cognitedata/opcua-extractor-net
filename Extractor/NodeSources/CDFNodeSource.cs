@@ -108,7 +108,8 @@ namespace Cognite.OpcUa.NodeSources
                             ShouldSubscribeEvents = node.InternalInfo.ShouldSubscribeEvents,
                             ValueRank = node.InternalInfo.ValueRank,
                         },
-                        Source = NodeSource.CDF
+                        Source = NodeSource.CDF,
+                        AsEvents = node.InternalInfo.AsEvents
                     };
                     readVariables.Add(variable);
                 }

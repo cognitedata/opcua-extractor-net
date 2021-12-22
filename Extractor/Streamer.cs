@@ -336,10 +336,20 @@ namespace Cognite.OpcUa
                 }
                 return;
             }
-            var buffDps = ToDataPoint(datapoint, node);
-            node.UpdateFromStream(buffDps);
 
             timeToExtractorDps.Observe((DateTime.UtcNow - datapoint.SourceTimestamp).TotalSeconds);
+
+            if (node.AsEvents)
+            {
+                var evt = DpAsEvent(datapoint, node);
+                log.LogTrace("Subscription DataPoint treated as event {Event}", node);
+                node.UpdateFromStream(DateTime.MaxValue, datapoint.SourceTimestamp);
+                Enqueue(evt);
+                return;
+            }
+
+            var buffDps = ToDataPoint(datapoint, node);
+            node.UpdateFromStream(buffDps);
 
             if ((extractor.StateStorage == null || config.StateStorage.IntervalValue.Value == Timeout.InfiniteTimeSpan)
                  && (node.IsFrontfilling && datapoint.SourceTimestamp > node.SourceExtractedRange.Last
@@ -359,6 +369,23 @@ namespace Cognite.OpcUa
             string idxStr = $"[{index}]";
             if (baseId.Length + idxStr.Length < 255) return baseId + idxStr;
             return baseId.Substring(0, 255 - idxStr.Length) + idxStr;
+        }
+
+        private UAEvent DpAsEvent(DataValue datapoint, VariableExtractionState node)
+        {
+            var value = extractor.StringConverter.ConvertToString(datapoint.WrappedValue);
+            return new UAEvent
+            {
+                EmittingNode = node.SourceId,
+                EventId = $"{node.Id}-{datapoint.SourceTimestamp.Ticks}",
+                Message = value,
+                SourceNode = node.SourceId,
+                Time = datapoint.SourceTimestamp,
+                MetaData = new Dictionary<string, string>
+                {
+                    { "Status", StatusCode.LookupSymbolicId((uint)datapoint.StatusCode) }
+                }
+            };
         }
 
         /// <summary>

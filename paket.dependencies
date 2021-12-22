@@ -22,3 +22,4 @@ nuget Microsoft.Extensions.Hosting.Systemd
 nuget Microsoft.Extensions.Hosting
 nuget Microsoft.Extensions.Hosting.Abstractions
 nuget Microsoft.Extensions.Logging.EventLog
+nuget System.ComponentModel.Annotations

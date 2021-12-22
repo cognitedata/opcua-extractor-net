@@ -64,6 +64,10 @@ namespace Cognite.OpcUa.Types
         /// Whether the value of this variable has been read from the server.
         /// </summary>
         public bool ValueRead { get; set; }
+        /// <summary>
+        /// True if the values of this node should be generated as events in CDF.
+        /// </summary>
+        public bool AsEvents { get; set; }
         public override string ToString()
         {
             var builder = new StringBuilder();
@@ -94,7 +98,8 @@ namespace Cognite.OpcUa.Types
             builder.AppendLine();
             if (ValueRank != ValueRanks.Scalar)
             {
-                builder.AppendFormat(CultureInfo.InvariantCulture, "ValueRank: {0}", ValueRank);
+                builder.AppendFormat(CultureInfo.InvariantCulture, "ValueRank: {0}",
+                    ExtractorUtils.GetValueRankString(ValueRank));
                 builder.AppendLine();
             }
             if (ArrayDimensions != null && ArrayDimensions.Length == 1)
@@ -106,6 +111,10 @@ namespace Cognite.OpcUa.Types
             {
                 builder.AppendFormat(CultureInfo.InvariantCulture, "NodeType: {0}", NodeType.Name ?? NodeType.Id);
                 builder.AppendLine();
+            }
+            if (AsEvents)
+            {
+                builder.AppendLine("Written as events to destinations");
             }
 
             if (Properties != null && Properties.Any())
