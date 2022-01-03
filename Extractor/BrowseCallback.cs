@@ -32,8 +32,10 @@ namespace Cognite.OpcUa
         public int TimeSeriesCreated { get; set; }
         public int RelationshipsCreated { get; set; }
         public int MinimalTimeSeriesCreated { get; set; }
-        public int Timestamp { get; set; }
-        public bool Rebrowse { get; set; }
+        public string? RawDatabase { get; set; }
+        public string? AssetsTable { get; set; }
+        public string? TimeSeriesTable { get; set; }
+        public string? RelationshipsTable { get; set; }
     }
 
     internal class BrowseCallback : FunctionCallWrapper<BrowseReport>
