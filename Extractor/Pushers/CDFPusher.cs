@@ -128,6 +128,8 @@ namespace Cognite.OpcUa.Pushers
                 var result = await destination.InsertDataPointsAsync(inserts, SanitationMode.Clean, RetryMode.OnError, token);
                 int realCount = count;
 
+                log.LogResult(result, RequestType.CreateDatapoints, false, LogLevel.Debug);
+
                 if (result.Errors != null)
                 {
                     var missing = result.Errors.FirstOrDefault(err => err.Type == ErrorType.ItemMissing);
@@ -200,6 +202,8 @@ namespace Cognite.OpcUa.Pushers
                 var result = await destination.EnsureEventsExistsAsync(eventList
                     .Select(evt => evt.ToCDFEvent(Extractor, config.DataSetId, nodeToAssetIds))
                     .Where(evt => evt != null), RetryMode.OnError, SanitationMode.Clean, token);
+
+                log.LogResult(result, RequestType.CreateEvents, false, LogLevel.Debug);
 
                 int skipped = 0;
                 if (result.Errors != null)
@@ -555,9 +559,9 @@ namespace Cognite.OpcUa.Pushers
                         .Where(asset => asset != null);
                 }, RetryMode.None, SanitationMode.Clean, token);
 
-                var fatalError = assetChunk.Errors?.FirstOrDefault(err => err.Type == ErrorType.FatalFailure
-                    || err.Type == ErrorType.ItemMissing);
-                if (fatalError != null) throw fatalError.Exception ?? new FatalException("Unknown fatal error in assets");
+                log.LogResult(assetChunk, RequestType.CreateAssets, true);
+
+                assetChunk.ThrowOnFatal();
 
                 if (assetChunk.Results == null) continue;
 
@@ -595,8 +599,11 @@ namespace Cognite.OpcUa.Pushers
             }
             if (updates.Any())
             {
-                log.LogInformation("Updating {Count} assets in CDF", updates.Count);
-                await destination.CogniteClient.Assets.UpdateAsync(updates, token);
+                var res = await destination.UpdateAssetsAsync(updates, RetryMode.OnError, SanitationMode.Clean, token);
+
+                log.LogResult(res, RequestType.UpdateAssets, false);
+
+                res.ThrowOnFatal();
             }
         }
         /// <summary>
@@ -733,8 +740,9 @@ namespace Cognite.OpcUa.Pushers
                     .Where(ts => ts != null);
             }, RetryMode.None, SanitationMode.Clean, token);
 
-            var fatalError = timeseries.Errors?.FirstOrDefault(err => err.Type == ErrorType.FatalFailure);
-            if (fatalError != null) throw fatalError.Exception ?? new FatalException("Unknown fatal error in timeseries");
+            log.LogResult(timeseries, RequestType.CreateTimeSeries, true);
+
+            timeseries.ThrowOnFatal();
 
             if (timeseries.Results == null) return Array.Empty<TimeSeries>();
 
@@ -786,10 +794,13 @@ namespace Cognite.OpcUa.Pushers
                     }
                 }
             }
+            
             if (updates.Any())
             {
-                log.LogInformation("Updating {Count} timeseries in CDF", updates.Count);
-                await destination.CogniteClient.TimeSeries.UpdateAsync(updates, token);
+                var res = await destination.UpdateTimeSeriesAsync(updates, RetryMode.OnError, SanitationMode.Clean, token);
+
+                log.LogResult(res, RequestType.UpdateTimeSeries, false);
+                res.ThrowOnFatal();
             }
         }
 
