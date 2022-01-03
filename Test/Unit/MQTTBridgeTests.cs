@@ -1,4 +1,5 @@
 ﻿using Cognite.Bridge;
+using Cognite.Extractor.Common;
 using Cognite.Extractor.Configuration;
 using Cognite.Extractor.Logging;
 using Cognite.Extractor.Utils;
