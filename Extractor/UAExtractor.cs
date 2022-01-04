@@ -734,7 +734,7 @@ namespace Cognite.OpcUa
         private void PushNodesFailure(
             IEnumerable<UANode> objects,
             IEnumerable<UAVariable> timeseries,
-            IEnumerable<UAReference>? references,
+            IEnumerable<UAReference> references,
             PushResult? result,
             bool dpRangesPassed,
             IPusher pusher)
@@ -742,11 +742,11 @@ namespace Cognite.OpcUa
             pusher.Initialized = false;
             pusher.DataFailing = true;
             pusher.EventsFailing = true;
-            if (result != null && !result.Objects)
+            if (result == null || !result.Objects)
             {
                 pusher.PendingNodes.AddRange(objects);
             }
-            if (result != null && !result.Variables)
+            if (result == null || !result.Variables)
             {
                 pusher.PendingNodes.AddRange(timeseries);
             }
@@ -756,7 +756,7 @@ namespace Cognite.OpcUa
                     .DistinctBy(ts => ts.Id)
                     .Where(ts => State.GetNodeState(ts.Id)?.FrontfillEnabled ?? false));
             }
-            if (result != null && !result.References && references != null)
+            if (result == null || !result.References)
             {
                 pusher.PendingReferences.AddRange(references);
             }
