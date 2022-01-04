@@ -242,13 +242,21 @@ namespace Cognite.OpcUa.Pushers
         /// <param name="variables">Variables to create as timeseries</param>
         /// <param name="update">Configuration for how these should be updated, if enabled</param>
         /// <returns>True on success, false on failure</returns>
-        public async Task<bool> PushNodes(
+        public async Task<PushResult> PushNodes(
             IEnumerable<UANode> objects,
             IEnumerable<UAVariable> variables,
+            IEnumerable<UAReference> references,
             UpdateConfig update,
             CancellationToken token)
         {
-            if (!client.IsConnected) return false;
+            if (!client.IsConnected) return new PushResult { Objects = false, References = false, Variables = false };
+
+            var relationships = Enumerable.Empty<RelationshipCreate>();
+
+            if (!config.SkipMetadata)
+            {
+                relationships = references.Select(rel => rel.ToRelationship(config.DataSetId, Extractor));
+            }
 
             if (!string.IsNullOrEmpty(config.LocalState) && Extractor.StateStorage != null)
             {
@@ -267,6 +275,7 @@ namespace Cognite.OpcUa.Pushers
                        .SelectNonNull(node => Extractor.GetUniqueId(node.Id))
                        .Where(node => !existingNodes.Contains(node))
                        .Concat(variables.SelectNonNull(variable => Extractor.GetUniqueId(variable.Id, variable.Index)))
+                       .Concat(relationships.SelectNonNull(rel => rel.ExternalId))
                        .Select(id => new ExistingState(id))
                        .ToDictionary(state => state.Id);
                 }
@@ -315,24 +324,28 @@ namespace Cognite.OpcUa.Pushers
                         node.Changed = id != null && existingNodes.Contains(id);
                     }
                 }
+
+                relationships = relationships.Where(rel => !existingNodes.Contains(rel.ExternalId));
             }
 
-            if (!objects.Any() && !variables.Any()) return true;
+            var result = new PushResult();
+
+            if (!objects.Any() && !variables.Any() && !references.Any()) return result;
 
             log.LogInformation("Pushing {ObjCount} assets and {VarCount} timeseries over MQTT", objects.Count(), variables.Count());
 
-            if (config.Debug) return true;
+            if (config.Debug) return result;
 
             if (objects.Any() && !config.SkipMetadata)
             {
                 var results = await Task.WhenAll(objects.ChunkBy(1000).Select(chunk => PushAssets(chunk, update.Objects, token)));
-                if (!results.All(res => res)) return false;
+                if (!results.All(res => res)) result.Objects = false;
             }
 
             if (variables.Any())
             {
                 var results = await Task.WhenAll(variables.ChunkBy(1000).Select(chunk => PushTimeseries(chunk, update.Variables, token)));
-                if (!results.All(res => res)) return false;
+                if (!results.All(res => res)) result.Variables = false;
                 foreach (var ts in variables)
                 {
                     if (ts.Index == -1) continue;
@@ -340,9 +353,18 @@ namespace Cognite.OpcUa.Pushers
                 }
             }
 
+            if (relationships.Any() && !config.SkipMetadata)
+            {
+                var results = await Task.WhenAll(relationships.ChunkBy(1000).Select(chunk => PushReferencesChunk(chunk, token)));
+                if (!results.All(res => res)) result.References = false;
+            }
+
+            if (!result.Objects || !result.Variables || !result.References) return result;
+
             var newStates = objects
                     .SelectNonNull(node => Extractor.GetUniqueId(node.Id))
                     .Concat(variables.SelectNonNull(variable => Extractor.GetUniqueId(variable.Id, variable.Index)))
+                    .Concat(relationships.SelectNonNull(rel => rel.ExternalId))
                     .Select(id => new ExistingState(id) { Existing = true, LastTimeModified = DateTime.UtcNow })
                     .ToList();
 
@@ -360,7 +382,7 @@ namespace Cognite.OpcUa.Pushers
                     token);
             }
 
-            return true;
+            return result;
         }
         /// <summary>
         /// Create the given list of events in CDF over MQTT.
@@ -394,74 +416,6 @@ namespace Cognite.OpcUa.Pushers
 
             log.LogDebug("Successfully pushed {Count} events to CDF over MQTT", count);
 
-            return true;
-        }
-        /// <summary>
-        /// Create the given list of references in CDF over MQTT.
-        /// </summary>
-        /// <param name="references">References to create as relationships</param>
-        /// <returns>True on success, false on failure.</returns>
-        public async Task<bool> PushReferences(IEnumerable<UAReference> references, CancellationToken token)
-        {
-            if (config.SkipMetadata) return true;
-
-            var relationships = references.Select(rel => rel.ToRelationship(config.DataSetId, Extractor));
-
-            if (!string.IsNullOrEmpty(config.LocalState) && Extractor.StateStorage != null)
-            {
-                var states = relationships
-                    .Select(rel => rel.ExternalId)
-                    .Select(id => new ExistingState(id))
-                    .ToDictionary(state => state.Id);
-
-                await Extractor.StateStorage.RestoreExtractionState<MqttState, ExistingState>(
-                    states,
-                    config.LocalState,
-                    (state, poco) => state.Existing = true,
-                    token);
-
-
-                foreach (var node in states)
-                {
-                    if (node.Value.Existing)
-                    {
-                        existingNodes.Add(node.Key);
-                    }
-                }
-            }
-
-            if (existingNodes.Any())
-            {
-                relationships = relationships.Where(rel => !existingNodes.Contains(rel.ExternalId)).ToList();
-            }
-
-            if (!relationships.Any()) return true;
-
-            log.LogInformation("Pushing {Count} relationships to CDF over MQTT", relationships.Count());
-
-            var tasks = relationships.ChunkBy(1000).Select(chunk => PushReferencesChunk(chunk, token));
-            var results = await Task.WhenAll(tasks);
-
-            if (!results.All(res => res)) return false;
-
-            var newStates = relationships
-                .Select(rel => rel.ExternalId)
-                .Select(id => new ExistingState(id) { Existing = true, LastTimeModified = DateTime.UtcNow })
-                .ToList();
-
-            foreach (var state in newStates)
-            {
-                existingNodes.Add(state.Id);
-            }
-
-            if (!string.IsNullOrEmpty(config.LocalState) && Extractor.StateStorage != null)
-            {
-                await Extractor.StateStorage.StoreExtractionState(
-                    newStates,
-                    config.LocalState,
-                    state => new MqttState { Id = state.Id, CreatedAt = DateTime.UtcNow },
-                    token);
-            }
             return true;
         }
 

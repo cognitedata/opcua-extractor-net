@@ -248,16 +248,19 @@ namespace Cognite.OpcUa.Pushers
         /// <param name="variables">List of variables to be synchronized</param>
         /// <param name="update">Configuration of what fields, if any, should be updated.</param>
         /// <returns>True if no operation failed unexpectedly</returns>
-        public async Task<bool> PushNodes(
+        public async Task<PushResult> PushNodes(
             IEnumerable<UANode> objects,
             IEnumerable<UAVariable> variables,
+            IEnumerable<UAReference> references,
             UpdateConfig update,
             CancellationToken token)
         {
-            if (!variables.Any() && !objects.Any())
+            var result = new PushResult();
+
+            if (!variables.Any() && !objects.Any() && !references.Any())
             {
                 log.LogDebug("Testing 0 nodes against CDF");
-                return true;
+                return result;
             }
 
             log.LogInformation("Testing {TotalNodesToTest} nodes against CDF", variables.Count() + objects.Count());
@@ -267,10 +270,11 @@ namespace Cognite.OpcUa.Pushers
                 {
                     log.LogTrace("{Node}", node);
                 }
-                return true;
+                return result;
             }
 
             var report = new BrowseReport();
+
 
             try
             {
@@ -279,8 +283,7 @@ namespace Cognite.OpcUa.Pushers
             catch (Exception e)
             {
                 log.LogError(e, "Failed to ensure assets");
-                nodeEnsuringFailures.Inc();
-                return false;
+                result.Objects = false;
             }
 
             try
@@ -290,18 +293,40 @@ namespace Cognite.OpcUa.Pushers
             catch (Exception e)
             {
                 log.LogError(e, "Failed to ensure timeseries");
-                nodeEnsuringFailures.Inc();
-                return false;
+                result.Variables = false;
             }
+
+            try
+            {
+                await PushReferences(references, report, token);
+            }
+            catch (Exception e)
+            {
+                log.LogError(e, "Failed to ensure references");
+                result.References = false;
+            }
+
+
             log.LogInformation("Finish pushing nodes to CDF");
 
-            if (callback != null)
+            if (result.Objects && result.References && result.Variables)
             {
-                report.IdPrefix = extractionConfig.IdPrefix;
-                await callback.Call(report, token);
+                if (callback != null)
+                {
+                    report.IdPrefix = extractionConfig.IdPrefix;
+                    report.RawDatabase = config.RawMetadata?.Database;
+                    report.AssetsTable = config.RawMetadata?.AssetsTable;
+                    report.TimeSeriesTable = config.RawMetadata?.TimeseriesTable;
+                    report.RelationshipsTable = config.RawMetadata?.RelationshipsTable;
+                    await callback.Call(report, token);
+                }
+            }
+            else
+            {
+                nodeEnsuringFailures.Inc();
             }
 
-            return true;
+            return result;
         }
         /// <summary>
         /// Reset the pusher, preparing it to be restarted
@@ -464,9 +489,9 @@ namespace Cognite.OpcUa.Pushers
         /// </summary>
         /// <param name="references">List of references to push</param>
         /// <returns>True if nothing failed unexpectedly</returns>
-        public async Task<bool> PushReferences(IEnumerable<UAReference> references, CancellationToken token)
+        private async Task PushReferences(IEnumerable<UAReference> references, BrowseReport report, CancellationToken token)
         {
-            if (references == null || !references.Any()) return true;
+            if (references == null || !references.Any()) return;
 
             var relationships = references
                 .Select(reference => reference.ToRelationship(config.DataSetId, Extractor))
@@ -477,25 +502,18 @@ namespace Cognite.OpcUa.Pushers
                 && !string.IsNullOrWhiteSpace(config.RawMetadata.RelationshipsTable);
 
             log.LogInformation("Test {Count} relationships against CDF", references.Count());
-            try
+
+            if (useRawRelationships)
             {
-                if (useRawRelationships)
-                {
-                    await PushRawReferences(relationships, token);
-                }
-                else
-                {
-                    await Task.WhenAll(relationships.ChunkBy(1000).Select(chunk => PushReferencesChunk(chunk, token)));
-                }
+                await PushRawReferences(relationships, report, token);
             }
-            catch (Exception e)
+            else
             {
-                log.LogError(e, "Failed to ensure relationships");
-                nodeEnsuringFailures.Inc();
-                return false;
+                var counts = await Task.WhenAll(relationships.ChunkBy(1000).Select(chunk => PushReferencesChunk(chunk, token)));
+                report.RelationshipsCreated += counts.Sum();
             }
+
             log.LogInformation("Sucessfully pushed relationships to CDF");
-            return true;
         }
         #endregion
 
@@ -1027,12 +1045,13 @@ namespace Cognite.OpcUa.Pushers
         /// Create the given list of relationships in CDF, handles duplicates.
         /// </summary>
         /// <param name="relationships">Relationships to create</param>
-        private async Task PushReferencesChunk(IEnumerable<RelationshipCreate> relationships, CancellationToken token)
+        private async Task<int> PushReferencesChunk(IEnumerable<RelationshipCreate> relationships, CancellationToken token)
         {
-            if (!relationships.Any()) return;
+            if (!relationships.Any()) return 0;
             try
             {
                 await destination.CogniteClient.Relationships.CreateAsync(relationships, token);
+                return relationships.Count();
             }
             catch (ResponseException ex)
             {
@@ -1052,7 +1071,7 @@ namespace Cognite.OpcUa.Pushers
                     if (!existing.Any()) throw;
 
                     relationships = relationships.Where(rel => !existing.Contains(rel.ExternalId)).ToList();
-                    await PushReferencesChunk(relationships, token);
+                    return await PushReferencesChunk(relationships, token);
                 }
                 else
                 {
@@ -1064,7 +1083,7 @@ namespace Cognite.OpcUa.Pushers
         /// Create the given list of relationships in CDF Raw, skips rows that already exist.
         /// </summary>
         /// <param name="relationships">Relationships to create.</param>
-        private async Task PushRawReferences(IEnumerable<RelationshipCreate> relationships, CancellationToken token)
+        private async Task PushRawReferences(IEnumerable<RelationshipCreate> relationships, BrowseReport report, CancellationToken token)
         {
             if (config.RawMetadata?.Database == null || config.RawMetadata.RelationshipsTable == null) return;
 
@@ -1075,7 +1094,9 @@ namespace Cognite.OpcUa.Pushers
                 ids =>
                 {
                     var idSet = ids.ToHashSet();
-                    return relationships.Where(rel => idSet.Contains(rel.ExternalId)).ToDictionary(rel => rel.ExternalId);
+                    var creates = relationships.Where(rel => idSet.Contains(rel.ExternalId)).ToDictionary(rel => rel.ExternalId);
+                    report.RelationshipsCreated += creates.Count;
+                    return creates;
                 },
                 new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase },
                 token);

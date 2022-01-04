@@ -24,6 +24,13 @@ using System.Threading.Tasks;
 
 namespace Cognite.OpcUa
 {
+    public class PushResult
+    {
+        public bool Objects { get; set; } = true;
+        public bool Variables { get; set; } = true;
+        public bool References { get; set; } = true;
+    }
+
     public interface IPusher : IDisposable
     {
         bool DataFailing { get; set; }
@@ -50,13 +57,14 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Push nodes, emptying the queue
         /// </summary>
-        Task<bool> PushNodes(
+        Task<PushResult> PushNodes(
             IEnumerable<UANode> objects,
             IEnumerable<UAVariable> variables,
+            IEnumerable<UAReference> references,
             UpdateConfig update,
             CancellationToken token)
         {
-            return Task.FromResult(true);
+            return Task.FromResult(new PushResult());
         }
         /// <summary>
         /// Test the connection to the destination, should return false on failure, can return null if 
@@ -106,15 +114,6 @@ namespace Cognite.OpcUa
         Task<bool?> PushDataPoints(IEnumerable<UADataPoint> points, CancellationToken token)
         {
             return Task.FromResult((bool?)true);
-        }
-        /// <summary>
-        /// Push given list of references.
-        /// </summary>
-        /// <param name="references">References to push</param>
-        /// <returns>True on success</returns>
-        Task<bool> PushReferences(IEnumerable<UAReference> references, CancellationToken token)
-        {
-            return Task.FromResult(true);
         }
 
         /// <summary>
