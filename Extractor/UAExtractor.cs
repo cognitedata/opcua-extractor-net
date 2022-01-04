@@ -735,18 +735,20 @@ namespace Cognite.OpcUa
             IEnumerable<UANode> objects,
             IEnumerable<UAVariable> timeseries,
             IEnumerable<UAReference> references,
-            PushResult? result,
+            bool objectsFailed,
+            bool variablesFailed,
+            bool referencesFailed,
             bool dpRangesPassed,
             IPusher pusher)
         {
             pusher.Initialized = false;
             pusher.DataFailing = true;
             pusher.EventsFailing = true;
-            if (result == null || !result.Objects)
+            if (objectsFailed)
             {
                 pusher.PendingNodes.AddRange(objects);
             }
-            if (result == null || !result.Variables)
+            if (variablesFailed)
             {
                 pusher.PendingNodes.AddRange(timeseries);
             }
@@ -756,7 +758,7 @@ namespace Cognite.OpcUa
                     .DistinctBy(ts => ts.Id)
                     .Where(ts => State.GetNodeState(ts.Id)?.FrontfillEnabled ?? false));
             }
-            if (result == null || !result.References)
+            if (referencesFailed)
             {
                 pusher.PendingReferences.AddRange(references);
             }
@@ -778,7 +780,7 @@ namespace Cognite.OpcUa
             if (pusher.NoInit)
             {
                 log.LogWarning("Skipping pushing on pusher {Name}", pusher.GetType());
-                PushNodesFailure(objects, timeseries, references, null, false, pusher);
+                PushNodesFailure(objects, timeseries, references, true, true, true, false, pusher);
                 return;
             }
 
@@ -788,7 +790,7 @@ namespace Cognite.OpcUa
                 if (!result.Variables || !result.Objects || !result.References)
                 {
                     log.LogError("Failed to push nodes on pusher {Name}", pusher.GetType());
-                    PushNodesFailure(objects, timeseries, references, result, false, pusher);
+                    PushNodesFailure(objects, timeseries, references, !result.Objects, !result.Variables, !result.References, false, pusher);
                     return;
                 }
             }
@@ -810,7 +812,7 @@ namespace Cognite.OpcUa
                 if (!initResults.All(res => res))
                 {
                     log.LogError("Initialization of extracted ranges failed for pusher {Name}", pusher.GetType());
-                    PushNodesFailure(objects, timeseries, references, null, initResults[0], pusher);
+                    PushNodesFailure(objects, timeseries, references, false, false, false, initResults[0], pusher);
                     return;
                 }
             }
