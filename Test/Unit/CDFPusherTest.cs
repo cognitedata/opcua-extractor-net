@@ -31,8 +31,8 @@ namespace Test.Unit
     public class CDFPusherTest : MakeConsoleWork, IClassFixture<CDFPusherTestFixture>
     {
         private readonly CDFPusherTestFixture tester;
-        private readonly CDFMockHandler handler;
-        private readonly CDFPusher pusher;
+        private CDFMockHandler handler;
+        private CDFPusher pusher;
         public CDFPusherTest(ITestOutputHelper output, CDFPusherTestFixture tester) : base(output)
         {
             this.tester = tester ?? throw new ArgumentNullException(nameof(tester));
@@ -563,6 +563,98 @@ namespace Test.Unit
             Assert.Contains(handler.TimeseriesRaw, ts => ts.Value.GetProperty("description").GetString() == "description");
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_node_ensure_failures_cdf", 1));
+        }
+
+        [Fact]
+        public async Task TestNodeCallback()
+        {
+            tester.Config.Cognite.Callback = new BrowseCallbackConfig
+            {
+                Id = 1234,
+                ReportOnEmpty = true
+            };
+            
+            (handler, pusher) = tester.GetCDFPusher();
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+            var log = tester.Provider.GetRequiredService<ILogger<ReferenceTypeManager>>();
+            var mgr = new ReferenceTypeManager(log, tester.Client, extractor);
+            CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_cdf");
+            tester.Config.Cognite.RawMetadata = null;
+
+            var dt = new UADataType(DataTypes.Double);
+
+            var update = new UpdateConfig();
+            await pusher.PushNodes(Enumerable.Empty<UANode>(), Enumerable.Empty<UAVariable>(),
+                Enumerable.Empty<UAReference>(), update, tester.Source.Token);
+
+            Assert.Single(handler.Callbacks);
+            var res = handler.Callbacks[0];
+            Assert.Equal(0, res.AssetsCreated);
+            Assert.Equal(0, res.AssetsUpdated);
+            Assert.Equal(0, res.TimeSeriesCreated);
+            Assert.Equal(0, res.TimeSeriesUpdated);
+            Assert.Equal(0, res.RelationshipsCreated);
+            Assert.Null(res.RawDatabase);
+            Assert.Null(res.AssetsTable);
+            Assert.Null(res.TimeSeriesTable);
+            Assert.Null(res.RelationshipsTable);
+            Assert.Equal("gp.", res.IdPrefix);
+
+            // Create one of each.
+            var node = new UANode(tester.Server.Ids.Base.Root, "BaseRoot", NodeId.Null, NodeClass.Object);
+            var variable = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", new NodeId("parent"));
+            variable.VariableAttributes.DataType = dt;
+            var rel = new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target2"), true, false, mgr);
+
+            await pusher.PushNodes(new[] { node }, new[] { variable }, new[] { rel }, update, tester.Source.Token);
+
+            Assert.Equal(2, handler.Callbacks.Count);
+            res = handler.Callbacks[1];
+            Assert.Equal(1, res.AssetsCreated);
+            Assert.Equal(0, res.AssetsUpdated);
+            Assert.Equal(1, res.TimeSeriesCreated);
+            Assert.Equal(0, res.TimeSeriesUpdated);
+            Assert.Equal(1, res.RelationshipsCreated);
+
+            // Update each without modifying "update"
+            node.Attributes.Description = "Some description";
+            variable.Attributes.Description = "Some description";
+
+            await pusher.PushNodes(new[] { node }, new[] { variable }, new[] { rel }, update, tester.Source.Token);
+
+            Assert.Equal(3, handler.Callbacks.Count);
+            res = handler.Callbacks[2];
+            Assert.Equal(0, res.AssetsCreated);
+            Assert.Equal(0, res.AssetsUpdated);
+            Assert.Equal(0, res.TimeSeriesCreated);
+            Assert.Equal(0, res.TimeSeriesUpdated);
+            Assert.Equal(0, res.RelationshipsCreated);
+
+            // Modify "update", also add another reference.
+            rel = new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source2"), new NodeId("target2"), true, false, mgr);
+            update.Variables.Description = true;
+            update.Objects.Description = true;
+
+            await pusher.PushNodes(new[] { node }, new[] { variable }, new[] { rel }, update, tester.Source.Token);
+
+            Assert.Equal(4, handler.Callbacks.Count);
+            res = handler.Callbacks[3];
+            Assert.Equal(0, res.AssetsCreated);
+            Assert.Equal(1, res.AssetsUpdated);
+            Assert.Equal(0, res.TimeSeriesCreated);
+            Assert.Equal(1, res.TimeSeriesUpdated);
+            Assert.Equal(1, res.RelationshipsCreated);
+
+            // Again, this time nothing changes
+            await pusher.PushNodes(new[] { node }, new[] { variable }, new[] { rel }, update, tester.Source.Token);
+
+            Assert.Equal(5, handler.Callbacks.Count);
+            res = handler.Callbacks[4];
+            Assert.Equal(0, res.AssetsCreated);
+            Assert.Equal(0, res.AssetsUpdated);
+            Assert.Equal(0, res.TimeSeriesCreated);
+            Assert.Equal(0, res.TimeSeriesUpdated);
+            Assert.Equal(0, res.RelationshipsCreated);
         }
         #endregion
 

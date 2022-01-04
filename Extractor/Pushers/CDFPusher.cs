@@ -256,9 +256,21 @@ namespace Cognite.OpcUa.Pushers
             CancellationToken token)
         {
             var result = new PushResult();
+            var report = new BrowseReport
+            {
+                IdPrefix = extractionConfig.IdPrefix,
+                RawDatabase = config.RawMetadata?.Database,
+                AssetsTable = config.RawMetadata?.AssetsTable,
+                TimeSeriesTable = config.RawMetadata?.TimeseriesTable,
+                RelationshipsTable = config.RawMetadata?.RelationshipsTable
+            };
 
             if (!variables.Any() && !objects.Any() && !references.Any())
             {
+                if (!config.Debug && callback != null)
+                {
+                    await callback.Call(report, token);
+                }
                 log.LogDebug("Testing 0 nodes against CDF");
                 return result;
             }
@@ -273,7 +285,6 @@ namespace Cognite.OpcUa.Pushers
                 return result;
             }
 
-            var report = new BrowseReport();
 
 
             try
@@ -313,11 +324,6 @@ namespace Cognite.OpcUa.Pushers
             {
                 if (callback != null)
                 {
-                    report.IdPrefix = extractionConfig.IdPrefix;
-                    report.RawDatabase = config.RawMetadata?.Database;
-                    report.AssetsTable = config.RawMetadata?.AssetsTable;
-                    report.TimeSeriesTable = config.RawMetadata?.TimeseriesTable;
-                    report.RelationshipsTable = config.RawMetadata?.RelationshipsTable;
                     await callback.Call(report, token);
                 }
             }
@@ -601,10 +607,12 @@ namespace Cognite.OpcUa.Pushers
                 var assetChunk = await destination.GetOrCreateAssetsAsync(chunk.Select(node => Extractor.GetUniqueId(node.Id)!), ids =>
                 {
                     var assets = ids.Select(id => assetMap[id]);
-                    return assets
+                    var creates = assets
                         .Select(node => node.ToCDFAsset(extractionConfig, Extractor,
                             Extractor.StringConverter, Extractor.DataTypeManager, config.DataSetId, config.MetadataMapping?.Assets))
                         .Where(asset => asset != null);
+                    report.AssetsCreated += creates.Count();
+                    return creates;
                 }, RetryMode.None, SanitationMode.Clean, token);
 
                 log.LogResult(assetChunk, RequestType.CreateAssets, true);
@@ -618,8 +626,6 @@ namespace Cognite.OpcUa.Pushers
                     nodeToAssetIds[assetMap[asset.ExternalId].Id] = asset.Id;
                 }
                 assets.AddRange(assetChunk.Results);
-
-                report.AssetsCreated += assetChunk.Results.Count();
             }
             return assets;
         }
@@ -801,7 +807,7 @@ namespace Cognite.OpcUa.Pushers
             var timeseries = await destination.GetOrCreateTimeSeriesAsync(tsMap.Keys, ids =>
             {
                 var tss = ids.Select(id => tsMap[id]);
-                return tss.Select(ts => ts.ToTimeseries(
+                var creates = tss.Select(ts => ts.ToTimeseries(
                     extractionConfig,
                     Extractor,
                     Extractor.DataTypeManager,
@@ -811,6 +817,15 @@ namespace Cognite.OpcUa.Pushers
                     config.MetadataMapping?.Timeseries,
                     createMinimalTimeseries))
                     .Where(ts => ts != null);
+                if (createMinimalTimeseries)
+                {
+                    report.MinimalTimeSeriesCreated += creates.Count();
+                }
+                else
+                {
+                    report.TimeSeriesCreated += creates.Count();
+                }
+                return creates;
             }, RetryMode.None, SanitationMode.Clean, token);
 
             log.LogResult(timeseries, RequestType.CreateTimeSeries, true);
@@ -836,15 +851,6 @@ namespace Cognite.OpcUa.Pushers
             if (foundBadTimeseries.Any())
             {
                 log.LogDebug("Found mismatched timeseries when ensuring: {TimeSeries}", string.Join(", ", foundBadTimeseries));
-            }
-
-            if (createMinimalTimeseries)
-            {
-                report.MinimalTimeSeriesCreated += timeseries.Results.Count();
-            }
-            else
-            {
-                report.TimeSeriesCreated += timeseries.Results.Count();
             }
 
             return timeseries.Results;
