@@ -1361,44 +1361,4 @@ namespace Cognite.OpcUa
         /// </summary>
         public string? FileName { get; set; }
     }
-
-    public class TimeSpanWrapper
-    {
-        private static readonly Regex isNegative = new Regex("^-[0-9]+");
-
-        private readonly bool allowZero;
-        private readonly string defaultUnit;
-        private readonly TimeSpan defaultValue;
-
-        public TimeSpan Value { get; private set; }
-        private string rawValue;
-        public string RawValue
-        {
-            get => rawValue; set
-            {
-                rawValue = value;
-                if (string.IsNullOrWhiteSpace(value))
-                {
-                    Value = defaultValue;
-                    return;
-                }
-                var conv = CogniteTime.ParseTimeSpanString(value, defaultUnit);
-                if (conv == null)
-                {
-                    if (isNegative.IsMatch(value)) conv = Timeout.InfiniteTimeSpan;
-                    else throw new ArgumentException($"Invalid timespan string: {value}");
-                }
-                if (conv == TimeSpan.Zero && !allowZero) Value = Timeout.InfiniteTimeSpan;
-                else Value = conv.Value;
-            }
-        }
-        public TimeSpanWrapper(bool allowZero, string defaultUnit, string defaultValue)
-        {
-            this.allowZero = allowZero;
-            this.defaultUnit = defaultUnit;
-            RawValue = defaultValue;
-            rawValue = defaultValue;
-            this.defaultValue = Value;
-        }
-    }
 }
