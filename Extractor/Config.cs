@@ -22,7 +22,6 @@ using Cognite.Extractor.Logging;
 using Cognite.Extractor.Metrics;
 using Cognite.Extractor.StateStorage;
 using Cognite.Extractor.Utils;
-using Cognite.ExtractorUtils;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
@@ -665,7 +664,7 @@ namespace Cognite.OpcUa
         /// Specification for a CDF function that is called after nodes are pushed to CDF,
         /// reporting the number changed.
         /// </summary>
-        public BrowseCallbackConfig? Callback { get; set; }
+        public BrowseCallbackConfig? BrowseCallback { get; set; }
     }
     public class RawMetadataConfig
     {

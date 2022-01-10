@@ -568,7 +568,7 @@ namespace Test.Unit
         [Fact]
         public async Task TestNodeCallback()
         {
-            tester.Config.Cognite.Callback = new BrowseCallbackConfig
+            tester.Config.Cognite.BrowseCallback = new BrowseCallbackConfig
             {
                 Id = 1234,
                 ReportOnEmpty = true
@@ -659,7 +659,7 @@ namespace Test.Unit
         [Fact]
         public async Task TestRawNodeCallback()
         {
-            tester.Config.Cognite.Callback = new BrowseCallbackConfig
+            tester.Config.Cognite.BrowseCallback = new BrowseCallbackConfig
             {
                 Id = 1234,
                 ReportOnEmpty = true

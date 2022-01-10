@@ -72,9 +72,9 @@ namespace Cognite.OpcUa.Pushers
             BaseConfig = config;
             this.destination = destination;
             extractionConfig = extConfig;
-            if (config.Callback != null && (config.Callback.Id.HasValue || !string.IsNullOrEmpty(config.Callback.ExternalId)))
+            if (config.BrowseCallback != null && (config.BrowseCallback.Id.HasValue || !string.IsNullOrEmpty(config.BrowseCallback.ExternalId)))
             {
-                callback = new BrowseCallback(destination, config.Callback, log);
+                callback = new BrowseCallback(destination, config.BrowseCallback, log);
             }
         }
 

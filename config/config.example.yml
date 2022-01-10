@@ -327,14 +327,16 @@ cognite:
     #     "assetsUpdated": [Number of assets updated or raw rows in the asset table modified],
     #     "timeSeriesCreated": [Number of new time series or raw rows in the time series table created],
     #     "timeSeriesUpdated": [Number of time series updated or raw rows in the time series table modified],
-    #     "minimalTimeSeriesUpdated": [Number of time series created, only used if timeseries are written to raw],
+    #     "minimalTimeSeriesCreated": [Number of time series created, only used if timeseries are written to raw],
     #     "relationshipsCreated": [Number of new relationships, or raw rows in the relationships table created],
     #     "rawDatabase": [Name of the configured raw database],
     #     "assetsTable": [Name of the configured raw table for assets],
     #     "timeSeriesTable": [Name of the configured raw table for time series],
     #     "relationshipsTable": [Name of the configured raw table for relationships]
     # }
-    callback:
+    # "Minimal time series" here refers to timeseries that are created with no metadata when timeseries metadata is written to raw.
+    # This requires functions:WRITE scoped to the function given by external-id or id, and READ if external-id is used.
+    browse-callback:
         # Function external id. If this is set the functions:read capability is required.
         external-id:
         # Function internal id.
