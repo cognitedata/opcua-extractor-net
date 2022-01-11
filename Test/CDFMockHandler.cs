@@ -15,6 +15,7 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using Cognite.OpcUa;
 using CogniteSdk;
 using Com.Cognite.V1.Timeseries.Proto;
 using Google.Protobuf;
@@ -51,6 +52,7 @@ namespace Test
         public Dictionary<string, RelationshipDummy> Relationships { get; } = new Dictionary<string, RelationshipDummy>();
         public Dictionary<string, RelationshipDummy> RelationshipsRaw { get; } = new Dictionary<string, RelationshipDummy>();
         public Dictionary<string, DataSet> DataSets { get; } = new Dictionary<string, DataSet>();
+        public List<BrowseReport> Callbacks { get; } = new List<BrowseReport>();
 
         private long assetIdCounter = 1;
         private long timeseriesIdCounter = 1;
@@ -119,6 +121,16 @@ namespace Test
                 res.Headers.Add("x-request-id", (requestIdCounter++).ToString(CultureInfo.InvariantCulture));
                 return res;
             }
+
+            if (req.RequestUri.AbsolutePath == $"/api/playground/projects/{project}/functions/1234/call")
+            {
+                var funcContent = await req.Content.ReadAsStringAsync(cancellationToken);
+                var res = HandleCallFunction(funcContent);
+                res.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+                res.Headers.Add("x-request-id", (requestIdCounter++).ToString(CultureInfo.InvariantCulture));
+                return res;
+            }
+
             string reqPath = req.RequestUri.AbsolutePath.Replace($"/api/v1/projects/{project}", "", StringComparison.InvariantCulture);
 
             log.Information("Request to {path}", reqPath);
@@ -963,6 +975,26 @@ namespace Test
             };
         }
 
+        private HttpResponseMessage HandleCallFunction(string content)
+        {
+            var options = new JsonSerializerSettings
+            {
+                ContractResolver = new DefaultContractResolver
+                {
+                    NamingStrategy = new CamelCaseNamingStrategy()
+                }
+            };
+            var data = JsonConvert.DeserializeObject<FunctionCallWrapper<BrowseReport>>(content, options);
+
+            Callbacks.Add(data.Data);
+
+            return new HttpResponseMessage
+            {
+                StatusCode = HttpStatusCode.OK,
+                Content = new StringContent("{}")
+            };
+        }
+
         public AssetDummy MockAsset(string externalId)
         {
             var asset = new AssetDummy
@@ -1258,6 +1290,10 @@ namespace Test
     public class RelationshipsReadWrapper
     {
         public IEnumerable<RelationshipDummy> items { get; set; }
+    }
+    public class FunctionCallWrapper<T>
+    {
+        public T Data { get; set; }
     }
 }
 #pragma warning restore IDE1006 // Naming Styles
