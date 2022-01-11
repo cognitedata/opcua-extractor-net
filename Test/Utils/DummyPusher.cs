@@ -73,14 +73,21 @@ namespace Test.Utils
             return Task.FromResult(TestConnectionResult);
         }
 
-        public Task<bool> PushNodes(
+        public Task<PushResult> PushNodes(
             IEnumerable<UANode> objects,
             IEnumerable<UAVariable> variables,
+            IEnumerable<UAReference> references,
             UpdateConfig update,
             CancellationToken token)
         {
-            if (!PushNodesResult) return Task.FromResult(false);
-            if (objects != null)
+            var result = new PushResult
+            {
+                Objects = PushNodesResult,
+                Variables = PushNodesResult,
+                References = PushReferenceResult
+            };
+
+            if (objects != null && PushNodesResult)
             {
                 foreach (var obj in objects)
                 {
@@ -88,9 +95,17 @@ namespace Test.Utils
                     PushedNodes[obj.Id] = obj;
                 }
             }
+            if (references != null && PushReferenceResult)
+            {
+                foreach (var rel in references)
+                {
+                    PushedReferences.Add(rel);
+                }
+            }
+            
             lock (dpLock)
             {
-                if (variables != null)
+                if (variables != null && PushNodesResult)
                 {
                     foreach (var variable in variables)
                     {
@@ -104,7 +119,7 @@ namespace Test.Utils
                 }
             }
 
-            return Task.FromResult(PushNodesResult);
+            return Task.FromResult(result);
         }
 
         public Task<bool> InitExtractedRanges(
@@ -215,18 +230,6 @@ namespace Test.Utils
             return Task.FromResult(PushDataPointResult);
         }
 
-        public Task<bool> PushReferences(IEnumerable<UAReference> references, CancellationToken token)
-        {
-            if (!PushReferenceResult) return Task.FromResult(PushReferenceResult);
-            if (references == null || !references.Any()) return Task.FromResult(true);
-
-            foreach (var rel in references)
-            {
-                PushedReferences.Add(rel);
-            }
-
-            return Task.FromResult(true);
-        }
         public void Reset()
         {
             OnReset.Set();

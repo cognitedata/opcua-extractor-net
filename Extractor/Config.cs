@@ -660,6 +660,11 @@ namespace Cognite.OpcUa
                 && value.Value > CogniteUtils.NumericValueMin
                 && value.Value < CogniteUtils.NumericValueMax ? value : null;
         }
+        /// <summary>
+        /// Specification for a CDF function that is called after nodes are pushed to CDF,
+        /// reporting the number changed.
+        /// </summary>
+        public BrowseCallbackConfig? BrowseCallback { get; set; }
     }
     public class RawMetadataConfig
     {
@@ -710,6 +715,13 @@ namespace Cognite.OpcUa
         /// potentially valid extraction targets.
         /// </summary>
         public bool BrowseOnEmpty { get; set; }
+    }
+    public class BrowseCallbackConfig : FunctionCallConfig
+    {
+        /// <summary>
+        /// Call callback even if zero items are created or updated.
+        /// </summary>
+        public bool ReportOnEmpty { get; set; }
     }
     public class InfluxPusherConfig : IPusherConfig
     {

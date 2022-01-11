@@ -240,27 +240,28 @@ namespace Test.Unit
             tester.Config.Mqtt.RawMetadata = null;
 
             var tss = Enumerable.Empty<UAVariable>();
+            var rels = Enumerable.Empty<UAReference>();
             var update = new UpdateConfig();
-            Assert.True(await pusher.PushNodes(Enumerable.Empty<UANode>(), tss, update, tester.Source.Token));
+            Assert.True((await pusher.PushNodes(Enumerable.Empty<UANode>(), tss, rels, update, tester.Source.Token)).Objects);
 
             // Test debug mode
             var node = new UANode(tester.Server.Ids.Base.Root, "BaseRoot", NodeId.Null, NodeClass.Object);
             tester.Config.Mqtt.Debug = true;
-            Assert.True(await pusher.PushNodes(new[] { node }, tss, update, tester.Source.Token));
+            Assert.True((await pusher.PushNodes(new[] { node }, tss, rels, update, tester.Source.Token)).Objects);
             tester.Config.Mqtt.Debug = false;
             Assert.Empty(handler.Assets);
 
             // Create the asset
             node = new UANode(tester.Server.Ids.Base.Root, "BaseRoot", NodeId.Null, NodeClass.Object);
             var waitTask = bridge.WaitForNextMessage();
-            Assert.True(await pusher.PushNodes(new[] { node }, tss, update, tester.Source.Token));
+            Assert.True((await pusher.PushNodes(new[] { node }, tss, rels, update, tester.Source.Token)).Objects);
             await waitTask;
             Assert.Single(handler.Assets);
 
             // Do nothing here, due to no update configured.
             node.Attributes.Description = "description";
             waitTask = bridge.WaitForNextMessage(1);
-            Assert.True(await pusher.PushNodes(new[] { node }, tss, update, tester.Source.Token));
+            Assert.True((await pusher.PushNodes(new[] { node }, tss, rels, update, tester.Source.Token)).Objects);
             await Assert.ThrowsAsync<TimeoutException>(() => waitTask);
 
             // Do nothing again, due to no changes on the node
@@ -270,13 +271,13 @@ namespace Test.Unit
             update.Objects.Name = true;
             node.Attributes.Description = null;
             waitTask = bridge.WaitForNextMessage();
-            Assert.True(await pusher.PushNodes(new[] { node }, tss, update, tester.Source.Token));
+            Assert.True((await pusher.PushNodes(new[] { node }, tss, rels, update, tester.Source.Token)).Objects);
             await waitTask;
 
             // Create new node
             var node2 = new UANode(tester.Server.Ids.Custom.Root, "CustomRoot", NodeId.Null, NodeClass.Object);
             waitTask = bridge.WaitForNextMessage();
-            Assert.True(await pusher.PushNodes(new[] { node, node2 }, tss, update, tester.Source.Token));
+            Assert.True((await pusher.PushNodes(new[] { node, node2 }, tss, rels, update, tester.Source.Token)).Objects);
             await waitTask;
             Assert.Equal(2, handler.Assets.Count);
             Assert.Null(handler.Assets.First().Value.description);
@@ -286,7 +287,7 @@ namespace Test.Unit
             node.Attributes.Description = "description";
             node2.Attributes.Description = "description";
             waitTask = bridge.WaitForNextMessage();
-            Assert.True(await pusher.PushNodes(new[] { node, node2 }, tss, update, tester.Source.Token));
+            Assert.True((await pusher.PushNodes(new[] { node, node2 }, tss, rels, update, tester.Source.Token)).Objects);
             await waitTask;
             Assert.Equal(2, handler.Assets.Count);
             Assert.Equal("description", handler.Assets.First().Value.description);
@@ -307,10 +308,11 @@ namespace Test.Unit
             var node = new UANode(tester.Server.Ids.Base.Root, "BaseRoot", NodeId.Null, NodeClass.Object);
             var tss = Enumerable.Empty<UAVariable>();
             var update = new UpdateConfig();
+            var rels = Enumerable.Empty<UAReference>();
 
             // Create one
             var waitTask = bridge.WaitForNextMessage();
-            Assert.True(await pusher.PushNodes(new[] { node }, tss, update, tester.Source.Token));
+            Assert.True((await pusher.PushNodes(new[] { node }, tss, rels, update, tester.Source.Token)).Objects);
             await waitTask;
             Assert.Single(handler.AssetRaw);
             Assert.Equal("BaseRoot", handler.AssetRaw.First().Value.GetProperty("name").GetString());
@@ -319,7 +321,7 @@ namespace Test.Unit
             var node2 = new UANode(tester.Server.Ids.Custom.Root, "CustomRoot", NodeId.Null, NodeClass.Object);
             node.Attributes.Description = "description";
             waitTask = bridge.WaitForNextMessage();
-            Assert.True(await pusher.PushNodes(new[] { node, node2 }, tss, update, tester.Source.Token));
+            Assert.True((await pusher.PushNodes(new[] { node, node2 }, tss, rels, update, tester.Source.Token)).Objects);
             await waitTask;
             Assert.Equal(2, handler.AssetRaw.Count);
             Assert.Null(handler.AssetRaw.First().Value.GetProperty("description").GetString());
@@ -327,7 +329,7 @@ namespace Test.Unit
 
             // Try to create again, skip both
             waitTask = bridge.WaitForNextMessage(1);
-            Assert.True(await pusher.PushNodes(new[] { node, node2 }, tss, update, tester.Source.Token));
+            Assert.True((await pusher.PushNodes(new[] { node, node2 }, tss, rels, update, tester.Source.Token)).Objects);
             await Assert.ThrowsAsync<TimeoutException>(() => waitTask);
             Assert.Equal(2, handler.AssetRaw.Count);
             Assert.Null(handler.AssetRaw.First().Value.GetProperty("description").GetString());
@@ -337,7 +339,7 @@ namespace Test.Unit
             update.Objects.Description = true;
             node2.Attributes.Description = "description";
             waitTask = bridge.WaitForNextMessage();
-            Assert.True(await pusher.PushNodes(new[] { node, node2 }, tss, update, tester.Source.Token));
+            Assert.True((await pusher.PushNodes(new[] { node, node2 }, tss, rels, update, tester.Source.Token)).Objects);
             await waitTask;
             Assert.Equal(2, handler.AssetRaw.Count);
             Assert.Equal("description", handler.AssetRaw.First().Value.GetProperty("description").GetString());
@@ -356,6 +358,7 @@ namespace Test.Unit
 
             var assets = Enumerable.Empty<UANode>();
             var update = new UpdateConfig();
+            var rels = Enumerable.Empty<UAReference>();
 
             handler.MockAsset(tester.Client.GetUniqueId(new NodeId("parent")));
 
@@ -364,14 +367,14 @@ namespace Test.Unit
             node.VariableAttributes.DataType = dt;
             tester.Config.Mqtt.Debug = true;
             var waitTask = bridge.WaitForNextMessage(1);
-            Assert.True(await pusher.PushNodes(assets, new[] { node }, update, tester.Source.Token));
+            Assert.True((await pusher.PushNodes(assets, new[] { node }, rels, update, tester.Source.Token)).Variables);
             await Assert.ThrowsAsync<TimeoutException>(() => waitTask);
             tester.Config.Mqtt.Debug = false;
             Assert.Empty(handler.Timeseries);
 
             // Create the timeseries
             waitTask = bridge.WaitForNextMessage();
-            Assert.True(await pusher.PushNodes(assets, new[] { node }, update, tester.Source.Token));
+            Assert.True((await pusher.PushNodes(assets, new[] { node }, rels, update, tester.Source.Token)).Variables);
             await waitTask;
             Assert.Single(handler.Timeseries);
             Assert.Equal(1, handler.Timeseries.First().Value.assetId);
@@ -379,7 +382,7 @@ namespace Test.Unit
             // Do nothing due to no configured update
             node.Attributes.Description = "description";
             waitTask = bridge.WaitForNextMessage(1);
-            Assert.True(await pusher.PushNodes(assets, new[] { node }, update, tester.Source.Token));
+            Assert.True((await pusher.PushNodes(assets, new[] { node }, rels, update, tester.Source.Token)).Variables);
             await Assert.ThrowsAsync<TimeoutException>(() => waitTask);
 
             // Do nothing again due to no changes on the node
@@ -389,14 +392,14 @@ namespace Test.Unit
             update.Variables.Name = true;
             node.Attributes.Description = null;
             waitTask = bridge.WaitForNextMessage();
-            Assert.True(await pusher.PushNodes(assets, new[] { node }, update, tester.Source.Token));
+            Assert.True((await pusher.PushNodes(assets, new[] { node }, rels, update, tester.Source.Token)).Variables);
             await waitTask;
 
             // Create new node
             var node2 = new UAVariable(tester.Server.Ids.Custom.MysteryVar, "MysteryVar", new NodeId("parent"));
             node2.VariableAttributes.DataType = dt;
             waitTask = bridge.WaitForNextMessage();
-            Assert.True(await pusher.PushNodes(assets, new[] { node, node2 }, update, tester.Source.Token));
+            Assert.True((await pusher.PushNodes(assets, new[] { node, node2 }, rels, update, tester.Source.Token)).Variables);
             await waitTask;
             Assert.Equal(2, handler.Timeseries.Count);
             Assert.Null(handler.Timeseries.First().Value.description);
@@ -406,7 +409,7 @@ namespace Test.Unit
             node2.Attributes.Description = "description";
             node.Attributes.Description = "description";
             waitTask = bridge.WaitForNextMessage();
-            Assert.True(await pusher.PushNodes(assets, new[] { node, node2 }, update, tester.Source.Token));
+            Assert.True((await pusher.PushNodes(assets, new[] { node, node2 }, rels, update, tester.Source.Token)).Variables);
             await waitTask;
             Assert.Equal(2, handler.Timeseries.Count);
             Assert.Equal("description", handler.Timeseries.First().Value.description);
@@ -429,13 +432,14 @@ namespace Test.Unit
             var dt = new UADataType(DataTypeIds.Double);
 
             var assets = Enumerable.Empty<UANode>();
+            var rels = Enumerable.Empty<UAReference>();
             var update = new UpdateConfig();
             var node = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", new NodeId("parent"));
             node.VariableAttributes.DataType = dt;
 
             // Create one
             var waitTask = bridge.WaitForNextMessage(topic: tester.Config.Mqtt.RawTopic);
-            Assert.True(await pusher.PushNodes(assets, new[] { node }, update, tester.Source.Token));
+            Assert.True((await pusher.PushNodes(assets, new[] { node }, rels, update, tester.Source.Token)).Variables);
             await waitTask;
             Assert.Single(handler.TimeseriesRaw);
             Assert.Equal("Variable 1", handler.TimeseriesRaw.First().Value.GetProperty("name").GetString());
@@ -445,7 +449,7 @@ namespace Test.Unit
             node2.VariableAttributes.DataType = dt;
             node.Attributes.Description = "description";
             waitTask = bridge.WaitForNextMessage(topic: tester.Config.Mqtt.RawTopic);
-            Assert.True(await pusher.PushNodes(assets, new[] { node, node2 }, update, tester.Source.Token));
+            Assert.True((await pusher.PushNodes(assets, new[] { node, node2 }, rels, update, tester.Source.Token)).Variables);
             await waitTask;
             Assert.Equal(2, handler.TimeseriesRaw.Count);
             Assert.Null(handler.TimeseriesRaw.First().Value.GetProperty("description").GetString());
@@ -453,7 +457,7 @@ namespace Test.Unit
 
             // Try to create again, skip both
             waitTask = bridge.WaitForNextMessage(5, tester.Config.Mqtt.RawTopic);
-            Assert.True(await pusher.PushNodes(assets, new[] { node, node2 }, update, tester.Source.Token));
+            Assert.True((await pusher.PushNodes(assets, new[] { node, node2 }, rels, update, tester.Source.Token)).Variables);
             await Assert.ThrowsAsync<TimeoutException>(() => waitTask);
             Assert.Equal(2, handler.TimeseriesRaw.Count);
             Assert.Null(handler.TimeseriesRaw.First().Value.GetProperty("description").GetString());
@@ -463,7 +467,7 @@ namespace Test.Unit
             update.Variables.Description = true;
             node2.Attributes.Description = "description";
             waitTask = bridge.WaitForNextMessage(topic: tester.Config.Mqtt.RawTopic);
-            Assert.True(await pusher.PushNodes(assets, new[] { node, node2 }, update, tester.Source.Token));
+            Assert.True((await pusher.PushNodes(assets, new[] { node, node2 }, rels, update, tester.Source.Token)).Variables);
             await waitTask;
             Assert.Equal(2, handler.TimeseriesRaw.Count);
             Assert.Equal("description", handler.TimeseriesRaw.First().Value.GetProperty("description").GetString());
@@ -479,9 +483,13 @@ namespace Test.Unit
             var mgr = new ReferenceTypeManager(log, tester.Client, extractor);
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_mqtt");
 
+            var assets = Enumerable.Empty<UANode>();
+            var tss = Enumerable.Empty<UAVariable>();
+            var update = new UpdateConfig();
+
             // Push none
             var waitTask = bridge.WaitForNextMessage(1);
-            Assert.True(await pusher.PushReferences(Enumerable.Empty<UAReference>(), tester.Source.Token));
+            Assert.True((await pusher.PushNodes(assets, tss, Enumerable.Empty<UAReference>(), update, tester.Source.Token)).References);
             await Assert.ThrowsAsync<TimeoutException>(() => waitTask);
 
             var references = new List<UAReference>
@@ -493,7 +501,7 @@ namespace Test.Unit
 
             // Push successful
             waitTask = bridge.WaitForNextMessage();
-            Assert.True(await pusher.PushReferences(references, tester.Source.Token));
+            Assert.True((await pusher.PushNodes(assets, tss, references, update, tester.Source.Token)).References);
             await waitTask;
             Assert.Equal(2, handler.Relationships.Count);
 
@@ -506,7 +514,7 @@ namespace Test.Unit
                 new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target"), false, true, mgr)
             };
             waitTask = bridge.WaitForNextMessage();
-            Assert.True(await pusher.PushReferences(references2, tester.Source.Token));
+            Assert.True((await pusher.PushNodes(assets, tss, references2, update, tester.Source.Token)).References);
             await waitTask;
             Assert.Equal(4, handler.Relationships.Count);
             var ids = new List<string>
@@ -520,7 +528,7 @@ namespace Test.Unit
 
             // Test pushing all duplicates
             waitTask = bridge.WaitForNextMessage(1);
-            Assert.True(await pusher.PushReferences(references, tester.Source.Token));
+            Assert.True((await pusher.PushNodes(assets, tss, references, update, tester.Source.Token)).References);
             await Assert.ThrowsAsync<TimeoutException>(() => waitTask);
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_node_ensure_failures_mqtt", 0));
@@ -539,9 +547,13 @@ namespace Test.Unit
                 Database = "metadata"
             };
 
+            var assets = Enumerable.Empty<UANode>();
+            var tss = Enumerable.Empty<UAVariable>();
+            var update = new UpdateConfig();
+
             // Push none
             var waitTask = bridge.WaitForNextMessage(1);
-            Assert.True(await pusher.PushReferences(Enumerable.Empty<UAReference>(), tester.Source.Token));
+            Assert.True((await pusher.PushNodes(assets, tss, Enumerable.Empty<UAReference>(), update, tester.Source.Token)).References);
             await Assert.ThrowsAsync<TimeoutException>(() => waitTask);
 
             var references = new List<UAReference>
@@ -553,7 +565,7 @@ namespace Test.Unit
 
             // Push successful
             waitTask = bridge.WaitForNextMessage();
-            Assert.True(await pusher.PushReferences(references, tester.Source.Token));
+            Assert.True((await pusher.PushNodes(assets, tss, references, update, tester.Source.Token)).References);
             await waitTask;
             Assert.Equal(2, handler.RelationshipsRaw.Count);
 
@@ -566,7 +578,7 @@ namespace Test.Unit
                 new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target"), false, true, mgr)
             };
             waitTask = bridge.WaitForNextMessage();
-            Assert.True(await pusher.PushReferences(references2, tester.Source.Token));
+            Assert.True((await pusher.PushNodes(assets, tss, references2, update, tester.Source.Token)).References);
             await waitTask;
             Assert.Equal(4, handler.RelationshipsRaw.Count);
             var ids = new List<string>
@@ -580,7 +592,7 @@ namespace Test.Unit
 
             // Test pushing all duplicates
             waitTask = bridge.WaitForNextMessage(1);
-            Assert.True(await pusher.PushReferences(references, tester.Source.Token));
+            Assert.True((await pusher.PushNodes(assets, tss, references, update, tester.Source.Token)).References);
             await Assert.ThrowsAsync<TimeoutException>(() => waitTask);
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_node_ensure_failures_mqtt", 0));
@@ -609,6 +621,8 @@ namespace Test.Unit
 
             var dt = new UADataType(DataTypeIds.Double);
 
+            var rels = Enumerable.Empty<UAReference>();
+
             var ts = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", new NodeId("parent"));
             ts.VariableAttributes.DataType = dt;
             var ts2 = new UAVariable(tester.Server.Ids.Base.DoubleVar2, "Variable 2", new NodeId("parent"));
@@ -616,7 +630,7 @@ namespace Test.Unit
             var node = new UANode(tester.Server.Ids.Base.Root, "BaseRoot", NodeId.Null, NodeClass.Object);
             var node2 = new UANode(tester.Server.Ids.Custom.Root, "BaseRoot", NodeId.Null, NodeClass.Object);
 
-            await pusher.PushNodes(new[] { node, node2 }, new[] { ts, ts2 }, new UpdateConfig(), tester.Source.Token);
+            await pusher.PushNodes(new[] { node, node2 }, new[] { ts, ts2 }, rels, new UpdateConfig(), tester.Source.Token);
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_created_assets_mqtt", 2));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_created_timeseries_mqtt", 2));
@@ -628,7 +642,7 @@ namespace Test.Unit
             Assert.Equal(4, existingNodes.Count);
             existingNodes.Clear();
 
-            await pusher.PushNodes(new[] { node, node2 }, new[] { ts, ts2 }, new UpdateConfig(), tester.Source.Token);
+            await pusher.PushNodes(new[] { node, node2 }, new[] { ts, ts2 }, rels, new UpdateConfig(), tester.Source.Token);
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_created_assets_mqtt", 2));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_created_timeseries_mqtt", 2));
@@ -655,6 +669,11 @@ namespace Test.Unit
                 Database = StateStoreConfig.StorageType.LiteDb,
                 Location = "mqtt-state-store-2.db"
             };
+
+            var assets = Enumerable.Empty<UANode>();
+            var tss = Enumerable.Empty<UAVariable>();
+            var update = new UpdateConfig();
+
             using var stateStore = new LiteDBStateStore(stateStoreConfig, tester.Provider.GetRequiredService<ILogger<LiteDBStateStore>>());
 
             using var extractor = tester.BuildExtractor(true, stateStore, pusher);
@@ -670,7 +689,7 @@ namespace Test.Unit
             };
             await mgr.GetReferenceTypeDataAsync(tester.Source.Token);
 
-            await pusher.PushReferences(references, tester.Source.Token);
+            await pusher.PushNodes(assets, tss, references, update, tester.Source.Token);
             Assert.True(CommonTestUtils.TestMetricValue("opcua_created_relationships_mqtt", 2));
 
             var existingNodes = (HashSet<string>)pusher.GetType()
@@ -680,7 +699,7 @@ namespace Test.Unit
 
             existingNodes.Clear();
 
-            await pusher.PushReferences(references, tester.Source.Token);
+            await pusher.PushNodes(assets, tss, references, update, tester.Source.Token);
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_created_relationships_mqtt", 2));
             Assert.Equal(2, existingNodes.Count);
