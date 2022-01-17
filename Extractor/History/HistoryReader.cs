@@ -29,7 +29,7 @@ namespace Cognite.OpcUa.History
         private readonly UAClient uaClient;
         private readonly UAExtractor extractor;
         private readonly HistoryConfig config;
-        private readonly CancellationTokenSource source;
+        private CancellationTokenSource source;
         // private ILogger log = Log.Logger.ForContext<HistoryReader>();
         private readonly TaskThrottler throttler;
         private readonly BlockingResourceCounter continuationPoints;
@@ -104,7 +104,11 @@ namespace Cognite.OpcUa.History
         /// <returns>True if successfully aborted, false if waiting timed out</returns>
         public async Task<bool> Terminate(CancellationToken token, int timeoutsec = 30)
         {
-            return await waiter.Wait(timeoutsec * 1000, token);
+            source.Cancel();
+            bool timedOut = await waiter.Wait(timeoutsec * 1000, token);
+            source.Dispose();
+            source = CancellationTokenSource.CreateLinkedTokenSource(token);
+            return timedOut;
         }
 
         public void Dispose()

@@ -161,13 +161,36 @@ namespace Cognite.OpcUa
         /// <param name="e">EventArgs for this event</param>
         private void UaClient_OnServerReconnect(object sender, EventArgs e)
         {
-            if (sender is UAClient client && Config.Source.RestartOnReconnect && !Source.IsCancellationRequested)
+            if (sender is not UAClient client || Source.IsCancellationRequested) return;
+
+            if (Config.Source.RestartOnReconnect)
             {
                 client.DataTypeManager.Configure();
                 client.ClearNodeOverrides();
                 client.ClearEventFields();
                 client.Browser.ResetVisitedNodes();
                 RestartExtractor();
+            }
+            else
+            {
+                if (historyReader != null)
+                {
+                    Scheduler.ScheduleTask(null, async t =>
+                    {
+                        await historyReader.Terminate(Source.Token);
+                        foreach (var state in State.NodeStates)
+                        {
+                            state.RestartHistory();
+                        }
+
+                        foreach (var state in State.EmitterStates)
+                        {
+                            state.RestartHistory();
+                        }
+
+                        await RestartHistory();
+                    });
+                }
             }
         }
         #region Interface
