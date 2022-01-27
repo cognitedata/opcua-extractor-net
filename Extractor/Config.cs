@@ -935,6 +935,10 @@ namespace Cognite.OpcUa
         /// Optionally capture OPC-UA trace. One of verbose, debug, information, warning, error, fatal.
         /// </summary>
         public string? UaTraceLevel { get; set; }
+        /// <summary>
+        /// Try to log raw data received from and sent to OPC-UA when possible.
+        /// </summary>
+        public bool UaSessionTracing { get; set; }
     }
     public class FullConfig : VersionedConfig
     {

@@ -506,6 +506,10 @@ logger:
         rolling-interval: "day"
     # Optionally capture OPC-UA trace. One of verbose, debug, information, warning, error fatal.
     ua-trace-level:
+    # Trace data sent to and from the OPC-UA server.
+    # WARNING: This produces an enormous amount of logs. Only use this when running against a small
+    # number of nodes, producing a limited number of datapoints, and make sure it is not turned on in production.
+    ua-session-tracing: false
     
 metrics:
     # Start a metrics server in the extractor for Prometheus scrape
