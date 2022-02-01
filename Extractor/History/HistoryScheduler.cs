@@ -187,7 +187,7 @@ namespace Cognite.OpcUa.History
             if (Frontfill)
             {
                 min = Max(nodes.First().Time, historyStartTime);
-                if (maxReadLength == null) max = DateTime.MinValue;
+                if (maxReadLength == null) max = historyEndTime ?? DateTime.MinValue;
                 else
                 {
                     max = min + maxReadLength.Value;
@@ -318,7 +318,8 @@ namespace Cognite.OpcUa.History
 
         public new async Task RunAsync()
         {
-            log.LogInformation("Begin reading history of type {Type} for {Count} nodes", type, nodeCount);
+            log.LogInformation("Begin reading history of type {Type} for {Count} nodes.", type, nodeCount);
+            log.LogDebug("History start time: {StartTime}, end time: {EndTime}", historyStartTime, historyEndTime);
             await base.RunAsync();
             log.LogInformation("Finish reading history of type {Type} for {Count} nodes. " +
                 "Took a total of {NumOps} operations", type, nodeCount, numReads);
