@@ -363,7 +363,7 @@ namespace Cognite.OpcUa.History
             foreach (var node in toTerminate)
             {
                 builder.AppendLine();
-                builder.AppendFormat("    {0} {1} total for {2}. Known range is ({4} {5})",
+                builder.AppendFormat("    {0} {1} total for {2}. Known range is ({3} {4})",
                     node.TotalRead,
                     name,
                     node.State.Id,
