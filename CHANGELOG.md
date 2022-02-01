@@ -1,5 +1,32 @@
 # OPC-UA Extractor Changelog
 
+2.6.1 2022-02-01
+-----------------
+ * Do not set history read end to zero if historyEndTime is set.
+
+2.6.0 2022-01-27
+-----------------
+ * Further improvements to logging.
+ * Transformation to let timeseries create events instead of datapoints.
+ * Option to cap size of failure buffer.
+ * Option to call a CDF function after finished browse.
+ * Fix issue where history would not be restarted after a normal reconnect.
+
+2.5.3 2021-12-09
+-----------------
+ * Catch errors on JSON serialization.
+ * Allow certificate expiry to be configured.
+ * Update OPC-UA SDK to give better performance for PubSub.
+ * Automatically recreate dead subscriptions.
+
+2.5.2 2021-11-19
+-----------------
+ * Improvements to logging.
+ * Update extractor to .NET 6.
+ * Add "Historizing" filter to transformations.
+ * Add new option to require "Historizing" when reading history.
+ * Several minor fixes and performance improvements.
+
 2.5.0 2021-10-29
 ------------------
 * Wait for config file to exist when starting extractor.
