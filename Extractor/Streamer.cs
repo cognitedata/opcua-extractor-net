@@ -306,8 +306,13 @@ namespace Cognite.OpcUa
         /// Handles notifications on subscribed items, pushes all new datapoints to the queue.
         /// </summary>
         /// <param name="item">Modified item</param>
-        public void DataSubscriptionHandler(MonitoredItem item, MonitoredItemNotificationEventArgs _)
+        public void DataSubscriptionHandler(MonitoredItem item, MonitoredItemNotificationEventArgs args)
         {
+            if (config.Logger.UaSessionTracing)
+            {
+                log.LogDump("Streamed datapoint monitored item", item);
+                log.LogDump("Streamed datapoint event args", args);
+            }
             if (item == null) return;
             var node = extractor.State.GetNodeState(item.ResolvedNodeId);
             if (node == null)
@@ -440,8 +445,13 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Handle subscription callback for events
         /// </summary>
-        public void EventSubscriptionHandler(MonitoredItem item, MonitoredItemNotificationEventArgs _)
+        public void EventSubscriptionHandler(MonitoredItem item, MonitoredItemNotificationEventArgs args)
         {
+            if (config.Logger.UaSessionTracing)
+            {
+                log.LogDump("Streamed event monitored item", item);
+                log.LogDump("Streamed event event args", args);
+            }
             if (item == null) return;
             if (item.Filter is not EventFilter filter)
             {

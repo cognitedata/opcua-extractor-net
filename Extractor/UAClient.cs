@@ -201,6 +201,11 @@ namespace Cognite.OpcUa
             }
         }
 
+        private void LogDump<T>(string message, T item)
+        {
+            if (Config.Logger.UaSessionTracing) log.LogDump(message, item);
+        }
+
         /// <summary>
         /// Load XML configuration file, override certain fields with environment variables if set.
         /// </summary>
@@ -252,6 +257,8 @@ namespace Cognite.OpcUa
                 AppConfig.CertificateValidator.CertificateValidation += CertificateValidationHandler;
             }
 
+            LogDump("Configuration", AppConfig);
+
             ConfigureUtilsTrace();
         }
 
@@ -268,7 +275,11 @@ namespace Cognite.OpcUa
                 throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.SelectEndpoint);
             }
             var endpointConfiguration = EndpointConfiguration.Create(AppConfig);
+            LogDump("Endpoint configuration", endpointConfiguration);
+
             var endpoint = new ConfiguredEndpoint(null, selectedEndpoint, endpointConfiguration);
+            LogDump("Endpoint", endpoint);
+
             var identity = AuthenticationUtils.GetUserIdentity(Config.Source);
             log.LogInformation("Attempt to connect to endpoint with security: {SecurityPolicyUri} using user identity {Identity}",
                 endpoint.Description.SecurityPolicyUri,
@@ -331,7 +342,11 @@ namespace Cognite.OpcUa
                 throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.SelectEndpoint);
             }
             var endpointConfiguration = EndpointConfiguration.Create(AppConfig);
+            LogDump("Reverse connect endpoint configuration", endpointConfiguration);
+
             var endpoint = new ConfiguredEndpoint(null, selectedEndpoint, endpointConfiguration);
+            LogDump("Reverse connect endpoint", endpoint);
+
             var identity = AuthenticationUtils.GetUserIdentity(Config.Source);
             log.LogInformation("Attempt to connect to endpoint with security: {SecurityPolicyUri} using user identity {Identity}",
                 endpoint.Description.SecurityPolicyUri,
@@ -439,6 +454,7 @@ namespace Cognite.OpcUa
         /// </summary>
         private void ClientKeepAlive(Session sender, KeepAliveEventArgs eventArgs)
         {
+            LogDump("Keep Alive", eventArgs);
             if (eventArgs.Status == null || !ServiceResult.IsNotGood(eventArgs.Status)) return;
             log.LogWarning("Keep alive failed: {Status}", eventArgs.Status);
             if (reconnectHandler != null) return;
@@ -475,7 +491,7 @@ namespace Cognite.OpcUa
         private void CertificateValidationHandler(CertificateValidator validator,
             CertificateValidationEventArgs eventArgs)
         {
-
+            LogDump("Certificate Validation", eventArgs);
             if (eventArgs.Error.StatusCode == StatusCodes.BadCertificateUntrusted)
             {
                 eventArgs.Accept |= Config.Source.AutoAccept;
@@ -572,6 +588,8 @@ namespace Cognite.OpcUa
             {
                 var result = results[i];
                 var node = nodes[i];
+                LogDump("Browse node", node);
+                LogDump("Browse result", result);
                 if (StatusCode.IsBad(result.StatusCode)
                     && result.StatusCode != StatusCodes.BadNodeIdUnknown)
                 {
@@ -615,6 +633,8 @@ namespace Cognite.OpcUa
 
                     results = result.Results;
                     numBrowse.Inc();
+                    LogDump("Browse diagnostics", result.DiagnosticInfos);
+                    LogDump("Browse header", result.ResponseHeader);
                 }
                 catch (OperationCanceledException) when (token.IsCancellationRequested) { return; }
                 catch (Exception ex)
@@ -641,6 +661,8 @@ namespace Cognite.OpcUa
 
                     results = result.Results;
                     numBrowse.Inc();
+                    LogDump("BrowseNext diagnostics", result.DiagnosticInfos);
+                    LogDump("BrowseNext header", result.ResponseHeader);
                 }
                 catch (OperationCanceledException) when (token.IsCancellationRequested) { return; }
                 catch (Exception ex)
@@ -933,12 +955,16 @@ namespace Cognite.OpcUa
                     ids,
                     token);
                 var results = response.Results;
+                LogDump("HistoryRead diagnostics", response.DiagnosticInfos);
+                LogDump("HistoryRead header", response.ResponseHeader);
 
                 numHistoryReads.Inc();
                 for (int i = 0; i < readParams.Nodes.Count; i++)
                 {
                     var data = results[i];
                     var node = readParams.Nodes[i];
+                    LogDump("HistoryRead node", node);
+                    LogDump("HistoryRead data", data);
                     if (StatusCode.IsBad(data.StatusCode))
                     {
                         throw new ServiceResultException(data.StatusCode);
@@ -1241,6 +1267,7 @@ namespace Cognite.OpcUa
             CancellationToken token)
         {
             var filter = BuildEventFilter();
+            LogDump("Event filter", filter);
 
             await AddSubscriptions(
                 emitters,
@@ -1377,6 +1404,7 @@ namespace Cognite.OpcUa
                 operand.BrowsePath = field.BrowsePath;
                 selectClauses.Add(operand);
             }
+
             return new EventFilter
             {
                 WhereClause = whereClause,
@@ -1423,7 +1451,6 @@ namespace Cognite.OpcUa
                 op.BrowsePath.Add(path);
                 selectClauses.Add(op);
             }
-
             return new EventFilter
             {
                 WhereClause = whereClause,
@@ -1440,6 +1467,7 @@ namespace Cognite.OpcUa
         {
             if (Session == null) throw new InvalidOperationException("Requires open session");
             var filter = BuildAuditFilter();
+            LogDump("Audit filter", filter);
             await subscriptionSem.WaitAsync(token);
 
             Subscription? subscription = null;

@@ -135,6 +135,7 @@ namespace Test.Unit
         {
             Assert.True(RuntimeInformation.IsOSPlatform(OSPlatform.Linux), "This test only runs on Linux");
             await tester.Client.Close(tester.Source.Token);
+            CommonTestUtils.StopProxyProcess();
             tester.Config.Source.EndpointUrl = "opc.tcp://localhost:62001";
             tester.Config.Source.KeepAliveInterval = 1000;
 
@@ -152,9 +153,25 @@ namespace Test.Unit
             try
             {
                 using var process = CommonTestUtils.GetProxyProcess(62001, 62000);
-                process.Start();
-                await Task.Delay(500);
-                await tester.Client.Run(tester.Source.Token);
+                Assert.True(process.Start(), "Expected proxy process to start");
+                Exception exception = null;
+                for (int i = 0; i < 10; i++)
+                {
+                    await Task.Delay(1000);
+                    try
+                    {
+                        await tester.Client.Run(tester.Source.Token);
+                        exception = null;
+                        break;
+                    }
+                    catch (Exception ex)
+                    {
+                        exception = ex;
+                    }
+                }
+
+                if (exception != null) throw exception;
+                
                 Assert.True(CommonTestUtils.TestMetricValue("opcua_connected", 1));
                 CommonTestUtils.StopProxyProcess();
                 await CommonTestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_connected", 0) && !connected, 20,
