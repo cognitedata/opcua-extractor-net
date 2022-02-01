@@ -360,15 +360,15 @@ namespace Cognite.OpcUa.History
             if (!toTerminate.Any()) return;
             string name = GetResourceName(type);
             var builder = new StringBuilder();
-            bool frontfill = type == HistoryReadType.FrontfillData || type == HistoryReadType.FrontfillEvents;
             foreach (var node in toTerminate)
             {
                 builder.AppendLine();
-                builder.AppendFormat("    {0} {1} total for {2}. End is now at {3}",
+                builder.AppendFormat("    {0} {1} total for {2}. Known range is ({4} {5})",
                     node.TotalRead,
                     name,
                     node.State.Id,
-                    frontfill ? node.State.SourceExtractedRange.Last : node.State.SourceExtractedRange.First);
+                    node.State.SourceExtractedRange.First,
+                    node.State.SourceExtractedRange.Last);
             }
             log.LogDebug("Finish reading {Type}. Retrieved: {Data}", name, builder);
         }
