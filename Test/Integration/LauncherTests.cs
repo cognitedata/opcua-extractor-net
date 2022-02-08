@@ -1,4 +1,5 @@
 ﻿using Cognite.Extractor.Logging;
+using Cognite.Extractor.Testing;
 using Cognite.Extractor.Utils;
 using Cognite.OpcUa;
 using Microsoft.Extensions.DependencyInjection;
@@ -44,12 +45,12 @@ namespace Test.Integration
         }
     }
 
-    public class LauncherTests : MakeConsoleWork, IClassFixture<LauncherTestFixture>
+    public sealed class LauncherTests : IClassFixture<LauncherTestFixture>, IDisposable
     {
         private readonly LauncherTestFixture tester;
         private DummyPusher pusher;
         private UAExtractor extractor;
-        public LauncherTests(LauncherTestFixture tester, ITestOutputHelper output) : base(output)
+        public LauncherTests(LauncherTestFixture tester)
         {
             this.tester = tester;
             Program.CommandDryRun = false;
@@ -58,6 +59,12 @@ namespace Test.Integration
             {
                 extractor = e;
             };
+        }
+
+        public void Dispose()
+        {
+            pusher?.Dispose();
+            extractor?.Dispose();
         }
 
         private void CommonBuild(ServiceCollection services)
@@ -138,11 +145,11 @@ version: 1
 
             try
             {
-                await CommonTestUtils.WaitForCondition(() => extractor != null, 10);
+                await TestUtils.WaitForCondition(() => extractor != null, 10);
 
                 await extractor.WaitForSubscriptions();
 
-                await CommonTestUtils.WaitForCondition(() => pusher.PushedNodes.Any(), 10);
+                await TestUtils.WaitForCondition(() => pusher.PushedNodes.Any(), 10);
                 Assert.Equal(167, pusher.PushedNodes.Count);
                 Assert.Equal(2006, pusher.PushedVariables.Count);
             }
@@ -168,11 +175,11 @@ version: 1
 
             try
             {
-                await CommonTestUtils.WaitForCondition(() => extractor != null, 10);
+                await TestUtils.WaitForCondition(() => extractor != null, 10);
 
                 await extractor.WaitForSubscriptions();
 
-                await CommonTestUtils.WaitForCondition(() => pusher.PushedNodes.Any(), 10);
+                await TestUtils.WaitForCondition(() => pusher.PushedNodes.Any(), 10);
                 Assert.Equal(172, pusher.PushedNodes.Count);
                 Assert.Equal(2032, pusher.PushedVariables.Count);
             }
@@ -203,11 +210,11 @@ version: 1
 
             try
             {
-                await CommonTestUtils.WaitForCondition(() => extractor != null, 10);
+                await TestUtils.WaitForCondition(() => extractor != null, 10);
 
                 await extractor.WaitForSubscriptions();
 
-                await CommonTestUtils.WaitForCondition(() => pusher.PushedNodes.Any(), 10);
+                await TestUtils.WaitForCondition(() => pusher.PushedNodes.Any(), 10);
                 Assert.Equal(172, pusher.PushedNodes.Count);
                 Assert.Equal(2032, pusher.PushedVariables.Count);
             }

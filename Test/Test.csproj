@@ -14,6 +14,14 @@
     <ProjectReference Include="..\Server\Server.csproj" />
     <ProjectReference Include="..\ExtractorLauncher\ExtractorLauncher.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <AssemblyAttribute Include="Xunit.CollectionBehavior">
+      <DisableTestParallelization>True</DisableTestParallelization>
+      <DisableTestParallelization_TypeName>System.Boolean</DisableTestParallelization_TypeName>
+    </AssemblyAttribute>
+  </ItemGroup>
+
   <ItemGroup>
     <None Include="$(SolutionDir)config\**" CopyToOutputDirectory="Always" LinkBase="config\" />
   </ItemGroup>

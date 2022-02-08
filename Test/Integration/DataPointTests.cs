@@ -1,5 +1,6 @@
 ﻿using Cognite.Extractor.Common;
 using Cognite.Extractor.StateStorage;
+using Cognite.Extractor.Testing;
 using Cognite.OpcUa;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.DependencyInjection;
@@ -26,13 +27,14 @@ namespace Test.Integration
         }
     }
 
-    public class DataPointTests : MakeConsoleWork, IClassFixture<DataPointTestFixture>
+    public class DataPointTests : IClassFixture<DataPointTestFixture>
     {
         private readonly DataPointTestFixture tester;
-        public DataPointTests(ITestOutputHelper output, DataPointTestFixture tester) : base(output)
+        public DataPointTests(ITestOutputHelper output, DataPointTestFixture tester)
         {
             this.tester = tester ?? throw new ArgumentNullException(nameof(tester));
             tester.ResetConfig();
+            tester.Init(output);
             tester.Config.Source.PublishingInterval = 400;
             tester.Config.Extraction.DataPushDelay = "400";
             tester.Config.History.Enabled = false;
@@ -65,7 +67,7 @@ namespace Test.Integration
 
             await extractor.WaitForSubscriptions();
 
-            await CommonTestUtils.WaitForCondition(() => pusher.DataPoints.Any(kvp => kvp.Value.Any()), 5);
+            await TestUtils.WaitForCondition(() => pusher.DataPoints.Any(kvp => kvp.Value.Any()), 5);
             foreach (var kvp in pusher.DataPoints)
             {
                 kvp.Value.Clear();
@@ -87,7 +89,7 @@ namespace Test.Integration
             // enum array
             tester.Server.UpdateNode(ids.EnumVar3, new[] { 123, 321, 321, 321 });
 
-            await CommonTestUtils.WaitForCondition(() => pusher.DataPoints.Count(kvp => kvp.Value.Any()) == 13,
+            await TestUtils.WaitForCondition(() => pusher.DataPoints.Count(kvp => kvp.Value.Any()) == 13,
                 5, () => $"Expected to get values in 13 timeseries, but got {pusher.DataPoints.Count(kvp => kvp.Value.Any())}");
 
             void TestDataPoints((NodeId, int) id, object expected)
@@ -144,7 +146,7 @@ namespace Test.Integration
 
             try
             {
-                await CommonTestUtils.WaitForCondition(() => pusher.DataPoints.Any(kvp => kvp.Value.Any()), 5);
+                await TestUtils.WaitForCondition(() => pusher.DataPoints.Any(kvp => kvp.Value.Any()), 5);
             }
             finally
             {
@@ -159,7 +161,7 @@ namespace Test.Integration
             // enum array
             tester.Server.UpdateNode(ids.EnumVar3, new[] { 123, 321, 321, 321 });
 
-            await CommonTestUtils.WaitForCondition(() => pusher.DataPoints.Count(kvp => kvp.Value.Any()) == 5,
+            await TestUtils.WaitForCondition(() => pusher.DataPoints.Count(kvp => kvp.Value.Any()) == 5,
                 5, () => $"Expected to get values in 5 timeseries, but got {pusher.DataPoints.Count(kvp => kvp.Value.Any())}");
 
             void TestDataPoints((NodeId, int) id, object expected)
@@ -205,7 +207,7 @@ namespace Test.Integration
 
             await extractor.WaitForSubscriptions();
 
-            await CommonTestUtils.WaitForCondition(() => pusher.DataPoints.Any(kvp => kvp.Value.Any()), 5);
+            await TestUtils.WaitForCondition(() => pusher.DataPoints.Any(kvp => kvp.Value.Any()), 5);
             foreach (var kvp in pusher.DataPoints)
             {
                 kvp.Value.Clear();
@@ -221,7 +223,7 @@ namespace Test.Integration
             tester.Server.UpdateNode(ids.RankImpreciseNoDim, new[] { 1, 2, 3, 4 });
             tester.Server.UpdateNode(ids.NullType, 1);
 
-            await CommonTestUtils.WaitForCondition(() => pusher.DataPoints.Count(kvp => kvp.Value.Any()) == 8,
+            await TestUtils.WaitForCondition(() => pusher.DataPoints.Count(kvp => kvp.Value.Any()) == 8,
                 5, () => $"Expected to get values in 8 timeseries, but got {pusher.DataPoints.Count(kvp => kvp.Value.Any())}");
 
             void TestDataPoints((NodeId, int) id, object expected)
@@ -290,7 +292,7 @@ namespace Test.Integration
             await Task.Delay(100);
             tester.Server.UpdateNode(ids.DoubleVar1, 1.0);
 
-            await CommonTestUtils.WaitForCondition(() => pusher.DataPoints[(ids.DoubleVar1, -1)].Count == 2, 5,
+            await TestUtils.WaitForCondition(() => pusher.DataPoints[(ids.DoubleVar1, -1)].Count == 2, 5,
                 () => $"Expected 2 datapoints, got {pusher.DataPoints[(ids.DoubleVar1, -1)].Count}");
 
             var dps = pusher.DataPoints[(ids.DoubleVar1, -1)];
@@ -329,7 +331,7 @@ namespace Test.Integration
             tester.Server.UpdateNode(ids.BoolVar, false);
             tester.Server.UpdateNode(ids.DoubleVar1, 2.0);
 
-            await CommonTestUtils.WaitForCondition(() =>
+            await TestUtils.WaitForCondition(() =>
                 pusher.Events.ContainsKey(ids.BoolVar) && pusher.Events[ids.BoolVar].Count >= 2
                 && pusher.DataPoints[(ids.DoubleVar1, -1)].Count >= 2, 5);
 
@@ -411,7 +413,7 @@ namespace Test.Integration
             var runTask = extractor.RunExtractor();
             await extractor.WaitForSubscriptions();
 
-            await CommonTestUtils.WaitForCondition(() => extractor.State.NodeStates.All(node =>
+            await TestUtils.WaitForCondition(() => extractor.State.NodeStates.All(node =>
                 !node.IsFrontfilling && !node.IsBackfilling), 10);
 
             await extractor.Looper.WaitForNextPush();
@@ -464,7 +466,7 @@ namespace Test.Integration
 
             await extractor.WaitForSubscriptions();
 
-            await CommonTestUtils.WaitForCondition(() => extractor.State.NodeStates.All(node =>
+            await TestUtils.WaitForCondition(() => extractor.State.NodeStates.All(node =>
                 !node.IsFrontfilling && !node.IsBackfilling), 10);
 
             await extractor.Looper.WaitForNextPush();
@@ -547,12 +549,12 @@ namespace Test.Integration
 
                 await extractor.WaitForSubscriptions();
 
-                await CommonTestUtils.WaitForCondition(() => extractor.State.NodeStates.All(node =>
+                await TestUtils.WaitForCondition(() => extractor.State.NodeStates.All(node =>
                     !node.IsFrontfilling && !node.IsBackfilling), 10);
 
                 await extractor.Looper.WaitForNextPush();
 
-                await CommonTestUtils.WaitForCondition(() => pusher.DataPoints.Values.Any(dps => dps.Count >= 1000), 5);
+                await TestUtils.WaitForCondition(() => pusher.DataPoints.Values.Any(dps => dps.Count >= 1000), 5);
 
                 await extractor.Looper.StoreState(tester.Source.Token);
                 await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
@@ -577,12 +579,12 @@ namespace Test.Integration
 
                 await extractor.WaitForSubscriptions();
 
-                await CommonTestUtils.WaitForCondition(() => extractor.State.NodeStates.All(node =>
+                await TestUtils.WaitForCondition(() => extractor.State.NodeStates.All(node =>
                     !node.IsFrontfilling && !node.IsBackfilling), 10);
 
                 await extractor.Looper.WaitForNextPush();
 
-                await CommonTestUtils.WaitForCondition(() => pusher.DataPoints.Values.Any(dps => dps.Count >= 1000), 5);
+                await TestUtils.WaitForCondition(() => pusher.DataPoints.Values.Any(dps => dps.Count >= 1000), 5);
                 await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
 
                 CountCustomValues(pusher, 1001);
@@ -624,12 +626,12 @@ namespace Test.Integration
 
                 await extractor.WaitForSubscriptions();
 
-                await CommonTestUtils.WaitForCondition(() => extractor.State.NodeStates.All(node =>
+                await TestUtils.WaitForCondition(() => extractor.State.NodeStates.All(node =>
                     !node.IsFrontfilling && !node.IsBackfilling), 10);
 
                 await extractor.Looper.WaitForNextPush();
 
-                await CommonTestUtils.WaitForCondition(() => pusher.DataPoints.Values.Any(dps => dps.Count >= 1000), 5);
+                await TestUtils.WaitForCondition(() => pusher.DataPoints.Values.Any(dps => dps.Count >= 1000), 5);
 
                 await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
 
@@ -651,12 +653,12 @@ namespace Test.Integration
 
                 await extractor.WaitForSubscriptions();
 
-                await CommonTestUtils.WaitForCondition(() => extractor.State.NodeStates.All(node =>
+                await TestUtils.WaitForCondition(() => extractor.State.NodeStates.All(node =>
                     !node.IsFrontfilling && !node.IsBackfilling), 10);
 
                 await extractor.Looper.WaitForNextPush();
 
-                await CommonTestUtils.WaitForCondition(() => pusher.DataPoints.Values.Any(dps => dps.Count >= 2000), 5);
+                await TestUtils.WaitForCondition(() => pusher.DataPoints.Values.Any(dps => dps.Count >= 2000), 5);
 
                 await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
 
@@ -713,7 +715,7 @@ namespace Test.Integration
             Assert.All(extractor.State.NodeStates, state => { Assert.True(state.ShouldSubscribe); });
             await extractor.WaitForSubscriptions();
             Assert.Equal(4u, session.Subscriptions.First(sub => sub.DisplayName.StartsWith("DataChangeListener", StringComparison.InvariantCulture)).MonitoredItemCount);
-            await CommonTestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 1), 5);
+            await TestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 1), 5);
 
             // Test disable subscriptions
             Reset();
@@ -725,7 +727,7 @@ namespace Test.Integration
             Assert.False(state.ShouldSubscribe);
             await extractor.WaitForSubscriptions();
             Assert.DoesNotContain(session.Subscriptions, sub => sub.DisplayName.StartsWith("DataChangeListener", StringComparison.InvariantCulture));
-            await CommonTestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 2), 5);
+            await TestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 2), 5);
 
 
 
@@ -752,7 +754,7 @@ namespace Test.Integration
             Assert.True(state.ShouldSubscribe);
             await extractor.WaitForSubscriptions();
             Assert.Equal(3u, session.Subscriptions.First(sub => sub.DisplayName.StartsWith("DataChangeListener", StringComparison.InvariantCulture)).MonitoredItemCount);
-            await CommonTestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 3), 5);
+            await TestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 3), 5);
         }
         #endregion
 
@@ -794,7 +796,7 @@ namespace Test.Integration
 
             // expect no data to arrive in pusher
 
-            await CommonTestUtils.WaitForCondition(
+            await TestUtils.WaitForCondition(
                 () => pusher.DataFailing
                 && extractor.State.NodeStates.All(state => !state.IsFrontfilling), 5,
                 () => $"Pusher is dataFailing: {pusher.DataFailing}");
@@ -806,7 +808,7 @@ namespace Test.Integration
             tester.Server.UpdateNode(ids.BoolVar, true);
             tester.Server.UpdateNode(ids.StringVar, "str: 1000");
 
-            await CommonTestUtils.WaitForCondition(() => CommonTestUtils.GetMetricValue("opcua_buffer_num_points") >= 2, 5,
+            await TestUtils.WaitForCondition(() => CommonTestUtils.GetMetricValue("opcua_buffer_num_points") >= 2, 5,
                 () => $"Expected at least 2 points to arrive in buffer, but got {CommonTestUtils.GetMetricValue("opcua_buffer_num_points")}");
 
             tester.Server.UpdateNode(ids.DoubleVar1, 1001);
@@ -814,12 +816,12 @@ namespace Test.Integration
             tester.Server.UpdateNode(ids.BoolVar, false);
             tester.Server.UpdateNode(ids.StringVar, "str: 1001");
 
-            await CommonTestUtils.WaitForCondition(() => CommonTestUtils.GetMetricValue("opcua_buffer_num_points") >= 4, 5,
+            await TestUtils.WaitForCondition(() => CommonTestUtils.GetMetricValue("opcua_buffer_num_points") >= 4, 5,
                 () => $"Expected at least 4 points to arrive in buffer, but got {CommonTestUtils.GetMetricValue("opcua_buffer_num_points")}");
 
             pusher.PushDataPointResult = true;
 
-            await CommonTestUtils.WaitForCondition(() => pusher.DataPoints[(ids.DoubleVar1, -1)].Count >= 1002, 10);
+            await TestUtils.WaitForCondition(() => pusher.DataPoints[(ids.DoubleVar1, -1)].Count >= 1002, 10);
 
             Assert.Equal(1002, pusher.DataPoints[(ids.DoubleVar1, -1)].DistinctBy(dp => dp.Timestamp).Count());
             Assert.True(pusher.DataPoints[(ids.DoubleVar2, -1)].Count >= 2);

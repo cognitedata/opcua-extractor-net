@@ -4,3 +4,4 @@ xunit
 xunit.runner.visualstudio
 AdysTech.InfluxDB.Client.Net.Core
 MQTTnet
+Cognite.Extractor.Testing

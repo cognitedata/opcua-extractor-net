@@ -174,11 +174,11 @@ namespace Test.Unit
                 
                 Assert.True(CommonTestUtils.TestMetricValue("opcua_connected", 1));
                 CommonTestUtils.StopProxyProcess();
-                await CommonTestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_connected", 0) && !connected, 20,
+                await TestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_connected", 0) && !connected, 20,
                     "Expected client to disconnect");
                 Assert.False(connected);
                 process.Start();
-                await CommonTestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_connected", 1) && connected, 20,
+                await TestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_connected", 1) && connected, 20,
                     "Expected client to reconnect");
                 Assert.True(connected);
             }
@@ -973,7 +973,7 @@ namespace Test.Unit
                 await tester.Client.SubscribeToNodes(nodes.Take(1000), handler, tester.Source.Token);
                 await tester.Client.SubscribeToNodes(nodes.Skip(1000), handler, tester.Source.Token);
 
-                await CommonTestUtils.WaitForCondition(() => dps.Count == 2000, 5,
+                await TestUtils.WaitForCondition(() => dps.Count == 2000, 5,
                     () => $"Expected to get 2000 datapoints, but got {dps.Count}");
 
                 foreach (var node in nodes)
@@ -981,7 +981,7 @@ namespace Test.Unit
                     tester.Server.UpdateNode(node.SourceId, 1.0);
                 }
 
-                await CommonTestUtils.WaitForCondition(() => dps.Count == 4000, 5,
+                await TestUtils.WaitForCondition(() => dps.Count == 4000, 5,
                     () => $"Expected to get 4000 datapoints, but got {dps.Count}");
             }
             finally
@@ -1069,22 +1069,22 @@ namespace Test.Unit
             {
                 await tester.Client.SubscribeToNodes(nodes, handler, tester.Source.Token);
 
-                await CommonTestUtils.WaitForCondition(() => dps.Count == 3, 5,
+                await TestUtils.WaitForCondition(() => dps.Count == 3, 5,
                     () => $"Expected to get 3 datapoints, but got {dps.Count}");
 
                 update(1);
 
-                await CommonTestUtils.WaitForCondition(() => dps.Count == 6, 5,
+                await TestUtils.WaitForCondition(() => dps.Count == 6, 5,
                     () => $"Expected to get 6 datapoints, but got {dps.Count}");
 
                 tester.Server.Server.DropSubscriptions();
 
-                await CommonTestUtils.WaitForCondition(() => dps.Count == 9, 20,
+                await TestUtils.WaitForCondition(() => dps.Count == 9, 20,
                     () => $"Expected to get 9 datapoints, but got {dps.Count}");
 
                 update(2);
 
-                await CommonTestUtils.WaitForCondition(() => dps.Count == 12, 5,
+                await TestUtils.WaitForCondition(() => dps.Count == 12, 5,
                     () => $"Expected to get 12 datapoints, but got {dps.Count}");
             }
             finally
@@ -1151,12 +1151,12 @@ namespace Test.Unit
 
                 tester.Server.TriggerEvents(0);
 
-                await CommonTestUtils.WaitForCondition(() => count == 11, 10,
+                await TestUtils.WaitForCondition(() => count == 11, 10,
                     () => $"Expected to get 11 events, but got {count}");
 
                 tester.Server.TriggerEvents(1);
 
-                await CommonTestUtils.WaitForCondition(() => count == 22, 10,
+                await TestUtils.WaitForCondition(() => count == 22, 10,
                     () => $"Expected to get 22 events, but got {count}");
             }
             finally
@@ -1197,7 +1197,7 @@ namespace Test.Unit
 
                 tester.Server.TriggerEvents(0);
 
-                await CommonTestUtils.WaitForCondition(() => count == 6, 10,
+                await TestUtils.WaitForCondition(() => count == 6, 10,
                     () => $"Expected to get 6 events, but got {count}");
             }
             finally
@@ -1230,12 +1230,12 @@ namespace Test.Unit
 
                 tester.Server.DirectGrowth();
 
-                await CommonTestUtils.WaitForCondition(() => count == 2, 10,
+                await TestUtils.WaitForCondition(() => count == 2, 10,
                     () => $"Expected to get 2 events, but got {count}");
 
                 tester.Server.ReferenceGrowth();
 
-                await CommonTestUtils.WaitForCondition(() => count == 6, 10,
+                await TestUtils.WaitForCondition(() => count == 6, 10,
                     () => $"Expected to get 6 events, but got {count}");
             }
             finally
@@ -1319,7 +1319,7 @@ namespace Test.Unit
 
             tester.Server.SetDiagnosticsEnabled(true);
 
-            await CommonTestUtils.WaitForCondition(() => CommonTestUtils.GetMetricValue("opcua_node_CurrentSessionCount") >= 1, 20);
+            await TestUtils.WaitForCondition(() => CommonTestUtils.GetMetricValue("opcua_node_CurrentSessionCount") >= 1, 20);
 
             await tester.Client.RemoveSubscription("NodeMetrics");
             tester.Server.SetDiagnosticsEnabled(false);
@@ -1344,12 +1344,12 @@ namespace Test.Unit
             await mgr.StartNodeMetrics(tester.Source.Token);
 
             tester.Server.UpdateNode(ids.DoubleVar1, 15);
-            await CommonTestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_node_Variable_1", 15), 5);
+            await TestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_node_Variable_1", 15), 5);
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_node_Variable_2", 0));
 
             tester.Server.UpdateNode(ids.DoubleVar2, 25);
-            await CommonTestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_node_Variable_2", 25), 5);
+            await TestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_node_Variable_2", 25), 5);
 
             tester.Server.UpdateNode(ids.DoubleVar1, 0);
             tester.Server.UpdateNode(ids.DoubleVar2, 0);

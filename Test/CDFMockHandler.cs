@@ -19,9 +19,9 @@ using Cognite.OpcUa;
 using CogniteSdk;
 using Com.Cognite.V1.Timeseries.Proto;
 using Google.Protobuf;
+using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Serialization;
-using Serilog;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -84,7 +84,12 @@ namespace Test
         }
         public HashSet<string> FailedRoutes { get; } = new HashSet<string>();
 
-        private readonly ILogger log = Log.Logger.ForContext(typeof(CDFMockHandler));
+        private readonly ILogger log;
+
+        public CDFMockHandler(ILogger log)
+        {
+            this.log = log;
+        }
 
         public enum MockMode
         {
@@ -133,10 +138,10 @@ namespace Test
 
             string reqPath = req.RequestUri.AbsolutePath.Replace($"/api/v1/projects/{project}", "", StringComparison.InvariantCulture);
 
-            log.Information("Request to {path}", reqPath);
+            log.LogInformation("Request to {Path}", reqPath);
             if (FailedRoutes.Contains(reqPath))
             {
-                log.Information("Failing request to {path}", reqPath);
+                log.LogInformation("Failing request to {Path}", reqPath);
                 return GetFailedRequest(HttpStatusCode.Forbidden);
             }
 
@@ -229,14 +234,14 @@ namespace Test
                             res = HandleRetrieveDataSets(content);
                             break;
                         default:
-                            log.Warning("Unknown path: {DummyFactoryUnknownPath}", reqPath);
+                            log.LogWarning("Unknown path: {DummyFactoryUnknownPath}", reqPath);
                             res = new HttpResponseMessage(HttpStatusCode.InternalServerError);
                             break;
                     }
                 }
                 catch (Exception e)
                 {
-                    log.Error(e, "Error in mock handler");
+                    log.LogError(e, "Error in mock handler");
                     res = new HttpResponseMessage(HttpStatusCode.BadRequest);
                 }
                 res.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
@@ -530,7 +535,6 @@ namespace Test
                     Content = new StringContent("{}")
                 };
             }
-            Console.WriteLine("Push points");
 
             var missing = req.Items.Where(item => !Timeseries.ContainsKey(item.ExternalId)).Select(item => item.ExternalId);
             var mismatched = req.Items.Where(item =>
@@ -542,7 +546,6 @@ namespace Test
 
             if (missing.Any())
             {
-                Console.WriteLine($"Found {missing.Count()} missing timeseries");
                 return new HttpResponseMessage(HttpStatusCode.BadRequest)
                 {
                     Content = new StringContent(JsonConvert.SerializeObject(new ErrorWrapper
@@ -579,12 +582,12 @@ namespace Test
                 }
                 if (item.DatapointTypeCase == DataPointInsertionItem.DatapointTypeOneofCase.NumericDatapoints)
                 {
-                    log.Information("{cnt} numeric datapoints to {id}", item.NumericDatapoints.Datapoints.Count, item.ExternalId);
+                    log.LogInformation("{Count} numeric datapoints to {Id}", item.NumericDatapoints.Datapoints.Count, item.ExternalId);
                     Datapoints[item.ExternalId].NumericDatapoints.AddRange(item.NumericDatapoints.Datapoints);
                 }
                 else
                 {
-                    log.Information("{cnt} string datapoints to {id}", item.StringDatapoints.Datapoints.Count, item.ExternalId);
+                    log.LogInformation("{Count} string datapoints to {Id}", item.StringDatapoints.Datapoints.Count, item.ExternalId);
                     Datapoints[item.ExternalId].StringDatapoints.AddRange(item.StringDatapoints.Datapoints);
                 }
             }

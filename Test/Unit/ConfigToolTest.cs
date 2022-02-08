@@ -1,5 +1,6 @@
 ﻿using Cognite.Extractor.Configuration;
 using Cognite.Extractor.Logging;
+using Cognite.Extractor.Testing;
 using Cognite.Extractor.Utils;
 using Cognite.OpcUa;
 using Cognite.OpcUa.Config;
@@ -24,7 +25,7 @@ namespace Test.Unit
         public ServerController Server { get; }
         public CancellationTokenSource Source { get; protected set; }
         public ServiceProvider Provider { get; }
-        public ConfigToolTestFixture()
+        public ConfigToolTestFixture(ITestOutputHelper output)
         {
             var services = new ServiceCollection();
             Config = services.AddConfig<FullConfig>("config.test.yml", 1);
@@ -35,8 +36,7 @@ namespace Test.Unit
             BaseConfig = ConfigurationUtils.Read<FullConfig>("config.test.yml");
             BaseConfig.GenerateDefaults();
 
-            services.AddLogger();
-            LoggingUtils.Configure(Config.Logger);
+            services.AddTestLogging(output);
 
             Provider = services.BuildServiceProvider();
 
@@ -67,10 +67,10 @@ namespace Test.Unit
             await Provider.DisposeAsync();
         }
     }
-    public class ConfigToolTest : MakeConsoleWork, IClassFixture<ConfigToolTestFixture>
+    public class ConfigToolTest : IClassFixture<ConfigToolTestFixture>
     {
         private readonly ConfigToolTestFixture tester;
-        public ConfigToolTest(ITestOutputHelper output, ConfigToolTestFixture tester) : base(output)
+        public ConfigToolTest(ConfigToolTestFixture tester)
         {
             this.tester = tester;
         }

@@ -2,6 +2,7 @@
 using Cognite.Extractor.Configuration;
 using Cognite.Extractor.Logging;
 using Cognite.Extractor.StateStorage;
+using Cognite.Extractor.Testing;
 using Cognite.Extractor.Utils;
 using Cognite.OpcUa;
 using Cognite.OpcUa.Pushers;
@@ -14,6 +15,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace Test.Utils
 {
@@ -26,7 +28,7 @@ namespace Test.Utils
         public ServerController Server { get; private set; }
         public CancellationTokenSource Source { get; protected set; }
         public ServiceProvider Provider { get; protected set; }
-        protected ServiceCollection Services { get; }
+        protected ServiceCollection Services { get; set; }
         protected PredefinedSetup[] Setups { get; }
         protected BaseExtractorTestFixture(PredefinedSetup[] setups = null)
         {
@@ -38,10 +40,7 @@ namespace Test.Utils
             Config = Services.AddConfig<FullConfig>("config.test.yml", 1);
             Console.WriteLine($"Add logger: {Config.Logger}");
             Config.Source.EndpointUrl = $"opc.tcp://localhost:{Port}";
-            Services.AddLogger();
-            LoggingUtils.Configure(Config.Logger);
-            Provider = Services.BuildServiceProvider();
-
+            
             if (setups == null)
             {
                 setups = new[] {
@@ -49,6 +48,12 @@ namespace Test.Utils
                     PredefinedSetup.Wrong, PredefinedSetup.Full, PredefinedSetup.Auditing };
             }
             Setups = setups;
+        }
+
+        public void Init(ITestOutputHelper output)
+        {
+            Services.AddTestLogging(output);
+            Provider = Services.BuildServiceProvider();
         }
 
         private async Task Start()

@@ -79,7 +79,7 @@ namespace Test.Unit
                 .GetValue(pusher);
             await client.DisconnectAsync();
             Assert.False(client.IsConnected);
-            await CommonTestUtils.WaitForCondition(() => client.IsConnected, 5, "Expected client to reconnect automatically");
+            await TestUtils.WaitForCondition(() => client.IsConnected, 5, "Expected client to reconnect automatically");
         }
         [Fact]
         public async Task TestPushDatapoints()

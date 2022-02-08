@@ -5,10 +5,11 @@ nuget Cognite.Extractor.Configuration
 nuget Cognite.Extractor.Logging
 nuget Cognite.Extractor.Metrics
 nuget Cognite.ExtractorUtils
+nuget Cognite.Extractor.Testing
 nuget Microsoft.CSharp
 nuget coverlet.msbuild
 nuget Microsoft.NET.Test.Sdk
-nuget System.CommandLine >= 2.0.0-beta1.21308.1
+nuget System.CommandLine 2.0.0-beta1.21308.1
 nuget xunit
 nuget xunit.runner.visualstudio
 nuget OPCFoundation.NetStandard.Opc.Ua.Client

@@ -120,7 +120,7 @@ namespace Test.Unit
             int dpsPerBatch = 21;
 
             // At least two batches
-            await CommonTestUtils.WaitForCondition(() => queue.Count > dpsPerBatch, 20);
+            await TestUtils.WaitForCondition(() => queue.Count > dpsPerBatch, 20);
 
             var dps = queue.ToArray();
 

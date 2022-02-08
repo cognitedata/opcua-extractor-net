@@ -1,4 +1,5 @@
 ﻿using Cognite.Extractor.StateStorage;
+using Cognite.Extractor.Testing;
 using Cognite.OpcUa;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -33,13 +34,14 @@ namespace Test.Integration
             Config.Extraction.RootNode = Server.Ids.Event.Root.ToProtoNodeId(Client);
         }
     }
-    public class EventTests : MakeConsoleWork, IClassFixture<EventTestFixture>
+    public class EventTests : IClassFixture<EventTestFixture>
     {
         private readonly EventTestFixture tester;
-        public EventTests(ITestOutputHelper output, EventTestFixture tester) : base(output)
+        public EventTests(ITestOutputHelper output, EventTestFixture tester)
         {
             this.tester = tester ?? throw new ArgumentNullException(nameof(tester));
             tester.ResetConfig();
+            tester.Init(output);
             tester.Config.Source.PublishingInterval = 200;
             tester.Config.Extraction.DataPushDelay = "200";
             tester.Config.History.Enabled = false;
@@ -64,7 +66,7 @@ namespace Test.Integration
 
             tester.Server.TriggerEvents(0);
 
-            await CommonTestUtils.WaitForCondition(() => pusher.Events.Count == 3 && pusher.Events[ObjectIds.Server].Count == 8, 5);
+            await TestUtils.WaitForCondition(() => pusher.Events.Count == 3 && pusher.Events[ObjectIds.Server].Count == 8, 5);
 
             Assert.Single(pusher.Events[ids.Obj2]);
             Assert.Equal(2, pusher.Events[ids.Obj1].Count);
@@ -104,7 +106,7 @@ namespace Test.Integration
 
             tester.Server.TriggerEvents(0);
 
-            await CommonTestUtils.WaitForCondition(() => pusher.Events.Count == 3, 5);
+            await TestUtils.WaitForCondition(() => pusher.Events.Count == 3, 5);
 
             Assert.Single(pusher.Events[ids.Obj2]);
             Assert.Equal(2, pusher.Events[ids.Obj1].Count);
@@ -155,7 +157,7 @@ namespace Test.Integration
                     evt.DeepProp.Value = "deepValue";
                 });
 
-            await CommonTestUtils.WaitForCondition(() => pusher.Events.Count == 1, 5);
+            await TestUtils.WaitForCondition(() => pusher.Events.Count == 1, 5);
 
             Assert.Single(pusher.Events[ObjectIds.Server]);
             var evt = pusher.Events[ObjectIds.Server].First();
@@ -208,7 +210,7 @@ namespace Test.Integration
             Assert.All(extractor.State.EmitterStates, state => { Assert.True(state.ShouldSubscribe); });
             await extractor.WaitForSubscriptions();
             Assert.Equal(3u, session.Subscriptions.First(sub => sub.DisplayName.StartsWith("EventListener", StringComparison.InvariantCulture)).MonitoredItemCount);
-            await CommonTestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 1), 5);
+            await TestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 1), 5);
 
             // Test disable subscriptions
             Reset();
@@ -220,7 +222,7 @@ namespace Test.Integration
             Assert.False(state.ShouldSubscribe);
             await extractor.WaitForSubscriptions();
             Assert.DoesNotContain(session.Subscriptions, sub => sub.DisplayName.StartsWith("EventListener", StringComparison.InvariantCulture));
-            await CommonTestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 2), 5);
+            await TestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 2), 5);
 
 
 
@@ -247,7 +249,7 @@ namespace Test.Integration
             Assert.True(state.ShouldSubscribe);
             await extractor.WaitForSubscriptions();
             Assert.Equal(2u, session.Subscriptions.First(sub => sub.DisplayName.StartsWith("EventListener", StringComparison.InvariantCulture)).MonitoredItemCount);
-            await CommonTestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 3), 5);
+            await TestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 3), 5);
         }
         #endregion
 
@@ -277,10 +279,10 @@ namespace Test.Integration
 
             await extractor.WaitForSubscriptions();
 
-            await CommonTestUtils.WaitForCondition(() => extractor.State.EmitterStates.All(state => !state.IsFrontfilling
+            await TestUtils.WaitForCondition(() => extractor.State.EmitterStates.All(state => !state.IsFrontfilling
                             && !state.IsBackfilling), 5);
 
-            await CommonTestUtils.WaitForCondition(() => pusher.Events.Count == 2 && pusher.Events[ObjectIds.Server].Count == 700, 5,
+            await TestUtils.WaitForCondition(() => pusher.Events.Count == 2 && pusher.Events[ObjectIds.Server].Count == 700, 5,
                 () => $"Expected to get 700 events but got {pusher.Events[ObjectIds.Server].Count} for {pusher.Events.Count}");
 
             var evt = pusher.Events[ObjectIds.Server].First(evt => evt.Message == "prop 0");
@@ -328,10 +330,10 @@ namespace Test.Integration
 
             await extractor.WaitForSubscriptions();
 
-            await CommonTestUtils.WaitForCondition(() => extractor.State.EmitterStates.All(state => !state.IsFrontfilling
+            await TestUtils.WaitForCondition(() => extractor.State.EmitterStates.All(state => !state.IsFrontfilling
                 && !state.IsBackfilling), 5);
 
-            await CommonTestUtils.WaitForCondition(() => pusher.Events.Count == 2 && pusher.Events[ObjectIds.Server].Count == 700
+            await TestUtils.WaitForCondition(() => pusher.Events.Count == 2 && pusher.Events[ObjectIds.Server].Count == 700
                 && pusher.Events[ids.Obj1].Count == 200, 5,
                 () => $"Expected to get 700 events but got {pusher.Events[ObjectIds.Server].Count}");
 
@@ -348,7 +350,7 @@ namespace Test.Integration
 
             await extractor.RestartHistory();
 
-            await CommonTestUtils.WaitForCondition(() => pusher.Events.Count == 2 && pusher.Events[ObjectIds.Server].Count == 1407
+            await TestUtils.WaitForCondition(() => pusher.Events.Count == 2 && pusher.Events[ObjectIds.Server].Count == 1407
                 && pusher.Events[ids.Obj1].Count == 402, 5,
                 () => $"Expected to get 1407 events but got {pusher.Events[ObjectIds.Server].Count}");
             // One overlap per event type
@@ -398,12 +400,12 @@ namespace Test.Integration
 
                 await extractor.WaitForSubscriptions();
 
-                await CommonTestUtils.WaitForCondition(() => extractor.State.EmitterStates.All(node =>
+                await TestUtils.WaitForCondition(() => extractor.State.EmitterStates.All(node =>
                     !node.IsFrontfilling && !node.IsBackfilling), 10);
 
                 await extractor.Looper.WaitForNextPush();
 
-                await CommonTestUtils.WaitForCondition(() =>
+                await TestUtils.WaitForCondition(() =>
                     pusher.Events.ContainsKey(ObjectIds.Server) && pusher.Events[ObjectIds.Server].Count == 700, 5);
 
                 await extractor.Looper.StoreState(tester.Source.Token);
@@ -429,12 +431,12 @@ namespace Test.Integration
 
                 await extractor.WaitForSubscriptions();
 
-                await CommonTestUtils.WaitForCondition(() => extractor.State.EmitterStates.All(node =>
+                await TestUtils.WaitForCondition(() => extractor.State.EmitterStates.All(node =>
                     !node.IsFrontfilling && !node.IsBackfilling), 10);
 
                 await extractor.Looper.WaitForNextPush();
 
-                await CommonTestUtils.WaitForCondition(() =>
+                await TestUtils.WaitForCondition(() =>
                     pusher.Events.ContainsKey(ObjectIds.Server) && pusher.Events[ObjectIds.Server].Count == 707, 5);
                 await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
 
@@ -475,12 +477,12 @@ namespace Test.Integration
 
                 await extractor.WaitForSubscriptions();
 
-                await CommonTestUtils.WaitForCondition(() => extractor.State.EmitterStates.All(node =>
+                await TestUtils.WaitForCondition(() => extractor.State.EmitterStates.All(node =>
                     !node.IsFrontfilling && !node.IsBackfilling), 10);
 
                 await extractor.Looper.WaitForNextPush();
 
-                await CommonTestUtils.WaitForCondition(() =>
+                await TestUtils.WaitForCondition(() =>
                     pusher.Events.ContainsKey(ObjectIds.Server) && pusher.Events[ObjectIds.Server].Count == 700, 5);
 
                 await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
@@ -504,12 +506,12 @@ namespace Test.Integration
 
                 await extractor.WaitForSubscriptions();
 
-                await CommonTestUtils.WaitForCondition(() => extractor.State.EmitterStates.All(node =>
+                await TestUtils.WaitForCondition(() => extractor.State.EmitterStates.All(node =>
                     !node.IsFrontfilling && !node.IsBackfilling), 10);
 
                 await extractor.Looper.WaitForNextPush();
 
-                await CommonTestUtils.WaitForCondition(() =>
+                await TestUtils.WaitForCondition(() =>
                     pusher.Events.ContainsKey(ObjectIds.Server) && pusher.Events[ObjectIds.Server].Count >= 1400, 5);
                 await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
 
@@ -573,7 +575,7 @@ namespace Test.Integration
             // expect no data to arrive in pusher
             try
             {
-                await CommonTestUtils.WaitForCondition(
+                await TestUtils.WaitForCondition(
                     () => pusher.DataFailing
                     && extractor.State.EmitterStates.All(state => !state.IsFrontfilling), 5,
                     () => $"Pusher is dataFailing: {pusher.DataFailing}");
@@ -591,19 +593,19 @@ namespace Test.Integration
 
             tester.Server.TriggerEvents(100);
 
-            await CommonTestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_buffer_num_events", 1), 5,
+            await TestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_buffer_num_events", 1), 5,
                 () => $"Expected 1 event to arrive in buffer, but got {CommonTestUtils.GetMetricValue("opcua_buffer_num_events")}");
 
             tester.Server.TriggerEvents(101);
 
-            await CommonTestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_buffer_num_events", 2), 5,
+            await TestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_buffer_num_events", 2), 5,
                 () => $"Expected 2 events to arrive in buffer, but got {CommonTestUtils.GetMetricValue("opcua_buffer_num_events")}");
 
             pusher.PushEventResult = true;
             pusher.PushDataPointResult = true;
             pusher.TestConnectionResult = true;
 
-            await CommonTestUtils.WaitForCondition(() => pusher.Events.Count == 3 && pusher.Events[ObjectIds.Server].Count == 714, 10);
+            await TestUtils.WaitForCondition(() => pusher.Events.Count == 3 && pusher.Events[ObjectIds.Server].Count == 714, 10);
 
             Assert.Equal(204, pusher.Events[ids.Obj1].Count);
             Assert.Equal(2, pusher.Events[ids.Obj2].Count);
@@ -627,7 +629,7 @@ namespace Test.Integration
 
             tester.Server.DirectGrowth();
 
-            await CommonTestUtils.WaitForCondition(() => pusher.PushedNodes.Count == 4 && pusher.PushedVariables.Count == 1, 10);
+            await TestUtils.WaitForCondition(() => pusher.PushedNodes.Count == 4 && pusher.PushedVariables.Count == 1, 10);
 
             var directRoot = pusher.PushedNodes[ids.DirectAdd];
 
@@ -641,7 +643,7 @@ namespace Test.Integration
 
             tester.Server.ReferenceGrowth(1);
 
-            await CommonTestUtils.WaitForCondition(() => pusher.PushedNodes.Count == 5 && pusher.PushedVariables.Count == 2, 10);
+            await TestUtils.WaitForCondition(() => pusher.PushedNodes.Count == 5 && pusher.PushedVariables.Count == 2, 10);
 
             var refRoot = pusher.PushedNodes[ids.RefAdd];
 

@@ -1,4 +1,5 @@
 ﻿using Cognite.Extractor.Common;
+using Cognite.Extractor.Testing;
 using Cognite.OpcUa;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.NodeSources;
@@ -28,17 +29,25 @@ namespace Test.Unit
         {
         }
     }
-    public class CDFPusherTest : MakeConsoleWork, IClassFixture<CDFPusherTestFixture>
+    public sealed class CDFPusherTest : IClassFixture<CDFPusherTestFixture>, IDisposable
     {
         private readonly CDFPusherTestFixture tester;
         private CDFMockHandler handler;
         private CDFPusher pusher;
-        public CDFPusherTest(ITestOutputHelper output, CDFPusherTestFixture tester) : base(output)
+        public CDFPusherTest(ITestOutputHelper output, CDFPusherTestFixture tester)
         {
             this.tester = tester ?? throw new ArgumentNullException(nameof(tester));
+            tester.Init(output);
             tester.ResetConfig();
             (handler, pusher) = tester.GetCDFPusher();
         }
+
+        public void Dispose()
+        {
+            pusher.Dispose();
+        }
+
+
         [Fact]
         public async Task TestTestConnection()
         {
@@ -1167,7 +1176,7 @@ namespace Test.Unit
             var id = tester.Client.GetUniqueId(tester.Server.Ids.Custom.MysteryVar);
             tester.Server.UpdateNode(tester.Server.Ids.Custom.MysteryVar, 1.0);
 
-            await CommonTestUtils.WaitForCondition(async () =>
+            await TestUtils.WaitForCondition(async () =>
             {
                 await extractor.Streamer.PushDataPoints(new[] { pusher }, Enumerable.Empty<IPusher>(), tester.Source.Token);
                 return handler.Datapoints.ContainsKey(id) && handler.Datapoints[id].NumericDatapoints.Any();
@@ -1239,7 +1248,7 @@ namespace Test.Unit
 
             tester.Server.TriggerEvents(0);
 
-            await CommonTestUtils.WaitForCondition(async () =>
+            await TestUtils.WaitForCondition(async () =>
             {
                 await extractor.Streamer.PushEvents(new[] { pusher }, Enumerable.Empty<IPusher>(), tester.Source.Token);
                 return handler.Events.Any();
@@ -1298,16 +1307,8 @@ namespace Test.Unit
 
             await extractor.RunExtractor(true);
 
-            await CommonTestUtils.WaitForCondition(() => handler.TimeseriesRaw.Count > 0, 10);
+            await TestUtils.WaitForCondition(() => handler.TimeseriesRaw.Count > 0, 10);
         }
         #endregion
-        protected override void Dispose(bool disposing)
-        {
-            base.Dispose(disposing);
-            if (disposing)
-            {
-                pusher.Dispose();
-            }
-        }
     }
 }

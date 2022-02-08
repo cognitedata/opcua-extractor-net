@@ -1,4 +1,5 @@
-﻿using Cognite.OpcUa;
+﻿using Cognite.Extractor.Testing;
+using Cognite.OpcUa;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -22,12 +23,13 @@ namespace Test.Integration
     }
 
     // Tests for various configurations for extracting nodes and pushing to dummy pusher
-    public class NodeExtractionTests : MakeConsoleWork, IClassFixture<NodeExtractionTestFixture>
+    public class NodeExtractionTests : IClassFixture<NodeExtractionTestFixture>
     {
         private readonly NodeExtractionTestFixture tester;
-        public NodeExtractionTests(ITestOutputHelper output, NodeExtractionTestFixture tester) : base(output)
+        public NodeExtractionTests(ITestOutputHelper output, NodeExtractionTestFixture tester)
         {
             this.tester = tester ?? throw new ArgumentNullException(nameof(tester));
+            tester.Init(output);
             tester.ResetConfig();
             tester.Config.History.Enabled = false;
         }
@@ -741,7 +743,7 @@ namespace Test.Integration
 
             pusher.TestConnectionResult = true;
 
-            await CommonTestUtils.WaitForCondition(() =>
+            await TestUtils.WaitForCondition(() =>
                 pusher.PushedNodes.Count == 6
                 && pusher.PushedReferences.Count == 32
                 && pusher.PushedVariables.Count == 16, 5, () => $"Expected to get 6 nodes, got {pusher.PushedNodes.Count}, " +
@@ -801,7 +803,7 @@ namespace Test.Integration
             pusher.PushNodesResult = true;
             pusher.PushReferenceResult = true;
 
-            await CommonTestUtils.WaitForCondition(() =>
+            await TestUtils.WaitForCondition(() =>
                 pusher.PushedNodes.Count == 6
                 && pusher.PushedReferences.Count == 32
                 && pusher.PushedVariables.Count == 16, 5, () => $"Expected to get 6 nodes, got {pusher.PushedNodes.Count}, " +
@@ -849,7 +851,7 @@ namespace Test.Integration
 
             var runTask = extractor.RunExtractor();
 
-            await CommonTestUtils.WaitForCondition(() => handler.Assets.Any() && handler.Timeseries.Any(), 5);
+            await TestUtils.WaitForCondition(() => handler.Assets.Any() && handler.Timeseries.Any(), 5);
 
             CommonTestUtils.VerifyStartingConditions(handler.Assets, handler.Timeseries, null, extractor, tester.Server.Ids.Custom, false);
 
@@ -904,7 +906,7 @@ namespace Test.Integration
 
             var runTask = extractor.RunExtractor();
 
-            await CommonTestUtils.WaitForCondition(() => handler.AssetRaw.Any() && handler.TimeseriesRaw.Any(), 5);
+            await TestUtils.WaitForCondition(() => handler.AssetRaw.Any() && handler.TimeseriesRaw.Any(), 5);
 
             foreach (var kvp in handler.TimeseriesRaw)
             {
@@ -974,7 +976,7 @@ namespace Test.Integration
 
             var runTask = extractor.RunExtractor();
 
-            await CommonTestUtils.WaitForCondition(() => handler.Assets.Any() && handler.Timeseries.Any(), 5);
+            await TestUtils.WaitForCondition(() => handler.Assets.Any() && handler.Timeseries.Any(), 5);
 
             var id = tester.Client.GetUniqueId(tester.Server.Ids.Wrong.RankImprecise);
 

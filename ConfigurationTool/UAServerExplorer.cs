@@ -231,7 +231,7 @@ namespace Cognite.OpcUa.Config
 
             // Try to find at least 10000 nodes
             var nodes = new List<UANode>();
-            var callback = ToolUtil.GetSimpleListWriterCallback(nodes, this);
+            var callback = ToolUtil.GetSimpleListWriterCallback(nodes, this, log);
 
             var nextIds = new List<NodeId> { root };
 
@@ -452,7 +452,7 @@ namespace Cognite.OpcUa.Config
             var roots = Config.Extraction.GetRootNodes(this);
             try
             {
-                await Browser.BrowseNodeHierarchy(roots, ToolUtil.GetSimpleListWriterCallback(nodeList, this), token, false,
+                await Browser.BrowseNodeHierarchy(roots, ToolUtil.GetSimpleListWriterCallback(nodeList, this, log), token, false,
                     "populating the main node hierarchy");
                 nodesRead = true;
             }
@@ -475,7 +475,7 @@ namespace Cognite.OpcUa.Config
             {
                 await Browser.BrowseDirectory(
                     new List<NodeId> { DataTypes.BaseDataType },
-                    ToolUtil.GetSimpleListWriterCallback(dataTypes, this),
+                    ToolUtil.GetSimpleListWriterCallback(dataTypes, this, log),
                     token,
                     ReferenceTypeIds.HasSubtype,
                     (uint)NodeClass.DataType | (uint)NodeClass.ObjectType,
@@ -921,7 +921,7 @@ namespace Cognite.OpcUa.Config
                 {
                     await ToolUtil.RunWithTimeout(SubscribeToNodes(
                         states.Take(chunkSize),
-                        ToolUtil.GetSimpleListWriterHandler(dps, states.ToDictionary(state => state.SourceId), this),
+                        ToolUtil.GetSimpleListWriterHandler(dps, states.ToDictionary(state => state.SourceId), this, log),
                         token), 120);
                     baseConfig.Source.SubscriptionChunk = chunkSize;
                     failed = false;
@@ -1040,7 +1040,7 @@ namespace Cognite.OpcUa.Config
                     foreach (var node in historyParams.Items)
                     {
                         if (node.LastResult == null) continue;
-                        var data = ToolUtil.ReadResultToDataPoints(node.LastResult, stateMap[node.Id], this);
+                        var data = ToolUtil.ReadResultToDataPoints(node.LastResult, stateMap[node.Id], this, log);
                         // If we want to do analysis of how best to read history, we need some number of datapoints
                         // If this number is too low, it typically means that there is no real history to read.
                         // Some servers write a single datapoint to history on startup, having a decently large number here
@@ -1141,7 +1141,7 @@ namespace Cognite.OpcUa.Config
             {
                 await ToolUtil.RunWithTimeout(DoHistoryRead(backfillParams, token), 10);
 
-                var data = ToolUtil.ReadResultToDataPoints(nodeWithData.LastResult!, stateMap[nodeWithData.Id], this);
+                var data = ToolUtil.ReadResultToDataPoints(nodeWithData.LastResult!, stateMap[nodeWithData.Id], this, log);
 
                 log.LogInformation("Last ts: {TimeStamp}", data.First().Timestamp);
 
@@ -1236,7 +1236,7 @@ namespace Cognite.OpcUa.Config
             try
             {
                 await Browser.BrowseDirectory(nodeList.Select(node => node.Id).Append(ObjectIds.Server).ToList(),
-                    ToolUtil.GetSimpleListWriterCallback(emitterReferences, this),
+                    ToolUtil.GetSimpleListWriterCallback(emitterReferences, this, log),
                     token,
                     ReferenceTypeIds.GeneratesEvent, (uint)NodeClass.ObjectType, false, purpose: "identifying GeneratesEvent references");
             }

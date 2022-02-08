@@ -106,7 +106,7 @@ namespace Test.Unit
 
             Assert.True(pusher.OnReset.WaitOne(10000));
 
-            await CommonTestUtils.WaitForCondition(() => pusher.PushedNodes.Count > 0, 10);
+            await TestUtils.WaitForCondition(() => pusher.PushedNodes.Count > 0, 10);
 
             await extractor.Close();
             await tester.Client.Run(tester.Source.Token);

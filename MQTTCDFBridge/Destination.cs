@@ -4,8 +4,8 @@ using Cognite.Extractor.Utils;
 using CogniteSdk;
 using Com.Cognite.V1.Timeseries.Proto;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using MQTTnet;
-using Serilog;
 using System;
 using System.Buffers;
 using System.Collections.Concurrent;
@@ -29,7 +29,7 @@ namespace Cognite.Bridge
         private readonly ConcurrentDictionary<string, long?> assetIds = new ConcurrentDictionary<string, long?>();
         private readonly ConcurrentDictionary<string, bool> tsIsString = new ConcurrentDictionary<string, bool>();
 
-        private readonly ILogger log = Log.Logger.ForContext(typeof(Destination));
+        private readonly ILogger log;
 
         private readonly CogniteDestination destination;
 
@@ -37,6 +37,7 @@ namespace Cognite.Bridge
         {
             this.config = config;
             destination = provider.GetRequiredService<CogniteDestination>();
+            log = provider.GetRequiredService<ILogger<Destination>>();
         }
 
         /// <summary>
@@ -124,7 +125,7 @@ namespace Cognite.Bridge
         {
             if (msg == null || msg.Payload == null)
             {
-                log.Warning("Null payload in assets");
+                log.LogWarning("Null payload in assets");
                 return true;
             }
             var assets = JsonSerializer.Deserialize<IEnumerable<AssetCreate>>(Encoding.UTF8.GetString(msg.Payload));
@@ -153,7 +154,7 @@ namespace Cognite.Bridge
             }
             catch (ResponseException ex)
             {
-                log.Error(ex, "Failed to ensure assets: {msg}", ex.Message);
+                log.LogError(ex, "Failed to ensure assets: {Message}", ex.Message);
                 return ex.Code == 400 || ex.Code == 409;
             }
             if (config.Update)
@@ -175,7 +176,7 @@ namespace Cognite.Bridge
                 }
                 catch (ResponseException ex)
                 {
-                    log.Error(ex, "Failed to update assets: {msg}", ex.Message);
+                    log.LogError(ex, "Failed to update assets: {Message}", ex.Message);
                     return ex.Code == 400 || ex.Code == 409;
                 }
             }
@@ -200,7 +201,7 @@ namespace Cognite.Bridge
             }
             catch (ResponseException ex)
             {
-                log.Error(ex, "Failed to retrieve missing assets: {msg}", ex.Message);
+                log.LogError(ex, "Failed to retrieve missing assets: {Message}", ex.Message);
                 return ex.Code == 400 || ex.Code == 409;
             }
             return true;
@@ -224,7 +225,7 @@ namespace Cognite.Bridge
             }
             catch (ResponseException ex)
             {
-                log.Error(ex, "Failed to retrieve missing timeseries: {msg}", ex.Message);
+                log.LogError(ex, "Failed to retrieve missing timeseries: {Message}", ex.Message);
                 return ex.Code == 400 || ex.Code == 409;
             }
             return true;
@@ -241,7 +242,7 @@ namespace Cognite.Bridge
             if (msg == null) return true;
             if (msg.Payload == null)
             {
-                log.Warning("Null payload in timeseries");
+                log.LogWarning("Null payload in timeseries");
                 return true;
             }
             var str = Encoding.UTF8.GetString(msg.Payload);
@@ -299,7 +300,7 @@ namespace Cognite.Bridge
             }
             catch (ResponseException ex)
             {
-                log.Error(ex, "Failed to create missing time series: {msg}", ex.Message);
+                log.LogError(ex, "Failed to create missing time series: {Message}", ex.Message);
                 return ex.Code == 400 || ex.Code == 409;
             }
 
@@ -322,7 +323,7 @@ namespace Cognite.Bridge
                 }
                 catch (ResponseException ex)
                 {
-                    log.Error(ex, "Failed to update timeseries: {msg}", ex.Message);
+                    log.LogError(ex, "Failed to update timeseries: {Message}", ex.Message);
                     return ex.Code == 400 || ex.Code == 409;
                 }
             }
@@ -339,7 +340,7 @@ namespace Cognite.Bridge
         {
             if (msg == null || msg.Payload == null)
             {
-                log.Warning("Null payload in datapoints");
+                log.LogWarning("Null payload in datapoints");
                 return true;
             }
             var datapoints = DataPointInsertionRequest.Parser.ParseFrom(msg.Payload);
@@ -354,7 +355,7 @@ namespace Cognite.Bridge
             {
                 if (!await RetrieveMissingTimeSeries(missingTsIds, token))
                 {
-                    log.Debug("Failed to retrieve {cnt} missing ids from CDF", missingTsIds.Count);
+                    log.LogDebug("Failed to retrieve {Count} missing ids from CDF", missingTsIds.Count);
                     return false;
                 }
             }
@@ -365,18 +366,18 @@ namespace Cognite.Bridge
                 && !(pts.DatapointTypeCase == DataPointInsertionItem.DatapointTypeOneofCase.NumericDatapoints && tsIsString[pts.ExternalId])
                 && !(pts.DatapointTypeCase == DataPointInsertionItem.DatapointTypeOneofCase.StringDatapoints && !tsIsString[pts.ExternalId])));
 
-            log.Verbose("Push datapoints for {cnt} out of {cnt2} timeseries", req.Items.Count, datapoints.Items.Count);
+            log.LogTrace("Push datapoints for {Count} out of {DpCount} timeseries", req.Items.Count, datapoints.Items.Count);
 
             var missingIds = new HashSet<string>();
 
             try
             {
                 await destination.CogniteClient.DataPoints.CreateAsync(req, token);
-                log.Debug("Push datapoints for {cnt} timeseries to CDF", req.Items.Count);
+                log.LogDebug("Push datapoints for {Count} timeseries to CDF", req.Items.Count);
             }
             catch (ResponseException ex)
             {
-                log.Warning("Failed to push datapoints to CDF: {msg}", ex.Message);
+                log.LogWarning("Failed to push datapoints to CDF: {Message}", ex.Message);
                 return ex.Code == 400 || ex.Code == 409;
             }
 
@@ -393,7 +394,7 @@ namespace Cognite.Bridge
             if (msg == null) throw new ArgumentNullException(nameof(msg));
             if (msg.Payload == null)
             {
-                log.Warning("Null payload in events");
+                log.LogWarning("Null payload in events");
                 return true;
             }
             var events = JsonSerializer.Deserialize<IEnumerable<StatelessEventCreate>>(Encoding.UTF8.GetString(msg.Payload));
@@ -428,7 +429,7 @@ namespace Cognite.Bridge
             }
             catch (ResponseException ex)
             {
-                log.Error("Failed to push events to CDF: {msg}", ex.Message);
+                log.LogError("Failed to push events to CDF: {Message}", ex.Message);
                 return ex.Code == 400 || ex.Code == 409;
             }
 
@@ -446,7 +447,7 @@ namespace Cognite.Bridge
             if (msg == null) throw new ArgumentNullException(nameof(msg));
             if (msg.Payload == null)
             {
-                log.Warning("Null payload in relationships");
+                log.LogWarning("Null payload in relationships");
                 return true;
             }
             var relationships = JsonSerializer.Deserialize<IEnumerable<RelationshipCreate>>(Encoding.UTF8.GetString(msg.Payload));
@@ -460,7 +461,7 @@ namespace Cognite.Bridge
             }
             catch (ResponseException ex)
             {
-                log.Error("Failed to push relationships to CDF: {msg}", ex.Message);
+                log.LogError("Failed to push relationships to CDF: {Message}", ex.Message);
 
                 return ex.Code == 400 || ex.Code == 409;
             }
@@ -517,7 +518,7 @@ namespace Cognite.Bridge
             if (msg == null) throw new ArgumentNullException(nameof(msg));
             if (msg.Payload == null)
             {
-                log.Warning("Null payload in raw");
+                log.LogWarning("Null payload in raw");
                 return true;
             }
             var rows = JsonSerializer.Deserialize<RawRequestWrapper>(Encoding.UTF8.GetString(msg.Payload), new JsonSerializerOptions
@@ -542,7 +543,7 @@ namespace Cognite.Bridge
             }
             catch (ResponseException ex)
             {
-                log.Error("Failed to push raw rows to CDF: {msg}", ex.Message);
+                log.LogError("Failed to push raw rows to CDF: {Message}", ex.Message);
                 return ex.Code == 400 || ex.Code == 409;
             }
 
@@ -578,7 +579,7 @@ namespace Cognite.Bridge
                 }
                 catch (ResponseException ex) when (ex.Code == 404)
                 {
-                    log.Warning("Table or database not found: {msg}", ex.Message);
+                    log.LogWarning("Table or database not found: {Message}", ex.Message);
                     break;
                 }
             } while (cursor != null);
@@ -592,7 +593,7 @@ namespace Cognite.Bridge
 
                 }
             }
-            log.Information("Creating or updating {cnt} raw rows in CDF", toUpsert.Count);
+            log.LogInformation("Creating or updating {Count} raw rows in CDF", toUpsert.Count);
 
             await destination.InsertRawRowsAsync(dbName, tableName, toUpsert, token);
         }

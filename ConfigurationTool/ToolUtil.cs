@@ -17,9 +17,9 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.Types;
+using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using Opc.Ua.Client;
-using Serilog;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -31,8 +31,6 @@ namespace Cognite.OpcUa.Config
 {
     public static class ToolUtil
     {
-        private static readonly ILogger log = Log.Logger.ForContext(typeof(ToolUtil));
-
         /// <summary>
         /// Run with timeout, returning the result of the task or throwing a TimeoutException
         /// </summary>
@@ -113,7 +111,7 @@ namespace Cognite.OpcUa.Config
         /// <param name="target">List to write to</param>
         /// <param name="client">UAClient instance for namespaces</param>
         /// <returns>Callback for Browse in UAClient</returns>
-        public static Action<ReferenceDescription, NodeId> GetSimpleListWriterCallback(ICollection<UANode> target, UAClient client)
+        public static Action<ReferenceDescription, NodeId> GetSimpleListWriterCallback(ICollection<UANode> target, UAClient client, ILogger log)
         {
             return (node, parentId) =>
             {
@@ -123,7 +121,7 @@ namespace Cognite.OpcUa.Config
                         node.DisplayName.Text, parentId, node.NodeClass);
                     bufferedNode.SetNodeType(client, node.NodeId);
 
-                    log.Verbose("HandleNode Object {name}", bufferedNode.DisplayName);
+                    log.LogTrace("HandleNode Object {Name}", bufferedNode.DisplayName);
                     target.Add(bufferedNode);
                 }
                 else if (node.NodeClass == NodeClass.Variable || node.NodeClass == NodeClass.VariableType)
@@ -132,7 +130,7 @@ namespace Cognite.OpcUa.Config
                         node.DisplayName.Text, parentId, node.NodeClass);
                     bufferedNode.SetNodeType(client, node.NodeId);
 
-                    log.Verbose("HandleNode Variable {name}", bufferedNode.DisplayName);
+                    log.LogTrace("HandleNode Variable {Name}", bufferedNode.DisplayName);
                     target.Add(bufferedNode);
                 }
             };
@@ -150,7 +148,8 @@ namespace Cognite.OpcUa.Config
         public static IEnumerable<UADataPoint> ToDataPoint(
             DataValue value,
             VariableExtractionState variable,
-            IUAClientAccess client)
+            IUAClientAccess client,
+            ILogger log)
         {
             if (client == null) throw new ArgumentNullException(nameof(client));
             if (variable == null || value == null) return Array.Empty<UADataPoint>();
@@ -159,7 +158,7 @@ namespace Cognite.OpcUa.Config
                 var ret = new List<UADataPoint>();
                 if (!(value.Value is Array))
                 {
-                    log.Debug("Bad array datapoint: {BadPointName} {BadPointValue}", variable.Id, value.Value.ToString());
+                    log.LogDebug("Bad array datapoint: {BadPointName} {BadPointValue}", variable.Id, value.Value.ToString());
                     return Enumerable.Empty<UADataPoint>();
                 }
                 var values = (Array)value.Value;
@@ -201,7 +200,8 @@ namespace Cognite.OpcUa.Config
         public static MonitoredItemNotificationEventHandler GetSimpleListWriterHandler(
             List<UADataPoint> points,
             IDictionary<NodeId, VariableExtractionState> states,
-            UAClient client)
+            UAClient client,
+            ILogger log)
         {
             return (item, args) =>
             {
@@ -212,16 +212,16 @@ namespace Cognite.OpcUa.Config
                     {
                         if (StatusCode.IsNotGood(datapoint.StatusCode))
                         {
-                            log.Debug("Bad streaming datapoint: {BadDatapointExternalId} {SourceTimestamp}", state.Id,
+                            log.LogDebug("Bad streaming datapoint: {BadDatapointExternalId} {SourceTimestamp}", state.Id,
                                 datapoint.SourceTimestamp);
                             continue;
                         }
 
-                        var buffDps = ToDataPoint(datapoint, state, client);
+                        var buffDps = ToDataPoint(datapoint, state, client, log);
                         state.UpdateFromStream(buffDps);
                         foreach (var buffDp in buffDps)
                         {
-                            log.Verbose("Subscription DataPoint {dp}", buffDp.ToString());
+                            log.LogTrace("Subscription DataPoint {DataPoint}", buffDp.ToString());
                         }
 
                         points.AddRange(buffDps);
@@ -229,7 +229,7 @@ namespace Cognite.OpcUa.Config
                 }
                 catch (Exception ex)
                 {
-                    log.Warning(ex, "Error in list writer callback");
+                    log.LogWarning(ex, "Error in list writer callback");
                 }
 
             };
@@ -242,7 +242,7 @@ namespace Cognite.OpcUa.Config
         /// <param name="state">State representing the source variable</param>
         /// <param name="client">Access to a connection to the OPC-UA server</param>
         /// <returns>Array of <see cref="UADataPoint"/> representing the DataValues in the IEncodable</returns>
-        public static UADataPoint[] ReadResultToDataPoints(IEncodeable rawData, VariableExtractionState state, IUAClientAccess client)
+        public static UADataPoint[] ReadResultToDataPoints(IEncodeable rawData, VariableExtractionState state, IUAClientAccess client, ILogger log)
         {
             if (client == null) throw new ArgumentNullException(nameof(client));
             if (rawData == null || state == null) return Array.Empty<UADataPoint>();
@@ -250,7 +250,7 @@ namespace Cognite.OpcUa.Config
             if (!(rawData is HistoryData data))
 #pragma warning restore CA1508 // Avoid dead conditional code
             {
-                log.Warning("Incorrect result type of history read data");
+                log.LogWarning("Incorrect result type of history read data");
                 return Array.Empty<UADataPoint>();
             }
 
@@ -261,15 +261,15 @@ namespace Cognite.OpcUa.Config
             {
                 if (StatusCode.IsNotGood(datapoint.StatusCode))
                 {
-                    log.Debug("Bad history datapoint: {BadDatapointExternalId} {SourceTimestamp}", state.Id,
+                    log.LogDebug("Bad history datapoint: {BadDatapointExternalId} {SourceTimestamp}", state.Id,
                         datapoint.SourceTimestamp);
                     continue;
                 }
 
-                var buffDps = ToDataPoint(datapoint, state, client);
+                var buffDps = ToDataPoint(datapoint, state, client, log);
                 foreach (var buffDp in buffDps)
                 {
-                    log.Verbose("History DataPoint {dp}", buffDp.ToString());
+                    log.LogTrace("History DataPoint {DataPoint}", buffDp.ToString());
                     result.Add(buffDp);
                 }
             }
