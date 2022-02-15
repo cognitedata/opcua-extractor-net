@@ -201,7 +201,8 @@ namespace Cognite.OpcUa.Config
             List<UADataPoint> points,
             IDictionary<NodeId, VariableExtractionState> states,
             UAClient client,
-            ILogger log)
+            ILogger log,
+            bool writeBadDatapoints)
         {
             return (item, args) =>
             {
@@ -212,9 +213,10 @@ namespace Cognite.OpcUa.Config
                     {
                         if (StatusCode.IsNotGood(datapoint.StatusCode))
                         {
-                            log.LogDebug("Bad streaming datapoint: {BadDatapointExternalId} {SourceTimestamp}", state.Id,
-                                datapoint.SourceTimestamp);
-                            continue;
+                            log.LogDebug("Bad streaming datapoint: {BadDatapointExternalId} {SourceTimestamp} {Code}", state.Id,
+                                datapoint.SourceTimestamp, datapoint.StatusCode);
+                            
+                            if (!writeBadDatapoints) continue;
                         }
 
                         var buffDps = ToDataPoint(datapoint, state, client, log);

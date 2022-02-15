@@ -921,7 +921,7 @@ namespace Cognite.OpcUa.Config
                 {
                     await ToolUtil.RunWithTimeout(SubscribeToNodes(
                         states.Take(chunkSize),
-                        ToolUtil.GetSimpleListWriterHandler(dps, states.ToDictionary(state => state.SourceId), this, log),
+                        ToolUtil.GetSimpleListWriterHandler(dps, states.ToDictionary(state => state.SourceId), this, log, true),
                         token), 120);
                     baseConfig.Source.SubscriptionChunk = chunkSize;
                     failed = false;

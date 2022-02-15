@@ -19,6 +19,7 @@ using Cognite.OpcUa;
 using Cognite.OpcUa.Types;
 using CogniteSdk;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using Prometheus;
 using Server;
@@ -59,11 +60,17 @@ namespace Test
             }
             return true;
         }
-        public static void AddDummyProvider(CDFMockHandler handler, IServiceCollection services)
+        public static void AddDummyProvider(string project, CDFMockHandler.MockMode mode, bool storeDatapoints, IServiceCollection services)
         {
-            if (handler == null) throw new ArgumentNullException(nameof(handler));
+            services.AddSingleton(provider =>
+            {
+                return new CDFMockHandler(project, mode, provider.GetRequiredService<ILogger<CDFMockHandler>>())
+                {
+                    StoreDatapoints = storeDatapoints
+                };
+            });
             services.AddHttpClient<Client.Builder>()
-                .ConfigurePrimaryHttpMessageHandler(handler.CreateHandler);
+                .ConfigurePrimaryHttpMessageHandler(provider => provider.GetRequiredService<CDFMockHandler>().CreateHandler());
         }
 
         private static Collector GetCollector(string name)

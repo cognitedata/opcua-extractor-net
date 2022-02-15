@@ -2,6 +2,7 @@
 using Cognite.Extractor.Common;
 using Cognite.Extractor.Configuration;
 using Cognite.Extractor.StateStorage;
+using Cognite.Extractor.Testing;
 using Cognite.Extractor.Utils;
 using Cognite.OpcUa;
 using Cognite.OpcUa.Pushers;
@@ -36,33 +37,34 @@ namespace Test.Unit
             mqttConfig.Mqtt.ClientId = $"opcua-mqtt-pusher-test-bridge-{idCounter}";
             mqttConfig.GenerateDefaults();
             mqttConfig.Cognite.Update = true;
-            var handler = new CDFMockHandler(mqttConfig.Cognite.Project, CDFMockHandler.MockMode.None)
-            {
-                StoreDatapoints = true
-            };
-            CommonTestUtils.AddDummyProvider(handler, Services);
+            CommonTestUtils.AddDummyProvider(Config.Cognite.Project, CDFMockHandler.MockMode.None, true, Services);
+
             Services.AddSingleton(mqttConfig.Cognite);
             Services.AddCogniteClient("MQTT-CDF Bridge", null, true, true, false);
             var provider = Services.BuildServiceProvider();
             Config.Mqtt.ClientId = $"opcua-mqtt-pusher-test-{idCounter}";
             idCounter++;
-            var log = Provider.GetRequiredService<ILogger<MQTTPusher>>();
+            var log = provider.GetRequiredService<ILogger<MQTTPusher>>();
             var pusher = new MQTTPusher(log, provider, Config.Mqtt);
-            var bridge = new MQTTBridge(new Destination(mqttConfig.Cognite, provider), mqttConfig);
+            var bridge = new MQTTBridge(new Destination(mqttConfig.Cognite, provider), mqttConfig,
+                provider.GetRequiredService<ILogger<MQTTBridge>>());
+
+            var handler = provider.GetRequiredService<CDFMockHandler>();
             return (handler, bridge, pusher);
         }
     }
-    public class MQTTPusherTest : MakeConsoleWork, IClassFixture<MQTTPusherTestFixture>
+    public sealed class MQTTPusherTest : IClassFixture<MQTTPusherTestFixture>, IDisposable
     {
         private readonly MQTTPusherTestFixture tester;
         private readonly MQTTBridge bridge;
         private readonly CDFMockHandler handler;
         private readonly MQTTPusher pusher;
 
-        public MQTTPusherTest(ITestOutputHelper output, MQTTPusherTestFixture tester) : base(output)
+        public MQTTPusherTest(ITestOutputHelper output, MQTTPusherTestFixture tester) 
         {
             this.tester = tester ?? throw new ArgumentNullException(nameof(tester));
             tester.ResetConfig();
+            tester.Init(output);
             (handler, bridge, pusher) = tester.GetPusher();
             bridge.StartBridge(tester.Source.Token).Wait();
         }
@@ -710,14 +712,10 @@ namespace Test.Unit
             }
             catch { }
         }
-        protected override void Dispose(bool disposing)
+        public void Dispose()
         {
-            base.Dispose(disposing);
-            if (disposing)
-            {
-                bridge.Dispose();
-                pusher.Dispose();
-            }
+            bridge?.Dispose();
+            pusher?.Dispose();
         }
     }
 }

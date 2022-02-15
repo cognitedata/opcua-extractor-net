@@ -17,7 +17,7 @@ using Xunit.Abstractions;
 
 namespace Test.Unit
 {
-    public class ConfigToolTestFixture : IAsyncLifetime
+    public class ConfigToolTestFixture : LoggingTestFixture, IAsyncLifetime
     {
         public UAServerExplorer Explorer { get; private set; }
         public FullConfig Config { get; }
@@ -25,7 +25,7 @@ namespace Test.Unit
         public ServerController Server { get; }
         public CancellationTokenSource Source { get; protected set; }
         public ServiceProvider Provider { get; }
-        public ConfigToolTestFixture(ITestOutputHelper output)
+        public ConfigToolTestFixture()
         {
             var services = new ServiceCollection();
             Config = services.AddConfig<FullConfig>("config.test.yml", 1);
@@ -35,8 +35,7 @@ namespace Test.Unit
             Config.Source.EndpointUrl = $"opc.tcp://localhost:{port}";
             BaseConfig = ConfigurationUtils.Read<FullConfig>("config.test.yml");
             BaseConfig.GenerateDefaults();
-
-            services.AddTestLogging(output);
+            Configure(services);
 
             Provider = services.BuildServiceProvider();
 
@@ -70,9 +69,10 @@ namespace Test.Unit
     public class ConfigToolTest : IClassFixture<ConfigToolTestFixture>
     {
         private readonly ConfigToolTestFixture tester;
-        public ConfigToolTest(ConfigToolTestFixture tester)
+        public ConfigToolTest(ITestOutputHelper output, ConfigToolTestFixture tester)
         {
             this.tester = tester;
+            tester.Init(output);
         }
         [Fact]
         public async Task TestEndpointDiscovery()

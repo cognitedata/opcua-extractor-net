@@ -1,11 +1,14 @@
-﻿using Cognite.OpcUa;
+﻿using Cognite.Extractor.Testing;
+using Cognite.OpcUa;
 using Cognite.OpcUa.Types;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Opc.Ua;
 using System.Collections.Generic;
 using System.Linq;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace Test.Unit
 {
@@ -14,14 +17,15 @@ namespace Test.Unit
         private readonly NamespaceTable nss;
         private readonly ILogger log;
 
-        public TransformationTest()
+        public TransformationTest(ITestOutputHelper output)
         {
             nss = new NamespaceTable();
             nss.Append("opc.tcp://test-namespace.one");
             nss.Append("https://some-namespace.org");
             nss.Append("my:namespace:uri");
-
-            log = new NullLogger<NodeTransformation>();
+            var services = new ServiceCollection();
+            services.AddTestLogging(output);
+            log = services.BuildServiceProvider().GetRequiredService<ILogger<NodeTransformation>>();
         }
         [Fact]
         public void TestNameFilter()

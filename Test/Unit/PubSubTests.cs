@@ -1,4 +1,5 @@
 ﻿using Cognite.Extractor.Common;
+using Cognite.Extractor.Testing;
 using Cognite.OpcUa;
 using Cognite.OpcUa.PubSub;
 using Cognite.OpcUa.Types;
@@ -21,12 +22,13 @@ namespace Test.Unit
     {
         public PubSubTestFixture() : base(new[] { PredefinedSetup.Base, PredefinedSetup.Custom, PredefinedSetup.PubSub }) { }
     }
-    public class PubSubTests : MakeConsoleWork, IClassFixture<PubSubTestFixture>
+    public class PubSubTests : IClassFixture<PubSubTestFixture>
     {
         private readonly PubSubTestFixture tester;
-        public PubSubTests(ITestOutputHelper output, PubSubTestFixture tester) : base(output)
+        public PubSubTests(ITestOutputHelper output, PubSubTestFixture tester)
         {
             if (tester == null) throw new ArgumentNullException(nameof(tester));
+            tester.Init(output);
             this.tester = tester;
             tester.Server.UpdateNode(tester.Ids.Base.DoubleVar1, 17);
             tester.Server.UpdateNode(tester.Ids.Base.DoubleVar2, -15);

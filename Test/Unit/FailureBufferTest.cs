@@ -21,14 +21,15 @@ using Xunit.Abstractions;
 namespace Test.Unit
 {
     [Collection("Shared server tests")]
-    public class FailureBufferTest : MakeConsoleWork
+    public class FailureBufferTest
     {
         private static int idx;
         private readonly StaticServerTestFixture tester;
-        public FailureBufferTest(ITestOutputHelper output, StaticServerTestFixture tester) : base(output)
+        public FailureBufferTest(ITestOutputHelper output, StaticServerTestFixture tester)
         {
             this.tester = tester ?? throw new ArgumentNullException(nameof(tester));
             tester.ResetConfig();
+            tester.Init(output);
         }
 
         private FullConfig BuildConfig()

@@ -19,7 +19,7 @@ using Xunit.Abstractions;
 
 namespace Test.Utils
 {
-    public abstract class BaseExtractorTestFixture : IAsyncLifetime
+    public abstract class BaseExtractorTestFixture : LoggingTestFixture, IAsyncLifetime
     {
         public int Port { get; }
         public NodeIdReference Ids => Server.Ids;
@@ -28,7 +28,7 @@ namespace Test.Utils
         public ServerController Server { get; private set; }
         public CancellationTokenSource Source { get; protected set; }
         public ServiceProvider Provider { get; protected set; }
-        protected ServiceCollection Services { get; set; }
+        protected ServiceCollection Services { get; }
         protected PredefinedSetup[] Setups { get; }
         protected BaseExtractorTestFixture(PredefinedSetup[] setups = null)
         {
@@ -40,6 +40,8 @@ namespace Test.Utils
             Config = Services.AddConfig<FullConfig>("config.test.yml", 1);
             Console.WriteLine($"Add logger: {Config.Logger}");
             Config.Source.EndpointUrl = $"opc.tcp://localhost:{Port}";
+            Configure(Services);
+            Provider = Services.BuildServiceProvider();
             
             if (setups == null)
             {
@@ -48,12 +50,6 @@ namespace Test.Utils
                     PredefinedSetup.Wrong, PredefinedSetup.Full, PredefinedSetup.Auditing };
             }
             Setups = setups;
-        }
-
-        public void Init(ITestOutputHelper output)
-        {
-            Services.AddTestLogging(output);
-            Provider = Services.BuildServiceProvider();
         }
 
         private async Task Start()
@@ -131,8 +127,6 @@ namespace Test.Utils
             return ext;
         }
 
-
-
         public (InfluxPusher pusher, InfluxDBClient client) GetInfluxPusher(string dbName, bool clear = true)
         {
             if (Config.Influx == null)
@@ -167,16 +161,13 @@ namespace Test.Utils
 
         public (CDFMockHandler, CDFPusher) GetCDFPusher()
         {
-            var handler = new CDFMockHandler("test", CDFMockHandler.MockMode.None)
-            {
-                StoreDatapoints = true
-            };
-            CommonTestUtils.AddDummyProvider(handler, Services);
+            CommonTestUtils.AddDummyProvider("test", CDFMockHandler.MockMode.None, true, Services);
             Services.AddCogniteClient("appid", null, true, true, false);
             var provider = Services.BuildServiceProvider();
             var destination = provider.GetRequiredService<CogniteDestination>();
             var pusher = new CDFPusher(Provider.GetRequiredService<ILogger<CDFPusher>>(),
                 Config.Extraction, Config.Cognite, destination);
+            var handler = provider.GetRequiredService<CDFMockHandler>();
             return (handler, pusher);
         }
 

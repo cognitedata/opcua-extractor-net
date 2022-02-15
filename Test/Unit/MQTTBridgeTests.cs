@@ -2,11 +2,13 @@
 using Cognite.Extractor.Common;
 using Cognite.Extractor.Configuration;
 using Cognite.Extractor.Logging;
+using Cognite.Extractor.Testing;
 using Cognite.Extractor.Utils;
 using CogniteSdk;
 using Com.Cognite.V1.Timeseries.Proto;
 using Google.Protobuf;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using MQTTnet;
 using MQTTnet.Client;
 using MQTTnet.Client.Options;
@@ -25,9 +27,13 @@ namespace Test.Unit
     /// Tests for the MQTT bridge as a standalone tool.
     /// </summary>
     [Collection("Extractor tests")]
-    public class MQTTBridgeTests : MakeConsoleWork
+    public class MQTTBridgeTests
     {
-        public MQTTBridgeTests(ITestOutputHelper output) : base(output) { }
+        private readonly ITestOutputHelper output;
+        public MQTTBridgeTests(ITestOutputHelper output)
+        {
+            this.output = output;
+        }
 
         private sealed class BridgeTester : IDisposable
         {
@@ -37,21 +43,20 @@ namespace Test.Unit
             private readonly IMqttClient client;
             private readonly MqttApplicationMessageBuilder baseBuilder;
             private readonly IServiceProvider provider;
-            public BridgeTester(CDFMockHandler.MockMode mode)
+            public BridgeTester(CDFMockHandler.MockMode mode, ITestOutputHelper output)
             {
                 var services = new ServiceCollection();
                 Config = services.AddConfig<BridgeConfig>("config.bridge.yml");
-                Handler = new CDFMockHandler(Config.Cognite.Project, mode)
-                {
-                    StoreDatapoints = true
-                };
+                
                 Config.Logger.Console.Level = "debug";
-                CommonTestUtils.AddDummyProvider(Handler, services);
-                services.AddLogger();
+                CommonTestUtils.AddDummyProvider(Config.Cognite.Project, mode, true, services);
+                services.AddTestLogging(output);
                 services.AddCogniteClient("MQTT-CDF Bridge", null, true, true, false);
                 provider = services.BuildServiceProvider();
 
-                bridge = new MQTTBridge(new Destination(Config.Cognite, provider), Config);
+                Handler = provider.GetRequiredService<CDFMockHandler>();
+
+                bridge = new MQTTBridge(new Destination(Config.Cognite, provider), Config, provider.GetRequiredService<ILogger<MQTTBridge>>());
                 bridge.StartBridge(CancellationToken.None).Wait();
                 var options = new MqttClientOptionsBuilder()
                     .WithClientId("test-mqtt-publisher")
@@ -67,7 +72,7 @@ namespace Test.Unit
             public async Task RecreateBridge()
             {
                 bridge.Dispose();
-                bridge = new MQTTBridge(new Destination(Config.Cognite, provider), Config);
+                bridge = new MQTTBridge(new Destination(Config.Cognite, provider), Config, provider.GetRequiredService<ILogger<MQTTBridge>>());
                 bool success = await bridge.StartBridge(CancellationToken.None);
                 if (!success) throw new ConfigurationException("Unable to start bridge");
             }
@@ -184,7 +189,7 @@ namespace Test.Unit
         [Trait("Test", "mqttcreateassets")]
         public async Task TestCreateAssets()
         {
-            using var tester = new BridgeTester(CDFMockHandler.MockMode.None);
+            using var tester = new BridgeTester(CDFMockHandler.MockMode.None, output);
             var roundOne = new List<AssetCreate>
             {
                 new AssetCreate
@@ -254,7 +259,7 @@ namespace Test.Unit
         [Trait("Test", "mqttcreatetimeseries")]
         public async Task TestCreateTimeseries()
         {
-            using var tester = new BridgeTester(CDFMockHandler.MockMode.None);
+            using var tester = new BridgeTester(CDFMockHandler.MockMode.None, output);
             var assets = new List<AssetCreate>
             {
                 new AssetCreate
@@ -352,7 +357,7 @@ namespace Test.Unit
         [Trait("Test", "mqttupdateassets")]
         public async Task TestUpdateAssets()
         {
-            using var tester = new BridgeTester(CDFMockHandler.MockMode.None);
+            using var tester = new BridgeTester(CDFMockHandler.MockMode.None, output);
             var assetOne = new AssetCreate
             {
                 ExternalId = "test-asset-1",
@@ -400,7 +405,7 @@ namespace Test.Unit
         [Trait("Test", "mqttupdatetimeseries")]
         public async Task TestUpdateTimeSeries()
         {
-            using var tester = new BridgeTester(CDFMockHandler.MockMode.None);
+            using var tester = new BridgeTester(CDFMockHandler.MockMode.None, output);
             var assetOne = new AssetCreate
             {
                 ExternalId = "test-asset-1",
@@ -464,7 +469,7 @@ namespace Test.Unit
         [Trait("Test", "mqttcreatedata")]
         public async Task TestCreateDatapoints()
         {
-            using var tester = new BridgeTester(CDFMockHandler.MockMode.None);
+            using var tester = new BridgeTester(CDFMockHandler.MockMode.None, output);
             var timeseries = new List<StatelessTimeSeriesCreate>
             {
                 new StatelessTimeSeriesCreate
@@ -613,7 +618,7 @@ namespace Test.Unit
         [Trait("Test", "mqttcreateevents")]
         public async Task TestCreateEvents()
         {
-            using var tester = new BridgeTester(CDFMockHandler.MockMode.None);
+            using var tester = new BridgeTester(CDFMockHandler.MockMode.None, output);
             var assets = new List<AssetCreate>
             {
                 new AssetCreate
@@ -728,7 +733,7 @@ namespace Test.Unit
         [Trait("Test", "mqttraw")]
         public async Task TestMqttRaw()
         {
-            using var tester = new BridgeTester(CDFMockHandler.MockMode.None);
+            using var tester = new BridgeTester(CDFMockHandler.MockMode.None, output);
 
             var roundOne = new AssetCreate[]
             {
@@ -785,7 +790,7 @@ namespace Test.Unit
         [Trait("Test", "mqttcreaterelationships")]
         public async Task TestCreateRelationships()
         {
-            using var tester = new BridgeTester(CDFMockHandler.MockMode.None);
+            using var tester = new BridgeTester(CDFMockHandler.MockMode.None, output);
 
             var roundOne = new List<RelationshipCreate>
             {

@@ -15,13 +15,14 @@ using Xunit.Abstractions;
 namespace Test.Unit
 {
     [Collection("Shared server tests")]
-    public class StringConversionTest : MakeConsoleWork
+    public class StringConversionTest
     {
         private readonly StaticServerTestFixture tester;
-        public StringConversionTest(ITestOutputHelper output, StaticServerTestFixture tester) : base(output)
+        public StringConversionTest(ITestOutputHelper output, StaticServerTestFixture tester)
         {
             this.tester = tester ?? throw new ArgumentNullException(nameof(tester));
             tester.ResetConfig();
+            tester.Init(output);
         }
         [Fact]
         public void TestConvertToString()

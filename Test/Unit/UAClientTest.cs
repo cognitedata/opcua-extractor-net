@@ -1,4 +1,5 @@
 ﻿using Cognite.Extractor.Logging;
+using Cognite.Extractor.Testing;
 using Cognite.Extractor.Utils;
 using Cognite.OpcUa;
 using Cognite.OpcUa.History;
@@ -22,7 +23,7 @@ using Xunit.Abstractions;
 
 namespace Test.Unit
 {
-    public sealed class UAClientTestFixture : IAsyncLifetime
+    public sealed class UAClientTestFixture : LoggingTestFixture, IAsyncLifetime
     {
         public UAClient Client { get; private set; }
         public ServerController Server { get; private set; }
@@ -34,7 +35,7 @@ namespace Test.Unit
             var services = new ServiceCollection();
             Config = services.AddConfig<FullConfig>("config.test.yml", 1);
             Config.Source.EndpointUrl = $"opc.tcp://localhost:62000";
-            services.AddLogger();
+            Configure(services);
             LoggingUtils.Configure(Config.Logger);
             Provider = services.BuildServiceProvider();
 
@@ -81,12 +82,13 @@ namespace Test.Unit
             await Provider.DisposeAsync();
         }
     }
-    public class UAClientTest : MakeConsoleWork, IClassFixture<UAClientTestFixture>
+    public class UAClientTest : IClassFixture<UAClientTestFixture>
     {
         private readonly UAClientTestFixture tester;
-        public UAClientTest(ITestOutputHelper output, UAClientTestFixture tester) : base(output)
+        public UAClientTest(ITestOutputHelper output, UAClientTestFixture tester)
         {
             this.tester = tester ?? throw new ArgumentNullException(nameof(tester));
+            tester.Init(output);
         }
         #region session
         [Fact]
@@ -391,7 +393,7 @@ namespace Test.Unit
             // Best case, it takes 91 reads: 1 read at level 0, 3 reads for each of the 30 remaining.
             // Timing might cause nodes to be read in a sligthly different order, so we might read 2 more times.
             // In practice this slight variance is irrelevant.
-            Assert.True(reads >= 90 && reads <= 93);
+            Assert.True(reads >= 89 && reads <= 93);
             Assert.True(CommonTestUtils.TestMetricValue("opcua_tree_depth", 31));
         }
         [Theory]

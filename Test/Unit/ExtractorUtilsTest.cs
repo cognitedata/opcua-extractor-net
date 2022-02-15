@@ -7,15 +7,14 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Xunit;
-using Xunit.Abstractions;
 using SourceOp = Cognite.OpcUa.ExtractorUtils.SourceOp;
 
 
 namespace Test.Unit
 {
-    public class ExtractorUtilsTest : MakeConsoleWork
+    public class ExtractorUtilsTest
     {
-        public ExtractorUtilsTest(ITestOutputHelper output) : base(output)
+        public ExtractorUtilsTest()
         {
         }
 

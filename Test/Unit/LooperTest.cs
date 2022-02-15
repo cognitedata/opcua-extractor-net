@@ -1,4 +1,5 @@
-﻿using Cognite.OpcUa;
+﻿using Cognite.Extractor.Testing;
+using Cognite.OpcUa;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.Types;
 using Opc.Ua;
@@ -14,13 +15,14 @@ using Xunit.Abstractions;
 namespace Test.Unit
 {
     [Collection("Shared server tests")]
-    public class LooperTest : MakeConsoleWork
+    public class LooperTest
     {
         private readonly StaticServerTestFixture tester;
-        public LooperTest(ITestOutputHelper output, StaticServerTestFixture tester) : base(output)
+        public LooperTest(ITestOutputHelper output, StaticServerTestFixture tester)
         {
             this.tester = tester ?? throw new ArgumentNullException(nameof(tester));
             tester.ResetConfig();
+            tester.Init(output);
             tester.Config.Extraction.DataPushDelay = "-1";
             tester.Config.Extraction.AutoRebrowsePeriod = "1000";
         }

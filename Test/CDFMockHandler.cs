@@ -86,19 +86,15 @@ namespace Test
 
         private readonly ILogger log;
 
-        public CDFMockHandler(ILogger log)
-        {
-            this.log = log;
-        }
-
         public enum MockMode
         {
             None, Some, All, FailAsset
         }
-        public CDFMockHandler(string project, MockMode mode)
+        public CDFMockHandler(string project, MockMode mode, ILogger log)
         {
             this.project = project;
             this.mode = mode;
+            this.log = log;
         }
 
         public HttpMessageHandler CreateHandler()

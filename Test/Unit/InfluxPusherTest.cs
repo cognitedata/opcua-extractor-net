@@ -16,30 +16,28 @@ using Xunit.Abstractions;
 namespace Test.Unit
 {
     [Collection("Shared server tests")]
-    public class InfluxPusherTest : MakeConsoleWork
+    public sealed class InfluxPusherTest : IDisposable
     {
         private readonly StaticServerTestFixture tester;
         private readonly InfluxDBClient client;
         private readonly InfluxPusher pusher;
         private static int ifIndex;
-        public InfluxPusherTest(ITestOutputHelper output, StaticServerTestFixture tester) : base(output)
+        public InfluxPusherTest(ITestOutputHelper output, StaticServerTestFixture tester)
         {
             this.tester = tester ?? throw new ArgumentNullException(nameof(tester));
             tester.ResetConfig();
+            tester.Init(output);
 
             var ifSetup = tester.GetInfluxPusher($"testdb-pusher{ifIndex++}");
             client = ifSetup.client;
             pusher = ifSetup.pusher;
         }
-        protected override void Dispose(bool disposing)
+        public void Dispose()
         {
-            base.Dispose(disposing);
-            if (disposing)
-            {
-                client?.Dispose();
-                pusher?.Dispose();
-            }
+            client?.Dispose();
+            pusher?.Dispose();
         }
+
         [Fact]
         public async Task TestTestConnection()
         {

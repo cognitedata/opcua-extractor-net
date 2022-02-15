@@ -191,11 +191,18 @@ namespace Test.Integration
         [Fact]
         public async Task TestWrongData()
         {
+            
+
             using var pusher = new DummyPusher(new DummyPusherConfig());
             using var extractor = tester.BuildExtractor(true, null, pusher);
 
             var dataTypes = tester.Config.Extraction.DataTypes;
             var ids = tester.Ids.Wrong;
+
+            tester.Server.UpdateNode(ids.WrongDim, new[] { 0, 0 });
+            tester.Server.UpdateNode(ids.RankImprecise, new[] { 0, 0, 0, 0, 0, 0 });
+            tester.Server.UpdateNode(ids.RankImpreciseNoDim, new[] { 0, 0, 0, 0 });
+            tester.Server.UpdateNode(ids.NullType, 0);
 
             tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Wrong.Root, tester.Client);
             dataTypes.AllowStringVariables = true;
