@@ -153,13 +153,13 @@ namespace Cognite.OpcUa.Types
         {
             if (config.Subscriptions.IgnoreAccessLevel && config.History.Enabled && config.History.Data)
             {
-                ReadHistory |= Historizing;
+                ReadHistory = Historizing;
             }
 
             if (!config.Subscriptions.IgnoreAccessLevel)
             {
-                ShouldSubscribeData |= (AccessLevel & AccessLevels.CurrentRead) != 0 && config.Subscriptions.DataPoints;
-                ReadHistory |= (AccessLevel & AccessLevels.HistoryRead) != 0 && config.History.Enabled && config.History.Data;
+                ShouldSubscribeData = (AccessLevel & AccessLevels.CurrentRead) != 0 && config.Subscriptions.DataPoints;
+                ReadHistory = (AccessLevel & AccessLevels.HistoryRead) != 0 && config.History.Enabled && config.History.Data;
             }
 
             if (config.Subscriptions.IgnoreAccessLevel)
