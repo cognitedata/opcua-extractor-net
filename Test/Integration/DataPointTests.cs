@@ -718,6 +718,7 @@ namespace Test.Integration
             // Test disable subscriptions
             Reset();
             tester.Config.Subscriptions.DataPoints = false;
+            extractor.State.Clear();
             await extractor.RunExtractor(true);
             var state = extractor.State.GetNodeState(ids.DoubleVar1);
             Assert.False(state.ShouldSubscribe);

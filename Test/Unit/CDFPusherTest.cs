@@ -1124,6 +1124,7 @@ namespace Test.Unit
             tester.Config.Extraction.DataTypes.MaxArraySize = 10;
             tester.Config.Extraction.DataTypes.AutoIdentifyTypes = true;
             tester.Config.Extraction.RootNode = tester.Ids.Custom.Root.ToProtoNodeId(tester.Client);
+            tester.Config.History.Enabled = true;
 
             using var extractor = tester.BuildExtractor(true, null, pusher);
 
@@ -1172,6 +1173,8 @@ namespace Test.Unit
                 await extractor.Streamer.PushDataPoints(new[] { pusher }, Enumerable.Empty<IPusher>(), tester.Source.Token);
                 return handler.Datapoints.ContainsKey(id) && handler.Datapoints[id].NumericDatapoints.Any();
             }, 10);
+
+            Assert.True(extractor.State.NodeStates.Where(state => state.FrontfillEnabled).Any());
 
             tester.WipeCustomHistory();
         }
