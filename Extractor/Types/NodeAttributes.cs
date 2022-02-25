@@ -81,6 +81,16 @@ namespace Cognite.OpcUa.Types
             }
             return result;
         }
+
+        /// <summary>
+        /// Call this after initializing values to calculate remaining parameters.
+        /// </summary>
+        /// <param name="config">Config object</param>
+        public virtual void InitializeAfterRead(FullConfig config)
+        {
+            ShouldSubscribeEvents |= (EventNotifier & EventNotifiers.SubscribeToEvents) != 0;
+        }
+
         /// <summary>
         /// Handle attribute read result. Should be overriden by subclasses to handle fields not found on the Object NodeClass.
         /// </summary>
@@ -116,7 +126,7 @@ namespace Cognite.OpcUa.Types
                 idx++;
             }
 
-            ShouldSubscribeEvents = (EventNotifier & EventNotifiers.SubscribeToEvents) != 0;
+            InitializeAfterRead(config);
 
             DataRead = true;
 
@@ -138,6 +148,34 @@ namespace Cognite.OpcUa.Types
         public bool ReadHistory { get; set; }
         public bool ShouldSubscribeData { get; set; } = true;
         public VariableAttributes(NodeClass nc) : base(nc) { }
+
+        public override void InitializeAfterRead(FullConfig config)
+        {
+            if (config.Subscriptions.IgnoreAccessLevel && config.History.Enabled && config.History.Data)
+            {
+                ReadHistory = Historizing;
+            }
+
+            if (!config.Subscriptions.IgnoreAccessLevel)
+            {
+                ShouldSubscribeData = (AccessLevel & AccessLevels.CurrentRead) != 0 && config.Subscriptions.DataPoints;
+                ReadHistory = (AccessLevel & AccessLevels.HistoryRead) != 0 && config.History.Enabled && config.History.Data;
+            }
+
+            if (config.Subscriptions.IgnoreAccessLevel)
+            {
+                ShouldSubscribeData = true;
+            }
+
+            if (config.History.RequireHistorizing)
+            {
+                ReadHistory &= Historizing;
+            }
+
+            base.InitializeAfterRead(config);
+        }
+
+
         /// <summary>
         /// Handle attribute read result for a variable.
         /// </summary>
@@ -192,28 +230,7 @@ namespace Cognite.OpcUa.Types
                 idx++;
             }
 
-            if (config.Subscriptions.IgnoreAccessLevel && config.History.Enabled && config.History.Data)
-            {
-                ReadHistory = Historizing;
-            }
-
-            if (!config.Subscriptions.IgnoreAccessLevel)
-            {
-                ShouldSubscribeData = (AccessLevel & AccessLevels.CurrentRead) != 0 && config.Subscriptions.DataPoints;
-                ReadHistory = (AccessLevel & AccessLevels.HistoryRead) != 0 && config.History.Enabled && config.History.Data;
-            }
-
-            if (config.Subscriptions.IgnoreAccessLevel)
-            {
-                ShouldSubscribeData = true;
-            }
-
-            if (config.History.RequireHistorizing)
-            {
-                ReadHistory = ReadHistory && Historizing;
-            }
-
-            ShouldSubscribeEvents = (EventNotifier & EventNotifiers.SubscribeToEvents) != 0;
+            InitializeAfterRead(config);
 
             DataRead = true;
             return idx;
