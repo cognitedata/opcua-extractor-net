@@ -18,13 +18,14 @@ using Xunit.Abstractions;
 namespace Test.Unit
 {
     [Collection("Shared server tests")]
-    public class PusherUtilsTest : MakeConsoleWork
+    public class PusherUtilsTest
     {
         private readonly StaticServerTestFixture tester;
-        public PusherUtilsTest(ITestOutputHelper output, StaticServerTestFixture tester) : base(output)
+        public PusherUtilsTest(ITestOutputHelper output, StaticServerTestFixture tester)
         {
             if (tester == null) throw new ArgumentNullException(nameof(tester));
             tester.ResetConfig();
+            tester.Init(output);
             this.tester = tester;
         }
         [Fact]

@@ -1,6 +1,7 @@
 ﻿using AdysTech.InfluxDB.Client.Net;
 using Cognite.Extractor.Common;
 using Cognite.Extractor.StateStorage;
+using Cognite.Extractor.Testing;
 using Cognite.OpcUa;
 using Cognite.OpcUa.History;
 using Microsoft.Extensions.DependencyInjection;
@@ -23,16 +24,17 @@ namespace Test.Integration
         }
     }
 
-    public class LiteDbStorageTests : MakeConsoleWork, IClassFixture<LiteDbStorageTestFixture>
+    public class LiteDbStorageTests : IClassFixture<LiteDbStorageTestFixture>
     {
         private readonly LiteDbStorageTestFixture tester;
         private static int index;
         // The influxbuffer tests are left here, the influxdb failure buffer should probably be retired.
         // Nobody is using it, and it is unnecessarily complex. The file buffer is faster and
         // much simpler, which in the end makes it safer.
-        public LiteDbStorageTests(ITestOutputHelper output, LiteDbStorageTestFixture tester) : base(output)
+        public LiteDbStorageTests(ITestOutputHelper output, LiteDbStorageTestFixture tester)
         {
             this.tester = tester ?? throw new ArgumentNullException(nameof(tester));
+            tester.Init(output);
             tester.ResetConfig();
             tester.WipeBaseHistory();
             tester.WipeEventHistory();
@@ -57,7 +59,7 @@ namespace Test.Integration
             var runTask = extractor.RunExtractor();
 
             await extractor.Looper.WaitForNextPush();
-            await CommonTestUtils.WaitForCondition(() => extractor.State.NodeStates.All(state => !state.IsFrontfilling), 20);
+            await TestUtils.WaitForCondition(() => extractor.State.NodeStates.All(state => !state.IsFrontfilling), 20);
             await extractor.Looper.WaitForNextPush();
 
             var oldHost = tester.Config.Influx.Host;
@@ -66,7 +68,7 @@ namespace Test.Integration
             tester.Server.UpdateNode(tester.Server.Ids.Base.IntVar, 1000);
             tester.Server.UpdateNode(tester.Server.Ids.Base.DoubleVar2, 1.0);
 
-            await CommonTestUtils.WaitForCondition(() => extractor.FailureBuffer.AnyPoints,
+            await TestUtils.WaitForCondition(() => extractor.FailureBuffer.AnyPoints,
                 10, "Failurebuffer must receive some data");
 
             tester.Config.Influx.Host = oldHost;
@@ -75,10 +77,10 @@ namespace Test.Integration
             tester.Server.UpdateNode(tester.Server.Ids.Base.IntVar, 1001);
             tester.Server.UpdateNode(tester.Server.Ids.Base.DoubleVar2, 2.0);
 
-            await CommonTestUtils.WaitForCondition(() => extractor.FailureBuffer.AnyPoints,
+            await TestUtils.WaitForCondition(() => extractor.FailureBuffer.AnyPoints,
                 10, "FailureBuffer should be emptied");
 
-            await CommonTestUtils.WaitForCondition(() => extractor.State.NodeStates.All(state => !state.IsFrontfilling), 20);
+            await TestUtils.WaitForCondition(() => extractor.State.NodeStates.All(state => !state.IsFrontfilling), 20);
 
             await extractor.Looper.WaitForNextPush();
 
@@ -130,7 +132,7 @@ namespace Test.Integration
                 tester.Server.UpdateNode(tester.Server.Ids.Base.BoolVar, true);
                 tester.Server.UpdateNode(tester.Server.Ids.Base.StringVar, "test 1");
 
-                await CommonTestUtils.WaitForCondition(() => extractor.FailureBuffer.AnyPoints,
+                await TestUtils.WaitForCondition(() => extractor.FailureBuffer.AnyPoints,
                     20, "Failurebuffer must receive some data");
 
                 await extractor.Looper.WaitForNextPush();
@@ -217,7 +219,7 @@ namespace Test.Integration
 
                 tester.Server.TriggerEvents(1);
 
-                await CommonTestUtils.WaitForCondition(() => extractor.FailureBuffer.AnyEvents, 10,
+                await TestUtils.WaitForCondition(() => extractor.FailureBuffer.AnyEvents, 10,
                     "FailureBuffer must receive some events");
 
                 await extractor.Looper.WaitForNextPush();
@@ -289,12 +291,12 @@ namespace Test.Integration
             handler.AllowConnectionTest = false;
 
             await extractor.WaitForSubscriptions();
-            await CommonTestUtils.WaitForCondition(() => cdfPusher.EventsFailing, 10, "Expected pusher to start failing");
+            await TestUtils.WaitForCondition(() => cdfPusher.EventsFailing, 10, "Expected pusher to start failing");
 
             tester.Server.TriggerEvents(100);
             tester.Server.TriggerEvents(101);
 
-            await CommonTestUtils.WaitForCondition(() => extractor.FailureBuffer.AnyEvents
+            await TestUtils.WaitForCondition(() => extractor.FailureBuffer.AnyEvents
                 && cdfPusher.EventsFailing,
                 10, "Expected failurebuffer to contain some events");
             await extractor.Looper.WaitForNextPush();
@@ -302,10 +304,10 @@ namespace Test.Integration
             handler.AllowEvents = true;
             handler.AllowPush = true;
             handler.AllowConnectionTest = true;
-            await CommonTestUtils.WaitForCondition(() => !extractor.FailureBuffer.AnyEvents,
+            await TestUtils.WaitForCondition(() => !extractor.FailureBuffer.AnyEvents,
                 10, "Expected FailureBuffer to be emptied");
 
-            await CommonTestUtils.WaitForCondition(() => handler.Events.Count == 1022, 10,
+            await TestUtils.WaitForCondition(() => handler.Events.Count == 1022, 10,
                 () => $"Expected to receive 920 events, but got {handler.Events.Count}");
 
             await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);

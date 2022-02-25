@@ -2,6 +2,7 @@
 using Cognite.Extractor.Configuration;
 using Cognite.Extractor.Logging;
 using Cognite.Extractor.StateStorage;
+using Cognite.Extractor.Testing;
 using Cognite.Extractor.Utils;
 using Cognite.OpcUa;
 using Cognite.OpcUa.Pushers;
@@ -14,10 +15,11 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace Test.Utils
 {
-    public abstract class BaseExtractorTestFixture : IAsyncLifetime
+    public abstract class BaseExtractorTestFixture : LoggingTestFixture, IAsyncLifetime
     {
         public int Port { get; }
         public NodeIdReference Ids => Server.Ids;
@@ -38,10 +40,9 @@ namespace Test.Utils
             Config = Services.AddConfig<FullConfig>("config.test.yml", 1);
             Console.WriteLine($"Add logger: {Config.Logger}");
             Config.Source.EndpointUrl = $"opc.tcp://localhost:{Port}";
-            Services.AddLogger();
-            LoggingUtils.Configure(Config.Logger);
+            Configure(Services);
             Provider = Services.BuildServiceProvider();
-
+            
             if (setups == null)
             {
                 setups = new[] {
@@ -126,8 +127,6 @@ namespace Test.Utils
             return ext;
         }
 
-
-
         public (InfluxPusher pusher, InfluxDBClient client) GetInfluxPusher(string dbName, bool clear = true)
         {
             if (Config.Influx == null)
@@ -162,16 +161,13 @@ namespace Test.Utils
 
         public (CDFMockHandler, CDFPusher) GetCDFPusher()
         {
-            var handler = new CDFMockHandler("test", CDFMockHandler.MockMode.None)
-            {
-                StoreDatapoints = true
-            };
-            CommonTestUtils.AddDummyProvider(handler, Services);
+            CommonTestUtils.AddDummyProvider("test", CDFMockHandler.MockMode.None, true, Services);
             Services.AddCogniteClient("appid", null, true, true, false);
             var provider = Services.BuildServiceProvider();
             var destination = provider.GetRequiredService<CogniteDestination>();
             var pusher = new CDFPusher(Provider.GetRequiredService<ILogger<CDFPusher>>(),
                 Config.Extraction, Config.Cognite, destination);
+            var handler = provider.GetRequiredService<CDFMockHandler>();
             return (handler, pusher);
         }
 

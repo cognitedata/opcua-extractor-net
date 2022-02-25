@@ -1,9 +1,9 @@
-﻿using MQTTnet;
+﻿using Microsoft.Extensions.Logging;
+using MQTTnet;
 using MQTTnet.Client;
 using MQTTnet.Client.Options;
 using MQTTnet.Client.Subscribing;
 using MQTTnet.Protocol;
-using Serilog;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -16,17 +16,18 @@ namespace Cognite.Bridge
         private readonly IMqttClientOptions options;
         private readonly IMqttClient client;
 
-        private readonly ILogger log = Log.Logger.ForContext(typeof(MQTTBridge));
+        private readonly ILogger log;
 
         private readonly Destination destination;
         private TaskCompletionSource? waitSource;
         private string? waitTopic;
 
         private bool disconnected;
-        public MQTTBridge(Destination destination, BridgeConfig config)
+        public MQTTBridge(Destination destination, BridgeConfig config, ILogger log)
         {
             this.config = config ?? throw new ArgumentNullException(nameof(config));
             this.destination = destination;
+            this.log = log;
             var builder = new MqttClientOptionsBuilder()
                 .WithClientId(config.Mqtt.ClientId)
                 .WithKeepAlivePeriod(TimeSpan.FromSeconds(10))
@@ -66,8 +67,8 @@ namespace Cognite.Bridge
         {
             client.UseDisconnectedHandler(async e =>
             {
-                log.Warning("MQTT Client disconnected");
-                log.Debug(e.Exception, "MQTT client disconnected");
+                log.LogWarning("MQTT Client disconnected");
+                log.LogDebug(e.Exception, "MQTT client disconnected");
                 if (disconnected) return;
                 try
                 {
@@ -75,12 +76,12 @@ namespace Cognite.Bridge
                 }
                 catch (Exception ex)
                 {
-                    log.Warning("Failed to reconnect to broker: {msg}", ex.Message);
+                    log.LogWarning("Failed to reconnect to broker: {Message}", ex.Message);
                 }
             });
             client.UseConnectedHandler(async _ =>
             {
-                log.Information("MQTT client connected");
+                log.LogInformation("MQTT client connected");
                 await client.SubscribeAsync(new MqttClientSubscribeOptionsBuilder()
                     .WithTopicFilter(config.Mqtt.AssetTopic, MqttQualityOfServiceLevel.AtLeastOnce)
                     .WithTopicFilter(config.Mqtt.TsTopic, MqttQualityOfServiceLevel.AtLeastOnce)
@@ -89,7 +90,7 @@ namespace Cognite.Bridge
                     .WithTopicFilter(config.Mqtt.RawTopic, MqttQualityOfServiceLevel.AtLeastOnce)
                     .WithTopicFilter(config.Mqtt.RelationshipTopic, MqttQualityOfServiceLevel.AtLeastOnce)
                     .Build(), token);
-                log.Information("Subscribed to topics");
+                log.LogInformation("Subscribed to topics");
             });
             client.UseApplicationMessageReceivedHandler(async msg =>
             {
@@ -97,86 +98,86 @@ namespace Cognite.Bridge
 
                 if (msg.ApplicationMessage.Topic == config.Mqtt.DatapointTopic)
                 {
-                    log.Verbose("Datapoints message from: {src}", msg.ClientId);
+                    log.LogTrace("Datapoints message from: {Source}", msg.ClientId);
                     try
                     {
                         success = await destination.PushDatapoints(msg.ApplicationMessage, token);
                     }
                     catch (Exception ex)
                     {
-                        log.Error(ex, "Unexpected failure while pushing datapoints to CDF: {msg}", ex.Message);
+                        log.LogError(ex, "Unexpected failure while pushing datapoints to CDF: {Message}", ex.Message);
                         success = false;
                     }
                 }
                 else if (msg.ApplicationMessage.Topic == config.Mqtt.EventTopic)
                 {
-                    log.Verbose("Events message from: {src}", msg.ClientId);
+                    log.LogTrace("Events message from: {Source}", msg.ClientId);
                     try
                     {
                         success = await destination.PushEvents(msg.ApplicationMessage, token);
                     }
                     catch (Exception ex)
                     {
-                        log.Error(ex, "Unexpected failure while pushing events to CDF: {msg}", ex.Message);
+                        log.LogError(ex, "Unexpected failure while pushing events to CDF: {Message}", ex.Message);
                         success = false;
                     }
                 }
                 else if (msg.ApplicationMessage.Topic == config.Mqtt.AssetTopic)
                 {
-                    log.Verbose("Assets message from: {src}", msg.ClientId);
+                    log.LogTrace("Assets message from: {Source}", msg.ClientId);
                     try
                     {
                         success = await destination.PushAssets(msg.ApplicationMessage, token);
                     }
                     catch (Exception ex)
                     {
-                        log.Error(ex, "Unexpected failure while pushing assets to CDF: {msg}", ex.Message);
+                        log.LogError(ex, "Unexpected failure while pushing assets to CDF: {Message}", ex.Message);
                         success = false;
                     }
                 }
                 else if (msg.ApplicationMessage.Topic == config.Mqtt.TsTopic)
                 {
-                    log.Verbose("Timeseries message from: {src}", msg.ClientId);
+                    log.LogTrace("Timeseries message from: {Source}", msg.ClientId);
                     try
                     {
                         success = await destination.PushTimeseries(msg.ApplicationMessage, token);
                     }
                     catch (Exception ex)
                     {
-                        log.Error(ex, "Unexpected failure while pushing timeseries to CDF: {msg}", ex.Message);
+                        log.LogError(ex, "Unexpected failure while pushing timeseries to CDF: {Message}", ex.Message);
                         success = false;
                     }
                 }
                 else if (msg.ApplicationMessage.Topic == config.Mqtt.RawTopic)
                 {
-                    log.Verbose("Raw message from: {src}", msg.ClientId);
+                    log.LogTrace("Raw message from: {Source}", msg.ClientId);
                     try
                     {
                         success = await destination.PushRaw(msg.ApplicationMessage, token);
                     }
                     catch (Exception ex)
                     {
-                        log.Error(ex, "Unexpected failure while pushing raw to CDF: {msg}", ex.Message);
+                        log.LogError(ex, "Unexpected failure while pushing raw to CDF: {Message}", ex.Message);
                         success = false;
                     }
                 }
                 else if (msg.ApplicationMessage.Topic == config.Mqtt.RelationshipTopic)
                 {
-                    log.Verbose("Relationships message from: {src}", msg.ClientId);
+                    log.LogTrace("Relationships message from: {Source}", msg.ClientId);
                     try
                     {
                         success = await destination.PushRelationships(msg.ApplicationMessage, token);
                     }
                     catch (Exception ex)
                     {
-                        log.Error(ex, "Unexpected failure while pushing relationships to CDF: {msg}", ex.Message);
+                        log.LogError(ex, "Unexpected failure while pushing relationships to CDF: {Message}", ex.Message);
                         success = false;
                     }
 
                 }
                 else
                 {
-                    log.Warning("Unknown topic: {tpc}, this message will be ignored", msg.ApplicationMessage.Topic);
+                    log.LogWarning("Unknown topic: {Topic}, this message will be ignored", msg.ApplicationMessage.Topic);
                     success = true;
                 }
 
@@ -194,11 +195,11 @@ namespace Cognite.Bridge
                 }
                 catch (Exception e)
                 {
-                    log.Error(e, "Failed to connect to broker: {msg}", e.Message);
+                    log.LogError(e, "Failed to connect to broker: {Message}", e.Message);
                     return false;
                 }
             }
-            log.Information("Successfully started MQTT bridge");
+            log.LogInformation("Successfully started MQTT bridge");
             return true;
         }
 

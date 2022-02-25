@@ -1,5 +1,6 @@
 ﻿using Cognite.Extractor.Configuration;
 using Cognite.Extractor.Logging;
+using Cognite.Extractor.Testing;
 using Cognite.Extractor.Utils;
 using Cognite.OpcUa;
 using Cognite.OpcUa.Config;
@@ -16,7 +17,7 @@ using Xunit.Abstractions;
 
 namespace Test.Unit
 {
-    public class ConfigToolTestFixture : IAsyncLifetime
+    public class ConfigToolTestFixture : LoggingTestFixture, IAsyncLifetime
     {
         public UAServerExplorer Explorer { get; private set; }
         public FullConfig Config { get; }
@@ -34,9 +35,7 @@ namespace Test.Unit
             Config.Source.EndpointUrl = $"opc.tcp://localhost:{port}";
             BaseConfig = ConfigurationUtils.Read<FullConfig>("config.test.yml");
             BaseConfig.GenerateDefaults();
-
-            services.AddLogger();
-            LoggingUtils.Configure(Config.Logger);
+            Configure(services);
 
             Provider = services.BuildServiceProvider();
 
@@ -67,12 +66,13 @@ namespace Test.Unit
             await Provider.DisposeAsync();
         }
     }
-    public class ConfigToolTest : MakeConsoleWork, IClassFixture<ConfigToolTestFixture>
+    public class ConfigToolTest : IClassFixture<ConfigToolTestFixture>
     {
         private readonly ConfigToolTestFixture tester;
-        public ConfigToolTest(ITestOutputHelper output, ConfigToolTestFixture tester) : base(output)
+        public ConfigToolTest(ITestOutputHelper output, ConfigToolTestFixture tester)
         {
             this.tester = tester;
+            tester.Init(output);
         }
         [Fact]
         public async Task TestEndpointDiscovery()

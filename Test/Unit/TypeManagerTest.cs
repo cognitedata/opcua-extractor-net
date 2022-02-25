@@ -16,13 +16,14 @@ using Xunit.Abstractions;
 namespace Test.Unit
 {
     [Collection("Shared server tests")]
-    public class TypeManagerTest : MakeConsoleWork
+    public class TypeManagerTest
     {
         private readonly StaticServerTestFixture tester;
-        public TypeManagerTest(ITestOutputHelper output, StaticServerTestFixture tester) : base(output)
+        public TypeManagerTest(ITestOutputHelper output, StaticServerTestFixture tester)
         {
             this.tester = tester ?? throw new ArgumentNullException(nameof(tester));
             tester.ResetConfig();
+            tester.Init(output);
         }
         #region datatypemanager
         [Fact]

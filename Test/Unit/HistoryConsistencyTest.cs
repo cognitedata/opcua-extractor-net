@@ -74,14 +74,15 @@ namespace Test.Unit
                 HistoryStart.AddSeconds(18), 10);
         }
     }
-    public class HistoryConsistencyTest : MakeConsoleWork, IClassFixture<HistoryConsistencyTestFixture>
+    public class HistoryConsistencyTest : IClassFixture<HistoryConsistencyTestFixture>
     {
         private readonly HistoryConsistencyTestFixture tester;
-        public HistoryConsistencyTest(ITestOutputHelper output, HistoryConsistencyTestFixture tester) : base(output)
+        public HistoryConsistencyTest(ITestOutputHelper output, HistoryConsistencyTestFixture tester)
         {
             if (tester == null) throw new ArgumentNullException(nameof(tester));
             this.tester = tester;
             tester.ResetConfig();
+            tester.Init(output);
         }
 
         [Theory(Timeout = 20000)]

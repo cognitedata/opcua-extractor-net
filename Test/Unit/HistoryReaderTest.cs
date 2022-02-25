@@ -32,13 +32,14 @@ namespace Test.Unit
             Server.PopulateEvents(HistoryStart);
         }
     }
-    public class HistoryReaderTest : MakeConsoleWork, IClassFixture<HistoryReaderTestFixture>
+    public class HistoryReaderTest : IClassFixture<HistoryReaderTestFixture>
     {
         private readonly HistoryReaderTestFixture tester;
-        public HistoryReaderTest(ITestOutputHelper output, HistoryReaderTestFixture tester) : base(output)
+        public HistoryReaderTest(ITestOutputHelper output, HistoryReaderTestFixture tester)
         {
             this.tester = tester ?? throw new ArgumentNullException(nameof(tester));
             tester.ResetConfig();
+            tester.Init(output);
         }
 
         [Fact(Timeout = 10000)]

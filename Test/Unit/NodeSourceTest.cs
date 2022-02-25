@@ -18,13 +18,14 @@ namespace Test.Unit
     {
         public NodeSourceTestFixture() : base() { }
     }
-    public class NodeSourceTest : MakeConsoleWork, IClassFixture<NodeSourceTestFixture>
+    public class NodeSourceTest : IClassFixture<NodeSourceTestFixture>
     {
         private readonly NodeSourceTestFixture tester;
-        public NodeSourceTest(ITestOutputHelper output, NodeSourceTestFixture tester) : base(output)
+        public NodeSourceTest(ITestOutputHelper output, NodeSourceTestFixture tester)
         {
             this.tester = tester;
             tester.ResetConfig();
+            tester.Init(output);
             tester.Config.Source.NodeSetSource = new NodeSetSourceConfig
             {
                 NodeSets = new[]

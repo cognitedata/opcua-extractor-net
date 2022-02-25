@@ -173,8 +173,6 @@ namespace Cognite.OpcUa
 
             using var provider = services.BuildServiceProvider();
 
-            Serilog.Log.Logger = provider.GetRequiredService<Serilog.ILogger>();
-
             string configOutput = setup.ConfigTarget ?? Path.Combine(setup.Config.Source.ConfigRoot, "config.config-tool-output.yml");
 
             var runTime = new ConfigToolRuntime(provider, setup.Config, setup.BaseConfig, configOutput);
@@ -256,7 +254,7 @@ namespace Cognite.OpcUa
                 AddLogger = true,
                 AddMetrics = true,
                 Restart = !setup.Exit,
-                ConfigCallback = (config, options) => VerifyAndBuildConfig(log, config, setup, options, configDir),
+                ConfigCallback = (config, options, services) => VerifyAndBuildConfig(log, config, setup, options, configDir),
                 ExtServices = services,
                 StartupLogger = log,
                 Config = config,

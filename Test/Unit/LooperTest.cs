@@ -1,4 +1,5 @@
-﻿using Cognite.OpcUa;
+﻿using Cognite.Extractor.Testing;
+using Cognite.OpcUa;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.Types;
 using Opc.Ua;
@@ -14,13 +15,14 @@ using Xunit.Abstractions;
 namespace Test.Unit
 {
     [Collection("Shared server tests")]
-    public class LooperTest : MakeConsoleWork
+    public class LooperTest
     {
         private readonly StaticServerTestFixture tester;
-        public LooperTest(ITestOutputHelper output, StaticServerTestFixture tester) : base(output)
+        public LooperTest(ITestOutputHelper output, StaticServerTestFixture tester)
         {
             this.tester = tester ?? throw new ArgumentNullException(nameof(tester));
             tester.ResetConfig();
+            tester.Init(output);
             tester.Config.Extraction.DataPushDelay = "-1";
             tester.Config.Extraction.AutoRebrowsePeriod = "1000";
         }
@@ -51,13 +53,13 @@ namespace Test.Unit
                 return Task.CompletedTask;
             });
 
-            await CommonTestUtils.WaitForCondition(() => synch1 && synch2, 5);
+            await TestUtils.WaitForCondition(() => synch1 && synch2, 5);
 
-            await CommonTestUtils.WaitForCondition(() => stateStore.NumStoreState == 2, 5);
+            await TestUtils.WaitForCondition(() => stateStore.NumStoreState == 2, 5);
 
             Assert.True(extractor.Looper.Scheduler.TryTriggerTask("StoreState"));
 
-            await CommonTestUtils.WaitForCondition(() => stateStore.NumStoreState == 4, 5);
+            await TestUtils.WaitForCondition(() => stateStore.NumStoreState == 4, 5);
 
             bool int1 = false, int2 = false;
 
@@ -83,9 +85,9 @@ namespace Test.Unit
 
             evt.Set();
 
-            await CommonTestUtils.WaitForCondition(() => int1, 5);
+            await TestUtils.WaitForCondition(() => int1, 5);
             evt2.Set();
-            await CommonTestUtils.WaitForCondition(() => int2, 5);
+            await TestUtils.WaitForCondition(() => int2, 5);
 
             evt.Reset();
             // Try to schedule a failing task
@@ -97,7 +99,7 @@ namespace Test.Unit
             });
 
             var loopTask = extractor.Looper.Scheduler.WaitForAll();
-            await CommonTestUtils.WaitForCondition(() => loopTask.IsFaulted || loopTask.IsCompleted, 5);
+            await TestUtils.WaitForCondition(() => loopTask.IsFaulted || loopTask.IsCompleted, 5);
             var ex = loopTask.Exception.Flatten();
             Assert.IsType<ExtractorFailureException>(ex.InnerException);
             Assert.Equal("SomeException", ex.InnerException.Message);

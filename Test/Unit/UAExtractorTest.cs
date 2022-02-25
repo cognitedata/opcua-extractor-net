@@ -1,4 +1,5 @@
-﻿using Cognite.OpcUa;
+﻿using Cognite.Extractor.Testing;
+using Cognite.OpcUa;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.DependencyInjection;
@@ -15,13 +16,14 @@ using Xunit.Abstractions;
 namespace Test.Unit
 {
     [Collection("Shared server tests")]
-    public class UAExtractorTest : MakeConsoleWork
+    public class UAExtractorTest
     {
         private readonly StaticServerTestFixture tester;
-        public UAExtractorTest(ITestOutputHelper output, StaticServerTestFixture tester) : base(output)
+        public UAExtractorTest(ITestOutputHelper output, StaticServerTestFixture tester)
         {
             this.tester = tester ?? throw new ArgumentNullException(nameof(tester));
             tester.ResetConfig();
+            tester.Init(output);
         }
         [Fact]
         public async Task TestClientStartFailure()
@@ -106,7 +108,7 @@ namespace Test.Unit
 
             Assert.True(pusher.OnReset.WaitOne(10000));
 
-            await CommonTestUtils.WaitForCondition(() => pusher.PushedNodes.Count > 0, 10);
+            await TestUtils.WaitForCondition(() => pusher.PushedNodes.Count > 0, 10);
 
             await extractor.Close();
             await tester.Client.Run(tester.Source.Token);

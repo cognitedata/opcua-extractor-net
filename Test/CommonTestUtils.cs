@@ -19,68 +19,24 @@ using Cognite.OpcUa;
 using Cognite.OpcUa.Types;
 using CogniteSdk;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using Prometheus;
-using Serilog;
 using Server;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Xunit;
-using Xunit.Abstractions;
 
 [assembly: CLSCompliant(false)]
 namespace Test
 {
-    public class MakeConsoleWork : IDisposable
-    {
-        private readonly ITestOutputHelper _output;
-        private readonly TextWriter _originalOut;
-        private readonly TextWriter _textWriter;
-        private bool disposed;
-
-        public MakeConsoleWork(ITestOutputHelper output)
-        {
-            _output = output;
-            _originalOut = Console.Out;
-            _textWriter = new StringWriter();
-            Console.SetOut(_textWriter);
-        }
-
-        public void Dispose()
-        {
-            Dispose(true);
-            GC.SuppressFinalize(this);
-        }
-
-        protected virtual void Dispose(bool disposing)
-        {
-            if (disposed) return;
-            if (disposing)
-            {
-                Console.SetOut(_originalOut);
-                // This can rarely randomly fail due to some obscure threading issue.
-                // It's just cleanup of tests, so we can just retry.
-                try
-                {
-                    _output.WriteLine(_textWriter.ToString());
-                }
-                catch (ArgumentOutOfRangeException)
-                {
-                    _output.WriteLine(_textWriter.ToString());
-                }
-                _textWriter.Dispose();
-            }
-            disposed = true;
-        }
-    }
     public static class CommonTestUtils
     {
         private static readonly object portCounterLock = new object();
@@ -96,8 +52,6 @@ namespace Test
             }
         }
 
-        private static readonly ILogger log = Log.Logger.ForContext(typeof(CommonTestUtils));
-
         public static bool TestRunResult(Exception e)
         {
             if (!(e is TaskCanceledException || e is AggregateException && e.InnerException is TaskCanceledException))
@@ -106,11 +60,17 @@ namespace Test
             }
             return true;
         }
-        public static void AddDummyProvider(CDFMockHandler handler, IServiceCollection services)
+        public static void AddDummyProvider(string project, CDFMockHandler.MockMode mode, bool storeDatapoints, IServiceCollection services)
         {
-            if (handler == null) throw new ArgumentNullException(nameof(handler));
+            services.AddSingleton(provider =>
+            {
+                return new CDFMockHandler(project, mode, provider.GetRequiredService<ILogger<CDFMockHandler>>())
+                {
+                    StoreDatapoints = storeDatapoints
+                };
+            });
             services.AddHttpClient<Client.Builder>()
-                .ConfigurePrimaryHttpMessageHandler(handler.CreateHandler);
+                .ConfigurePrimaryHttpMessageHandler(provider => provider.GetRequiredService<CDFMockHandler>().CreateHandler());
         }
 
         private static Collector GetCollector(string name)
@@ -230,7 +190,6 @@ namespace Test
         {
             if (cmd == null) throw new ArgumentNullException(nameof(cmd));
             var escapedArgs = cmd.Replace("\"", "\\\"", StringComparison.InvariantCulture);
-            log.Information(escapedArgs);
 
             var process = new Process
             {
@@ -408,30 +367,6 @@ namespace Test
                 Assert.Equal("(0, 200)", mysteryMeta["EURange"]);
             }
         }
-        public static async Task WaitForCondition(Func<Task<bool>> condition, int seconds, Func<string> assertion)
-        {
-            if (condition == null) throw new ArgumentNullException(nameof(condition));
-            if (assertion == null) throw new ArgumentNullException(nameof(assertion));
-            bool triggered = false;
-            int i;
-            for (i = 0; i < seconds * 5; i++)
-            {
-                if (await condition())
-                {
-                    triggered = true;
-                    break;
-                }
-
-                await Task.Delay(200);
-            }
-
-            if (!triggered)
-            {
-                log.Error("Condition failed to appear within {sec} seconds", seconds);
-            }
-            log.Information("Waited for {cnt} seconds", i / 5.0);
-            Assert.True(triggered, assertion());
-        }
 
         public static string JsonElementToString(JsonElement elem)
         {
@@ -441,21 +376,6 @@ namespace Test
             });
         }
 
-        public static async Task WaitForCondition(Func<bool> condition, int seconds,
-            string assertion = "Expected condition to trigger")
-        {
-            await WaitForCondition(() => Task.FromResult(condition()), seconds, () => assertion);
-        }
-        public static async Task WaitForCondition(Func<bool> condition, int seconds,
-            Func<string> assertion)
-        {
-            await WaitForCondition(() => Task.FromResult(condition()), seconds, assertion);
-        }
-        public static async Task WaitForCondition(Func<Task<bool>> condition, int seconds,
-            string assertion = "Expected condition to trigger")
-        {
-            await WaitForCondition(condition, seconds, () => assertion);
-        }
         public static ProtoNodeId ToProtoNodeId(this NodeId id, UAClient client)
         {
             if (id == null || id.IsNullNodeId || client == null) return null;

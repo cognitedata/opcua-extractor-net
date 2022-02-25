@@ -19,13 +19,14 @@ using Xunit.Abstractions;
 namespace Test.Unit
 {
     [Collection("Shared server tests")]
-    public class TypesTest : MakeConsoleWork
+    public class TypesTest
     {
         private readonly StaticServerTestFixture tester;
-        public TypesTest(ITestOutputHelper output, StaticServerTestFixture tester) : base(output)
+        public TypesTest(ITestOutputHelper output, StaticServerTestFixture tester)
         {
             this.tester = tester ?? throw new ArgumentNullException(nameof(tester));
             tester.ResetConfig();
+            tester.Init(output);
         }
         #region uanode
         [Theory]
