@@ -15,6 +15,7 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using Cognite.Extractor.Utils.CommandLine;
 using Cognite.OpcUa.Service;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -30,25 +31,53 @@ using System.Threading.Tasks;
 [assembly: CLSCompliant(false)]
 namespace Cognite.OpcUa
 {
-    public class ExtractorParams
+    
+
+    public class BaseExtractorParams
     {
+        [CommandLineOption("Override configured OPC-UA endpoint", true, "-e")]
         public string? EndpointUrl { get; set; }
+        [CommandLineOption("Override configured OPC-UA user", true, "-u")]
         public string? User { get; set; }
+        [CommandLineOption("Override configured OPC-UA password", true, "-p")]
         public string? Password { get; set; }
+        [CommandLineOption("Auto accept server certificates")]
         public bool AutoAccept { get; set; }
+        [CommandLineOption("Try to use a secured OPC-UA endpoint")]
         public bool Secure { get; set; }
+        [CommandLineOption("Set path to .yml configuration file", true, "-f")]
         public string? ConfigFile { get; set; }
+        [CommandLineOption("Set path to config directory", true, "-d")]
         public string? ConfigDir { get; set; }
+        [CommandLineOption("Set path to log files, enables logging to file")]
         public string? LogDir { get; set; }
-        public string? ConfigTarget { get; set; }
-        public bool NoConfig { get; set; }
+        [CommandLineOption("Set the console log-level [fatal/error/warning/information/debug/verbose]", true, "-l")]
         public string? LogLevel { get; set; }
-        public bool Service { get; set; }
+        [CommandLineOption("Set the working directory of the extractor. Defaults to current directory for standalone," +
+                " or one level above for service version", true, "-w")]
         public string? WorkingDir { get; set; }
-        public bool Exit { get; set; }
+        [CommandLineOption("Run extractor without a yml config file. The .xml config file is still needed", true, "-n")]
+        public bool NoConfig { get; set; }
+        
         public bool ConfigTool { get; set; }
         public FullConfig? Config { get; set; }
         public FullConfig? BaseConfig { get; set; }
+    }
+
+    public class ExtractorParams : BaseExtractorParams
+    {
+        [CommandLineOption("Required flag when starting the extractor as a service", true, "-s")]
+        public bool Service { get; set; }
+        [CommandLineOption("Exit the extractor on failure. Equivalent to source.exit-on-failure", true, "-x")]
+        public bool Exit { get; set; }
+
+    }
+
+    public class ConfigToolParams : BaseExtractorParams
+    {
+        [CommandLineOption("Path to output of config tool. Defaults to [config-dir]/config.config-tool-output.yml", true, "-o")]
+        public string? ConfigTarget { get; set; }
+
     }
 
     /// <summary>
@@ -59,7 +88,7 @@ namespace Cognite.OpcUa
     {
         // For testing
         public static bool CommandDryRun { get; set; }
-        public static Action<ServiceCollection, ExtractorParams>? OnLaunch { get; set; }
+        public static Action<ServiceCollection, BaseExtractorParams>? OnLaunch { get; set; }
         public static async Task<int> Main(string[] args)
         {
             return await GetCommandLineOptions().InvokeAsync(args);
@@ -77,61 +106,7 @@ namespace Cognite.OpcUa
             var toolCmd = new Command("tool", "Run the configuration tool");
             rootCommand.Add(toolCmd);
 
-            var option = new Option<string>("--endpoint-url", "Override configured OPC-UA endpoint");
-            option.AddAlias("-e");
-            rootCommand.AddGlobalOption(option);
-
-            option = new Option<string>("--user", "Override configured OPC-UA user");
-            option.AddAlias("-u");
-            rootCommand.AddGlobalOption(option);
-
-            option = new Option<string>("--password", "Override configured OPC-UA password");
-            option.AddAlias("-p");
-            rootCommand.AddGlobalOption(option);
-
-            var flag = new Option("--auto-accept", "Auto accept server certificates");
-            rootCommand.AddGlobalOption(flag);
-
-            flag = new Option("--secure", "Try to use a secured OPC-UA endpoint");
-            rootCommand.AddGlobalOption(flag);
-
-            option = new Option<string>("--config-file", "Set path to .yml configuration file");
-            option.AddAlias("-f");
-            rootCommand.AddGlobalOption(option);
-
-            option = new Option<string>("--config-dir", "Set path to config directory");
-            option.AddAlias("-d");
-            rootCommand.AddGlobalOption(option);
-
-            option = new Option<string>("--log-dir", "Set path to log files, enables logging to file");
-            rootCommand.AddGlobalOption(option);
-
-            option = new Option<string>("--config-target", "Path to output of config tool. Defaults to [config-dir]/config.config-tool-output.yml");
-            option.AddAlias("-o");
-            toolCmd.AddOption(option);
-
-            flag = new Option("--no-config", "Run extractor without a yml config file. The .xml config file is still needed");
-            flag.AddAlias("-n");
-            rootCommand.AddGlobalOption(flag);
-
-            option = new Option<string>("--log-level", "Set the console log-level [fatal/error/warning/information/debug/verbose]");
-            option.AddAlias("-l");
-            rootCommand.AddGlobalOption(option);
-
-            flag = new Option("--service", "Required flag when starting the extractor as a service");
-            flag.AddAlias("-s");
-            rootCommand.AddOption(flag);
-
-            option = new Option<string>("--working-dir", "Set the working directory of the extractor. Defaults to current directory for standalone," +
-                " or one level above for service version");
-            option.AddAlias("-w");
-            rootCommand.AddGlobalOption(option);
-
-            flag = new Option("--exit", "Exit the extractor on failure. Equivalent to source.exit-on-failure");
-            flag.AddAlias("-x");
-            rootCommand.AddOption(flag);
-
-            bool OnLaunchCommon(ExtractorParams setup)
+            bool OnLaunchCommon<T>(T setup) where T : BaseExtractorParams
             {
                 services.AddSingleton(setup);
                 OnLaunch?.Invoke(services, setup);
@@ -139,7 +114,10 @@ namespace Cognite.OpcUa
                 return true;
             }
 
-            rootCommand.Handler = CommandHandler.Create(async (ExtractorParams setup) =>
+            var rootBinder = new AttributeBinder<ExtractorParams>();
+            rootBinder.AddOptionsToCommand(rootCommand);
+
+            rootCommand.SetHandler<ExtractorParams>(async setup =>
             {
                 if (!OnLaunchCommon(setup)) return;
                 if (setup.Service)
@@ -148,15 +126,19 @@ namespace Cognite.OpcUa
                 }
                 else
                 {
-                    await RunStandalone(services, setup);
+                    await ExtractorStarter.RunExtractor(null, setup, services, CancellationToken.None);
                 }
-            });
-            toolCmd.Handler = CommandHandler.Create(async (ExtractorParams setup) =>
+            }, rootBinder);
+
+            var toolBinder = new AttributeBinder<ConfigToolParams>();
+            toolBinder.AddOptionsToCommand(toolCmd);
+
+            toolCmd.SetHandler<ConfigToolParams>(async setup =>
             {
                 setup.ConfigTool = true;
                 if (!OnLaunchCommon(setup)) return;
-                await RunStandalone(services, setup);
-            });
+                await ExtractorStarter.RunConfigTool(null, setup, services, CancellationToken.None);
+            }, toolBinder);
 
             return new CommandLineBuilder(rootCommand)
                 .UseVersionOption()
@@ -182,17 +164,6 @@ namespace Cognite.OpcUa
                 builder = builder.UseSystemd();
             }
             await builder.Build().RunAsync();
-        }
-        private static async Task RunStandalone(ServiceCollection services, ExtractorParams setup)
-        {
-            if (setup.ConfigTool)
-            {
-                await ExtractorStarter.RunConfigTool(null, setup, services, CancellationToken.None);
-            }
-            else
-            {
-                await ExtractorStarter.RunExtractor(null, setup, services, CancellationToken.None);
-            }
         }
     }
 }
