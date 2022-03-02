@@ -228,7 +228,7 @@ version: 1
         [Fact]
         public async Task TestExtractorCLI()
         {
-            ExtractorParams setup = null;
+            BaseExtractorParams setup = null;
             Program.CommandDryRun = true;
             Program.OnLaunch = (s, o) => setup = o;
             var args = new[]
@@ -258,19 +258,21 @@ version: 1
 
             await Program.Main(args);
 
-            Assert.Equal("endpoint url", setup.EndpointUrl);
-            Assert.Equal("password", setup.Password);
-            Assert.Equal("username", setup.User);
-            Assert.True(setup.AutoAccept);
-            Assert.True(setup.Secure);
-            Assert.Equal("config file", setup.ConfigFile);
-            Assert.Equal("config dir", setup.ConfigDir);
-            Assert.Equal("log dir", setup.LogDir);
-            Assert.True(setup.NoConfig);
-            Assert.Equal("fatal", setup.LogLevel);
-            Assert.True(setup.Service);
-            Assert.Equal("working dir", setup.WorkingDir);
-            Assert.True(setup.Exit);
+            var extSetup = setup as ExtractorParams;
+
+            Assert.Equal("endpoint url", extSetup.EndpointUrl);
+            Assert.Equal("password", extSetup.Password);
+            Assert.Equal("username", extSetup.User);
+            Assert.True(extSetup.AutoAccept);
+            Assert.True(extSetup.Secure);
+            Assert.Equal("config file", extSetup.ConfigFile);
+            Assert.Equal("config dir", extSetup.ConfigDir);
+            Assert.Equal("log dir", extSetup.LogDir);
+            Assert.True(extSetup.NoConfig);
+            Assert.Equal("fatal", extSetup.LogLevel);
+            Assert.True(extSetup.Service);
+            Assert.Equal("working dir", extSetup.WorkingDir);
+            Assert.True(extSetup.Exit);
 
             args = new[]
             {
@@ -299,19 +301,21 @@ version: 1
 
             await Program.Main(args);
 
-            Assert.Equal("endpoint url", setup.EndpointUrl);
-            Assert.Equal("password", setup.Password);
-            Assert.Equal("username", setup.User);
-            Assert.True(setup.AutoAccept);
-            Assert.True(setup.Secure);
-            Assert.Equal("config file", setup.ConfigFile);
-            Assert.Equal("config dir", setup.ConfigDir);
-            Assert.Equal("log dir", setup.LogDir);
-            Assert.True(setup.NoConfig);
-            Assert.Equal("fatal", setup.LogLevel);
-            Assert.True(setup.Service);
-            Assert.Equal("working dir", setup.WorkingDir);
-            Assert.True(setup.Exit);
+            extSetup = setup as ExtractorParams;
+
+            Assert.Equal("endpoint url", extSetup.EndpointUrl);
+            Assert.Equal("password", extSetup.Password);
+            Assert.Equal("username", extSetup.User);
+            Assert.True(extSetup.AutoAccept);
+            Assert.True(extSetup.Secure);
+            Assert.Equal("config file", extSetup.ConfigFile);
+            Assert.Equal("config dir", extSetup.ConfigDir);
+            Assert.Equal("log dir", extSetup.LogDir);
+            Assert.True(extSetup.NoConfig);
+            Assert.Equal("fatal", extSetup.LogLevel);
+            Assert.True(extSetup.Service);
+            Assert.Equal("working dir", extSetup.WorkingDir);
+            Assert.True(extSetup.Exit);
 
             args = new[]
             {
@@ -339,18 +343,20 @@ version: 1
 
             await Program.Main(args);
 
-            Assert.True(setup.ConfigTool);
-            Assert.Equal("config target", setup.ConfigTarget);
-            Assert.Equal("endpoint url", setup.EndpointUrl);
-            Assert.Equal("password", setup.Password);
-            Assert.Equal("username", setup.User);
-            Assert.True(setup.AutoAccept);
-            Assert.True(setup.Secure);
-            Assert.Equal("config file", setup.ConfigFile);
-            Assert.Equal("config dir", setup.ConfigDir);
-            Assert.True(setup.NoConfig);
-            Assert.Equal("fatal", setup.LogLevel);
-            Assert.Equal("working dir", setup.WorkingDir);
+            var tSetup = setup as ConfigToolParams;
+
+            Assert.True(tSetup.ConfigTool);
+            Assert.Equal("config target", tSetup.ConfigTarget);
+            Assert.Equal("endpoint url", tSetup.EndpointUrl);
+            Assert.Equal("password", tSetup.Password);
+            Assert.Equal("username", tSetup.User);
+            Assert.True(tSetup.AutoAccept);
+            Assert.True(tSetup.Secure);
+            Assert.Equal("config file", tSetup.ConfigFile);
+            Assert.Equal("config dir", tSetup.ConfigDir);
+            Assert.True(tSetup.NoConfig);
+            Assert.Equal("fatal", tSetup.LogLevel);
+            Assert.Equal("working dir", tSetup.WorkingDir);
 
             args = new[]
             {
@@ -378,18 +384,20 @@ version: 1
 
             await Program.Main(args);
 
-            Assert.True(setup.ConfigTool);
-            Assert.Equal("config target", setup.ConfigTarget);
-            Assert.Equal("endpoint url", setup.EndpointUrl);
-            Assert.Equal("password", setup.Password);
-            Assert.Equal("username", setup.User);
-            Assert.True(setup.AutoAccept);
-            Assert.True(setup.Secure);
-            Assert.Equal("config file", setup.ConfigFile);
-            Assert.Equal("config dir", setup.ConfigDir);
-            Assert.True(setup.NoConfig);
-            Assert.Equal("fatal", setup.LogLevel);
-            Assert.Equal("working dir", setup.WorkingDir);
+            tSetup = setup as ConfigToolParams;
+
+            Assert.True(tSetup.ConfigTool);
+            Assert.Equal("config target", tSetup.ConfigTarget);
+            Assert.Equal("endpoint url", tSetup.EndpointUrl);
+            Assert.Equal("password", tSetup.Password);
+            Assert.Equal("username", tSetup.User);
+            Assert.True(tSetup.AutoAccept);
+            Assert.True(tSetup.Secure);
+            Assert.Equal("config file", tSetup.ConfigFile);
+            Assert.Equal("config dir", tSetup.ConfigDir);
+            Assert.True(tSetup.NoConfig);
+            Assert.Equal("fatal", tSetup.LogLevel);
+            Assert.Equal("working dir", tSetup.WorkingDir);
         }
 
         [Fact]

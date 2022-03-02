@@ -16,6 +16,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using Cognite.Extractor.Logging;
+using Cognite.Extractor.Utils.CommandLine;
 using Serilog;
 using Serilog.Events;
 using System;
@@ -34,30 +35,63 @@ namespace Server
         Justification = "Instantiated through reflection.")]
     internal class ServerOptions
     {
+        [CommandLineOption("Endpoint to run the server on, defaults to opc.tcp://localhost", true, "-e")]
         public string EndpointUrl { get; set; }
+        [CommandLineOption("Port to run the server on, defaults to 62546", true, "-p")]
         public int? Port { get; set; }
+        [CommandLineOption("Broker URL when publishing to mqtt. Defaults to mqtt://localhost:4060 when pubsub is enabled")]
         public string MqttUrl { get; set; }
+        [CommandLineOption("Populate history for nodes in the 'Base' node hierarchy")]
         public bool BaseHistory { get; set; }
+        [CommandLineOption("Populate history for nodes in the 'Custom' node hierarchy")]
         public bool CustomHistory { get; set; }
+        [CommandLineOption("Populate event history for all emitters")]
         public bool EventHistory { get; set; }
+        [CommandLineOption("Periodically update nodes in the 'Base' node hierarchy")]
         public bool BasePeriodic { get; set; }
+        [CommandLineOption("Periodically update nodes in the 'Custom' node hierarchy")]
         public bool CustomPeriodic { get; set; }
+        [CommandLineOption("Periodically update nodes in the 'Events' node hierarchy")]
         public bool EventsPeriodic { get; set; }
+        [CommandLineOption("Periodically add new nodes and references in the 'Growing' node hierarchy")]
         public bool GrowthPeriodic { get; set; }
+        [CommandLineOption("Server issue: Period in seconds between the server dropping all subscriptions from all connected sessions")]
         public int DropSubscriptions { get; set; }
+        [CommandLineOption("Create nodes from the wide and deep 'Full' node hierarchy")]
         public bool LargeHierarchy { get; set; }
+        [CommandLineOption("Create nodes from the very large 'VeryLarge' node hierarchy")]
         public bool VeryLargeHierarchy { get; set; }
+        [CommandLineOption("Create nodes for and load the 'PubSub' node hierarchy, and write to MQTT")]
         public bool Pubsub { get; set; }
+        [CommandLineOption("Enable server diagnostics")]
         public bool Diagnostics { get; set; }
+        [CommandLineOption("Enable periodic and history events and datapoints. " +
+                "Equivalent to each -history flag, and base, custom, and events periodic flags")]
         public bool CoreProfile { get; set; }
+        [CommandLineOption("Server issue: Do not return continuation points, " +
+                "and never return more references than this value")]
         public int MaxBrowseResults { get; set; }
+        [CommandLineOption("Server issue: More nodes than this value will" +
+                " result in BadTooManyOperations")]
         public int MaxBrowseNodes { get; set; }
+        [CommandLineOption("Server issue: More attribute reads than this value " +
+                " will result in BadTooManyOperation")]
         public int MaxAttributes { get; set; }
+        [CommandLineOption("Server issue: More monitored items created than this " +
+                "value will result in BadTooManyOperations")]
         public int MaxSubscriptions { get; set; }
+        [CommandLineOption("Server issue: More nodes when reading history than" +
+                " this value will result in BadTooManyOperations")]
         public int MaxHistoryNodes { get; set; }
+        [CommandLineOption("Server issue: This " +
+                "number counts down for each browse operation, " +
+                "and once it reaches zero it results in BadTooManyOperations")]
         public int RemainingBrowseCount { get; set; }
+        [CommandLineOption("Level of logging to console. One of 'verbose', 'debug', 'information', 'warning', 'error' and 'fatal'", true, "-l")]
         public string LogLevel { get; set; }
+        [CommandLineOption("Path to log files, this enables logging to file")]
         public string LogFile { get; set; }
+        [CommandLineOption("Write OPC-UA SDK trace to log at debug level")]
         public bool LogTrace { get; set; }
     }
 
@@ -144,98 +178,11 @@ namespace Server
                 Description = "Cognite OPC-UA Test Server"
             };
 
-            var option = new Option<string>("--endpoint-url",
-                "Endpoint to run the server on, defaults to opc.tcp://localhost");
-            option.AddAlias("-e");
-            root.AddOption(option);
+            var binder = new AttributeBinder<ServerOptions>();
+            binder.AddOptionsToCommand(root);
 
-            var intOption = new Option<int>("--port", "Port to run the server on, defaults to 62546");
-            intOption.AddAlias("-p");
-            root.AddOption(intOption);
 
-            option = new Option<string>("--mqtt-url", "Broker URL when publishing to mqtt. " +
-                "Defaults to mqtt://localhost:4060 when pubsub is enabled");
-            root.AddOption(option);
-
-            var flag = new Option("--base-history", "Populate history for nodes in the 'Base' node hierarchy.");
-            root.AddOption(flag);
-
-            flag = new Option("--custom-history", "Populate history for nodes in the 'Custom' node hierarchy.");
-            root.AddOption(flag);
-
-            flag = new Option("--event-history", "Populate event history for all emitters.");
-            root.AddOption(flag);
-
-            flag = new Option("--base-periodic", "Periodically update nodes in the 'Base' node hierarchy.");
-            root.AddOption(flag);
-
-            flag = new Option("--custom-periodic", "Periodically update nodes in the 'Custom' node hierarchy.");
-            root.AddOption(flag);
-
-            flag = new Option("--events-periodic", "Periodically update nodes in the 'Events' node hierarchy.");
-            root.AddOption(flag);
-
-            flag = new Option("--growth-periodic", "Periodically add new nodes and references " +
-                "in the 'Growing' node hierarchy.");
-            root.AddOption(flag);
-
-            flag = new Option("--large-hierarchy", "Create nodes from the wide and deep 'Full' node hierarchy.");
-            root.AddOption(flag);
-
-            flag = new Option("--very-large-hierarchy", "Create nodes from the very large 'VeryLarge' node hierarchy.");
-            root.AddOption(flag);
-
-            flag = new Option("--pubsub", "Create nodes for and load the 'PubSub' node hierarchy, and write to MQTT.");
-            root.AddOption(flag);
-
-            flag = new Option("--diagnostics", "Enable server diagnostics.");
-            root.AddOption(flag);
-
-            flag = new Option("--core-profile", "Enable periodic and history events and datapoints. " +
-                "Equivalent to each -history flag, and base, custom, and events periodic flags");
-            root.AddOption(flag);
-
-            intOption = new Option<int>("--max-browse-results", "Server issue: Do not return continuation points, " +
-                "and never return more references than this value.");
-            root.AddOption(intOption);
-
-            intOption = new Option<int>("--max-browse-nodes", "Server issue: More nodes than this value will" +
-                " result in BadTooManyOperations.");
-            root.AddOption(intOption);
-
-            intOption = new Option<int>("--max-attributes", "Server issue: More attribute reads than this value " +
-                " will result in BadTooManyOperations");
-            root.AddOption(intOption);
-
-            intOption = new Option<int>("--max-subscriptions", "Server issue: More monitored items created than this " +
-                "value will result in BadTooManyOperations");
-            root.AddOption(intOption);
-
-            intOption = new Option<int>("--max-history-nodes", "Server issue: More nodes when reading history than" +
-                " this value will result in BadTooManyOperations");
-            root.AddOption(intOption);
-
-            intOption = new Option<int>("--remaining-browse-count", "Server issue: This " +
-                "number counts down for each browse operation, " +
-                "and once it reaches zero it results in BadTooManyOperations");
-            root.AddOption(intOption);
-
-            intOption = new Option<int>("--drop-subscriptions", "Server issue: Period in seconds between the server dropping all" +
-                " subscriptions from all connected sessions.");
-            root.AddOption(intOption);
-
-            option = new Option<string>("--log-level", "Level of logging to console. " +
-                "One of 'verbose', 'debug', 'information', 'warning', 'error' and 'fatal'");
-            option.AddAlias("-l");
-            root.AddOption(option);
-
-            option = new Option<string>("--log-file", "Path to log files, this enables logging to file");
-            root.AddOption(option);
-
-            flag = new Option("--log-trace", "Write OPC-UA SDK trace to log at debug level");
-            root.AddOption(flag);
-
-            root.Handler = CommandHandler.Create(async (ServerOptions opt) =>
+            root.SetHandler<ServerOptions>(async opt =>
             {
                 var loggerConfig = new LoggerConfig
                 {
@@ -258,7 +205,7 @@ namespace Server
 
                 using var controller = BuildServer(opt);
                 await Run(opt, controller);
-            });
+            }, binder);
 
 
             return new CommandLineBuilder(root)

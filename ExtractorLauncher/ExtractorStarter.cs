@@ -71,7 +71,7 @@ namespace Cognite.OpcUa
         private static void VerifyAndBuildConfig(
             ILogger log,
             FullConfig config,
-            ExtractorParams setup,
+            BaseExtractorParams setup,
             ExtractorRunnerParams<FullConfig, UAExtractor>? options,
             string configRoot)
         {
@@ -94,7 +94,7 @@ namespace Cognite.OpcUa
                 }
             }
             config.Source.AutoAccept |= setup.AutoAccept;
-            config.Source.ExitOnFailure |= setup.Exit;
+            config.Source.ExitOnFailure |= setup is ExtractorParams p2 && p2.Exit;
 
             if (options != null)
             {
@@ -113,14 +113,14 @@ namespace Cognite.OpcUa
             }
         }
 
-        private static void SetWorkingDir(ExtractorParams setup)
+        private static void SetWorkingDir(BaseExtractorParams setup)
         {
             string? path = null;
             if (setup.WorkingDir != null)
             {
                 path = setup.WorkingDir;
             }
-            else if (setup.Service)
+            else if (setup is ExtractorParams p2 && p2.Service)
             {
                 path = Directory.GetParent(AppContext.BaseDirectory)?.Parent?.FullName;
             }
@@ -134,7 +134,7 @@ namespace Cognite.OpcUa
             }
         }
 
-        public static async Task RunConfigTool(ILogger? log, ExtractorParams setup, ServiceCollection services, CancellationToken token)
+        public static async Task RunConfigTool(ILogger? log, ConfigToolParams setup, ServiceCollection services, CancellationToken token)
         {
             string configDir = setup.ConfigDir ?? Environment.GetEnvironmentVariable("OPCUA_CONFIG_DIR") ?? "config/";
 
