@@ -93,6 +93,14 @@ namespace Cognite.OpcUa
                     config.Logger.File.Path = setup.LogDir;
                 }
             }
+            if (setup.ConfigTool && config.Logger.File?.Level == null)
+            {
+                config.Logger.File = new FileConfig
+                {
+                    Level = "debug",
+                    Path = "config-tool-output.txt"
+                };
+            }
             config.Source.AutoAccept |= setup.AutoAccept;
             config.Source.ExitOnFailure |= setup is ExtractorParams p2 && p2.Exit;
 
