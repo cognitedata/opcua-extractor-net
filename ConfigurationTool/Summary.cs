@@ -174,6 +174,7 @@ namespace Cognite.OpcUa.Config
     {
         public int ChunkSize { get; set; }
         public bool LimitWarning { get; set; }
+        public int KnownCount { get; set; }
         public bool SilentWarning { get; set; }
         public bool Unsupported { get; set; }
         public bool UnableToUnsubscribe { get; set; }
@@ -186,10 +187,11 @@ namespace Cognite.OpcUa.Config
             {
                 log.LogInformation("Successfully subscribed to data variables");
                 log.LogInformation("Settled on subscription chunk size: {SubscriptionChunk}", ChunkSize);
-                if (LimitWarning)
+                if (LimitWarning && KnownCount < ChunkSize)
                 {
                     log.LogInformation("This is not a completely safe option, as the actual number of extractable nodes is lower than the limit, " +
-                                    "so if the number of variables increases in the future, it may fail");
+                                    "so if the number of variables increases in the future, it may fail. To be completely safe you may use a value " +
+                                    "smaller than or equal to {Known}", KnownCount);
                 }
 
                 if (SilentWarning)

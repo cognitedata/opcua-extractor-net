@@ -90,6 +90,7 @@ namespace Cognite.OpcUa.Config
                 log.LogWarning("There are only {Count} extractable variables, so expected chunksizes may not be accurate. " +
                             "The default is 1000, which generally works.", states.Count);
                 Summary.Subscriptions.LimitWarning = true;
+                Summary.Subscriptions.KnownCount = states.Count;
             }
 
             var dps = new List<UADataPoint>();
