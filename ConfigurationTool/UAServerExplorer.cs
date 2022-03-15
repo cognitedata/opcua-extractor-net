@@ -307,10 +307,20 @@ namespace Cognite.OpcUa.Config
             }
             if (Summary.Enums)
             {
-                log.LogInformation("There are variables with enum datatype. These can either be mapped to raw integer values with labels in" +
+                log.LogInformation("There are variables with enum datatype. These can either be mapped to raw integer values with labels in " +
                     "metadata, or to string timeseries with labels as values.");
             }
-            if (Summary.CustomNumTypesCount > 0 || Summary.MaxArraySize > 0 || Summary.StringVariables || Summary.Enums)
+            if (Summary.MissingDataType)
+            {
+                log.LogWarning("There were nodes with a data type that does not exist in the main data type hierarchy. Datatype discovery mechanisms may not work correctly. " +
+                    "This is not valid server behavior.");
+            }
+            if (Summary.NullDataType)
+            {
+                log.LogWarning("There were nodes with a null data type. The extractor has no way to deal with these beyond setting extraction.data-types.null-as-numeric " +
+                    "and assuming they are all numeric.");
+            }
+            if (Summary.CustomNumTypesCount > 0 || Summary.MaxArraySize > 0 || Summary.StringVariables || Summary.Enums || Summary.MissingDataType || Summary.NullDataType)
             {
                 log.LogInformation("");
             }

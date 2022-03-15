@@ -39,6 +39,26 @@ namespace Cognite.OpcUa.Config
         };
 
         /// <summary>
+        /// Internal AllowTSMap, used to check whether a node should be mapped over or not,
+        /// for use with subscriptions.
+        /// </summary>
+        /// <param name="node">Node to test</param>
+        /// <returns>True if the config tool should keep the variable</returns>
+        private bool AllowTSMap(UAVariable node)
+        {
+            if (node == null) throw new ArgumentNullException(nameof(node));
+
+            if (node.ValueRank == ValueRanks.Scalar) return true;
+
+            if (node.ArrayDimensions == null || node.ArrayDimensions.Length != 1) return false;
+
+            int length = node.ArrayDimensions.First();
+
+            return Config.Extraction.DataTypes.MaxArraySize < 0 || length > 0 && length <= Config.Extraction.DataTypes.MaxArraySize;
+
+        }
+
+        /// <summary>
         /// Attempts different chunk sizes for subscriptions. (number of created monitored items per attempt, 
         /// most servers should support at least one subscription).
         /// </summary>

@@ -29,7 +29,7 @@ namespace Cognite.OpcUa.Config
 {
     public partial class UAServerExplorer : UAClient
     {
-        private readonly List<ProtoDataType> customNumericTypes = new List<ProtoDataType>();
+        private readonly Dictionary<NodeId, ProtoDataType> customNumericTypes = new Dictionary<NodeId, ProtoDataType>();
 
         /// <summary>
         /// Returns true if the id is for a custom object. Tested by checking for non-integer identifiertype, or >0 namespaceUri.
@@ -113,12 +113,12 @@ namespace Cognite.OpcUa.Config
                 }
                 else
                 {
-                    customNumericTypes.Add(new ProtoDataType
+                    customNumericTypes[type.Id] = new ProtoDataType
                     {
                         IsStep = dataTypeSwitch == DataTypes.Boolean,
                         Enum = dataTypeSwitch == DataTypes.Enumeration,
                         NodeId = NodeIdToProto(type.Id)
-                    });
+                    };
                 }
                 if (dataTypeSwitch == DataTypes.Enumeration)
                 {
@@ -150,7 +150,7 @@ namespace Cognite.OpcUa.Config
 
             log.LogInformation("Found {Count} custom datatypes outside of normal hierarchy", customNumericTypes.Count);
             Summary.CustomNumTypesCount = customNumericTypes.Count;
-            baseConfig.Extraction.DataTypes.CustomNumericTypes = customNumericTypes;
+            baseConfig.Extraction.DataTypes.CustomNumericTypes = customNumericTypes.Values;
         }
 
         /// <summary>
@@ -181,8 +181,10 @@ namespace Cognite.OpcUa.Config
             bool stringVariables = false;
             int maxLimitedArrayLength = 0;
 
-            var identifiedTypes = new List<UANode>();
+            var identifiedTypes = new Dictionary<NodeId, UANode>();
             var missingTypes = new HashSet<NodeId>();
+
+            // Look for ArrayDimensions fields on values, we use these to identify arrays.
             foreach (var variable in variables)
             {
                 if (variable == null) continue;
@@ -209,26 +211,30 @@ namespace Cognite.OpcUa.Config
 
                 if (variable.DataType == null || variable.DataType.Raw == null || variable.DataType.Raw.IsNullNodeId)
                 {
+                    Summary.NullDataType = true;
                     log.LogWarning("Variable datatype is null on id: {Id}", variable.Id);
                     continue;
                 }
 
                 var dataType = dataTypes.FirstOrDefault(type => type.Id == variable.DataType.Raw);
 
-                if (dataType == null && missingTypes.Add(variable.DataType.Raw))
+                if (dataType == null)
                 {
-                    log.LogWarning("DataType found on node but not in hierarchy, " +
-                                "this may mean that some datatypes are defined outside of the main datatype hierarchy: {Type}", variable.DataType);
+                    if (missingTypes.Add(variable.DataType.Raw))
+                    {
+                        Summary.MissingDataType = true;
+                        log.LogWarning("DataType found on node but not in hierarchy, " +
+                                    "this may mean that some datatypes are defined outside of the main datatype hierarchy: {Type}", variable.DataType);
+                    }
                     continue;
                 }
-                if (dataType == null) continue;
-                if (identifiedTypes.Contains(dataType)) continue;
-                identifiedTypes.Add(dataType);
+
+                identifiedTypes.TryAdd(dataType.Id, dataType);
             }
 
             log.LogInformation("Found {Count} distinct data types in detected variables", identifiedTypes.Count);
 
-            foreach (var dataType in identifiedTypes)
+            foreach (var dataType in identifiedTypes.Values)
             {
                 if (dataType.Id.NamespaceIndex == 0)
                 {
@@ -241,7 +247,10 @@ namespace Cognite.OpcUa.Config
                 }
                 else
                 {
-                    stringVariables = true;
+                    if (!customNumericTypes.ContainsKey(dataType.Id))
+                    {
+                        stringVariables = true;
+                    }
                 }
             }
 
@@ -280,24 +289,6 @@ namespace Cognite.OpcUa.Config
 
             Summary.StringVariables = stringVariables;
             Summary.MaxArraySize = maxLimitedArrayLength;
-        }
-        /// <summary>
-        /// Internal AllowTSMap, used to check whether a node should be mapped over or not.
-        /// </summary>
-        /// <param name="node">Node to test</param>
-        /// <returns>True if the config tool should keep the variable</returns>
-        private bool AllowTSMap(UAVariable node)
-        {
-            if (node == null) throw new ArgumentNullException(nameof(node));
-
-            if (node.ValueRank == ValueRanks.Scalar) return true;
-
-            if (node.ArrayDimensions == null || node.ArrayDimensions.Length != 1) return false;
-
-            int length = node.ArrayDimensions.First();
-
-            return Config.Extraction.DataTypes.MaxArraySize < 0 || length > 0 && length <= Config.Extraction.DataTypes.MaxArraySize;
-
         }
     }
 }

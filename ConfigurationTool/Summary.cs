@@ -51,5 +51,7 @@ namespace Cognite.OpcUa.Config
         public bool Auditing { get; set; }
         public bool Subscriptions { get; set; }
         public bool History { get; set; }
+        public bool NullDataType { get; set; }
+        public bool MissingDataType { get; set; }
     }
 }
