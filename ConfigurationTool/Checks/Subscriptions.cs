@@ -77,6 +77,7 @@ namespace Cognite.OpcUa.Config
 
             if (states.Count == 0)
             {
+                Summary.Subscriptions.NoSubscribable = true;
                 log.LogWarning("There are no extractable states, subscriptions will not be tested");
                 return;
             }
@@ -88,7 +89,7 @@ namespace Cognite.OpcUa.Config
             {
                 log.LogWarning("There are only {Count} extractable variables, so expected chunksizes may not be accurate. " +
                             "The default is 1000, which generally works.", states.Count);
-                Summary.SubscriptionLimitWarning = true;
+                Summary.Subscriptions.LimitWarning = true;
             }
 
             var dps = new List<UADataPoint>();
@@ -117,12 +118,14 @@ namespace Cognite.OpcUa.Config
                     catch (Exception ex)
                     {
                         critical = true;
+                        Summary.Subscriptions.UnableToUnsubscribe = true;
                         log.LogWarning(ex, "Unable to remove subscriptions, further analysis is not possible");
                     }
 
                     if (e is ServiceResultException exc && exc.StatusCode == StatusCodes.BadServiceUnsupported)
                     {
                         critical = true;
+                        Summary.Subscriptions.Unsupported = true;
                         log.LogWarning("CreateMonitoredItems or CreateSubscriptions services unsupported, the extractor " +
                                     "will not be able to properly read datapoints live from this server");
                     }
@@ -137,18 +140,18 @@ namespace Cognite.OpcUa.Config
                 return;
             }
 
-            Summary.Subscriptions = true;
+            Summary.Subscriptions.Enabled = true;
             log.LogInformation("Settled on chunkSize: {Size}", baseConfig.Source.SubscriptionChunk);
             log.LogInformation("Waiting for datapoints to arrive...");
-            Summary.SubscriptionChunkSize = baseConfig.Source.SubscriptionChunk;
+            Summary.Subscriptions.ChunkSize = baseConfig.Source.SubscriptionChunk;
 
             for (int i = 0; i < 50; i++)
             {
-                if (dps.Any()) break;
+                if (dps.Count > 0) break;
                 await Task.Delay(100, token);
             }
 
-            if (dps.Any())
+            if (dps.Count > 0)
             {
                 log.LogInformation("Datapoints arrived, subscriptions confirmed to be working properly");
             }
@@ -156,7 +159,7 @@ namespace Cognite.OpcUa.Config
             {
                 log.LogWarning("No datapoints arrived, subscriptions may not be working properly, " +
                             "or there may be no updates on the server");
-                Summary.SilentSubscriptionsWarning = true;
+                Summary.Subscriptions.SilentWarning = true;
             }
 
             await Session!.RemoveSubscriptionsAsync(Session.Subscriptions.ToList());

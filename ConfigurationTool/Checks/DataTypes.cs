@@ -100,7 +100,7 @@ namespace Cognite.OpcUa.Config
                     break;
                 case DataTypes.Enumeration:
                     log.LogInformation("Found potential enum type: {Id}, consider turning on extraction.enum-as-strings", type.Id);
-                    Summary.Enums = true;
+                    Summary.DataTypes.Enums = true;
                     break;
             }
             // Update configuration based on whether or not the node was found in hierarchy.
@@ -146,10 +146,10 @@ namespace Cognite.OpcUa.Config
                 TestDataType(type);
             }
 
-            if (!Summary.Enums && dataTypes.Any(type => ToolUtil.IsChildOf(dataTypes, type, DataTypes.Enumeration))) Summary.Enums = true;
+            if (!Summary.DataTypes.Enums && dataTypes.Any(type => ToolUtil.IsChildOf(dataTypes, type, DataTypes.Enumeration))) Summary.DataTypes.Enums = true;
 
             log.LogInformation("Found {Count} custom datatypes outside of normal hierarchy", customNumericTypes.Count);
-            Summary.CustomNumTypesCount = customNumericTypes.Count;
+            Summary.DataTypes.CustomNumTypesCount = customNumericTypes.Count;
             baseConfig.Extraction.DataTypes.CustomNumericTypes = customNumericTypes.Values;
         }
 
@@ -195,12 +195,23 @@ namespace Cognite.OpcUa.Config
                 {
                     maxLimitedArrayLength = variable.ArrayDimensions[0];
                 }
-                else if (variable.ArrayDimensions != null
-                         && (variable.ArrayDimensions.Length > 1
-                             || variable.ArrayDimensions.Length == 1 &&
-                             variable.ArrayDimensions[0] > arrayLimit)
-                         || variable.ValueRank >= ValueRanks.TwoDimensions)
+                else if (variable.ValueRank == ValueRanks.Any
+                    || variable.ValueRank == ValueRanks.OneOrMoreDimensions)
                 {
+                    Summary.DataTypes.UnspecificDimensions = true;
+                    continue;
+                }
+                else if (variable.ValueRank >= ValueRanks.TwoDimensions || variable.ArrayDimensions != null && variable.ArrayDimensions.Length > 1)
+                {
+                    Summary.DataTypes.HighDimensions = true;
+                    continue;
+                }
+                else if (variable.ArrayDimensions != null
+                         && variable.ArrayDimensions.Length == 1
+                         && variable.ArrayDimensions[0] > arrayLimit)
+                {
+                    Summary.DataTypes.MaxUnlimitedArraySize = variable.ArrayDimensions[0];
+                    Summary.DataTypes.LargeArrays = true;
                     continue;
                 }
 
@@ -211,7 +222,7 @@ namespace Cognite.OpcUa.Config
 
                 if (variable.DataType == null || variable.DataType.Raw == null || variable.DataType.Raw.IsNullNodeId)
                 {
-                    Summary.NullDataType = true;
+                    Summary.DataTypes.NullDataType = true;
                     log.LogWarning("Variable datatype is null on id: {Id}", variable.Id);
                     continue;
                 }
@@ -222,7 +233,7 @@ namespace Cognite.OpcUa.Config
                 {
                     if (missingTypes.Add(variable.DataType.Raw))
                     {
-                        Summary.MissingDataType = true;
+                        Summary.DataTypes.MissingDataType = true;
                         log.LogWarning("DataType found on node but not in hierarchy, " +
                                     "this may mean that some datatypes are defined outside of the main datatype hierarchy: {Type}", variable.DataType);
                     }
@@ -287,8 +298,8 @@ namespace Cognite.OpcUa.Config
             baseConfig.Extraction.DataTypes.AllowStringVariables = baseConfig.Extraction.DataTypes.AllowStringVariables || stringVariables;
             baseConfig.Extraction.DataTypes.MaxArraySize = maxLimitedArrayLength > 0 ? maxLimitedArrayLength : oldArraySize;
 
-            Summary.StringVariables = stringVariables;
-            Summary.MaxArraySize = maxLimitedArrayLength;
+            Summary.DataTypes.StringVariables = stringVariables;
+            Summary.DataTypes.MaxArraySize = maxLimitedArrayLength;
         }
     }
 }

@@ -47,7 +47,7 @@ namespace Cognite.OpcUa.Config
                 try
                 {
                     endpoints = await disc.GetEndpointsAsync(null);
-                    summary.Endpoints = endpoints.Select(ep => $"{ep.EndpointUrl}: {ep.SecurityPolicyUri}").ToList();
+                    Summary.Session.Endpoints = endpoints.Select(ep => $"{ep.EndpointUrl}: {ep.SecurityPolicyUri}").ToList();
                 }
                 catch (Exception e)
                 {
@@ -65,7 +65,7 @@ namespace Cognite.OpcUa.Config
                 log.LogInformation("Endpoint: {Url}, Security: {Security}", ep.EndpointUrl, ep.SecurityPolicyUri);
                 openExists |= ep.SecurityPolicyUri == SecurityPolicies.None;
                 secureExists |= ep.SecurityPolicyUri != SecurityPolicies.None;
-                summary.Secure = secureExists;
+                Summary.Session.Secure = secureExists;
             }
 
             if (Session == null || !Session.Connected)

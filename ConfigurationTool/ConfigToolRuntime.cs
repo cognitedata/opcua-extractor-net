@@ -30,7 +30,7 @@ namespace Cognite.OpcUa.Config
     /// </summary>
     public class ConfigToolRuntime
     {
-        private readonly ILogger<ConfigToolRuntime> log;
+        private readonly ILogger log;
         private readonly IServiceProvider provider;
 
         private readonly string output;
@@ -42,7 +42,7 @@ namespace Cognite.OpcUa.Config
             this.config = config;
             this.baseConfig = baseConfig;
             this.output = output;
-            log = provider.GetRequiredService<ILogger<ConfigToolRuntime>>();
+            log = provider.GetRequiredService<ILogger<UAServerExplorer>>();
         }
         /// <summary>
         /// Start the config tool, then sequentially run the tests.
@@ -70,7 +70,7 @@ namespace Cognite.OpcUa.Config
                 await explorer.GetHistoryReadConfig(source.Token);
                 await explorer.GetEventConfig(source.Token);
                 explorer.GetNamespaceMap();
-                explorer.LogSummary();
+                explorer.Summary.Log(log);
             }
             catch (Exception e)
             {

@@ -65,7 +65,8 @@ namespace Cognite.OpcUa.Config
             {
                 log.LogWarning("Reading less than 1000 attributes maximum. Most servers should support more, but" +
                             " this server only has enough nodes to read {Reads}", expectedAttributeReads);
-                Summary.VariableLimitWarning = true;
+                Summary.Attributes.LimitWarning = true;
+                Summary.Attributes.KnownCount = expectedAttributeReads;
             }
 
             bool succeeded = false;
@@ -105,7 +106,7 @@ namespace Cognite.OpcUa.Config
                 break;
             }
 
-            Summary.AttributeChunkSize = baseConfig.Source.AttributesChunk;
+            Summary.Attributes.ChunkSize = baseConfig.Source.AttributesChunk;
 
             Config.Extraction.DataTypes.MaxArraySize = oldArraySize;
 

@@ -46,13 +46,13 @@ namespace Cognite.OpcUa.Config
             if (emitters.Any())
             {
                 log.LogInformation("Discovered {EmitterCount} emitters, of which {HistCount} are historizing", emitters.Count(), historizingEmitters.Count());
-                Summary.NumEmitters = emitters.Count();
-                Summary.NumHistEmitters = historizingEmitters.Count();
-                Summary.AnyEvents = true;
+                Summary.Events.NumEmitters = emitters.Count();
+                Summary.Events.NumHistEmitters = historizingEmitters.Count();
+                Summary.Events.AnyEvents = true;
                 baseConfig.Events.Enabled = true;
                 if (historizingEmitters.Any())
                 {
-                    Summary.HistoricalEvents = true;
+                    Summary.Events.HistoricalEvents = true;
                     baseConfig.History.Enabled = true;
                     baseConfig.Events.History = true;
                 }
@@ -84,10 +84,10 @@ namespace Cognite.OpcUa.Config
                 bool auditReferences = emitterReferences.Any(evt => evt.ParentId == ObjectIds.Server
                 && (evt.Id == ObjectTypeIds.AuditAddNodesEventType || evt.Id == ObjectTypeIds.AuditAddReferencesEventType));
 
-                Summary.AnyEvents = true;
+                Summary.Events.AnyEvents = true;
 
                 baseConfig.Extraction.EnableAuditDiscovery |= auditReferences;
-                Summary.Auditing = auditReferences;
+                Summary.Events.Auditing = auditReferences;
 
                 if (auditReferences)
                 {
@@ -95,7 +95,7 @@ namespace Cognite.OpcUa.Config
                 }
             }
 
-            if (!Summary.Auditing)
+            if (!Summary.Events.Auditing)
             {
                 try
                 {
@@ -111,7 +111,7 @@ namespace Cognite.OpcUa.Config
                     if (result)
                     {
                         log.LogInformation("Server capabilities indicate that auditing is enabled");
-                        Summary.Auditing = true;
+                        Summary.Events.Auditing = true;
                         baseConfig.Extraction.EnableAuditDiscovery = true;
                     }
                 }

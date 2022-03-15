@@ -57,7 +57,7 @@ namespace Cognite.OpcUa.Config
             if (!historizingStates.Any())
             {
                 log.LogWarning("No historizing variables detected, unable analyze history");
-                Summary.NoHistorizingNodes = true;
+                Summary.History.NoHistorizingNodes = true;
                 return;
             }
 
@@ -153,10 +153,10 @@ namespace Cognite.OpcUa.Config
                 return;
             }
 
-            Summary.History = true;
+            Summary.History.Enabled = true;
             baseConfig.History.Enabled = true;
             log.LogInformation("Settled on chunkSize: {Size}", baseConfig.History.DataNodesChunk);
-            Summary.HistoryChunkSize = baseConfig.History.DataNodesChunk;
+            Summary.History.ChunkSize = baseConfig.History.DataNodesChunk;
             log.LogInformation("Largest estimated number of datapoints in a single nodes history is {LargestEstimate}, " +
                             "this is found by looking at the first datapoints, then assuming the average frequency holds until now", largestEstimate);
 
@@ -175,7 +175,7 @@ namespace Cognite.OpcUa.Config
             log.LogInformation("Suggested granularity is: {Granularity} seconds", granularity);
             Config.History.Granularity = granularity.ToString();
 
-            Summary.HistoryGranularity = TimeSpan.FromSeconds(granularity);
+            Summary.History.Granularity = TimeSpan.FromSeconds(granularity);
 
             bool backfillCapable = false;
 
@@ -225,7 +225,7 @@ namespace Cognite.OpcUa.Config
                 log.LogInformation(e, "Failed to perform backfill");
             }
 
-            Summary.BackfillRecommended = largestEstimate > 100000 && backfillCapable;
+            Summary.History.BackfillRecommended = largestEstimate > 100000 && backfillCapable;
 
             if ((largestEstimate > 100000 || Config.History.Backfill) && backfillCapable)
             {

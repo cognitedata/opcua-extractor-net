@@ -192,7 +192,7 @@ namespace Cognite.OpcUa.Config
                 browseChunkSize = chunkSize;
             }
             log.LogInformation("Settled on a BrowseNodesChunk of {ChunkSize}", browseChunkSize);
-            Summary.BrowseNodesChunk = browseChunkSize;
+            Summary.Browse.BrowseNodesChunk = browseChunkSize;
 
             // Test if there are issues with BrowseNext.
             int originalChunkSize = Config.Source.BrowseChunk;
@@ -237,20 +237,20 @@ namespace Cognite.OpcUa.Config
                 {
                     log.LogWarning("Expected to receive {Count} nodes but only got {ChildCount}!", total, childCount);
                     log.LogWarning("There is likely an issue with returning large numbers of nodes from the server");
-                    Summary.BrowseNextWarning = true;
+                    Summary.Browse.BrowseNextWarning = true;
                     int largest = toBrowse.First().Count();
                     log.LogInformation("The largest discovered node has {Count} children", largest);
                     // Usually we will have found the largest parent by this point, unless the server is extremely large
                     // So we can try to choose a BrowseNodesChunk that lets us avoid the issue
-                    Summary.BrowseNodesChunk = Math.Max(1, (int)Math.Floor((double)chunkSize / largest));
+                    Summary.Browse.BrowseNodesChunk = Math.Max(1, (int)Math.Floor((double)chunkSize / largest));
                 }
-                Summary.BrowseChunk = Math.Min(chunkSize, originalChunkSize);
+                Summary.Browse.BrowseChunk = Math.Min(chunkSize, originalChunkSize);
                 break;
             }
-            Config.Source.BrowseChunk = Summary.BrowseChunk;
-            Config.Source.BrowseNodesChunk = Summary.BrowseNodesChunk;
-            baseConfig.Source.BrowseChunk = Summary.BrowseChunk;
-            baseConfig.Source.BrowseNodesChunk = Summary.BrowseNodesChunk;
+            Config.Source.BrowseChunk = Summary.Browse.BrowseChunk;
+            Config.Source.BrowseNodesChunk = Summary.Browse.BrowseNodesChunk;
+            baseConfig.Source.BrowseChunk = Summary.Browse.BrowseChunk;
+            baseConfig.Source.BrowseNodesChunk = Summary.Browse.BrowseNodesChunk;
         }
     }
 }
