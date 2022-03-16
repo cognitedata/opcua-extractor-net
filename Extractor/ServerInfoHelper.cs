@@ -58,13 +58,16 @@ namespace Cognite.OpcUa
 
             int SafeValue(int cVal, DataValue sVal, string name)
             {
-                if (StatusCode.IsBad(sVal.StatusCode)) return cVal;
                 int val = 0;
-                try
+                if (!StatusCode.IsBad(sVal.StatusCode))
                 {
-                    val = Convert.ToInt32(sVal.Value);
+                    try
+                    {
+                        val = Convert.ToInt32(sVal.Value);
+                    }
+                    catch { }
                 }
-                catch { }
+                
                 if ((cVal > val || cVal == 0) && val > 0)
                 {
                     log.LogInformation("Max {Name} is restricted to {Val}", name, val);
@@ -73,6 +76,10 @@ namespace Cognite.OpcUa
                 else if (val > 0 && val > cVal)
                 {
                     log.LogInformation("Upper limit on {Name} is {Val}, but configured to {CVal}", name, val, cVal);
+                }
+                else if (cVal == 0)
+                {
+                    log.LogWarning("No upper limit is set on {Name} by the server, the extractor will continue with {CVal}", name, cVal);
                 }
                 return cVal;
             }
