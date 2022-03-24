@@ -24,11 +24,14 @@ using Cognite.OpcUa.Pushers;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Prometheus;
+using Serilog;
+using Serilog.Events;
 using System;
 using System.IO;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
+using ILogger = Microsoft.Extensions.Logging.ILogger;
 
 namespace Cognite.OpcUa
 {
@@ -169,7 +172,7 @@ namespace Cognite.OpcUa
                 services.AddSingleton(setup.Config);
             }
 
-            services.AddLogger();
+            services.AddLogger(BuildConfigToolLogger);
 
             using var provider = services.BuildServiceProvider();
 
@@ -177,6 +180,25 @@ namespace Cognite.OpcUa
 
             var runTime = new ConfigToolRuntime(provider, setup.Config, setup.BaseConfig, configOutput);
             await runTime.Run(token);
+        }
+
+        private static Serilog.ILogger BuildConfigToolLogger(LoggerConfig config)
+        {
+            if (config == null) config = new LoggerConfig();
+            if (config.Console == null)
+            {
+                config.Console = new ConsoleConfig
+                {
+                    Level = "information"
+                };
+            }
+            var path = $"config-tool-{DateTime.Now.ToString("yyyy-MM-dd-HHmmss")}.log";
+            return LoggingUtils.GetConfiguration(config)
+                .WriteTo.Async(p => p.File(
+                    path: path,
+                    restrictedToMinimumLevel: LogEventLevel.Debug,
+                    outputTemplate: LoggingUtils.LogTemplateWithContext)
+                ).CreateLogger();
         }
 
         public static async Task RunExtractor(ILogger? log, ExtractorParams setup, ServiceCollection services, CancellationToken token)
