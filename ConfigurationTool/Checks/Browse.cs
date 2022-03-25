@@ -238,7 +238,21 @@ namespace Cognite.OpcUa.Config
                     log.LogWarning("Expected to receive {Count} nodes but only got {ChildCount}!", total, childCount);
                     log.LogWarning("There is likely an issue with returning large numbers of nodes from the server");
                     Summary.Browse.BrowseNextWarning = true;
-                    int largest = toBrowse.First().Count();
+
+                    var largestNode = toBrowse.First();
+
+                    var largestDict = new Dictionary<NodeId, BrowseNode> {
+                        { largestNode.Key, new BrowseNode(largestNode.Key) }
+                    };
+                    await GetReferences(new BrowseParams
+                    {
+                        NodeClassMask = (uint)NodeClass.Object | (uint)NodeClass.Variable,
+                        Nodes = largestDict
+                    }, true, token);
+
+                    int largest = largestDict[largestNode.Key].Result?.References?.Count ?? throw new FatalException(
+                        "Largest node has 0 children, this should not be possible at this stage, and indicates a server failure");
+
                     log.LogInformation("The largest discovered node has {Count} children", largest);
                     // Usually we will have found the largest parent by this point, unless the server is extremely large
                     // So we can try to choose a BrowseNodesChunk that lets us avoid the issue

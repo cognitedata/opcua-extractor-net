@@ -215,7 +215,7 @@ namespace Test.Unit
             await tester.Explorer.GetAttributeChunkSizes(tester.Source.Token);
             summary = tester.Explorer.Summary;
             Assert.Equal(100, summary.Attributes.ChunkSize);
-            Assert.False(summary.Attributes.LimitWarning);
+            Assert.False(summary.Attributes.LimitWarning && (summary.Attributes.KnownCount < summary.Attributes.ChunkSize));
 
             tester.Config.Extraction.RootNode = null;
             tester.Server.Issues.MaxAttributes = 0;
