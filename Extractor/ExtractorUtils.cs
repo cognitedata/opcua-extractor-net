@@ -15,19 +15,15 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using Cognite.Extractor.Configuration;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Text;
-using System.Text.RegularExpressions;
-using YamlDotNet.Serialization;
-using YamlDotNet.Serialization.NamingConventions;
-using YamlDotNet.Serialization.TypeInspectors;
 
 namespace Cognite.OpcUa
 {
@@ -491,29 +487,11 @@ namespace Cognite.OpcUa
         /// <returns>Final config string, can be written directly to file or parsed further</returns>
         public static string ConfigToString(FullConfig config)
         {
-            var serializer = new SerializerBuilder()
-                .WithTypeInspector(insp => new DefaultFilterTypeInspector(insp,
-                    Enumerable.Empty<string>(),
-                    new[] { "ConfigDir", "BaseExcludeProperties", "IdpAuthentication", "ApiKey", "Password" }))
-                .WithNamingConvention(HyphenatedNamingConvention.Instance)
-                .Build();
-
-            string raw = serializer.Serialize(config);
-
-            return TrimConfigString(raw);
-        }
-
-        public static string TrimConfigString(string raw)
-        {
-            var clearEmptyRegex = new Regex("^\\s*[a-zA-Z-_\\d]*:\\s*({}|\\[\\])\\s*\n", RegexOptions.Multiline);
-            var doubleIndentRegex = new Regex("(^ +)", RegexOptions.Multiline);
-            var fixListIndentRegex = new Regex("(^ +-)", RegexOptions.Multiline);
-
-            raw = clearEmptyRegex.Replace(raw, "");
-            raw = doubleIndentRegex.Replace(raw, "$1$1");
-            raw = fixListIndentRegex.Replace(raw, "  $1");
-
-            return raw;
+            return ConfigurationUtils.ConfigToString(config,
+                Enumerable.Empty<string>(),
+                new[] { "ConfigDir", "BaseExcludeProperties", "IdpAuthentication", "ApiKey", "Password" },
+                new[] { "Cognite" },
+                false);
         }
 
         public static string GetValueRankString(int valueRank)
@@ -528,70 +506,6 @@ namespace Cognite.OpcUa
                 ValueRanks.TwoDimensions => "TwoDimensions",
                 _ => $"{valueRank}Dimensions",
             };
-        }
-    }
-
-    /// <summary>
-    /// YamlDotNet type inspector, used to filter out default values from the generated config.
-    /// Instead of serializing the entire config file, which ends up being complicated and difficult to read,
-    /// this just serializes the properties that do not simply equal the default values.
-    /// This does sometimes produce empty arrays, but we can strip those later.
-    /// </summary>
-    public class DefaultFilterTypeInspector : TypeInspectorSkeleton
-    {
-        private readonly ITypeInspector innerTypeDescriptor;
-        private readonly HashSet<string> ToAlwaysKeep;
-        private readonly HashSet<string> ToIgnore;
-        public DefaultFilterTypeInspector(ITypeInspector innerTypeDescriptor, IEnumerable<string> toAlwaysKeep, IEnumerable<string> toIgnore)
-        {
-            this.innerTypeDescriptor = innerTypeDescriptor;
-            ToAlwaysKeep = new HashSet<string>(toAlwaysKeep);
-            ToIgnore = new HashSet<string>(toIgnore);
-        }
-
-        public override IEnumerable<IPropertyDescriptor> GetProperties(Type type, object? container)
-        {
-            if (container is null) return Enumerable.Empty<IPropertyDescriptor>();
-            var props = innerTypeDescriptor.GetProperties(type, container);
-
-            object? dfs = null;
-            try
-            {
-                dfs = Activator.CreateInstance(type);
-                var genD = type.GetMethod("GenerateDefaults");
-                genD?.Invoke(dfs, null);
-            }
-            catch { }
-
-            props = props.Where(p =>
-            {
-                var name = PascalCaseNamingConvention.Instance.Apply(p.Name);
-                var prop = type.GetProperty(name);
-                object? df = null;
-                if (dfs != null) df = prop?.GetValue(dfs);
-                var val = prop?.GetValue(container);
-
-                // Some config objects have private properties, since this is a write-back of config we shouldn't save those
-                if (!p.CanWrite) return false;
-                // Some custom properties are kept on the config object for convenience
-                if (ToIgnore.Contains(name)) return false;
-                // Some should be kept to encourage users to set them
-                if (ToAlwaysKeep.Contains(name)) return true;
-                if (prop != null && prop.PropertyType.Namespace.StartsWith("Cognite", StringComparison.InvariantCulture) && !type.IsValueType)
-                {
-                    var pr = GetProperties(prop.PropertyType, val);
-                    if (!pr.Any()) return false;
-                }
-
-
-                // Compare the value of each property with its default, and check for empty arrays, don't save those.
-                // This creates minimal config files
-                if (val != null && (val is IEnumerable list) && !list.GetEnumerator().MoveNext()) return false;
-
-                return df != null && !df.Equals(val) || df == null && val != null;
-            });
-
-            return props;
         }
     }
 

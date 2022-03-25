@@ -76,13 +76,13 @@ namespace Cognite.OpcUa
             Scheduler.SchedulePeriodicTask(nameof(Pushers), config.Extraction.DataPushDelayValue.Value, Pushers, true);
             Scheduler.SchedulePeriodicTask(nameof(ExtraTasks), Timeout.InfiniteTimeSpan, ExtraTasks, false);
 
-            Scheduler.SchedulePeriodicTask(nameof(Rebrowse), config.Extraction.AutoRebrowsePeriodValue.Value, Rebrowse, false);
+            Scheduler.SchedulePeriodicTask(nameof(Rebrowse), config.Extraction.AutoRebrowsePeriodValue, Rebrowse, false);
             if (extractor.StateStorage != null)
             {
                 var interval = config.StateStorage.IntervalValue.Value;
                 Scheduler.SchedulePeriodicTask(nameof(StoreState), interval, StoreState, interval != Timeout.InfiniteTimeSpan);
             }
-            Scheduler.SchedulePeriodicTask(nameof(HistoryRestart), config.History.RestartPeriodValue.Value, HistoryRestart, false);
+            Scheduler.SchedulePeriodicTask(nameof(HistoryRestart), config.History.RestartPeriodValue, HistoryRestart, false);
         }
 
         /// <summary>

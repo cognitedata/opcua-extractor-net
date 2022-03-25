@@ -289,12 +289,13 @@ namespace Cognite.OpcUa
         public Dictionary<string, string> NamespaceMap { get => namespaceMap; set => namespaceMap = value ?? namespaceMap; }
         private Dictionary<string, string> namespaceMap = new Dictionary<string, string>();
         
-        public TimeSpanWrapper AutoRebrowsePeriodValue { get; } = new TimeSpanWrapper(false, "m", "0");
+        public CronTimeSpanWrapper AutoRebrowsePeriodValue { get; } = new CronTimeSpanWrapper(false, false, "m", "0");
 
         /// <summary>
         /// Time in minutes between each call to browse the OPC-UA directory, then push new nodes to destinations.
         /// Note that this is a heavy operation, so this number should not be set too low.
         /// Alternatively, use N[timeunit] where timeunit is w, d, h, m, s or ms.
+        /// You can also use a cron expression on the form "[minute] [hour] [day of month] [month] [day of week]"
         /// </summary>
         public string? AutoRebrowsePeriod
         {
@@ -1181,11 +1182,12 @@ namespace Cognite.OpcUa
         /// </summary>
         public bool IgnoreContinuationPoints { get; set; }
 
-        public TimeSpanWrapper RestartPeriodValue { get; } = new TimeSpanWrapper(false, "s", "0");
+        public CronTimeSpanWrapper RestartPeriodValue { get; } = new CronTimeSpanWrapper(false, false, "s", "0");
         /// <summary>
         /// Time in seconds to wait between each restart of history. Setting this too low may impact performance.
         /// Leave at 0 to disable periodic restarts.
         /// Alternatively, use N[timeunit] where timeunit is w, d, h, m, s or ms.
+        /// You may also use a cron expression on the form "[minute] [hour] [day of month] [month] [day of week]"
         /// </summary>
         public string? RestartPeriod
         {
