@@ -8,7 +8,7 @@ source:
 
 logger:
     console:
-        level: "debug"
+        level: "fatal"
 
 cognite:
     project: test

@@ -1,0 +1,34 @@
+name: Build and test extractor
+
+on:
+    pull_request:
+        branches: [ master ]
+    
+jobs:
+    build:
+        runs-on: ubuntu-latest
+        
+        steps:
+        - uses: actions/checkout@v2
+        - name: Setup .NET
+          uses: actions/setup-dotnet@v1
+          with:
+              dotnet-version: 6.0.x
+        - name: Restore paket
+          run: dotnet tool restore
+        - name: Restore dependencies
+          run: dotnet restore
+        - name: Build
+          run: dotnet build ExtractorLauncher/
+        - name: Install test dependencies
+          run: "sudo apt-get update && sudo apt-get -y install gnupg curl procps gawk grep && curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | sudo apt-key add - && sudo apt-get install -y nmap ncat mosquitto"
+        - name: Setup mosquitto
+          run: mosquitto -p 4060 &
+        - name: Setup influxdb
+          run: sh setup-influxdb.sh
+        - name: Run tests
+          run: sh test.sh
+        - name: Upload coverage to Codecov
+          uses: codecov/codecov-action@v1
+          with:
+            token: ${{ secrets.CODECOV_TOKEN }}
