@@ -11,6 +11,7 @@ jobs:
         outputs:
             publish-args: ${{ steps.get-pub-args.outputs.args }}
             upload-url: ${{ steps.create_release.outputs.upload_url }}
+            version: ${{ steps.get-version.outputs.version }}
         
         steps:
         - uses: actions/checkout@v2
@@ -21,11 +22,13 @@ jobs:
             GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           with:
             tag_name: ${{ github.ref }}
-            release_name: OPC-UA Extractor ${{ github.ref }}
+            release_name: ${{ github.ref }}
             draft: false
             prerelease: false
         - id: get-pub-args
-          run: echo ::set-output name=args::$(sh ./get-build-args.sh)
+          run: echo ::set-output name=args::$(./get-build-args.sh ${GITHUB_REF#refs/tags/})
+        - id: get-version
+          run: echo ::set-output name=version::${GITHUB_REF#refs/tags/}
         
     build-linux:
         runs-on: ubuntu-latest
@@ -43,79 +46,37 @@ jobs:
           run: dotnet restore
         - name: Build
           run: dotnet build ExtractorLauncher/
-        - name: Build windows release
-          run: ./build-zip.sh win-x64 ${{ needs.create-release.outputs.publish-args }} false
-        - name: Build linux release
-          run: ./build-zip.sh linux-x64 ${{ needs.create-release.outputs.publish-args }} true 
-        - name: Build windows bridge release
-          run: ./build-zip-bridge.sh win-x64 ${{ needs.create-release.outputs.publish-args }} false
-        - name: Build linux bridge release
-          run: ./build-zip-bridge.sh linux-x64 ${{ needs.create-release.outputs.publish-args }} true
-        - name: Build windows server release
-          run: ./build-zip-server.sh win-x64 ${{ needs.create-release.outputs.publish-args }} false
-        - name: Build linux server release
-          run: ./build-zip-server.sh linux-x64 ${{ needs.create-release.outputs.publish-args }} true
 
-        - name: Upload windows extractor
-          uses: actions/upload-release-asset@v1
-          env:
-            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          with:
-            upload_url: ${{ needs.create-release.outputs.upload-url }}
-            asset_path: ./opcua-extractor.win-x64.${{ github.ref }}.zip
-            asset_name: opcua-extractor.win-x64.${{ github.ref }}.zip
-            asset_content_type: application/zip
-            
-        - name: Upload linux extractor
-          uses: actions/upload-release-asset@v1
-          env:
-            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          with:
-            upload_url: ${{ needs.create-release.outputs.upload-url }}
-            asset_path: ./opcua-extractor.linux-x64.${{ github.ref }}.zip
-            asset_name: opcua-extractor.linux-x64.${{ github.ref }}.zip
-            asset_content_type: application/zip
-            
-        - name: Upload windows bridge
-          uses: actions/upload-release-asset@v1
-          env:
-            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          with:
-            upload_url: ${{ needs.create-release.outputs.upload-url }}
-            asset_path: ./mqtt-cdf-bridge.win-x64.${{ github.ref }}.zip
-            asset_name: mqtt-cdf-bridge.win-x64.${{ github.ref }}.zip
-            asset_content_type: application/zip
-            
-        - name: Upload linux bridge
-          uses: actions/upload-release-asset@v1
-          env:
-            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          with:
-            upload_url: ${{ needs.create-release.outputs.upload-url }}
-            asset_path: ./mqtt-cdf-bridge.linux-x64.${{ github.ref }}.zip
-            asset_name: mqtt-cdf-bridge.linux-x64.${{ github.ref }}.zip
-            asset_content_type: application/zip
+        - name: Install release dependencies
+          run: sudo apt-get install -y rpm build-essential sed
+        - name: Build release binary
+          run: dotnet publish -c Release -r linux-x64 ${{ needs.create-release.outputs.publish-args }} ExtractorLauncher/ -o linux/publish/
+        - run: sh ./build-linux-installers.sh ${{ needs.create-release.outputs.version }}
         
-        - name: Upload windows server
-          uses: actions/upload-release-asset@v1
-          env:
-            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          with:
-            upload_url: ${{ needs.create-release.outputs.upload-url }}
-            asset_path: ./test-server.win-x64.${{ github.ref }}.zip
-            asset_name: test-server.win-x64.${{ github.ref }}.zip
-            asset_content_type: application/zip
+        - name: Get RPM version
+          id: rpmver
+          run: echo ::set-output name=rpmver::$(echo "${{ needs.create-release.outputs.version}}" | tr - _)
         
-        - name: Upload linux server
+        - name: Upload rpm installer
           uses: actions/upload-release-asset@v1
           env:
             GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           with:
             upload_url: ${{ needs.create-release.outputs.upload-url }}
-            asset_path: ./test-server.linux-x64.${{ github.ref }}.zip
-            asset_name: test-server.linux-x64.${{ github.ref }}.zip
-            asset_content_type: application/zip
-         
+            asset_path: ./opcua-extractor-${{ steps.rpmver.outputs.rpmver }}-1.x86_64.rpm
+            asset_name: opcua-extractor-${{ steps.rpmver.outputs.rpmver }}-1.x86_64.rpm
+            asset_content_type: application/x-rpm
+        
+        - name: Upload deb installer
+          uses: actions/upload-release-asset@v1
+          env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          with:
+            upload_url: ${{ needs.create-release.outputs.upload-url }}
+            asset_path: ./opcua-extractor_${{ needs.create-release.outputs.version }}_amd64.deb
+            asset_name: opcua-extractor_${{ needs.create-release.outputs.version }}_amd64.deb
+            asset_content_type: application/x-debian-package
+        
     build-installer:
         runs-on: windows-2019
         needs: create-release

@@ -1,10 +1,9 @@
 #!/bin/bash
 
 configuration="$1"
-buildargs="$2"
-linux="$3"
+linux="$2"
+version="$3"
 
-dotnet publish -c Release -r $configuration $buildargs MQTTCDFBridge/
 mkdir -p $configuration/
 mv MQTTCDFBridge/bin/Release/net6.0/$configuration/publish/* ./$configuration/
 rm -f ./$configuration/*.config ./$configuration/*.pdb ./$configuration/*.xml
@@ -12,7 +11,7 @@ mkdir -p ./$configuration/config
 cp ./LICENSE.md ./$configuration/
 cp ./config/config.bridge.example.yml ./$configuration/config/
 
-if ["$linux" -eq "true"]
+if [ $linux = "true" ]
 then
     chmod +x ./$configuration/MQTTCDFBridge
 fi

@@ -1,10 +1,10 @@
 #!/bin/bash
 
+set -x
 configuration="$1"
-buildargs="$2"
-linux="$3"
+linux="$2"
+version="$3"
 
-dotnet publish -c Release -r $configuration $buildargs ExtractorLauncher/
 mkdir -p $configuration/
 mv ExtractorLauncher/bin/Release/net6.0/$configuration/publish/* ./$configuration/
 rm -f ./$configuration/*.config ./$configuration/*.pdb ./$configuration/*.xml
@@ -15,7 +15,7 @@ cp ./config/config.minimal.yml ./$configuration/config/
 cp ./config/opc.ua.net.extractor.Config.xml ./$configuration/config/
 cp ./CHANGELOG.md ./$configuration/
 
-if ["$linux" -eq "true"]
+if [ $linux = "true" ]
 then
     chmod +x ./$configuration/OpcuaExtractor
 fi
