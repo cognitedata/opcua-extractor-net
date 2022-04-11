@@ -53,10 +53,94 @@ jobs:
           run: dotnet publish -c Release -r linux-x64 ${{ needs.create-release.outputs.publish-args }} ExtractorLauncher/ -o linux/publish/
         - run: sh ./build-linux-installers.sh ${{ needs.create-release.outputs.version }}
         
+        - name: Build windows release
+          run: dotnet publish -c Release -r win-x64 ${{ needs.create-release.outputs.publish-args }} ExtractorLauncher/
+        - run: ./build-zip.sh win-x64 false ${{ needs.create-release.outputs.version }}
+
+        - name: Build linux release
+          run: dotnet publish -c Release -r linux-x64 ${{ needs.create-release.outputs.publish-args }} ExtractorLauncher/
+        - run: ./build-zip.sh linux-x64 true ${{ needs.create-release.outputs.version }}
+
+        - name: Build windows bridge release
+          run: dotnet publish -c Release -r win-x64 ${{ needs.create-release.outputs.publish-args }} MQTTCDFBridge/
+        - run: ./build-zip-bridge.sh win-x64 false ${{ needs.create-release.outputs.version }}
+
+        - name: Build linux bridge release
+          run: dotnet publish -c Release -r linux-x64 ${{ needs.create-release.outputs.publish-args }} MQTTCDFBridge/
+        - run: ./build-zip-bridge.sh linux-x64 true ${{ needs.create-release.outputs.version }}
+
+        - name: Build windows server release
+          run: dotnet publish -c Release -r win-x64 ${{ needs.create-release.outputs.publish-args }} Server/
+        - run: ./build-zip-server.sh win-x64 false ${{ needs.create-release.outputs.version }}
+
+        - name: Build linux server release
+          run: dotnet publish -c Release -r linux-x64 ${{ needs.create-release.outputs.publish-args }} Server/
+        - run: ./build-zip-server.sh linux-x64 true ${{ needs.create-release.outputs.version }}
+
+        - name: Upload windows extractor
+          uses: actions/upload-release-asset@v1
+          env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          with:
+            upload_url: ${{ needs.create-release.outputs.upload-url }}
+            asset_path: ./opcua-extractor.win-x64.${{ needs.create-release.outputs.version }}.zip
+            asset_name: opcua-extractor.win-x64.${{ needs.create-release.outputs.version }}.zip
+            asset_content_type: application/zip
+
+        - name: Upload linux extractor
+          uses: actions/upload-release-asset@v1
+          env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          with:
+            upload_url: ${{ needs.create-release.outputs.upload-url }}
+            asset_path: ./opcua-extractor.linux-x64.${{ needs.create-release.outputs.version }}.zip
+            asset_name: opcua-extractor.linux-x64.${{ needs.create-release.outputs.version }}.zip
+            asset_content_type: application/zip
+
+        - name: Upload windows bridge
+          uses: actions/upload-release-asset@v1
+          env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          with:
+            upload_url: ${{ needs.create-release.outputs.upload-url }}
+            asset_path: ./mqtt-cdf-bridge.win-x64.${{ needs.create-release.outputs.version }}.zip
+            asset_name: mqtt-cdf-bridge.win-x64.${{ needs.create-release.outputs.version }}.zip
+            asset_content_type: application/zip
+
+        - name: Upload linux bridge
+          uses: actions/upload-release-asset@v1
+          env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          with:
+            upload_url: ${{ needs.create-release.outputs.upload-url }}
+            asset_path: ./mqtt-cdf-bridge.linux-x64.${{ needs.create-release.outputs.version }}.zip
+            asset_name: mqtt-cdf-bridge.linux-x64.${{ needs.create-release.outputs.version }}.zip
+            asset_content_type: application/zip
+
+        - name: Upload windows server
+          uses: actions/upload-release-asset@v1
+          env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          with:
+            upload_url: ${{ needs.create-release.outputs.upload-url }}
+            asset_path: ./test-server.win-x64.${{ needs.create-release.outputs.version }}.zip
+            asset_name: test-server.win-x64.${{ needs.create-release.outputs.version }}.zip
+            asset_content_type: application/zip
+
+        - name: Upload linux server
+          uses: actions/upload-release-asset@v1
+          env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          with:
+            upload_url: ${{ needs.create-release.outputs.upload-url }}
+            asset_path: ./test-server.linux-x64.${{ needs.create-release.outputs.version }}.zip
+            asset_name: test-server.linux-x64.${{ needs.create-release.outputs.version }}.zip
+            asset_content_type: application/zip
+
         - name: Get RPM version
           id: rpmver
           run: echo ::set-output name=rpmver::$(echo "${{ needs.create-release.outputs.version}}" | tr - _)
-        
+
         - name: Upload rpm installer
           uses: actions/upload-release-asset@v1
           env:
@@ -66,7 +150,7 @@ jobs:
             asset_path: ./opcua-extractor-${{ steps.rpmver.outputs.rpmver }}-1.x86_64.rpm
             asset_name: opcua-extractor-${{ steps.rpmver.outputs.rpmver }}-1.x86_64.rpm
             asset_content_type: application/x-rpm
-        
+
         - name: Upload deb installer
           uses: actions/upload-release-asset@v1
           env:
@@ -76,11 +160,11 @@ jobs:
             asset_path: ./opcua-extractor_${{ needs.create-release.outputs.version }}_amd64.deb
             asset_name: opcua-extractor_${{ needs.create-release.outputs.version }}_amd64.deb
             asset_content_type: application/x-debian-package
-        
+
     build-installer:
         runs-on: windows-2019
         needs: create-release
-        
+
         steps:
         - uses: actions/checkout@v2
           with:
@@ -94,10 +178,10 @@ jobs:
           run: dotnet tool restore
         - name: Restore dependencies
           run: dotnet restore
-          
+
         - name: Build Executable
           run: dotnet publish -c Release -r win-x64 ${{ needs.create-release.outputs.publish-args }} .\ExtractorLauncher\ -o extractorbuild\
-          
+
         - name: Sign executable
           env:
             CERTIFICATE: ${{ secrets.CODE_SIGNING_CERTIFICATE }}
@@ -105,10 +189,10 @@ jobs:
           uses: cognitedata/code-sign-action/@v1
           with:
             path-to-binary: .\extractorbuild\OpcuaExtractor.exe
-        
+
         - name: Add msbuild to path
           uses: microsoft/setup-msbuild@v1.1
-        
+
         - name: Build service manager
           run: msbuild .\OpcUaServiceManager\OpcUaServiceManager.csproj /t:rebuild /p:Configuration=Release
         - run: mkdir managerbuild
