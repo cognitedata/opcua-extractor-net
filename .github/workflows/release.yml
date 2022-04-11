@@ -124,7 +124,7 @@ jobs:
 
         - name: Build MSI
           working-directory: .\OpcUaExtractorSetup
-          run: .\build.ps1 -v ${{ needs.create-release.outputs.version }} -b msbuild -d "" -c .\setup-config.json
+          run: .\build.ps1 -v ${{ needs.create-release.outputs.version }} -b msbuild -d "OPC-UA Extractor" -c .\setup-config.json
 
         - name: Sign MSI
           env:
