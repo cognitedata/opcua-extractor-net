@@ -36,12 +36,11 @@ namespace Test.Unit
             Config = services.AddConfig<FullConfig>("config.test.yml", 1);
             Config.Source.EndpointUrl = $"opc.tcp://localhost:62000";
             Configure(services);
-            LoggingUtils.Configure(Config.Logger);
             Provider = services.BuildServiceProvider();
 
             Server = new ServerController(new[] {
                 PredefinedSetup.Base, PredefinedSetup.Full, PredefinedSetup.Auditing,
-                PredefinedSetup.Custom, PredefinedSetup.Events, PredefinedSetup.Wrong }, 62000)
+                PredefinedSetup.Custom, PredefinedSetup.Events, PredefinedSetup.Wrong }, Provider, 62000)
             {
                 ConfigRoot = "Server.Test.UaClient"
             };

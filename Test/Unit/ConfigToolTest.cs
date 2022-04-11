@@ -41,7 +41,7 @@ namespace Test.Unit
 
             Server = new ServerController(new[] {
                 PredefinedSetup.Base, PredefinedSetup.Full, PredefinedSetup.Auditing,
-                PredefinedSetup.Custom, PredefinedSetup.Events, PredefinedSetup.Wrong }, port);
+                PredefinedSetup.Custom, PredefinedSetup.Events, PredefinedSetup.Wrong }, Provider, port);
 
         }
 

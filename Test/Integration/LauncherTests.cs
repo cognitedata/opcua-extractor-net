@@ -16,7 +16,7 @@ using Xunit.Abstractions;
 
 namespace Test.Integration
 {
-    public class LauncherTestFixture : IAsyncLifetime
+    public class LauncherTestFixture : LoggingTestFixture, IAsyncLifetime
     {
         public int Port { get; }
         public ServerController Server { get; }
@@ -26,11 +26,15 @@ namespace Test.Integration
         {
             Port = CommonTestUtils.NextPort;
 
+            var services = new ServiceCollection();
+            Configure(services);
+            var provider = services.BuildServiceProvider();
+
             ThreadPool.SetMinThreads(20, 20);
 
             Server = new ServerController(new[] {
                 PredefinedSetup.Custom, PredefinedSetup.Base, PredefinedSetup.Events,
-                PredefinedSetup.Wrong, PredefinedSetup.Full, PredefinedSetup.Auditing }, Port);
+                PredefinedSetup.Wrong, PredefinedSetup.Full, PredefinedSetup.Auditing }, provider, Port);
         }
 
         public async Task InitializeAsync()
@@ -50,9 +54,10 @@ namespace Test.Integration
         private readonly LauncherTestFixture tester;
         private DummyPusher pusher;
         private UAExtractor extractor;
-        public LauncherTests(LauncherTestFixture tester)
+        public LauncherTests(ITestOutputHelper output, LauncherTestFixture tester)
         {
             this.tester = tester;
+            tester.Init(output);
             Program.CommandDryRun = false;
             Program.OnLaunch = (s, o) => CommonBuild(s);
             ExtractorStarter.OnCreateExtractor = (d, e) =>

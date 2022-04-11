@@ -54,7 +54,7 @@ namespace Test.Utils
 
         private async Task Start()
         {
-            Server = new ServerController(Setups, Port);
+            Server = new ServerController(Setups, Provider, Port);
             await Server.Start();
 
             Client = new UAClient(Provider, Config);
