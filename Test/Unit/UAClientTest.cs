@@ -548,10 +548,6 @@ namespace Test.Unit
                 tester.Config.Extraction.NodeTypes.AsNodes = false;
             }
             var distinctNodes = nodes.SelectMany(kvp => kvp.Value).GroupBy(rd => rd.NodeId);
-            foreach (var node in distinctNodes.Where(group => group.Count() > 1))
-            {
-                Console.WriteLine("Duplicate node: " + node.Key);
-            }
 
             Assert.Equal(distinctNodes.Count(), nodes.Sum(kvp => kvp.Value.Count));
             Assert.Equal(2544, nodes.Sum(kvp => kvp.Value.Count));
@@ -920,7 +916,6 @@ namespace Test.Unit
                 foreach (var node in nodes)
                 {
                     var result = node.LastResult;
-                    Console.WriteLine($"{node.Id} {result}");
                     var historyData = result as HistoryData;
                     Assert.Equal(600, historyData.DataValues.Count);
                     Assert.False(node.Completed);
@@ -1139,7 +1134,6 @@ namespace Test.Unit
 
             void handler(MonitoredItem _, MonitoredItemNotificationEventArgs __)
             {
-                Console.WriteLine("Trigger event");
                 count++;
             }
 

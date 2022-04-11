@@ -908,11 +908,6 @@ namespace Test.Integration
 
             await TestUtils.WaitForCondition(() => handler.AssetRaw.Any() && handler.TimeseriesRaw.Any(), 5);
 
-            foreach (var kvp in handler.TimeseriesRaw)
-            {
-                Console.WriteLine(kvp.Value.ToString());
-            }
-
             CommonTestUtils.VerifyStartingConditions(
                 handler.AssetRaw
                 .ToDictionary(kvp => kvp.Key, kvp => (AssetDummy)JsonSerializer.Deserialize<AssetDummyJson>(kvp.Value.ToString())),
@@ -980,7 +975,6 @@ namespace Test.Integration
 
             var id = tester.Client.GetUniqueId(tester.Server.Ids.Wrong.RankImprecise);
 
-            Console.WriteLine(handler.Assets[id].metadata["TooLargeDim"]);
             Assert.True(string.IsNullOrEmpty(handler.Assets[id].metadata["TooLargeDim"]));
 
             await extractor.Rebrowse();
@@ -1226,7 +1220,6 @@ namespace Test.Integration
                 Assert.Equal(refs.Count, references.Count);
                 foreach (var node in nodes)
                 {
-                    Console.WriteLine("Investigate object: " + node.Id + ", " + node.DisplayName);
                     Assert.True(assets.TryGetValue(node.Id, out var other));
                     Assert.Equal(other.DisplayName, node.DisplayName);
                     Assert.Equal(other.ShouldSubscribeEvents, node.ShouldSubscribeEvents);
@@ -1239,7 +1232,6 @@ namespace Test.Integration
 
                 foreach (var node in variables)
                 {
-                    Console.WriteLine("Investigate variable: " + node.Id + ", " + node.DisplayName);
                     Assert.True(tss.TryGetValue((node.Id, node.Index), out var other));
                     Assert.Equal(other.DisplayName, node.DisplayName);
                     Assert.Equal(other.ShouldSubscribeData, node.ShouldSubscribeData);

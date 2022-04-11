@@ -44,12 +44,10 @@ namespace Test.Unit
             {
                 synch1 = true;
                 await Task.Delay(100, token);
-                Console.WriteLine("Terminate synch 1");
             });
             extractor.Looper.Scheduler.ScheduleTask(null, token =>
             {
                 synch2 = true;
-                Console.WriteLine("Terminate synch 2");
                 return Task.CompletedTask;
             });
 
@@ -68,18 +66,13 @@ namespace Test.Unit
             using var evt2 = new ManualResetEvent(false);
             extractor.Looper.Scheduler.ScheduleTask("Interupt1", token =>
             {
-                Console.WriteLine("Starting task 1");
                 evt.WaitOne();
-                Console.WriteLine("Finishing task 1");
                 int1 = true;
             });
             extractor.Looper.Scheduler.ScheduleTask("Interupt2", token =>
             {
-                Console.WriteLine("Starting task 2");
                 evt.WaitOne();
-                Console.WriteLine("Triggered once on task 2");
                 evt2.WaitOne();
-                Console.WriteLine("Finish task 2");
                 int2 = true;
             });
 
@@ -94,7 +87,6 @@ namespace Test.Unit
             extractor.Looper.Scheduler.ScheduleTask("failing", async token =>
             {
                 await Task.Delay(100, token);
-                Console.Write("Throw exception");
                 throw new ExtractorFailureException("SomeException");
             });
 

@@ -299,7 +299,6 @@ namespace Test.Integration
 
             evt = pusher.Events[ObjectIds.Server].First(evt => evt.Message == "mapped 0");
             Assert.Equal(ObjectIds.Server, evt.EmittingNode);
-            foreach (var meta in evt.MetaData) Console.WriteLine($"{meta.Key}: {meta.Value}");
             Assert.Equal(3, evt.MetaData.Count);
             Assert.Equal("CustomType", evt.MetaData["Type"]);
 
@@ -572,22 +571,10 @@ namespace Test.Integration
 
             Assert.False(runTask.IsFaulted, $"Faulted! {runTask.Exception}");
 
-            // expect no data to arrive in pusher
-            try
-            {
-                await TestUtils.WaitForCondition(
-                    () => pusher.DataFailing
-                    && extractor.State.EmitterStates.All(state => !state.IsFrontfilling), 5,
-                    () => $"Pusher is dataFailing: {pusher.DataFailing}");
-            }
-            finally
-            {
-                foreach (var state in extractor.State.EmitterStates)
-                {
-                    Console.WriteLine($"{state.Id}: {state.IsFrontfilling}");
-                }
-            }
-
+            await TestUtils.WaitForCondition(
+                () => pusher.DataFailing
+                && extractor.State.EmitterStates.All(state => !state.IsFrontfilling), 5,
+                () => $"Pusher is dataFailing: {pusher.DataFailing}");
 
             Assert.True(pusher.DataPoints.All(dps => !dps.Value.Any()));
 

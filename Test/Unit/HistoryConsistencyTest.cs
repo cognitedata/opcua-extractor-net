@@ -146,8 +146,6 @@ namespace Test.Unit
                 .GetField("dataPointQueue", BindingFlags.NonPublic | BindingFlags.Instance)
                 .GetValue(extractor.Streamer);
 
-            Console.WriteLine(tester.HistoryStart);
-
             await reader.FrontfillData(states);
 
             if (backfill)
@@ -161,7 +159,6 @@ namespace Test.Unit
             Assert.Equal(6, distinct.Count);
             foreach (var kvp in distinct)
             {
-                Console.WriteLine($"Check: {kvp.Key}");
                 Assert.Equal(1000, kvp.Value.Length);
             }
         }
@@ -224,8 +221,6 @@ namespace Test.Unit
             {
                 extractor.State.ActiveEvents[pair.Key] = pair.Value;
             }
-
-            Console.WriteLine(tester.HistoryStart);
 
             await reader.FrontfillEvents(states);
 
