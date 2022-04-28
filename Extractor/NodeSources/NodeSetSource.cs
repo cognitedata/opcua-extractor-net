@@ -108,6 +108,10 @@ namespace Cognite.OpcUa.NodeSources
         {
             using var stream = new FileStream(file, FileMode.Open, FileAccess.Read);
             var set = Opc.Ua.Export.UANodeSet.Read(stream);
+            if (Config.Source.EndpointUrl == null)
+            {
+                Client.AddExternalNamespaces(set.NamespaceUris);
+            }
             set.Import(Client.SystemContext, nodes);
         }
 
@@ -281,6 +285,7 @@ namespace Cognite.OpcUa.NodeSources
                     variable.VariableAttributes.Historizing = varState.Historizing;
                     variable.SetNodeType(Client, varState.TypeDefinitionId);
                     variable.VariableAttributes.DataType = Client.DataTypeManager.GetDataType(varState.DataType);
+                    variable.SetDataPoint(new Variant(varState.Value));
                     if (Config.History.Enabled && Config.History.Data)
                     {
                         if (Config.Subscriptions.IgnoreAccessLevel)
@@ -333,7 +338,7 @@ namespace Cognite.OpcUa.NodeSources
             return false;
         }
 
-        private void Build()
+        public void Build()
         {
             lock (buildLock)
             {
@@ -424,7 +429,7 @@ namespace Cognite.OpcUa.NodeSources
                     properties.Add(variable);
                 }
             }
-            await Client.ReadNodeValues(properties, token);
+            if (Config.Source.EndpointUrl != null) await Client.ReadNodeValues(properties, token);
 
             if (Config.Extraction.DataTypes.MaxArraySize != 0 && Config.Extraction.DataTypes.EstimateArraySizes == true)
             {

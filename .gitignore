@@ -27,6 +27,8 @@ Service/Properties
 *.bin
 *.db
 extractorbuild/
+*.NodeSet2.xml
+!Test/TestServer.NodeSet2.xml
 
 # Config
 config/*
