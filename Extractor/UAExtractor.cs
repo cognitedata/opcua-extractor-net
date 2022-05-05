@@ -63,6 +63,8 @@ namespace Cognite.OpcUa
         public StringConverter StringConverter => uaClient.StringConverter;
         private readonly PubSubManager? pubSubManager;
 
+        private NodeSetSource? nodeSetSource;
+
         public bool ShouldStartLooping { get; set; } = true;
 
         public bool Started { get; private set; }
@@ -215,7 +217,7 @@ namespace Cognite.OpcUa
         private async Task RunExtractorInternal()
         {
             Starting.Set(1);
-            if (!uaClient.Started)
+            if (!uaClient.Started && Config.Source.EndpointUrl != null)
             {
                 log.LogInformation("Start UAClient");
                 try
@@ -233,6 +235,21 @@ namespace Cognite.OpcUa
                 {
                     throw new ExtractorFailureException("UAClient failed to start");
                 }
+            }
+            else if (Config.Source.EndpointUrl == null)
+            {
+                log.LogWarning("No endpointUrl specified, extractor will attempt to run without OPC-UA context. " +
+                    "This mode is experimental, most configuration options will not work.");
+
+                if (Config.Source.NodeSetSource == null) throw new ConfigurationException("Extractor configured without both EndpointUrl and NodeSetSource");
+                Config.Subscriptions.Events = false;
+                Config.Subscriptions.DataPoints = false;
+                Config.History.Enabled = false;
+                Config.Source.LimitToServerConfig = false;
+                Config.Source.NodeSetSource.Types = true;
+                Config.Source.NodeSetSource.Instance = true;
+                nodeSetSource = new NodeSetSource(Provider.GetRequiredService<ILogger<NodeSetSource>>(), Config, this, uaClient);
+                nodeSetSource.Build();
             }
 
             await ConfigureExtractor();
@@ -516,7 +533,12 @@ namespace Cognite.OpcUa
                 && (Config.Source.NodeSetSource.Instance || Config.Source.NodeSetSource.Types))
             {
                 log.LogDebug("Begin fetching data from internal node set");
-                var handler = new NodeSetSource(Provider.GetRequiredService<ILogger<NodeSetSource>>(), Config, this, uaClient);
+                if (nodeSetSource == null)
+                {
+                    nodeSetSource = new NodeSetSource(Provider.GetRequiredService<ILogger<NodeSetSource>>(), Config, this, uaClient);
+                }
+
+                var handler = nodeSetSource;
                 handler.BuildNodes(nodesToBrowse);
 
                 if (Config.Source.NodeSetSource.Instance)
@@ -528,6 +550,7 @@ namespace Cognite.OpcUa
                 {
                     eventSource = handler;
                 }
+                nodeSetSource = null;
             }
 
             if (Config.Events.Enabled)

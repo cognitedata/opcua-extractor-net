@@ -17,6 +17,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using Cognite.Extractor.Common;
 using Cognite.OpcUa.History;
+using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.DependencyInjection;
@@ -1310,10 +1311,12 @@ namespace Cognite.OpcUa
         #endregion
 
         #region Events
+
+        private ISystemContext? dummyContext;
         /// <summary>
         /// Return systemContext. Can be used by SDK-tools for converting events.
         /// </summary>
-        public ISystemContext? SystemContext => Session?.SystemContext;
+        public ISystemContext? SystemContext => Session?.SystemContext ?? dummyContext;
         /// <summary>
         /// Return MessageContext, used for serialization
         /// </summary>
@@ -1528,7 +1531,27 @@ namespace Cognite.OpcUa
 
         #region Utils
 
-        public NamespaceTable? NamespaceTable => Session?.NamespaceUris;
+        public NamespaceTable? ExternalNamespaceUris { get; set; }
+
+        public void AddExternalNamespaces(string[] table)
+        {
+            if (ExternalNamespaceUris == null)
+            {
+                ExternalNamespaceUris = new NamespaceTable(new[]
+                {
+                    "http://opcfoundation.org/UA/"
+                });
+                dummyContext = new DummySystemContext(ExternalNamespaceUris);
+            }
+            if (table == null) return;
+            foreach (var ns in table)
+            {
+                ExternalNamespaceUris.GetIndexOrAppend(ns);
+            }
+        }
+
+
+        public NamespaceTable? NamespaceTable => Session?.NamespaceUris ?? ExternalNamespaceUris;
         /// <summary>
         /// Converts an ExpandedNodeId into a NodeId using the Session
         /// </summary>
@@ -1536,8 +1559,8 @@ namespace Cognite.OpcUa
         /// <returns>Resulting NodeId</returns>
         public NodeId ToNodeId(ExpandedNodeId nodeid)
         {
-            if (nodeid == null || nodeid.IsNull || Session == null) return NodeId.Null;
-            return ExpandedNodeId.ToNodeId(nodeid, Session.NamespaceUris);
+            if (nodeid == null || nodeid.IsNull || NamespaceTable == null) return NodeId.Null;
+            return ExpandedNodeId.ToNodeId(nodeid, NamespaceTable);
         }
         /// <summary>
         /// Converts identifier string and namespaceUri into NodeId. Identifier will be on form i=123 or s=abc etc.
@@ -1547,14 +1570,15 @@ namespace Cognite.OpcUa
         /// <returns>Resulting NodeId</returns>
         public NodeId ToNodeId(string? identifier, string? namespaceUri)
         {
-            if (identifier == null || namespaceUri == null || Session == null) return NodeId.Null;
-            int idx = Session.NamespaceUris.GetIndex(namespaceUri);
+            if (identifier == null || namespaceUri == null || NamespaceTable == null) return NodeId.Null;
+            int idx = NamespaceTable.GetIndex(namespaceUri);
             if (idx < 0)
             {
+                log.LogInformation("Namespace {NS} not found in {Table}", namespaceUri, NamespaceTable.ToArray());
                 if (Config.Extraction.NamespaceMap.ContainsValue(namespaceUri))
                 {
                     string readNs = Config.Extraction.NamespaceMap.First(kvp => kvp.Value == namespaceUri).Key;
-                    idx = Session.NamespaceUris.GetIndex(readNs);
+                    idx = NamespaceTable.GetIndex(readNs);
                     if (idx < 0) return NodeId.Null;
                 }
                 else
@@ -1620,7 +1644,7 @@ namespace Cognite.OpcUa
 
             if (!nsPrefixMap.TryGetValue(nodeId.NamespaceIndex, out var prefix))
             {
-                var namespaceUri = id.NamespaceUri ?? Session!.NamespaceUris.GetString(nodeId.NamespaceIndex);
+                var namespaceUri = id.NamespaceUri ?? NamespaceTable!.GetString(nodeId.NamespaceIndex);
                 string newPrefix = Config.Extraction.NamespaceMap.TryGetValue(namespaceUri, out string prefixNode) ? prefixNode : (namespaceUri + ":");
                 nsPrefixMap[nodeId.NamespaceIndex] = prefix = newPrefix;
             }
@@ -1679,7 +1703,7 @@ namespace Cognite.OpcUa
 
             if (!nsPrefixMap.TryGetValue(nodeId.NamespaceIndex, out var prefix))
             {
-                var namespaceUri = Session!.NamespaceUris.GetString(nodeId.NamespaceIndex);
+                var namespaceUri = NamespaceTable!.GetString(nodeId.NamespaceIndex);
                 string newPrefix = Config.Extraction.NamespaceMap.TryGetValue(namespaceUri, out string prefixNode) ? prefixNode : (namespaceUri + ":");
                 nsPrefixMap[nodeId.NamespaceIndex] = prefix = newPrefix;
             }

@@ -1238,6 +1238,7 @@ namespace Cognite.OpcUa
         public string? NodeId { get; set; }
         public NodeId ToNodeId(UAClient client, NodeId? defaultValue = null)
         {
+            Console.WriteLine($"Try convert node {NodeId} {NamespaceUri}");
             var node = client.ToNodeId(NodeId, NamespaceUri);
             if (node.IsNullNodeId)
             {

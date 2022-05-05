@@ -164,6 +164,47 @@ namespace Test.Unit
             });
         }
 
+        [Fact]
+        public async Task TestNodeSetWithoutServer()
+        {
+            tester.Config.Extraction.Relationships.Enabled = true;
+            using var extractor = tester.BuildExtractor();
+            tester.Config.Extraction.Relationships.Enabled = false;
+            tester.Config.Source.EndpointUrl = null;
+
+            var log = tester.Provider.GetRequiredService<ILogger<NodeSetSource>>();
+            var source = new NodeSetSource(log, tester.Config, extractor, tester.Client);
+
+            tester.Config.Extraction.DataTypes.MaxArraySize = 4;
+            tester.Config.Extraction.NodeTypes.AsNodes = true;
+            tester.Config.Extraction.DataTypes.AllowStringVariables = true;
+            tester.Config.Extraction.MapVariableChildren = true;
+            tester.Config.Extraction.Relationships.Hierarchical = true;
+            tester.Config.Extraction.Relationships.InverseHierarchical = true;
+            tester.Config.Extraction.Relationships.Enabled = true;
+
+            source.BuildNodes(new[] { tester.Ids.Custom.Root, ObjectIds.TypesFolder });
+            var result = await source.ParseResults(tester.Source.Token);
+            Assert.Equal(892, result.SourceVariables.Count());
+            Assert.Equal(899, result.DestinationVariables.Count());
+            Assert.Equal(497, result.DestinationObjects.Count());
+            Assert.Equal(475, result.SourceObjects.Count());
+            Assert.Equal(5070, result.DestinationReferences.Count());
+            Assert.Equal(2535, result.DestinationReferences.Count(rel => rel.IsForward));
+            Assert.All(result.DestinationReferences, rel =>
+            {
+                Assert.NotNull(rel.Source);
+                Assert.NotNull(rel.Target);
+                Assert.False(rel.Source.Id.IsNullNodeId);
+                Assert.False(rel.Target.Id.IsNullNodeId);
+                Assert.NotNull(rel.Type);
+                Assert.NotNull(rel.Type.Id);
+                Assert.True(rel.Type.HasName);
+                Assert.Contains(result.DestinationReferences, orel => orel.Source.Id == rel.Target.Id
+                    && orel.Target.Id == rel.Source.Id && orel.IsForward == !rel.IsForward);
+            });
+        }
+
 
         [Fact]
         public async Task TestNodeSetSourceEvents()
