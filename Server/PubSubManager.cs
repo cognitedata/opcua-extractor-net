@@ -15,10 +15,10 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using Opc.Ua.PubSub;
 using Opc.Ua.PubSub.Transport;
-using Serilog;
 using System;
 
 namespace Server
@@ -32,8 +32,9 @@ namespace Server
         private readonly PublishedDataItemsDataType[] items = new PublishedDataItemsDataType[2];
 
         private UaPubSubApplication app;
+        private ILogger log;
 
-        public PubSubManager(string mqttUrl)
+        public PubSubManager(string mqttUrl, ILogger log)
         {
             config = new PubSubConfigurationDataType
             {
@@ -42,6 +43,7 @@ namespace Server
             CreateUADPMQTTConnection(mqttUrl);
             CreateJSONMQTTConnection(mqttUrl);
             CreateDataSets();
+            this.log = log;
         }
 
         private void CreateDataSets()
@@ -314,7 +316,7 @@ namespace Server
             }
             app = UaPubSubApplication.Create(config);
             app.Start();
-            Log.Information("Start pubsub application");
+            log.LogInformation("Start pubsub application");
             started = true;
         }
 

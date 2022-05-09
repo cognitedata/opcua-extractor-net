@@ -15,9 +15,10 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using Opc.Ua.Configuration;
-using Serilog;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -32,7 +33,7 @@ namespace Server
     sealed public class ServerController : IDisposable
     {
         public NodeIdReference Ids => Server.Ids;
-        private readonly ILogger log = Log.Logger.ForContext(typeof(ServerController));
+        private readonly ILogger log;
         public TestServer Server { get; private set; }
         private readonly IEnumerable<PredefinedSetup> setups;
         private readonly int port;
@@ -41,9 +42,11 @@ namespace Server
         private readonly string mqttUrl;
         private readonly string endpointUrl;
         private readonly bool logTrace;
+        private readonly IServiceProvider provider;
 
         public ServerController(
             IEnumerable<PredefinedSetup> setups,
+            IServiceProvider provider,
             int port = 62546,
             string mqttUrl = "mqtt://localhost:4060",
             string endpointUrl = "opc.tcp://localhost",
@@ -54,11 +57,13 @@ namespace Server
             this.mqttUrl = mqttUrl;
             this.endpointUrl = endpointUrl;
             this.logTrace = logTrace;
+            log = provider.GetRequiredService<ILogger<ServerController>>();
+            this.provider = provider;
         }
 
         public void Dispose()
         {
-            log.Information("Closing server");
+            log.LogInformation("Closing server");
             Server?.Stop();
             Server?.Dispose();
         }
@@ -74,13 +79,13 @@ namespace Server
                 var cfg = await app.LoadApplicationConfiguration(Path.Join("config", $"{ConfigRoot}.Config.xml"), false);
                 cfg.ServerConfiguration.BaseAddresses[0] = $"{endpointUrl}:{port}";
                 await app.CheckApplicationInstanceCertificate(false, 0);
-                Server = new TestServer(setups, mqttUrl, logTrace);
+                Server = new TestServer(setups, mqttUrl, provider, logTrace);
                 await Task.Run(async () => await app.Start(Server));
-                log.Information("Server started");
+                log.LogInformation("Server started");
             }
             catch (Exception e)
             {
-                log.Error(e, "Failed to start server");
+                log.LogError(e, "Failed to start server");
             }
         }
         public void Stop()

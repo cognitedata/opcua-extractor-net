@@ -196,13 +196,11 @@ namespace Test.Utils
             if (events == null || !events.Any()) return Task.FromResult<bool?>(null);
             lock (eventLock)
             {
-                Console.WriteLine($"Push {events.Count()} events");
                 var groups = events.GroupBy(evt => evt.EmittingNode);
                 foreach (var group in groups)
                 {
                     if (!Events.TryGetValue(group.Key, out var stored))
                     {
-                        Console.WriteLine($"New group: {group.Key}");
                         Events[group.Key] = stored = new List<UAEvent>();
                     }
                     stored.AddRange(group);
@@ -217,7 +215,6 @@ namespace Test.Utils
         {
             if (!PushDataPointResult ?? false) return Task.FromResult(PushDataPointResult);
             if (points == null || !points.Any()) return Task.FromResult<bool?>(null);
-            Console.WriteLine($"Push {points.Count()} dps");
             lock (dpLock)
             {
                 // Missing nodes here is unacceptable

@@ -30,6 +30,7 @@ namespace Test.Utils
         public ServiceProvider Provider { get; protected set; }
         protected ServiceCollection Services { get; }
         protected PredefinedSetup[] Setups { get; }
+        public ILogger Log { get; }
         protected BaseExtractorTestFixture(PredefinedSetup[] setups = null)
         {
             Port = CommonTestUtils.NextPort;
@@ -38,10 +39,11 @@ namespace Test.Utils
             ThreadPool.SetMinThreads(20, 20);
             Services = new ServiceCollection();
             Config = Services.AddConfig<FullConfig>("config.test.yml", 1);
-            Console.WriteLine($"Add logger: {Config.Logger}");
             Config.Source.EndpointUrl = $"opc.tcp://localhost:{Port}";
             Configure(Services);
             Provider = Services.BuildServiceProvider();
+
+            Log = Provider.GetRequiredService<ILogger<BaseExtractorTestFixture>>();
             
             if (setups == null)
             {
@@ -54,7 +56,7 @@ namespace Test.Utils
 
         private async Task Start()
         {
-            Server = new ServerController(Setups, Port);
+            Server = new ServerController(Setups, Provider, Port);
             await Server.Start();
 
             Client = new UAClient(Provider, Config);
@@ -154,7 +156,7 @@ namespace Test.Utils
             }
             catch
             {
-                Console.WriteLine("Failed to drop database: " + Config.Influx.Database);
+                Log.LogError("Failed to drop database: {DB}", Config.Influx.Database);
             }
             await client.CreateDatabaseAsync(Config.Influx.Database);
         }
@@ -171,7 +173,7 @@ namespace Test.Utils
             return (handler, pusher);
         }
 
-        public static void DeleteFiles(string prefix)
+        public void DeleteFiles(string prefix)
         {
             try
             {
@@ -189,7 +191,7 @@ namespace Test.Utils
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Failed to clear files: {ex.Message}");
+                Log.LogError("Failed to clear files: {Message}", ex.Message);
             }
         }
 

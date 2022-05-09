@@ -131,13 +131,15 @@ namespace Cognite.OpcUa
             {
                 if (Session != null && !Session.Disposed)
                 {
-                    var closeTask = Session.CloseSessionAsync(null, true, token);
+#pragma warning disable CA1508 // Avoid dead conditional code
+                    var closeTask = Session?.CloseSessionAsync(null, true, token);
                     var resultTask = await Task.WhenAny(Task.Delay(5000, token), closeTask);
                     if (closeTask != resultTask)
                     {
                         log.LogWarning("Failed to close session, timed out");
                     }
-                    Session.Dispose();
+                    Session?.Dispose();
+#pragma warning restore CA1508 // Avoid dead conditional code
                     Session = null;
                 }
             }

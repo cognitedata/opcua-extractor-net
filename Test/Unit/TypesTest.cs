@@ -919,7 +919,6 @@ namespace Test.Unit
             // Test complex type
             dt = new UADataType(DataTypeIds.ReadValueId);
             var value = new Variant(new ReadValueId { AttributeId = Attributes.Value, NodeId = new NodeId("test") });
-            Console.WriteLine(value.TypeInfo);
             dp = dt.ToDataPoint(extractor, value, now, "id");
             Assert.Equal("id", dp.Id);
             Assert.Equal(@"{""NodeId"":{""IdType"":1,""Id"":""test""},""AttributeId"":13}", dp.StringValue);

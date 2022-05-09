@@ -69,6 +69,7 @@ namespace Cognite.Bridge
             {
                 log.LogWarning("MQTT Client disconnected");
                 log.LogDebug(e.Exception, "MQTT client disconnected");
+                await Task.Delay(1000);
                 if (disconnected) return;
                 try
                 {

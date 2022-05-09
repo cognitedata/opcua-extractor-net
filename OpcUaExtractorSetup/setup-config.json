@@ -1,0 +1,14 @@
+{
+	"target_project": "../ExtractorLauncher/ExtractorLauncher.csproj",
+	"target_configuration": "Release",
+	"target_runtime": "win-x64",
+	"product_name": "Cognite OPC-UA Extractor",
+	"product_short_name": "OpcUaExtractor",
+	"exe_name": "OpcuaExtractor.exe",
+	"config_dir": "../config",
+	"service": "true",
+	"service_args": "-s",
+	"upgrade_guid": "3bd281b5-ad7d-4bb0-8dcf-11949ba9c592",
+	"output_name": "OpcUaExtractorSetup",
+	"setup_project": "OpcUaExtractorSetup.wixproj"
+}

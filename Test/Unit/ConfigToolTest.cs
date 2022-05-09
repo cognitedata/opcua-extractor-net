@@ -29,7 +29,6 @@ namespace Test.Unit
         {
             var services = new ServiceCollection();
             Config = services.AddConfig<FullConfig>("config.test.yml", 1);
-            Console.WriteLine($"Add logger: {Config.Logger}");
 
             int port = CommonTestUtils.NextPort;
             Config.Source.EndpointUrl = $"opc.tcp://localhost:{port}";
@@ -41,7 +40,7 @@ namespace Test.Unit
 
             Server = new ServerController(new[] {
                 PredefinedSetup.Base, PredefinedSetup.Full, PredefinedSetup.Auditing,
-                PredefinedSetup.Custom, PredefinedSetup.Events, PredefinedSetup.Wrong }, port);
+                PredefinedSetup.Custom, PredefinedSetup.Events, PredefinedSetup.Wrong }, Provider, port);
 
         }
 

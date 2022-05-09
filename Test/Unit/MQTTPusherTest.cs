@@ -41,6 +41,7 @@ namespace Test.Unit
 
             Services.AddSingleton(mqttConfig.Cognite);
             Services.AddCogniteClient("MQTT-CDF Bridge", null, true, true, false);
+            Services.AddMultiTestLogging(Serilog.Events.LogEventLevel.Debug);
             var provider = Services.BuildServiceProvider();
             Config.Mqtt.ClientId = $"opcua-mqtt-pusher-test-{idCounter}";
             idCounter++;

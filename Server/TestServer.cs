@@ -21,8 +21,9 @@ using System;
 using System.Linq;
 using System.Collections.Generic;
 using System.Security.Cryptography.X509Certificates;
-using Serilog;
 using System.Text.RegularExpressions;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Server
 {
@@ -54,13 +55,16 @@ namespace Server
         public bool AllowAnonymous { get; set; } = true;
         private readonly string mqttUrl;
         private readonly bool logTrace;
-        private readonly ILogger traceLog = Log.Logger.ForContext<Tracing>();
+        private readonly ILogger traceLog;
+        private readonly IServiceProvider provider;
 
-        public TestServer(IEnumerable<PredefinedSetup> setups, string mqttUrl, bool logTrace = false)
+        public TestServer(IEnumerable<PredefinedSetup> setups, string mqttUrl, IServiceProvider provider, bool logTrace = false)
         {
             this.setups = setups;
             this.mqttUrl = mqttUrl;
             this.logTrace = logTrace;
+            this.provider = provider;
+            this.traceLog = provider.GetRequiredService<ILogger<Tracing>>();
         }
 
         protected override void OnServerStarting(ApplicationConfiguration configuration)
@@ -78,12 +82,14 @@ namespace Server
             fullConfig = configuration;
         }
 
+        private LogLevel? traceLevel;
         private void ConfigureUtilsTrace()
         {
             if (!logTrace) return;
             Utils.SetTraceMask(Utils.TraceMasks.All);
-            Utils.Tracing.TraceEventHandler -= TraceEventHandler;
+            if (traceLevel != null) return;
             Utils.Tracing.TraceEventHandler += TraceEventHandler;
+            traceLevel = LogLevel.Debug;
         }
 
         private Regex traceGroups = new Regex("{([0-9]+)}");
@@ -113,11 +119,13 @@ namespace Server
 
             if (e.Exception != null)
             {
-                traceLog.Debug(e.Exception, e.Format, args);
+#pragma warning disable CA2254 // Template should be a static expression - we are injecting format from a different logger
+                traceLog.Log(traceLevel!.Value, e.Exception, e.Format, args);
             }
             else
             {
-                traceLog.Debug(e.Format, args);
+                traceLog.Log(traceLevel!.Value, e.Format, args);
+#pragma warning restore CA2254 // Template should be a static expression
             }
         }
 
@@ -152,7 +160,7 @@ namespace Server
 
         protected override MasterNodeManager CreateMasterNodeManager(IServerInternal server, ApplicationConfiguration configuration)
         {
-            custom = new TestNodeManager(server, configuration, setups, mqttUrl);
+            custom = new TestNodeManager(server, configuration, setups, mqttUrl, provider);
             var nodeManagers = new List<INodeManager> { custom };
             // create the custom node managers.
 

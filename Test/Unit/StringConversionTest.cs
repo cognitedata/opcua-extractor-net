@@ -136,7 +136,7 @@ namespace Test.Unit
                 }
                 catch
                 {
-                    Console.WriteLine("Type: " + type + ", could not be serialized");
+                    tester.Log.LogWarning("Type: {Type}, could not be serialized", type);
                     throw;
                 }
                 builder.Append('}');
@@ -147,7 +147,7 @@ namespace Test.Unit
                 }
                 catch
                 {
-                    Console.WriteLine($"Type {type} produced invalid JSON: " + builder.ToString());
+                    tester.Log.LogWarning("Type {Type} produced invalid JSON: {Json}", type, builder);
                     failedTypes.Add(type);
                 }
             }
@@ -358,7 +358,7 @@ namespace Test.Unit
             {
                 var json = JsonSerializer.Serialize(node, options);
 
-                Console.WriteLine(json);
+                tester.Log.LogDebug("Produced JSON: {Json}", json);
 
                 return JsonSerializer.Deserialize<SavedNode>(json, options);
             }

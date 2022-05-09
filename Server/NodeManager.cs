@@ -15,9 +15,10 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using Opc.Ua.Server;
-using Serilog;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -37,26 +38,28 @@ namespace Server
         private uint nextId;
         private readonly IEnumerable<PredefinedSetup> predefinedNodes;
         public NodeIdReference Ids { get; }
-        private readonly ILogger log = Log.Logger.ForContext(typeof(TestNodeManager));
+        private readonly ILogger log;
 
         private readonly PubSubManager pubSub;
 
-        public TestNodeManager(IServerInternal server, ApplicationConfiguration configuration)
+        public TestNodeManager(IServerInternal server, ApplicationConfiguration configuration, IServiceProvider provider)
             : base(server, configuration, "opc.tcp://test.localhost")
         {
             SystemContext.NodeIdFactory = this;
-            store = new HistoryMemoryStore();
+            store = new HistoryMemoryStore(provider.GetRequiredService<ILogger<HistoryMemoryStore>>());
+            log = provider.GetRequiredService<ILogger<TestNodeManager>>();
             Ids = new NodeIdReference();
         }
 
         public TestNodeManager(IServerInternal server,
             ApplicationConfiguration configuration,
             IEnumerable<PredefinedSetup> predefinedNodes,
-            string mqttUrl) :
-            this(server, configuration)
+            string mqttUrl,
+            IServiceProvider provider) :
+            this(server, configuration, provider)
         {
             this.predefinedNodes = predefinedNodes;
-            pubSub = new PubSubManager(mqttUrl);
+            pubSub = new PubSubManager(mqttUrl, provider.GetRequiredService<ILogger<PubSubManager>>());
         }
         #region access
         public void UpdateNode(NodeId id, object value, DateTime? timestamp = null)
@@ -191,7 +194,7 @@ namespace Server
             "NodeStates are disposed in CustomNodeManager2, so long as they are added to the list of predefined nodes")]
         public NodeId AddObject(NodeId parentId, string name, bool audit = false)
         {
-            log.Debug("Add object: Parent: {Parent}, Name: {Name}", parentId, name);
+            log.LogDebug("Add object: Parent: {Parent}, Name: {Name}", parentId, name);
 
             var parent = PredefinedNodes[parentId];
             var obj = CreateObject(name);
@@ -224,7 +227,7 @@ namespace Server
             "NodeStates are disposed in CustomNodeManager2, so long as they are added to the list of predefined nodes")]
         public NodeId AddVariable(NodeId parentId, string name, NodeId dataType, bool audit = false)
         {
-            log.Debug("Add variable: Parent: {Parent}, Name {Name}, DataType: {DataType}", parentId, name, dataType);
+            log.LogDebug("Add variable: Parent: {Parent}, Name {Name}, DataType: {DataType}", parentId, name, dataType);
 
             var parent = PredefinedNodes[parentId];
             var obj = CreateVariable(name, dataType);
@@ -257,7 +260,7 @@ namespace Server
             "NodeStates are disposed in CustomNodeManager2, so long as they are added to the list of predefined nodes")]
         public void AddReference(NodeId targetId, NodeId parentId, NodeId type, bool audit = false)
         {
-            log.Debug("Add reference from {Parent} to {Target} of type {Type}", parentId, targetId, type);
+            log.LogDebug("Add reference from {Parent} to {Target} of type {Type}", parentId, targetId, type);
 
             var target = PredefinedNodes[targetId];
             var parent = PredefinedNodes[parentId];
@@ -292,7 +295,7 @@ namespace Server
         }
         public NodeId AddProperty<T>(NodeId parentId, string name, NodeId dataType, object value, int rank = -1)
         {
-            log.Debug("Add property of type {Type} name {Name} and DataType {DataType} to {Parent}",
+            log.LogDebug("Add property of type {Type} name {Name} and DataType {DataType} to {Parent}",
                 typeof(T), name, dataType, parentId);
 
             var parent = PredefinedNodes[parentId];
@@ -304,7 +307,7 @@ namespace Server
         }
         public void RemoveProperty(NodeId parentId, string name)
         {
-            log.Debug("Remove property of {Parent} with name {Name}", parentId, name);
+            log.LogDebug("Remove property of {Parent} with name {Name}", parentId, name);
 
             var parent = PredefinedNodes[parentId];
             var children = new List<BaseInstanceState>();
@@ -316,7 +319,7 @@ namespace Server
 
         public void ReContextualize(NodeId id, NodeId oldParentId, NodeId newParentId, NodeId referenceType)
         {
-            log.Debug("Move node {Id} from {Old} to {New} with reference type {Ref}",
+            log.LogDebug("Move node {Id} from {Old} to {New} with reference type {Ref}",
                 id, oldParentId, newParentId, referenceType);
 
             var state = PredefinedNodes[id];
@@ -376,7 +379,7 @@ namespace Server
         /// <param name="externalReferences"></param>
         public override void CreateAddressSpace(IDictionary<NodeId, IList<IReference>> externalReferences)
         {
-            log.Information("Create address space");
+            log.LogInformation("Create address space");
             try
             {
                 LoadPredefinedNodes(SystemContext, externalReferences);
@@ -449,13 +452,13 @@ namespace Server
             }
             catch (Exception ex)
             {
-                log.Error(ex, "Failed to create address space: {Message}", ex.Message);
+                log.LogError(ex, "Failed to create address space: {Message}", ex.Message);
             }
         }
 
         private void CreateBaseSpace(IDictionary<NodeId, IList<IReference>> externalReferences)
         {
-            log.Information("Create base address space");
+            log.LogInformation("Create base address space");
 
             lock (Lock)
             {
@@ -517,7 +520,7 @@ namespace Server
             "NodeStates are disposed in CustomNodeManager2, so long as they are added to the list of predefined nodes")]
         private void CreateFullAddressSpace(IDictionary<NodeId, IList<IReference>> externalReferences)
         {
-            log.Information("Create large address space");
+            log.LogInformation("Create large address space");
 
             lock (Lock)
             {
@@ -560,7 +563,7 @@ namespace Server
 
         private void CreateCustomAddressSpace(IDictionary<NodeId, IList<IReference>> externalReferences)
         {
-            log.Information("Create custom address space");
+            log.LogInformation("Create custom address space");
 
             lock (Lock)
             {
@@ -752,7 +755,7 @@ namespace Server
 
         private void CreateEventAddressSpace(IDictionary<NodeId, IList<IReference>> externalReferences)
         {
-            log.Information("Create event address space");
+            log.LogInformation("Create event address space");
 
             lock (Lock)
             {
@@ -834,7 +837,7 @@ namespace Server
 
         private void CreateAuditAddressSpace(IDictionary<NodeId, IList<IReference>> externalReferences)
         {
-            log.Information("Create audit address space");
+            log.LogInformation("Create audit address space");
 
             lock (Lock)
             {
@@ -869,7 +872,7 @@ namespace Server
 
         public void CreateWrongAddressSpace(IDictionary<NodeId, IList<IReference>> externalReferences)
         {
-            log.Information("Create wrong address space");
+            log.LogInformation("Create wrong address space");
 
             lock (Lock)
             {
@@ -925,7 +928,7 @@ namespace Server
             "NodeStates are disposed in CustomNodeManager2, so long as they are added to the list of predefined nodes")]
         public void CreateVeryLargeAddressSpace(IDictionary<NodeId, IList<IReference>> externalReferences)
         {
-            log.Information("Create very large address space");
+            log.LogInformation("Create very large address space");
 
             lock (Lock)
             {
@@ -1154,7 +1157,7 @@ namespace Server
         private void AddNodeToExt(NodeState state, NodeId id, NodeId typeId,
             IDictionary<NodeId, IList<IReference>> externalReferences)
         {
-            log.Verbose("Add node {Id} {Name} as child of external node {Parent} with reference type {Type}",
+            log.LogTrace("Add node {Id} {Name} as child of external node {Parent} with reference type {Type}",
                 state.NodeId, state.DisplayName, id, typeId);
 
             if (!externalReferences.TryGetValue(id, out var references))
@@ -1167,7 +1170,7 @@ namespace Server
         }
         private void AddNodeRelation(NodeState state, NodeState parent, NodeId typeId)
         {
-            log.Verbose("Add reference of type {Type} from {Parent} {PName} to {Id} {Name}",
+            log.LogTrace("Add reference of type {Type} from {Parent} {PName} to {Id} {Name}",
                 typeId, parent.NodeId, parent.DisplayName, state.NodeId, state.DisplayName);
 
             state.AddReference(typeId, true, parent.NodeId);
@@ -1195,7 +1198,7 @@ namespace Server
             state.DataType = dataType;
             state.Value = value;
 
-            log.Verbose("Create variable: Id: {Id}, Name: {Name}, VariableType: {Type}, DataType: {DataType} {ActualType}",
+            log.LogTrace("Create variable: Id: {Id}, Name: {Name}, VariableType: {Type}, DataType: {DataType} {ActualType}",
                 state.NodeId, state.DisplayName, typeof(TVar), dataType, typeof(TValue));
 
             return state;
@@ -1211,7 +1214,7 @@ namespace Server
             prop.Value = value;
             prop.NodeId = GenerateNodeId();
 
-            log.Verbose("Create property {Name} of type {Type} for {Parent} {ParentName}",
+            log.LogTrace("Create property {Name} of type {Type} for {Parent} {ParentName}",
                 name, typeof(T), parent.NodeId, parent.DisplayName);
 
             return prop;
@@ -1225,7 +1228,7 @@ namespace Server
             state.DisplayName = state.BrowseName.Name;
             state.TypeDefinitionId = state.GetDefaultTypeDefinitionId(SystemContext);
 
-            log.Verbose("Create object: Id: {Id}, Name: {Name}, ObjectType: {Type}",
+            log.LogTrace("Create object: Id: {Id}, Name: {Name}, ObjectType: {Type}",
                 state.NodeId, state.DisplayName, typeof(T));
 
             return state;
@@ -1241,7 +1244,7 @@ namespace Server
             state.DisplayName = state.BrowseName.Name;
             state.TypeDefinitionId = ObjectTypeIds.BaseObjectType;
 
-            log.Verbose("Create object: Id: {Id}, Name: {Name}",
+            log.LogTrace("Create object: Id: {Id}, Name: {Name}",
                 state.NodeId, state.DisplayName);
 
             return state;
@@ -1264,7 +1267,7 @@ namespace Server
                 state.ArrayDimensions = new[] { (uint)dim };
             }
 
-            log.Verbose("Create variable: Id: {Id}, Name: {Name}, DataType: {DataType}",
+            log.LogTrace("Create variable: Id: {Id}, Name: {Name}, DataType: {DataType}",
                 state.NodeId, state.DisplayName, dataType);
 
             return state;
@@ -1286,7 +1289,7 @@ namespace Server
             type.AddReference(ReferenceTypeIds.HasSubtype, true, parent);
             references.Add(new NodeStateReference(ReferenceTypeIds.HasSubtype, false, type.NodeId));
 
-            log.Verbose("Create data type: Id: {Id}, Name: {Name}", type.NodeId, type.DisplayName);
+            log.LogTrace("Create data type: Id: {Id}, Name: {Name}", type.NodeId, type.DisplayName);
 
             return type;
         }
@@ -1308,7 +1311,7 @@ namespace Server
             type.AddReference(ReferenceTypeIds.HasSubtype, true, parent);
             references.Add(new NodeStateReference(ReferenceTypeIds.HasSubtype, false, type.NodeId));
 
-            log.Verbose("Create object type: Id: {Id}, Name: {Name}", type.NodeId, type.DisplayName);
+            log.LogTrace("Create object type: Id: {Id}, Name: {Name}", type.NodeId, type.DisplayName);
 
             return type;
         }
@@ -1330,7 +1333,7 @@ namespace Server
             type.AddReference(ReferenceTypeIds.HasSubtype, true, parent);
             references.Add(new NodeStateReference(ReferenceTypeIds.HasSubtype, false, type.NodeId));
 
-            log.Verbose("Create variable type: Id: {Id}, Name: {Name}", type.NodeId, type.DisplayName);
+            log.LogTrace("Create variable type: Id: {Id}, Name: {Name}", type.NodeId, type.DisplayName);
 
             return type;
         }
@@ -1355,7 +1358,7 @@ namespace Server
             type.AddReference(ReferenceTypeIds.HasSubtype, true, parent);
             references.Add(new NodeStateReference(ReferenceTypeIds.HasSubtype, false, type.NodeId));
 
-            log.Verbose("Create reference type: Id: {Id}, Name: {Name}", type.NodeId, type.DisplayName);
+            log.LogTrace("Create reference type: Id: {Id}, Name: {Name}", type.NodeId, type.DisplayName);
 
             return type;
         }
@@ -1502,7 +1505,7 @@ namespace Server
 
                     data.DataValues.AddRange(rawData);
 
-                    log.Information("Read raw modified: {cnt}", rawData.Count());
+                    log.LogInformation("Read raw modified: {Cnt}", rawData.Count());
 
                     errors[handle.Index] = ServiceResult.Good;
 
@@ -1515,7 +1518,7 @@ namespace Server
                 }
                 catch (Exception ex)
                 {
-                    log.Error(ex, "Failed to read history");
+                    log.LogError(ex, "Failed to read history");
                     errors[handle.Index] = ServiceResult.Create(ex, StatusCodes.BadUnexpectedError,
                         "Unexpected error processing request.");
                 }
@@ -1628,7 +1631,7 @@ namespace Server
 
                     events.Events.AddRange(rawData.Select(evt => GetEventFields(request, evt)));
 
-                    log.Information("Read events: {cnt}", rawData.Count());
+                    log.LogInformation("Read events: {Cnt}", rawData.Count());
 
                     errors[handle.Index] = ServiceResult.Good;
 
@@ -1641,7 +1644,7 @@ namespace Server
                 }
                 catch (Exception ex)
                 {
-                    log.Error(ex, "Failed to read history");
+                    log.LogError(ex, "Failed to read history");
                     errors[handle.Index] = ServiceResult.Create(ex, StatusCodes.BadUnexpectedError,
                         "Unexpected error processing request.");
                 }

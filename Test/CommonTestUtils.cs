@@ -90,7 +90,7 @@ namespace Test
                 _ => 0
             };
         }
-        public static bool TestMetricValue(string name, double value)
+        public static bool TestMetricValue(string name, double value, ILogger log = null)
         {
             var collector = GetCollector(name);
             double val = collector switch
@@ -101,7 +101,7 @@ namespace Test
             };
             if (Math.Abs(val - value) > 0.01)
             {
-                Console.WriteLine($"Expected {value} but got {val} for metric {name}");
+                log?.LogWarning("Expected {Value} but got {Val} for metric {Name}", value, val, name);
                 return false;
             }
 

@@ -17,6 +17,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using Cognite.Extractor.Logging;
 using Cognite.Extractor.Utils.CommandLine;
+using Microsoft.Extensions.DependencyInjection;
 using Serilog;
 using Serilog.Events;
 using System;
@@ -103,7 +104,7 @@ namespace Server
             return await GetCommandLineOptions().InvokeAsync(args);
         }
 
-        private static ServerController BuildServer(ServerOptions opt)
+        private static ServerController BuildServer(IServiceProvider provider, ServerOptions opt)
         {
             var setups = new List<PredefinedSetup> { PredefinedSetup.Custom, PredefinedSetup.Base,
                 PredefinedSetup.Events, PredefinedSetup.Wrong, PredefinedSetup.Auditing };
@@ -115,7 +116,7 @@ namespace Server
             string endpointUrl = opt.EndpointUrl ?? "opc.tcp://localhost";
             string mqttUrl = opt.MqttUrl ?? "mqtt://localhost:4060";
 
-            var controller = new ServerController(setups, port, mqttUrl, endpointUrl, opt.LogTrace);
+            var controller = new ServerController(setups, provider, port, mqttUrl, endpointUrl, opt.LogTrace);
 
             return controller;
         }
@@ -201,9 +202,13 @@ namespace Server
                     };
                 }
 
-                LoggingUtils.Configure(loggerConfig);
+                var services = new ServiceCollection();
+                services.AddSingleton(loggerConfig);
+                services.AddLogger();
 
-                using var controller = BuildServer(opt);
+                var provider = services.BuildServiceProvider();
+
+                using var controller = BuildServer(provider, opt);
                 await Run(opt, controller);
             }, binder);
 

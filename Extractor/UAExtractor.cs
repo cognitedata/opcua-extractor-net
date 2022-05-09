@@ -405,7 +405,7 @@ namespace Cognite.OpcUa
         /// </summary>
         public async Task Close(bool closeClient = true)
         {
-            Source.Cancel();
+            Source?.Cancel();
             if (!uaClient.Started || !closeClient) return;
             try
             {
