@@ -28,6 +28,7 @@ using Serilog;
 using Serilog.Events;
 using System;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
@@ -46,15 +47,25 @@ namespace Cognite.OpcUa
 
         private static string? VerifyConfig(ILogger log, FullConfig config)
         {
-            if (string.IsNullOrEmpty(config.Source.EndpointUrl)) return "Missing endpoint-url";
-            try
+            if (string.IsNullOrEmpty(config.Source.EndpointUrl))
             {
-                var uri = new Uri(config.Source.EndpointUrl);
+                if (config.Source.NodeSetSource == null || !(config.Source.NodeSetSource.NodeSets?.Any() ?? false))
+                {
+                    return "Missing endpoint-url";
+                }
             }
-            catch
+            else
             {
-                return "EndpointUrl is not a valid URI";
+                try
+                {
+                    var uri = new Uri(config.Source.EndpointUrl);
+                }
+                catch
+                {
+                    return "EndpointUrl is not a valid URI";
+                }
             }
+            
             if (string.IsNullOrEmpty(config.Extraction.IdPrefix)) log.LogWarning("No id-prefix specified in config file");
             if (config.Cognite == null && config.Influx == null && config.Mqtt == null) log.LogWarning("No destination system specified");
             if (config.Extraction.IdPrefix == "events.") return "Do not use events. as id-prefix, as it is used internally";

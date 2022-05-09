@@ -100,7 +100,7 @@ namespace Cognite.OpcUa.NodeSources
         }
         protected async Task EstimateArraySizes(IEnumerable<UAVariable> nodes, CancellationToken token)
         {
-            if (!Config.Extraction.DataTypes.EstimateArraySizes) return;
+            if (!Config.Extraction.DataTypes.EstimateArraySizes || Config.Source.EndpointUrl == null) return;
             nodes = nodes.Where(node =>
                 (node.ArrayDimensions == null || !node.ArrayDimensions.Any() || node.ArrayDimensions[0] == 0)
                 && (node.ValueRank == ValueRanks.OneDimension

@@ -174,7 +174,7 @@ namespace Cognite.OpcUa.Config
             }
             return new ProtoNodeId
             {
-                NamespaceUri = Session!.NamespaceUris.GetString(id.NamespaceIndex),
+                NamespaceUri = NamespaceTable!.GetString(id.NamespaceIndex),
                 NodeId = nodeidstr
             };
         }
@@ -232,7 +232,7 @@ namespace Cognite.OpcUa.Config
         {
             var indices = nodeList.Concat(dataTypes).Concat(eventTypes).Select(node => node.Id.NamespaceIndex).Distinct();
 
-            var namespaces = indices.Select(idx => Session!.NamespaceUris.GetString(idx));
+            var namespaces = indices.Select(idx => NamespaceTable!.GetString(idx));
 
             namespaceMap = GenerateNamespaceMap(namespaces);
 
