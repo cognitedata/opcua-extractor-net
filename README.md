@@ -1,5 +1,4 @@
 # opcua-extractor-net
-[Build](https://cd.jenkins.cognite.ai/job/cognitedata-cd/job/opcua-extractor-net/job/master) 
 [![codecov](https://codecov.io/gh/cognitedata/opcua-extractor-net/branch/master/graph/badge.svg?token=SS8CBL93bW)](https://codecov.io/gh/cognitedata/opcua-extractor-net)
 
 OPC-UA extractor using libraries from OPCFoundation see [here](https://github.com/OPCFoundation/UA-.NETStandard)
@@ -29,13 +28,13 @@ For `CONFIG_DIR`, default is `[application dir]/config`. `CERTIFICATE_DIR` is us
 See the [example configuration](config/config.example.yml) for a config template.
 
 ### Using Docker
-Simply download and run the latest build from [here](https://console.cloud.google.com/gcr/images/cognitedata/EU/opcua-extractor-net?gcrImageListsize=30).
+Simply download and run the latest build from [here](https://console.cloud.google.com/gcr/images/cognite-registry/EU/opcua-extractor-net?gcrImageListsize=30).
 
-There are docker images of each release at: eu.gcr.io/cognitedata/opcua-extractor-net and eu.gcr.io/cognite-registry/opcua-extractor-net.
+There are docker images of each release at eu.gcr.io/cognite-registry/opcua-extractor-net.
 
 Config, both opcua config `opc.ua.extractor.Config.xml` and `config.yml` are located in a volume /config and certificates are located in subfolders of the volume /certificates. Example:
 
-`docker run -v "$(pwd)/config:/config" -v "$(pwd)/certificates:/certificates eu.gcr.io/cognitedata/opcua-extractor-net:tag`
+`docker run -v "$(pwd)/config:/config" -v "$(pwd)/certificates:/certificates eu.gcr.io/cognite-registry/opcua-extractor-net:tag`
 
 which would run the build tagged with `tag` using config stored in `current_dir/config`.
 
@@ -65,13 +64,11 @@ By default it runs on `opc.tcp://localhost:62546`, so that is where you would co
 The server is capable of generating history for events and simple and complex datapoints, as well as generating periodic updates, events and changes over time.
 It can also optionally simulate some types of buggy server behavior.
 
-If the server is run with pubsub enabled, a local instance of mosquitto must be running for the server to start at all. This is due to a bug in the OPC-UA SDK.
-
 ## Development
 You will need .net 6.0. Then simply run `dotnet build` to compile,
 or `dotnet run --project ExtractorLauncher` to compile and run.
 
-The compiler may complain about OpcUaExtractorSetup, which isn't generally necessary to compile during development.
+The compiler may complain about OpcUaExtractorSetup and OpcUaServiceManager, which aren't generally necessary to compile during development.
 You can use `dotnet build Test` or `dotnet build ExtractorLauncher` to only compile some parts.
 
 For testing metrics, a good solution is the prom-stack found [here](https://github.com/evnsio/prom-stack)
@@ -82,6 +79,18 @@ To run the tests locally, run `dotnet test`, or use the `test.sh` script.
 Some tests require an instance of influxdb 1.8 found [here](https://portal.influxdata.com/downloads/) running on port 8086,
 and some require a version of mosquitto, found [here](https://mosquitto.org/) running on port 4060. The tests now run their own OPC-UA servers.
 
+During development it is perfectly fine to just run a subset of the tests using `dotnet test --filter MyTestMethod`. All tests run as part of CI.
+
 ### Releasing
-The release.sh script just creates a new tag on the current commit, then pushes it to `origin`, which should be this repository. If the CI is run on a commit with a tag, it automatically
-deploys to github releases and docker images to eu.gcr.io/cognitedata/, and eu.gcr.io/cognite-registry/.
+The release.sh script just creates a new tag on the current commit, then pushes it to `origin`, which should be this repository. This will automatically
+deploy binaries to github releases and docker images to eu.gcr.io/cognite-registry/. For the MSI to build, the version must be simple, i.e. on the form "a.b.c".
+
+## Contributing
+Please follow the code style of the rest of the code, meaning:
+ - Public and protected members are properties and Capitalized.
+ - Private members are not prefixed, and should be camelCase.
+ - Curly braces on the next line.
+
+In general just make sure the code remains consistent. The code has nullable analysis enabled, so make sure to fix any warnings. You should add tests for any new behavior or fixes.
+
+This project adheres to [Contributor Covenant v2.0](https://www.contributor-covenant.org/version/2/0/code_of_conduct/) as a code of conduct.
