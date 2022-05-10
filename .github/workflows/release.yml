@@ -230,3 +230,42 @@ jobs:
             asset_name: OpcUaExtractorSetup-${{ needs.create-release.outputs.version }}.msi
             # Yes this is real, it makes no sense
             asset_content_type: application/msword
+
+    build-docker:
+        runs-on: ubuntu-latest
+        needs: create-release
+
+        steps:
+        - uses: actions/checkout@v2
+          name: Checkout
+
+        - id: image_tags
+          run: |
+            echo ::set-output name=extractor::"eu.gcr.io/cognite-registry/opcua-extractor-net:${{ needs.create-release.outputs.version }}"
+            echo ::set-output name=bridge::"eu.gcr.io/cognite-registry/mqtt-cdf-bridge:${{ needs.create-release.outputs.version }}"
+            echo ::set-output name=desc::"$(git describe --tags --dirty) $(git log -1  --format=%ai)"
+
+        - name: Build extractor image
+          run: |
+            image=$(docker build --build-arg VERSION='${{ needs.create-release.outputs.version }}' --build-arg DESCRIPTION='${{ steps.image_tags.outputs.desc }}' -f Dockerfile.build . | awk '/Successfully built/ {print $3}')
+            id=$(docker create $image)
+            docker cp $id:/build/deploy .
+            docker rm -v $id
+            docker build -t ${{ steps.image_tags.outputs.extractor }} .
+
+        - name: Build bridge image
+          run: |
+            image=$(docker build --build-arg VERSION='${{ needs.create-release.outputs.version }}' --build-arg DESCRIPTION='${{ steps.image_tags.outputs.desc }}' -f Dockerfile.bridge.build . | awk '/Successfully built/ {print $3}')
+            id=$(docker create $image)
+            docker cp $id:/build/deploy .
+            docker rm -v $id
+            docker build -f Dockerfile.bridge -t ${{ steps.image_tags.outputs.extractor }} .
+
+        - name: Push images
+          run: |
+            echo "Images being pushed as ${{ steps.image_tags.outputs.extractor }}, ${{ steps.image_tags.outputs.bridge }}"
+            echo ${{ secrets.COGNITE_REGISTRY_KEY }} | base64 -d | docker login -u _json_key --password-stdin https://eu.gcr.io
+            docker push eu.gcr.io/cognite-registry/opcua-extractor-net:latest
+            docker push ${{ steps.image_tags.outputs.extractor }}
+            docker push eu.gcr.io/cognite-registry/mqtt-cdf-bridge:latest
+            docker push ${{ steps.image_tags.outputs.bridge }}
