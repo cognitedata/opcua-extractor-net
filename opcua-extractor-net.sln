@@ -15,7 +15,6 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Misc", "Misc", "{F9D856F4-2
 		Dockerfile.bridge = Dockerfile.bridge
 		Dockerfile.bridge.build = Dockerfile.bridge.build
 		Dockerfile.build = Dockerfile.build
-		Jenkinsfile = Jenkinsfile
 		LICENSE.md = LICENSE.md
 		MsiVersionUpdate.ps1 = MsiVersionUpdate.ps1
 		paket.dependencies = paket.dependencies
