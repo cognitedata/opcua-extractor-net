@@ -28,8 +28,6 @@ For `CONFIG_DIR`, default is `[application dir]/config`. `CERTIFICATE_DIR` is us
 See the [example configuration](config/config.example.yml) for a config template.
 
 ### Using Docker
-Simply download and run the latest build from [here](https://console.cloud.google.com/gcr/images/cognite-registry/EU/opcua-extractor-net?gcrImageListsize=30).
-
 There are docker images of each release at eu.gcr.io/cognite-registry/opcua-extractor-net.
 
 Config, both opcua config `opc.ua.extractor.Config.xml` and `config.yml` are located in a volume /config and certificates are located in subfolders of the volume /certificates. Example:
