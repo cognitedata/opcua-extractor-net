@@ -1,5 +1,16 @@
 # OPC-UA Extractor Changelog
 
+2.7.0 2022-05-12
+-----------------
+ * Fix docker image to correctly use .NET 6
+ * Improve configuration tool logging.
+ * Add support for cron expressions for certain configuration options.
+ * Add option to run the extractor entirely without an OPC-UA server.
+
+2.6.2 2022-02-23
+-----------------
+ * Fix issue causing history to not be read when nodes are read from CDF.
+
 2.6.1 2022-02-01
 -----------------
  * Do not set history read end to zero if historyEndTime is set.
