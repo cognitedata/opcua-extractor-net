@@ -265,7 +265,5 @@ jobs:
           run: |
             echo "Images being pushed as ${{ steps.image_tags.outputs.extractor }}, ${{ steps.image_tags.outputs.bridge }}"
             echo ${{ secrets.COGNITE_REGISTRY_KEY }} | base64 -d | docker login -u _json_key --password-stdin https://eu.gcr.io
-            docker push eu.gcr.io/cognite-registry/opcua-extractor-net:latest
             docker push ${{ steps.image_tags.outputs.extractor }}
-            docker push eu.gcr.io/cognite-registry/mqtt-cdf-bridge:latest
             docker push ${{ steps.image_tags.outputs.bridge }}
