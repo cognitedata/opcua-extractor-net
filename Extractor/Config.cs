@@ -452,6 +452,11 @@ namespace Cognite.OpcUa
         /// reasonable or useful values.
         /// </summary>
         public bool EstimateArraySizes { get; set; }
+
+        /// <summary>
+        /// Convert variables that fail checks for datatype, array length, etc. to properties.
+        /// </summary>
+        public bool UnmappableAsProperties { get; set; }
     }
 
     public class RelationshipConfig
@@ -666,6 +671,11 @@ namespace Cognite.OpcUa
         /// reporting the number changed.
         /// </summary>
         public BrowseCallbackConfig? BrowseCallback { get; set; }
+
+        /// <summary>
+        /// Configuration for writing to a custom OPC-UA flexible data model.
+        /// </summary>
+        public FdmDestinationConfig? FlexibleDataModels { get; set; }
     }
     public class RawMetadataConfig
     {
@@ -723,6 +733,22 @@ namespace Cognite.OpcUa
         /// Call callback even if zero items are created or updated.
         /// </summary>
         public bool ReportOnEmpty { get; set; }
+    }
+
+    public class FdmDestinationConfig
+    {
+        /// <summary>
+        /// PG3 space to write to.
+        /// This should implement the OPC-UA information model.
+        /// TODO: Create this space dynamically? We might be want to embed the definition in the extractor.
+        /// </summary>
+        public string Space { get; set; } = "opcua";
+        /// <summary>
+        /// True to enable. This will not produce meaningful results unless
+        /// extraction.types.as-nodes, extraction.relationships.enabled, extraction.relationships.hierarchical,
+        /// are all set to "true", and there is exactly one root node i=84
+        /// </summary>
+        public bool Enabled { get; set; }
     }
     public class InfluxPusherConfig : IPusherConfig
     {

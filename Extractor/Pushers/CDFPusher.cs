@@ -20,8 +20,10 @@ using Cognite.Extractor.Common;
 using Cognite.Extractor.Utils;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.NodeSources;
+using Cognite.OpcUa.Pushers.PG3;
 using Cognite.OpcUa.Types;
 using CogniteSdk;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using Prometheus;
@@ -29,6 +31,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Http;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -60,12 +63,14 @@ namespace Cognite.OpcUa.Pushers
         private readonly CogniteDestination destination;
 
         private readonly BrowseCallback? callback;
+        private readonly PG3Writer? pg3Destination;
 
         public CDFPusher(
             ILogger<CDFPusher> log,
             ExtractionConfig extConfig,
             CognitePusherConfig config,
-            CogniteDestination destination)
+            CogniteDestination destination,
+            IServiceProvider provider)
         {
             this.log = log;
             this.config = config;
@@ -75,6 +80,11 @@ namespace Cognite.OpcUa.Pushers
             if (config.BrowseCallback != null && (config.BrowseCallback.Id.HasValue || !string.IsNullOrEmpty(config.BrowseCallback.ExternalId)))
             {
                 callback = new BrowseCallback(destination, config.BrowseCallback, log);
+            }
+            if (config.FlexibleDataModels != null && config.FlexibleDataModels.Enabled)
+            {
+                pg3Destination = new PG3Writer(provider.GetRequiredService<FullConfig>(), provider.GetRequiredService<HttpClient>(),
+                    provider.GetRequiredService<ILogger<PG3Writer>>());
             }
         }
 
@@ -286,38 +296,65 @@ namespace Cognite.OpcUa.Pushers
                 return result;
             }
 
+            if (pg3Destination != null)
+            {
+                try
+                {
+                    var tsIds = new ConcurrentDictionary<string, UAVariable>(
+                        variables.ToDictionary(ts => Extractor.GetUniqueId(ts.Id, ts.Index)!));
+                    await CreateTimeseries(tsIds, report, true, token);
+                }
+                catch (Exception ex)
+                {
+                    log.LogError(ex, "Failed to push minimal timeseries to CDF");
+                }
+                
+                bool pushResult;
+                try
+                {
+                    pushResult = await pg3Destination.PushNodes(objects, variables, references, Extractor, token);
+                }
+                catch (Exception e)
+                {
+                    log.LogError(e, "Failed to push to flexible data models");
+                    pushResult = false;
+                }
+                result.Objects = pushResult;
+                result.Variables = pushResult;
+                result.References = pushResult;
+            }
+            else
+            {
+                try
+                {
+                    await PushAssets(objects, update.Objects, report, token);
+                }
+                catch (Exception e)
+                {
+                    log.LogError(e, "Failed to ensure assets");
+                    result.Objects = false;
+                }
 
+                try
+                {
+                    await PushTimeseries(variables, update.Variables, report, token);
+                }
+                catch (Exception e)
+                {
+                    log.LogError(e, "Failed to ensure timeseries");
+                    result.Variables = false;
+                }
 
-            try
-            {
-                await PushAssets(objects, update.Objects, report, token);
+                try
+                {
+                    await PushReferences(references, report, token);
+                }
+                catch (Exception e)
+                {
+                    log.LogError(e, "Failed to ensure references");
+                    result.References = false;
+                }
             }
-            catch (Exception e)
-            {
-                log.LogError(e, "Failed to ensure assets");
-                result.Objects = false;
-            }
-
-            try
-            {
-                await PushTimeseries(variables, update.Variables, report, token);
-            }
-            catch (Exception e)
-            {
-                log.LogError(e, "Failed to ensure timeseries");
-                result.Variables = false;
-            }
-
-            try
-            {
-                await PushReferences(references, report, token);
-            }
-            catch (Exception e)
-            {
-                log.LogError(e, "Failed to ensure references");
-                result.References = false;
-            }
-
 
             log.LogInformation("Finish pushing nodes to CDF");
 

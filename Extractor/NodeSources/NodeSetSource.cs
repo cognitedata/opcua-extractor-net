@@ -322,6 +322,7 @@ namespace Cognite.OpcUa.NodeSources
             {
                 if (id == ObjectIds.Server || id == ObjectIds.Aliases) return false;
                 var obj = new UANode(id, node.DisplayName?.Text ?? "", parent, node.NodeClass);
+                obj.BrowseName = node.BrowseName?.Name ?? "";
                 if (node is BaseObjectState objState)
                 {
                     obj.Attributes.Description = objState.Description?.Text;

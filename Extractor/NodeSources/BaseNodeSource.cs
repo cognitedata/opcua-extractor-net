@@ -289,7 +289,11 @@ namespace Cognite.OpcUa.NodeSources
         /// <param name="node">Node to sort.</param>
         protected void SortVariable(TypeUpdateConfig update, UAVariable node)
         {
-            if (!Extractor.DataTypeManager.AllowTSMap(node)) return;
+            if (!Extractor.DataTypeManager.AllowTSMap(node))
+            {
+                if (!Config.Extraction.DataTypes.UnmappableAsProperties) return;
+                node.VariableAttributes.IsProperty = true;
+            }
             if (FilterObject(update, node)) AddVariableToLists(node);
         }
 

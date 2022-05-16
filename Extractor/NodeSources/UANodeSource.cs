@@ -159,6 +159,7 @@ namespace Cognite.OpcUa.NodeSources
         private async Task GetRelationshipData(bool getPropertyReferences, CancellationToken token)
         {
             if (Extractor.ReferenceTypeManager == null) return;
+
             var nodes = FinalSourceObjects.Concat(FinalSourceVariables);
 
             if (!getPropertyReferences)
@@ -236,10 +237,12 @@ namespace Cognite.OpcUa.NodeSources
         {
             bool mapped = true;
 
-            if (node.NodeClass == NodeClass.Object || Config.Extraction.NodeTypes.AsNodes && node.NodeClass == NodeClass.ObjectType)
+            if (node.NodeClass == NodeClass.Object || Config.Extraction.NodeTypes.AsNodes && 
+                (node.NodeClass == NodeClass.ObjectType || node.NodeClass == NodeClass.ReferenceType || node.NodeClass == NodeClass.DataType))
             {
                 var uaNode = new UANode(Client.ToNodeId(node.NodeId), node.DisplayName.Text, parentId, node.NodeClass);
                 uaNode.SetNodeType(Client, node.TypeDefinition);
+                uaNode.BrowseName = node.BrowseName?.Name ?? "";
 
                 Extractor.State.RegisterNode(uaNode.Id, Extractor.GetUniqueId(uaNode.Id));
                 Log.LogTrace("HandleNode {Class} {Name}", uaNode.NodeClass, uaNode.DisplayName);
@@ -250,6 +253,7 @@ namespace Cognite.OpcUa.NodeSources
             {
                 var variable = new UAVariable(Client.ToNodeId(node.NodeId), node.DisplayName.Text, parentId, node.NodeClass);
                 variable.SetNodeType(Client, node.TypeDefinition);
+                variable.BrowseName = node.BrowseName?.Name ?? "";
 
                 Extractor.State.RegisterNode(variable.Id, Extractor.GetUniqueId(variable.Id));
                 Log.LogTrace("HandleNode Variable {Name}", variable.DisplayName);

@@ -28,6 +28,7 @@ namespace Cognite.OpcUa.Types
         private string? name;
         private string? inverseName;
         public bool HasName => name != null;
+        public bool IsHierarchical { get; set; }
         public UAReferenceType(NodeId id)
         {
             Id = id;

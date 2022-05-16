@@ -20,6 +20,15 @@ using System.Collections.Generic;
 
 namespace Cognite.OpcUa.Types
 {
+    public class TypeAttributes
+    {
+        public bool IsAbstract { get; set; }
+        public DataTypeDefinition? DataTypeDefinition { get; set; }
+        public bool Symmetric { get; set; }
+        public string? InverseName { get; set; }
+    }
+
+
     /// <summary>
     /// Class containing the base attributes of an OPC-UA node,
     /// managing its fields and properties externally, so that multiple instances
@@ -27,6 +36,7 @@ namespace Cognite.OpcUa.Types
     /// </summary>
     public class NodeAttributes
     {
+        public TypeAttributes? TypeAttributes { get; set; }
         public string? Description { get; set; }
         public byte EventNotifier { get; set; }
         public UANodeType? NodeType { get; set; }
@@ -39,6 +49,11 @@ namespace Cognite.OpcUa.Types
         public NodeAttributes(NodeClass nc)
         {
             NodeClass = nc;
+            if (NodeClass == NodeClass.ObjectType || NodeClass == NodeClass.DataType
+                || NodeClass == NodeClass.ReferenceType || NodeClass == NodeClass.VariableType)
+            {
+                TypeAttributes = new TypeAttributes();
+            }
         }
         /// <summary>
         /// Retrieve the list of attribute ids to fetch.
@@ -69,14 +84,33 @@ namespace Cognite.OpcUa.Types
                     {
                         result.Add(Attributes.UserAccessLevel);
                     }
-                    goto case NodeClass.VariableType;
-                case NodeClass.VariableType:
                     result.Add(Attributes.DataType);
                     result.Add(Attributes.ValueRank);
                     if (IsProperty || config.Extraction.DataTypes.MaxArraySize != 0)
                     {
                         result.Add(Attributes.ArrayDimensions);
                     }
+                    break;
+                case NodeClass.VariableType:
+                    result.Add(Attributes.IsAbstract);
+                    result.Add(Attributes.DataType);
+                    result.Add(Attributes.ValueRank);
+                    if (IsProperty || config.Extraction.DataTypes.MaxArraySize != 0)
+                    {
+                        result.Add(Attributes.ArrayDimensions);
+                    }
+                    break;
+                case NodeClass.ObjectType:
+                    result.Add(Attributes.IsAbstract);
+                    break;
+                case NodeClass.ReferenceType:
+                    result.Add(Attributes.IsAbstract);
+                    result.Add(Attributes.Symmetric);
+                    result.Add(Attributes.InverseName);
+                    break;
+                case NodeClass.DataType:
+                    result.Add(Attributes.IsAbstract);
+                    result.Add(Attributes.DataTypeDefinition);
                     break;
             }
             return result;
@@ -115,6 +149,18 @@ namespace Cognite.OpcUa.Types
                         break;
                     case Attributes.EventNotifier:
                         EventNotifier = values[idx].GetValue(EventNotifiers.None);
+                        break;
+                    case Attributes.IsAbstract:
+                        TypeAttributes!.IsAbstract = values[idx].GetValue(false);
+                        break;
+                    case Attributes.InverseName:
+                        TypeAttributes!.InverseName = values[idx].GetValue<QualifiedName?>(null)?.Name;
+                        break;
+                    case Attributes.Symmetric:
+                        TypeAttributes!.Symmetric = values[idx].GetValue(false);
+                        break;
+                    case Attributes.DataTypeDefinition:
+                        TypeAttributes!.DataTypeDefinition = values[idx].GetValue<DataTypeDefinition?>(null);
                         break;
                 }
 
@@ -219,6 +265,9 @@ namespace Cognite.OpcUa.Types
                         {
                             ArrayDimensions = dimVal;
                         }
+                        break;
+                    case Attributes.IsAbstract:
+                        TypeAttributes!.IsAbstract = values[idx].GetValue(false);
                         break;
                 }
 

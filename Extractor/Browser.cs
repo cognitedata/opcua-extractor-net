@@ -97,7 +97,7 @@ namespace Cognite.OpcUa
             uint classMask = (uint)NodeClass.Variable | (uint)NodeClass.Object;
             if (config.Extraction.NodeTypes.AsNodes)
             {
-                classMask |= (uint)NodeClass.VariableType | (uint)NodeClass.ObjectType;
+                classMask |= (uint)NodeClass.VariableType | (uint)NodeClass.ObjectType | (uint)NodeClass.ReferenceType | (uint)NodeClass.DataType;
             }
 
             await BrowseDirectory(roots, callback, token, null, classMask, ignoreVisited, true, purpose: purpose);

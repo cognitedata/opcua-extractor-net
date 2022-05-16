@@ -45,6 +45,10 @@ namespace Cognite.OpcUa.Types
         /// </summary>
         public string DisplayName { get; }
         /// <summary>
+        /// BrowseName in OPC-UA
+        /// </summary>
+        public string BrowseName { get; set; }
+        /// <summary>
         /// Node Class in OPC-UA
         /// </summary>
         public NodeClass NodeClass => Attributes.NodeClass;
