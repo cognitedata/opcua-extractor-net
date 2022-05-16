@@ -93,7 +93,8 @@ namespace Cognite.OpcUa.TypeCollectors
         public async Task<IEnumerable<UAReference>> GetReferencesAsync(
             IEnumerable<NodeId> nodes,
             NodeId referenceTypes,
-            CancellationToken token)
+            CancellationToken token,
+            uint nodeClassMask = (uint)NodeClass.Object | (uint)NodeClass.Variable)
         {
             if (!nodes.Any()) return Enumerable.Empty<UAReference>();
 
@@ -101,16 +102,15 @@ namespace Cognite.OpcUa.TypeCollectors
 
             var browseNodes = nodes.Select(node => new BrowseNode(node)).ToDictionary(node => node.Id);
 
-            var classMask = NodeClass.Object | NodeClass.Variable;
             if (config.Extraction.NodeTypes?.AsNodes ?? false)
             {
-                classMask |= NodeClass.ObjectType | NodeClass.VariableType;
+                nodeClassMask |= ((uint)NodeClass.ObjectType) | ((uint)NodeClass.VariableType);
             }
 
             var baseParams = new BrowseParams
             {
                 BrowseDirection = BrowseDirection.Both,
-                NodeClassMask = (uint)classMask,
+                NodeClassMask = nodeClassMask,
                 ReferenceTypeId = referenceTypes,
                 Nodes = browseNodes
             };

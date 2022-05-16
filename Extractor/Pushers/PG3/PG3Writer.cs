@@ -75,6 +75,37 @@ namespace Cognite.OpcUa.Pushers.PG3
                 .DistinctBy(node => node.Id)
                 .ToList();
 
+            var nodeIds = nodes.Select(node => node.Id).ToHashSet();
+
+            var finalReferences = new List<UAReference>();
+
+            int numSkipped = 0;
+            foreach (var refr in references)
+            {
+                if (!refr.IsForward) continue;
+
+                if (!nodeIds.Contains(refr.Source.Id))
+                {
+                    log.LogWarning("Missing source node {Node} ({Target})", refr.Source.Id, refr.Target.Id);
+                    numSkipped++;
+                    continue;
+                }
+                if (!nodeIds.Contains(refr.Target.Id))
+                {
+                    log.LogWarning("Missing target node {Node} ({Source})", refr.Target.Id, refr.Source.Id);
+                    numSkipped++;
+                    continue;
+                }
+                if (!nodeIds.Contains(refr.Type?.Id ?? NodeId.Null)) {
+                    log.LogWarning("Missing type {Node} ({Source}, {Target})", refr.Type?.Id ?? NodeId.Null, refr.Source.Id, refr.Target.Id);
+                    numSkipped++;
+                    continue;
+                }
+
+                finalReferences.Add(refr);
+            }
+
+            // We need to map out hierarchical references here, but this is should be safe at this point.
             foreach (var node in nodes.Where(nd => nd.NodeClass == NodeClass.ReferenceType))
             {
                 if (node.Id == ReferenceTypeIds.NonHierarchicalReferences || node.Id == ReferenceTypeIds.References)
@@ -91,17 +122,7 @@ namespace Cognite.OpcUa.Pushers.PG3
                 }
             }
 
-            var nodeIds = nodes.Select(node => node.Id).ToHashSet();
-
-            foreach (var refr in references)
-            {
-                if (!nodeIds.Contains(refr.Source.Id)) log.LogWarning("Missing source node {Node} ({Target})", refr.Source.Id, refr.Target.Id);
-                if (!nodeIds.Contains(refr.Target.Id)) log.LogWarning("Missing target node {Node} ({Source})", refr.Target.Id, refr.Source.Id);
-                if (!nodeIds.Contains(refr.Type?.Id ?? NodeId.Null)) log.LogWarning("Missing type {Node} ({Source}, {Target})",
-                    refr.Type?.Id ?? NodeId.Null, refr.Source.Id, refr.Target.Id);
-            }
-
-            var request = new BulkRequestWrapper(nodes, references);
+            var request = new BulkRequestWrapper(nodes, finalReferences);
 
             await SendBulkInsertRequest(request, extractor, token);
 

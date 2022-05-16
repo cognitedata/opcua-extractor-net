@@ -171,10 +171,17 @@ namespace Cognite.OpcUa.NodeSources
                 nodes = nodes.Concat(nodes.SelectMany(node => node.GetAllProperties())).DistinctBy(node => node.Id);
             }
 
+            uint classMask = (uint)NodeClass.Object | (uint)NodeClass.Variable;
+            if (usesFdm)
+            {
+                classMask |= (uint)NodeClass.ObjectType | (uint)NodeClass.DataType | (uint)NodeClass.VariableType | (uint)NodeClass.ReferenceType;
+            }
+
             var nonHierarchicalReferences = await Extractor.ReferenceTypeManager.GetReferencesAsync(
                 nodes.Select(node => node.Id).ToList(),
                 ReferenceTypeIds.NonHierarchicalReferences,
-                token);
+                token,
+                classMask);
 
             Log.LogInformation("Found {Count} non-hierarchical references", nonHierarchicalReferences.Count());
 
