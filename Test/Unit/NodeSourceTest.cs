@@ -196,12 +196,12 @@ namespace Test.Unit
 
             source.BuildNodes(new[] { tester.Ids.Custom.Root, ObjectIds.TypesFolder });
             var result = await source.ParseResults(tester.Source.Token);
-            Assert.Equal(892, result.SourceVariables.Count());
-            Assert.Equal(899, result.DestinationVariables.Count());
-            Assert.Equal(497, result.DestinationObjects.Count());
-            Assert.Equal(475, result.SourceObjects.Count());
-            Assert.Equal(5070, result.DestinationReferences.Count());
-            Assert.Equal(2535, result.DestinationReferences.Count(rel => rel.IsForward));
+            Assert.Equal(9, result.SourceVariables.Count());
+            Assert.Equal(16, result.DestinationVariables.Count());
+            Assert.Equal(477, result.DestinationObjects.Count());
+            Assert.Equal(473, result.SourceObjects.Count());
+            Assert.Equal(1508, result.DestinationReferences.Count());
+            Assert.Equal(754, result.DestinationReferences.Count(rel => rel.IsForward));
             Assert.All(result.DestinationReferences, rel =>
             {
                 Assert.NotNull(rel.Source);
