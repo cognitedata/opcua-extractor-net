@@ -53,6 +53,13 @@ namespace Cognite.OpcUa.Types
         /// </summary>
         public NodeClass NodeClass => Attributes.NodeClass;
         /// <summary>
+        /// True if this is a type node.
+        /// </summary>
+        public bool IsType => NodeClass == NodeClass.DataType
+            || NodeClass == NodeClass.VariableType
+            || NodeClass == NodeClass.ObjectType
+            || NodeClass == NodeClass.ReferenceType;
+        /// <summary>
         /// NodeId of the parent. May be NodeId.Null for rootNodes
         /// </summary>
         public NodeId ParentId { get; }

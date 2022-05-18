@@ -229,6 +229,12 @@ namespace Cognite.OpcUa.NodeSources
                 }
             }
         }
+
+        protected bool IsDecendantOfType(UANode node)
+        {
+            return node.Parent != null && (node.Parent.IsType || IsDecendantOfType(node.Parent));
+        }
+
         /// <summary>
         /// Apply transformations and sort the given node as variable, object or property.
         /// </summary>
@@ -243,10 +249,7 @@ namespace Cognite.OpcUa.NodeSources
                 node.Attributes.IsProperty |= node.Parent.IsProperty
                     || !Config.Extraction.MapVariableChildren && node.Parent.NodeClass == NodeClass.Variable
                     // Children of types are generally not timeseries
-                    || node.Parent.NodeClass == NodeClass.ObjectType
-                    || node.Parent.NodeClass == NodeClass.VariableType
-                    || node.Parent.NodeClass == NodeClass.DataType
-                    || node.Parent.NodeClass == NodeClass.ReferenceType
+                    || IsDecendantOfType(node) && node.NodeClass == NodeClass.Variable
                     // This refers to the big schema types
                     || node.NodeClass != NodeClass.DataType && node.ParentId == ObjectIds.DataTypesFolder;
             }
