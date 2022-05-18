@@ -1,0 +1,148 @@
+﻿using Cognite.Extractor.Common;
+using Cognite.OpcUa.Types;
+using Microsoft.Extensions.Logging;
+using Opc.Ua;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+
+namespace Cognite.OpcUa.Pushers.PG3
+{
+    internal class NodeTrimmer
+    {
+        private Dictionary<NodeId, IEnumerable<UAReference>> referencesByTargetId;
+        private Dictionary<NodeId, IEnumerable<UAReference>> referencesBySourceId;
+        private HashSet<NodeId> visitedIds = new HashSet<NodeId>();
+        private Dictionary<NodeId, UANode> nodeMap;
+        private Dictionary<NodeId, bool> refHierarchical;
+        private FullConfig config;
+        private ILogger log;
+        public NodeTrimmer(Dictionary<NodeId, bool> refHierarchical, IEnumerable<UANode> nodes, IEnumerable<UAReference> references, FullConfig config, ILogger log)
+        {
+            referencesByTargetId = references.GroupBy(rf => rf.Target.Id).ToDictionary(group => group.Key, group => (IEnumerable<UAReference>)group);
+            referencesBySourceId = references.GroupBy(rf => rf.Source.Id).ToDictionary(group => group.Key, group => (IEnumerable<UAReference>)group);
+            nodeMap = nodes.ToDictionary(node => node.Id);
+            this.refHierarchical = refHierarchical;
+            this.config = config;
+            this.log = log;
+        }
+
+        private void TraverseNode(List<UANode> result, List<UAReference> refResult, UAReference? reference, UANode node)
+        {
+            if (reference != null) refResult.Add(reference);
+            if (!visitedIds.Add(node.Id)) return;
+            result.Add(node);
+            var bySource = referencesBySourceId.GetValueOrDefault(node.Id) ?? Enumerable.Empty<UAReference>();
+            var byTarget = referencesByTargetId.GetValueOrDefault(node.Id) ?? Enumerable.Empty<UAReference>();
+
+            if (!bySource.Any() && !byTarget.Any())
+            {
+                log.LogWarning("Orphaned node: {Name} {Id}", node.DisplayName, node.Id);
+            }
+
+            if (node.NodeClass == NodeClass.Variable || node.NodeClass == NodeClass.VariableType)
+            {
+                var dataTypeId = (node as UAVariable)!.VariableAttributes.DataType?.Raw;
+                if (dataTypeId != null && !dataTypeId.IsNullNodeId) TraverseNode(result, refResult, null, nodeMap[dataTypeId]);
+            }
+
+            if (node.Id.NamespaceIndex != 0)
+            {
+                // We explore all references for custom nodes
+                foreach (var rf in bySource)
+                {
+                    TraverseNode(result, refResult, rf, nodeMap[rf.Target.Id]);
+                }
+                foreach (var rf in byTarget)
+                {
+                    TraverseNode(result, refResult, rf, nodeMap[rf.Source.Id]);
+                }
+            }
+            else
+            {
+                // We explore hierarchically up, and down to non-types for base nodes,
+                // we also follow non-hierarchical references, but only outward.
+                foreach (var rf in bySource)
+                {
+                    var target = nodeMap[rf.Target.Id];
+                    if (refHierarchical[rf.Type.Id])
+                    {
+                        if (target.NodeClass == NodeClass.Object || target.NodeClass == NodeClass.Variable)
+                        {
+                            TraverseNode(result, refResult, rf, target);
+                        }
+                    }
+                    else
+                    {
+                        TraverseNode(result, refResult, rf, target);
+                    }
+                }
+                foreach (var rf in byTarget)
+                {
+                    if (refHierarchical[rf.Type.Id])
+                    {
+                        TraverseNode(result, refResult, rf, nodeMap[rf.Source.Id]);
+                    }
+                }
+            }
+        }
+
+        private void TraverseHierarchy(List<UANode> result, List<UAReference> refResult, UAReference? reference, UANode node)
+        {
+            if (reference != null) refResult.Add(reference);
+            if (visitedIds.Add(node.Id)) result.Add(node);
+            var bySource = referencesBySourceId.GetValueOrDefault(node.Id) ?? Enumerable.Empty<UAReference>();
+
+            if (node.NodeClass == NodeClass.Variable || node.NodeClass == NodeClass.VariableType)
+            {
+                var dataTypeId = (node as UAVariable)!.VariableAttributes.DataType?.Raw;
+                if (dataTypeId != null && !dataTypeId.IsNullNodeId) TraverseNode(result, refResult, null, nodeMap[dataTypeId]);
+            }
+
+            // For hierarchical nodes we just follow all outgoing references.
+            foreach (var rf in bySource)
+            {
+                if (refHierarchical[rf.Type.Id])
+                {
+                    TraverseHierarchy(result, refResult, rf, nodeMap[rf.Target.Id]);
+                }
+                else
+                {
+                    TraverseNode(result, refResult, rf, nodeMap[rf.Target.Id]);
+                }
+            }
+        }
+
+
+
+        public (List<UANode>, List<UAReference>) Filter()
+        {
+            var result = new List<UANode>();
+            var refResult = new List<UAReference>();
+            var roots = nodeMap.Values.Where(nd => nd.Id.NamespaceIndex != 0).ToList();
+
+            foreach (var node in roots)
+            {
+                TraverseNode(result, refResult, null, node);
+            }
+
+            // If we have enabled all events we need to explore the event hierarchy
+            if (config.Events.Enabled && config.Events.AllEvents && nodeMap.TryGetValue(ObjectTypeIds.BaseEventType, out var baseEvt))
+            {
+                TraverseNode(result, refResult, null, baseEvt);
+                TraverseHierarchy(result, refResult, null, baseEvt);
+            }
+
+            // Make sure we get all used reference types
+            foreach (var type in refResult.Select(rf => rf.Type.Id).Distinct().ToList())
+            {
+                TraverseNode(result, refResult, null, nodeMap[type]);
+            }
+
+            refResult = refResult.DistinctBy(rf => (rf.Source.Id, rf.Target.Id, rf.Type.Id)).ToList();
+
+            return (result, refResult);
+        }
+    }
+}

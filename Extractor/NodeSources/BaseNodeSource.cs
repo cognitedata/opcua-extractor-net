@@ -241,7 +241,11 @@ namespace Cognite.OpcUa.NodeSources
                 node.Parent = parent;
                 node.Attributes.Ignore |= node.Parent.Ignore;
                 node.Attributes.IsProperty |= node.Parent.IsProperty
-                    || !Config.Extraction.MapVariableChildren && node.Parent.NodeClass == NodeClass.Variable;
+                    || !Config.Extraction.MapVariableChildren && node.Parent.NodeClass == NodeClass.Variable
+                    || node.Parent.NodeClass == NodeClass.ObjectType
+                    || node.Parent.NodeClass == NodeClass.VariableType
+                    || node.Parent.NodeClass == NodeClass.DataType
+                    || node.Parent.NodeClass == NodeClass.ReferenceType;
             }
 
             if (Extractor.Transformations != null)

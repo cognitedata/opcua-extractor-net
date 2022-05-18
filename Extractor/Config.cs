@@ -749,6 +749,21 @@ namespace Cognite.OpcUa
         /// are all set to "true", and there is exactly one root node i=84
         /// </summary>
         public bool Enabled { get; set; }
+
+        /// <summary>
+        /// Exclude any nodes that are not somehow referenced by a custom node.
+        /// The following node types are included:
+        /// Custom nodes
+        /// Nodes referenced non-hierarchically by any other included node, recursively.
+        /// Ancestors of any included node.
+        /// 
+        /// This is all applied recursively meaning that the excluded nodes are generally:
+        /// Unused reference types
+        /// Unused object types
+        /// Unused variable types
+        /// Children of unused types
+        /// </summary>
+        public bool ExcludeNonReferenced { get; set; }
     }
     public class InfluxPusherConfig : IPusherConfig
     {
