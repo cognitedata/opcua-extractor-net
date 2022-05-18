@@ -94,7 +94,8 @@ namespace Cognite.OpcUa.TypeCollectors
             IEnumerable<NodeId> nodes,
             NodeId referenceTypes,
             CancellationToken token,
-            uint nodeClassMask = (uint)NodeClass.Object | (uint)NodeClass.Variable)
+            uint nodeClassMask = (uint)NodeClass.Object | (uint)NodeClass.Variable,
+            bool usesFdm = false)
         {
             if (!nodes.Any()) return Enumerable.Empty<UAReference>();
 

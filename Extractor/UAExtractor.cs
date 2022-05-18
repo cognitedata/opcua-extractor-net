@@ -62,6 +62,7 @@ namespace Cognite.OpcUa
         public IEnumerable<NodeTransformation>? Transformations { get; private set; }
         public StringConverter StringConverter => uaClient.StringConverter;
         private readonly PubSubManager? pubSubManager;
+        public NamespaceTable? NamespaceTable => uaClient.NamespaceTable;
 
         private NodeSetSource? nodeSetSource;
 
@@ -1169,5 +1170,6 @@ namespace Cognite.OpcUa
         string? GetUniqueId(ExpandedNodeId id, int index = -1);
         StringConverter StringConverter { get; }
         string GetRelationshipId(UAReference reference);
+        NamespaceTable? NamespaceTable { get; }
     }
 }

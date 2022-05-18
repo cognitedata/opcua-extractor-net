@@ -68,6 +68,9 @@ namespace Cognite.OpcUa.Pushers.PG3
                     var target = nodeMap[rf.Target.Id];
                     if (refHierarchical[rf.Type.Id])
                     {
+                        // These nodes in particular we skip here, as they are huge, and we only need custom members.
+                        // They contain the binary schema for every OPC-UA type.
+                        if (node.Id == ObjectIds.XmlSchema_TypeSystem || node.Id == ObjectIds.OPCBinarySchema_TypeSystem) continue;
                         if (target.NodeClass == NodeClass.Object || target.NodeClass == NodeClass.Variable)
                         {
                             TraverseNode(result, refResult, rf, target);

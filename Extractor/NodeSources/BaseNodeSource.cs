@@ -242,10 +242,13 @@ namespace Cognite.OpcUa.NodeSources
                 node.Attributes.Ignore |= node.Parent.Ignore;
                 node.Attributes.IsProperty |= node.Parent.IsProperty
                     || !Config.Extraction.MapVariableChildren && node.Parent.NodeClass == NodeClass.Variable
+                    // Children of types are generally not timeseries
                     || node.Parent.NodeClass == NodeClass.ObjectType
                     || node.Parent.NodeClass == NodeClass.VariableType
                     || node.Parent.NodeClass == NodeClass.DataType
-                    || node.Parent.NodeClass == NodeClass.ReferenceType;
+                    || node.Parent.NodeClass == NodeClass.ReferenceType
+                    // This refers to the big schema types
+                    || node.NodeClass != NodeClass.DataType && node.ParentId == ObjectIds.DataTypesFolder;
             }
 
             if (Extractor.Transformations != null)

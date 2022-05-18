@@ -181,7 +181,8 @@ namespace Cognite.OpcUa.NodeSources
                 nodes.Select(node => node.Id).ToList(),
                 ReferenceTypeIds.NonHierarchicalReferences,
                 token,
-                classMask);
+                classMask,
+                usesFdm);
 
             Log.LogInformation("Found {Count} non-hierarchical references", nonHierarchicalReferences.Count());
 

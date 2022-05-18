@@ -7,6 +7,13 @@ using System.Text.Json.Serialization;
 
 namespace Cognite.OpcUa.Pushers.PG3
 {
+    internal enum IngestType
+    {
+        Node,
+        Reference,
+        Server
+    }
+
     internal class IngestUnion
     {
         public object Item { get; set; }
@@ -23,17 +30,23 @@ namespace Cognite.OpcUa.Pushers.PG3
             Item = reference;
             Type = IngestType.Reference;
         }
+
+        public IngestUnion(ServerMetadata server)
+        {
+            Item = server;
+            Type = IngestType.Server;
+        }
     }
 
     internal class PG3IngestConverter : JsonConverter<IngestUnion>
     {
         private string? prefix;
-        private UAExtractor extractor;
+        private IUAClientAccess client;
         private Dictionary<NodeId, bool> refTypeIsHierarchical;
-        public PG3IngestConverter(string? prefix, UAExtractor extractor, Dictionary<NodeId, bool> refTypeIsHierarchical)
+        public PG3IngestConverter(string? prefix, IUAClientAccess client, Dictionary<NodeId, bool> refTypeIsHierarchical)
         {
             this.prefix = prefix;
-            this.extractor = extractor;
+            this.client = client;
             this.refTypeIsHierarchical = refTypeIsHierarchical;
         }
 
@@ -69,6 +82,7 @@ namespace Cognite.OpcUa.Pushers.PG3
             writer.WriteStartObject();
             writer.WriteNumber("node_class", (byte)value.NodeClass);
             writer.WriteString("browse_name", value.BrowseName);
+            writer.WriteString("ua_node_id", value.Id.ToString());
             writer.WriteEndObject();
         }
 
@@ -103,11 +117,11 @@ namespace Cognite.OpcUa.Pushers.PG3
                     if (variable.IsProperty)
                     {
                         writer.WritePropertyName("value");
-                        writer.WriteRawValue(extractor.StringConverter.ConvertToString(variable.Value, variable.DataType?.EnumValues, null, true));
+                        writer.WriteRawValue(client.StringConverter.ConvertToString(variable.Value, variable.DataType?.EnumValues, null, true));
                     }
                     else
                     {
-                        writer.WriteString("time_series", extractor.GetUniqueId(value.Id));
+                        writer.WriteString("time_series", client.GetUniqueId(value.Id));
                     }
                     WriteNodeId(writer, "data_type", variable.DataType?.Raw ?? NodeId.Null);
                     writer.WriteNumber("value_rank", variable.ValueRank);
@@ -122,7 +136,7 @@ namespace Cognite.OpcUa.Pushers.PG3
                     writer.WritePropertyName("opcua.variable_type");
                     writer.WriteStartObject();
                     writer.WritePropertyName("value");
-                    writer.WriteRawValue(extractor.StringConverter.ConvertToString(variableType.Value, variableType.DataType?.EnumValues, null, true));
+                    writer.WriteRawValue(client.StringConverter.ConvertToString(variableType.Value, variableType.DataType?.EnumValues, null, true));
                     WriteNodeId(writer, "data_type", variableType.DataType?.Raw ?? NodeId.Null);
                     writer.WriteNumber("value_rank", variableType.ValueRank);
                     writer.WritePropertyName("array_dimensions");
@@ -158,14 +172,25 @@ namespace Cognite.OpcUa.Pushers.PG3
             writer.WriteEndObject();
         }
 
+        private static void WriteServer(Utf8JsonWriter writer, ServerMetadata server, JsonSerializerOptions options)
+        {
+            writer.WritePropertyName("node");
+            writer.WriteStartObject();
+            writer.WriteString("external_id", $"{server.Prefix}server_metadata");
+            writer.WriteString("type", "uaserver");
+            writer.WriteString("name", $"{server.Prefix}Server");
+            writer.WriteString("description", $"Server metadata for server with prefix {server.Prefix}");
+            writer.WriteEndObject();
+
+            writer.WritePropertyName("opcua.server");
+            JsonSerializer.Serialize(writer, server, options);
+        }
+
 
         public override IngestUnion? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
         {
             throw new NotImplementedException();
         }
-
-
-
 
         public override void Write(Utf8JsonWriter writer, IngestUnion value, JsonSerializerOptions options)
         {
@@ -178,7 +203,9 @@ namespace Cognite.OpcUa.Pushers.PG3
                 case IngestType.Reference:
                     WriteUAReference(writer, (value.Item as UAReference)!, options);
                     break;
-
+                case IngestType.Server:
+                    WriteServer(writer, (value.Item as ServerMetadata)!, options);
+                    break;
             }
             writer.WriteEndObject();
         }
