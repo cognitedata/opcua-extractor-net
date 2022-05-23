@@ -213,8 +213,8 @@ namespace Test
 
         public static void StopProxyProcess()
         {
-            using var process = Bash($"kill $(ps aux | grep '[n]cat' | awk '{{print $2}}')");
-
+            using var process = Bash($"kill -9 $(ps aux | grep '[n]cat' | awk '{{print $2}}')");
+            process.Start();
             process.WaitForExit();
         }
 

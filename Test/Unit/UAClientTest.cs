@@ -137,8 +137,9 @@ namespace Test.Unit
             Assert.True(RuntimeInformation.IsOSPlatform(OSPlatform.Linux), "This test only runs on Linux");
             await tester.Client.Close(tester.Source.Token);
             CommonTestUtils.StopProxyProcess();
-            tester.Config.Source.EndpointUrl = "opc.tcp://localhost:62001";
+            tester.Config.Source.EndpointUrl = "opc.tcp://localhost:61050";
             tester.Config.Source.KeepAliveInterval = 1000;
+            tester.Config.Logger.UaSessionTracing = true;
 
             bool connected = true;
 
@@ -153,7 +154,7 @@ namespace Test.Unit
 
             try
             {
-                using var process = CommonTestUtils.GetProxyProcess(62001, 62000);
+                using var process = CommonTestUtils.GetProxyProcess(61050, 62000);
                 Assert.True(process.Start(), "Expected proxy process to start");
                 Exception exception = null;
                 for (int i = 0; i < 10; i++)
@@ -174,6 +175,7 @@ namespace Test.Unit
                 if (exception != null) throw exception;
                 
                 Assert.True(CommonTestUtils.TestMetricValue("opcua_connected", 1));
+                process.Kill();
                 CommonTestUtils.StopProxyProcess();
                 await TestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_connected", 0) && !connected, 20,
                     "Expected client to disconnect");
@@ -188,6 +190,7 @@ namespace Test.Unit
                 tester.Config.Source.EndpointUrl = "opc.tcp://localhost:62000";
                 await tester.Client.Close(tester.Source.Token);
                 tester.Config.Source.KeepAliveInterval = 10000;
+                tester.Config.Logger.UaSessionTracing = false;
                 await tester.Client.Run(tester.Source.Token);
                 CommonTestUtils.StopProxyProcess();
             }
@@ -392,7 +395,7 @@ namespace Test.Unit
             // Best case, it takes 91 reads: 1 read at level 0, 3 reads for each of the 30 remaining.
             // Timing might cause nodes to be read in a sligthly different order, so we might read 2 more times.
             // In practice this slight variance is irrelevant.
-            Assert.True(reads >= 89 && reads <= 93);
+            Assert.True(reads >= 89 && reads <= 93, $"Expected reads between 89 and 93, got {reads}");
             Assert.True(CommonTestUtils.TestMetricValue("opcua_tree_depth", 31));
         }
         [Theory]

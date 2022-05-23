@@ -22,6 +22,7 @@ using Opc.Ua;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Cognite.OpcUa
 {
@@ -168,9 +169,9 @@ namespace Cognite.OpcUa
         }
 
         /// <summary>
-        /// Number of currently managed nodes.
+        /// Number of currently managed non-property nodes.
         /// </summary>
-        public int NumActiveNodes => mappedNodes.Count;
+        public int NumActiveNodes => mappedNodes.Count(kvp => !kvp.Value.IsProperty);
 
         /// <summary>
         /// Wipe the state

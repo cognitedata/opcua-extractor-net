@@ -62,6 +62,7 @@ namespace Test.Unit
             Assert.Empty(result.DestinationReferences);
 
             // Enable arrays
+            extractor.State.Clear();
             tester.Config.Extraction.DataTypes.MaxArraySize = 4;
             source.BuildNodes(new[] { tester.Ids.Custom.Root });
             result = await source.ParseResults(tester.Source.Token);
@@ -72,6 +73,7 @@ namespace Test.Unit
             Assert.Empty(result.DestinationReferences);
 
             // Enable strings
+            extractor.State.Clear();
             tester.Config.Extraction.DataTypes.AllowStringVariables = true;
             source.BuildNodes(new[] { tester.Ids.Custom.Root });
             result = await source.ParseResults(tester.Source.Token);
@@ -82,6 +84,7 @@ namespace Test.Unit
             Assert.Empty(result.DestinationReferences);
 
             // Enable ignore
+            extractor.State.Clear();
             tester.Config.Extraction.DataTypes.IgnoreDataTypes = new[]
             {
                 CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Custom.IgnoreType, tester.Client)
@@ -96,6 +99,7 @@ namespace Test.Unit
             Assert.Empty(result.DestinationReferences);
 
             // Map variable children to objects
+            extractor.State.Clear();
             tester.Config.Extraction.MapVariableChildren = true;
             source.BuildNodes(new[] { tester.Ids.Custom.Root });
             result = await source.ParseResults(tester.Source.Token);
@@ -108,9 +112,14 @@ namespace Test.Unit
             tester.Config.Extraction.MapVariableChildren = false;
 
             // Enable non-hierarchical relations
+            extractor.State.Clear();
             tester.Config.Extraction.Relationships.Enabled = true;
             source.BuildNodes(new[] { tester.Ids.Custom.Root });
             result = await source.ParseResults(tester.Source.Token);
+            foreach (var rf in result.DestinationReferences)
+            {
+                log.LogDebug("Ref: {Source} {Target} {Type} {IsForward}", rf.Source.Id, rf.Target.Id, rf.Type.Id, rf.IsForward);
+            }
             Assert.Equal(8, result.DestinationReferences.Count());
             Assert.Equal(4, result.DestinationReferences.Count(rel => rel.IsForward));
             Assert.All(result.DestinationReferences, rel =>
@@ -128,6 +137,7 @@ namespace Test.Unit
 
 
             // Enable forward hierarchical relations
+            extractor.State.Clear();
             tester.Config.Extraction.Relationships.Hierarchical = true;
             source.BuildNodes(new[] { tester.Ids.Custom.Root });
             result = await source.ParseResults(tester.Source.Token);
@@ -145,6 +155,7 @@ namespace Test.Unit
             });
 
             // Enable inverse hierarchical relations
+            extractor.State.Clear();
             tester.Config.Extraction.Relationships.InverseHierarchical = true;
             source.BuildNodes(new[] { tester.Ids.Custom.Root });
             result = await source.ParseResults(tester.Source.Token);

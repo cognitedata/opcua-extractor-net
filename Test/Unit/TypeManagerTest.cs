@@ -574,9 +574,13 @@ namespace Test.Unit
                 extractor.State.AddActiveNode(node, new TypeUpdateConfig(), false, false);
             }
 
-            var references = await mgr.GetReferencesAsync(nodes.Select(node => node.Id), referenceTypeId, tester.Source.Token);
-            Assert.All(references, reference => Assert.True(reference.Type != null && !reference.Type.Id.IsNullNodeId));
-            Assert.Equal(results, references.Count());
+            var references = await mgr.GetReferencesAsync(ids, referenceTypeId, tester.Source.Token);
+            var filteredReferences = references
+                .Where(rf => nodes.Any(node => node.Id == rf.Target.Id) && nodes.Any(node => node.Id == rf.Source.Id))
+                .ToList();
+
+            Assert.All(filteredReferences, filteredReferences => Assert.True(filteredReferences.Type != null && !filteredReferences.Type.Id.IsNullNodeId));
+            Assert.Equal(results, filteredReferences.Count);
         }
         [Fact]
         public async Task TestGetReferences()

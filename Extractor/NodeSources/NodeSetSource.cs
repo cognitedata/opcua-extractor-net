@@ -452,7 +452,7 @@ namespace Cognite.OpcUa.NodeSources
 
             if (Config.Extraction.Relationships.Enabled)
             {
-                GetRelationshipData(FinalSourceObjects.Concat(FinalSourceVariables));
+                GetRelationshipData();
             }
 
             NodeMap.Clear();
@@ -481,10 +481,8 @@ namespace Cognite.OpcUa.NodeSources
                 FinalReferences);
         }
 
-        private void GetRelationshipData(IEnumerable<UANode> mappedNodes)
+        private void GetRelationshipData()
         {
-            var nodeMap = mappedNodes.ToDictionary(node => node.Id);
-
             foreach (var (id, refs) in references)
             {
                 var parentNode = Extractor.State.GetMappedNode(id);
