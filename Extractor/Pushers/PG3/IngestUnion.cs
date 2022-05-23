@@ -94,6 +94,23 @@ namespace Cognite.OpcUa.Pushers.PG3
             writer.WriteEndObject();
         }
 
+        private void WriteBaseType(Utf8JsonWriter writer, UANode node, NodeId root)
+        {
+            writer.WritePropertyName("opcua.base_type");
+            writer.WriteStartObject();
+            writer.WriteBoolean("is_abstract", node.Attributes.TypeAttributes!.IsAbstract);
+            var parents = new List<string>();
+            parents.Add(ToExtId(node.Id));
+            while (node.Parent != null && node.Id != root)
+            {
+                parents.Add(ToExtId(node.Parent.Id));
+                node = node.Parent;
+            }
+            writer.WritePropertyName("parents");
+            JsonSerializer.Serialize(writer, parents);
+            writer.WriteEndObject();
+        }
+
         private static void WriteCommonProperties(Utf8JsonWriter writer, UANode value)
         {
             writer.WriteStartObject();
@@ -113,18 +130,15 @@ namespace Cognite.OpcUa.Pushers.PG3
             switch (value.NodeClass)
             {
                 case NodeClass.ReferenceType:
+                    WriteBaseType(writer, value, ReferenceTypeIds.References);
                     writer.WritePropertyName("opcua.reference_type");
                     writer.WriteStartObject();
-                    writer.WriteBoolean("is_abstract", value.Attributes.TypeAttributes!.IsAbstract);
                     writer.WriteBoolean("symmetric", value.Attributes.TypeAttributes!.Symmetric);
                     writer.WriteString("inverse_name", value.Attributes.TypeAttributes!.InverseName);
                     writer.WriteEndObject();
                     break;
                 case NodeClass.ObjectType:
-                    writer.WritePropertyName("opcua.object_type");
-                    writer.WriteStartObject();
-                    writer.WriteBoolean("is_abstract", value.Attributes.TypeAttributes!.IsAbstract);
-                    writer.WriteEndObject();
+                    WriteBaseType(writer, value, ObjectTypeIds.BaseObjectType);
                     break;
                 case NodeClass.Variable:
                     var variable = value as UAVariable;
@@ -150,6 +164,7 @@ namespace Cognite.OpcUa.Pushers.PG3
                 case NodeClass.VariableType:
                     var variableType = value as UAVariable;
                     if (variableType == null) throw new InvalidOperationException("Node with class VariableType passed as UANode");
+                    WriteBaseType(writer, value, VariableTypeIds.BaseVariableType);
                     writer.WritePropertyName("opcua.variable_type");
                     writer.WriteStartObject();
                     writer.WritePropertyName("value");
@@ -158,13 +173,15 @@ namespace Cognite.OpcUa.Pushers.PG3
                     writer.WriteNumber("value_rank", variableType.ValueRank);
                     writer.WritePropertyName("array_dimensions");
                     JsonSerializer.Serialize(writer, variableType.ArrayDimensions);
-                    writer.WriteBoolean("is_abstract", variableType.Attributes.TypeAttributes!.IsAbstract);
                     writer.WriteEndObject();
                     break;
                 case NodeClass.DataType:
+                    WriteBaseType(writer, value, DataTypeIds.BaseDataType);
                     writer.WritePropertyName("opcua.data_type");
                     writer.WriteStartObject();
-                    writer.WriteBoolean("is_abstract", value.Attributes.TypeAttributes!.IsAbstract);
+                    writer.WritePropertyName("data_type_definition");
+                    writer.WriteStartObject();
+                    writer.WriteEndObject();
                     writer.WriteEndObject();
                     // TODO: Handle data type definition
                     break;
