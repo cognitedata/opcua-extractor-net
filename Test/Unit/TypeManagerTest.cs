@@ -574,7 +574,7 @@ namespace Test.Unit
                 extractor.State.AddActiveNode(node, new TypeUpdateConfig(), false, false);
             }
 
-            var references = await mgr.GetReferencesAsync(nodes.ToDictionary(node => node.Id), referenceTypeId, tester.Source.Token);
+            var references = await mgr.GetReferencesAsync(nodes.Select(node => node.Id), referenceTypeId, tester.Source.Token);
             Assert.All(references, reference => Assert.True(reference.Type != null && !reference.Type.Id.IsNullNodeId));
             Assert.Equal(results, references.Count());
         }

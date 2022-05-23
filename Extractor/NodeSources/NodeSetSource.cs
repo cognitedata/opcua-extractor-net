@@ -487,26 +487,27 @@ namespace Cognite.OpcUa.NodeSources
 
             foreach (var (id, refs) in references)
             {
-                if (!nodeMap.TryGetValue(id, out var node)) continue;
-                bool sourceIsTs = node is UAVariable variable && !variable.IsObject;
+                var parentNode = Extractor.State.GetMappedNode(id);
+                if (parentNode == null) continue;
+
                 foreach (var rf in refs)
                 {
                     bool isHierarchical = IsOfType(rf.ReferenceTypeId, ReferenceTypeIds.HierarchicalReferences);
 
-                    if (!nodeMap.TryGetValue(Client.ToNodeId(rf.TargetId), out var target)) continue;
-                    bool targetIsTs = target is UAVariable targetVariable && !targetVariable.IsObject;
+                    var childNode = Extractor.State.GetMappedNode(Client.ToNodeId(rf.TargetId));
+                    if (childNode == null) continue;
 
                     var reference = new UAReference(
                         type: Client.ToNodeId(rf.ReferenceTypeId),
                         isForward: !rf.IsInverse,
                         source: id,
-                        target: target.Id,
-                        sourceIsTs,
-                        targetIsTs,
+                        target: childNode.Id,
+                        sourceTs: !parentNode.IsObject,
+                        targetTs: !childNode.IsObject,
                         isHierarchical,
                         manager: Extractor.ReferenceTypeManager!);
 
-                    if (!FilterReference(nodeMap, reference, true)) continue;
+                    if (!FilterReference(reference)) continue;
 
                     FinalReferences.Add(reference);
                 }

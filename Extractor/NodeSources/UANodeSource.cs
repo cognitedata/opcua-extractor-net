@@ -169,10 +169,9 @@ namespace Cognite.OpcUa.NodeSources
             {
                 nodes = nodes.Concat(nodes.SelectMany(node => node.GetAllProperties())).DistinctBy(node => node.Id);
             }
-            var nodeMap = nodes.ToDictionary(node => node.Id);
 
             var nonHierarchicalReferences = await Extractor.ReferenceTypeManager.GetReferencesAsync(
-                nodeMap,
+                nodes.Select(node => node.Id).ToList(),
                 ReferenceTypeIds.NonHierarchicalReferences,
                 token);
 
@@ -188,17 +187,18 @@ namespace Cognite.OpcUa.NodeSources
                 {
                     // The child should always be in the list of mapped nodes here
                     var nodeId = Client.ToNodeId(pair.Node.NodeId);
-                    if (!nodeMap.TryGetValue(nodeId, out var childNode)) continue;
-
-                    bool childIsTs = childNode is UAVariable cVar && !cVar.IsObject;
+                    var childNode = Extractor.State.GetMappedNode(nodeId);
+                    if (childNode == null) continue;
+                    var parentNode = Extractor.State.GetMappedNode(pair.ParentId);
+                    if (parentNode == null) continue;
 
                     hierarchicalReferences.Add(new UAReference(
                         type: pair.Node.ReferenceTypeId,
                         isForward: true,
                         source: pair.ParentId,
                         target: childNode.Id,
-                        sourceTs: false,
-                        targetTs: childIsTs,
+                        sourceTs: !parentNode.IsObject,
+                        targetTs: !childNode.IsObject,
                         isHierarchical: true,
                         manager: Extractor.ReferenceTypeManager));
 
@@ -209,8 +209,8 @@ namespace Cognite.OpcUa.NodeSources
                             isForward: false,
                             source: childNode.Id,
                             target: pair.ParentId,
-                            sourceTs: childIsTs,
-                            targetTs: false,
+                            sourceTs: !childNode.IsObject,
+                            targetTs: !parentNode.IsObject,
                             isHierarchical: true,
                             manager: Extractor.ReferenceTypeManager));
                     }
@@ -220,7 +220,7 @@ namespace Cognite.OpcUa.NodeSources
 
             foreach (var reference in nonHierarchicalReferences.Concat(hierarchicalReferences))
             {
-                if (!FilterReference(nodeMap, reference)) continue;
+                if (!FilterReference(reference)) continue;
                 FinalReferences.Add(reference);
             }
 

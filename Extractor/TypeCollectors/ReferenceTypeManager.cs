@@ -91,15 +91,15 @@ namespace Cognite.OpcUa.TypeCollectors
         /// <param name="referenceTypes">ReferenceType filter</param>
         /// <returns>List of found references</returns>
         public async Task<IEnumerable<UAReference>> GetReferencesAsync(
-            Dictionary<NodeId, UANode> nodeMap,
+            IEnumerable<NodeId> nodes,
             NodeId referenceTypes,
             CancellationToken token)
         {
-            if (!nodeMap.Any()) return Enumerable.Empty<UAReference>();
+            if (!nodes.Any()) return Enumerable.Empty<UAReference>();
 
-            log.LogInformation("Get extra references from the server for {Count} nodes", nodeMap.Count);
+            log.LogInformation("Get extra references from the server for {Count} nodes", nodes.Count());
 
-            var browseNodes = nodeMap.Keys.Select(node => new BrowseNode(node)).ToDictionary(node => node.Id);
+            var browseNodes = nodes.Select(node => new BrowseNode(node)).ToDictionary(node => node.Id);
 
             var classMask = NodeClass.Object | NodeClass.Variable;
             if (config.Extraction.NodeTypes?.AsNodes ?? false)
@@ -120,22 +120,20 @@ namespace Cognite.OpcUa.TypeCollectors
             var results = new List<UAReference>();
             foreach (var (parentId, children) in references)
             {
-                if (!nodeMap.TryGetValue(parentId, out var parentNode)) continue;
+                var parentNode = extractor.State.GetMappedNode(parentId);
+                if (parentNode == null) continue;
                 foreach (var child in children)
                 {
                     var childId = uaClient.ToNodeId(child.NodeId);
-                    VariableExtractionState? childState = null;
-                    if (child.NodeClass == NodeClass.Variable)
-                    {
-                        childState = extractor.State.GetNodeState(childId);
-                    }
+                    var childNode = extractor.State.GetMappedNode(childId);
+
                     results.Add(new UAReference(
                         type: child.ReferenceTypeId,
                         isForward: child.IsForward,
                         source: parentId,
                         target: childId,
-                        sourceTs: parentNode is UAVariable pVar && !pVar.IsObject,
-                        targetTs: childState != null && !childState.IsArray,
+                        sourceTs: !parentNode.IsObject,
+                        targetTs: childNode != null && !childNode.IsObject,
                         isHierarchical: false,
                         manager: this));
                 }
