@@ -186,37 +186,6 @@ namespace Test
                 ResetMetricValue(metric);
             }
         }
-        public static Process Bash(string cmd)
-        {
-            if (cmd == null) throw new ArgumentNullException(nameof(cmd));
-            var escapedArgs = cmd.Replace("\"", "\\\"", StringComparison.InvariantCulture);
-
-            var process = new Process
-            {
-                StartInfo = new ProcessStartInfo
-                {
-                    FileName = "/bin/bash",
-                    Arguments = $"-c \"{escapedArgs}\"",
-                    RedirectStandardOutput = true,
-                    UseShellExecute = false,
-                    CreateNoWindow = false,
-                }
-            };
-            process.Start();
-            return process;
-        }
-
-        public static Process GetProxyProcess(int source, int target)
-        {
-            return Bash($"ncat -lk {source} -c \"ncat localhost {target}\"");
-        }
-
-        public static void StopProxyProcess()
-        {
-            using var process = Bash($"kill -9 $(ps aux | grep '[n]cat' | awk '{{print $2}}')");
-            process.Start();
-            process.WaitForExit();
-        }
 
         private static Dictionary<string, string> MetaToDict(JsonElement elem)
         {
