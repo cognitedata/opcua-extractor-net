@@ -483,7 +483,7 @@ namespace Test.Unit
         {
             using var extractor = tester.BuildExtractor(true, null, pusher);
             var log = tester.Provider.GetRequiredService<ILogger<ReferenceTypeManager>>();
-            var mgr = new ReferenceTypeManager(log, tester.Client, extractor);
+            var mgr = new ReferenceTypeManager(tester.Config, log, tester.Client, extractor);
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_mqtt");
 
             var assets = Enumerable.Empty<UANode>();
@@ -497,8 +497,8 @@ namespace Test.Unit
 
             var references = new List<UAReference>
             {
-                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target2"), true, false, mgr),
-                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target"), false, true, mgr),
+                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target2"), true, false, true, mgr),
+                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target"), false, true, true, mgr),
             };
             await mgr.GetReferenceTypeDataAsync(tester.Source.Token);
 
@@ -511,10 +511,10 @@ namespace Test.Unit
             // Push again, with duplicates
             var references2 = new List<UAReference>
             {
-                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target"), true, true, mgr),
-                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target2"), false, false, mgr),
-                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target2"), true, false, mgr),
-                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target"), false, true, mgr)
+                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target"), true, true, true, mgr),
+                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target2"), false, false, true, mgr),
+                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target2"), true, false, true, mgr),
+                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target"), false, true, true, mgr)
             };
             waitTask = bridge.WaitForNextMessage();
             Assert.True((await pusher.PushNodes(assets, tss, references2, update, tester.Source.Token)).References);
@@ -541,7 +541,7 @@ namespace Test.Unit
         {
             using var extractor = tester.BuildExtractor(true, null, pusher);
             var log = tester.Provider.GetRequiredService<ILogger<ReferenceTypeManager>>();
-            var mgr = new ReferenceTypeManager(log, tester.Client, extractor);
+            var mgr = new ReferenceTypeManager(tester.Config, log, tester.Client, extractor);
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_mqtt");
 
             tester.Config.Mqtt.RawMetadata = new RawMetadataConfig
@@ -561,8 +561,8 @@ namespace Test.Unit
 
             var references = new List<UAReference>
             {
-                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target2"), true, false, mgr),
-                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target"), false, true, mgr),
+                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target2"), true, false, true, mgr),
+                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target"), false, true, true, mgr),
             };
             await mgr.GetReferenceTypeDataAsync(tester.Source.Token);
 
@@ -575,10 +575,10 @@ namespace Test.Unit
             // Push again, with duplicates
             var references2 = new List<UAReference>
             {
-                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target"), true, true, mgr),
-                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target2"), false, false, mgr),
-                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target2"), true, false, mgr),
-                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target"), false, true, mgr)
+                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target"), true, true, true, mgr),
+                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target2"), false, false, true, mgr),
+                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target2"), true, false, true, mgr),
+                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target"), false, true, true, mgr)
             };
             waitTask = bridge.WaitForNextMessage();
             Assert.True((await pusher.PushNodes(assets, tss, references2, update, tester.Source.Token)).References);
@@ -681,14 +681,14 @@ namespace Test.Unit
 
             using var extractor = tester.BuildExtractor(true, stateStore, pusher);
             var log = tester.Provider.GetRequiredService<ILogger<ReferenceTypeManager>>();
-            var mgr = new ReferenceTypeManager(log, tester.Client, extractor);
+            var mgr = new ReferenceTypeManager(tester.Config, log, tester.Client, extractor);
             CommonTestUtils.ResetMetricValues("opcua_node_ensure_failures_mqtt", "opcua_created_relationships_mqtt");
             tester.Config.Mqtt.LocalState = "mqtt_state";
 
             var references = new List<UAReference>
             {
-                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target2"), true, false, mgr),
-                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target"), false, true, mgr),
+                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target2"), true, false, true, mgr),
+                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target"), false, true, true, mgr),
             };
             await mgr.GetReferenceTypeDataAsync(tester.Source.Token);
 

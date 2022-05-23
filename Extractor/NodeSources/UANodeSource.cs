@@ -15,6 +15,7 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using Cognite.Extractor.Common;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
@@ -96,7 +97,7 @@ namespace Cognite.OpcUa.NodeSources
 
             if (Config.Extraction.Relationships.Enabled)
             {
-                await GetRelationshipData(token);
+                await GetRelationshipData(false, token);
             }
 
             if (!FinalDestinationObjects.Any() && !FinalDestinationVariables.Any() && !FinalSourceVariables.Any() && !FinalReferences.Any())
@@ -155,27 +156,32 @@ namespace Cognite.OpcUa.NodeSources
         /// Get references for the mapped nodes.
         /// </summary>
         /// <returns>A list of references.</returns>
-        private async Task GetRelationshipData(CancellationToken token)
+        private async Task GetRelationshipData(bool getPropertyReferences, CancellationToken token)
         {
             if (Extractor.ReferenceTypeManager == null) return;
-            var nodes = RawObjects.Concat(RawVariables);
+            var nodes = FinalSourceObjects.Concat(FinalSourceVariables);
+
+            if (!getPropertyReferences)
+            {
+                nodes = nodes.Where(node => !node.IsProperty);
+            }
+            else
+            {
+                nodes = nodes.Concat(nodes.SelectMany(node => node.GetAllProperties())).DistinctBy(node => node.Id);
+            }
+            var nodeMap = nodes.ToDictionary(node => node.Id);
 
             var nonHierarchicalReferences = await Extractor.ReferenceTypeManager.GetReferencesAsync(
-                nodes,
+                nodeMap,
                 ReferenceTypeIds.NonHierarchicalReferences,
                 token);
 
-            foreach (var reference in nonHierarchicalReferences)
-            {
-                FinalReferences.Add(reference);
-            }
-            Log.LogInformation("Found {Count} non-hierarchical references", FinalReferences.Count);
+            Log.LogInformation("Found {Count} non-hierarchical references", nonHierarchicalReferences.Count());
+
+            var hierarchicalReferences = new List<UAReference>();
 
             if (Config.Extraction.Relationships.Hierarchical)
             {
-                var nodeMap = FinalSourceObjects.Concat(FinalSourceVariables)
-                    .ToDictionary(node => node.Id);
-
                 Log.LogInformation("Mapping {Count} hierarchical references", references.Count);
 
                 foreach (var pair in references)
@@ -183,31 +189,39 @@ namespace Cognite.OpcUa.NodeSources
                     // The child should always be in the list of mapped nodes here
                     var nodeId = Client.ToNodeId(pair.Node.NodeId);
                     if (!nodeMap.TryGetValue(nodeId, out var childNode)) continue;
-                    if (childNode == null || childNode is UAVariable childVar && childVar.IsProperty) continue;
 
                     bool childIsTs = childNode is UAVariable cVar && !cVar.IsObject;
 
-                    FinalReferences.Add(new UAReference(
-                        pair.Node.ReferenceTypeId,
-                        true,
-                        pair.ParentId,
-                        childNode.Id,
-                        false,
-                        childIsTs,
-                        Extractor.ReferenceTypeManager));
+                    hierarchicalReferences.Add(new UAReference(
+                        type: pair.Node.ReferenceTypeId,
+                        isForward: true,
+                        source: pair.ParentId,
+                        target: childNode.Id,
+                        sourceTs: false,
+                        targetTs: childIsTs,
+                        isHierarchical: true,
+                        manager: Extractor.ReferenceTypeManager));
 
                     if (Config.Extraction.Relationships.InverseHierarchical)
                     {
-                        FinalReferences.Add(new UAReference(
-                            pair.Node.ReferenceTypeId,
-                            false,
-                            childNode.Id,
-                            pair.ParentId,
-                            childIsTs,
-                            false,
-                            Extractor.ReferenceTypeManager));
+                        hierarchicalReferences.Add(new UAReference(
+                            type: pair.Node.ReferenceTypeId,
+                            isForward: false,
+                            source: childNode.Id,
+                            target: pair.ParentId,
+                            sourceTs: childIsTs,
+                            targetTs: false,
+                            isHierarchical: true,
+                            manager: Extractor.ReferenceTypeManager));
                     }
                 }
+                Log.LogInformation("Found {Count} hierarchical references", hierarchicalReferences.Count);
+            }
+
+            foreach (var reference in nonHierarchicalReferences.Concat(hierarchicalReferences))
+            {
+                if (!FilterReference(nodeMap, reference)) continue;
+                FinalReferences.Add(reference);
             }
 
             await Extractor.ReferenceTypeManager.GetReferenceTypeDataAsync(token);

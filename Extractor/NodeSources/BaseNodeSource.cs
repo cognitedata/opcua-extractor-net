@@ -308,5 +308,35 @@ namespace Cognite.OpcUa.NodeSources
 
             return true;
         }
+
+        /// <summary>
+        /// Returns true if a reference should be mapped to destinations.
+        /// </summary>
+        /// <param name="nodeMap">Nodes used as sources when extracting this reference.</param>
+        /// <param name="reference">Reference to filter.</param>
+        /// <param name="requireChild">True to require a child node in nodeMap</param>
+        /// <returns>True if reference should be mapped.</returns>
+        protected bool FilterReference(Dictionary<NodeId, UANode> nodeMap, UAReference reference, bool requireChild = false)
+        {
+            if (!Extractor.State.IsMappedNode(reference.Source.Id)
+                || !nodeMap.TryGetValue(reference.Source.Id, out var parent)) return false;
+            if (parent.IsProperty) return false;
+
+            if (!Extractor.State.IsMappedNode(reference.Target.Id)) return false;
+
+            if (reference.IsHierarchical && !Config.Extraction.Relationships.Hierarchical) return false;
+            if (reference.IsHierarchical && !reference.IsForward && !Config.Extraction.Relationships.InverseHierarchical) return false;
+
+            if (!nodeMap.TryGetValue(reference.Target.Id, out var child))
+            {
+                if (requireChild) return false;
+            }
+            else
+            {
+                if (child.IsProperty) return false;
+            }
+
+            return true;
+        }
     }
 }

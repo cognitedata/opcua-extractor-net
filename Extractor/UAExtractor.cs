@@ -120,7 +120,7 @@ namespace Cognite.OpcUa
             StateStorage = stateStore;
             if (config.Extraction.Relationships.Enabled)
             {
-                ReferenceTypeManager = new ReferenceTypeManager(provider.GetRequiredService<ILogger<ReferenceTypeManager>>(), uaClient, this);
+                ReferenceTypeManager = new ReferenceTypeManager(Config, provider.GetRequiredService<ILogger<ReferenceTypeManager>>(), uaClient, this);
             }
 
             if (config.FailureBuffer.Enabled)

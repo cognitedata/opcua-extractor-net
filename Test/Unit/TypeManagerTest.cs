@@ -543,7 +543,7 @@ namespace Test.Unit
         {
             using var extractor = tester.BuildExtractor();
             var log = tester.Provider.GetRequiredService<ILogger<ReferenceTypeManager>>();
-            var mgr = new ReferenceTypeManager(log, tester.Client, extractor);
+            var mgr = new ReferenceTypeManager(tester.Config, log, tester.Client, extractor);
             var type1 = mgr.GetReferenceType(ReferenceTypeIds.Organizes);
             var type2 = mgr.GetReferenceType(ReferenceTypeIds.HasComponent);
             var type3 = mgr.GetReferenceType(tester.Server.Ids.Custom.RefType1);
@@ -565,7 +565,7 @@ namespace Test.Unit
         {
             using var extractor = tester.BuildExtractor();
             var log = tester.Provider.GetRequiredService<ILogger<ReferenceTypeManager>>();
-            var mgr = new ReferenceTypeManager(log, tester.Client, extractor);
+            var mgr = new ReferenceTypeManager(tester.Config, log, tester.Client, extractor);
 
             var nodes = ids.Select(id => new UANode(id, "Node", NodeId.Null, NodeClass.Object)).ToList();
             foreach (var node in nodes)
@@ -574,7 +574,7 @@ namespace Test.Unit
                 extractor.State.AddActiveNode(node, new TypeUpdateConfig(), false, false);
             }
 
-            var references = await mgr.GetReferencesAsync(nodes, referenceTypeId, tester.Source.Token);
+            var references = await mgr.GetReferencesAsync(nodes.ToDictionary(node => node.Id), referenceTypeId, tester.Source.Token);
             Assert.All(references, reference => Assert.True(reference.Type != null && !reference.Type.Id.IsNullNodeId));
             Assert.Equal(results, references.Count());
         }

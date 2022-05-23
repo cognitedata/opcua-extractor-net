@@ -483,31 +483,30 @@ namespace Cognite.OpcUa.NodeSources
 
         private void GetRelationshipData(IEnumerable<UANode> mappedNodes)
         {
-            var validNodeIds = new HashSet<NodeId>(mappedNodes.Select(node => node.Id));
+            var nodeMap = mappedNodes.ToDictionary(node => node.Id);
+
             foreach (var (id, refs) in references)
             {
-                if (!NodeMap.TryGetValue(id, out var node)) continue;
-                if (!validNodeIds.Contains(id)) continue;
-                if (node.IsProperty) continue;
+                if (!nodeMap.TryGetValue(id, out var node)) continue;
                 bool sourceIsTs = node is UAVariable variable && !variable.IsObject;
                 foreach (var rf in refs)
                 {
                     bool isHierarchical = IsOfType(rf.ReferenceTypeId, ReferenceTypeIds.HierarchicalReferences);
-                    if (isHierarchical && !Config.Extraction.Relationships.Hierarchical) continue;
-                    if (isHierarchical && rf.IsInverse && !Config.Extraction.Relationships.InverseHierarchical) continue;
-                    if (!NodeMap.TryGetValue(Client.ToNodeId(rf.TargetId), out var target)) continue;
-                    if (!validNodeIds.Contains(target.Id)) continue;
-                    if (target.IsProperty) continue;
+
+                    if (!nodeMap.TryGetValue(Client.ToNodeId(rf.TargetId), out var target)) continue;
                     bool targetIsTs = target is UAVariable targetVariable && !targetVariable.IsObject;
 
                     var reference = new UAReference(
-                        Client.ToNodeId(rf.ReferenceTypeId),
-                        !rf.IsInverse,
-                        id,
-                        target.Id,
+                        type: Client.ToNodeId(rf.ReferenceTypeId),
+                        isForward: !rf.IsInverse,
+                        source: id,
+                        target: target.Id,
                         sourceIsTs,
                         targetIsTs,
-                        Extractor.ReferenceTypeManager!);
+                        isHierarchical,
+                        manager: Extractor.ReferenceTypeManager!);
+
+                    if (!FilterReference(nodeMap, reference, true)) continue;
 
                     FinalReferences.Add(reference);
                 }

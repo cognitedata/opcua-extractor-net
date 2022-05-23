@@ -15,6 +15,7 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using Cognite.Extractor.Common;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.Logging;
@@ -35,11 +36,13 @@ namespace Cognite.OpcUa.TypeCollectors
         private readonly UAClient uaClient;
         private readonly UAExtractor extractor;
         private readonly Dictionary<NodeId, UAReferenceType> mappedTypes = new Dictionary<NodeId, UAReferenceType>();
-        public ReferenceTypeManager(ILogger<ReferenceTypeManager> log, UAClient client, UAExtractor extractor)
+        private readonly FullConfig config;
+        public ReferenceTypeManager(FullConfig config, ILogger<ReferenceTypeManager> log, UAClient client, UAExtractor extractor)
         {
             this.log = log;
             uaClient = client;
             this.extractor = extractor;
+            this.config = config;
         }
         /// <summary>
         /// Gets or creates a <see cref="UAReferenceType"/> for <paramref name="id"/>.
@@ -87,54 +90,54 @@ namespace Cognite.OpcUa.TypeCollectors
         /// <param name="nodes">Nodes to fetch references for</param>
         /// <param name="referenceTypes">ReferenceType filter</param>
         /// <returns>List of found references</returns>
-        public async Task<IEnumerable<UAReference>> GetReferencesAsync(IEnumerable<UANode> nodes, NodeId referenceTypes, CancellationToken token)
+        public async Task<IEnumerable<UAReference>> GetReferencesAsync(
+            Dictionary<NodeId, UANode> nodeMap,
+            NodeId referenceTypes,
+            CancellationToken token)
         {
-            if (!nodes.Any()) return Enumerable.Empty<UAReference>();
+            if (!nodeMap.Any()) return Enumerable.Empty<UAReference>();
 
-            var nodeMap = nodes.ToDictionary(node => node.Id);
-
-            // We only care about references to objects or variables, at least for now.
-            // Only references between objects represented in the extracted hierarchy are relevant.
             log.LogInformation("Get extra references from the server for {Count} nodes", nodeMap.Count);
 
             var browseNodes = nodeMap.Keys.Select(node => new BrowseNode(node)).ToDictionary(node => node.Id);
 
+            var classMask = NodeClass.Object | NodeClass.Variable;
+            if (config.Extraction.NodeTypes?.AsNodes ?? false)
+            {
+                classMask |= NodeClass.ObjectType | NodeClass.VariableType;
+            }
+
             var baseParams = new BrowseParams
             {
                 BrowseDirection = BrowseDirection.Both,
-                NodeClassMask = (uint)NodeClass.Object | (uint)NodeClass.Variable,
+                NodeClassMask = (uint)classMask,
                 ReferenceTypeId = referenceTypes,
                 Nodes = browseNodes
             };
 
-            var references = await Task.Run(() => uaClient.Browser.BrowseLevel(baseParams, token, purpose: "references"));
+            var references = await uaClient.Browser.BrowseLevel(baseParams, token, purpose: "references");
 
             var results = new List<UAReference>();
-
             foreach (var (parentId, children) in references)
             {
                 if (!nodeMap.TryGetValue(parentId, out var parentNode)) continue;
-                if (!extractor.State.IsMappedNode(parentId)) continue;
-                if (parentNode is UAVariable parentVar && parentVar.IsProperty) continue;
                 foreach (var child in children)
                 {
                     var childId = uaClient.ToNodeId(child.NodeId);
-                    if (!extractor.State.IsMappedNode(childId)) continue;
-                    if (child.TypeDefinition == VariableTypeIds.PropertyType) continue;
-
                     VariableExtractionState? childState = null;
                     if (child.NodeClass == NodeClass.Variable)
                     {
                         childState = extractor.State.GetNodeState(childId);
                     }
                     results.Add(new UAReference(
-                        child.ReferenceTypeId,
-                        child.IsForward,
-                        parentId,
-                        childId,
-                        parentNode is UAVariable pVar && !pVar.IsObject,
-                        childState != null && !childState.IsArray,
-                        this));
+                        type: child.ReferenceTypeId,
+                        isForward: child.IsForward,
+                        source: parentId,
+                        target: childId,
+                        sourceTs: parentNode is UAVariable pVar && !pVar.IsObject,
+                        targetTs: childState != null && !childState.IsArray,
+                        isHierarchical: false,
+                        manager: this));
                 }
             }
 
