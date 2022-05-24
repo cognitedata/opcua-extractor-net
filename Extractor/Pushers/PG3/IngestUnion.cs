@@ -148,7 +148,7 @@ namespace Cognite.OpcUa.Pushers.PG3
                     if (variable.IsProperty)
                     {
                         writer.WritePropertyName("value");
-                        writer.WriteRawValue(client.StringConverter.ConvertToString(variable.Value, variable.DataType?.EnumValues, null, true));
+                        writer.WriteRawValue(client.StringConverter.ConvertToString(variable.Value, variable.DataType?.EnumValues, null, StringConverterMode.Json));
                     }
                     else
                     {
@@ -168,7 +168,7 @@ namespace Cognite.OpcUa.Pushers.PG3
                     writer.WritePropertyName("opcua.variable_type");
                     writer.WriteStartObject();
                     writer.WritePropertyName("value");
-                    writer.WriteRawValue(client.StringConverter.ConvertToString(variableType.Value, variableType.DataType?.EnumValues, null, true));
+                    writer.WriteRawValue(client.StringConverter.ConvertToString(variableType.Value, variableType.DataType?.EnumValues, null, StringConverterMode.ReversibleJson));
                     WriteNodeId(writer, "data_type", variableType.DataType?.Raw ?? NodeId.Null);
                     writer.WriteNumber("value_rank", variableType.ValueRank);
                     writer.WritePropertyName("array_dimensions");
@@ -180,8 +180,7 @@ namespace Cognite.OpcUa.Pushers.PG3
                     writer.WritePropertyName("opcua.data_type");
                     writer.WriteStartObject();
                     writer.WritePropertyName("data_type_definition");
-                    writer.WriteStartObject();
-                    writer.WriteEndObject();
+                    writer.WriteRawValue(client.StringConverter.ConvertToString(value.Attributes.TypeAttributes!.DataTypeDefinition, null, null, StringConverterMode.ReversibleJson));
                     writer.WriteEndObject();
                     // TODO: Handle data type definition
                     break;

@@ -29,6 +29,14 @@ using System.Text.Json.Serialization;
 
 namespace Cognite.OpcUa.Types
 {
+    public enum StringConverterMode
+    {
+        Simple,
+        Json,
+        ReversibleJson
+    }
+
+
     /// <summary>
     /// Class used for converting properties and property values to strings.
     /// Handles both conversion to metadata for Clean, and conversion to JSON for Raw.
@@ -57,25 +65,27 @@ namespace Cognite.OpcUa.Types
         /// <param name="value">Value to convert</param>
         /// <param name="enumValues">Map from numeric to string values</param>
         /// <param name="typeInfo">TypeInfo for <paramref name="value"/></param>
-        /// <param name="json">True to return valid JSON.</param>
+        /// <param name="mode">String converter mode.</param>
         /// <returns></returns>
         public string ConvertToString(
             object? value,
             IDictionary<long, string>? enumValues = null,
-            TypeInfo? typeInfo = null, bool json = false)
+            TypeInfo? typeInfo = null,
+            StringConverterMode mode = StringConverterMode.Simple)
         {
+            var jsonMode = mode == StringConverterMode.ReversibleJson ? StringConverterMode.ReversibleJson : StringConverterMode.Json;
             if (value == null)
             {
-                return json ? "null" : "";
+                return mode != StringConverterMode.Simple ? "null" : "";
             }
             if (value is Variant variantValue)
             {
                 // This helps reduce code duplication, by making it possible to call ConvertToString with both variants and non-variants.
-                return ConvertToString(variantValue.Value, enumValues, variantValue.TypeInfo, json);
+                return ConvertToString(variantValue.Value, enumValues, variantValue.TypeInfo, mode);
             }
             if (value is string strValue)
             {
-                return json ? JsonSerializer.Serialize(strValue) : strValue;
+                return mode != StringConverterMode.Simple ? JsonSerializer.Serialize(strValue) : strValue;
             }
             // If this is true, the value should be converted using the built-in JsonEncoder.
             if (typeInfo != null && ShouldUseJson(value) && uaClient != null)
@@ -84,7 +94,7 @@ namespace Cognite.OpcUa.Types
                 {
                     bool topLevelIsArray = typeInfo.ValueRank >= ValueRanks.OneDimension;
 
-                    using var encoder = new JsonEncoder(uaClient.MessageContext, false, null, topLevelIsArray);
+                    using var encoder = new JsonEncoder(uaClient.MessageContext, mode == StringConverterMode.ReversibleJson, null, topLevelIsArray);
                     encoder.WriteVariantContents(value, typeInfo);
                     var result = encoder.CloseAndReturnText();
 
@@ -113,7 +123,7 @@ namespace Cognite.OpcUa.Types
                     {
                         builder.Append(',');
                     }
-                    builder.Append(ConvertToString(dvalue, enumValues, typeInfo, true));
+                    builder.Append(ConvertToString(dvalue, enumValues, typeInfo, jsonMode));
                 }
                 builder.Append(']');
                 return builder.ToString();
@@ -125,7 +135,7 @@ namespace Cognite.OpcUa.Types
                     var longVal = Convert.ToInt64(value, CultureInfo.InvariantCulture);
                     if (enumValues.TryGetValue(longVal, out string enumVal))
                     {
-                        if (json)
+                        if (mode != StringConverterMode.Json)
                         {
                             return JsonSerializer.Serialize(enumVal);
                         }
@@ -140,7 +150,7 @@ namespace Cognite.OpcUa.Types
             string returnStr;
 
             if (value is NodeId nodeId) returnStr = uaClient?.GetUniqueId(nodeId) ?? nodeId.ToString();
-            else if (value is DataValue dv) return ConvertToString(dv.WrappedValue, enumValues, null, json);
+            else if (value is DataValue dv) return ConvertToString(dv.WrappedValue, enumValues, null, mode);
             else if (value is ExpandedNodeId expandedNodeId) returnStr = uaClient?.GetUniqueId(expandedNodeId) ?? expandedNodeId.ToString();
             else if (value is LocalizedText localizedText) returnStr = localizedText.Text;
             else if (value is QualifiedName qualifiedName) returnStr = qualifiedName.Name;
@@ -148,14 +158,14 @@ namespace Cognite.OpcUa.Types
             else if (value is EUInformation euInfo) returnStr = $"{euInfo.DisplayName?.Text}: {euInfo.Description?.Text}";
             else if (value is EnumValueType enumType)
             {
-                if (json) return $"{{{JsonSerializer.Serialize(enumType.DisplayName?.Text ?? "null")}:{enumType.Value}}}";
+                if (mode != StringConverterMode.Simple) return $"{{{JsonSerializer.Serialize(enumType.DisplayName?.Text ?? "null")}:{enumType.Value}}}";
                 return $"{enumType.DisplayName?.Text}: {enumType.Value}";
             }
             else if (value.GetType().IsEnum) returnStr = Enum.GetName(value.GetType(), value);
             else if (value is Opc.Ua.KeyValuePair kvp)
             {
-                if (json) return $"{{{JsonSerializer.Serialize(kvp.Key?.Name ?? "null")}:{ConvertToString(kvp.Value, enumValues, typeInfo, json)}}}";
-                return $"{kvp.Key?.Name}: {ConvertToString(kvp.Value, enumValues, typeInfo, json)}";
+                if (mode != StringConverterMode.Simple) return $"{{{JsonSerializer.Serialize(kvp.Key?.Name ?? "null")}:{ConvertToString(kvp.Value, enumValues, typeInfo, mode)}}}";
+                return $"{kvp.Key?.Name}: {ConvertToString(kvp.Value, enumValues, typeInfo, mode)}";
             }
             else if (typeInfo != null && typeInfo.BuiltInType == BuiltInType.StatusCode && value is uint uintVal)
             {
@@ -172,9 +182,9 @@ namespace Cognite.OpcUa.Types
                 builder.Append(@",""AdditionalInfo"":");
                 builder.Append(diagInfo.AdditionalInfo == null ? "null" : JsonSerializer.Serialize(diagInfo.AdditionalInfo));
                 builder.Append(@",""InnerStatusCode"":");
-                builder.Append(ConvertToString(diagInfo.InnerStatusCode, null, null, true));
+                builder.Append(ConvertToString(diagInfo.InnerStatusCode, null, null, jsonMode));
                 builder.Append(@",""InnerDiagnosticInfo"":");
-                builder.Append(ConvertToString(diagInfo.InnerDiagnosticInfo, null, null, true));
+                builder.Append(ConvertToString(diagInfo.InnerDiagnosticInfo, null, null, jsonMode));
                 builder.Append('}');
                 return builder.ToString();
             }
@@ -183,20 +193,20 @@ namespace Cognite.OpcUa.Types
                 var body = extensionObject.Body;
                 if (body == null)
                 {
-                    return json ? "null" : "";
+                    return mode != StringConverterMode.Simple ? "null" : "";
                 }
                 if (typeof(IEnumerable).IsAssignableFrom(body.GetType())
                     || customHandledTypes.Contains(body.GetType())
                     || typeInfo == null)
                 {
-                    return ConvertToString(extensionObject.Body, enumValues, null, json);
+                    return ConvertToString(extensionObject.Body, enumValues, null, mode);
                 }
                 returnStr = value.ToString();
             }
             else if (IsNumber(value)) return value.ToString();
             else returnStr = value.ToString();
 
-            return json ? JsonSerializer.Serialize(returnStr) : returnStr;
+            return mode != StringConverterMode.Simple ? JsonSerializer.Serialize(returnStr) : returnStr;
         }
 
         /// <summary>
@@ -298,7 +308,7 @@ namespace Cognite.OpcUa.Types
 
         private void WriteValueSafe(Utf8JsonWriter writer, UAVariable variable)
         {
-            var value = converter.ConvertToString(variable.Value, variable.DataType?.EnumValues, null, true);
+            var value = converter.ConvertToString(variable.Value, variable.DataType?.EnumValues, null, StringConverterMode.Json);
             try
             {
                 writer.WriteRawValue(value);

@@ -23,7 +23,7 @@ namespace Cognite.OpcUa.Types
     public class TypeAttributes
     {
         public bool IsAbstract { get; set; }
-        public DataTypeDefinition? DataTypeDefinition { get; set; }
+        public Variant? DataTypeDefinition { get; set; }
         public bool Symmetric { get; set; }
         public string? InverseName { get; set; }
     }
@@ -160,7 +160,7 @@ namespace Cognite.OpcUa.Types
                         TypeAttributes!.Symmetric = values[idx].GetValue(false);
                         break;
                     case Attributes.DataTypeDefinition:
-                        TypeAttributes!.DataTypeDefinition = values[idx].GetValue<DataTypeDefinition?>(null);
+                        TypeAttributes!.DataTypeDefinition = values[idx].WrappedValue;
                         break;
                 }
 
