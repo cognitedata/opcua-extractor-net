@@ -75,13 +75,8 @@ namespace Cognite.OpcUa.Pushers.PG3
             }
             else
             {
-                writer.WriteString(name, ToExtId(id));
+                writer.WriteString(name, client.GetUniqueId(id));
             }
-        }
-
-        private string ToExtId(NodeId id)
-        {
-            return $"{prefix}{id}";
         }
 
         private void WriteMinimalNode(Utf8JsonWriter writer, UANode value)
@@ -99,11 +94,11 @@ namespace Cognite.OpcUa.Pushers.PG3
             writer.WritePropertyName("opcua.base_type");
             writer.WriteStartObject();
             writer.WriteBoolean("is_abstract", node.Attributes.TypeAttributes!.IsAbstract);
-            var parents = new List<string>();
-            parents.Add(ToExtId(node.Id));
+            var parents = new List<string?>();
+            parents.Add(client.GetUniqueId(node.Id));
             while (node.Parent != null && node.Id != root)
             {
-                parents.Add(ToExtId(node.Parent.Id));
+                parents.Add(client.GetUniqueId(node.Parent.Id));
                 node = node.Parent;
             }
             writer.WritePropertyName("parents");
@@ -182,7 +177,6 @@ namespace Cognite.OpcUa.Pushers.PG3
                     writer.WritePropertyName("data_type_definition");
                     writer.WriteRawValue(client.StringConverter.ConvertToString(value.Attributes.TypeAttributes!.DataTypeDefinition, null, null, StringConverterMode.ReversibleJson));
                     writer.WriteEndObject();
-                    // TODO: Handle data type definition
                     break;
             }
         }
@@ -195,12 +189,12 @@ namespace Cognite.OpcUa.Pushers.PG3
             WriteNodeId(writer, "end_node", reference.Target.Id);
             // writer.WriteString("type", ToExtId(reference.Type?.Id ?? NodeId.Null));
             writer.WriteString("type", "uareference");
-            writer.WriteString("external_id", $"{ToExtId(reference.Source.Id)};{ToExtId(reference.Target.Id)};{ToExtId(reference.Type?.Id ?? NodeId.Null)}");
+            writer.WriteString("external_id", $"{client.GetUniqueId(reference.Source.Id)};{client.GetUniqueId(reference.Target.Id)};{client.GetUniqueId(reference.Type?.Id ?? NodeId.Null)}");
             writer.WriteEndObject();
 
             writer.WritePropertyName("opcua.reference");
             writer.WriteStartObject();
-            writer.WriteString("reference_type_id", ToExtId(reference.Type?.Id ?? NodeId.Null));
+            writer.WriteString("reference_type_id", client.GetUniqueId(reference.Type?.Id ?? NodeId.Null));
             writer.WriteBoolean("is_hierarchical", refTypeIsHierarchical.GetValueOrDefault(reference.Type?.Id ?? NodeId.Null));
             writer.WriteEndObject();
         }

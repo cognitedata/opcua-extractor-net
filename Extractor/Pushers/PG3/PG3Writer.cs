@@ -159,10 +159,16 @@ namespace Cognite.OpcUa.Pushers.PG3
                 log.LogInformation("After filtering {Nodes} nodes and {Edges} edges are left", nodes.Count, finalReferences.Count);
             }
 
+            var namespaces = new Dictionary<string, string>();
+            foreach (var ns in uaClient.NamespaceTable?.ToArray() ?? Enumerable.Empty<string>()) 
+            {
+                namespaces[ns] = config.Extraction.NamespaceMap.GetValueOrDefault(ns) ?? ns;
+            }
+
             var serverMetadata = new ServerMetadata
             {
                 HierarchyUpdateTimestamp = CogniteTime.ToUnixTimeMilliseconds(DateTime.UtcNow),
-                NamespaceTable = uaClient.NamespaceTable?.ToArray(),
+                Namespaces = namespaces,
                 Prefix = config.Extraction.IdPrefix,
                 Root = $"{config.Extraction.IdPrefix}{ObjectIds.RootFolder}"
             };
@@ -194,8 +200,8 @@ namespace Cognite.OpcUa.Pushers.PG3
         public string? Root { get; set; }
         [JsonPropertyName("prefix")]
         public string? Prefix { get; set; }
-        [JsonPropertyName("namespace_table")]
-        public IEnumerable<string>? NamespaceTable { get; set; }
+        [JsonPropertyName("namespaces")]
+        public Dictionary<string, string>? Namespaces { get; set; }
         [JsonPropertyName("hierarchy_update_timestamp")]
         public long HierarchyUpdateTimestamp { get; set; }
     }
