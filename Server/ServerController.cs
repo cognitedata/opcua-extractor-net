@@ -43,6 +43,7 @@ namespace Server
         private readonly string endpointUrl;
         private readonly bool logTrace;
         private readonly IServiceProvider provider;
+        private bool running;
 
         public ServerController(
             IEnumerable<PredefinedSetup> setups,
@@ -70,6 +71,7 @@ namespace Server
 
         public async Task Start()
         {
+            if (running) return;
             var app = new ApplicationInstance
             {
                 ConfigSectionName = ConfigRoot
@@ -82,6 +84,7 @@ namespace Server
                 Server = new TestServer(setups, mqttUrl, provider, logTrace);
                 await Task.Run(async () => await app.Start(Server));
                 log.LogInformation("Server started");
+                running = true;
             }
             catch (Exception e)
             {
@@ -91,6 +94,7 @@ namespace Server
         public void Stop()
         {
             Server.Stop();
+            running = false;
         }
 
         public void PopulateCustomHistory(DateTime? start = null)

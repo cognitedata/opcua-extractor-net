@@ -28,6 +28,10 @@ namespace Cognite.OpcUa.Types
     public class UAReference
     {
         /// <summary>
+        /// True if this reference is hierarchical.
+        /// </summary>
+        public bool IsHierarchical { get; }
+        /// <summary>
         /// NodeId of the OPC-UA reference type
         /// </summary>
         public UAReferenceType Type { get; }
@@ -44,12 +48,13 @@ namespace Cognite.OpcUa.Types
         /// </summary>
         public ReferenceVertex Target { get; }
         public UAReference(NodeId type, bool isForward, NodeId source, NodeId target,
-            bool sourceTs, bool targetTs, ReferenceTypeManager manager)
+            bool sourceTs, bool targetTs, bool isHierarchical, ReferenceTypeManager manager)
         {
             Type = manager.GetReferenceType(type);
             IsForward = isForward;
             Source = new ReferenceVertex(source, sourceTs);
             Target = new ReferenceVertex(target, targetTs);
+            IsHierarchical = isHierarchical;
         }
         public override string ToString()
         {

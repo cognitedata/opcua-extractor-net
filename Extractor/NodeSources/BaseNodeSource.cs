@@ -173,6 +173,15 @@ namespace Cognite.OpcUa.NodeSources
                 Config.Extraction.DataTypes.DataTypeMetadata,
                 Config.Extraction.NodeTypes.Metadata);
 
+            foreach (var prop in node.GetAllProperties())
+            {
+                Extractor.State.AddActiveNode(
+                    prop,
+                    updateConfig,
+                    Config.Extraction.DataTypes.DataTypeMetadata,
+                    Config.Extraction.NodeTypes.Metadata);
+            }
+
             if (Config.Events.Enabled
                 && node.EventNotifier != 0
                 && (node.NodeClass == NodeClass.Variable || node.NodeClass == NodeClass.Object)
@@ -294,7 +303,7 @@ namespace Cognite.OpcUa.NodeSources
         {
             if (update.AnyUpdate)
             {
-                var oldChecksum = Extractor.State.GetNodeChecksum(node.Id);
+                var oldChecksum = Extractor.State.GetMappedNode(node.Id)?.Checksum;
                 if (oldChecksum != null)
                 {
                     node.Changed |= oldChecksum != node.GetUpdateChecksum(
@@ -305,6 +314,27 @@ namespace Cognite.OpcUa.NodeSources
                 }
             }
             Log.LogTrace("{Node}", node.ToString());
+
+            return true;
+        }
+
+        /// <summary>
+        /// Returns true if a reference should be mapped to destinations.
+        /// </summary>
+        /// <param name="nodeMap">Nodes used as sources when extracting this reference.</param>
+        /// <param name="reference">Reference to filter.</param>
+        /// <param name="requireChild">True to require a child node in nodeMap</param>
+        /// <returns>True if reference should be mapped.</returns>
+        protected bool FilterReference(UAReference reference)
+        {
+            var source = Extractor.State.GetMappedNode(reference.Source.Id);
+            if (source == null || source.IsProperty) return false;
+
+            var target = Extractor.State.GetMappedNode(reference.Target.Id);
+            if (target == null || target.IsProperty) return false;
+
+            if (reference.IsHierarchical && !Config.Extraction.Relationships.Hierarchical) return false;
+            if (reference.IsHierarchical && !reference.IsForward && !Config.Extraction.Relationships.InverseHierarchical) return false;
 
             return true;
         }

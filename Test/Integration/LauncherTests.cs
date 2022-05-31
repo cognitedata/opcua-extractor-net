@@ -144,7 +144,8 @@ version: 1
                 "--endpoint-url",
                 tester.EndpointUrl,
                 "--no-config",
-                "--auto-accept"
+                "--auto-accept",
+                "--exit"
             };
             var task = Program.Main(args);
 
@@ -172,7 +173,8 @@ version: 1
             {
                 "--auto-accept",
                 "--config-file",
-                "config-test-1.yml"
+                "config-test-1.yml",
+                "--exit"
             };
             File.WriteAllText("config-test-1.yml", GetConfigToolOutput());
 
@@ -207,7 +209,8 @@ version: 1
                 "--working-dir",
                 Directory.GetCurrentDirectory(),
                 "--config-root",
-                "config"
+                "config",
+                "--exit"
             };
             File.WriteAllText("config-test-1.yml", GetConfigToolOutput());
 

@@ -120,7 +120,7 @@ namespace Cognite.OpcUa
             StateStorage = stateStore;
             if (config.Extraction.Relationships.Enabled)
             {
-                ReferenceTypeManager = new ReferenceTypeManager(provider.GetRequiredService<ILogger<ReferenceTypeManager>>(), uaClient, this);
+                ReferenceTypeManager = new ReferenceTypeManager(Config, provider.GetRequiredService<ILogger<ReferenceTypeManager>>(), uaClient, this);
             }
 
             if (config.FailureBuffer.Enabled)
@@ -863,6 +863,8 @@ namespace Cognite.OpcUa
                 }
             }
 
+            log.LogInformation("Successfully pushed nodes on pusher {Name} {Initial}", pusher.GetType(), initial);
+
             pusher.Initialized |= initial;
         }
 
@@ -907,6 +909,7 @@ namespace Cognite.OpcUa
             }
 
             pushTasks = pushTasks.ToList();
+            log.LogInformation("Await push tasks");
             await Task.WhenAll(pushTasks);
 
             if (initial)

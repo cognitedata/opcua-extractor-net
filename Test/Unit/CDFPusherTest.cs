@@ -586,7 +586,7 @@ namespace Test.Unit
             (handler, pusher) = tester.GetCDFPusher();
             using var extractor = tester.BuildExtractor(true, null, pusher);
             var log = tester.Provider.GetRequiredService<ILogger<ReferenceTypeManager>>();
-            var mgr = new ReferenceTypeManager(log, tester.Client, extractor);
+            var mgr = new ReferenceTypeManager(tester.Config, log, tester.Client, extractor);
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_cdf");
             tester.Config.Cognite.RawMetadata = null;
 
@@ -613,7 +613,7 @@ namespace Test.Unit
             var node = new UANode(tester.Server.Ids.Base.Root, "BaseRoot", NodeId.Null, NodeClass.Object);
             var variable = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", new NodeId("parent"));
             variable.VariableAttributes.DataType = dt;
-            var rel = new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target2"), true, false, mgr);
+            var rel = new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target2"), true, false, false, mgr);
 
             await pusher.PushNodes(new[] { node }, new[] { variable }, new[] { rel }, update, tester.Source.Token);
 
@@ -640,7 +640,7 @@ namespace Test.Unit
             Assert.Equal(0, res.RelationshipsCreated);
 
             // Modify "update", also add another reference.
-            rel = new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source2"), new NodeId("target2"), true, false, mgr);
+            rel = new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source2"), new NodeId("target2"), true, false, false, mgr);
             update.Variables.Description = true;
             update.Objects.Description = true;
 
@@ -685,7 +685,7 @@ namespace Test.Unit
             (handler, pusher) = tester.GetCDFPusher();
             using var extractor = tester.BuildExtractor(true, null, pusher);
             var log = tester.Provider.GetRequiredService<ILogger<ReferenceTypeManager>>();
-            var mgr = new ReferenceTypeManager(log, tester.Client, extractor);
+            var mgr = new ReferenceTypeManager(tester.Config, log, tester.Client, extractor);
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_cdf");
 
             var dt = new UADataType(DataTypes.Double);
@@ -712,7 +712,7 @@ namespace Test.Unit
             var node = new UANode(tester.Server.Ids.Base.Root, "BaseRoot", NodeId.Null, NodeClass.Object);
             var variable = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", new NodeId("parent"));
             variable.VariableAttributes.DataType = dt;
-            var rel = new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target2"), true, false, mgr);
+            var rel = new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target2"), true, false, false, mgr);
 
             await pusher.PushNodes(new[] { node }, new[] { variable }, new[] { rel }, update, tester.Source.Token);
 
@@ -741,7 +741,7 @@ namespace Test.Unit
             Assert.Equal(0, res.RelationshipsCreated);
 
             // Modify "update", also add another reference.
-            rel = new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source2"), new NodeId("target2"), true, false, mgr);
+            rel = new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source2"), new NodeId("target2"), true, false, false, mgr);
             update.Variables.Description = true;
             update.Objects.Description = true;
 
@@ -868,7 +868,7 @@ namespace Test.Unit
         {
             using var extractor = tester.BuildExtractor(true, null, pusher);
             var log = tester.Provider.GetRequiredService<ILogger<ReferenceTypeManager>>();
-            var mgr = new ReferenceTypeManager(log, tester.Client, extractor);
+            var mgr = new ReferenceTypeManager(tester.Config, log, tester.Client, extractor);
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_cdf");
 
             var assets = Enumerable.Empty<UANode>();
@@ -881,8 +881,8 @@ namespace Test.Unit
             // Fail to push
             var references = new List<UAReference>
             {
-                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target2"), true, false, mgr),
-                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target"), false, true, mgr),
+                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target2"), true, false, true, mgr),
+                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target"), false, true, true, mgr),
             };
             await mgr.GetReferenceTypeDataAsync(tester.Source.Token);
             handler.FailedRoutes.Add("/relationships");
@@ -897,10 +897,10 @@ namespace Test.Unit
             // Push again, with duplicates
             var references2 = new List<UAReference>
             {
-                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target"), true, true, mgr),
-                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target2"), false, false, mgr),
-                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target2"), true, false, mgr),
-                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target"), false, true, mgr)
+                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target"), true, true, true, mgr),
+                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target2"), false, false, true, mgr),
+                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target2"), true, false, true, mgr),
+                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target"), false, true, true, mgr)
             };
             Assert.True((await pusher.PushNodes(assets, tss, references2, update, tester.Source.Token)).References);
             Assert.Equal(4, handler.Relationships.Count);
@@ -923,7 +923,7 @@ namespace Test.Unit
         {
             using var extractor = tester.BuildExtractor(true, null, pusher);
             var log = tester.Provider.GetRequiredService<ILogger<ReferenceTypeManager>>();
-            var mgr = new ReferenceTypeManager(log, tester.Client, extractor);
+            var mgr = new ReferenceTypeManager(tester.Config, log, tester.Client, extractor);
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_cdf");
 
             tester.Config.Cognite.RawMetadata = new RawMetadataConfig
@@ -942,8 +942,8 @@ namespace Test.Unit
             // Fail to push
             var references = new List<UAReference>
             {
-                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target2"), true, false, mgr),
-                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target"), false, true, mgr),
+                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target2"), true, false, true, mgr),
+                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target"), false, true, true, mgr),
             };
             await mgr.GetReferenceTypeDataAsync(tester.Source.Token);
             handler.FailedRoutes.Add("/raw/dbs/metadata/tables/relationships/rows");
@@ -958,10 +958,10 @@ namespace Test.Unit
             // Push again, with duplicates
             var references2 = new List<UAReference>
             {
-                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target"), true, true, mgr),
-                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target2"), false, false, mgr),
-                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target2"), true, false, mgr),
-                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target"), false, true, mgr)
+                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target"), true, true, true, mgr),
+                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target2"), false, false, true, mgr),
+                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target2"), true, false, true, mgr),
+                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target"), false, true, true, mgr)
             };
             Assert.True((await pusher.PushNodes(assets, tss, references2, update, tester.Source.Token)).References);
             Assert.Equal(4, handler.RelationshipsRaw.Count);

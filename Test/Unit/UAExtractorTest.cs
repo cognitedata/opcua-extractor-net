@@ -173,6 +173,7 @@ namespace Test.Unit
                     new NodeId("var1"),
                     false,
                     true,
+                    false,
                     refManager)
             };
 

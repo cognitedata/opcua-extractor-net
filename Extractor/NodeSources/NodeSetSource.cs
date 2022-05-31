@@ -452,7 +452,7 @@ namespace Cognite.OpcUa.NodeSources
 
             if (Config.Extraction.Relationships.Enabled)
             {
-                GetRelationshipData(FinalSourceObjects.Concat(FinalSourceVariables));
+                GetRelationshipData();
             }
 
             NodeMap.Clear();
@@ -481,33 +481,31 @@ namespace Cognite.OpcUa.NodeSources
                 FinalReferences);
         }
 
-        private void GetRelationshipData(IEnumerable<UANode> mappedNodes)
+        private void GetRelationshipData()
         {
-            var validNodeIds = new HashSet<NodeId>(mappedNodes.Select(node => node.Id));
             foreach (var (id, refs) in references)
             {
-                if (!NodeMap.TryGetValue(id, out var node)) continue;
-                if (!validNodeIds.Contains(id)) continue;
-                if (node.IsProperty) continue;
-                bool sourceIsTs = node is UAVariable variable && !variable.IsObject;
+                var parentNode = Extractor.State.GetMappedNode(id);
+                if (parentNode == null) continue;
+
                 foreach (var rf in refs)
                 {
                     bool isHierarchical = IsOfType(rf.ReferenceTypeId, ReferenceTypeIds.HierarchicalReferences);
-                    if (isHierarchical && !Config.Extraction.Relationships.Hierarchical) continue;
-                    if (isHierarchical && rf.IsInverse && !Config.Extraction.Relationships.InverseHierarchical) continue;
-                    if (!NodeMap.TryGetValue(Client.ToNodeId(rf.TargetId), out var target)) continue;
-                    if (!validNodeIds.Contains(target.Id)) continue;
-                    if (target.IsProperty) continue;
-                    bool targetIsTs = target is UAVariable targetVariable && !targetVariable.IsObject;
+
+                    var childNode = Extractor.State.GetMappedNode(Client.ToNodeId(rf.TargetId));
+                    if (childNode == null) continue;
 
                     var reference = new UAReference(
-                        Client.ToNodeId(rf.ReferenceTypeId),
-                        !rf.IsInverse,
-                        id,
-                        target.Id,
-                        sourceIsTs,
-                        targetIsTs,
-                        Extractor.ReferenceTypeManager!);
+                        type: Client.ToNodeId(rf.ReferenceTypeId),
+                        isForward: !rf.IsInverse,
+                        source: id,
+                        target: childNode.Id,
+                        sourceTs: !parentNode.IsObject,
+                        targetTs: !childNode.IsObject,
+                        isHierarchical,
+                        manager: Extractor.ReferenceTypeManager!);
+
+                    if (!FilterReference(reference)) continue;
 
                     FinalReferences.Add(reference);
                 }

@@ -22,6 +22,7 @@ using Opc.Ua;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Cognite.OpcUa
 {
@@ -48,8 +49,8 @@ namespace Cognite.OpcUa
         public ConcurrentDictionary<NodeId, UAEventType> ActiveEvents { get; }
             = new ConcurrentDictionary<NodeId, UAEventType>();
 
-        private readonly ConcurrentDictionary<NodeId, int> nodeChecksums =
-            new ConcurrentDictionary<NodeId, int>();
+        private readonly ConcurrentDictionary<NodeId, MappedNode> mappedNodes =
+            new ConcurrentDictionary<NodeId, MappedNode>();
 
         public IEnumerable<VariableExtractionState> NodeStates => nodeStates.Values;
         public IEnumerable<EventExtractionState> EmitterStates => emitterStates.Values;
@@ -144,7 +145,7 @@ namespace Cognite.OpcUa
         public bool IsMappedNode(NodeId id)
         {
             if (id == null || id.IsNullNodeId) return false;
-            return nodeChecksums.ContainsKey(id);
+            return mappedNodes.ContainsKey(id);
         }
         /// <summary>
         /// Add node to overview of known mapped nodes
@@ -153,31 +154,31 @@ namespace Cognite.OpcUa
         public void AddActiveNode(UANode node, TypeUpdateConfig update, bool dataTypeMetadata, bool nodeTypeMetadata)
         {
             if (node is UAVariable variable && variable.Index != -1) throw new InvalidOperationException();
-            nodeChecksums[node.Id] = node.GetUpdateChecksum(update, dataTypeMetadata, nodeTypeMetadata);
+            mappedNodes[node.Id] = new MappedNode(node, update, dataTypeMetadata, nodeTypeMetadata);
         }
         /// <summary>
         /// Get node checksum by NodeId and index if it exists
         /// </summary>
         /// <param name="id">NodeId to use for lookup</param>
         /// <returns></returns>
-        public int? GetNodeChecksum(NodeId id)
+        public MappedNode? GetMappedNode(NodeId id)
         {
             if (id == null || id.IsNullNodeId) return null;
-            if (nodeChecksums.TryGetValue(id, out var checksum)) return checksum;
+            if (mappedNodes.TryGetValue(id, out var checksum)) return checksum;
             return null;
         }
 
         /// <summary>
-        /// Number of currently managed nodes.
+        /// Number of currently managed non-property nodes.
         /// </summary>
-        public int NumActiveNodes => nodeChecksums.Count;
+        public int NumActiveNodes => mappedNodes.Count(kvp => !kvp.Value.IsProperty);
 
         /// <summary>
         /// Wipe the state
         /// </summary>
         public void Clear()
         {
-            nodeChecksums.Clear();
+            mappedNodes.Clear();
             nodeStates.Clear();
             nodeStatesByExtId.Clear();
             emitterStates.Clear();
