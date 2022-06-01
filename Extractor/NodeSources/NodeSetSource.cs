@@ -157,7 +157,6 @@ namespace Cognite.OpcUa.NodeSources
                     var targetId = Client.ToNodeId(reference.TargetId);
                     if (!references.TryGetValue(targetId, out var targetRefs))
                     {
-
                         references[targetId] = targetRefs = new List<IReference>();
                     }
                     if (!targetRefs.Any(targetRef =>
@@ -318,7 +317,8 @@ namespace Cognite.OpcUa.NodeSources
                 return true;
             }
             else if (node.NodeClass == NodeClass.Object
-                || Config.Extraction.NodeTypes.AsNodes && node.NodeClass == NodeClass.ObjectType)
+                || Config.Extraction.NodeTypes.AsNodes && (
+                    node.NodeClass == NodeClass.ObjectType || node.NodeClass == NodeClass.ReferenceType || node.NodeClass == NodeClass.DataType))
             {
                 if (id == ObjectIds.Server || id == ObjectIds.Aliases) return false;
                 var obj = new UANode(id, node.DisplayName?.Text ?? "", parent, node.NodeClass);

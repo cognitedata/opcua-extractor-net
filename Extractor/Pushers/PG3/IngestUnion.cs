@@ -110,7 +110,7 @@ namespace Cognite.OpcUa.Pushers.PG3
         {
             writer.WriteStartObject();
             writer.WriteNumber("node_class", (byte)value.NodeClass);
-            writer.WriteString("browse_name", value.BrowseName);
+            writer.WriteString("browse_name", value.BrowseName ?? value.DisplayName ?? "");
             writer.WriteString("ua_node_id", value.Id.ToString());
             writer.WriteEndObject();
         }
