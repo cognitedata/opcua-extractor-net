@@ -167,7 +167,7 @@ namespace Cognite.OpcUa.Pushers.PG3
 
             var serverMetadata = new ServerMetadata
             {
-                HierarchyUpdateTimestamp = CogniteTime.ToUnixTimeMilliseconds(DateTime.UtcNow),
+                HierarchyUpdateTimestamp = DateTime.UtcNow,
                 Namespaces = namespaces,
                 Prefix = config.Extraction.IdPrefix,
                 Root = $"{config.Extraction.IdPrefix}{ObjectIds.RootFolder}"
@@ -203,6 +203,6 @@ namespace Cognite.OpcUa.Pushers.PG3
         [JsonPropertyName("namespaces")]
         public Dictionary<string, string>? Namespaces { get; set; }
         [JsonPropertyName("hierarchy_update_timestamp")]
-        public long HierarchyUpdateTimestamp { get; set; }
+        public DateTime HierarchyUpdateTimestamp { get; set; }
     }
 }

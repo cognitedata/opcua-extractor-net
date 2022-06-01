@@ -115,6 +115,21 @@ namespace Cognite.OpcUa.Pushers.PG3
             writer.WriteEndObject();
         }
 
+        private void WriteBaseInstance(Utf8JsonWriter writer, UANode value)
+        {
+            writer.WritePropertyName("opcua.base_instance");
+            writer.WriteStartObject();
+            if (value.NodeType == null || value.NodeType.Id.IsNullNodeId)
+            {
+                writer.WriteNull("type_definition");
+            }
+            else
+            {
+                writer.WriteString("type_definition", client.GetUniqueId(value.NodeType.Id));
+            }
+            writer.WriteEndObject();
+        }
+
         private void WriteUANode(Utf8JsonWriter writer, UANode value, JsonSerializerOptions options)
         {
             writer.WritePropertyName("node");
@@ -131,6 +146,9 @@ namespace Cognite.OpcUa.Pushers.PG3
                     writer.WriteBoolean("symmetric", value.Attributes.TypeAttributes!.Symmetric);
                     writer.WriteString("inverse_name", value.Attributes.TypeAttributes!.InverseName);
                     writer.WriteEndObject();
+                    break;
+                case NodeClass.Object:
+                    WriteBaseInstance(writer, value);
                     break;
                 case NodeClass.ObjectType:
                     WriteBaseType(writer, value, ObjectTypeIds.BaseObjectType);
@@ -155,6 +173,7 @@ namespace Cognite.OpcUa.Pushers.PG3
                     JsonSerializer.Serialize(writer, variable.ArrayDimensions);
                     writer.WriteBoolean("historizing", variable.VariableAttributes.Historizing);
                     writer.WriteEndObject();
+                    WriteBaseInstance(writer, value);
                     break;
                 case NodeClass.VariableType:
                     var variableType = value as UAVariable;
