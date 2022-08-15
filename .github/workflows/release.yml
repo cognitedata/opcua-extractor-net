@@ -107,7 +107,13 @@ jobs:
         - name: Build Executable
           run: dotnet publish -c Release -r win-x64 ${{ needs.create-release.outputs.publish-args }} .\ExtractorLauncher\ -o extractorbuild\
 
-
+        - name: Sign executable
+          env:
+            CERTIFICATE: ${{ secrets.CODE_SIGNING_CERTIFICATE }}
+            CERTIFICATE_PASSWORD: ${{ secrets.CODE_SIGNING_CERTIFICATE_PASSWORD }}
+          uses: cognitedata/code-sign-action/@v1
+          with:
+            path-to-binary: .\extractorbuild\OpcuaExtractor.exe
 
         - name: Add msbuild to path
           uses: microsoft/setup-msbuild@v1.1
@@ -117,13 +123,25 @@ jobs:
         - run: mkdir managerbuild
         - run: xcopy OpcUaServiceManager\bin\Release managerbuild /S /Y
 
-
+        - name: Sign manager
+          env:
+            CERTIFICATE: ${{ secrets.CODE_SIGNING_CERTIFICATE }}
+            CERTIFICATE_PASSWORD: ${{ secrets.CODE_SIGNING_CERTIFICATE_PASSWORD }}
+          uses: cognitedata/code-sign-action/@v1
+          with:
+            path-to-binary: .\managerbuild\OpcUaServiceManager.exe
 
         - name: Build MSI
           working-directory: .\OpcUaExtractorSetup
           run: .\build.ps1 -v ${{ needs.create-release.outputs.version }} -b msbuild -d "OPC-UA Extractor" -c .\setup-config.json
 
-
+        - name: Sign MSI
+          env:
+            CERTIFICATE: ${{ secrets.CODE_SIGNING_CERTIFICATE }}
+            CERTIFICATE_PASSWORD: ${{ secrets.CODE_SIGNING_CERTIFICATE_PASSWORD }}
+          uses: cognitedata/code-sign-action/@v1
+          with:
+            path-to-binary: .\OpcUaExtractorSetup\bin\Release\OpcUaExtractorSetup.msi
 
         - run: mv .\OpcUaExtractorSetup\bin\Release\OpcUaExtractorSetup.msi .\OpcUaExtractorSetup-${{ needs.create-release.outputs.version }}.msi
 

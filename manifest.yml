@@ -5,21 +5,13 @@ artifacts:
  - name: opcua-extractor.win-x64.{version}.zip
    path: artifacts/opcua-extractor.win-x64.{version}.zip
    platform: windows
- - name: opcua-extractor.linux-x64.{version}.zip
-   path: artifacts/opcua-extractor.linux-x64.{version}.zip
-   platform: linux
- - name: opcua-test-server.win-x64.{version}.zip
-   path: artifacts/test-server.win-x64.{version}.zip
-   platform: windows
-   displayName: "Windows test server"
- - name: opcua-test-server.linux-x64.{version}.zip
-   path: artifacts/test-server.linux-x64.{version}.zip
-   platform: linux
-   displayName: "Linux test server"
  - name: opcua-extractor_{version}_amd64.deb
    path: artifacts/opcua-extractor_{version}_amd64.deb
    platform: linux
-   displayName: "Debian installer"
+   displayName: "Linux (Debian) installer"
+ - name: opcua-extractor.linux-x64.{version}.zip
+   path: artifacts/opcua-extractor.linux-x64.{version}.zip
+   platform: linux
 
 extractor:
   externalId: opcua
@@ -28,6 +20,8 @@ extractor:
   documentation: >
     The Cognite OPC UA extractor connects to the open OPC UA protocol and streams time series into the CDF time series service and events into the CDF events service.
     It batch extracts the OPC UA node hierarchy into the CDF staging area or as CDF assets and relationships.
+
+    A local test server is available in github releases.
   tags: ["opcua", "predictor", "kepware", "embedded"]
   type: "global"
   links:
