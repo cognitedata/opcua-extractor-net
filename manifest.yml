@@ -1,0 +1,134 @@
+artifacts:
+ - name: OpcUaExtractorSetup-{version}.msi
+   path: artifacts/OpcUaExtractorSetup-{version}.msi
+   platform: windows
+ - name: opcua-extractor.win-x64.{version}.zip
+   path: artifacts/opcua-extractor.win-x64.{version}.zip
+   platform: windows
+ - name: opcua-extractor_{version}_amd64.deb
+   path: artifacts/opcua-extractor_{version}_amd64.deb
+   platform: linux
+   displayName: "Linux (Debian) installer"
+ - name: opcua-extractor.linux-x64.{version}.zip
+   path: artifacts/opcua-extractor.linux-x64.{version}.zip
+   platform: linux
+
+extractor:
+  externalId: opcua
+  name: Cognite OPC UA Extractor
+  description: Extracts time series, events, and assets data via the OPC UA protocol.
+  documentation: >
+    The Cognite OPC UA extractor connects to the open OPC UA protocol and streams time series into the CDF time series service and events into the CDF events service.
+    It batch extracts the OPC UA node hierarchy into the CDF staging area or as CDF assets and relationships.
+
+    A local test server is available in github releases.
+  tags: ["opcua", "predictor", "kepware", "embedded"]
+  type: "global"
+  links:
+    - name: Github
+      url: "https://github.com/cognitedata/opcua-extractor-net"
+      type: "generic"
+    - name: About
+      url: "https://docs.cognite.com/cdf/integration/guides/extraction/opc_ua"
+      type: "externalDocumentation"
+    - name: Hardware and CDF requirements
+      url: "https://docs.cognite.com/cdf/integration/guides/extraction/opc_ua/opc_ua_hw_requirements"
+      type: "externalDocumentation"
+    - name: Server requirements
+      url: "https://docs.cognite.com/cdf/integration/guides/extraction/opc_ua/opc_ua_server_requirements"
+      type: "externalDocumentation"
+    - name: Setting up
+      url: "https://docs.cognite.com/cdf/integration/guides/extraction/opc_ua/opc_ua_setup"
+      type: "externalDocumentation"
+    - name: Command line interface
+      url: "https://docs.cognite.com/cdf/integration/guides/extraction/opc_ua/opc_ua_cli"
+      type: "externalDocumentation"
+    - name: Configuration
+      url: "https://docs.cognite.com/cdf/integration/guides/extraction/opc_ua/opc_ua_configuration"
+      type: "externalDocumentation"
+    - name: Metrics
+      url: "https://docs.cognite.com/cdf/integration/guides/extraction/opc_ua/opc_ua_metrics"
+      type: "externalDocumentation"
+    - name: Troubleshooting
+      url: "https://docs.cognite.com/cdf/integration/guides/extraction/opc_ua/opc_ua_troubleshooting"
+      type: "externalDocumentation"
+  image: opc-ua.png
+
+versions:
+  "2.7.1":
+    description: Minor fix to consistency of reference extraction
+    changelog:
+      fixed:
+        - "Improve consistency of OPC UA reference extraction"
+  "2.7.0":
+    description: Cron support, config tool improvements
+    changelog:
+      fixed:
+        - "Make docker image correctly use .NET 6"
+        - "Fix issue causing historie to not be properly read when getting nodes from CDF"
+      added:
+        - "Improved configuration tool logging"
+        - "Add support for cron expressions for certain configuration options"
+        - "Add option to run the extractor entirely without an OPC-UA server"
+  "2.6.1":
+    description: "Improved tracing and fix to issue with history"
+    changelog:
+      fixed:
+        - "Fix issue causing end time to not be properly set when reading history"
+        - "Add option to enable heavy tracing of OPC-UA operations"
+  "2.6.0":
+    description: "Improve logging, fixes to history on restart, callback for browsing"
+    changelog:
+      added:
+        - "Improvements to logging"
+        - "Option to convert timeseries values to events"
+        - "Option to set a maximum size for the failure buffer"
+        - "Option to call a CDF function as callback after browse"
+      fixed:
+        - "Fix issue where history would not be restarted after a normal reconnect"
+  "2.5.3":
+    description: "Bugfixes, handling of bad subscriptions, and performance improvements in pubsub. See changelog"
+    changelog:
+      added:
+        - "Improved error handling on json serialization"
+        - "Configurable certificate expiry"
+        - "Automatically recreate dead subscriptions"
+      changed:
+        - "Update OPC-UA SDK for better performance when using pubsub"
+  "2.5.2":
+    description: "Improvements to logging and performance. See changelog"
+    changelog:
+      added:
+        - "Improvements to logging"
+        - "Transformation to make a variable historizing"
+        - "Option to require Historizing for reading variable history"
+        - "Various performance improvements"
+      changed:
+        - "Update to .NET 6"
+      fixed:
+        - "Fix some various subtle bugs related to attribute reading"
+  "2.5.0":
+    description: "Numerous fixes and improvements. See changelog"
+    changelog:
+      changed:
+        - "Wait for configuration file to exist when starting extractor"
+        - "Add name of event type to CDF event metadata"
+        - "History node parallelism is now properly shared, so that the configuration option can reflect available continuation points directly"
+        - "Considerable internal refactoring, using infrastructure from extractor utils"
+      added:
+        - "Add support for using NodeSet2 files as source for nodes instead of the OPC-UA server"
+        - "Support for throttling browse operations"
+        - "Limit config values based on server capabilities"
+        - "Improve logging of exceptions"
+        - "Add support for extraction pipelines"
+        - "Add proof of concept for OPC-UA pubsub using exposed server configuration"
+        - "Log configuration file on startup"
+        - "Support for specifying timestamps using relative syntax like `2d-ago`, and timespans like `2m`"
+        - "Optionally map nested variables to CDF, instead of treating them as metadata"
+        - "Optionally estimate size of OPC-UA arrays based on value on startup"
+        - "Optionally log OPC-UA SDK trace"
+        - "Optionally browse in background when reading from CDF"
+      fixed:
+        - "Correctly handle nodes that are discovered during browse but do not actually exist"
+        - "Fix service manager"
+        - "Fix logging of transformations"
