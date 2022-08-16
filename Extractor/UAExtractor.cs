@@ -104,7 +104,8 @@ namespace Cognite.OpcUa
             IEnumerable<IPusher> pushers,
             UAClient uaClient,
             IExtractionStateStore? stateStore,
-            ExtractionRun? run = null) : base(config, provider, null, run)
+            ExtractionRun? run = null,
+            RemoteConfigManager<FullConfig>? configManager = null) : base(config, provider, null, run, configManager)
         {
             this.uaClient = uaClient;
             this.pushers = pushers.Where(pusher => pusher != null).ToList();
@@ -141,6 +142,20 @@ namespace Cognite.OpcUa
             {
                 pusher.Extractor = this;
             }
+
+            if (configManager != null)
+            {
+                configManager.UpdatePeriod = new BasicTimeSpanProvider(TimeSpan.FromMinutes(2));
+                OnConfigUpdate += OnNewConfig;
+
+            }
+        }
+
+        private void OnNewConfig(object sender, FullConfig newConfig, int revision)
+        {
+            log.LogInformation("New remote configuration file obtained, restarting extractor");
+            // Trigger close, we can just fire-and-forget this.
+            _ = Close();
         }
 
         /// <summary>

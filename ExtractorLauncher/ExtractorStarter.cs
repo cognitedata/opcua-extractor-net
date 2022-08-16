@@ -293,7 +293,9 @@ namespace Cognite.OpcUa
                 Config = config,
                 RequireDestination = false,
                 LogException = (log, e, msg) => ExtractorUtils.LogException(log, e, msg, msg),
-                OnCreateExtractor = OnCreateExtractor
+                OnCreateExtractor = OnCreateExtractor,
+                AllowRemoteConfig = true,
+                BufferRemoteConfig = true
             };
 
             await ExtractorRunner.Run(options, token);
