@@ -11,7 +11,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using MQTTnet;
 using MQTTnet.Client;
-using MQTTnet.Client.Options;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -65,7 +64,7 @@ namespace Test.Unit
                     .Build();
                 client = new MqttFactory().CreateMqttClient();
                 baseBuilder = new MqttApplicationMessageBuilder()
-                    .WithAtLeastOnceQoS();
+                    .WithQualityOfServiceLevel(MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce);
                 client.ConnectAsync(options).Wait();
             }
 
