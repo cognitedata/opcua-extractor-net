@@ -24,6 +24,8 @@ foreach ($prop in $Settings.PsObject.Properties) {
 	}
 	$Args = "$($Args) /p:$($prop.Name)=`"$($prop.Value)`""
 }
+$version = $version -replace '([0-9]+\.[0-9]+\.[0-9]+)-?.*','$1'
+echo "Publishing $version"
 
 $Args = "$($Args) /p:target_version=`"$($version)`" /p:target_description=`"$($description)`" /p:Configuration=Release"
 
