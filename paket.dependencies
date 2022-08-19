@@ -26,4 +26,4 @@ nuget Microsoft.Extensions.Hosting
 nuget Microsoft.Extensions.Hosting.Abstractions
 nuget Microsoft.Extensions.Logging.EventLog
 nuget System.ComponentModel.Annotations
-nuget MQTTnet
+nuget MQTTnet 3.1.2

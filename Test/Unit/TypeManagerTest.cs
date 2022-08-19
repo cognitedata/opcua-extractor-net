@@ -431,7 +431,7 @@ namespace Test.Unit
 
             var fields = await collector.GetEventIdFields(tester.Source.Token);
 
-            Assert.Equal(98, fields.Count);
+            Assert.Equal(96, fields.Count);
 
             // Check that all parent properties are present in a deep event
             Assert.Equal(16, fields[ObjectTypeIds.AuditHistoryAtTimeDeleteEventType].CollectedFields.Count);

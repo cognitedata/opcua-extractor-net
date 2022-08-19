@@ -1441,17 +1441,18 @@ namespace Cognite.OpcUa
             var elem2 = whereClause.Push(FilterOperator.Equals, eventTypeOperand, op2);
             whereClause.Push(FilterOperator.Or, elem1, elem2);
             var selectClauses = new SimpleAttributeOperandCollection();
-            foreach ((var source, string path) in new[]
+            foreach (string path in new[]
             {
-                (ObjectTypeIds.BaseEventType, BrowseNames.EventType),
-                (ObjectTypeIds.AuditAddNodesEventType, BrowseNames.NodesToAdd),
-                (ObjectTypeIds.AuditAddReferencesEventType, BrowseNames.ReferencesToAdd)
+                BrowseNames.EventType,
+                BrowseNames.NodesToAdd,
+                BrowseNames.ReferencesToAdd,
+                BrowseNames.EventId
             })
             {
                 var op = new SimpleAttributeOperand
                 {
                     AttributeId = Attributes.Value,
-                    TypeDefinitionId = source
+                    TypeDefinitionId = ObjectTypeIds.BaseEventType
                 };
                 op.BrowsePath.Add(path);
                 selectClauses.Add(op);
@@ -1493,7 +1494,8 @@ namespace Cognite.OpcUa
                     AttributeId = Attributes.EventNotifier,
                     SamplingInterval = Config.Source.SamplingInterval,
                     QueueSize = (uint)Math.Max(0, Config.Source.QueueLength),
-                    NodeClass = NodeClass.Object
+                    NodeClass = NodeClass.Object,
+                    DisplayName = "Audit: Server"
                 };
                 item.Notification += callback;
                 subscription.AddItem(item);

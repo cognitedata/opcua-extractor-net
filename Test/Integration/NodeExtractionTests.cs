@@ -1137,7 +1137,7 @@ namespace Test.Integration
             extraction.DataTypes.AutoIdentifyTypes = true;
             await extractor.RunExtractor(true);
 
-            Assert.Equal(503, pusher.PushedNodes.Count);
+            Assert.Equal(475, pusher.PushedNodes.Count);
             Assert.Equal(426, pusher.PushedVariables.Count);
             var customVarType = pusher.PushedNodes[tester.Server.Ids.Custom.VariableType];
             Assert.Equal("CustomVariableType", customVarType.DisplayName);

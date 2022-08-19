@@ -156,6 +156,8 @@ namespace Server
 
             // request notifications when the user identity is changed. all valid users are accepted by default.
             server.SessionManager.ImpersonateUser += new ImpersonateEventHandler(ImpersonateUser);
+            // Auto accept untrusted, for testing
+            CertificateValidator.AutoAcceptUntrustedCertificates = true;
         }
 
         protected override MasterNodeManager CreateMasterNodeManager(IServerInternal server, ApplicationConfiguration configuration)

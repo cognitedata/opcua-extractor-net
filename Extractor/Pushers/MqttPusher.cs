@@ -26,6 +26,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using MQTTnet;
 using MQTTnet.Client;
+using MQTTnet.Client.Options;
 using Opc.Ua;
 using Prometheus;
 using System;
@@ -49,7 +50,7 @@ namespace Cognite.OpcUa.Pushers
         public IPusherConfig BaseConfig => config;
         private readonly MqttPusherConfig config;
         private readonly IMqttClient client;
-        private readonly MqttClientOptions options;
+        private readonly IMqttClientOptions options;
 
         private readonly ILogger<MQTTPusher> log;
 
@@ -97,6 +98,7 @@ namespace Cognite.OpcUa.Pushers
                 .WithClientId(config.ClientId)
                 .WithTcpServer(config.Host, config.Port)
                 .WithKeepAlivePeriod(TimeSpan.FromSeconds(15))
+                .WithCommunicationTimeout(TimeSpan.FromSeconds(10))
                 .WithCleanSession();
 
             if (config.UseTls)
@@ -111,10 +113,10 @@ namespace Cognite.OpcUa.Pushers
             options = builder.Build();
             client = new MqttFactory().CreateMqttClient();
             baseBuilder = new MqttApplicationMessageBuilder()
-                .WithQualityOfServiceLevel(MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce);
+                .WithAtLeastOnceQoS();
             if (config.Debug) return;
 
-            client.DisconnectedAsync += async e =>
+            client.UseDisconnectedHandler(async e =>
             {
                 log.LogWarning("MQTT Client disconnected");
                 log.LogDebug(e.Exception, "MQTT client disconnected");
@@ -134,12 +136,11 @@ namespace Cognite.OpcUa.Pushers
                     }
                 }
                 await TryReconnect(3);
-            };
-            client.ConnectedAsync += _ =>
+            });
+            client.UseConnectedHandler(_ =>
             {
                 log.LogInformation("MQTT client connected");
-                return Task.CompletedTask;
-            };
+            });
             client.ConnectAsync(options, CancellationToken.None).Wait();
         }
         #region interface
