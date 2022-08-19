@@ -129,6 +129,7 @@ namespace Server
             if (opt.BaseHistory || opt.CoreProfile) server.PopulateBaseHistory();
             if (opt.CustomHistory || opt.CoreProfile) server.PopulateCustomHistory();
             if (opt.EventHistory || opt.CoreProfile) server.PopulateEvents();
+            server.SetEventConfig(opt.GrowthPeriodic, opt.EventsPeriodic || opt.CoreProfile || opt.EventsPeriodic || opt.GrowthPeriodic, opt.GrowthPeriodic);
 
             server.Server.Issues.MaxBrowseResults = opt.MaxBrowseResults;
             server.Server.Issues.MaxBrowseNodes = opt.MaxBrowseNodes;

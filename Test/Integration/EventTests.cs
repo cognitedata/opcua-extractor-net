@@ -605,6 +605,8 @@ namespace Test.Integration
             using var pusher = new DummyPusher(new DummyPusherConfig());
             using var extractor = tester.BuildExtractor(true, null, pusher);
 
+            tester.Server.SetEventConfig(true, true, true);
+
             var ids = tester.Server.Ids.Audit;
             tester.Config.Extraction.RootNode = ids.Root.ToProtoNodeId(tester.Client);
             tester.Config.Extraction.EnableAuditDiscovery = true;

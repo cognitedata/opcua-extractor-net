@@ -55,6 +55,11 @@ extractor:
   image: opc-ua.png
 
 versions:
+  "2.8.0-beta1":
+    description: Support for remote configuration files
+    changelog:
+      added:
+        - "Support for remote configuration files stored in extraction pipelines"
   "2.7.1":
     description: Minor fix to consistency of reference extraction
     changelog:

@@ -206,16 +206,20 @@ namespace Server
                 {
                     ParentNodeId = parentId,
                     NodeClass = NodeClass.Object,
-                    TypeDefinition = ObjectTypeIds.BaseObjectType
+                    TypeDefinition = ObjectTypeIds.BaseObjectType,
+                    ReferenceTypeId = ReferenceTypeIds.Organizes,
                 };
                 var evt = new AuditAddNodesEventState(null);
-                evt.NodesToAdd = new PropertyState<AddNodesItem[]>(evt)
-                {
-                    Value = new[] { evtAdd }
-                };
-                evt.Initialize(SystemContext, null, EventSeverity.Medium, new LocalizedText($"Audit add: {name}"));
+
+                evt.Initialize(SystemContext, null, EventSeverity.Medium, new LocalizedText($"Audit add: {name}"), true, DateTime.UtcNow);
+                evt.SetChildValue(SystemContext, BrowseNames.SourceNode, ObjectIds.Server, false);
+                evt.SetChildValue(SystemContext, BrowseNames.SourceName, "NodeManagement/AddNodes", false);
+                evt.SetChildValue(SystemContext, BrowseNames.LocalTime, Utils.GetTimeZoneInfo(), false);
+                evt.SetChildValue(SystemContext, BrowseNames.NodesToAdd, new[] { evtAdd }, false);
+
                 AddPredefinedNode(SystemContext, obj);
-                Server.ReportEvent(evt);
+
+                Server.ReportEvent(SystemContext, evt);
             }
             else
             {
@@ -239,16 +243,21 @@ namespace Server
                 {
                     ParentNodeId = parentId,
                     NodeClass = NodeClass.Variable,
-                    TypeDefinition = VariableTypeIds.BaseDataVariableType
+                    TypeDefinition = VariableTypeIds.BaseDataVariableType,
+                    ReferenceTypeId = ReferenceTypeIds.HasComponent
                 };
                 var evt = new AuditAddNodesEventState(null);
-                evt.NodesToAdd = new PropertyState<AddNodesItem[]>(evt)
-                {
-                    Value = new[] { evtAdd }
-                };
-                evt.Initialize(SystemContext, null, EventSeverity.Medium, new LocalizedText($"Audit add: {name}"));
+
+                evt.Initialize(SystemContext, null, EventSeverity.Medium, new LocalizedText($"Audit add: {name}"), true, DateTime.UtcNow);
+                evt.SetChildValue(SystemContext, BrowseNames.SourceNode, ObjectIds.Server, false);
+                evt.SetChildValue(SystemContext, BrowseNames.SourceName, "NodeManagement/AddNodes", false);
+                evt.SetChildValue(SystemContext, BrowseNames.LocalTime, Utils.GetTimeZoneInfo(), false);
+                evt.SetChildValue(SystemContext, BrowseNames.NodesToAdd, new[] { evtAdd }, false);
+                evt.SetChildValue(SystemContext, BrowseNames.EventType, ObjectTypeIds.AuditAddNodesEventType, false);
+
                 AddPredefinedNode(SystemContext, obj);
-                Server.ReportEvent(evt);
+
+                Server.ReportEvent(SystemContext, evt);
             }
             else
             {
@@ -274,13 +283,15 @@ namespace Server
                     ReferenceTypeId = type
                 };
                 var evt = new AuditAddReferencesEventState(null);
-                evt.ReferencesToAdd = new PropertyState<AddReferencesItem[]>(evt)
-                {
-                    Value = new[] { evtRef }
-                };
-                evt.Initialize(SystemContext, null, EventSeverity.Medium, new LocalizedText($"Audit add reference"));
+
+                evt.Initialize(SystemContext, null, EventSeverity.Medium, new LocalizedText($"Audit add reference"), true, DateTime.UtcNow);
+                evt.SetChildValue(SystemContext, BrowseNames.SourceNode, ObjectIds.Server, false);
+                evt.SetChildValue(SystemContext, BrowseNames.SourceName, "NodeManagement/AddReferences", false);
+                evt.SetChildValue(SystemContext, BrowseNames.LocalTime, Utils.GetTimeZoneInfo(), false);
+                evt.SetChildValue(SystemContext, BrowseNames.ReferencesToAdd, new[] { evtRef }, false);
                 AddNodeRelation(target, parent, type);
-                Server.ReportEvent(evt);
+
+                Server.ReportEvent(SystemContext, evt);
             }
             else
             {
@@ -334,12 +345,24 @@ namespace Server
 
         public void SetEventConfig(bool auditing, bool server, bool serverAuditing)
         {
+            log.LogInformation("Set server event options. Auditing: {Auditing}, Server emitting events: {Server}", auditing, server);
             var cfnm = (ConfigurationNodeManager)Server.NodeManager.NodeManagers.First(nm => nm.GetType() == typeof(ConfigurationNodeManager));
             lock (cfnm.Lock)
             {
                 var serverAud = (PropertyState)cfnm.Find(VariableIds.Server_Auditing);
                 serverAud.Value = auditing;
             }
+
+            Server.EventManager.GetType().GetField("m_ServerAuditing", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                .SetValue(Server.EventManager, new Lazy<bool>(() => auditing));
+
+            var dfnm = Server.DiagnosticsNodeManager;
+            lock (dfnm.Lock)
+            {
+                var serverAud = (PropertyState)cfnm.Find(VariableIds.Server_Auditing);
+                serverAud.Value = auditing;
+            }
+
             var serverNode = (BaseObjectState)cfnm.Find(ObjectIds.Server);
             if (server)
             {
