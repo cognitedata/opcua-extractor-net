@@ -997,6 +997,10 @@ namespace Cognite.OpcUa
         /// Configuration for using OPC-UA pubsub to obtain datapoints and events.
         /// </summary>
         public PubSubConfig PubSub { get; set; } = null!;
+        /// <summary>
+        /// Configuration for high availability support.
+        /// </summary>
+        public HighAvailabilityConfig HighAvailability { get; set; } = null!;
         public override void GenerateDefaults()
         {
             if (Source == null) Source = new UAClientConfig();
@@ -1016,6 +1020,7 @@ namespace Cognite.OpcUa
             if (StateStorage == null) StateStorage = new StateStorageConfig();
             if (Subscriptions == null) Subscriptions = new SubscriptionConfig();
             if (PubSub == null) PubSub = new PubSubConfig();
+            if (HighAvailability == null) HighAvailability = new HighAvailabilityConfig();
         }
     }
     public class EventConfig
