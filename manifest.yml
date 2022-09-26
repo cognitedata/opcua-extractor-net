@@ -55,7 +55,7 @@ extractor:
   image: opc-ua.png
 
 versions:
- "2.8.0-beta2":
+  "2.8.0-beta2":
     description: Utility release to publish Extractor to public Docker registry
   "2.8.0-beta1":
     description: Support for remote configuration files
