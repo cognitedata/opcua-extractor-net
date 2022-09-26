@@ -224,9 +224,9 @@ jobs:
         - id: image_tags
           run: |
             echo ::set-output name=extractor::"eu.gcr.io/cognite-registry/opcua-extractor-net:${{ needs.create-release.outputs.version }}"
-            echo ::set-output name=extractor_dockerhub::"cognitedata/opcua-extractor-net:${{ needs.create-release.outputs.version }}"
+            echo ::set-output name=extractor_dockerhub::"cognite/opcua-extractor-net:${{ needs.create-release.outputs.version }}"
             echo ::set-output name=bridge::"eu.gcr.io/cognite-registry/mqtt-cdf-bridge:${{ needs.create-release.outputs.version }}"
-            echo ::set-output name=bridge_dockerhub::"cognitedata/mqtt-cdf-bridge:${{ needs.create-release.outputs.version }}"
+            echo ::set-output name=bridge_dockerhub::"cognite/mqtt-cdf-bridge:${{ needs.create-release.outputs.version }}"
             echo ::set-output name=desc::"$(git describe --tags --dirty) $(git log -1  --format=%ai)"
 
         - name: Build extractor image
