@@ -245,6 +245,7 @@ jobs:
             docker cp $id:/build/deploy .
             docker rm -v $id
             docker build -f Dockerfile.bridge -t ${{ steps.image_tags.outputs.bridge }} .
+            docker tag ${{ steps.image_tags.outputs.bridge }} ${{ steps.image_tags.outputs.bridge_dockerhub }}
 
         - name: Push images
           run: |
