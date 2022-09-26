@@ -264,11 +264,3 @@ jobs:
             echo "Images being pushed as ${{ steps.image_tags.outputs.extractor_dockerhub }}, ${{ steps.image_tags.outputs.bridge_dockerhub }}"
             docker push ${{ steps.image_tags.outputs.extractor_dockerhub }}
             docker push ${{ steps.image_tags.outputs.bridge_dockerhub }}
-            
-            
-            
-            
-            
-            
-            
-            
