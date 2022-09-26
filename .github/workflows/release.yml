@@ -224,7 +224,9 @@ jobs:
         - id: image_tags
           run: |
             echo ::set-output name=extractor::"eu.gcr.io/cognite-registry/opcua-extractor-net:${{ needs.create-release.outputs.version }}"
+            echo ::set-output name=extractor_dockerhub::"cognite/opcua-extractor-net:${{ needs.create-release.outputs.version }}"
             echo ::set-output name=bridge::"eu.gcr.io/cognite-registry/mqtt-cdf-bridge:${{ needs.create-release.outputs.version }}"
+            echo ::set-output name=bridge_dockerhub::"cognite/mqtt-cdf-bridge:${{ needs.create-release.outputs.version }}"
             echo ::set-output name=desc::"$(git describe --tags --dirty) $(git log -1  --format=%ai)"
 
         - name: Build extractor image
@@ -234,6 +236,7 @@ jobs:
             docker cp $id:/build/deploy .
             docker rm -v $id
             docker build -t ${{ steps.image_tags.outputs.extractor }} .
+            docker tag ${{ steps.image_tags.outputs.extractor }} ${{ steps.image_tags.outputs.extractor_dockerhub }}
 
         - name: Build bridge image
           run: |
@@ -249,3 +252,15 @@ jobs:
             echo ${{ secrets.COGNITE_REGISTRY_KEY }} | base64 -d | docker login -u _json_key --password-stdin https://eu.gcr.io
             docker push ${{ steps.image_tags.outputs.extractor }}
             docker push ${{ steps.image_tags.outputs.bridge }}
+        
+
+        - name: "Log in to the Dockerhub"
+          uses: docker/login-action@v1
+          with:
+            username: ${{ secrets.DOCKERHUB_USER }}
+            password: ${{ secrets.DOCKERHUB_ACCESS_TOKEN }}
+        - name: Push images dockerhub
+          run: |
+            echo "Images being pushed as ${{ steps.image_tags.outputs.extractor_dockerhub }}, ${{ steps.image_tags.outputs.bridge_dockerhub }}"
+            docker push ${{ steps.image_tags.outputs.extractor_dockerhub }}
+            docker push ${{ steps.image_tags.outputs.bridge_dockerhub }}
