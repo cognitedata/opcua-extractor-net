@@ -20,7 +20,7 @@ using Cognite.Extractor.Common;
 using Cognite.Extractor.Utils;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.NodeSources;
-using Cognite.OpcUa.Pushers.PG3;
+using Cognite.OpcUa.Pushers.FDM;
 using Cognite.OpcUa.Types;
 using CogniteSdk;
 using Microsoft.Extensions.DependencyInjection;
@@ -63,7 +63,7 @@ namespace Cognite.OpcUa.Pushers
         private readonly CogniteDestination destination;
 
         private readonly BrowseCallback? callback;
-        private readonly PG3Writer? pg3Destination;
+        private readonly FDMWriter? fdmDestination;
 
         public CDFPusher(
             ILogger<CDFPusher> log,
@@ -83,8 +83,8 @@ namespace Cognite.OpcUa.Pushers
             }
             if (config.FlexibleDataModels != null && config.FlexibleDataModels.Enabled)
             {
-                pg3Destination = new PG3Writer(provider.GetRequiredService<FullConfig>(), provider.GetRequiredService<HttpClient>(),
-                    provider.GetRequiredService<ILogger<PG3Writer>>());
+                fdmDestination = new FDMWriter(provider.GetRequiredService<FullConfig>(), destination,
+                    provider.GetRequiredService<ILogger<FDMWriter>>());
             }
         }
 
@@ -296,7 +296,7 @@ namespace Cognite.OpcUa.Pushers
                 return result;
             }
 
-            if (pg3Destination != null)
+            if (fdmDestination != null)
             {
                 try
                 {
@@ -312,7 +312,7 @@ namespace Cognite.OpcUa.Pushers
                 bool pushResult;
                 try
                 {
-                    pushResult = await pg3Destination.PushNodes(objects, variables, references, Extractor, token);
+                    pushResult = await fdmDestination.PushNodes(objects, variables, references, Extractor, token);
                 }
                 catch (Exception e)
                 {

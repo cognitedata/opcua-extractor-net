@@ -738,11 +738,9 @@ namespace Cognite.OpcUa
     public class FdmDestinationConfig
     {
         /// <summary>
-        /// PG3 space to write to.
-        /// This should implement the OPC-UA information model.
-        /// TODO: Create this space dynamically? We might be want to embed the definition in the extractor.
+        /// Instance space to write to
         /// </summary>
-        public string Space { get; set; } = "opcua";
+        public string InstanceSpace { get; set; } = "opcua";
         /// <summary>
         /// True to enable. This will not produce meaningful results unless
         /// extraction.types.as-nodes, extraction.relationships.enabled, extraction.relationships.hierarchical,

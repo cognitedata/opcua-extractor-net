@@ -22,7 +22,7 @@ using Opc.Ua;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace Cognite.OpcUa.Pushers.PG3
+namespace Cognite.OpcUa.Pushers.FDM
 {
     internal class NodeTrimmer
     {
@@ -30,15 +30,13 @@ namespace Cognite.OpcUa.Pushers.PG3
         private Dictionary<NodeId, IEnumerable<UAReference>> referencesBySourceId;
         private HashSet<NodeId> visitedIds = new HashSet<NodeId>();
         private Dictionary<NodeId, UANode> nodeMap;
-        private Dictionary<NodeId, bool> refHierarchical;
         private FullConfig config;
         private ILogger log;
-        public NodeTrimmer(Dictionary<NodeId, bool> refHierarchical, IEnumerable<UANode> nodes, IEnumerable<UAReference> references, FullConfig config, ILogger log)
+        public NodeTrimmer(IEnumerable<UANode> nodes, IEnumerable<UAReference> references, FullConfig config, ILogger log)
         {
             referencesByTargetId = references.GroupBy(rf => rf.Target.Id).ToDictionary(group => group.Key, group => (IEnumerable<UAReference>)group);
             referencesBySourceId = references.GroupBy(rf => rf.Source.Id).ToDictionary(group => group.Key, group => (IEnumerable<UAReference>)group);
             nodeMap = nodes.ToDictionary(node => node.Id);
-            this.refHierarchical = refHierarchical;
             this.config = config;
             this.log = log;
         }
@@ -81,7 +79,7 @@ namespace Cognite.OpcUa.Pushers.PG3
                 foreach (var rf in bySource)
                 {
                     var target = nodeMap[rf.Target.Id];
-                    if (refHierarchical[rf.Type.Id])
+                    if (rf.IsHierarchical)
                     {
                         // These nodes in particular we skip here, as they are huge, and we only need custom members.
                         // They contain the binary schema for every OPC-UA type.
@@ -98,7 +96,7 @@ namespace Cognite.OpcUa.Pushers.PG3
                 }
                 foreach (var rf in byTarget)
                 {
-                    if (refHierarchical[rf.Type.Id])
+                    if (rf.IsHierarchical)
                     {
                         TraverseNode(result, refResult, rf, nodeMap[rf.Source.Id]);
                     }
@@ -121,7 +119,7 @@ namespace Cognite.OpcUa.Pushers.PG3
             // For hierarchical nodes we just follow all outgoing references.
             foreach (var rf in bySource)
             {
-                if (refHierarchical[rf.Type.Id])
+                if (rf.IsHierarchical)
                 {
                     TraverseHierarchy(result, refResult, rf, nodeMap[rf.Target.Id]);
                 }
