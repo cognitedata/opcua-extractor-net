@@ -171,6 +171,8 @@ namespace Cognite.OpcUa.NodeSources
                 nodes = nodes.Concat(nodes.SelectMany(node => node.GetAllProperties())).DistinctBy(node => node.Id);
             }
 
+            var usesFdm = Config.Cognite?.FlexibleDataModels?.Enabled ?? false;
+
             uint classMask = (uint)NodeClass.Object | (uint)NodeClass.Variable;
             if (usesFdm)
             {

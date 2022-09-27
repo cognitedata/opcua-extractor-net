@@ -66,7 +66,7 @@ namespace Cognite.Bridge
 
             quitEvent.WaitOne();
 
-            Serilog.Log.CloseAndFlush();
+            await Serilog.Log.CloseAndFlushAsync();
         }
     }
 }
