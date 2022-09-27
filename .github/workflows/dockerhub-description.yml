@@ -1,0 +1,19 @@
+name: Dockerhub description
+
+on:
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Docker Hub Description
+      uses: peter-evans/dockerhub-description@v3
+      env:
+        username: ${{ secrets.DOCKERHUB_USER }}
+        password: ${{ secrets.DOCKERHUB_ACCESS_TOKEN }}
+        repository: cognite/opcua-extractor-net
+        short-description: "OPC-UA data extractor for Cognite CDF platform"
