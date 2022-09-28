@@ -94,10 +94,11 @@ namespace Cognite.OpcUa.NodeSources
             {
                 InitNodeState(update, node);
             }
+            var usesFdm = Config.Cognite?.FlexibleDataModels?.Enabled ?? false;
 
             if (Config.Extraction.Relationships.Enabled)
             {
-                await GetRelationshipData(false, token);
+                await GetRelationshipData(usesFdm, usesFdm, token);
             }
 
             if (!FinalDestinationObjects.Any() && !FinalDestinationVariables.Any() && !FinalSourceVariables.Any() && !FinalReferences.Any())
@@ -156,7 +157,7 @@ namespace Cognite.OpcUa.NodeSources
         /// Get references for the mapped nodes.
         /// </summary>
         /// <returns>A list of references.</returns>
-        private async Task GetRelationshipData(bool getPropertyReferences, CancellationToken token)
+        private async Task GetRelationshipData(bool getPropertyReferences, bool getTypeReferences, CancellationToken token)
         {
             if (Extractor.ReferenceTypeManager == null) return;
 
@@ -171,10 +172,8 @@ namespace Cognite.OpcUa.NodeSources
                 nodes = nodes.Concat(nodes.SelectMany(node => node.GetAllProperties())).DistinctBy(node => node.Id);
             }
 
-            var usesFdm = Config.Cognite?.FlexibleDataModels?.Enabled ?? false;
-
             uint classMask = (uint)NodeClass.Object | (uint)NodeClass.Variable;
-            if (usesFdm)
+            if (getTypeReferences)
             {
                 classMask |= (uint)NodeClass.ObjectType | (uint)NodeClass.DataType | (uint)NodeClass.VariableType | (uint)NodeClass.ReferenceType;
             }
@@ -183,8 +182,7 @@ namespace Cognite.OpcUa.NodeSources
                 nodes.Select(node => node.Id).ToList(),
                 ReferenceTypeIds.NonHierarchicalReferences,
                 token,
-                classMask,
-                usesFdm);
+                classMask);
 
             Log.LogInformation("Found {Count} non-hierarchical references", nonHierarchicalReferences.Count());
 
@@ -199,9 +197,18 @@ namespace Cognite.OpcUa.NodeSources
                     // The child should always be in the list of mapped nodes here
                     var nodeId = Client.ToNodeId(pair.Node.NodeId);
                     var childNode = Extractor.State.GetMappedNode(nodeId);
+                    if (childNode == null)
+                    {
+                        Log.LogInformation("Child node does not exist: {R}", nodeId);
+                    }
                     if (childNode == null) continue;
                     var parentNode = Extractor.State.GetMappedNode(pair.ParentId);
                     if (parentNode == null) continue;
+
+                    if (childNode.IsProperty && childNode.Id.NamespaceIndex != 0)
+                    {
+                        Log.LogInformation("Added reference from node {P} to {C}", parentNode.Id, childNode.Id);
+                    }
 
                     hierarchicalReferences.Add(new UAReference(
                         type: pair.Node.ReferenceTypeId,
@@ -231,7 +238,7 @@ namespace Cognite.OpcUa.NodeSources
 
             foreach (var reference in nonHierarchicalReferences.Concat(hierarchicalReferences))
             {
-                if (!FilterReference(reference)) continue;
+                if (!FilterReference(reference, getPropertyReferences)) continue;
                 FinalReferences.Add(reference);
             }
 

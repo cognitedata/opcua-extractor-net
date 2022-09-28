@@ -339,13 +339,13 @@ namespace Cognite.OpcUa.NodeSources
         /// <param name="reference">Reference to filter.</param>
         /// <param name="requireChild">True to require a child node in nodeMap</param>
         /// <returns>True if reference should be mapped.</returns>
-        protected bool FilterReference(UAReference reference)
+        protected bool FilterReference(UAReference reference, bool mapProperties)
         {
             var source = Extractor.State.GetMappedNode(reference.Source.Id);
-            if (source == null || source.IsProperty) return false;
+            if (source == null || source.IsProperty && !mapProperties) return false;
 
             var target = Extractor.State.GetMappedNode(reference.Target.Id);
-            if (target == null || target.IsProperty) return false;
+            if (target == null || target.IsProperty && !mapProperties) return false;
 
             if (reference.IsHierarchical && !Config.Extraction.Relationships.Hierarchical) return false;
             if (reference.IsHierarchical && !reference.IsForward && !Config.Extraction.Relationships.InverseHierarchical) return false;

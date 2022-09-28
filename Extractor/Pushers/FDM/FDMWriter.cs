@@ -18,11 +18,13 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using Cognite.Extractor.Common;
 using Cognite.Extractor.Utils;
 using Cognite.OpcUa.Types;
+using CogniteSdk;
 using CogniteSdk.Beta;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -52,11 +54,19 @@ namespace Cognite.OpcUa.Pushers.FDM
                 var request = new NodeIngestRequest<T>
                 {
                     Items = chunk,
-                    Model = new ModelIdentifier("opcua", model),
+                    Model = new ModelIdentifier(FDMDataModel.Space, model),
                     Overwrite = true,
                     SpaceExternalId = instSpace
                 };
-                await destination.CogniteClient.Beta.DataModels.IngestNodes(request, token);
+                try
+                {
+                    await destination.CogniteClient.Beta.DataModels.IngestNodes(request, token);
+                }
+                catch (ResponseException ex)
+                {
+                    log.LogError("Failed to write to FDM: {Extras}", ex.Extra);
+                    throw;
+                }
             }
         }
 
@@ -71,20 +81,91 @@ namespace Cognite.OpcUa.Pushers.FDM
                     Items = chunk,
                     AutoCreateEndNodes = true,
                     AutoCreateStartNodes = true,
-                    Model = new ModelIdentifier("opcua", model),
+                    Model = new ModelIdentifier(FDMDataModel.Space, model),
                     Overwrite = true,
                     SpaceExternalId = instSpace
                 };
-                await destination.CogniteClient.Beta.DataModels.IngestEdges(request, token);
+                try
+                {
+                    await destination.CogniteClient.Beta.DataModels.IngestEdges(request, token);
+                }
+                catch (ResponseException ex)
+                {
+                    log.LogError("Failed to write to FDM: {Extras}", ex.Extra);
+                    throw;
+                }
             }
+        }
+
+        class SelectAllTemp : IDMSFilter, ICompositeDMSFilter
+        {
         }
 
         private async Task Initialize(CancellationToken token)
         {
             if (initialized) return;
 
-            await destination.CogniteClient.Beta.DataModels.ApplyModels(FDMDataModel.GetModels(), "opcua", token);
+            await destination.CogniteClient.Beta.DataModels.CreateSpaces(new[]
+            {
+                new Space { ExternalId = FDMDataModel.Space },
+                new Space { ExternalId = instSpace }
+            }, token);
+
+            while (!token.IsCancellationRequested)
+            {
+                var res = await destination.CogniteClient.Beta.DataModels.GraphQuery<Dictionary<string, IEnumerable<Dictionary<string, Dictionary<string, JsonElement>>>>>(new GraphQuery
+                {
+                    Select = new Dictionary<string, SelectModelProperties>
+                    {
+                        { "externalId", new SelectModelProperties { Limit = 1000, Models = new Dictionary<string, ModelQueryProperties>
+                        {
+                            { "node", new ModelQueryProperties { Model = ModelIdentifier.Node, Properties = new [] { "externalId" } } }
+                        } } },
+                        { "edgeExternalId", new SelectModelProperties { Limit = 1000, Models = new Dictionary<string, ModelQueryProperties>
+                        {
+                            { "edge", new ModelQueryProperties { Model = ModelIdentifier.Edge, Properties = new [] { "externalId" } } }
+                        } } }
+                    },
+                    With = new Dictionary<string, QueryExpression>
+                    {
+                        { "externalId", new QueryExpression
+                        {
+                            Nodes = new NodeQueryExpression
+                            {
+                                Filter = new SelectAllTemp()
+                            },
+                        } },
+                        { "edgeExternalId", new QueryExpression
+                        {
+                            Edges = new EdgeQueryExpression
+                            {
+                                Filter = new SelectAllTemp()
+                            },
+                        } }
+                    }
+                }, token);
+
+                var nodes = res["externalId"].Where(r => r["node"]["spaceExternalId"].Deserialize<string>() == instSpace).Select(r => r["node"]["externalId"]).Select(el => el.Deserialize<string>()).ToList();
+                var edges = res["edgeExternalId"].Where(r => r["edge"]["spaceExternalId"].Deserialize<string>() == instSpace).Select(r => r["edge"]["externalId"]).Select(el => el.Deserialize<string>()).ToList();
+                if (nodes.Any())
+                {
+                    log.LogInformation("Delete {Count} nodes: {Nodes}", nodes.Count, string.Join(", ", nodes));
+                    await destination.CogniteClient.Beta.DataModels.DeleteNodes(nodes, instSpace, token);
+                }
+
+                if (edges.Any())
+                {
+                    log.LogInformation("Delete {Count} edges: {Edges}", edges.Count, string.Join(", ", edges));
+                    await destination.CogniteClient.Beta.DataModels.DeleteNodes(edges, instSpace, token);
+                }
+
+                if (!nodes.Any() && !edges.Any()) break;
+            }
+
+            await destination.CogniteClient.Beta.DataModels.ApplyModels(FDMDataModel.GetModels(), FDMDataModel.Space, token);
             initialized = true;
+
+
         }
 
         public async Task<bool> PushNodes(
@@ -205,10 +286,12 @@ namespace Cognite.OpcUa.Pushers.FDM
             // Ingest types first
             await Task.WhenAll(
                 IngestNodes("BaseType", fdmObjectTypes, token),
-                IngestNodes("VariableType", fdmVariableTypes, token),
                 IngestNodes("ReferenceType", fdmReferenceTypes, token),
                 IngestNodes("DataType", fdmDataTypes, token)
             );
+
+            // Need to ingest variable types after data types.
+            await IngestNodes("VariableType", fdmVariableTypes, token);
 
             // Next ingest instances
             await Task.WhenAll(

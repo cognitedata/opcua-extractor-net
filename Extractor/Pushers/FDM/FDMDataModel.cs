@@ -27,8 +27,8 @@ namespace Cognite.OpcUa.Pushers.FDM
 {
     internal static class FDMDataModel
     {
-        private static readonly string space = "opcua";
-        private static readonly ModelIdentifier baseModel = new ModelIdentifier("opcua", "Node");
+        public const string Space = "opcua2";
+        private static readonly ModelIdentifier baseModel = new ModelIdentifier(Space, "Node");
 
         public static IEnumerable<ModelCreate> GetModels()
         {
@@ -63,11 +63,11 @@ namespace Cognite.OpcUa.Pushers.FDM
         private static ModelCreate ReferenceType =>
             new ModelCreate
             {
-                Extends = new[] { new ModelIdentifier(space, "BaseType") },
+                Extends = new[] { new ModelIdentifier(Space, "BaseType") },
                 ExternalId = "ReferenceType",
                 Properties = new Dictionary<string, ModelProperty>
                 {
-                    { "symmetric", new ModelProperty { Nullable = false, Type = "bool" } },
+                    { "symmetric", new ModelProperty { Nullable = false, Type = "boolean" } },
                     { "inverseName", new ModelProperty { Nullable = true, Type = "text" } }
                 }
             };
@@ -79,7 +79,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                 ExternalId = "BaseType",
                 Properties = new Dictionary<string, ModelProperty>
                 {
-                    { "isAbstract", new ModelProperty { Nullable = false, Type = "bool" } },
+                    { "isAbstract", new ModelProperty { Nullable = false, Type = "boolean" } },
                     { "parents", new ModelProperty { Nullable = true, Type = "text[]" } }
                 }
             };
@@ -94,7 +94,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                     { "typeDefinition", new ModelProperty {
                         Nullable = true,
                         Type = "direct_relation",
-                        TargetModel = new ModelIdentifier(space, "BaseType")
+                        TargetModel = new ModelIdentifier(Space, "BaseType")
                     } }
                 },
                 Indexes = new ModelIndexes
@@ -109,7 +109,7 @@ namespace Cognite.OpcUa.Pushers.FDM
         private static ModelCreate Variable =>
             new ModelCreate
             {
-                Extends = new[] { new ModelIdentifier(space, "BaseInstance") },
+                Extends = new[] { new ModelIdentifier(Space, "BaseInstance") },
                 ExternalId = "Variable",
                 Properties = new Dictionary<string, ModelProperty>
                 {
@@ -119,18 +119,18 @@ namespace Cognite.OpcUa.Pushers.FDM
                     { "dataType", new ModelProperty {
                         Nullable = true,
                         Type = "direct_relation",
-                        TargetModel = new ModelIdentifier(space, "DataType")
+                        TargetModel = new ModelIdentifier(Space, "DataType")
                     } },
                     { "valueRank", new ModelProperty { Nullable = false, Type = "int32" } },
                     { "arrayDimensions", new ModelProperty { Nullable = true, Type = "int32[]" } },
-                    { "historizing", new ModelProperty { Nullable = true, Type = "bool" } }
+                    { "historizing", new ModelProperty { Nullable = true, Type = "boolean" } }
                 }
             };
 
         private static ModelCreate VariableType =>
             new ModelCreate
             {
-                Extends = new[] { new ModelIdentifier(space, "BaseType") },
+                Extends = new[] { new ModelIdentifier(Space, "BaseType") },
                 ExternalId = "VariableType",
                 Properties = new Dictionary<string, ModelProperty>
                 {
@@ -138,7 +138,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                     { "dataType", new ModelProperty {
                         Nullable = true,
                         Type = "direct_relation",
-                        TargetModel = new ModelIdentifier(space, "DataType")
+                        TargetModel = new ModelIdentifier(Space, "DataType")
                     } },
                     { "valueRank", new ModelProperty { Nullable = false, Type = "int32" } },
                     { "arrayDimensions", new ModelProperty { Nullable = true, Type = "int32[]" } },
@@ -148,7 +148,7 @@ namespace Cognite.OpcUa.Pushers.FDM
         private static ModelCreate DataType =>
             new ModelCreate
             {
-                Extends = new[] { new ModelIdentifier(space, "BaseType") },
+                Extends = new[] { new ModelIdentifier(Space, "BaseType") },
                 ExternalId = "DataType",
                 Properties = new Dictionary<string, ModelProperty>
                 {
@@ -165,7 +165,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                     { "root", new ModelProperty {
                         Nullable = true,
                         Type = "direct_relation",
-                        TargetModel = new ModelIdentifier(space, "BaseInstance")
+                        TargetModel = new ModelIdentifier(Space, "BaseInstance")
                     } },
                     { "namespaces", new ModelProperty { Nullable = false, Type = "json" } },
                     { "hierarchyUpdateTimestamp", new ModelProperty { Nullable = false, Type = "timestamp" } }
@@ -180,7 +180,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                 AllowNode = false,
                 Properties = new Dictionary<string, ModelProperty>
                 {
-                    { "IsHierarchical", new ModelProperty { Type = "bool", Nullable = false } }
+                    { "isHierarchical", new ModelProperty { Type = "boolean", Nullable = false } }
                 }
             };
     }
@@ -257,7 +257,7 @@ namespace Cognite.OpcUa.Pushers.FDM
 
     class FDMVariable : FDMBaseInstance
     {
-        public JsonElement Value { get; set; }
+        public JsonElement? Value { get; set; }
         public string? TimeSeries { get; set; }
         public DirectRelationIdentifier? DataType { get; set; }
         public int ValueRank { get; set; }
@@ -288,7 +288,7 @@ namespace Cognite.OpcUa.Pushers.FDM
 
     class FDMVariableType : FDMBaseType
     {
-        public JsonElement Value { get; set; }
+        public JsonElement? Value { get; set; }
         public DirectRelationIdentifier? DataType { get; set; }
         public int ValueRank { get; set; }
         public int[]? ArrayDimensions { get; set; }
@@ -309,7 +309,7 @@ namespace Cognite.OpcUa.Pushers.FDM
 
     class FDMDataType : FDMBaseType
     {
-        public JsonElement DataTypeDefinition { get; set; }
+        public JsonElement? DataTypeDefinition { get; set; }
 
         public FDMDataType(IUAClientAccess client, NodeId root, UANode node) : base(client, root, node)
         {
@@ -323,11 +323,11 @@ namespace Cognite.OpcUa.Pushers.FDM
     {
         public DirectRelationIdentifier? Root { get; set; }
         public Dictionary<string, string>? Namespaces { get; set; }
-        public long HierarchyUpdateTimestamp { get; set; }
+        public string? HierarchyUpdateTimestamp { get; set; }
 
         public FDMServer(string space, string prefix, IUAClientAccess client, NodeId root, Dictionary<string, string> namespaces)
         {
-            HierarchyUpdateTimestamp = DateTime.UtcNow.ToUnixTimeMilliseconds();
+            HierarchyUpdateTimestamp = DateTime.UtcNow.ToISOString();
             Namespaces = namespaces;
             ExternalId = $"{prefix}ServerMetadata";
             Root = new DirectRelationIdentifier(space, client.GetUniqueId(root));
@@ -348,5 +348,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             EndNode = new DirectRelationIdentifier(space, client.GetUniqueId(reference.Target.Id));
             ExternalId = $"{prefix}{reference.Type?.Id?.ToString()};{reference.Source.Id};{reference.Target.Id}";
         }
+
+        public FDMReference() { }
     }
 }

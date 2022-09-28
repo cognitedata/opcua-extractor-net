@@ -451,9 +451,11 @@ namespace Cognite.OpcUa.NodeSources
                 InitNodeState(update, node);
             }
 
+            var usesFdm = Config.Cognite?.FlexibleDataModels?.Enabled ?? false;
+
             if (Config.Extraction.Relationships.Enabled)
             {
-                GetRelationshipData();
+                GetRelationshipData(usesFdm);
             }
 
             NodeMap.Clear();
@@ -482,7 +484,7 @@ namespace Cognite.OpcUa.NodeSources
                 FinalReferences);
         }
 
-        private void GetRelationshipData()
+        private void GetRelationshipData(bool getPropertyReferences)
         {
             foreach (var (id, refs) in references)
             {
@@ -506,7 +508,7 @@ namespace Cognite.OpcUa.NodeSources
                         isHierarchical,
                         manager: Extractor.ReferenceTypeManager!);
 
-                    if (!FilterReference(reference)) continue;
+                    if (!FilterReference(reference, getPropertyReferences)) continue;
 
                     FinalReferences.Add(reference);
                 }

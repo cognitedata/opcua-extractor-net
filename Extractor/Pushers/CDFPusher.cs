@@ -298,6 +298,7 @@ namespace Cognite.OpcUa.Pushers
 
             if (fdmDestination != null)
             {
+                bool pushResult = true;
                 try
                 {
                     var tsIds = new ConcurrentDictionary<string, UAVariable>(
@@ -307,18 +308,22 @@ namespace Cognite.OpcUa.Pushers
                 catch (Exception ex)
                 {
                     log.LogError(ex, "Failed to push minimal timeseries to CDF");
-                }
-                
-                bool pushResult;
-                try
-                {
-                    pushResult = await fdmDestination.PushNodes(objects, variables, references, Extractor, token);
-                }
-                catch (Exception e)
-                {
-                    log.LogError(e, "Failed to push to flexible data models");
                     pushResult = false;
                 }
+                
+                if (pushResult)
+                {
+                    try
+                    {
+                        pushResult = await fdmDestination.PushNodes(objects, variables, references, Extractor, token);
+                    }
+                    catch (Exception e)
+                    {
+                        log.LogError(e, "Failed to push to flexible data models");
+                        pushResult = false;
+                    }
+                }
+                
                 result.Objects = pushResult;
                 result.Variables = pushResult;
                 result.References = pushResult;
