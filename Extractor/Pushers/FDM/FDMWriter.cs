@@ -109,7 +109,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             {
                 new Space { ExternalId = FDMDataModel.Space },
                 new Space { ExternalId = instSpace }
-            }, token);
+            }.DistinctBy(s => s.ExternalId), token);
 
             while (!token.IsCancellationRequested)
             {

@@ -27,7 +27,7 @@ namespace Cognite.OpcUa.Pushers.FDM
 {
     internal static class FDMDataModel
     {
-        public const string Space = "opcua2";
+        public const string Space = "opcua3";
         private static readonly ModelIdentifier baseModel = new ModelIdentifier(Space, "Node");
 
         public static IEnumerable<ModelCreate> GetModels()
