@@ -88,45 +88,9 @@ namespace Server
             if (!logTrace) return;
             Utils.SetTraceMask(Utils.TraceMasks.All);
             if (traceLevel != null) return;
-            Utils.Tracing.TraceEventHandler += TraceEventHandler;
-            traceLevel = LogLevel.Debug;
-        }
-
-        private Regex traceGroups = new Regex("{([0-9]+)}");
-        private object[] ReOrderArguments(string format, object[] args)
-        {
-            // OPC-UA Trace uses the stringbuilder style of arguments, which allows them to be out of order
-            // If we want nice coloring in logs (we do), then we have to re-order arguments like this.
-            // There's a cost, but this is only enabled when debugging anyway.
-            if (!args.Any()) return args;
-
-            var matches = traceGroups.Matches(format);
-            var indices = matches.Select(m => Convert.ToInt32(m.Groups[1].Value)).ToArray();
-
-            return indices.Select(i => args[i]).ToArray();
-        }
-
-        private void TraceEventHandler(object sender, TraceEventArgs e)
-        {
-            object[] args = e.Arguments;
-            try
-            {
-                args = ReOrderArguments(e.Format, e.Arguments);
-            }
-            catch
-            {
-            }
-
-            if (e.Exception != null)
-            {
-#pragma warning disable CA2254 // Template should be a static expression - we are injecting format from a different logger
-                traceLog.Log(traceLevel!.Value, e.Exception, e.Format, args);
-            }
-            else
-            {
-                traceLog.Log(traceLevel!.Value, e.Format, args);
-#pragma warning restore CA2254 // Template should be a static expression
-            }
+            traceLevel = LogLevel.Trace;
+            Utils.SetLogLevel(traceLevel.Value);
+            Utils.SetLogger(traceLog);
         }
 
         public void SetValidator(bool failAlways)
@@ -325,15 +289,6 @@ namespace Server
             if (cnt > 0)
             {
                 Console.WriteLine($"Deleted {cnt} subscriptions manually");
-            }
-        }
-
-        protected override void Dispose(bool disposing)
-        {
-            base.Dispose(disposing);
-            if (disposing)
-            {
-                Utils.Tracing.TraceEventHandler -= TraceEventHandler;
             }
         }
     }
