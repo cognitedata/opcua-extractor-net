@@ -55,6 +55,12 @@ extractor:
   image: opc-ua.png
 
 versions:
+  "2.8.0":
+    description: Basic support for high availability.
+    changelog:
+      added:
+        - Configuration options to use Raw or a Redis store for high availability
+        - Support for remote configuration files
   "2.8.0-beta2":
     description: Utility release to publish Extractor to public Docker registry
   "2.8.0-beta1":

@@ -232,6 +232,12 @@ namespace Cognite.OpcUa
         private async Task RunExtractorInternal()
         {
             Starting.Set(1);
+
+            if (Config.HighAvailability != null)
+            {
+                await RunWithHighAvailabilityAndWait(Config.HighAvailability);
+            }
+
             if (!uaClient.Started && Config.Source.EndpointUrl != null)
             {
                 log.LogInformation("Start UAClient");

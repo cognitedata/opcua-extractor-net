@@ -832,3 +832,24 @@ pub-sub:
     # from server configuration. If this is pre-created manually, the server does not need to expose
     # pubsub configuration.
     file-name:
+
+# Configure the extractor to support high availability.
+high-availability:
+    # Index of the extractor. Each extractor running in high availability needs a unique index.
+    # When running with remote configs, this can be provided using an environment variable.
+    index:
+
+    # Use CDF Raw as high availability store
+    # Must be identical for each instance of the extractor.
+    raw:
+        # Raw database name
+        database-name:
+        # Raw table name
+        table-name:
+
+    # Use a redis store for high availability.
+    redis:
+        # Redis connection string
+        connection-string:
+        # Redis table name
+        table-name:
