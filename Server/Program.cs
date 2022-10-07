@@ -92,7 +92,7 @@ namespace Server
         public string LogLevel { get; set; }
         [CommandLineOption("Path to log files, this enables logging to file")]
         public string LogFile { get; set; }
-        [CommandLineOption("Write OPC-UA SDK trace to log at debug level")]
+        [CommandLineOption("Write OPC-UA SDK trace to log.")]
         public bool LogTrace { get; set; }
     }
 

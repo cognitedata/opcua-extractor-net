@@ -156,52 +156,18 @@ namespace Cognite.OpcUa
             if (Config.Logger?.UaTraceLevel == null) return;
             Utils.SetTraceMask(Utils.TraceMasks.All);
             if (traceLevel != null) return;
-            Utils.Tracing.TraceEventHandler += TraceEventHandler;
-            switch (Config.Logger.UaTraceLevel)
+            traceLevel = Config.Logger.UaTraceLevel switch
             {
-                case "verbose": traceLevel = LogLevel.Trace; break;
-                case "debug": traceLevel = LogLevel.Debug; break;
-                case "information": traceLevel = LogLevel.Information; break;
-                case "warning": traceLevel = LogLevel.Warning; break;
-                case "error": traceLevel = LogLevel.Error; break;
-                case "fatal": traceLevel = LogLevel.Critical; break;
-            }
-        }
-
-        private Regex traceGroups = new Regex("{([0-9]+)}");
-        private object[] ReOrderArguments(string format, object[] args)
-        {
-            // OPC-UA Trace uses the stringbuilder style of arguments, which allows them to be out of order
-            // If we want nice coloring in logs (we do), then we have to re-order arguments like this.
-            // There's a cost, but this is only enabled when debugging anyway.
-            if (!args.Any()) return args;
-
-            var matches = traceGroups.Matches(format);
-            var indices = matches.Select(m => Convert.ToInt32(m.Groups[1].Value)).ToArray();
-
-            return indices.Select(i => args[i]).ToArray();
-        }
-
-        private void TraceEventHandler(object sender, TraceEventArgs e)
-        {
-            object[] args = e.Arguments;
-            try
-            {
-                args = ReOrderArguments(e.Format, e.Arguments);
-            } catch
-            {
-            }
-
-            if (e.Exception != null)
-            {
-#pragma warning disable CA2254 // Template should be a static expression - we are injecting format from a different logger
-                traceLog.Log(traceLevel!.Value, e.Exception, e.Format, args);
-            }
-            else
-            {
-                traceLog.Log(traceLevel!.Value, e.Format, args);
-#pragma warning restore CA2254 // Template should be a static expression
-            }
+                "verbose" => LogLevel.Trace,
+                "debug" => LogLevel.Debug,
+                "information" => LogLevel.Information,
+                "warning" => LogLevel.Warning,
+                "error" => LogLevel.Error,
+                "fatal" => LogLevel.Critical,
+                _ => LogLevel.Trace
+            };
+            Utils.SetLogger(traceLog);
+            Utils.SetLogLevel(traceLevel.Value);
         }
 
         private void LogDump<T>(string message, T item)
@@ -1781,7 +1747,6 @@ namespace Cognite.OpcUa
             reconnectHandler?.Dispose();
             reverseConnectManager?.Dispose();
             waiter.Dispose();
-            Utils.Tracing.TraceEventHandler -= TraceEventHandler;
             if (AppConfig != null)
             {
                 AppConfig.CertificateValidator.CertificateValidation -= CertificateValidationHandler;
