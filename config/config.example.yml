@@ -568,7 +568,7 @@ extraction:
     # Map OPC-UA namespaces to prefixes in CDF. If not mapped, the full namespace URI is used.
     # Saves space compared to using the full URL. Using the ns index is not safe as the order can change on the server.
     # For example:
-    # NamespaceMap:
+    # namespace-map:
     #   "urn:cognite:net:server": cns
     #   "urn:freeopcua:python:server": fps
     #   "http://examples.freeopcua.github.io": efg
