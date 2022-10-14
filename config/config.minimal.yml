@@ -53,7 +53,7 @@ extraction:
     # Saves space compared to using the full URL. Using the ns index is not safe as the order can change on the server.
     # It is recommended to set this before extracting the node hierarchy.
     # For example:
-    # NamespaceMap:
+    # namespace-map:
     #   "urn:cognite:net:server": cns
     #   "urn:freeopcua:python:server": fps
     #   "http://examples.freeopcua.github.io": efg
