@@ -21,6 +21,7 @@ using CogniteSdk.Beta;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Text.Json;
 
 namespace Cognite.OpcUa.Pushers.FDM
@@ -269,7 +270,14 @@ namespace Cognite.OpcUa.Pushers.FDM
             if (node is not UAVariable variable) throw new InvalidOperationException("Node with class Variable passed as UANode");
             if (variable.IsProperty)
             {
-                Value = JsonDocument.Parse(client.StringConverter.ConvertToString(variable.Value, variable.DataType?.EnumValues, null, StringConverterMode.ReversibleJson)).RootElement;
+                try
+                {
+                    Value = JsonDocument.Parse(client.StringConverter.ConvertToString(variable.Value, variable.DataType?.EnumValues, null, StringConverterMode.ReversibleJson)).RootElement;
+                } catch
+                {
+                    Console.WriteLine(client.StringConverter.ConvertToString(variable.Value, variable.DataType?.EnumValues, null, StringConverterMode.ReversibleJson));
+                    throw;
+                }
             }
             else
             {
@@ -327,7 +335,7 @@ namespace Cognite.OpcUa.Pushers.FDM
 
         public FDMServer(string space, string prefix, IUAClientAccess client, NodeId root, Dictionary<string, string> namespaces)
         {
-            HierarchyUpdateTimestamp = DateTime.UtcNow.ToISOString();
+            HierarchyUpdateTimestamp = DateTime.UtcNow.ToString("yyyy-MM-dd'T'HH:mm:ss.fffK", CultureInfo.InvariantCulture);
             Namespaces = namespaces;
             ExternalId = $"{prefix}ServerMetadata";
             Root = new DirectRelationIdentifier(space, client.GetUniqueId(root));

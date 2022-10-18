@@ -88,7 +88,7 @@ namespace Cognite.OpcUa.Types
                 return mode != StringConverterMode.Simple ? JsonSerializer.Serialize(strValue) : strValue;
             }
             // If this is true, the value should be converted using the built-in JsonEncoder.
-            if (typeInfo != null && ShouldUseJson(value) && uaClient != null)
+            if (typeInfo != null && ShouldUseJson(value, mode) && uaClient != null)
             {
                 try
                 {
@@ -97,6 +97,12 @@ namespace Cognite.OpcUa.Types
                     using var encoder = new JsonEncoder(uaClient.MessageContext, mode == StringConverterMode.ReversibleJson, null, topLevelIsArray);
                     encoder.WriteVariantContents(value, typeInfo);
                     var result = encoder.CloseAndReturnText();
+
+                    // Workaround for a silly problem, it really likes to write JSON like this, for some reason.
+                    if (result == "{null}")
+                    {
+                        return mode != StringConverterMode.Simple ? "null" : "";
+                    }
 
                     // JsonEncoder for some reason spits out {{ ... }} from WriteVariantContents.
                     if (topLevelIsArray)
@@ -241,7 +247,7 @@ namespace Cognite.OpcUa.Types
         /// </summary>
         /// <param name="value">Value to check</param>
         /// <returns>True if this type is best handled by Opc.Ua.JsonEncoder</returns>
-        private static bool ShouldUseJson(object value)
+        private static bool ShouldUseJson(object value, StringConverterMode mode)
         {
             if (value == null) return false;
             // Go through the value to check if we can parse it ourselves.
@@ -254,16 +260,16 @@ namespace Cognite.OpcUa.Types
                 var enumerator = enumerable.GetEnumerator();
                 if (enumerator.MoveNext())
                 {
-                    return ShouldUseJson(enumerator.Current);
+                    return ShouldUseJson(enumerator.Current, mode);
                 }
                 return false;
             }
             if (value is ExtensionObject extensionObject)
             {
-                return ShouldUseJson(extensionObject.Body);
+                return ShouldUseJson(extensionObject.Body, mode);
             }
             if (!type.Namespace.StartsWith("Opc.Ua", StringComparison.InvariantCulture)) return false;
-            if (customHandledTypes.Contains(type)) return false;
+            if (mode != StringConverterMode.ReversibleJson && customHandledTypes.Contains(type)) return false;
             if (type.IsEnum) return false;
             return true;
         }
