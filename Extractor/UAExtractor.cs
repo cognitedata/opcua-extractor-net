@@ -165,10 +165,10 @@ namespace Cognite.OpcUa
         /// <param name="e">EventArgs for this event</param>
         private void UaClient_OnServerDisconnect(object sender, EventArgs e)
         {
-            if (Config.Source.ForceRestart && !Source.IsCancellationRequested)
+            /* if (Config.Source.ForceRestart && !Source.IsCancellationRequested)
             {
                 Close().Wait();
-            }
+            } */
         }
 
         /// <summary>
@@ -180,19 +180,20 @@ namespace Cognite.OpcUa
         {
             if (sender is not UAClient client || Source.IsCancellationRequested) return;
 
-            if (Config.Source.RestartOnReconnect)
+            Scheduler.ScheduleTask(null, async t =>
             {
-                client.DataTypeManager.Configure();
-                client.ClearNodeOverrides();
-                client.ClearEventFields();
-                client.Browser.ResetVisitedNodes();
-                RestartExtractor();
-            }
-            else
-            {
-                if (historyReader != null)
+                await EnsureSubscriptions();
+                if (Config.Source.RestartOnReconnect)
                 {
-                    Scheduler.ScheduleTask(null, async t =>
+                    client.DataTypeManager.Configure();
+                    client.ClearNodeOverrides();
+                    client.ClearEventFields();
+                    client.Browser.ResetVisitedNodes();
+                    await RestartExtractor();
+                }
+                else
+                {
+                    if (historyReader != null)
                     {
                         await historyReader.Terminate(Source.Token);
                         foreach (var state in State.NodeStates)
@@ -206,9 +207,9 @@ namespace Cognite.OpcUa
                         }
 
                         await RestartHistory();
-                    });
+                    }
                 }
-            }
+            });
         }
         #region Interface
 
@@ -340,22 +341,25 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Initializes restart of the extractor. Waits for history, reset states, then schedule restart on the looper.
         /// </summary>
-        public void RestartExtractor()
+        public async Task RestartExtractor()
         {
             subscribed = 0;
             subscribeFlag = false;
-            historyReader?.Terminate(Source.Token, 30).Wait();
-            foreach (var state in State.NodeStates)
+            if (historyReader != null)
             {
-                state.RestartHistory();
+                await historyReader.Terminate(Source.Token, 30);
+                foreach (var state in State.NodeStates)
+                {
+                    state.RestartHistory();
+                }
+
+                foreach (var state in State.EmitterStates)
+                {
+                    state.RestartHistory();
+                }
             }
 
-            foreach (var state in State.EmitterStates)
-            {
-                state.RestartHistory();
-            }
-
-            Looper.WaitForNextPush(true).Wait();
+            await Looper.WaitForNextPush(true);
             foreach (var pusher in pushers)
             {
                 pusher.Reset();
@@ -642,6 +646,24 @@ namespace Cognite.OpcUa
             var historyTasks = Synchronize(result.SourceVariables.Where(var => !var.Changed));
             Starting.Set(0);
             return historyTasks;
+        }
+
+        private async Task EnsureSubscriptions()
+        {
+            if (Config.Subscriptions.Events)
+            {
+                var subscribeStates = State.EmitterStates.Where(state => state.ShouldSubscribe);
+
+                await uaClient.SubscribeToEvents(subscribeStates, Streamer.EventSubscriptionHandler, Source.Token);
+            }
+
+            if (Config.Subscriptions.DataPoints)
+            {
+                var subscribeStates = State.NodeStates.Where(state => state.ShouldSubscribe);
+
+                await uaClient.SubscribeToNodes(subscribeStates, Streamer.DataSubscriptionHandler, Source.Token);
+            }
+
         }
 
         /// <summary>
