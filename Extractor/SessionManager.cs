@@ -22,7 +22,6 @@ namespace Cognite.OpcUa
         private ApplicationConfiguration appConfig;
         private ILogger log;
 
-        private SemaphoreSlim readerSemaphore = new SemaphoreSlim(1);
         private Session? session;
         private CancellationToken liveToken;
         private bool disposedValue;
@@ -32,13 +31,7 @@ namespace Cognite.OpcUa
             .CreateCounter("opcua_connects", "Number of times the client has connected to and mapped the opcua server");
         private static readonly Gauge connected = Metrics
             .CreateGauge("opcua_connected", "Whether or not the client is currently connected to the opcua server");
-        public Session? Session { get
-            {
-                readerSemaphore.Wait(liveToken);
-                var xSession = session;
-                readerSemaphore.Release();
-                return xSession;
-            } }
+        public Session? Session => session;
 
         public SessionManager(UAClientConfig config, UAClient parent, ApplicationConfiguration appConfig, ILogger log, CancellationToken token, int timeout = -1)
         {
@@ -81,7 +74,6 @@ namespace Cognite.OpcUa
 
         public async Task Connect()
         {
-            await readerSemaphore.WaitAsync(liveToken);
             if (session != null)
             {
                 try
@@ -112,14 +104,7 @@ namespace Cognite.OpcUa
                 newSession.PublishError += OnPublishError;
                 session = newSession;
             };
-            try
-            {
-                await TryWithBackoff(generator, 6, liveToken);
-            }
-            finally
-            {
-                readerSemaphore.Release();
-            }
+            await TryWithBackoff(generator, 6, liveToken);
             if (!liveToken.IsCancellationRequested)
             {
                 log.LogInformation("Successfully connected to server");
@@ -264,10 +249,6 @@ namespace Cognite.OpcUa
             reconnectHandler.Dispose();
             log.LogWarning("--- RECONNECTED ---");
 
-            // It's really important to release the semaphore before invoking the event, or we will deadlock, since event
-            // invocation is synchronous.
-            readerSemaphore.Release();
-
             client.TriggerOnServerReconnect();
 
             connects.Inc();
@@ -286,7 +267,6 @@ namespace Cognite.OpcUa
             if (reconnectHandler != null || liveToken.IsCancellationRequested) return;
             connected.Set(0);
 
-            readerSemaphore.Wait(liveToken);
 #pragma warning disable CA1508 // Avoid dead conditional code
             if (reconnectHandler != null) return;
 #pragma warning restore CA1508 // Avoid dead conditional code
@@ -321,8 +301,6 @@ namespace Cognite.OpcUa
                         session.PublishError -= OnPublishError;
                         session = null;
                     }
-                    
-                    readerSemaphore.Release();
                 }
                 if (!liveToken.IsCancellationRequested)
                 {
@@ -343,7 +321,6 @@ namespace Cognite.OpcUa
 
         public async Task Close(CancellationToken token)
         {
-            await readerSemaphore.WaitAsync(token);
             reconnectHandler?.Dispose();
             reconnectHandler = null;
             try
@@ -369,7 +346,6 @@ namespace Cognite.OpcUa
             finally
             {
                 connected.Set(0);
-                readerSemaphore.Release();
             }
         }
 
@@ -381,7 +357,6 @@ namespace Cognite.OpcUa
                 {
                     reverseConnectManager?.Dispose();
                     reverseConnectManager = null;
-                    readerSemaphore?.Dispose();
                     reconnectHandler?.Dispose();
                     reconnectHandler = null;
                     if (session != null)
