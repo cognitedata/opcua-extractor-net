@@ -25,7 +25,7 @@ namespace Cognite.OpcUa
         private Session? session;
         private CancellationToken liveToken;
         private bool disposedValue;
-        private int timeout;
+        public int Timeout { get; set; }
 
         private static readonly Counter connects = Metrics
             .CreateCounter("opcua_connects", "Number of times the client has connected to and mapped the opcua server");
@@ -40,7 +40,7 @@ namespace Cognite.OpcUa
             this.appConfig = appConfig;
             this.log = log;
             liveToken = token;
-            this.timeout = timeout;
+            this.Timeout = timeout;
         }
 
         private async Task TryWithBackoff(Func<Task> method, int maxBackoff, CancellationToken token)
@@ -61,7 +61,7 @@ namespace Cognite.OpcUa
                     iter = Math.Min(iter, maxBackoff);
                     backoff = TimeSpan.FromSeconds(Math.Pow(2, iter));
 
-                    if (timeout >= 0 && (DateTime.UtcNow - start).TotalSeconds > timeout)
+                    if (Timeout >= 0 && (DateTime.UtcNow - start).TotalSeconds > Timeout)
                     {
                         throw;
                     }

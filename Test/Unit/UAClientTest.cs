@@ -131,11 +131,14 @@ namespace Test.Unit
                 await tester.Client.Run(tester.Source.Token, 0);
             }
         }
-        [Fact]
-        public async Task TestReconnect()
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public async Task TestReconnect(bool forceRestart)
         {
             await tester.Client.Close(tester.Source.Token);
             tester.Config.Source.KeepAliveInterval = 1000;
+            tester.Config.Source.ForceRestart = forceRestart;
 
             bool connected = true;
 

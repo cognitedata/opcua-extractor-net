@@ -230,6 +230,9 @@ namespace Cognite.OpcUa
             if (sessionManager == null)
             {
                 sessionManager = new SessionManager(Config.Source, this, AppConfig!, log, liveToken, timeout);
+            } else
+            {
+                sessionManager.Timeout = timeout;
             }
 
             await sessionManager.Connect();
