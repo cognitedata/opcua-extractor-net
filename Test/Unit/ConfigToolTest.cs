@@ -50,7 +50,7 @@ namespace Test.Unit
 
             Explorer = new UAServerExplorer(Provider, Config, BaseConfig);
             Source = new CancellationTokenSource();
-            await Explorer.Run(Source.Token);
+            await Explorer.Run(Source.Token, 0);
         }
 
         public async Task DisposeAsync()
@@ -73,7 +73,7 @@ namespace Test.Unit
             this.tester = tester;
             tester.Init(output);
         }
-        [Fact]
+        [Fact(Timeout = 10000)]
         public async Task TestEndpointDiscovery()
         {
             // Test while connected

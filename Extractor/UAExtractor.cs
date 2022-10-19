@@ -230,7 +230,7 @@ namespace Cognite.OpcUa
             Init(token);
         }
 
-        private async Task RunExtractorInternal()
+        private async Task RunExtractorInternal(int startTimeout = -1)
         {
             Starting.Set(1);
 
@@ -244,7 +244,7 @@ namespace Cognite.OpcUa
                 log.LogInformation("Start UAClient");
                 try
                 {
-                    await uaClient.Run(Source.Token);
+                    await uaClient.Run(Source.Token, startTimeout);
                 }
                 catch (Exception ex)
                 {
@@ -313,9 +313,9 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="quitAfterMap">False to wait for cancellation</param>
         /// <returns></returns>
-        public async Task RunExtractor(bool quitAfterMap = false)
+        public async Task RunExtractor(bool quitAfterMap = false, int startTimeout = -1)
         {
-            await RunExtractorInternal();
+            await RunExtractorInternal(startTimeout);
             if (!quitAfterMap)
             {
                 Looper.Run();

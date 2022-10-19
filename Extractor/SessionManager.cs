@@ -32,12 +32,11 @@ namespace Cognite.OpcUa
             .CreateCounter("opcua_connects", "Number of times the client has connected to and mapped the opcua server");
         private static readonly Gauge connected = Metrics
             .CreateGauge("opcua_connected", "Whether or not the client is currently connected to the opcua server");
-        public Session Session { get
+        public Session? Session { get
             {
                 readerSemaphore.Wait(liveToken);
                 var xSession = session;
                 readerSemaphore.Release();
-                if (xSession == null) throw new InvalidOperationException("Session is not initialized");
                 return xSession;
             } }
 

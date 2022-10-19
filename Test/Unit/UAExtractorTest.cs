@@ -35,12 +35,12 @@ namespace Test.Unit
             try
             {
                 using var extractor = tester.BuildExtractor();
-                await Assert.ThrowsAsync<SilentServiceException>(() => extractor.RunExtractor(true));
+                await Assert.ThrowsAsync<SilentServiceException>(() => extractor.RunExtractor(true, 0));
             }
             finally
             {
                 tester.Config.Source.EndpointUrl = oldEP;
-                await tester.Client.Run(tester.Source.Token);
+                await tester.Client.Run(tester.Source.Token, 0);
             }
         }
         [Fact]
@@ -72,29 +72,10 @@ namespace Test.Unit
         }
 
         [Fact]
-        public async Task TestForceRestart()
-        {
-            tester.Config.Source.ForceRestart = true;
-            var pusher = new DummyPusher(new DummyPusherConfig());
-            if (!tester.Client.Started) await tester.Client.Run(tester.Source.Token);
-            tester.Config.Extraction.RootNode = tester.Ids.Base.Root.ToProtoNodeId(tester.Client);
-            using var extractor = tester.BuildExtractor(pushers: pusher);
-
-            var task = extractor.RunExtractor();
-            await extractor.WaitForSubscriptions();
-
-            Assert.False(task.IsCompleted);
-
-            TriggerEventExternally("OnServerDisconnect", tester.Client);
-
-            await Task.WhenAny(task, Task.Delay(10000));
-            Assert.True(task.IsCompleted);
-        }
-        [Fact]
         public async Task TestRestartOnReconnect()
         {
             tester.Config.Source.RestartOnReconnect = true;
-            if (!tester.Client.Started) await tester.Client.Run(tester.Source.Token);
+            if (!tester.Client.Started) await tester.Client.Run(tester.Source.Token, 0);
             tester.Config.Extraction.RootNode = tester.Ids.Base.Root.ToProtoNodeId(tester.Client);
 
             var pusher = new DummyPusher(new DummyPusherConfig());
@@ -111,7 +92,7 @@ namespace Test.Unit
             await TestUtils.WaitForCondition(() => pusher.PushedNodes.Count > 0, 10);
 
             await extractor.Close();
-            await tester.Client.Run(tester.Source.Token);
+            await tester.Client.Run(tester.Source.Token, 0);
         }
         [Theory]
         [InlineData(0, 2, 2, 1, 0, 0)]

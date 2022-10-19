@@ -69,7 +69,7 @@ namespace Test.Unit
             await Server.Start();
             Client = new UAClient(Provider, Config);
             Source = new CancellationTokenSource();
-            await Client.Run(Source.Token, 1);
+            await Client.Run(Source.Token, 0);
         }
 
         public async Task DisposeAsync()

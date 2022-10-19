@@ -1064,6 +1064,10 @@ namespace Cognite.OpcUa
             {
                 await Session.RemoveSubscriptionAsync(subscription);
             }
+            catch
+            {
+                // A failure to delete the subscription generally means it just doesn't exist.
+            }
             finally
             {
                 subscription.Dispose();

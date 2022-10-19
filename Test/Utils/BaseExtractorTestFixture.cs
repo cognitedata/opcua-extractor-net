@@ -61,7 +61,7 @@ namespace Test.Utils
 
             Client = new UAClient(Provider, Config);
             Source = new CancellationTokenSource();
-            await Client.Run(Source.Token);
+            await Client.Run(Source.Token, 0);
         }
 
         private void ResetType(object obj, object reference)
