@@ -33,6 +33,8 @@ namespace Cognite.OpcUa
             .CreateGauge("opcua_connected", "Whether or not the client is currently connected to the opcua server");
         public Session? Session => session;
 
+        public string? EndpointUrl { get; private set; }
+
         public SessionManager(UAClientConfig config, UAClient parent, ApplicationConfiguration appConfig, ILogger log, CancellationToken token, int timeout = -1)
         {
             client = parent;
@@ -41,6 +43,7 @@ namespace Cognite.OpcUa
             this.log = log;
             liveToken = token;
             this.Timeout = timeout;
+            EndpointUrl = config.EndpointUrl;
         }
 
         private async Task TryWithBackoff(Func<Task> method, int maxBackoff, CancellationToken token)
@@ -95,9 +98,13 @@ namespace Cognite.OpcUa
                 {
                     newSession = await WaitForReverseConnect();
                 }
+                else if (config.AltEndpointUrls != null && config.AltEndpointUrls.Any())
+                {
+                    newSession = await CreateSessionWithRedundancy(config.EndpointUrl!, config.AltEndpointUrls);
+                }
                 else
                 {
-                    newSession = await CreateSessionDirect();
+                    newSession = await CreateSessionDirect(config.EndpointUrl!);
                 }
                 newSession.KeepAliveInterval = config.KeepAliveInterval;
                 newSession.KeepAlive += ClientKeepAlive;
@@ -198,13 +205,13 @@ namespace Cognite.OpcUa
             }
         }
 
-        private async Task<Session> CreateSessionDirect()
+        private async Task<Session> CreateSessionDirect(string endpointUrl)
         {
-            log.LogInformation("Attempt to select endpoint from: {EndpointURL}", config.EndpointUrl);
+            log.LogInformation("Attempt to select endpoint from: {EndpointURL}", endpointUrl);
             EndpointDescription selectedEndpoint;
             try
             {
-                selectedEndpoint = CoreClientUtils.SelectEndpoint(config.EndpointUrl, config.Secure);
+                selectedEndpoint = CoreClientUtils.SelectEndpoint(endpointUrl, config.Secure);
             }
             catch (Exception ex)
             {
@@ -236,6 +243,61 @@ namespace Cognite.OpcUa
             {
                 throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.CreateSession);
             }
+        }
+
+        public async Task<Session> CreateSessionWithRedundancy(string initialUrl, IEnumerable<string> endpointUrls)
+        {
+            string? bestUrl = null;
+            byte bestServiceLevel = 0;
+
+            endpointUrls = endpointUrls.Prepend(initialUrl).Distinct().ToList();
+
+            Session? activeSession = null;
+            var exceptions = new List<Exception>();
+
+            foreach (var url in endpointUrls)
+            {
+                try
+                {
+                    var session = await CreateSessionDirect(url);
+                    var res = await session.ReadAsync(null, 0, TimestampsToReturn.Neither, new ReadValueIdCollection
+                    {
+                        new ReadValueId
+                        {
+                            NodeId = VariableIds.Server_ServiceLevel,
+                            AttributeId = Attributes.Value
+                        }
+                    }, liveToken);                    
+                    var dv = res.Results[0];
+                    byte value = dv.GetValue<byte>(0);
+
+                    if (value > bestServiceLevel)
+                    {
+                        if (activeSession != null)
+                        {
+                            activeSession.Close();
+                            activeSession.Dispose();
+                        }
+                        activeSession = session;
+                        bestServiceLevel = value;
+                        bestUrl = url;
+                    }
+
+                    log.LogInformation("Connected to session with endpoint {Endpoint}. ServiceLevel: {Level}", url, value);
+                }
+                catch (Exception ex)
+                {
+                    exceptions.Add(ex);
+                }
+            }
+
+            if (activeSession == null)
+            {
+                throw new AggregateException("Failed to connect to any configured endpoint", exceptions);
+            }
+            EndpointUrl = bestUrl;
+            log.LogInformation("Successfully connected to server with endpoint: {Endpoint}, ServiceLevel: {Level}", bestUrl, bestServiceLevel);
+            return activeSession;
         }
 
         /// <summary>

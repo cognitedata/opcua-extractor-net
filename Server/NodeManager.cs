@@ -343,6 +343,21 @@ namespace Server
             state.AddReference(referenceType, true, newParentId);
         }
 
+        public void SetServerRedundancyStatus(byte serviceLevel, RedundancySupport support)
+        {
+            log.LogInformation("Set server redundancy statues: Level: {Level}, Support: {Support}", serviceLevel, support);
+            lock (Server.DiagnosticsNodeManager.Lock)
+            {
+                ServerObjectState serverObject = (ServerObjectState)Server.DiagnosticsNodeManager.FindPredefinedNode(
+                    ObjectIds.Server,
+                    typeof(ServerObjectState));
+
+                // update server capabilities.
+                serverObject.ServiceLevel.Value = serviceLevel;
+                serverObject.ServerRedundancy.RedundancySupport.Value = support;
+            }
+        }
+
         public void SetEventConfig(bool auditing, bool server, bool serverAuditing)
         {
             log.LogInformation("Set server event options. Auditing: {Auditing}, Server emitting events: {Server}", auditing, server);

@@ -340,5 +340,10 @@ namespace Server
             UpdateNode(Ids.Custom.EnumVar3, idx % 2 == 0
                 ? new[] { 123, 123, 321, 123 } : new[] { 123, 123, 123, 321 });
         }
+
+        public void SetServerRedundancyStatus(byte serviceLevel, RedundancySupport support)
+        {
+            Server.SetServerRedundancyStatus(serviceLevel, support);
+        }
     }
 }

@@ -94,6 +94,12 @@ namespace Server
         public string LogFile { get; set; }
         [CommandLineOption("Write OPC-UA SDK trace to log.")]
         public bool LogTrace { get; set; }
+
+        [CommandLineOption("Manually set server service level, 0-255")]
+        public byte ServiceLevel { get; set; } = 255;
+
+        [CommandLineOption("Set server redundancy support. One of None, Cold, Warm, Hot, Transparent, HotAndMirrored")]
+        public string RedundancySupport { get; set; }
     }
 
 
@@ -137,6 +143,11 @@ namespace Server
             server.Server.Issues.MaxSubscriptions = opt.MaxSubscriptions;
             server.Server.Issues.MaxHistoryNodes = opt.MaxHistoryNodes;
             server.Server.Issues.RemainingBrowseCount = opt.RemainingBrowseCount;
+
+            if (opt.RedundancySupport != null)
+            {
+                server.SetServerRedundancyStatus(opt.ServiceLevel, Enum.Parse<Opc.Ua.RedundancySupport>(opt.RedundancySupport));
+            }
 
             int idx = 0;
 

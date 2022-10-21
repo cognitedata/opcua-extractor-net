@@ -48,6 +48,10 @@ namespace Cognite.OpcUa
         [Required]
         public string? EndpointUrl { get; set; }
         /// <summary>
+        /// Alternate endpoint URLs, used for redundancy if the server supports it.
+        /// </summary>
+        public IEnumerable<string>? AltEndpointUrls { get; set; }
+        /// <summary>
         /// True to auto accept untrusted certificates.
         /// If this is false, server certificates must be trusted by manually moving them to the "trusted" certificates folder.
         /// </summary>

@@ -211,6 +211,11 @@ namespace Server
         {
             custom.SetEventConfig(auditing, server, serverAuditing);
         }
+
+        public void SetServerRedundancyStatus(byte serviceLevel, RedundancySupport support)
+        {
+            custom.SetServerRedundancyStatus(serviceLevel, support);
+        }
         public void PopulateEventHistory<T>(NodeId eventId,
             NodeId emitter,
             NodeId source,

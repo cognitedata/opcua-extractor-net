@@ -230,14 +230,15 @@ namespace Cognite.OpcUa
             if (sessionManager == null)
             {
                 sessionManager = new SessionManager(Config.Source, this, AppConfig!, log, liveToken, timeout);
-            } else
+            }
+            else
             {
                 sessionManager.Timeout = timeout;
             }
 
             await sessionManager.Connect();
             Started = true;
-            log.LogInformation("Successfully connected to server at {EndpointURL}", Config.Source.EndpointUrl);
+            log.LogInformation("Successfully connected to server at {EndpointURL}", sessionManager.EndpointUrl);
         }
 
         public void TriggerOnServerDisconnect()
