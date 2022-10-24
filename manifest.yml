@@ -55,6 +55,13 @@ extractor:
   image: opc-ua.png
 
 versions:
+  "2.9.0":
+    description: Support for non-transparent server redundancy.
+    changelog:
+      added:
+        - Support for non-transparent server redundancy ref. OPC-UA standard chapter 4 6.6.2
+      changed:
+        - Improved performance of force-restart, the extractor will no-longer rebrowse automatically if force-restart is enabled. Instead use restart-on-reconnect if that is desired.
   "2.8.0":
     description: Basic support for high availability.
     changelog:
