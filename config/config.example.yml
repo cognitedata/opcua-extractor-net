@@ -319,7 +319,7 @@ cognite:
     # Configure an extraction pipeline manager
     extraction-pipeline:
         # ExternalId of extraction pipeline
-        # pipeline-id: 
+        # external-id:
     # Call a cognite function with the number of assets, timeseries and relationships created/updated
     # after each browse/rebrowse operation.
     # The function is called with the following object:
