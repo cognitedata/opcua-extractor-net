@@ -45,10 +45,8 @@ namespace Cognite.OpcUa
     public class UAClient : IDisposable, IUAClientAccess
     {
         protected FullConfig Config { get; set; }
-        protected Session? Session { get; set; }
+        protected Session? Session => sessionManager?.Session;
         protected ApplicationConfiguration? AppConfig { get; set; }
-        private ReverseConnectManager? reverseConnectManager;
-        private SessionReconnectHandler? reconnectHandler;
         public DataTypeManager DataTypeManager { get; }
         public NodeTypeManager ObjectTypeManager { get; }
 
@@ -63,10 +61,6 @@ namespace Cognite.OpcUa
         public event EventHandler? OnServerDisconnect;
         public event EventHandler? OnServerReconnect;
 
-        private static readonly Counter connects = Metrics
-            .CreateCounter("opcua_connects", "Number of times the client has connected to and mapped the opcua server");
-        private static readonly Gauge connected = Metrics
-            .CreateGauge("opcua_connected", "Whether or not the client is currently connected to the opcua server");
         private static readonly Counter attributeRequests = Metrics
             .CreateCounter("opcua_attribute_requests", "Number of attributes fetched from the server");
         private static readonly Gauge numSubscriptions = Metrics
@@ -83,6 +77,8 @@ namespace Cognite.OpcUa
             .CreateCounter("opcua_browse_failures", "Number of failures on browse operations");
 
         private readonly NodeMetricsManager? metricsManager;
+
+        private SessionManager? sessionManager;
 
         private readonly ILogger<UAClient> log;
         private readonly ILogger<Tracing> traceLog;
@@ -114,10 +110,10 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Entrypoint for starting the opcua Session. Must be called before any further requests can be made.
         /// </summary>
-        public async Task Run(CancellationToken token)
+        public async Task Run(CancellationToken token, int timeout = -1)
         {
             liveToken = token;
-            await StartSession();
+            await StartSession(timeout);
             await StartNodeMetrics();
         }
         /// <summary>
@@ -125,30 +121,17 @@ namespace Cognite.OpcUa
         /// </summary>
         public async Task Close(CancellationToken token)
         {
-            reconnectHandler?.Dispose();
-            reconnectHandler = null;
             try
             {
-                if (Session != null && !Session.Disposed)
+                if (sessionManager != null)
                 {
-#pragma warning disable CA1508 // Avoid dead conditional code
-                    var closeTask = Session?.CloseSessionAsync(null, true, token);
-                    var resultTask = await Task.WhenAny(Task.Delay(5000, token), closeTask);
-                    if (closeTask != resultTask)
-                    {
-                        log.LogWarning("Failed to close session, timed out");
-                    }
-                    Session?.Dispose();
-#pragma warning restore CA1508 // Avoid dead conditional code
-                    Session = null;
+                    await sessionManager.Close(token);
                 }
             }
             finally
             {
-                connected.Set(0);
                 Started = false;
             }
-
         }
 
         private void ConfigureUtilsTrace()
@@ -170,7 +153,7 @@ namespace Cognite.OpcUa
             Utils.SetLogLevel(traceLevel.Value);
         }
 
-        private void LogDump<T>(string message, T item)
+        public void LogDump<T>(string message, T item)
         {
             if (Config.Logger.UaSessionTracing) log.LogDump(message, item);
         }
@@ -231,133 +214,10 @@ namespace Cognite.OpcUa
             ConfigureUtilsTrace();
         }
 
-        private async Task CreateSessionDirect()
-        {
-            log.LogInformation("Attempt to select endpoint from: {EndpointURL}", Config.Source.EndpointUrl);
-            EndpointDescription selectedEndpoint;
-            try
-            {
-                selectedEndpoint = CoreClientUtils.SelectEndpoint(Config.Source.EndpointUrl, Config.Source.Secure);
-            }
-            catch (Exception ex)
-            {
-                throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.SelectEndpoint);
-            }
-            var endpointConfiguration = EndpointConfiguration.Create(AppConfig);
-            LogDump("Endpoint configuration", endpointConfiguration);
-
-            var endpoint = new ConfiguredEndpoint(null, selectedEndpoint, endpointConfiguration);
-            LogDump("Endpoint", endpoint);
-
-            var identity = AuthenticationUtils.GetUserIdentity(Config.Source);
-            log.LogInformation("Attempt to connect to endpoint with security: {SecurityPolicyUri} using user identity {Identity}",
-                endpoint.Description.SecurityPolicyUri,
-                identity.DisplayName);
-            try
-            {
-                if (Session?.Connected ?? false)
-                {
-                    Session.Close();
-                }
-                Session?.Dispose();
-
-
-                Session = await Session.Create(
-                    AppConfig,
-                    endpoint,
-                    false,
-                    ".NET OPC-UA Extractor Client",
-                    0,
-                    identity,
-                    null
-                );
-            }
-            catch (Exception ex)
-            {
-                throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.CreateSession);
-            }
-        }
-        private async Task WaitForReverseConnect()
-        {
-            if (AppConfig == null) throw new InvalidOperationException("AppConfig must be initialized");
-            reverseConnectManager?.Dispose();
-
-            AppConfig.ClientConfiguration.ReverseConnect = new ReverseConnectClientConfiguration
-            {
-                WaitTimeout = 300000,
-                HoldTime = 30000
-            };
-
-            reverseConnectManager = new ReverseConnectManager();
-            var endpointUrl = new Uri(Config.Source.EndpointUrl);
-            var reverseUrl = new Uri(Config.Source.ReverseConnectUrl);
-            reverseConnectManager.AddEndpoint(reverseUrl);
-            reverseConnectManager.StartService(AppConfig);
-
-            log.LogInformation("Waiting for reverse connection from: {EndpointURL}", Config.Source.EndpointUrl);
-            var connection = await reverseConnectManager.WaitForConnection(endpointUrl, null);
-            if (connection == null)
-            {
-                log.LogError("Reverse connect failed, no connection established");
-                throw new ExtractorFailureException("Failed to obtain reverse connection from server");
-            }
-            EndpointDescription selectedEndpoint;
-            try
-            {
-                selectedEndpoint = CoreClientUtils.SelectEndpoint(AppConfig, connection, Config.Source.Secure, 30000);
-            }
-            catch (Exception ex)
-            {
-                throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.SelectEndpoint);
-            }
-            var endpointConfiguration = EndpointConfiguration.Create(AppConfig);
-            LogDump("Reverse connect endpoint configuration", endpointConfiguration);
-
-            var endpoint = new ConfiguredEndpoint(null, selectedEndpoint, endpointConfiguration);
-            LogDump("Reverse connect endpoint", endpoint);
-
-            var identity = AuthenticationUtils.GetUserIdentity(Config.Source);
-            log.LogInformation("Attempt to connect to endpoint with security: {SecurityPolicyUri} using user identity {Identity}",
-                endpoint.Description.SecurityPolicyUri,
-                identity.DisplayName);
-
-            try
-            {
-                if (Session?.Connected ?? false)
-                {
-                    Session.Close();
-                }
-                Session?.Dispose();
-
-                connection = await reverseConnectManager.WaitForConnection(endpointUrl, null);
-                if (connection == null)
-                {
-                    log.LogError("Reverse connect failed, no connection established");
-                    throw new ExtractorFailureException("Failed to obtain reverse connection from server");
-                }
-
-
-                Session = await Session.Create(
-                    AppConfig,
-                    connection,
-                    endpoint,
-                    false,
-                    false,
-                    ".NET OPC-UA Extractor Client",
-                    0,
-                    identity,
-                    null);
-            }
-            catch (Exception ex)
-            {
-                throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.CreateSession);
-            }
-        }
-
         /// <summary>
         /// Load security configuration for the Session, then start the server.
         /// </summary>
-        private async Task StartSession()
+        private async Task StartSession(int timeout = -1)
         {
             Browser.ResetVisitedNodes();
             // A restarted Session might mean a restarted server, so all server-relevant data must be cleared.
@@ -367,93 +227,29 @@ namespace Cognite.OpcUa
 
             await LoadAppConfig();
 
-            if (!string.IsNullOrEmpty(Config.Source.ReverseConnectUrl))
+            if (sessionManager == null)
             {
-                await WaitForReverseConnect();
-            }
-            else
+                sessionManager = new SessionManager(Config.Source, this, AppConfig!, log, liveToken, timeout);
+            } else
             {
-                await CreateSessionDirect();
+                sessionManager.Timeout = timeout;
             }
-            if (Session == null) return;
-            Session.KeepAliveInterval = Config.Source.KeepAliveInterval;
-            Session.KeepAlive += ClientKeepAlive;
-            Session.PublishError += OnPublishError;
+
+            await sessionManager.Connect();
             Started = true;
-            connects.Inc();
-            connected.Set(1);
             log.LogInformation("Successfully connected to server at {EndpointURL}", Config.Source.EndpointUrl);
         }
 
-        /// <summary>
-        /// Event triggered when a publish request fails.
-        /// </summary>
-        private void OnPublishError(Session session, PublishErrorEventArgs e)
+        public void TriggerOnServerDisconnect()
         {
-            string symId = StatusCode.LookupSymbolicId(e.Status.Code);
-
-            var sub = session.Subscriptions.FirstOrDefault(sub => sub.Id == e.SubscriptionId);
-
-            if (sub != null)
-            {
-                log.LogError("Unexpected error on publish: {Code}, subscription: {Name}", symId, sub.DisplayName);
-            }
-        }
-
-        /// <summary>
-        /// Event triggered after a succesfull reconnect.
-        /// </summary>
-        private void ClientReconnectComplete(object sender, EventArgs eventArgs)
-        {
-            if (!ReferenceEquals(sender, reconnectHandler)) return;
-            if (reconnectHandler == null) return;
-            Session = reconnectHandler.Session;
-            reconnectHandler.Dispose();
-            log.LogWarning("--- RECONNECTED ---");
-
-            OnServerReconnect?.Invoke(this, EventArgs.Empty);
-
-            connects.Inc();
-            connected.Set(1);
-            reconnectHandler = null;
-        }
-
-        /// <summary>
-        /// Called on client keep alive, handles the case where the server has stopped responding and the connection timed out.
-        /// </summary>
-        private void ClientKeepAlive(Session sender, KeepAliveEventArgs eventArgs)
-        {
-            LogDump("Keep Alive", eventArgs);
-            if (eventArgs.Status == null || !ServiceResult.IsNotGood(eventArgs.Status)) return;
-            log.LogWarning("Keep alive failed: {Status}", eventArgs.Status);
-            if (reconnectHandler != null) return;
-            connected.Set(0);
-            log.LogWarning("--- RECONNECTING ---");
-            if (!Config.Source.ForceRestart && !liveToken.IsCancellationRequested)
-            {
-                reconnectHandler = new SessionReconnectHandler();
-                if (reverseConnectManager != null)
-                {
-                    reconnectHandler.BeginReconnect(sender, reverseConnectManager, 5000, ClientReconnectComplete);
-                }
-                else
-                {
-                    reconnectHandler.BeginReconnect(sender, 5000, ClientReconnectComplete);
-                }
-            }
-            else
-            {
-                try
-                {
-                    Session?.Close();
-                }
-                catch
-                {
-                    log.LogWarning("Client failed to close, quitting");
-                }
-            }
             OnServerDisconnect?.Invoke(this, EventArgs.Empty);
         }
+
+        public void TriggerOnServerReconnect()
+        {
+            OnServerReconnect?.Invoke(this, EventArgs.Empty);
+        }
+
         /// <summary>
         /// Called after succesful validation of a server certificate. Handles the case where the certificate is untrusted.
         /// </summary>
@@ -1068,7 +864,7 @@ namespace Cognite.OpcUa
 
         private async Task RecreateSubscription(Subscription sub, CancellationToken token)
         {
-            if (Session == null || !Session.Connected || reconnectHandler != null || token.IsCancellationRequested) return;
+            if (Session == null || !Session.Connected || token.IsCancellationRequested) return;
 
             if (!sub.PublishingStopped) return;
 
@@ -1270,6 +1066,10 @@ namespace Cognite.OpcUa
             try
             {
                 await Session.RemoveSubscriptionAsync(subscription);
+            }
+            catch
+            {
+                // A failure to delete the subscription generally means it just doesn't exist.
             }
             finally
             {
@@ -1744,18 +1544,13 @@ namespace Cognite.OpcUa
             {
                 log.LogWarning("Failed to close UAClient: {Message}", ex.Message);
             }
-            reconnectHandler?.Dispose();
-            reverseConnectManager?.Dispose();
             waiter.Dispose();
             if (AppConfig != null)
             {
                 AppConfig.CertificateValidator.CertificateValidation -= CertificateValidationHandler;
             }
-            if (Session != null)
-            {
-                Session.KeepAlive -= ClientKeepAlive;
-            }
             subscriptionSem.Dispose();
+            sessionManager?.Dispose();
         }
         #endregion
     }

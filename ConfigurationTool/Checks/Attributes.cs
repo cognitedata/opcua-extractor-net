@@ -47,7 +47,7 @@ namespace Cognite.OpcUa.Config
 
             if (Session == null || !Session.Connected)
             {
-                await Run(token);
+                await Run(token, 0);
                 await LimitConfigValues(token);
             }
 

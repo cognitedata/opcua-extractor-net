@@ -69,7 +69,7 @@ namespace Test.Unit
             await Server.Start();
             Client = new UAClient(Provider, Config);
             Source = new CancellationTokenSource();
-            await Client.Run(Source.Token);
+            await Client.Run(Source.Token, 0);
         }
 
         public async Task DisposeAsync()
@@ -98,7 +98,7 @@ namespace Test.Unit
             Assert.Equal(4, tester.Client.NamespaceTable.Count);
             Assert.Equal("opc.tcp://test.localhost", tester.Client.NamespaceTable.GetString(2));
         }
-        [Fact]
+        [Fact(Timeout = 10000)]
         public async Task TestConnectionFailure()
         {
             string oldEP = tester.Config.Source.EndpointUrl;
@@ -106,14 +106,14 @@ namespace Test.Unit
             tester.Config.Source.EndpointUrl = "opc.tcp://localhost:62009";
             try
             {
-                var exc = await Assert.ThrowsAsync<SilentServiceException>(() => tester.Client.Run(tester.Source.Token));
+                var exc = await Assert.ThrowsAsync<SilentServiceException>(() => tester.Client.Run(tester.Source.Token, 0));
                 Assert.Equal(StatusCodes.BadNotConnected, exc.StatusCode);
                 Assert.Equal(ExtractorUtils.SourceOp.SelectEndpoint, exc.Operation);
             }
             finally
             {
                 tester.Config.Source.EndpointUrl = "opc.tcp://localhost:62000";
-                await tester.Client.Run(tester.Source.Token);
+                await tester.Client.Run(tester.Source.Token, 0);
             }
         }
         [Fact]
@@ -123,19 +123,22 @@ namespace Test.Unit
             tester.Config.Source.ConfigRoot = "wrong";
             try
             {
-                var exc = await Assert.ThrowsAsync<ExtractorFailureException>(() => tester.Client.Run(tester.Source.Token));
+                var exc = await Assert.ThrowsAsync<ExtractorFailureException>(() => tester.Client.Run(tester.Source.Token, 0));
             }
             finally
             {
                 tester.Config.Source.ConfigRoot = "config";
-                await tester.Client.Run(tester.Source.Token);
+                await tester.Client.Run(tester.Source.Token, 0);
             }
         }
-        [Fact]
-        public async Task TestReconnect()
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public async Task TestReconnect(bool forceRestart)
         {
             await tester.Client.Close(tester.Source.Token);
             tester.Config.Source.KeepAliveInterval = 1000;
+            tester.Config.Source.ForceRestart = forceRestart;
 
             bool connected = true;
 
@@ -150,24 +153,7 @@ namespace Test.Unit
 
             try
             {
-
-                Exception exception = null;
-                for (int i = 0; i < 10; i++)
-                {
-                    await Task.Delay(1000);
-                    try
-                    {
-                        await tester.Client.Run(tester.Source.Token);
-                        exception = null;
-                        break;
-                    }
-                    catch (Exception ex)
-                    {
-                        exception = ex;
-                    }
-                }
-
-                if (exception != null) throw exception;
+                await tester.Client.Run(tester.Source.Token, 10);
                 
                 Assert.True(CommonTestUtils.TestMetricValue("opcua_connected", 1));
                 tester.Server.Stop();
@@ -186,7 +172,7 @@ namespace Test.Unit
                 await tester.Client.Close(tester.Source.Token);
                 tester.Config.Source.KeepAliveInterval = 10000;
                 tester.Config.Logger.UaSessionTracing = false;
-                await tester.Client.Run(tester.Source.Token);
+                await tester.Client.Run(tester.Source.Token, 0);
             }
         }
         [Fact]
@@ -200,7 +186,7 @@ namespace Test.Unit
             try
             {
                 Environment.SetEnvironmentVariable("OPCUA_CERTIFICATE_DIR", "certificates-test");
-                await tester.Client.Run(tester.Source.Token);
+                await tester.Client.Run(tester.Source.Token, 0);
                 var dir = new DirectoryInfo("./certificates-test/pki/trusted/certs/");
                 Assert.Single(dir.GetFiles());
             }
@@ -209,7 +195,7 @@ namespace Test.Unit
                 await tester.Client.Close(tester.Source.Token);
                 Environment.SetEnvironmentVariable("OPCUA_CERTIFICATE_DIR", null);
                 Directory.Delete("./certificates-test/", true);
-                await tester.Client.Run(tester.Source.Token);
+                await tester.Client.Run(tester.Source.Token, 0);
             }
         }
         [Fact]
@@ -230,18 +216,18 @@ namespace Test.Unit
 
                 tester.Server.Server.SetValidator(true);
 
-                await Assert.ThrowsAsync<SilentServiceException>(async () => await tester.Client.Run(tester.Source.Token));
+                await Assert.ThrowsAsync<SilentServiceException>(async () => await tester.Client.Run(tester.Source.Token, 0));
 
                 tester.Server.Server.SetValidator(false);
 
-                await tester.Client.Run(tester.Source.Token);
+                await tester.Client.Run(tester.Source.Token, 0);
             }
             finally
             {
                 tester.Server.Server.AllowAnonymous = true;
                 tester.Config.Source.X509Certificate = null;
                 tester.Server.Server.SetValidator(false);
-                await tester.Client.Run(tester.Source.Token);
+                await tester.Client.Run(tester.Source.Token, 0);
             }
         }
 
@@ -256,18 +242,18 @@ namespace Test.Unit
                 tester.Config.Source.Username = "testuser";
                 tester.Config.Source.Password = "wrongpassword";
 
-                await Assert.ThrowsAsync<SilentServiceException>(async () => await tester.Client.Run(tester.Source.Token));
+                await Assert.ThrowsAsync<SilentServiceException>(async () => await tester.Client.Run(tester.Source.Token, 0));
 
                 tester.Config.Source.Password = "testpassword";
 
-                await tester.Client.Run(tester.Source.Token);
+                await tester.Client.Run(tester.Source.Token, 0);
             }
             finally
             {
                 tester.Server.Server.AllowAnonymous = true;
                 tester.Config.Source.Username = null;
                 tester.Config.Source.Password = null;
-                await tester.Client.Run(tester.Source.Token);
+                await tester.Client.Run(tester.Source.Token, 0);
             }
         }
         [Fact]
@@ -278,7 +264,7 @@ namespace Test.Unit
             tester.Config.Source.ReverseConnectUrl = "opc.tcp://localhost:61000";
             try
             {
-                await tester.Client.Run(tester.Source.Token);
+                await tester.Client.Run(tester.Source.Token, 0);
                 Assert.True(tester.Client.Started);
                 // Just check that we are able to read, indicating an established connection
                 await tester.Client.ReadRawValues(new[] { VariableIds.Server_ServerStatus }, tester.Source.Token);
@@ -287,7 +273,7 @@ namespace Test.Unit
             {
                 tester.Server.Server.RemoveReverseConnection(new Uri("opc.tcp://localhost:61000"));
                 tester.Config.Source.ReverseConnectUrl = null;
-                await tester.Client.Run(tester.Source.Token);
+                await tester.Client.Run(tester.Source.Token, 0);
             }
         }
 
