@@ -93,6 +93,7 @@ namespace Server
         }
         public void Stop()
         {
+            log.LogInformation("Closing server");
             Server.Stop();
             running = false;
         }

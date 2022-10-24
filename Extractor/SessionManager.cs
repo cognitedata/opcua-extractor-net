@@ -188,7 +188,7 @@ namespace Cognite.OpcUa
                 }
 
 
-                return await Session.Create(
+                var session = await Session.Create(
                     appConfig,
                     connection,
                     endpoint,
@@ -198,6 +198,8 @@ namespace Cognite.OpcUa
                     0,
                     identity,
                     null);
+                EndpointUrl = config.EndpointUrl;
+                return session;
             }
             catch (Exception ex)
             {
@@ -229,7 +231,7 @@ namespace Cognite.OpcUa
                 identity.DisplayName);
             try
             {
-                return await Session.Create(
+                var session = await Session.Create(
                     appConfig,
                     endpoint,
                     false,
@@ -238,6 +240,8 @@ namespace Cognite.OpcUa
                     identity,
                     null
                 );
+                EndpointUrl = endpointUrl;
+                return session;
             }
             catch (Exception ex)
             {
