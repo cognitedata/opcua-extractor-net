@@ -282,6 +282,7 @@ namespace Test.Unit
         {
             await tester.Client.Close(tester.Source.Token);
             tester.Server.SetServerRedundancyStatus(230, RedundancySupport.Hot);
+            tester.Config.Source.KeepAliveInterval = 1000;
             var altServer = new ServerController(new[] {
                 PredefinedSetup.Base
             }, tester.Provider, 62300)
@@ -311,6 +312,7 @@ namespace Test.Unit
             {
                 tester.Config.Source.AltEndpointUrls = null;
                 tester.Config.Source.ForceRestart = false;
+                tester.Config.Source.KeepAliveInterval = 10000;
                 await tester.Client.Run(tester.Source.Token, 0);
             }
         }
