@@ -60,7 +60,7 @@ versions:
     changelog:
       added:
         - Support for non-transparent server redundancy ref. OPC-UA standard chapter 4 6.6.2
-        - `extraction-pipeline: external-id` as alias for `pipeline-id` in config, to align with python extractors.
+        - "`extraction-pipeline: external-id` as alias for `pipeline-id` in config, to align with python extractors."
       fixed:
         - Bug causing extractor to fail if the `cognite` section was missing in remote config.
       changed:
