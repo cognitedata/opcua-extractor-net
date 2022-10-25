@@ -12,6 +12,14 @@ version: 1
 source:
     # The URL of the OPC-UA server to connect to
     endpoint-url: "opc.tcp://localhost:4840"
+    # A list of URLs to connect to if the endpoint-url fails.
+    # These are connected to in order, and the one with the highest ServiceLevel is selected.
+    # See the OPC-UA standard part 4 6.6.2, this is for non-transparent redundancy.
+    # When using this, setting force-restart: true is recommended, as otherwise the extractor will only try to
+    # reconnect to the same server on failure.
+    alt-endpoint-urls:
+    # - opc.tcp://some-other-server:1234
+    # - opc.tcp://some-third-server:4321
     # Auto accept connections from unknown servers.
     # There is not yet a feature to accept new certificates, but you can manually move rejected certificates to accepted.
     # Paths are defined in opc.ua.net.extractor.Config.xml
@@ -51,7 +59,9 @@ source:
     # Note that enabling this makes the connection less secure, and that a better solution is to resolve these issues on
     # the server.
     ignore-certificate-issues: false
-    # If true, force restart the extractor on disconnect. Required for some servers
+    # If true, exit the session and reconnect on restart, this means that subscriptions will need to be recreated,
+    # which has some performance cost.
+    # Required for failover if alt-endpoint-urls is set.
     force-restart: false
     # Completely exit the extractor on failure, instead of doing an internal restart. Internal reset should re-initialize everything relevant,
     # but this can be set to do restart with some external tool instead.

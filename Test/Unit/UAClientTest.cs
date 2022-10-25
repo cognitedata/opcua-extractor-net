@@ -277,6 +277,46 @@ namespace Test.Unit
             }
         }
 
+        [Fact]
+        public async Task TestRedundancy()
+        {
+            await tester.Client.Close(tester.Source.Token);
+            tester.Server.SetServerRedundancyStatus(230, RedundancySupport.Hot);
+            tester.Config.Source.KeepAliveInterval = 1000;
+            var altServer = new ServerController(new[] {
+                PredefinedSetup.Base
+            }, tester.Provider, 62300)
+            {
+                ConfigRoot = "Server.Test.UaClient"
+            };
+            await altServer.Start();
+            altServer.SetServerRedundancyStatus(240, RedundancySupport.Hot);
+            tester.Config.Source.AltEndpointUrls = new[]
+            {
+                "opc.tcp://localhost:62300"
+            };
+            tester.Config.Source.ForceRestart = true;
+
+            try
+            {
+                await tester.Client.Run(tester.Source.Token, 0);
+                var sm = tester.Client.GetType().GetField("sessionManager", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                    .GetValue(tester.Client) as SessionManager;
+                Assert.Equal("opc.tcp://localhost:62300", sm.EndpointUrl);
+
+                altServer.Stop();
+                altServer.Dispose();
+                await TestUtils.WaitForCondition(() => sm.EndpointUrl == tester.Config.Source.EndpointUrl, 20, "Expected session to reconnect to original server");
+            }
+            finally
+            {
+                tester.Config.Source.AltEndpointUrls = null;
+                tester.Config.Source.ForceRestart = false;
+                tester.Config.Source.KeepAliveInterval = 10000;
+                await tester.Client.Run(tester.Source.Token, 0);
+            }
+        }
+
         #endregion
 
         #region browse

@@ -93,6 +93,7 @@ namespace Server
         }
         public void Stop()
         {
+            log.LogInformation("Closing server");
             Server.Stop();
             running = false;
         }
@@ -339,6 +340,11 @@ namespace Server
             UpdateNode(Ids.Custom.EnumVar2, idx % 2 == 0 ? 123 : 321);
             UpdateNode(Ids.Custom.EnumVar3, idx % 2 == 0
                 ? new[] { 123, 123, 321, 123 } : new[] { 123, 123, 123, 321 });
+        }
+
+        public void SetServerRedundancyStatus(byte serviceLevel, RedundancySupport support)
+        {
+            Server.SetServerRedundancyStatus(serviceLevel, support);
         }
     }
 }
