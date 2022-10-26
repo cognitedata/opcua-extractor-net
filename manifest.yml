@@ -55,6 +55,11 @@ extractor:
   image: opc-ua.png
 
 versions:
+  "2.9.1":
+    description: Actual fix to missing `cognite` section bug.
+    changelog:
+      fixed:
+        - "Bug causing extractor to fail if the `cognite` section was missing in remote config."
   "2.9.0":
     description: Support for non-transparent server redundancy.
     changelog:
@@ -62,7 +67,7 @@ versions:
         - Support for non-transparent server redundancy ref. OPC-UA standard chapter 4 6.6.2
         - "`extraction-pipeline: external-id` as alias for `pipeline-id` in config, to align with python extractors."
       fixed:
-        - Bug causing extractor to fail if the `cognite` section was missing in remote config.
+        - "Bug causing extractor to fail if the `cognite` section was missing in remote config."
       changed:
         - Improved performance of force-restart, the extractor will no-longer rebrowse automatically if force-restart is enabled. Instead use restart-on-reconnect if that is desired.
   "2.8.0":
