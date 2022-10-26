@@ -168,7 +168,7 @@ NUGET
       Microsoft.Extensions.Hosting (>= 6.0.1) - restriction: || (>= net461) (>= netstandard2.0)
       Microsoft.Extensions.Logging.EventLog (>= 6.0) - restriction: || (>= net461) (>= netstandard2.0)
       System.ServiceProcess.ServiceController (>= 6.0) - restriction: || (&& (< net461) (>= netstandard2.0)) (>= netstandard2.1)
-    Microsoft.Extensions.Http (6.0) - restriction: >= netstandard2.0
+    Microsoft.Extensions.Http (6.0) - restriction: || (>= net462) (>= netstandard2.0)
       Microsoft.Extensions.DependencyInjection.Abstractions (>= 6.0) - restriction: || (>= net461) (>= netstandard2.0)
       Microsoft.Extensions.Logging (>= 6.0) - restriction: || (>= net461) (>= netstandard2.0)
       Microsoft.Extensions.Logging.Abstractions (>= 6.0) - restriction: || (>= net461) (>= netstandard2.0)
@@ -453,8 +453,8 @@ NUGET
     Polly.Extensions.Http (3.0) - restriction: >= netstandard2.0
       Polly (>= 7.1) - restriction: >= netstandard1.1
     Portable.BouncyCastle (1.9) - restriction: || (>= net462) (&& (>= netstandard2.0) (< netstandard2.1))
-    prometheus-net (7.0) - restriction: >= netstandard2.0
-      Microsoft.Extensions.Http (>= 6.0) - restriction: || (>= net462) (>= net6.0)
+    prometheus-net (6.0)
+      Microsoft.Extensions.Http (>= 3.1.9) - restriction: || (>= net462) (>= netstandard2.0)
       System.ValueTuple (>= 4.5) - restriction: >= net462
     runtime.debian.8-x64.runtime.native.System.Security.Cryptography.OpenSsl (4.3.3) - restriction: && (< monotouch) (< net452) (>= netstandard1.6) (< netstandard2.0) (< uap10.0) (< xamarintvos) (< xamarinwatchos)
     runtime.debian.9-x64.runtime.native.System.Security.Cryptography.OpenSsl (4.3.3) - restriction: && (< monotouch) (< net452) (>= netstandard1.6) (< netstandard2.0) (< uap10.0) (< xamarintvos) (< xamarinwatchos)

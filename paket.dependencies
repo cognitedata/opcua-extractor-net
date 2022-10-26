@@ -21,3 +21,5 @@ nuget Microsoft.Extensions.Hosting.Abstractions
 nuget Microsoft.Extensions.Logging.EventLog
 nuget System.ComponentModel.Annotations
 nuget MQTTnet 3.1.2
+# There appears to be some issue with prometheus-net 7.0.0, investigate further in the future
+nuget prometheus-net 6
