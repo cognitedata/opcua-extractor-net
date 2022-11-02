@@ -22,13 +22,14 @@ using Opc.Ua;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Text.Json;
 
 namespace Cognite.OpcUa.Pushers.FDM
 {
     internal static class FDMDataModel
     {
-        public const string Space = "opcua3";
+        public const string Space = "opcua4";
         private static readonly ModelIdentifier baseModel = new ModelIdentifier(Space, "Node");
 
         public static IEnumerable<ModelCreate> GetModels()
@@ -168,7 +169,8 @@ namespace Cognite.OpcUa.Pushers.FDM
                         Type = "direct_relation",
                         TargetModel = new ModelIdentifier(Space, "BaseInstance")
                     } },
-                    { "namespaces", new ModelProperty { Nullable = false, Type = "json" } },
+                    { "namespaces", new ModelProperty { Nullable = false, Type = "text[]" } },
+                    { "namespaceMap", new ModelProperty { Nullable = false, Type = "json" } },
                     { "hierarchyUpdateTimestamp", new ModelProperty { Nullable = false, Type = "timestamp" } }
                 }
             };
@@ -330,13 +332,15 @@ namespace Cognite.OpcUa.Pushers.FDM
     class FDMServer : BaseNode
     {
         public DirectRelationIdentifier? Root { get; set; }
-        public Dictionary<string, string>? Namespaces { get; set; }
+        public string[]? Namespaces { get; set; }
+        public Dictionary<string, string>? NamespaceMap { get; set; }
         public string? HierarchyUpdateTimestamp { get; set; }
 
-        public FDMServer(string space, string prefix, IUAClientAccess client, NodeId root, Dictionary<string, string> namespaces)
+        public FDMServer(string space, string prefix, IUAClientAccess client, NodeId root, NamespaceTable namespaces, Dictionary<string, string> namespaceMap)
         {
             HierarchyUpdateTimestamp = DateTime.UtcNow.ToString("yyyy-MM-dd'T'HH:mm:ss.fffK", CultureInfo.InvariantCulture);
-            Namespaces = namespaces;
+            Namespaces = namespaces.ToArray();
+            NamespaceMap = Namespaces.ToDictionary(a => a, a => namespaceMap.GetValueOrDefault(a) ?? a);
             ExternalId = $"{prefix}ServerMetadata";
             Root = new DirectRelationIdentifier(space, client.GetUniqueId(root));
         }

@@ -236,13 +236,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                 log.LogInformation("After filtering {Nodes} nodes and {Edges} edges are left", nodes.Count, finalReferences.Count);
             }
 
-            var namespaces = new Dictionary<string, string>();
-            foreach (var ns in uaClient.NamespaceTable?.ToArray() ?? Enumerable.Empty<string>())
-            {
-                namespaces[ns] = config.Extraction.NamespaceMap.GetValueOrDefault(ns) ?? ns;
-            }
-
-            var serverMetadata = new FDMServer(instSpace, config.Extraction.IdPrefix ?? "", uaClient, ObjectIds.RootFolder, namespaces);
+            var serverMetadata = new FDMServer(instSpace, config.Extraction.IdPrefix ?? "", uaClient, ObjectIds.RootFolder, uaClient.NamespaceTable!, config.Extraction.NamespaceMap);
 
             var fdmObjects = new List<FDMBaseInstance>();
             var fdmVariables = new List<FDMVariable>();
