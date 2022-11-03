@@ -4,7 +4,6 @@
     "type": "object",
     "description": "Configuration for pushing data to Cognite Data Fusion (CDF)",
     "allOf": [{ "$ref": "https://raw.githubusercontent.com/cognitedata/dotnet-extractor-utils/v1.4.1/schema/cognite_config.schema.json" }],
-    "unevaluatedProperties": false,
     "properties": {
         "data-set-id": {
             "type": "integer",
@@ -139,5 +138,6 @@
                 }
             }
         }
-    }
+    },
+    "unevaluatedProperties": false
 }
