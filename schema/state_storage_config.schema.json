@@ -4,7 +4,7 @@
     "type": "object",
     "description": "Configuration for storing the range of extracted datapoints and events to a persistent store",
     "unevaluatedProperties": false,
-    "allOf": [{ "$ref": "https://raw.githubusercontent.com/cognitedata/dotnet-extractor-utils/v1.4.1/schema/state_store_config.schema.json" }],
+    "allOf": [{ "$ref": "https://raw.githubusercontent.com/cognitedata/dotnet-extractor-utils/unval-props/schema/state_store_config.schema.json" }],
     "properties": {
         "interval": {
             "type": "string",

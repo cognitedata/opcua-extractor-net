@@ -3,7 +3,13 @@
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "description": "OPC-UA extractor configuration",
     "type": "object",
+    "unevaluatedProperties": false,
     "properties": {
+        "version": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Version of the config file, the extractor specifies which config file versions are accepted in each version of the extractor."
+        },
         "source": {
             "$ref": "source_config.schema.json"
         },
@@ -61,8 +67,8 @@
             }
         },
         "high-availability": {
-            "$ref": "https://raw.githubusercontent.com/cognitedata/dotnet-extractor-utils/v1.4.1/schema/high_availability.schema.json"
+            "$ref": "https://raw.githubusercontent.com/cognitedata/dotnet-extractor-utils/unval-props/schema/high_availability.schema.json",
+            "unevaluatedProperties": false
         }
-    },
-    "unevaluatedProperties": false
+    }
 }
