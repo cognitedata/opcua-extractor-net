@@ -1,0 +1,44 @@
+{
+    "$id": "influx_schema.config.json",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "unevaluatedProperties": false,
+    "description": "Write datapoints and events to an influxdb database",
+    "required": ["host"],
+    "properties": {
+        "host": {
+            "type": "string",
+            "description": "URL of the host influxdb server"
+        },
+        "username": {
+            "type": "string",
+            "description": "Username for the influxdb server"
+        },
+        "password": {
+            "type": "string",
+            "description": "Password for the influxdb server"
+        },
+        "point-chunk-size": {
+            "type": "integer",
+            "description": "Maximum number of points to send in each request to influx",
+            "minimum": 1,
+            "default": 100000
+        },
+        "debug": {
+            "type": "boolean",
+            "description": "Debug mode. If true, data will not be pushed to target"
+        },
+        "read-extracted-ranges": {
+            "type": "boolean",
+            "description": "Whether to read start/end points on startup, where possible."
+        },
+        "read-extracted-event-ranges": {
+            "type": "boolean",
+            "description": "Whether to read start/end points for events on startup, where possible"
+        },
+        "non-finite-replacement": {
+            "type": ["number", "null"],
+            "description": "Replace all instances of NaN or Infinity with this floating point number"
+        }
+    }
+}

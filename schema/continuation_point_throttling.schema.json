@@ -1,0 +1,29 @@
+{
+    "$id": "continuation_point_throttling.schema.json",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "allOf": [{ "$ref": "ua-throttling-config" }],
+    "unevaluatedProperties": false,
+    "properties": {
+        "max-node-parallelism": {
+            "type": "integer",
+            "description": "Maximum number of concurrent nodes accross all parallel requests"
+        }
+    },
+    "$defs": {
+        "ua-throttling-config": {
+            "type": "object",
+            "unevaluatedProperties": false,
+            "properties": {
+                "max-per-minute": {
+                    "type": "integer",
+                    "description": "Maximum number of requests per minute, approximately"
+                },
+                "max-parallelism": {
+                    "type": "integer",
+                    "description": "Maximum number of parallel requests"
+                }
+            }
+        }
+    }
+}

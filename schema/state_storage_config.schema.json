@@ -1,0 +1,35 @@
+{
+    "$id": "state_storage_config.schema.json",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "description": "Configuration for storing the range of extracted datapoints and events to a persistent store",
+    "unevaluatedProperties": false,
+    "allOf": [{ "$ref": "https://raw.githubusercontent.com/cognitedata/dotnet-extractor-utils/v1.4.1/schema/state_store_config.schema.json" }],
+    "properties": {
+        "interval": {
+            "type": "string",
+            "description": "Interval between each write to the buffer file, in seconds. 0 or less disables the state store. Alternatively use `N[timeunit]` where `timeunit` is one of `w`, `d`, `h`, `m`, `s`, or `ms`",
+            "default": "0s"
+        },
+        "variable-store": {
+            "type": "string",
+            "description": "Name of raw table or litedb store for variable ranges",
+            "default": "variable_states"
+        },
+        "event-store": {
+            "type": "string",
+            "description": "Name of raw table or litedb store for event ranges",
+            "default": "event_states"
+        },
+        "influx-variable-store": {
+            "type": "string",
+            "description": "Name of raw table or litedb store for influxdb failure buffer variable ranges",
+            "default": "influx_variable_states"
+        },
+        "influx-event-store": {
+            "type": "string",
+            "description": "Name of raw table or litedb store for influxdb failure buffer event ranges",
+            "default": "influx_event_states"
+        }
+    }
+}

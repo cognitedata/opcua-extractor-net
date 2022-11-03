@@ -1,0 +1,192 @@
+{
+    "$id": "source_config.schema.json",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "unevaluatedProperties": false,
+    "properties": {
+        "endpoint-url": {
+            "type": "string",
+            "description": "URL of OPC-UA server endpoint or discovery server"
+        },
+        "alt-endpoint-urls": {
+            "type": "array",
+            "description": "List of alternate endpoint URLs. Enables server redundancy. Should not contain `endpoint-url`",
+            "items": {
+                "type": "string",
+                "description": "URL of OPC-UA server endpoint"
+            }
+        },
+        "auto-accept": {
+            "type": "boolean",
+            "default": true,
+            "description": "True to auto accept untrusted certificates. If this is set to false, server certificates must be trusted by manually moving them to the \"trusted\" certificates folder"
+        },
+        "publishing-interval": {
+            "type": "integer",
+            "description": "Interval between OPC-UA subscription publish requests in milliseconds. This is how frequentely the extractor requests updates from the server.",
+            "minimum": 0,
+            "default": 500
+        },
+        "sampling-interval": {
+            "type": "integer",
+            "description": "Requested sample interval per variable on the server. This is how often the extractor requests the server sample changes to values. The server has no obligation to use this value, or to use any form of sampling at all, but according to the standard this should limit the _lowest_ allowed rate of updates.",
+            "default": 100,
+            "minimum": 0
+        },
+        "queue-length": {
+            "type": "integer",
+            "description": "Requested length of queue for each variable on the server. This is how many data points the server will buffer. It should in general be set to at least 2 * `publishing-interval` / `sampling-interval`",
+            "default": 100,
+            "minimum": 0
+        },
+        "username": {
+            "type": "string",
+            "description": "OPC-UA username"
+        },
+        "password": {
+            "type": "string",
+            "description": "OPC-UA password"
+        },
+        "secure": {
+            "type": "boolean",
+            "description": "True if the extractor should try to connect to a secure endpoint on the server"
+        },
+        "force-restart": {
+            "type": "boolean",
+            "description": "True if the extractor should disconnect from the server instead of using built-in OPC-UA reconnect mechanisms. Some servers handle build in reconnect poorly, in which case this is a useful workaround. If using server redundancy through `alt-endpoint-urls`, this should be set to `true`"
+        },
+        "exit-on-failure": {
+            "type": "boolean",
+            "description": "True if the extractor should quit completely when it fails to start, instead of restarting."
+        },
+        "browse-nodes-chunk": {
+            "type": "integer",
+            "description": "Number of nodes per browse request. Large numbers are likely to exceed the server's tolerance. Lower numbers greatly increase startup time.",
+            "default": 1000,
+            "minimum": 1,
+            "maximum": 100000
+        },
+        "browse-chunk": {
+            "type": "integer",
+            "description": "Number of maximum requested results per node during browse. The server may decide to return fewer. Setting this lower increases startup times. Setting it to 0 leaves the decision entirely up to the server.",
+            "minimum": 0,
+            "maximum": 100000,
+            "default": 1000
+        },
+        "attributes-chunk": {
+            "type": "integer",
+            "description": "Number of attributes per request. The extractor will read 5-10 attributes per node, so setting this too low will massively increase startup times. Setting it too high will likely exceed server limits.",
+            "default": 10000,
+            "minimum": 1,
+            "maximum": 1000000
+        },
+        "subscription-chunk": {
+            "type": "integer",
+            "description": "Number of monitored items to create per request. Setting this lower will increase startup times. High values may exceed server limits.",
+            "minimum": 1,
+            "maximum": 100000,
+            "default": 1000
+        },
+        "keep-alive-interval": {
+            "type": "integer",
+            "description": "Time between each keep-alive request to the server, in milliseconds. The third failed keep-alive request will time out the extractor and trigger a reconnect. Setting this lower will trigger reconnect logic faster. Setting this too high will make it meaningless.",
+            "minimum": 100,
+            "maximum": 60000,
+            "default": 5000
+        },
+        "restart-on-reconnect": {
+            "type": "boolean",
+            "description": "Restart the extractor on reconnect, browsing the node hierarchy and recreating subscriptions. This may be necessary if the server is expected to change after reconnecting, but it may be too expensive if the connection to the server is lost frequently"
+        },
+        "x509-certificate": {
+            "type": "object",
+            "description": "Configure settings for using an x509-certificate as login credentials. This is separate from the application certificate, and used for servers with automatic systems for authentication.",
+            "unevaluatedProperties": false,
+            "properties": {
+                "file-name": {
+                    "type": "string",
+                    "description": "Path to local x509-certificate"
+                },
+                "password": {
+                    "type": "string",
+                    "description": "Password to local x509-certificate file"
+                },
+                "store": {
+                    "type": "string",
+                    "description": "Local certificate store to use. One of `None` (to use a file), `Local` (for LocalMachine) or `User`",
+                    "default": "None",
+                    "enum": ["None", "Local", "User"]
+                },
+                "cert-name": {
+                    "type": "string",
+                    "description": "Name of certificate in store, e.g. CN=my-certificate"
+                }
+            }
+        },
+        "reverse-connect-url": {
+            "type": "string",
+            "description": "Local URL used for reverse-connect. This is the URL the server should connect to. An endpoint-url should also be provided so that the extractor knows where it should accept requests from. The server is responsible for initiating connections"
+        },
+        "ignore-certificate-issues": {
+            "type": "boolean",
+            "description": "Ignore all issues caused by the server certificate. This potentially opens the extractor up to a man-in-the-middle attack, but can be used if the server is noncompliant and on a closed network"
+        },
+        "browse-throttling": {
+            "$ref": "continuation_point_throttling.schema.json",
+            "description": "Settings for throttling browse operations"
+        },
+        "node-set-source": {
+            "type": "object",
+            "description": "Configuration for using NodeSet2 files as sources for the OPC-uA node hierarchy instead of browsing the server. This can be used if the server structure is well known and fixed. Values of nodes are still read from the server",
+            "unevaluatedProperties": false,
+            "anyOf": [{ "required": ["instance"] }, { "required": ["type"] }],
+            "required": ["node-sets"],
+            "properties": {
+                "node-sets": {
+                    "type": "array",
+                    "description": "List of nodesets to read. Specified by URL, file name, or both. If no name is specified, the last segment of the URL is used as file name. File name is where downloaded files are saved, and where the extractor looks for existing files.",
+                    "items": {
+                        "type": "object",
+                        "description": "Configuration specifying a node set file",
+                        "unevaluatedProperties": false,
+                        "anyOf": [{ "required": ["file-name"] }, { "required": ["url"] }],
+                        "properties": {
+                            "file-name": {
+                                "type": "string",
+                                "description": "Path to nodeset file"
+                            },
+                            "url": {
+                                "type": "string",
+                                "description": "URL of publicly available nodeset file"
+                            }
+                        }
+                    }
+                },
+                "instance": {
+                    "type": "boolean",
+                    "description": "Use nodeset files to replace the OPC-UA instance hierarchy, i.e. everything under \"Objects\" in the OPC-A server"
+                },
+                "types": {
+                    "type": "boolean",
+                    "description": "Use nodeset files to replace the OPC-UA type hierarchy"
+                }
+            }
+        },
+        "limit-to-server-config": {
+            "type": "boolean",
+            "description": "Limit chunking values based on exposed information from the server, if any. This can be set to false if the server info is known to be wrong, but should generally be left on, as exceeding configured server limits will almost certainly cause a crash",
+            "default": true
+        },
+        "alt-source-background-browse": {
+            "type": "boolean",
+            "description": "If an alternative source for the node hierarchy is used, like CDF or nodeset files, this can be set to true to also browse the node hierarchy in the background. This is useful to start the extractor quickly but also discover everything in the server"
+        },
+        "certificate-expiry": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535,
+            "default": 60,
+            "description": "Default application certificate expiry in months"
+        }
+    }
+}

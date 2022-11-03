@@ -1,0 +1,51 @@
+{
+    "$id": "subscription_config.schema.json",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "unevaluatedProperties": false,
+    "description": "Configuration for the subscriptions created on the server.",
+    "properties": {
+        "data-change-filter": {
+            "type": "object",
+            "description": "Modify the DataChangeFilter used for datapoint subscriptions. See OPC-UA reference part 4 7.17.2 for details. These are just passed to hte server, they have no further effect on extractor behavior. Filters are applied to all noes, but deadband should only affect some, according to the standard.",
+            "unevaluatedProperties": false,
+            "properties": {
+                "trigger": {
+                    "type": "string",
+                    "description": "What changes to a variable trigger an update. One of `Status`, `StatusValue` or `StatusValueTimestamp`",
+                    "enum": ["Status", "StatusValue", "StatusValueTimestamp"],
+                    "default": "StatusValue"
+                },
+                "deadband-type": {
+                    "type": "string",
+                    "description": "Enable deadband for numeric nodes. One of `None`, `Absolute` or `Percent`",
+                    "enum": ["None", "Absolute", "Percent"],
+                    "default": "None"
+                },
+                "deadband-value": {
+                    "type": "number",
+                    "description": "Deadband value, effect depends on deadband type."
+                }
+            }
+        },
+        "data-points": {
+            "type": "boolean",
+            "description": "Enable subscriptions on data-points",
+            "default": true
+        },
+        "events": {
+            "type": "boolean",
+            "description": "Enable subscriptions on events. Requires `events.enabled` to be set to `true`",
+            "default": true
+        },
+        "ignore-access-level": {
+            "type": "boolean",
+            "description": "Ignore the access level parameter for history and datapoints. This means using the `Historizing` parameter for history, and subscribing to all timeseries."
+        },
+        "log-bad-values": {
+            "type": "boolean",
+            "description": "Log bad subscription datapoints",
+            "default": true
+        }
+    }
+}

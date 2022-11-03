@@ -1,0 +1,19 @@
+{
+    "$id": "logger_config.schema.json",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "description": "Configure logging to console or file",
+    "allOf": [{ "$ref": "https://raw.githubusercontent.com/cognitedata/dotnet-extractor-utils/v1.4.1/schema/logger_config.schema.json" }],
+    "unevaluatedProperties": false,
+    "type": "object",
+    "properties": {
+        "ua-trace-level": {
+            "type": "string",
+            "enum": ["verbose", "debug", "information", "warning", "error", "fatal"],
+            "description": "Optionally capture OPC-UA trace at this level or higher."
+        },
+        "ua-session-tracing": {
+            "type": "string",
+            "description": "Trace data sent to and received from the OPC-UA server. WARNING: This produces an enormous amount of logs, only use this when running against a small number of nodes, producing a limited number of datapoints, and make sure it is not turned on in production"
+        }
+    }
+}
