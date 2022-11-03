@@ -171,6 +171,7 @@
     "$defs": {
         "type-update-config": {
             "type": "object",
+            "$id": "type-update-config",
             "unevaluatedProperties": false,
             "properties": {
                 "description": {
@@ -193,6 +194,7 @@
         },
         "proto-data-type": {
             "type": "object",
+            "$id": "proto-data-type",
             "unevaluatedProperties": false,
             "description": "Definition of an OPC-UA data type",
             "properties": {
@@ -212,6 +214,7 @@
         },
         "data-type-config": {
             "type": "object",
+            "$id": "data-type-config",
             "unevaluatedProperties": false,
             "description": "Configuration related to how data types are mapped to CDF",
             "properties": {
@@ -275,6 +278,7 @@
         },
         "raw-node-filter": {
             "type": "object",
+            "$id": "raw-node-filter",
             "unevaluatedProperties": false,
             "properties": {
                 "name": {

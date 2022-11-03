@@ -12,6 +12,7 @@
     },
     "$defs": {
         "ua-throttling-config": {
+            "$id": "ua-throttling-config",
             "type": "object",
             "unevaluatedProperties": false,
             "properties": {
