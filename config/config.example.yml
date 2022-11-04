@@ -396,6 +396,10 @@ mqtt:
     password:
     # True to enable TLS
     use-tls:
+    # Allow untrusted server SSL certificates. This is fundamentally unsafe
+    allow-untrusted-certificates: false
+    # Optional path to a custom certificate authority file for SSL
+    custom-certificate-authority:
     # Mqtt client id. Should be unique for a given broker.
     client-id: cognite-opcua-extractor
     # Data set to use for new objects. Existing objects will not be updated
