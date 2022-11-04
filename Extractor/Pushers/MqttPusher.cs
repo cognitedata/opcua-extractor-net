@@ -32,6 +32,7 @@ using Prometheus;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -103,7 +104,41 @@ namespace Cognite.OpcUa.Pushers
 
             if (config.UseTls)
             {
-                builder = builder.WithTls();
+                builder = builder.WithTls(new MqttClientOptionsBuilderTlsParameters
+                {
+                    AllowUntrustedCertificates = config.AllowUntrustedCertificates,
+                    UseTls = true,
+                    CertificateValidationHandler = (context) =>
+                    {
+                        if (context.SslPolicyErrors == System.Net.Security.SslPolicyErrors.None)
+                        {
+                            return true;
+                        }
+                        if (string.IsNullOrWhiteSpace(config.CustomCertificateAuthority)) return false;
+
+                        var privateChain = new X509Chain();
+                        privateChain.ChainPolicy.RevocationMode = X509RevocationMode.Offline;
+
+                        var certificate = new X509Certificate2(context.Certificate);
+                        var signerCertificate = new X509Certificate2(config.CustomCertificateAuthority);
+
+                        privateChain.ChainPolicy.ExtraStore.Add(certificate);
+                        privateChain.Build(signerCertificate);
+
+                        bool isValid = true;
+
+                        foreach (X509ChainStatus chainStatus in privateChain.ChainStatus)
+                        {
+                            if (chainStatus.Status != X509ChainStatusFlags.NoError)
+                            {
+                                isValid = false;
+                                break;
+                            }
+                        }
+                        return isValid;
+
+                    }
+                });
                 if (!string.IsNullOrEmpty(config.Username) && !string.IsNullOrEmpty(config.Host))
                 {
                     builder = builder.WithCredentials(config.Username, config.Password);
@@ -118,8 +153,7 @@ namespace Cognite.OpcUa.Pushers
 
             client.UseDisconnectedHandler(async e =>
             {
-                log.LogWarning("MQTT Client disconnected");
-                log.LogDebug(e.Exception, "MQTT client disconnected");
+                log.LogWarning(e.Exception, "MQTT client disconnected");
                 async Task TryReconnect(int retries)
                 {
                     if (client.IsConnected || retries == 0 || closed) return;
