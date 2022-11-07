@@ -55,6 +55,11 @@ extractor:
   image: opc-ua.png
 
 versions:
+  "2.9.2":
+    description: Improve configuration of certificates in docker containers
+    changelog:
+      changed:
+        - "Docker containers now use a local certificate directory for application certificates by default, they also use a static signature not dependent on the host machine."
   "2.9.1":
     description: Actual fix to missing `cognite` section bug.
     changelog:

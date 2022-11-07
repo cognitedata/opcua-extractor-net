@@ -188,12 +188,25 @@ namespace Cognite.OpcUa
                 throw new ExtractorFailureException("Failed to load OPC-UA xml configuration file", exc);
             }
 
+            string ownCertificateDir = Environment.GetEnvironmentVariable("OPCUA_OWN_CERTIFICATE_DIR");
             string certificateDir = Environment.GetEnvironmentVariable("OPCUA_CERTIFICATE_DIR");
+            string certificateSubject = Environment.GetEnvironmentVariable("OPCUA_CERTIFICATE_SUBJECT");
             if (!string.IsNullOrEmpty(certificateDir))
             {
                 AppConfig.SecurityConfiguration.TrustedIssuerCertificates.StorePath = $"{certificateDir}/pki/issuer";
                 AppConfig.SecurityConfiguration.TrustedPeerCertificates.StorePath = $"{certificateDir}/pki/trusted";
                 AppConfig.SecurityConfiguration.RejectedCertificateStore.StorePath = $"{certificateDir}/pki/rejected";
+            }
+
+            if (!string.IsNullOrEmpty(ownCertificateDir))
+            {
+                AppConfig.SecurityConfiguration.ApplicationCertificate.StoreType = "Directory";
+                AppConfig.SecurityConfiguration.ApplicationCertificate.StorePath = $"{ownCertificateDir}";
+            }
+
+            if (!string.IsNullOrEmpty(certificateSubject))
+            {
+                AppConfig.SecurityConfiguration.ApplicationCertificate.SubjectName = certificateSubject;
             }
 
             bool validAppCert = await application.CheckApplicationInstanceCertificate(false, 0, Config.Source.CertificateExpiry);
