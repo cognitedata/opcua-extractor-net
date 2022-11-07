@@ -4,7 +4,7 @@
     "type": "object",
     "unevaluatedProperties": false,
     "description": "Write datapoints and events to an influxdb database",
-    "required": ["host"],
+    "required": ["host", "database"],
     "properties": {
         "host": {
             "type": "string",
@@ -17,6 +17,10 @@
         "password": {
             "type": "string",
             "description": "Password for the influxdb server"
+        },
+        "database": {
+            "type": "string",
+            "description": "Database to connect to on the influxdb server"
         },
         "point-chunk-size": {
             "type": "integer",
