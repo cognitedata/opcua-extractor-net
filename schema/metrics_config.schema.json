@@ -2,7 +2,7 @@
     "$id": "metrics_config.schema.json",
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "description": "Configure logging to console or file",
-    "allOf": [{ "$ref": "https://raw.githubusercontent.com/cognitedata/dotnet-extractor-utils/unval-props/schema/metrics_config.schema.json" }],
+    "allOf": [{ "$ref": "https://raw.githubusercontent.com/cognitedata/dotnet-extractor-utils/v1.4.2/schema/metrics_config.schema.json" }],
     "unevaluatedProperties": false,
     "type": "object",
     "properties": {

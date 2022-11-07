@@ -54,6 +54,11 @@ extractor:
       type: "externalDocumentation"
   image: opc-ua.png
 
+schema:
+  rootSchema: schema/full_config.schema.json
+  additionalUris:
+   - "https://raw.githubusercontent.com/"
+
 versions:
   "2.9.2":
     description: Improve configuration of certificates in docker containers
