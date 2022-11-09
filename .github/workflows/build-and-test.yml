@@ -52,16 +52,6 @@ jobs:
             python -m pip install --upgrade pip
             pip install cognite-extractor-publisher --extra-index-url "https://${PYPI_ARTIFACTORY_USERNAME}:${PYPI_ARTIFACTORY_PASSWORD}@cognite.jfrog.io/cognite/api/pypi/snakepit/simple"
 
-        # TODO: Add way to verify entire schema in uploader
-        - name: Produce schema bundle
-          env:
-            EXTRACTOR_DOWNLOAD_API_ADMIN_SECRET: pass
+        - name: Verify manifest
           run: |
-            publish-extractor --schema schema/full_config.schema.json output.schema.json --extra-uris https://raw.githubusercontent.com/
-            
-        - name: Test schema bundle
-          env:
-            # TODO: Remove this once we fix the uploader
-            EXTRACTOR_DOWNLOAD_API_ADMIN_SECRET: pass
-          run: |
-            publish-extractor --run-bundled-schema output.schema.json Test/config.test.yml
+            publish-extractor validate --manifest manifest.yml --config-files Test/config.test.yml
