@@ -806,6 +806,14 @@ namespace Cognite.OpcUa
         /// </summary>
         public bool UseTls { get; set; }
         /// <summary>
+        /// Allow untrusted SSL certificates.
+        /// </summary>
+        public bool AllowUntrustedCertificates { get; set; }
+        /// <summary>
+        /// Path to an optional cert file for a custom certificate authority.
+        /// </summary>
+        public string? CustomCertificateAuthority { get; set; }
+        /// <summary>
         /// Mqtt client id. Should be unique for a given broker.
         /// </summary>
         [DefaultValue("cognite-opcua-extractor")]

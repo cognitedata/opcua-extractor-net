@@ -60,6 +60,12 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.10.0":
+    description: Add more options for SSL certificates in the MQTT destination
+    changelog:
+      added:
+        - "Option to add an additional certificate authority cert in MQTT destination"
+        - "Option to skip certificate checks entirely in MQTT destination"
   "2.9.2":
     description: Improve configuration of certificates in docker containers
     changelog:
