@@ -508,21 +508,15 @@ namespace Cognite.OpcUa
                 {
                     if (token.IsCancellationRequested) break;
                     count++;
-                    await Session.ReadAsync(
+                    var response = await Session.ReadAsync(
                         null,
                         0,
                         TimestampsToReturn.Source,
                         new ReadValueIdCollection(nextValues),
                         token);
 
-                    Session.Read(
-                        null,
-                        0,
-                        TimestampsToReturn.Source,
-                        new ReadValueIdCollection(nextValues),
-                        out DataValueCollection lvalues,
-                        out _
-                    );
+                    var lvalues = response.Results;
+
                     attributeRequests.Inc();
                     values.AddRange(lvalues);
                     attrCount += lvalues.Count;
