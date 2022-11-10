@@ -1,0 +1,28 @@
+{
+    "$id": "metrics_config.schema.json",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "description": "Configure logging to console or file",
+    "allOf": [{ "$ref": "https://raw.githubusercontent.com/cognitedata/dotnet-extractor-utils/v1.4.2/schema/metrics_config.schema.json" }],
+    "unevaluatedProperties": false,
+    "type": "object",
+    "properties": {
+        "nodes": {
+            "type": "object",
+            "description": "Configuration to treat OPC-UA nodes as metrics. Values will be mapped to `opcua_nodes_[NODE-DISPLAY-NAME]` in prometheus",
+            "unevaluatedProperties": false,
+            "properties": {
+                "server-metrics": {
+                    "type": "boolean",
+                    "description": "Map a few relevant static diagnostics contained in `ServerDiagnosticsSummary` in OPC-UA"
+                },
+                "other-metrics": {
+                    "type": "array",
+                    "description": "List of nodes to map to metrics",
+                    "items": {
+                        "$ref": "proto_node_id.schema.json"
+                    }
+                }
+            }
+        }
+    }
+}

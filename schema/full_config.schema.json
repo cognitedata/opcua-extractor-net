@@ -1,0 +1,74 @@
+{
+    "$id": "full_config.schema.json",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "description": "OPC-UA extractor configuration",
+    "type": "object",
+    "unevaluatedProperties": false,
+    "properties": {
+        "version": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Version of the config file, the extractor specifies which config file versions are accepted in each version of the extractor."
+        },
+        "source": {
+            "$ref": "source_config.schema.json"
+        },
+        "logger": {
+            "$ref": "logger_config.schema.json"
+        },
+        "metrics": {
+            "$ref": "metrics_config.schema.json"
+        },
+        "cognite": {
+            "$ref": "cognite_config.schema.json"
+        },
+        "mqtt": {
+            "$ref": "mqtt_config.schema.json"
+        },
+        "influx": {
+            "$ref": "influx_config.schema.json"
+        },
+        "extraction": {
+            "$ref": "extraction_config.schema.json"
+        },
+        "events": {
+            "$ref": "event_config.schema.json"
+        },
+        "failure-buffer": {
+            "$ref": "failure_buffer_config.schema.json"
+        },
+        "history": {
+            "$ref": "history_config.schema.json"
+        },
+        "state-storage": {
+            "$ref": "state_storage_config.schema.json"
+        },
+        "subscriptions": {
+            "$ref": "subscription_config.schema.json"
+        },
+        "pub-sub": {
+            "type": "object",
+            "description": "Configure the extractor to read from MQTT using OPC-UA pubsub. This requires the server pubsub configuration to be exposed through the Server object. You should consider setting subscriptions: data-points: false to avoid duplicate datapoints if this is enabled.",
+            "unevaluatedProperties": false,
+            "properties": {
+                "enabled": {
+                    "type": "boolean",
+                    "description": "Enable PubSub"
+                },
+                "prefer-uadp": {
+                    "type": "boolean",
+                    "description": "Prefer using the UADP binary format. If false JSON is preferred",
+                    "default": true
+                },
+                "file-name": {
+                    "type": "string",
+                    "description": "Save or read configuration from a file. If the file does not exist, it will be created from server configuration. If this is pre-created manually, the server does not need to expose pubsub configuration"
+                }
+            }
+        },
+        "high-availability": {
+            "$ref": "https://raw.githubusercontent.com/cognitedata/dotnet-extractor-utils/v1.4.2/schema/high_availability.schema.json",
+            "unevaluatedProperties": false
+        }
+    }
+}

@@ -54,6 +54,11 @@ extractor:
       type: "externalDocumentation"
   image: opc-ua.png
 
+schema:
+  rootSchema: schema/full_config.schema.json
+  additionalUris:
+   - "https://raw.githubusercontent.com/"
+
 versions:
   "2.10.0":
     description: Add more options for SSL certificates in the MQTT destination
