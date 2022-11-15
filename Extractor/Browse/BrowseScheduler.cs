@@ -124,7 +124,6 @@ namespace Cognite.OpcUa
             if (token.IsCancellationRequested) return;
             numReads++;
             var browseChunk = (BrowseParams)chunk;
-            await Task.Delay(1000, token);
             await client.GetReferences(browseChunk, false, token);
         }
 
