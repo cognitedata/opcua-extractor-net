@@ -3,24 +3,24 @@ NUGET
   remote: https://www.nuget.org/api/v2
     AdysTech.InfluxDB.Client.Net.Core (0.25)
       Newtonsoft.Json (>= 10.0.3) - restriction: || (>= net46) (>= netstandard2.0)
-    Cognite.Extensions (1.5) - restriction: >= netstandard2.0
-      Cognite.Extractor.Common (>= 1.5) - restriction: >= netstandard2.0
+    Cognite.Extensions (1.5.1) - restriction: >= netstandard2.0
+      Cognite.Extractor.Common (>= 1.5.1) - restriction: >= netstandard2.0
       CogniteSdk (>= 3.6) - restriction: >= netstandard2.0
       Microsoft.Extensions.Http (>= 6.0) - restriction: >= netstandard2.0
       Microsoft.Extensions.Http.Polly (>= 6.0.8) - restriction: >= netstandard2.0
       Microsoft.Identity.Client (>= 4.46.1) - restriction: >= netstandard2.0
       Polly.Extensions.Http (>= 3.0) - restriction: >= netstandard2.0
       prometheus-net (>= 6.0) - restriction: >= netstandard2.0
-    Cognite.Extractor.Common (1.5) - restriction: >= netstandard2.0
+    Cognite.Extractor.Common (1.5.1) - restriction: >= netstandard2.0
       Cronos (>= 0.7.1) - restriction: >= netstandard2.0
       Microsoft.Extensions.Logging.Abstractions (>= 6.0.1) - restriction: >= netstandard2.0
       System.Text.Json (>= 6.0.5) - restriction: >= netstandard2.0
-    Cognite.Extractor.Configuration (1.5) - restriction: >= netstandard2.0
-      Cognite.Extractor.Common (>= 1.5) - restriction: >= netstandard2.0
+    Cognite.Extractor.Configuration (1.5.1) - restriction: >= netstandard2.0
+      Cognite.Extractor.Common (>= 1.5.1) - restriction: >= netstandard2.0
       Microsoft.CSharp (>= 4.7) - restriction: >= netstandard2.0
       Microsoft.Extensions.DependencyInjection (>= 6.0) - restriction: >= netstandard2.0
       YamlDotNet (>= 12.0) - restriction: >= netstandard2.0
-    Cognite.Extractor.Logging (1.5) - restriction: >= netstandard2.0
+    Cognite.Extractor.Logging (1.5.1) - restriction: >= netstandard2.0
       Microsoft.Bcl.AsyncInterfaces (>= 6.0) - restriction: >= netstandard2.0
       Microsoft.Extensions.DependencyInjection (>= 6.0) - restriction: >= netstandard2.0
       Serilog (>= 2.11) - restriction: >= netstandard2.0
@@ -28,29 +28,29 @@ NUGET
       Serilog.Sinks.Async (>= 1.5) - restriction: >= netstandard2.0
       Serilog.Sinks.Console (>= 4.0.1) - restriction: >= netstandard2.0
       Serilog.Sinks.File (>= 5.0) - restriction: >= netstandard2.0
-    Cognite.Extractor.Metrics (1.5) - restriction: >= netstandard2.0
-      Cognite.Extractor.Common (>= 1.5) - restriction: >= netstandard2.0
-      Cognite.Extractor.Logging (>= 1.5) - restriction: >= netstandard2.0
+    Cognite.Extractor.Metrics (1.5.1) - restriction: >= netstandard2.0
+      Cognite.Extractor.Common (>= 1.5.1) - restriction: >= netstandard2.0
+      Cognite.Extractor.Logging (>= 1.5.1) - restriction: >= netstandard2.0
       Microsoft.Extensions.Http (>= 6.0) - restriction: >= netstandard2.0
       Microsoft.Extensions.Http.Polly (>= 6.0.8) - restriction: >= netstandard2.0
       Polly.Extensions.Http (>= 3.0) - restriction: >= netstandard2.0
       prometheus-net (>= 6.0) - restriction: >= netstandard2.0
-    Cognite.Extractor.StateStorage (1.5) - restriction: >= netstandard2.0
-      Cognite.Extractor.Common (>= 1.5) - restriction: >= netstandard2.0
-      Cognite.Extractor.Logging (>= 1.5) - restriction: >= netstandard2.0
-      Cognite.Extractor.Metrics (>= 1.5) - restriction: >= netstandard2.0
+    Cognite.Extractor.StateStorage (1.5.1) - restriction: >= netstandard2.0
+      Cognite.Extractor.Common (>= 1.5.1) - restriction: >= netstandard2.0
+      Cognite.Extractor.Logging (>= 1.5.1) - restriction: >= netstandard2.0
+      Cognite.Extractor.Metrics (>= 1.5.1) - restriction: >= netstandard2.0
       LiteDB (>= 5.0.12) - restriction: >= netstandard2.0
-    Cognite.Extractor.Testing (1.5)
-      Cognite.ExtractorUtils (>= 1.5) - restriction: >= netstandard2.0
+    Cognite.Extractor.Testing (1.5.1)
+      Cognite.ExtractorUtils (>= 1.5.1) - restriction: >= netstandard2.0
       xunit.assert (>= 2.4.2) - restriction: >= netstandard2.0
       xunit.core (>= 2.4.2) - restriction: >= netstandard2.0
-    Cognite.ExtractorUtils (1.5)
-      Cognite.Extensions (>= 1.5) - restriction: >= netstandard2.0
-      Cognite.Extractor.Common (>= 1.5) - restriction: >= netstandard2.0
-      Cognite.Extractor.Configuration (>= 1.5) - restriction: >= netstandard2.0
-      Cognite.Extractor.Logging (>= 1.5) - restriction: >= netstandard2.0
-      Cognite.Extractor.Metrics (>= 1.5) - restriction: >= netstandard2.0
-      Cognite.Extractor.StateStorage (>= 1.5) - restriction: >= netstandard2.0
+    Cognite.ExtractorUtils (1.5.1)
+      Cognite.Extensions (>= 1.5.1) - restriction: >= netstandard2.0
+      Cognite.Extractor.Common (>= 1.5.1) - restriction: >= netstandard2.0
+      Cognite.Extractor.Configuration (>= 1.5.1) - restriction: >= netstandard2.0
+      Cognite.Extractor.Logging (>= 1.5.1) - restriction: >= netstandard2.0
+      Cognite.Extractor.Metrics (>= 1.5.1) - restriction: >= netstandard2.0
+      Cognite.Extractor.StateStorage (>= 1.5.1) - restriction: >= netstandard2.0
       Microsoft.Bcl.AsyncInterfaces (>= 6.0) - restriction: >= netstandard2.0
       Microsoft.CSharp (>= 4.7) - restriction: >= netstandard2.0
       Microsoft.Extensions.DependencyInjection (>= 6.0) - restriction: >= netstandard2.0
@@ -240,7 +240,7 @@ NUGET
     Microsoft.Extensions.Primitives (7.0) - restriction: || (>= net462) (>= netstandard2.0)
       System.Memory (>= 4.5.5) - restriction: || (>= net462) (&& (< net6.0) (>= netstandard2.0))
       System.Runtime.CompilerServices.Unsafe (>= 6.0) - restriction: || (>= net462) (>= netstandard2.0)
-    Microsoft.Identity.Client (4.48) - restriction: >= netstandard2.0
+    Microsoft.Identity.Client (4.48.1) - restriction: >= netstandard2.0
       Microsoft.CSharp (>= 4.5) - restriction: && (< net6.0) (>= xamarinios)
       Microsoft.IdentityModel.Abstractions (>= 6.22) - restriction: || (&& (>= monoandroid10.0) (< net6.0)) (&& (< monoandroid10.0) (>= monoandroid9.0) (< netcoreapp2.1)) (&& (< monoandroid9.0) (< net45) (< netcoreapp2.1) (>= netstandard2.0) (< xamarinios)) (&& (< monoandroid9.0) (>= net6.0) (< xamarinios)) (&& (< monoandroid9.0) (< net6.0) (>= netcoreapp2.1) (< xamarinios)) (&& (>= net45) (< netstandard2.0)) (>= net461) (&& (< net6.0) (>= xamarinios)) (>= net6.0-android) (>= net6.0-ios) (>= net6.0-windows10.0.17763.0)
       Microsoft.Web.WebView2 (>= 1.0.864.35) - restriction: >= net6.0-windows10.0.17763.0
