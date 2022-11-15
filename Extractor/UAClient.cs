@@ -913,6 +913,9 @@ namespace Cognite.OpcUa
                     DisplayName = name
                 };
                 subscription.PublishStatusChanged += OnSubscriptionPublishStatusChange;
+            }
+            if (!subscription.Created)
+            {
                 try
                 {
                     Session.AddSubscription(subscription);
@@ -932,8 +935,6 @@ namespace Cognite.OpcUa
                         ExtractorUtils.SourceOp.CreateSubscription);
                 }
             }
-
-            if (!subscription.Created) throw new ServiceCallFailureException($"Failed to create subscription with name {name}");
 
             return subscription;
         }
