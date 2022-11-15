@@ -573,4 +573,37 @@ namespace Cognite.OpcUa
 
         public FatalException() { }
     }
+
+    public enum ServiceCallFailure
+    {
+        SessionMissing,
+        ServerFault,
+        ExtractorError
+    }
+
+    public class ServiceCallFailureException : Exception
+    {
+        public ServiceCallFailure Cause { get; }
+        public ServiceCallFailureException(string message, ServiceCallFailure cause, Exception innerException) : base(message, innerException)
+        {
+            Cause = cause;
+        }
+
+        public ServiceCallFailureException(string message, ServiceCallFailure cause) : base(message)
+        {
+            Cause = cause;
+        }
+
+        public ServiceCallFailureException() : this("Unspecified extractor error", ServiceCallFailure.ExtractorError)
+        {
+        }
+
+        public ServiceCallFailureException(string message) : this(message, ServiceCallFailure.ExtractorError)
+        {
+        }
+
+        public ServiceCallFailureException(string message, Exception innerException) : this(message, ServiceCallFailure.ExtractorError, innerException)
+        {
+        }
+    }
 }

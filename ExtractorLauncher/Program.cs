@@ -156,8 +156,13 @@ namespace Cognite.OpcUa
                 });
             if (OperatingSystem.IsWindows())
             {
-                builder = builder.ConfigureLogging(loggerFactory => loggerFactory.AddEventLog())
-                    .UseWindowsService(options => options.ServiceName = "OpcuaExtractor");
+                builder = builder.ConfigureLogging(loggerFactory =>
+                {
+                    if (OperatingSystem.IsWindows())
+                    {
+                        loggerFactory.AddEventLog();
+                    }
+                }).UseWindowsService(options => options.ServiceName = "OpcuaExtractor");
             }
             else if (OperatingSystem.IsLinux())
             {

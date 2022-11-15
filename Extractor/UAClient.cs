@@ -264,6 +264,27 @@ namespace Cognite.OpcUa
             OnServerReconnect?.Invoke(this, EventArgs.Empty);
         }
 
+        private bool ShouldRetryException(Exception ex)
+        {
+            if (ex is ServiceResultException serviceExc)
+            {
+                var code = serviceExc.StatusCode;
+                return Config.Source.Retries.FinalRetryStatusCodes.Contains(code);
+            }
+            else if (ex is ServiceCallFailureException failureExc)
+            {
+                return failureExc.Cause == ServiceCallFailure.SessionMissing;
+            }
+            else if (ex is SilentServiceException silentExc)
+            {
+                if (silentExc.InnerServiceException != null)
+                {
+                    return Config.Source.Retries.FinalRetryStatusCodes.Contains(silentExc.InnerServiceException.StatusCode);
+                }
+            }
+            return false;
+        }
+
         /// <summary>
         /// Called after succesful validation of a server certificate. Handles the case where the certificate is untrusted.
         /// </summary>
@@ -384,8 +405,12 @@ namespace Cognite.OpcUa
 
         public async Task GetReferences(BrowseParams browseParams, bool readToCompletion, CancellationToken token)
         {
+            await RetryUtil.RetryAsync("browse", async () => await GetReferencesInternal(browseParams, readToCompletion, token), Config.Source.Retries, ShouldRetryException, log, token);
+        }
+
+        private async Task GetReferencesInternal(BrowseParams browseParams, bool readToCompletion, CancellationToken token)
+        {
             if (browseParams == null || browseParams.Nodes == null) throw new ArgumentNullException(nameof(browseParams));
-            if (Session == null) throw new InvalidOperationException("Requires open session");
 
             var toBrowse = new List<BrowseNode>();
             var toBrowseNext = new List<BrowseNode>();
@@ -399,28 +424,7 @@ namespace Cognite.OpcUa
 
             if (toBrowse.Any())
             {
-                var descriptions = new BrowseDescriptionCollection(toBrowse.Select(node => browseParams.ToDescription(node)));
-                BrowseResultCollection results;
-                try
-                {
-                    var result = await Session.BrowseAsync(
-                        null,
-                        null,
-                        browseParams.MaxPerNode,
-                        descriptions,
-                        token);
-
-                    results = result.Results;
-                    numBrowse.Inc();
-                    LogDump("Browse diagnostics", result.DiagnosticInfos);
-                    LogDump("Browse header", result.ResponseHeader);
-                }
-                catch (OperationCanceledException) when (token.IsCancellationRequested) { return; }
-                catch (Exception ex)
-                {
-                    browseFailures.Inc();
-                    throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.Browse);
-                }
+                var results = await RetryUtil.RetryResultAsync("browse", async () => await GetReferencesChunk(browseParams, toBrowse, token), Config.Source.Retries, ShouldRetryException, log, token);
 
                 var next = HandleBrowseResult(toBrowse, results, ExtractorUtils.SourceOp.Browse);
                 if (readToCompletion) toBrowseNext.AddRange(next);
@@ -428,30 +432,64 @@ namespace Cognite.OpcUa
 
             while (toBrowseNext.Any())
             {
-                var cps = new ByteStringCollection(toBrowseNext.Select(node => node.ContinuationPoint));
-                BrowseResultCollection results;
-                try
-                {
-                    var result = await Session.BrowseNextAsync(
-                        null,
-                        false,
-                        cps,
-                        token);
+                var results = await RetryUtil.RetryResultAsync("browse next", async () => await GetNextReferencesChunk(toBrowseNext, token), Config.Source.Retries, ShouldRetryException, log, token);
 
-                    results = result.Results;
-                    numBrowse.Inc();
-                    LogDump("BrowseNext diagnostics", result.DiagnosticInfos);
-                    LogDump("BrowseNext header", result.ResponseHeader);
-                }
-                catch (OperationCanceledException) when (token.IsCancellationRequested) { return; }
-                catch (Exception ex)
-                {
-                    browseFailures.Inc();
-                    throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.BrowseNext);
-                }
                 var next = HandleBrowseResult(toBrowseNext, results, ExtractorUtils.SourceOp.BrowseNext);
                 if (readToCompletion) toBrowseNext = next;
                 else break;
+            }
+        }
+
+        private async Task<BrowseResultCollection> GetReferencesChunk(BrowseParams browseParams, List<BrowseNode> toBrowse, CancellationToken token)
+        {
+            if (Session == null) throw new ServiceCallFailureException("Session is not connected", ServiceCallFailure.SessionMissing);
+            var descriptions = new BrowseDescriptionCollection(toBrowse.Select(node => browseParams.ToDescription(node)));
+            try
+            {
+                token.ThrowIfCancellationRequested();
+                var result = await Session.BrowseAsync(
+                    null,
+                    null,
+                    browseParams.MaxPerNode,
+                    descriptions,
+                    token);
+
+                numBrowse.Inc();
+                LogDump("Browse diagnostics", result.DiagnosticInfos);
+                LogDump("Browse header", result.ResponseHeader);
+                return result.Results;
+            }
+            catch (Exception ex)
+            {
+                token.ThrowIfCancellationRequested();
+                browseFailures.Inc();
+                throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.Browse);
+            }
+        }
+
+        private async Task<BrowseResultCollection> GetNextReferencesChunk(List<BrowseNode> toBrowse, CancellationToken token)
+        {
+            if (Session == null) throw new ServiceCallFailureException("Session is not connected", ServiceCallFailure.SessionMissing);
+            var cps = new ByteStringCollection(toBrowse.Select(node => node.ContinuationPoint));
+            try
+            {
+                token.ThrowIfCancellationRequested();
+                var result = await Session.BrowseNextAsync(
+                    null,
+                    false,
+                    cps,
+                    token);
+
+                numBrowse.Inc();
+                LogDump("BrowseNext diagnostics", result.DiagnosticInfos);
+                LogDump("BrowseNext header", result.ResponseHeader);
+                return result.Results;
+            }
+            catch (Exception ex)
+            {
+                token.ThrowIfCancellationRequested();
+                browseFailures.Inc();
+                throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.BrowseNext);
             }
         }
 
@@ -493,7 +531,6 @@ namespace Cognite.OpcUa
             CancellationToken token,
             string purpose = "")
         {
-            if (Session == null) throw new InvalidOperationException("Requires open session");
             var values = new List<DataValue>();
             if (readValueIds == null || !readValueIds.Any()) return values;
             if (!string.IsNullOrEmpty(purpose)) purpose = $" for {purpose}";
@@ -501,39 +538,48 @@ namespace Cognite.OpcUa
             using var operation = waiter.GetInstance();
             int total = readValueIds.Count;
             int attrCount = 0;
+
+            int count = 0;
+            foreach (var nextValues in readValueIds.ChunkBy(Config.Source.AttributesChunk))
+            {
+                if (token.IsCancellationRequested) break;
+
+                count++;
+                var chunk = await RetryUtil.RetryResultAsync($"read for {purpose}", async () => await ReadAttributesChunk(nextValues, token), Config.Source.Retries, ShouldRetryException, log, token);
+                values.AddRange(chunk);
+                attrCount += chunk.Count();
+                log.LogDebug("Read {NumAttributesRead} / {Total} attributes{Purpose}", attrCount, total, purpose);
+            }
+            log.LogInformation(
+                "Read {TotalAttributesRead} attributes with {NumAttributeReadOperations} operations for {NodeCount} nodes{Purpose}",
+                values.Count, count, distinctNodeCount, purpose);
+
+            return values;
+        }
+
+        private async Task<IEnumerable<DataValue>> ReadAttributesChunk(IEnumerable<ReadValueId> readValueIds, CancellationToken token)
+        {
+            if (token.IsCancellationRequested) return Enumerable.Empty<DataValue>();
+            if (Session == null) throw new ServiceCallFailureException("Session is not connected", ServiceCallFailure.SessionMissing);
             try
             {
-                int count = 0;
-                foreach (var nextValues in readValueIds.ChunkBy(Config.Source.AttributesChunk))
-                {
-                    if (token.IsCancellationRequested) break;
-                    count++;
-                    var response = await Session.ReadAsync(
-                        null,
-                        0,
-                        TimestampsToReturn.Source,
-                        new ReadValueIdCollection(nextValues),
-                        token);
+                var response = await Session.ReadAsync(
+                    null,
+                    0,
+                    TimestampsToReturn.Source,
+                    new ReadValueIdCollection(readValueIds),
+                    token);
 
-                    var lvalues = response.Results;
-
-                    attributeRequests.Inc();
-                    values.AddRange(lvalues);
-                    attrCount += lvalues.Count;
-                    log.LogDebug("Read {NumAttributesRead} / {Total} attributes{Purpose}", attrCount, total, purpose);
-                }
-                log.LogInformation(
-                    "Read {TotalAttributesRead} attributes with {NumAttributeReadOperations} operations for {NodeCount} nodes{Purpose}",
-                    values.Count, count, distinctNodeCount, purpose);
+                attributeRequests.Inc();
+                return response.Results;
             }
-            catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+            catch (OperationCanceledException) when(token.IsCancellationRequested) { return Enumerable.Empty<DataValue>(); }
             catch (Exception ex)
             {
                 attributeRequestFailures.Inc();
                 throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.ReadAttributes);
             }
-
-            return values;
+    
         }
 
         /// <summary>
@@ -557,14 +603,8 @@ namespace Cognite.OpcUa
             }
 
             IList<DataValue> values;
-            try
-            {
-                values = await ReadAttributes(readValueIds, nodes.Count(), token, "node hierarchy information");
-            }
-            catch (Exception ex)
-            {
-                throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.ReadAttributes);
-            }
+            values = await ReadAttributes(readValueIds, nodes.Count(), token, "node hierarchy information");
+
             int total = values.Count;
 
             log.LogInformation("Retrieved {Total}/{Expected} core attributes for {Count} nodes",
@@ -643,7 +683,7 @@ namespace Cognite.OpcUa
         /// <exception cref="InvalidOperationException"></exception>
         public async Task AbortHistoryRead(HistoryReadParams readParams, CancellationToken token)
         {
-            if (Session == null) throw new InvalidOperationException("Requires open session");
+            if (Session == null) throw new ServiceCallFailureException("Session is not connected", ServiceCallFailure.SessionMissing);
             using var operation = waiter.GetInstance();
 
             var ids = new HistoryReadValueIdCollection();
@@ -705,7 +745,7 @@ namespace Cognite.OpcUa
         /// <returns>Pairs of NodeId and history read results as IEncodable</returns>
         public async Task DoHistoryRead(HistoryReadParams readParams, CancellationToken token)
         {
-            if (Session == null) throw new InvalidOperationException("Requires open session");
+            if (Session == null) throw new ServiceCallFailureException("Session is not connected", ServiceCallFailure.SessionMissing);
             using var operation = waiter.GetInstance();
 
             var ids = new HistoryReadValueIdCollection();
@@ -786,7 +826,7 @@ namespace Cognite.OpcUa
             CancellationToken token,
             string purpose = "")
         {
-            if (Session == null) throw new InvalidOperationException("Requires open session");
+            if (Session == null) throw new ServiceCallFailureException("Session is not connected", ServiceCallFailure.SessionMissing);
 
             if (!string.IsNullOrEmpty(purpose)) purpose = $"{purpose} ";
             await subscriptionSem.WaitAsync(token);
@@ -1245,7 +1285,7 @@ namespace Cognite.OpcUa
             Justification = "Bad analysis")]
         public async Task SubscribeToAuditEvents(MonitoredItemNotificationEventHandler callback, CancellationToken token)
         {
-            if (Session == null) throw new InvalidOperationException("Requires open session");
+            if (Session == null) throw new ServiceCallFailureException("Session is not connected", ServiceCallFailure.SessionMissing);
             var filter = BuildAuditFilter();
             LogDump("Audit filter", filter);
             await subscriptionSem.WaitAsync(token);

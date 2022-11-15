@@ -31,6 +31,7 @@ using System.Linq;
 using System.Runtime.Serialization;
 using System.Text.RegularExpressions;
 using System.Threading;
+using YamlDotNet.Serialization;
 
 namespace Cognite.OpcUa
 {
@@ -199,7 +200,55 @@ namespace Cognite.OpcUa
         [DefaultValue(60)]
         [Range(1, 65535)]
         public ushort CertificateExpiry { get; set; } = 60;
+        /// <summary>
+        /// Configuration for retrying operations against the OPC-UA server.
+        /// </summary>
+        public UARetryConfig Retries { get => retries; set => retries = value ?? retries; }
+        private UARetryConfig retries = new UARetryConfig();
     }
+
+    public class UARetryConfig : RetryUtilConfig
+    {
+        /// <summary>
+        /// List of numeric status codes to retry, in addition to a set of default codes.
+        /// </summary>
+        public IEnumerable<uint>? RetryStatusCodes { get => retryStatusCodes; set
+        {
+            retryStatusCodes = value;
+            finalRetryStatusCodes = new HashSet<uint>((retryStatusCodes ?? Enumerable.Empty<uint>()).Concat(internalRetryStatusCodes));
+        } }
+        private IEnumerable<uint>? retryStatusCodes;
+
+
+        private readonly IEnumerable<uint> internalRetryStatusCodes = new[]
+        {
+            StatusCodes.Bad,
+            StatusCodes.BadConnectionClosed,
+            StatusCodes.BadConnectionRejected,
+            StatusCodes.BadNotConnected,
+            StatusCodes.BadServerHalted,
+            StatusCodes.BadServerNotConnected,
+            StatusCodes.BadTimeout,
+            StatusCodes.BadSecureChannelClosed
+        };
+
+        private HashSet<uint>? finalRetryStatusCodes;
+
+        [YamlIgnore]
+        public HashSet<uint> FinalRetryStatusCodes { get
+        {
+            if (finalRetryStatusCodes == null)
+            {
+                finalRetryStatusCodes = new HashSet<uint>((retryStatusCodes ?? Enumerable.Empty<uint>()).Concat(internalRetryStatusCodes));
+                if (RetryStatusCodes != null)
+                {
+                    foreach (var code in RetryStatusCodes) finalRetryStatusCodes.Add(code);
+                }
+            }
+            return finalRetryStatusCodes;
+        } }
+    }
+
     public enum X509CertificateLocation
     {
         None,
