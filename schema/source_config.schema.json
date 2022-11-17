@@ -187,6 +187,9 @@
             "maximum": 65535,
             "default": 60,
             "description": "Default application certificate expiry in months"
+        },
+        "retries": {
+            "$ref": "ua_retries_config.schema.json"
         }
     }
 }
