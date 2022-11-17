@@ -112,6 +112,25 @@ source:
     # Default certificate expiration in months. You may also replace the certificate with your own, by modifying
     # the .xml config file
     certificate-expiry: 60
+    # Configuration for retrying operations against the OPC-UA server.
+    retries:
+        # Total timeout, after this much time has elapsed no more retries will be started.
+        # Syntax is N[timeunit] where timeunit is w, d, h, m, s or ms.
+        # Set to 0 to disable timeout.
+        timeout: 0s
+        # Maximum number of retries per operation
+        max-tries: 5
+        # Maximum delay between retries, 0 limits it to roughly 10 minutes.
+        # Syntax is N[timeunit] where timeunit is w, d, h, m, s or ms
+        max-delay: 0s
+        # Initial delay between retries, basis for exponential backoff.
+        # Syntax is N[timeunit] where timeunit is w, d, h, m, s or ms
+        initial-delay: 500ms
+        # Additional list of numeric status codes to retry. In addition to default codes:
+        # Bad, BadConnectionClosed, BadConnectionRejected, BadNotConnected, BadServerHalted,
+        # BadServerNotConnected, BadTimeout, BadSecureChannelClosed, and generic loss of connection to the server.
+        retry-status-codes:
+
 
 # Config for reading of history from the server
 history:
