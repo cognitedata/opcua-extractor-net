@@ -614,7 +614,7 @@ namespace Test.Unit
             );
 
             var root = ex.InnerException;
-            Assert.IsType<FatalException>(root);
+            Assert.IsType<SilentServiceException>(root);
 
             // Root node is browsed once
             Assert.Equal(21, nodes.Aggregate(0, (seed, kvp) => seed + kvp.Value.Count));
