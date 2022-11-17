@@ -63,6 +63,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "schema", "schema", "{54673C
 		schema\source_config.schema.json = schema\source_config.schema.json
 		schema\state_storage_config.schema.json = schema\state_storage_config.schema.json
 		schema\subscription_config.schema.json = schema\subscription_config.schema.json
+		schema\ua_retries_config.schema.json = schema\ua_retries_config.schema.json
 	EndProjectSection
 EndProject
 Global
