@@ -100,6 +100,10 @@ namespace Server
 
         [CommandLineOption("Set server redundancy support. One of None, Cold, Warm, Hot, Transparent, HotAndMirrored")]
         public string RedundancySupport { get; set; }
+
+        [CommandLineOption("Server issue: This is the denominator for a probability that an arbitrary browse operation will fail " +
+            "I.e. 5 means that 1/5 browse ops will fail with BadNoCommunication")]
+        public int RandomBrowseFail { get; set; }
     }
 
 
@@ -143,6 +147,7 @@ namespace Server
             server.Server.Issues.MaxSubscriptions = opt.MaxSubscriptions;
             server.Server.Issues.MaxHistoryNodes = opt.MaxHistoryNodes;
             server.Server.Issues.RemainingBrowseCount = opt.RemainingBrowseCount;
+            server.Server.Issues.BrowseFailDenom = opt.RandomBrowseFail;
 
             if (opt.RedundancySupport != null)
             {

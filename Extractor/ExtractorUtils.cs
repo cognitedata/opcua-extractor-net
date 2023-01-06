@@ -179,6 +179,10 @@ namespace Cognite.OpcUa
             {
                 return HandleServiceResult(log, serviceEx, op);
             }
+            else if (ex is SilentServiceException silentEx)
+            {
+                return silentEx;
+            }
             else
             {
                 log.LogError(ex, "Unexpected error of type {Type} in operation {Op}", ex.GetType(), op);

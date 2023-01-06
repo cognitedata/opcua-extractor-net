@@ -15,6 +15,9 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+#pragma warning disable CA5394 // Random being used for insecure applications
+// There is no security connected to random here.
+
 using Opc.Ua;
 using Opc.Ua.Server;
 using System;
@@ -31,6 +34,7 @@ namespace Server
         public int MaxSubscriptions { get; set; }
         public int MaxHistoryNodes { get; set; }
         public int RemainingBrowseCount { get; set; }
+        public int BrowseFailDenom { get; set; }
     }
     /// <summary>
     /// The master node manager is called from the server with most "regular" service calls.
@@ -40,6 +44,9 @@ namespace Server
     public class DebugMasterNodeManager : MasterNodeManager
     {
         private readonly ServerIssueConfig issues;
+
+        private readonly Random rand = new Random();
+
         public DebugMasterNodeManager(
             IServerInternal server,
             ApplicationConfiguration config,
@@ -134,6 +141,13 @@ namespace Server
                     return;
                 }
                 issues.RemainingBrowseCount--;
+            }
+
+            if (issues.BrowseFailDenom > 0 && rand.NextInt64(0, issues.BrowseFailDenom) == 0)
+            {
+                results = new BrowseResultCollection() { new BrowseResult { StatusCode = StatusCodes.BadNoCommunication } };
+                diagnosticInfos = new DiagnosticInfoCollection();
+                return;
             }
 
             base.Browse(context, view, maxReferencesPerNode, nodesToBrowse, out results, out diagnosticInfos);
