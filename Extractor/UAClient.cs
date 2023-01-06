@@ -285,9 +285,9 @@ namespace Cognite.OpcUa
             }
             else if (ex is AggregateException aex)
             {
-                // Only retry aggregate exceptions if all inner exceptions should be retried...
+                // Only retry aggregate exceptions if one of the inner exceptions should be retried...
                 var flat = aex.Flatten();
-                return aex.InnerExceptions.All(e => ShouldRetryException(e));
+                return aex.InnerExceptions.Any(e => ShouldRetryException(e));
             }
             return false;
         }
