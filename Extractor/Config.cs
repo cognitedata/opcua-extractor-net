@@ -229,7 +229,8 @@ namespace Cognite.OpcUa
             StatusCodes.BadServerHalted,
             StatusCodes.BadServerNotConnected,
             StatusCodes.BadTimeout,
-            StatusCodes.BadSecureChannelClosed
+            StatusCodes.BadSecureChannelClosed,
+            StatusCodes.BadNoCommunication
         };
 
         private HashSet<uint>? finalRetryStatusCodes;

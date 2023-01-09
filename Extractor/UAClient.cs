@@ -283,6 +283,12 @@ namespace Cognite.OpcUa
                     return Config.Source.Retries.FinalRetryStatusCodes.Contains(silentExc.InnerServiceException.StatusCode);
                 }
             }
+            else if (ex is AggregateException aex)
+            {
+                // Only retry aggregate exceptions if one of the inner exceptions should be retried...
+                var flat = aex.Flatten();
+                return aex.InnerExceptions.Any(e => ShouldRetryException(e));
+            }
             return false;
         }
 
