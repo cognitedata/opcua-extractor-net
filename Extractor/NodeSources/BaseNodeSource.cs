@@ -301,7 +301,8 @@ namespace Cognite.OpcUa.NodeSources
         /// <returns>True if node should be considered for mapping, false otherwise.</returns>
         protected bool FilterObject(TypeUpdateConfig update, UANode node)
         {
-            if (update.AnyUpdate)
+            // If deletes are enabled, we are not able to filter any nodes, even if that has a real cost in terms of memory usage.
+            if (update.AnyUpdate && !Config.Extraction.Deletes.Enabled)
             {
                 var oldChecksum = Extractor.State.GetMappedNode(node.Id)?.Checksum;
                 if (oldChecksum != null)

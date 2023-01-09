@@ -30,18 +30,22 @@ namespace Cognite.OpcUa.NodeSources
             IEnumerable<UAVariable> sourceVariables,
             IEnumerable<UANode> destinationObjects,
             IEnumerable<UAVariable> destinationVariables,
-            IEnumerable<UAReference> destinationReferences)
+            IEnumerable<UAReference> destinationReferences,
+            bool canBeUsedForDeletes)
         {
             SourceObjects = sourceObjects;
             SourceVariables = sourceVariables;
             DestinationObjects = destinationObjects;
             DestinationVariables = destinationVariables;
             DestinationReferences = destinationReferences;
+            CanBeUsedForDeletes = canBeUsedForDeletes;
         }
         public IEnumerable<UANode> SourceObjects { get; }
         public IEnumerable<UAVariable> SourceVariables { get; }
         public IEnumerable<UANode> DestinationObjects { get; }
         public IEnumerable<UAVariable> DestinationVariables { get; }
         public IEnumerable<UAReference> DestinationReferences { get; }
+
+        public bool CanBeUsedForDeletes { get; }
     }
 }
