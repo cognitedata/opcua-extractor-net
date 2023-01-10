@@ -170,6 +170,7 @@ namespace Cognite.OpcUa
                 log.LogTrace("Read {Count} children from node {Id}{Purpose}", refs.Count(), node.Id, purpose);
                 foreach (var rd in refs)
                 {
+                    if (rd.NodeId.ServerIndex != 0) continue;
                     var nodeId = client.ToNodeId(rd.NodeId);
                     if (nodeId == ObjectIds.Server || nodeId == ObjectIds.Aliases) continue;
                     if (!NodeFilter(rd.DisplayName.Text, client.ToNodeId(rd.TypeDefinition), nodeId, rd.NodeClass))
