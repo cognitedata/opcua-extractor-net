@@ -1459,7 +1459,9 @@ namespace Cognite.OpcUa
             if (!nsPrefixMap.TryGetValue(nodeId.NamespaceIndex, out var prefix))
             {
                 var namespaceUri = id.NamespaceUri ?? NamespaceTable!.GetString(nodeId.NamespaceIndex);
-                string newPrefix = Config.Extraction.NamespaceMap.TryGetValue(namespaceUri, out string prefixNode) ? prefixNode : (namespaceUri + ":");
+                string newPrefix = namespaceUri is not null
+                    && Config.Extraction.NamespaceMap.TryGetValue(namespaceUri, out string prefixNode)
+                    ? prefixNode : (namespaceUri + ":");
                 nsPrefixMap[nodeId.NamespaceIndex] = prefix = newPrefix;
             }
 

@@ -60,6 +60,11 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.10.3":
+    description: Fix bug related to external server references
+    changelog:
+      fixed:
+        - "Properly ignore external server references"
   "2.10.2":
     description: Fix to retries on some operations
     changelog:
