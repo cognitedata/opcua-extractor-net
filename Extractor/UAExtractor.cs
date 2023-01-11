@@ -246,7 +246,7 @@ namespace Cognite.OpcUa
                 {
                     await uaClient.Run(Source.Token, startTimeout);
                 }
-                catch (OperationCanceledException ex)
+                catch (OperationCanceledException)
                 {
                     log.LogWarning("Connecting to OPC-UA server was cancelled");
                     throw;
