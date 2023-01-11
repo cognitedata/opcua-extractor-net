@@ -88,6 +88,8 @@ namespace Cognite.OpcUa
         public StringConverter StringConverter { get; }
         public Browser Browser { get; }
 
+        public readonly ServerSubscriptionManager serverSubscription;
+
         /// <summary>
         /// Constructor, does not start the client.
         /// </summary>
@@ -104,6 +106,7 @@ namespace Cognite.OpcUa
             {
                 metricsManager = new NodeMetricsManager(this, config.Source, config.Metrics.Nodes);
             }
+            serverSubscription = new ServerSubscriptionManager(provider.GetRequiredService<ILogger<ServerSubscriptionManager>>(), this);
             StringConverter = new StringConverter(provider.GetRequiredService<ILogger<StringConverter>>(), this, config);
             Browser = new Browser(provider.GetRequiredService<ILogger<Browser>>(), this, config);
         }
@@ -116,7 +119,14 @@ namespace Cognite.OpcUa
             liveToken = token;
             await StartSession(timeout);
             await StartNodeMetrics();
+            await StartCustomServerSubscriptions();
         }
+
+        public async Task StartCustomServerSubscriptions()
+        {
+            await serverSubscription.CreateCustomServerSubscriptions(liveToken);
+        }
+
         /// <summary>
         /// Close the Session, cleaning up any client data on the server
         /// </summary>
@@ -595,13 +605,12 @@ namespace Cognite.OpcUa
                 attributeRequests.Inc();
                 return response.Results;
             }
-            catch (OperationCanceledException) when(token.IsCancellationRequested) { return Enumerable.Empty<DataValue>(); }
+            catch (OperationCanceledException) when (token.IsCancellationRequested) { return Enumerable.Empty<DataValue>(); }
             catch (Exception ex)
             {
                 attributeRequestFailures.Inc();
                 throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.ReadAttributes);
             }
-    
         }
 
         /// <summary>
