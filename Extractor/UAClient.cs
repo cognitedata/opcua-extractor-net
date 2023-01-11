@@ -251,6 +251,9 @@ namespace Cognite.OpcUa
             }
 
             await sessionManager.Connect();
+
+            liveToken.ThrowIfCancellationRequested();
+
             Started = true;
             log.LogInformation("Successfully connected to server at {EndpointURL}", sessionManager.EndpointUrl);
         }
