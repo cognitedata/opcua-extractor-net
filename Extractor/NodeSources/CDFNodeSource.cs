@@ -192,7 +192,8 @@ namespace Cognite.OpcUa.NodeSources
                 FinalSourceVariables,
                 FinalDestinationObjects,
                 FinalDestinationVariables,
-                FinalReferences);
+                FinalReferences,
+                false);
         }
 
         private async Task GetExtraNodeData(CancellationToken token)

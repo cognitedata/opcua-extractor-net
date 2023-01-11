@@ -37,10 +37,12 @@ namespace Cognite.OpcUa.NodeSources
 
         private readonly List<(ReferenceDescription Node, NodeId ParentId)> references = new List<(ReferenceDescription, NodeId)>();
         public Action<ReferenceDescription, NodeId> Callback => HandleNode;
+        private readonly bool isFullBrowse;
 
-        public UANodeSource(ILogger<UANodeSource> log, FullConfig config, UAExtractor extractor, UAClient client)
+        public UANodeSource(ILogger<UANodeSource> log, FullConfig config, UAExtractor extractor, UAClient client, bool isFullBrowse)
             : base(log, config, extractor, client)
         {
+            this.isFullBrowse = isFullBrowse;
         }
 
         /// <summary>
@@ -120,7 +122,8 @@ namespace Cognite.OpcUa.NodeSources
                 FinalSourceVariables,
                 FinalDestinationObjects,
                 FinalDestinationVariables,
-                FinalReferences);
+                FinalReferences,
+                isFullBrowse);
         }
 
         /// <summary>
