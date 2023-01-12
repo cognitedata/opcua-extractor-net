@@ -299,6 +299,8 @@ namespace Cognite.OpcUa
             {
                 throw new AggregateException("Failed to connect to any configured endpoint", exceptions);
             }
+
+            liveToken.ThrowIfCancellationRequested();
             EndpointUrl = bestUrl;
             log.LogInformation("Successfully connected to server with endpoint: {Endpoint}, ServiceLevel: {Level}", bestUrl, bestServiceLevel);
             return activeSession;
