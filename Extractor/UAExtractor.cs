@@ -282,6 +282,14 @@ namespace Cognite.OpcUa
                 await DataTypeManager.GetDataTypeStructureAsync(Source.Token);
             }
 
+            var namespaceSubscription = Config.Subscriptions.ServerNamespacesToRebrowse;
+
+            if (namespaceSubscription is not null && namespaceSubscription.Allowed)
+            {
+                await uaClient.StartCustomServerSubscriptions(this);
+            }
+
+
             Started = true;
             startTime.Set(new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds());
 
@@ -303,7 +311,7 @@ namespace Cognite.OpcUa
 
             if (pubSubManager != null)
             {
-                Looper.Scheduler.ScheduleTask(null, StartPubSub);
+                Scheduler.ScheduleTask(null, StartPubSub);
             }
         }
 
@@ -663,7 +671,6 @@ namespace Cognite.OpcUa
 
                 await uaClient.SubscribeToNodes(subscribeStates, Streamer.DataSubscriptionHandler, Source.Token);
             }
-
         }
 
         /// <summary>

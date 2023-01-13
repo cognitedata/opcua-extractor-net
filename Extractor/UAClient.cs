@@ -106,7 +106,10 @@ namespace Cognite.OpcUa
             {
                 metricsManager = new NodeMetricsManager(this, config.Source, config.Metrics.Nodes);
             }
-            serverSubscription = new ServerSubscriptionManager(provider.GetRequiredService<ILogger<ServerSubscriptionManager>>(), this);
+            serverSubscription = new ServerSubscriptionManager(
+                provider.GetRequiredService<ILogger<ServerSubscriptionManager>>(),
+                this, config.Subscriptions.ServerNamespacesToRebrowse
+            );
             StringConverter = new StringConverter(provider.GetRequiredService<ILogger<StringConverter>>(), this, config);
             Browser = new Browser(provider.GetRequiredService<ILogger<Browser>>(), this, config);
         }
@@ -119,12 +122,11 @@ namespace Cognite.OpcUa
             liveToken = token;
             await StartSession(timeout);
             await StartNodeMetrics();
-            await StartCustomServerSubscriptions();
         }
 
-        public async Task StartCustomServerSubscriptions()
+        public async Task StartCustomServerSubscriptions(UAExtractor extractor)
         {
-            await serverSubscription.CreateCustomServerSubscriptions(liveToken);
+            await serverSubscription.CreateCustomServerSubscriptions(extractor, liveToken);
         }
 
         /// <summary>

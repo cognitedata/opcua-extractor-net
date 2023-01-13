@@ -628,6 +628,14 @@ namespace Cognite.OpcUa
         /// Log bad subscription datapoints
         /// </summary>
         public bool LogBadValues { get; set; } = true;
+
+        public ServerNamespacesToRebrowseConfig? ServerNamespacesToRebrowse { get; set; }
+    }
+    public class ServerNamespacesToRebrowseConfig
+    {
+        public bool Allowed { get; set; } = false;
+
+        public IEnumerable<ProtoNodeId> NamespaceNames { get; set; } = new List<ProtoNodeId>();
     }
     public interface IPusherConfig
     {

@@ -15,13 +15,14 @@ namespace Cognite.OpcUa
     {
         private readonly ILogger<ServerSubscriptionManager> _logger;
         private readonly UAClient _uaClient;
+        private readonly ServerNamespacesToRebrowseConfig? _config;
 
-        private readonly List<NodeId> nodeIds = new List<NodeId> {
-            Variables.OPCUANamespaceMetadata_NamespacePublicationDate,
-            VariableIds.NamespaceMetadataType_NamespacePublicationDate,
-            "ns=1;s=Input4",
-            VariableIds.NamespacesType_NamespaceIdentifier_Placeholder_NamespacePublicationDate,
-        };
+        // private readonly List<NodeId> nodeIds = new List<NodeId> {
+        //     Variables.OPCUANamespaceMetadata_NamespacePublicationDate,
+        //     VariableIds.NamespaceMetadataType_NamespacePublicationDate,
+        //     "ns=1;s=Input4",
+        //     VariableIds.NamespacesType_NamespaceIdentifier_Placeholder_NamespacePublicationDate,
+        // };
 
         private readonly uint[] attributes = new[]
         {
@@ -32,21 +33,49 @@ namespace Cognite.OpcUa
             Attributes.Description
         };
 
-        public ServerSubscriptionManager(ILogger<ServerSubscriptionManager> logger, UAClient uaClient)
+        public ServerSubscriptionManager(
+            ILogger<ServerSubscriptionManager> logger,
+            UAClient uaClient,
+            ServerNamespacesToRebrowseConfig? config
+        )
         {
             _logger = logger;
             _uaClient = uaClient;
+            _config = config;
         }
 
-        public async Task CreateCustomServerSubscriptions(CancellationToken token)
+        public async Task CreateCustomServerSubscriptions(UAExtractor extractor, CancellationToken token)
         {
+            var serverNode = await _uaClient.GetServerNode(token);
+
+            List<NodeId> nodeIds = new List<NodeId>();
+
+            await _uaClient.Browser.BrowseDirectory(
+                new[] { serverNode.Id },
+                (refDef, id) =>
+                {
+                    _logger.LogInformation("namespace url: {namespace}, node id: {id}", refDef.DisplayName.ToString(), id.ToString());
+                    if (refDef.DisplayName.ToString().Equals("NamespacePublicationDate"))
+                    {
+                        nodeIds.Add(id);
+                        _logger.LogInformation(
+                            "namespace url: {namespace}, node id: {id}",
+                            refDef.DisplayName.ToString(), id.ToString()
+                        );
+                    }
+                },
+                token,
+                maxDepth: 2,
+                doFilter: false
+            );
+
             var readValueIds = new ReadValueIdCollection(
                 nodeIds.SelectMany(
                     node => attributes.Select(att => new ReadValueId { AttributeId = att, NodeId = node })
                 )
             );
             var results = await _uaClient.ReadAttributes(readValueIds, nodeIds.Count, token, "server subscriptions");
-            IDictionary<NodeId, UAHistoryExtractionState> nodes = new Dictionary<NodeId, UAHistoryExtractionState>();
+            var nodes = new Dictionary<NodeId, UAHistoryExtractionState>();
 
             for (var id = 0; id < nodeIds.Count; id++)
             {
@@ -57,7 +86,8 @@ namespace Cognite.OpcUa
                 nodes[nodeIds[id]] = new ServerItemSubscriptionState(_uaClient, nodeIds[id]);
             }
 
-            await _uaClient.AddSubscriptions(nodes.Values, "NodeMetrics", SubscriptionHandler,
+            await _uaClient.AddSubscriptions(nodes.Values, "NodeMetrics",
+               async (MonitoredItem item, MonitoredItemNotificationEventArgs _) => await extractor.Rebrowse(),
                 state => new MonitoredItem
                 {
                     StartNodeId = state.SourceId,
@@ -69,11 +99,6 @@ namespace Cognite.OpcUa
                     NodeClass = NodeClass.Variable,
                     CacheQueueSize = 1
                 }, token, "metric");
-        }
-
-        private void SubscriptionHandler(MonitoredItem item, MonitoredItemNotificationEventArgs _)
-        {
-            _logger.LogInformation("Something happened");
         }
     }
 
