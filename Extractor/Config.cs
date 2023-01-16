@@ -633,7 +633,7 @@ namespace Cognite.OpcUa
     }
     public class ServerNamespacesToRebrowseConfig
     {
-        public bool Allowed { get; set; } = false;
+        public bool Subscribe { get; set; } = false;
 
         public IEnumerable<ProtoNodeId> NamespaceNames { get; set; } = new List<ProtoNodeId>();
     }

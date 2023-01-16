@@ -17,13 +17,6 @@ namespace Cognite.OpcUa
         private readonly UAClient _uaClient;
         private readonly ServerNamespacesToRebrowseConfig? _config;
 
-        // private readonly List<NodeId> nodeIds = new List<NodeId> {
-        //     Variables.OPCUANamespaceMetadata_NamespacePublicationDate,
-        //     VariableIds.NamespaceMetadataType_NamespacePublicationDate,
-        //     "ns=1;s=Input4",
-        //     VariableIds.NamespacesType_NamespaceIdentifier_Placeholder_NamespacePublicationDate,
-        // };
-
         private readonly uint[] attributes = new[]
         {
             Attributes.NodeId,
@@ -49,23 +42,24 @@ namespace Cognite.OpcUa
             var serverNode = await _uaClient.GetServerNode(token);
 
             List<NodeId> nodeIds = new List<NodeId>();
+            var targets = _config?.NamespaceNames.Select(name => name.ToNodeId(_uaClient));
 
             await _uaClient.Browser.BrowseDirectory(
                 new[] { serverNode.Id },
                 (refDef, id) =>
                 {
-                    _logger.LogInformation("namespace url: {namespace}, node id: {id}", refDef.DisplayName.ToString(), id.ToString());
-                    if (refDef.DisplayName.ToString().Equals("NamespacePublicationDate"))
+                    var nodeId = (NodeId) refDef.NodeId;
+                    if (targets.Contains(nodeId))
                     {
-                        nodeIds.Add(id);
+                        nodeIds.Add(nodeId);
                         _logger.LogInformation(
-                            "namespace url: {namespace}, node id: {id}",
-                            refDef.DisplayName.ToString(), id.ToString()
+                            "Subscription to a rebrowse on node {node} with {id} is now set",
+                            refDef.DisplayName.ToString(), nodeId
                         );
                     }
                 },
                 token,
-                maxDepth: 2,
+                maxDepth: -1,
                 doFilter: false
             );
 

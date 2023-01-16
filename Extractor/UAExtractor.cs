@@ -282,15 +282,15 @@ namespace Cognite.OpcUa
                 await DataTypeManager.GetDataTypeStructureAsync(Source.Token);
             }
 
+            Started = true;
+
             var namespaceSubscription = Config.Subscriptions.ServerNamespacesToRebrowse;
 
-            if (namespaceSubscription is not null && namespaceSubscription.Allowed)
+            if (namespaceSubscription is not null && namespaceSubscription.Subscribe)
             {
                 await uaClient.StartCustomServerSubscriptions(this);
             }
 
-
-            Started = true;
             startTime.Set(new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds());
 
             foreach (var pusher in pushers)
@@ -670,6 +670,13 @@ namespace Cognite.OpcUa
                 var subscribeStates = State.NodeStates.Where(state => state.ShouldSubscribe);
 
                 await uaClient.SubscribeToNodes(subscribeStates, Streamer.DataSubscriptionHandler, Source.Token);
+            }
+
+            var namespaceSubscription = Config.Subscriptions.ServerNamespacesToRebrowse;
+            
+            if (namespaceSubscription is not null && namespaceSubscription.Subscribe)
+            {
+                await uaClient.StartCustomServerSubscriptions(this);
             }
         }
 
