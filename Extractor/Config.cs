@@ -629,13 +629,18 @@ namespace Cognite.OpcUa
         /// </summary>
         public bool LogBadValues { get; set; } = true;
 
+        /// <summary>
+        /// Server namespace nodes the should be subscribed to a rebrowse upon changes to their values.
+        /// </summary>
         public ServerNamespacesToRebrowseConfig? ServerNamespacesToRebrowse { get; set; }
     }
     public class ServerNamespacesToRebrowseConfig
     {
-        public bool Subscribe { get; set; } = false;
-
-        public IEnumerable<ProtoNodeId> NamespaceNames { get; set; } = new List<ProtoNodeId>();
+        /// <summary>
+        /// Desired namespace nodes to subscribe to.
+        /// </summary>
+        /// <typeparam name="ProtoNodeId"></typeparam>
+        public IEnumerable<ProtoNodeId> NamespaceNodes { get; set; } = new List<ProtoNodeId>();
     }
     public interface IPusherConfig
     {

@@ -284,9 +284,7 @@ namespace Cognite.OpcUa
 
             Started = true;
 
-            var namespaceSubscription = Config.Subscriptions.ServerNamespacesToRebrowse;
-
-            if (namespaceSubscription is not null && namespaceSubscription.Subscribe)
+            if (Config.Subscriptions.ServerNamespacesToRebrowse?.NamespaceNodes.Count() > 0)
             {
                 await uaClient.StartCustomServerSubscriptions(this);
             }
@@ -671,10 +669,8 @@ namespace Cognite.OpcUa
 
                 await uaClient.SubscribeToNodes(subscribeStates, Streamer.DataSubscriptionHandler, Source.Token);
             }
-
-            var namespaceSubscription = Config.Subscriptions.ServerNamespacesToRebrowse;
             
-            if (namespaceSubscription is not null && namespaceSubscription.Subscribe)
+            if (Config.Subscriptions.ServerNamespacesToRebrowse?.NamespaceNodes.Count() > 0)
             {
                 await uaClient.StartCustomServerSubscriptions(this);
             }

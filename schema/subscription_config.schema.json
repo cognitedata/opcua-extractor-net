@@ -46,6 +46,20 @@
             "type": "boolean",
             "description": "Log bad subscription datapoints",
             "default": true
+        },
+        "server-namespaces-to-rebrowse-config": {
+            "type": "object",
+            "unevaluatedProperties": false,
+            "description": "Subscribes provided server namespace nodes to a rebrowse when their values are modified.",
+            "properties": {
+                "namespace-nodes": {
+                    "type": "array",
+                    "description": "A list of server namespace nodes to subscribe to rebrowse.",
+                    "items": {
+                        "$ref": "proto_node_id.schema.json"
+                    }
+                }
+            }
         }
     }
 }
