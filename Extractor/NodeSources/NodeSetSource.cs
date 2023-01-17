@@ -82,6 +82,7 @@ namespace Cognite.OpcUa.NodeSources
         private readonly Dictionary<NodeId, IList<IReference>> references = new Dictionary<NodeId, IList<IReference>>();
         private readonly object buildLock = new object();
         private bool built;
+        private bool isFullBrowse;
         public NodeSetSource(ILogger<NodeSetSource> log, FullConfig config, UAExtractor extractor, UAClient client)
             : base(log, config, extractor, client)
         {
@@ -361,9 +362,10 @@ namespace Cognite.OpcUa.NodeSources
         /// <summary>
         /// Construct 
         /// </summary>
-        public void BuildNodes(IEnumerable<NodeId> rootNodes)
+        public void BuildNodes(IEnumerable<NodeId> rootNodes, bool isFullBrowse)
         {
             Build();
+            this.isFullBrowse = isFullBrowse;
 
             NodeMap.Clear();
             var visitedNodes = new HashSet<NodeId>();
@@ -478,7 +480,8 @@ namespace Cognite.OpcUa.NodeSources
                 FinalSourceVariables,
                 FinalDestinationObjects,
                 FinalDestinationVariables,
-                FinalReferences);
+                FinalReferences,
+                isFullBrowse);
         }
 
         private void GetRelationshipData()

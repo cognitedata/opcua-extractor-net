@@ -246,6 +246,11 @@ namespace Cognite.OpcUa
                 {
                     await uaClient.Run(Source.Token, startTimeout);
                 }
+                catch (OperationCanceledException)
+                {
+                    log.LogWarning("Connecting to OPC-UA server was cancelled");
+                    throw;
+                }
                 catch (Exception ex)
                 {
                     ExtractorUtils.LogException(log, ex, "Unexpected error starting UAClient",
@@ -296,7 +301,7 @@ namespace Cognite.OpcUa
                 pusher.Reset();
             }
 
-            var synchTasks = await RunMapping(RootNodes, true, true);
+            var synchTasks = await RunMapping(RootNodes, true, true, true);
 
             if (Config.FailureBuffer.Enabled && FailureBuffer != null)
             {
@@ -390,7 +395,7 @@ namespace Cognite.OpcUa
 
             uaClient.Browser.ResetVisitedNodes();
 
-            var synchTasks = await RunMapping(RootNodes, true, false);
+            var synchTasks = await RunMapping(RootNodes, true, false, true);
 
             foreach (var task in synchTasks)
             {
@@ -412,7 +417,7 @@ namespace Cognite.OpcUa
                 {
                     nodesToBrowse.Add(id);
                 }
-                var historyTasks = await RunMapping(nodesToBrowse.Distinct(), true, false);
+                var historyTasks = await RunMapping(nodesToBrowse.Distinct(), true, false, false);
 
                 foreach (var task in historyTasks)
                 {
@@ -505,7 +510,8 @@ namespace Cognite.OpcUa
             // If we are updating we want to re-discover nodes in order to run them through mapping again.
             var historyTasks = await RunMapping(RootNodes,
                 !Config.Extraction.Update.AnyUpdate && !Config.Extraction.Relationships.Enabled,
-                false);
+                false,
+                true);
 
             foreach (var task in historyTasks)
             {
@@ -531,7 +537,7 @@ namespace Cognite.OpcUa
 
         #region Mapping
 
-        private async Task<IEnumerable<Func<CancellationToken, Task>>> RunMapping(IEnumerable<NodeId> nodesToBrowse, bool ignoreVisited, bool initial)
+        private async Task<IEnumerable<Func<CancellationToken, Task>>> RunMapping(IEnumerable<NodeId> nodesToBrowse, bool ignoreVisited, bool initial, bool isFull)
         {
             bool readFromOpc = true;
 
@@ -570,7 +576,7 @@ namespace Cognite.OpcUa
                 }
 
                 var handler = nodeSetSource;
-                handler.BuildNodes(nodesToBrowse);
+                handler.BuildNodes(nodesToBrowse, isFull);
 
                 if (Config.Source.NodeSetSource.Instance)
                 {
@@ -597,7 +603,7 @@ namespace Cognite.OpcUa
             if (readFromOpc)
             {
                 log.LogInformation("Begin mapping main directory");
-                var handler = new UANodeSource(Provider.GetRequiredService<ILogger<UANodeSource>>(), Config, this, uaClient);
+                var handler = new UANodeSource(Provider.GetRequiredService<ILogger<UANodeSource>>(), Config, this, uaClient, isFull);
                 try
                 {
                     await uaClient.Browser.BrowseNodeHierarchy(nodesToBrowse, handler.Callback, Source.Token, ignoreVisited,
@@ -620,7 +626,7 @@ namespace Cognite.OpcUa
                 {
                     tasks = tasks.Append(async token =>
                     {
-                        var tasks = await RunMapping(RootNodes, false, false);
+                        var tasks = await RunMapping(RootNodes, false, false, true);
                         foreach (var task in tasks)
                         {
                             Looper.Scheduler.ScheduleTask(null, task);

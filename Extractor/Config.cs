@@ -404,6 +404,12 @@ namespace Cognite.OpcUa
         /// </summary>
         public bool MapVariableChildren { get; set; }
         /// <summary>
+        /// Configuration for enabling soft deletes.
+        /// </summary>
+        public DeletesConfig Deletes { get => deletes; set => deletes = value ?? deletes; }
+        private DeletesConfig deletes = new DeletesConfig();
+
+        /// <summary>
         /// A list of transformations to be applied to the source nodes before pushing
         /// The possible transformations are
         /// "Ignore", ignore the node. This will ignore all descendants of the node.
@@ -575,8 +581,16 @@ namespace Cognite.OpcUa
         /// True to update context, i.e. the position of the node in the node hierarchy.
         /// </summary>
         public bool Context { get; set; }
-
     }
+
+    public class DeletesConfig
+    {
+        /// <summary>
+        /// Enable deletes.
+        /// </summary>
+        public bool Enabled { get; set; }
+    }
+
     public class DataSubscriptionConfig
     {
         /// <summary>
@@ -1369,6 +1383,18 @@ namespace Cognite.OpcUa
         /// Name of the raw table or litedb store for influxdb failurebuffer event ranges.
         /// </summary>
         public string InfluxEventStore { get; set; } = "influx_event_states";
+        /// <summary>
+        /// Name of the raw table or litedb store for storing known object-type nodes, used for detecting deleted nodes.
+        /// </summary>
+        public string KnownObjectsStore { get; set; } = "known_objects";
+        /// <summary>
+        /// Name of the raw table or litedb store for storing known variable-type nodes, used for detecting deleted nodes.
+        /// </summary>
+        public string KnownVariablesStore { get; set; } = "known_variables";
+        /// <summary>
+        /// Name of the raw table or litedb store for storing known reference-type nodes, used for detecting deleted nodes.
+        /// </summary>
+        public string KnownReferencesStore { get; set; } = "known_references";
     }
     public class RawNodeFilter
     {
