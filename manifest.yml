@@ -60,6 +60,11 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.10.5":
+    description: Improve handling of unknown namespace index
+    changelog:
+      fixed:
+        - "Improve handling of unknown namespace index"
   "2.10.4":
     description: Fix to a few bugs
     changelog:
