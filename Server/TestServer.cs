@@ -177,6 +177,9 @@ namespace Server
                 if (!AllowAnonymous) throw ServiceResultException.Create(StatusCodes.BadIdentityTokenRejected,
                         "Anonymous token not permitted");
             }
+            args.Identity = new UserIdentity();
+            args.Identity.GrantedRoleIds.Add(ObjectIds.WellKnownRole_ConfigureAdmin);
+            args.Identity.GrantedRoleIds.Add(ObjectIds.WellKnownRole_SecurityAdmin);
         }
 
         public void UpdateNode(NodeId id, object value)

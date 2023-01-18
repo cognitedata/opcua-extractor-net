@@ -938,6 +938,7 @@ namespace Cognite.OpcUa
                     }
                     finally
                     {
+                        subscription.PublishStatusChanged -= OnSubscriptionPublishStatusChange;
                         subscription.Dispose();
                     }
                     throw ExtractorUtils.HandleServiceResult(log, ex,

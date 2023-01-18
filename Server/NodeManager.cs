@@ -375,6 +375,7 @@ namespace Server
             lock (dfnm.Lock)
             {
                 var serverAud = (PropertyState)cfnm.Find(VariableIds.Server_Auditing);
+                log.LogInformation("Auditing node: {Val}, {Id}, {Parent}", serverAud.Value, serverAud.NodeId, serverAud.Parent.NodeId);
                 serverAud.Value = auditing;
             }
 

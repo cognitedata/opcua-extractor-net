@@ -485,6 +485,15 @@ namespace Cognite.OpcUa.Pushers
                 }
             }
 
+            try
+            {
+                await EnsureConfigInit(token);
+            }
+            catch
+            {
+                return false;
+            }
+
             return true;
         }
         /// <summary>
