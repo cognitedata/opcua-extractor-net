@@ -81,7 +81,7 @@ namespace Cognite.OpcUa
             }
 
             await _uaClient.AddSubscriptions(nodes.Values, "NodeMetrics",
-               async (MonitoredItem item, MonitoredItemNotificationEventArgs _) => await extractor.Rebrowse(),
+               (MonitoredItem item, MonitoredItemNotificationEventArgs _) => extractor.Looper.Run(),
                 state => new MonitoredItem
                 {
                     StartNodeId = state.SourceId,
