@@ -18,10 +18,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using Opc.Ua;
 using Opc.Ua.Server;
 using System;
-using System.Linq;
 using System.Collections.Generic;
 using System.Security.Cryptography.X509Certificates;
-using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -30,6 +28,11 @@ namespace Server
     internal class DummyValidator : ICertificateValidator
     {
         public void Validate(X509Certificate2 certificate)
+        {
+            throw ServiceResultException.Create(StatusCodes.BadCertificateInvalid, "Bad certificate");
+        }
+
+        public void Validate(X509Certificate2Collection certificates)
         {
             throw ServiceResultException.Create(StatusCodes.BadCertificateInvalid, "Bad certificate");
         }

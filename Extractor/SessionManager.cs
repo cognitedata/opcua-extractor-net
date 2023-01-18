@@ -22,7 +22,7 @@ namespace Cognite.OpcUa
         private ApplicationConfiguration appConfig;
         private ILogger log;
 
-        private Session? session;
+        private ISession? session;
         private CancellationToken liveToken;
         private bool disposedValue;
         public int Timeout { get; set; }
@@ -31,7 +31,7 @@ namespace Cognite.OpcUa
             .CreateCounter("opcua_connects", "Number of times the client has connected to and mapped the opcua server");
         private static readonly Gauge connected = Metrics
             .CreateGauge("opcua_connected", "Whether or not the client is currently connected to the opcua server");
-        public Session? Session => session;
+        public ISession? Session => session;
 
         public string? EndpointUrl { get; private set; }
 
@@ -123,7 +123,7 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Event triggered when a publish request fails.
         /// </summary>
-        private void OnPublishError(Session session, PublishErrorEventArgs e)
+        private void OnPublishError(ISession session, PublishErrorEventArgs e)
         {
             string symId = StatusCode.LookupSymbolicId(e.Status.Code);
 
@@ -188,7 +188,7 @@ namespace Cognite.OpcUa
                 }
 
 
-                var session = await Session.Create(
+                var session = await Opc.Ua.Client.Session.Create(
                     appConfig,
                     connection,
                     endpoint,
@@ -231,7 +231,7 @@ namespace Cognite.OpcUa
                 identity.DisplayName);
             try
             {
-                var session = await Session.Create(
+                var session = await Opc.Ua.Client.Session.Create(
                     appConfig,
                     endpoint,
                     false,
@@ -327,7 +327,7 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Called on client keep alive, handles the case where the server has stopped responding and the connection timed out.
         /// </summary>
-        private void ClientKeepAlive(Session sender, KeepAliveEventArgs eventArgs)
+        private void ClientKeepAlive(ISession sender, KeepAliveEventArgs eventArgs)
         {
             client.LogDump("Keep Alive", eventArgs);
             if (eventArgs.Status == null || !ServiceResult.IsNotGood(eventArgs.Status)) return;
