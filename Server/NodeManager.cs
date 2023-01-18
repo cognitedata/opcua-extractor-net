@@ -368,8 +368,8 @@ namespace Server
                 serverAud.Value = auditing;
             }
 
-            Server.EventManager.GetType().GetField("m_ServerAuditing", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
-                .SetValue(Server.EventManager, new Lazy<bool>(() => auditing));
+            Server.GetType().GetField("m_auditing", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                .SetValue(Server, auditing);
 
             var dfnm = Server.DiagnosticsNodeManager;
             lock (dfnm.Lock)

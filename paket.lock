@@ -28,29 +28,29 @@ NUGET
       Serilog.Sinks.Async (>= 1.5) - restriction: >= netstandard2.0
       Serilog.Sinks.Console (>= 4.0.1) - restriction: >= netstandard2.0
       Serilog.Sinks.File (>= 5.0) - restriction: >= netstandard2.0
-    Cognite.Extractor.Metrics (1.5.1)
-      Cognite.Extractor.Common (>= 1.5.1) - restriction: >= netstandard2.0
-      Cognite.Extractor.Logging (>= 1.5.1) - restriction: >= netstandard2.0
+    Cognite.Extractor.Metrics (1.6) - restriction: >= netstandard2.0
+      Cognite.Extractor.Common (>= 1.6) - restriction: >= netstandard2.0
+      Cognite.Extractor.Logging (>= 1.6) - restriction: >= netstandard2.0
       Microsoft.Extensions.Http (>= 6.0) - restriction: >= netstandard2.0
       Microsoft.Extensions.Http.Polly (>= 6.0.8) - restriction: >= netstandard2.0
       Polly.Extensions.Http (>= 3.0) - restriction: >= netstandard2.0
       prometheus-net (>= 6.0) - restriction: >= netstandard2.0
-    Cognite.Extractor.StateStorage (1.5.1) - restriction: >= netstandard2.0
-      Cognite.Extractor.Common (>= 1.5.1) - restriction: >= netstandard2.0
-      Cognite.Extractor.Logging (>= 1.5.1) - restriction: >= netstandard2.0
-      Cognite.Extractor.Metrics (>= 1.5.1) - restriction: >= netstandard2.0
+    Cognite.Extractor.StateStorage (1.6) - restriction: >= netstandard2.0
+      Cognite.Extractor.Common (>= 1.6) - restriction: >= netstandard2.0
+      Cognite.Extractor.Logging (>= 1.6) - restriction: >= netstandard2.0
+      Cognite.Extractor.Metrics (>= 1.6) - restriction: >= netstandard2.0
       LiteDB (>= 5.0.12) - restriction: >= netstandard2.0
-    Cognite.Extractor.Testing (1.5.1)
-      Cognite.ExtractorUtils (>= 1.5.1) - restriction: >= netstandard2.0
+    Cognite.Extractor.Testing (1.6)
+      Cognite.ExtractorUtils (>= 1.6) - restriction: >= netstandard2.0
       xunit.assert (>= 2.4.2) - restriction: >= netstandard2.0
       xunit.core (>= 2.4.2) - restriction: >= netstandard2.0
-    Cognite.ExtractorUtils (1.5.1)
-      Cognite.Extensions (>= 1.5.1) - restriction: >= netstandard2.0
-      Cognite.Extractor.Common (>= 1.5.1) - restriction: >= netstandard2.0
-      Cognite.Extractor.Configuration (>= 1.5.1) - restriction: >= netstandard2.0
-      Cognite.Extractor.Logging (>= 1.5.1) - restriction: >= netstandard2.0
-      Cognite.Extractor.Metrics (>= 1.5.1) - restriction: >= netstandard2.0
-      Cognite.Extractor.StateStorage (>= 1.5.1) - restriction: >= netstandard2.0
+    Cognite.ExtractorUtils (1.6)
+      Cognite.Extensions (>= 1.6) - restriction: >= netstandard2.0
+      Cognite.Extractor.Common (>= 1.6) - restriction: >= netstandard2.0
+      Cognite.Extractor.Configuration (>= 1.6) - restriction: >= netstandard2.0
+      Cognite.Extractor.Logging (>= 1.6) - restriction: >= netstandard2.0
+      Cognite.Extractor.Metrics (>= 1.6) - restriction: >= netstandard2.0
+      Cognite.Extractor.StateStorage (>= 1.6) - restriction: >= netstandard2.0
       Microsoft.Bcl.AsyncInterfaces (>= 6.0) - restriction: >= netstandard2.0
       Microsoft.CSharp (>= 4.7) - restriction: >= netstandard2.0
       Microsoft.Extensions.DependencyInjection (>= 6.0) - restriction: >= netstandard2.0

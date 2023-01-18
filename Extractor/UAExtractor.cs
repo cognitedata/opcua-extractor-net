@@ -147,7 +147,6 @@ namespace Cognite.OpcUa
             {
                 configManager.UpdatePeriod = new BasicTimeSpanProvider(TimeSpan.FromMinutes(2));
                 OnConfigUpdate += OnNewConfig;
-
             }
         }
 
