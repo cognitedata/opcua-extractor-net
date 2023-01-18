@@ -405,10 +405,15 @@ namespace Cognite.OpcUa
                     {
                         log.LogInformation("Successfully closed connection to server");
                     }
-                    session.KeepAlive -= ClientKeepAlive;
-                    session.PublishError -= OnPublishError;
-                    session.Dispose();
-                    session = null;
+#pragma warning disable CA1508 // Avoid dead conditional code. Threading may cause this method to be called multiple times in parallel...
+                    if (session != null)
+                    {
+                        session.KeepAlive -= ClientKeepAlive;
+                        session.PublishError -= OnPublishError;
+                        session.Dispose();
+                        session = null;
+                    }
+#pragma warning restore CA1508 // Avoid dead conditional code
                 }
             }
             finally
