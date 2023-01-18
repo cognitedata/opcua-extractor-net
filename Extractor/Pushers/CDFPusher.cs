@@ -286,7 +286,19 @@ namespace Cognite.OpcUa.Pushers
                 return result;
             }
 
-
+            try
+            {
+                await EnsureConfigInit(token);
+            }
+            catch (Exception e)
+            {
+                log.LogError(e, "Failed to initialize config");
+                result.Objects = false;
+                result.References = false;
+                result.Variables = false;
+                nodeEnsuringFailures.Inc();
+                return result;
+            }
 
             try
             {
@@ -469,22 +481,6 @@ namespace Cognite.OpcUa.Pushers
                     log.LogError("Could not access CDF Events, though event emitters are specified - most likely due " +
                               "to insufficient access rights on API key. Project {Project} at {Host}: {Message}",
                         config.Project, config.Host, ex.Message);
-                    return false;
-                }
-            }
-
-            if (!config.DataSetId.HasValue && !string.IsNullOrEmpty(config.DataSetExternalId))
-            {
-                try
-                {
-                    var dataSet = await destination.CogniteClient.DataSets.RetrieveAsync(new[] { config.DataSetExternalId }, false, token);
-                    config.DataSetId = dataSet.First().Id;
-                }
-                catch (ResponseException ex)
-                {
-                    log.LogError("Could not fetch data set by external id. It may not exist, or the user may lack" +
-                        " sufficient access rights. Project {Project} at {Host}, id {Id}: {Message}",
-                        config.Project, config.Host, config.DataSetExternalId, ex.Message);
                     return false;
                 }
             }
@@ -1109,6 +1105,29 @@ namespace Cognite.OpcUa.Pushers
                 token);
         }
         #endregion
+
+        /// <summary>
+        /// Make sure any configuration that requires synchronizing with CDF is properly initialized.
+        /// </summary>
+        private async Task EnsureConfigInit(CancellationToken token)
+        {
+            if (!config.DataSetId.HasValue && !string.IsNullOrEmpty(config.DataSetExternalId))
+            {
+                try
+                {
+                    var dataSet = await destination.CogniteClient.DataSets.RetrieveAsync(new[] { config.DataSetExternalId }, false, token);
+                    config.DataSetId = dataSet.First().Id;
+                }
+                catch (ResponseException ex)
+                {
+                    log.LogError("Could not fetch data set by external id. It may not exist, or the user may lack" +
+                        " sufficient access rights. Project {Project} at {Host}, id {Id}: {Message}",
+                        config.Project, config.Host, config.DataSetExternalId, ex.Message);
+                    throw;
+                }
+            }
+        }
+
         public void Dispose() { }
     }
 }
