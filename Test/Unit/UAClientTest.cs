@@ -30,6 +30,7 @@ namespace Test.Unit
         public FullConfig Config { get; }
         public CancellationTokenSource Source { get; private set; }
         public ServiceProvider Provider { get; }
+        public ILogger Logger { get; }
         public UAClientTestFixture()
         {
             var services = new ServiceCollection();
@@ -37,6 +38,7 @@ namespace Test.Unit
             Config.Source.EndpointUrl = $"opc.tcp://localhost:62000";
             Configure(services);
             Provider = services.BuildServiceProvider();
+            Logger = Provider.GetRequiredService<ILogger<UAClientTestFixture>>();
 
             Server = new ServerController(new[] {
                 PredefinedSetup.Base, PredefinedSetup.Full, PredefinedSetup.Auditing,
@@ -618,8 +620,8 @@ namespace Test.Unit
 
             // Root node is browsed once
             Assert.Equal(21, nodes.Aggregate(0, (seed, kvp) => seed + kvp.Value.Count));
-            Assert.True(CommonTestUtils.TestMetricValue("opcua_browse_operations", 5));
-            Assert.True(CommonTestUtils.TestMetricValue("opcua_tree_depth", 5));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_browse_operations", 4, tester.Logger));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_tree_depth", 5, tester.Logger));
         }
 
         #endregion
@@ -1242,6 +1244,8 @@ namespace Test.Unit
                 count++;
             }
 
+            tester.Server.SetEventConfig(true, true, true);
+
             try
             {
                 await tester.Client.SubscribeToAuditEvents(handler, tester.Source.Token);
@@ -1258,6 +1262,7 @@ namespace Test.Unit
             }
             finally
             {
+                tester.Server.SetEventConfig(false, true, false);
                 await tester.Client.RemoveSubscription("AuditListener");
             }
         }

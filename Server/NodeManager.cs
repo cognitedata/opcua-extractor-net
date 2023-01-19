@@ -368,13 +368,14 @@ namespace Server
                 serverAud.Value = auditing;
             }
 
-            Server.EventManager.GetType().GetField("m_ServerAuditing", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
-                .SetValue(Server.EventManager, new Lazy<bool>(() => auditing));
+            Server.GetType().GetField("m_auditing", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                .SetValue(Server, auditing);
 
             var dfnm = Server.DiagnosticsNodeManager;
             lock (dfnm.Lock)
             {
                 var serverAud = (PropertyState)cfnm.Find(VariableIds.Server_Auditing);
+                log.LogInformation("Auditing node: {Val}, {Id}, {Parent}", serverAud.Value, serverAud.NodeId, serverAud.Parent.NodeId);
                 serverAud.Value = auditing;
             }
 

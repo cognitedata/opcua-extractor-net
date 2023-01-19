@@ -60,6 +60,14 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.10.4":
+    description: Fix to a few bugs
+    changelog:
+      fixed:
+        - "Fix config to not being properly reloaded"
+        - "Fix data-set-external-id not working correctly"
+        - "Fix an error when restarting the extractor"
+        - "Fix logging of retries"
   "2.10.3":
     description: Fix bug related to external server references
     changelog:

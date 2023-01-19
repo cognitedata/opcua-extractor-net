@@ -46,7 +46,7 @@ namespace Cognite.OpcUa
     public class UAClient : IDisposable, IUAClientAccess
     {
         protected FullConfig Config { get; set; }
-        protected Session? Session => sessionManager?.Session;
+        protected ISession? Session => sessionManager?.Session;
         protected ApplicationConfiguration? AppConfig { get; set; }
         public DataTypeManager DataTypeManager { get; }
         public NodeTypeManager ObjectTypeManager { get; }
@@ -949,6 +949,7 @@ namespace Cognite.OpcUa
                     }
                     finally
                     {
+                        subscription.PublishStatusChanged -= OnSubscriptionPublishStatusChange;
                         subscription.Dispose();
                     }
                     throw ExtractorUtils.HandleServiceResult(log, ex,
