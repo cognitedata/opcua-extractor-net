@@ -1477,7 +1477,7 @@ namespace Cognite.OpcUa
                 }
                 else
                 {
-                    log.LogWarning("NodeID received with null NamespaceUri, and index not in NamespaceTable. This should not be possible! {Id}, {Index}",
+                    log.LogWarning("NodeID received with null NamespaceUri, and index not in NamespaceTable. This is likely a bug in the server. {Id}, {Index}",
                         nodeId, nodeId.NamespaceIndex);
                     newPrefix = $"UNKNOWN_NS_{nodeId.NamespaceIndex}";
                 }
