@@ -73,7 +73,7 @@ namespace Cognite.OpcUa
             if (deleted.Any())
             {
                 logger.LogInformation("Found {Del} stored nodes in {Tab} that no longer exist and will be marked as deleted", deleted.Count, tableName);
-                await stateStore.DeleteExtractionState(deleted.Cast<IExtractionState>(), tableName, token);
+                await stateStore.DeleteExtractionState(deleted.Select(d => new NodeExistsState(d.Id)), tableName, token);
             }
 
             var newStates = states.Values.Where(s => !oldStates.ContainsKey(s.Id)).ToList();
@@ -81,9 +81,8 @@ namespace Cognite.OpcUa
             if (newStates.Any())
             {
                 logger.LogInformation("Found {New} new nodes in {Tab}, adding to state store...", newStates.Count, tableName);
-                await stateStore.StoreExtractionState(newStates, tableName, token);
+                await stateStore.StoreExtractionState(newStates, tableName, s => new BaseStorableState { Id = s.Id }, token);
             }
-
 
             return deleted.Select(d => d.Id);
         }
