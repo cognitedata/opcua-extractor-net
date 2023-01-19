@@ -1463,9 +1463,24 @@ namespace Cognite.OpcUa
             if (!nsPrefixMap.TryGetValue(nodeId.NamespaceIndex, out var prefix))
             {
                 var namespaceUri = id.NamespaceUri ?? NamespaceTable!.GetString(nodeId.NamespaceIndex);
-                string newPrefix = namespaceUri is not null
-                    && Config.Extraction.NamespaceMap.TryGetValue(namespaceUri, out string prefixNode)
-                    ? prefixNode : (namespaceUri + ":");
+                string newPrefix;
+                if (namespaceUri is not null)
+                {
+                    if (Config.Extraction.NamespaceMap.TryGetValue(namespaceUri, out string prefixNode))
+                    {
+                        newPrefix = prefixNode;
+                    }
+                    else
+                    {
+                        newPrefix = namespaceUri + ":";
+                    }
+                }
+                else
+                {
+                    log.LogWarning("NodeID received with null NamespaceUri, and index not in NamespaceTable. This is likely a bug in the server. {Id}, {Index}",
+                        nodeId, nodeId.NamespaceIndex);
+                    newPrefix = $"UNKNOWN_NS_{nodeId.NamespaceIndex}";
+                }
                 nsPrefixMap[nodeId.NamespaceIndex] = prefix = newPrefix;
             }
 
