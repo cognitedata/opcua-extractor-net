@@ -88,8 +88,6 @@ namespace Cognite.OpcUa
         public StringConverter StringConverter { get; }
         public Browser Browser { get; }
 
-        public readonly ServerSubscriptionManager serverSubscription;
-
         /// <summary>
         /// Constructor, does not start the client.
         /// </summary>
@@ -106,10 +104,6 @@ namespace Cognite.OpcUa
             {
                 metricsManager = new NodeMetricsManager(this, config.Source, config.Metrics.Nodes);
             }
-            serverSubscription = new ServerSubscriptionManager(
-                provider.GetRequiredService<ILogger<ServerSubscriptionManager>>(),
-                this, config.Subscriptions.ServerNamespacesToRebrowse
-            );
             StringConverter = new StringConverter(provider.GetRequiredService<ILogger<StringConverter>>(), this, config);
             Browser = new Browser(provider.GetRequiredService<ILogger<Browser>>(), this, config);
         }
@@ -122,11 +116,6 @@ namespace Cognite.OpcUa
             liveToken = token;
             await StartSession(timeout);
             await StartNodeMetrics();
-        }
-
-        public async Task StartCustomServerSubscriptions(UAExtractor extractor)
-        {
-            await serverSubscription.CreateCustomServerSubscriptions(extractor, liveToken);
         }
 
         /// <summary>

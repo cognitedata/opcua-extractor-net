@@ -86,6 +86,14 @@ namespace Cognite.OpcUa
         }
 
         /// <summary>
+        /// Trigger a rebrowse.
+        /// </summary>
+        public void QueueRebrowse()
+        {
+            Scheduler.TryTriggerTask(nameof(Rebrowse));
+        }
+
+        /// <summary>
         /// Schedule a restart of the extractor.
         /// </summary>
         public void Restart()

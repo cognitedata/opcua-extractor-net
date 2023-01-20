@@ -93,6 +93,8 @@ namespace Cognite.OpcUa
 
         private readonly ILogger<UAExtractor> log;
 
+        private readonly ServerSubscriptionManager? serverSubscription;
+
         /// <summary>
         /// Construct extractor with list of pushers
         /// </summary>
@@ -147,6 +149,14 @@ namespace Cognite.OpcUa
             {
                 configManager.UpdatePeriod = new BasicTimeSpanProvider(TimeSpan.FromMinutes(2));
                 OnConfigUpdate += OnNewConfig;
+            }
+            if (Config.Subscriptions.ServerNamespacesToRebrowse is not null &&
+                Config.Subscriptions.ServerNamespacesToRebrowse.Subscribe)
+            {
+                serverSubscription = new ServerSubscriptionManager(
+                    provider.GetRequiredService<ILogger<ServerSubscriptionManager>>(),
+                    uaClient, config.Subscriptions.ServerNamespacesToRebrowse
+                );
             }
         }
 
@@ -288,9 +298,12 @@ namespace Cognite.OpcUa
 
             Started = true;
 
-            if (Config.Subscriptions.ServerNamespacesToRebrowse?.NamespaceNodes.Count() > 0)
+            if (
+                serverSubscription is not null
+                && Config.Subscriptions.ServerNamespacesToRebrowse?.NamespaceNodes.Count() > 0
+            )
             {
-                await uaClient.StartCustomServerSubscriptions(this);
+                await serverSubscription.EnableCustomServerSubscriptions(this, Source.Token);
             }
 
             startTime.Set(new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds());
@@ -674,10 +687,13 @@ namespace Cognite.OpcUa
 
                 await uaClient.SubscribeToNodes(subscribeStates, Streamer.DataSubscriptionHandler, Source.Token);
             }
-            
-            if (Config.Subscriptions.ServerNamespacesToRebrowse?.NamespaceNodes.Count() > 0)
+
+            if (
+                serverSubscription is not null 
+                && Config.Subscriptions.ServerNamespacesToRebrowse is not null
+                && Config.Subscriptions.ServerNamespacesToRebrowse.Subscribe)
             {
-                await uaClient.StartCustomServerSubscriptions(this);
+                await serverSubscription.EnableCustomServerSubscriptions(this, Source.Token);
             }
         }
 

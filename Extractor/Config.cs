@@ -651,6 +651,11 @@ namespace Cognite.OpcUa
     public class ServerNamespacesToRebrowseConfig
     {
         /// <summary>
+        /// Indicate if the extractor should turn on subscription to namespaces.
+        /// </summary>
+        /// <value></value>
+        public bool Subscribe { get; set; } = false;
+        /// <summary>
         /// Desired namespace nodes to subscribe to.
         /// </summary>
         /// <typeparam name="ProtoNodeId"></typeparam>

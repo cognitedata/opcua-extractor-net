@@ -37,7 +37,7 @@ namespace Cognite.OpcUa
             _config = config;
         }
 
-        public async Task CreateCustomServerSubscriptions(UAExtractor extractor, CancellationToken token)
+        public async Task EnableCustomServerSubscriptions(UAExtractor extractor, CancellationToken token)
         {
             var serverNode = await _uaClient.GetServerNode(token);
 
@@ -48,7 +48,7 @@ namespace Cognite.OpcUa
                 new[] { serverNode.Id },
                 (refDef, id) =>
                 {
-                    var nodeId = (NodeId) refDef.NodeId;
+                    var nodeId = (NodeId)refDef.NodeId;
                     if (targets.Contains(nodeId))
                     {
                         nodeIds.Add(nodeId);
@@ -81,11 +81,11 @@ namespace Cognite.OpcUa
             }
 
             await _uaClient.AddSubscriptions(nodes.Values, "NodeMetrics",
-               (MonitoredItem item, MonitoredItemNotificationEventArgs _) => extractor.Looper.Run(),
+               (MonitoredItem item, MonitoredItemNotificationEventArgs _) => extractor.Looper.QueueRebrowse(),
                 state => new MonitoredItem
                 {
                     StartNodeId = state.SourceId,
-                    SamplingInterval = 100,
+                    SamplingInterval = 10,
                     DisplayName = "Value " + state.Id,
                     QueueSize = 1,
                     DiscardOldest = true,
