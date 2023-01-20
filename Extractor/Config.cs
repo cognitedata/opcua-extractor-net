@@ -653,13 +653,12 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Indicate if the extractor should turn on subscription to namespaces.
         /// </summary>
-        /// <value></value>
         public bool Subscribe { get; set; } = false;
         /// <summary>
         /// Desired namespace nodes to subscribe to.
         /// </summary>
-        /// <typeparam name="ProtoNodeId"></typeparam>
-        public IEnumerable<ProtoNodeId> NamespaceNodes { get; set; } = new List<ProtoNodeId>();
+        /// <typeparam name="String"></typeparam>
+        public IEnumerable<String> Namespaces { get; set; } = new List<String>();
     }
     public interface IPusherConfig
     {

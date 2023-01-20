@@ -42,14 +42,15 @@ namespace Cognite.OpcUa
             var serverNode = await _uaClient.GetServerNode(token);
 
             List<NodeId> nodeIds = new List<NodeId>();
-            var targets = _config?.NamespaceNodes.Select(name => name.ToNodeId(_uaClient));
+            var targets = _config?.Namespaces;
+            // nodeIds.Add("ns=1;s=Input4");
 
             await _uaClient.Browser.BrowseDirectory(
                 new[] { serverNode.Id },
                 (refDef, id) =>
                 {
                     var nodeId = (NodeId)refDef.NodeId;
-                    if (targets.Contains(nodeId))
+                    if (targets.Contains(refDef.DisplayName.ToString()))
                     {
                         nodeIds.Add(nodeId);
                         _logger.LogInformation(

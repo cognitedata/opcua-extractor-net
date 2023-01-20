@@ -300,7 +300,8 @@ namespace Cognite.OpcUa
 
             if (
                 serverSubscription is not null
-                && Config.Subscriptions.ServerNamespacesToRebrowse?.NamespaceNodes.Count() > 0
+                && Config.Subscriptions.ServerNamespacesToRebrowse is not null 
+                && Config.Subscriptions.ServerNamespacesToRebrowse.Subscribe
             )
             {
                 await serverSubscription.EnableCustomServerSubscriptions(this, Source.Token);
