@@ -483,9 +483,6 @@ namespace Server
                     var dataSets = (BaseObjectState)cfnm.Find(ObjectIds.PublishSubscribe_PublishedDataSets);
                 }
 
-                CreateNamespaceMetadataNode(externalReferences);
-                SetNamespacePublicationDate(DateTime.UtcNow);
-
                 if (predefinedNodes != null)
                 {
                     foreach (var set in predefinedNodes)
@@ -519,6 +516,8 @@ namespace Server
                         }
                     }
                 }
+
+                CreateNamespaceMetadataNode(externalReferences);
             }
             catch (Exception ex)
             {
