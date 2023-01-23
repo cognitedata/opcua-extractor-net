@@ -14,7 +14,6 @@ using System.Threading.Tasks;
 using Test.Utils;
 using Xunit;
 using Xunit.Abstractions;
-using Xunit.Sdk;
 
 namespace Test.Unit
 {

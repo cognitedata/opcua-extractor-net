@@ -1,11 +1,9 @@
 ﻿using Cognite.Extractor.StateStorage;
 using Cognite.OpcUa.NodeSources;
 using Microsoft.Extensions.Logging;
-using Opc.Ua;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
