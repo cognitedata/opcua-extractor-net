@@ -50,39 +50,42 @@ namespace Cognite.OpcUa
             this.logger = logger;
         }
 
+        private async Task<Dictionary<string, BaseStorableState>> GetExistingStates(string tableName, CancellationToken token)
+        {
+            try
+            {
+                return (await stateStore.GetAllExtractionStates<BaseStorableState>(tableName, token)).ToDictionary(s => s.Id);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to get states from state store, assuming it is empty");
+                return new Dictionary<string, BaseStorableState>();
+            }
+        }
+
         private async Task<IEnumerable<string>> GetDeletedItems(string? tableName, Dictionary<string, NodeExistsState> states, CancellationToken token)
         {
             // If there are no states we don't check for deletes. This means we can't ever delete the _last_ of a type, but that is likely to be
             // an issue or a bug either way.
             if (tableName == null || !states.Any()) return Enumerable.Empty<string>();
 
-            Dictionary<string, BaseStorableState> oldStates;
-            try
-            {
-                oldStates = (await stateStore.GetAllExtractionStates<BaseStorableState>(tableName, token)).ToDictionary(s => s.Id);
-            }
-            catch (Exception ex)
-            {
-                logger.LogWarning(ex, "Failed to get states from state store, assuming it is empty");
-                oldStates = new Dictionary<string, BaseStorableState>();
-            }
-            var deleted = oldStates.Where(s => !states.ContainsKey(s.Key)).Select(kvp => kvp.Value).ToList();
+            var oldStates = await GetExistingStates(tableName, token);
 
-            if (deleted.Any())
+            var deletedStates = oldStates.Where(s => !states.ContainsKey(s.Key)).Select(kvp => kvp.Value).ToList();
+            if (deletedStates.Any())
             {
-                logger.LogInformation("Found {Del} stored nodes in {Tab} that no longer exist and will be marked as deleted", deleted.Count, tableName);
-                await stateStore.DeleteExtractionState(deleted.Select(d => new NodeExistsState(d.Id)), tableName, token);
+                logger.LogInformation("Found {Del} stored nodes in {Tab} that no longer exist and will be marked as deleted", deletedStates.Count, tableName);
+                await stateStore.DeleteExtractionState(deletedStates.Select(d => new NodeExistsState(d.Id)), tableName, token);
             }
 
             var newStates = states.Values.Where(s => !oldStates.ContainsKey(s.Id)).ToList();
-
             if (newStates.Any())
             {
                 logger.LogInformation("Found {New} new nodes in {Tab}, adding to state store...", newStates.Count, tableName);
                 await stateStore.StoreExtractionState(newStates, tableName, s => new BaseStorableState { Id = s.Id }, token);
             }
 
-            return deleted.Select(d => d.Id);
+            return deletedStates.Select(d => d.Id);
         }
 
         public async Task<DeletedNodes> GetDiffAndStoreIds(NodeSourceResult result, CancellationToken token)
