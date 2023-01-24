@@ -65,6 +65,8 @@ namespace Cognite.OpcUa
 
         private NodeSetSource? nodeSetSource;
 
+        private readonly DeletesManager? deletesManager;
+
         public bool ShouldStartLooping { get; set; } = true;
 
         public bool Started { get; private set; }
@@ -147,6 +149,18 @@ namespace Cognite.OpcUa
             {
                 configManager.UpdatePeriod = new BasicTimeSpanProvider(TimeSpan.FromMinutes(2));
                 OnConfigUpdate += OnNewConfig;
+            }
+
+            if (config.Extraction.Deletes.Enabled)
+            {
+                if (stateStore != null)
+                {
+                    deletesManager = new DeletesManager(stateStore, this, provider.GetRequiredService<ILogger<DeletesManager>>(), config);
+                }
+                else
+                {
+                    log.LogWarning("Deletes are enabled, but no state store is configured. Detecting deleted nodes will not work.");
+                }
             }
         }
 
@@ -646,7 +660,10 @@ namespace Cognite.OpcUa
             if (result == null) return Enumerable.Empty<Func<CancellationToken, Task>>();
 
             Streamer.AllowData = State.NodeStates.Any();
-            await PushNodes(result.DestinationObjects, result.DestinationVariables, result.DestinationReferences);
+
+            var toPush = await PusherInput.FromNodeSourceResult(result, deletesManager, Source.Token);
+
+            await PushNodes(toPush);
             // Changed flag means that it already existed, so we avoid synchronizing these.
             var historyTasks = Synchronize(result.SourceVariables.Where(var => !var.Changed));
             Starting.Set(0);
@@ -818,80 +835,55 @@ namespace Cognite.OpcUa
         /// Called when pushing nodes fail, to properly add the nodes not yet pushed to
         /// PendingNodes and PendingReferences on the pusher.
         /// </summary>
-        /// <param name="objects">Objects pushed</param>
-        /// <param name="timeseries">Timeseries pushed</param>
-        /// <param name="references">References pushed</param>
-        /// <param name="nodesPassed">True if nodes were successfully pushed</param>
-        /// <param name="referencesPassed">True if references were successfully pushed</param>
-        /// <param name="dpRangesPassed">True if datapoint ranges were pushed.</param>
+        /// <param name="input">Nodes that failed to push</param>
         /// <param name="pusher">Pusher pushed to</param>
-        private void PushNodesFailure(
-            IEnumerable<UANode> objects,
-            IEnumerable<UAVariable> timeseries,
-            IEnumerable<UAReference> references,
-            bool objectsFailed,
-            bool variablesFailed,
-            bool referencesFailed,
-            bool dpRangesPassed,
+        private static void PushNodesFailure(
+            PusherInput input,
+            FullPushResult result,
             IPusher pusher)
         {
             pusher.Initialized = false;
             pusher.DataFailing = true;
             pusher.EventsFailing = true;
-            if (objectsFailed)
-            {
-                pusher.PendingNodes.AddRange(objects);
-            }
-            if (variablesFailed)
-            {
-                pusher.PendingNodes.AddRange(timeseries);
-            }
-            else if (!dpRangesPassed)
-            {
-                pusher.PendingNodes.AddRange(timeseries
-                    .DistinctBy(ts => ts.Id)
-                    .Where(ts => State.GetNodeState(ts.Id)?.FrontfillEnabled ?? false));
-            }
-            if (referencesFailed)
-            {
-                pusher.PendingReferences.AddRange(references);
-            }
+
+            pusher.AddPendingNodes(input, result);
         }
         /// <summary>
         /// Push nodes to given pusher
         /// </summary>
-        /// <param name="objects">Object type nodes to push</param>
-        /// <param name="timeseries">Variable type nodes to push</param>
-        /// <param name="references">References to push</param>
+        /// <param name="input">Nodes to push</param>
         /// <param name="pusher">Destination to push to</param>
         /// <param name="initial">True if this counts as initialization of the pusher</param>
         public async Task PushNodes(
-            IEnumerable<UANode> objects,
-            IEnumerable<UAVariable> timeseries,
-            IEnumerable<UAReference> references,
+            PusherInput input,
             IPusher pusher, bool initial)
         {
+            var result = new FullPushResult();
             if (pusher.NoInit)
             {
                 log.LogWarning("Skipping pushing on pusher {Name}", pusher.GetType());
-                PushNodesFailure(objects, timeseries, references, true, true, true, false, pusher);
+                PushNodesFailure(input, result, pusher);
                 return;
             }
 
-            if (objects.Any() || timeseries.Any() || references.Any())
+            log.LogInformation("Executing pushes on pusher {Type}", pushers.GetType());
+
+            if (input.Objects.Any() || input.Variables.Any() || input.References.Any())
             {
-                var result = await pusher.PushNodes(objects, timeseries, references, Config.Extraction.Update, Source.Token);
+                var pushResult = await pusher.PushNodes(input.Objects, input.Variables, input.References, Config.Extraction.Update, Source.Token);
+                result.Apply(pushResult);
                 if (!result.Variables || !result.Objects || !result.References)
                 {
                     log.LogError("Failed to push nodes on pusher {Name}", pusher.GetType());
-                    PushNodesFailure(objects, timeseries, references, !result.Objects, !result.Variables, !result.References, false, pusher);
+                    PushNodesFailure(input, result, pusher);
                     return;
                 }
             }
 
             if (pusher.BaseConfig.ReadExtractedRanges)
             {
-                var statesToSync = timeseries
+                var statesToSync = input
+                    .Variables
                     .Select(ts => ts.Id)
                     .Distinct()
                     .SelectNonNull(id => State.GetNodeState(id))
@@ -903,10 +895,24 @@ namespace Cognite.OpcUa
                     pusher.InitExtractedRanges(statesToSync, Config.History.Backfill, Source.Token),
                     pusher.InitExtractedEventRanges(eventStatesToSync, Config.History.Backfill, Source.Token));
 
+                result.Ranges = initResults[0];
+
                 if (!initResults.All(res => res))
                 {
                     log.LogError("Initialization of extracted ranges failed for pusher {Name}", pusher.GetType());
-                    PushNodesFailure(objects, timeseries, references, false, false, false, initResults[0], pusher);
+                    PushNodesFailure(input, result, pusher);
+                    return;
+                }
+            }
+
+            if (input.Deletes != null)
+            {
+                var delResult = await pusher.ExecuteDeletes(input.Deletes, Source.Token);
+                result.Deletes = delResult;
+                if (!delResult)
+                {
+                    log.LogError("Executing soft deletes failed for pusher {Name}", pusher.GetType());
+                    PushNodesFailure(input, result, pusher);
                     return;
                 }
             }
@@ -919,21 +925,17 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Push given lists of nodes to pusher destinations, and fetches latest timestamp for relevant nodes.
         /// </summary>
-        /// <param name="objects">Objects to synchronize with destinations</param>
-        /// <param name="timeseries">Variables to synchronize with destinations</param>
-        /// <param name="references">References to synchronize with destinations</param>
-        private async Task PushNodes(IEnumerable<UANode> objects,
-            IEnumerable<UAVariable> timeseries,
-            IEnumerable<UAReference> references)
+        /// <param name="input">Nodes to push</param>
+        private async Task PushNodes(PusherInput input)
         {
-            var newStates = timeseries
+            var newStates = input.Variables
                 .Select(ts => ts.Id)
                 .Distinct()
                 .Select(id => State.GetNodeState(id));
 
-            bool initial = objects.Count() + timeseries.Count() >= State.NumActiveNodes;
+            bool initial = input.Variables.Count() + input.Objects.Count() >= State.NumActiveNodes;
 
-            var pushTasks = pushers.Select(pusher => PushNodes(objects, timeseries, references, pusher, initial));
+            var pushTasks = pushers.Select(pusher => PushNodes(input, pusher, initial));
 
             if (StateStorage != null && Config.StateStorage.IntervalValue.Value != Timeout.InfiniteTimeSpan)
             {
@@ -957,18 +959,18 @@ namespace Cognite.OpcUa
             }
 
             pushTasks = pushTasks.ToList();
-            log.LogInformation("Await push tasks");
+            log.LogInformation("Waiting for pushes on pushers");
             await Task.WhenAll(pushTasks);
 
             if (initial)
             {
-                trackedAssets.Set(objects.Count());
-                trackedTimeseres.Set(timeseries.Count());
+                trackedAssets.Set(input.Objects.Count());
+                trackedTimeseres.Set(input.Variables.Count());
             }
             else
             {
-                trackedAssets.Inc(objects.Count());
-                trackedTimeseres.Inc(timeseries.Count());
+                trackedAssets.Inc(input.Objects.Count());
+                trackedTimeseres.Inc(input.Variables.Count());
             }
 
             foreach (var state in newStates.Concat<UAHistoryExtractionState?>(State.EmitterStates))

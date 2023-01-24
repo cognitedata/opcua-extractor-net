@@ -18,6 +18,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using AdysTech.InfluxDB.Client.Net;
 using Cognite.Extractor.Common;
 using Cognite.OpcUa.History;
+using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
@@ -43,8 +44,7 @@ namespace Cognite.OpcUa
         public bool EventsFailing { get; set; }
         public bool Initialized { get; set; }
         public bool NoInit { get; set; }
-        public List<UANode> PendingNodes { get; } = new List<UANode>();
-        public List<UAReference> PendingReferences { get; } = new List<UAReference>();
+        public PusherInput? PendingNodes { get; set; }
 
         private readonly DateTime minTs = DateTime.Parse("1677-09-21T00:12:43.145224194Z");
         private readonly DateTime maxTs = DateTime.Parse("2262-04-11T23:47:16.854775806Z");

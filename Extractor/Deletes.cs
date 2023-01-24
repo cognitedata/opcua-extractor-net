@@ -34,6 +34,14 @@ namespace Cognite.OpcUa
             Variables = Enumerable.Empty<string>();
             References = Enumerable.Empty<string>();
         }
+
+        public DeletedNodes Merge(DeletedNodes other)
+        {
+            return new DeletedNodes(
+                Objects.Concat(other.Objects).Distinct().ToList(),
+                Variables.Concat(other.Variables).Distinct().ToList(),
+                References.Concat(other.References).Distinct().ToList());
+        }
     }
 
     public class DeletesManager
