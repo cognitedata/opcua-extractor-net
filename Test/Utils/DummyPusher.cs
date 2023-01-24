@@ -32,6 +32,7 @@ namespace Test.Utils
         public bool? PushDataPointResult { get; set; } = true;
         public bool? PushEventResult { get; set; } = true;
         public bool PushReferenceResult { get; set; } = true;
+        public bool DeleteResult { get; set; } = true;
         public ManualResetEvent OnReset { get; } = new ManualResetEvent(false);
 
         private readonly object dpLock = new object();
@@ -48,6 +49,7 @@ namespace Test.Utils
 
         public UAExtractor Extractor { get; set; }
 
+        public DeletedNodes LastDeleteReq { get; set; }
 
         public Dictionary<NodeId, UANode> PushedNodes { get; }
             = new Dictionary<NodeId, UANode>();
@@ -224,6 +226,12 @@ namespace Test.Utils
             }
 
             return Task.FromResult(PushDataPointResult);
+        }
+
+        public Task<bool> ExecuteDeletes(DeletedNodes deletes, CancellationToken token)
+        {
+            LastDeleteReq = deletes;
+            return Task.FromResult(DeleteResult);
         }
 
         public void Reset()
