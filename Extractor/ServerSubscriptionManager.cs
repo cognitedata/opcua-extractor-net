@@ -15,85 +15,114 @@ namespace Cognite.OpcUa
     {
         private readonly ILogger<ServerSubscriptionManager> _logger;
         private readonly UAClient _uaClient;
-        private readonly ServerNamespacesToRebrowseConfig? _config;
-
-        private readonly uint[] attributes = new[]
-        {
-            Attributes.NodeId,
-            Attributes.DisplayName,
-            Attributes.DataType,
-            Attributes.NodeClass,
-            Attributes.Description
-        };
+        private readonly RebrowseTriggersConfig _config;
+        private readonly UAExtractor _extractor;
+        private readonly CancellationToken _liveToken;
 
         public ServerSubscriptionManager(
             ILogger<ServerSubscriptionManager> logger,
             UAClient uaClient,
-            ServerNamespacesToRebrowseConfig? config
+            RebrowseTriggersConfig config,
+            UAExtractor extractor,
+            CancellationToken token
         )
         {
             _logger = logger;
             _uaClient = uaClient;
             _config = config;
+            _extractor = extractor;
+            _liveToken = token;
         }
 
-        public async Task EnableCustomServerSubscriptions(UAExtractor extractor, CancellationToken token)
+        public async Task EnableCustomServerSubscriptions()
         {
-            var serverNode = await _uaClient.GetServerNode(token);
-
             List<NodeId> nodeIds = new List<NodeId>();
-            var targets = _config?.Namespaces;
-            // nodeIds.Add("ns=1;s=Input4");
+            var filteredNamespaces = _config.Namespaces;
+            var targetNodes = _config.Targets.GetValues;
+            var shouldFilterNamespaces = filteredNamespaces?.Count() > 0;
+
+            var serverNamespaces = ObjectIds.Server_Namespaces;
+
+            var grouping = new Dictionary<NodeId, List<ReferenceDescription>>();
+            // displayName: nodeId
+            var namespaceNameToId = new Dictionary<string, string>();
 
             await _uaClient.Browser.BrowseDirectory(
-                new[] { serverNode.Id },
-                (refDef, id) =>
+                new[] { serverNamespaces },
+                (refDef, parent) =>
                 {
                     var nodeId = (NodeId)refDef.NodeId;
-                    if (targets.Contains(refDef.DisplayName.ToString()))
+
+                    if (parent == serverNamespaces && !grouping.ContainsKey(nodeId))
                     {
-                        nodeIds.Add(nodeId);
-                        _logger.LogInformation(
-                            "Subscription to a rebrowse on node {node} with {id} is now set",
-                            refDef.DisplayName.ToString(), nodeId
-                        );
+                        grouping.Add(nodeId, new List<ReferenceDescription>());
+                        namespaceNameToId.Add(refDef.DisplayName.ToString(), nodeId.ToString());
+                    }
+                    else if (
+                        grouping.ContainsKey(parent)
+                        // Ensures that the type of node being added is a variable node class
+                        && refDef.NodeClass == NodeClass.Variable
+                        // Filters nodes
+                        && targetNodes.Contains(refDef.DisplayName.ToString())
+                    )
+                    {
+                        grouping.GetValueOrDefault(parent).Add(refDef);
                     }
                 },
-                token,
-                maxDepth: -1,
-                doFilter: false
+                _liveToken,
+                maxDepth: 1,
+                doFilter: false,
+                ignoreVisited: false
             );
 
-            var readValueIds = new ReadValueIdCollection(
-                nodeIds.SelectMany(
-                    node => attributes.Select(att => new ReadValueId { AttributeId = att, NodeId = node })
-                )
-            );
-            var results = await _uaClient.ReadAttributes(readValueIds, nodeIds.Count, token, "server subscriptions");
-            var nodes = new Dictionary<NodeId, UAHistoryExtractionState>();
+            var availableNamespaces = namespaceNameToId.Keys;
 
-            for (var id = 0; id < nodeIds.Count; id++)
+            // Filters by namespaces
+            filteredNamespaces = (
+                shouldFilterNamespaces
+                    ? filteredNamespaces.Intersect(availableNamespaces)
+                    : availableNamespaces
+            ).ToList();
+
+            foreach (var @namespace in filteredNamespaces)
             {
-                var nc = (NodeClass)results[id * attributes.Count() + 3].Value;
-                if (nc != NodeClass.Variable) continue;
-                var rawDt = results[id * attributes.Count() + 2].GetValue(NodeId.Null);
+                var nodeId = namespaceNameToId.GetValueOrDefault(@namespace);
+                var references = grouping.GetValueOrDefault(nodeId);
 
-                nodes[nodeIds[id]] = new ServerItemSubscriptionState(_uaClient, nodeIds[id]);
-            }
+                nodeIds.AddRange(
+                    references.Where(@ref => targetNodes.Contains(@ref.DisplayName.ToString()))
+                        .Select(@ref => (NodeId)@ref.NodeId)
+                );
+            };
 
-            await _uaClient.AddSubscriptions(nodes.Values, "NodeMetrics",
-               (MonitoredItem item, MonitoredItemNotificationEventArgs _) => extractor.Looper.QueueRebrowse(),
+
+            var nodes = nodeIds.Select(node => new ServerItemSubscriptionState(_uaClient, node)).ToList();
+
+            await Subscribe(nodes);
+        }
+
+        private async Task Subscribe(List<ServerItemSubscriptionState> nodes)
+        {
+            await _uaClient.AddSubscriptions(
+                nodes, "TriggerRebrowse",
+                (MonitoredItem item, MonitoredItemNotificationEventArgs _) =>
+                {
+                    // Check value.
+                    // Catch errors.
+                    _extractor.Looper.QueueRebrowse();
+                },
                 state => new MonitoredItem
                 {
                     StartNodeId = state.SourceId,
-                    SamplingInterval = 10,
+                    SamplingInterval = 1000,
                     DisplayName = "Value " + state.Id,
                     QueueSize = 1,
                     DiscardOldest = true,
                     AttributeId = Attributes.Value,
                     NodeClass = NodeClass.Variable,
                     CacheQueueSize = 1
-                }, token, "metric");
+                }, _liveToken, "namespaces "
+            );
         }
     }
 

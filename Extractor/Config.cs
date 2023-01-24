@@ -29,8 +29,6 @@ using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Runtime.Serialization;
-using System.Text.RegularExpressions;
-using System.Threading;
 using YamlDotNet.Serialization;
 
 namespace Cognite.OpcUa
@@ -646,20 +644,39 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Server namespace nodes the should be subscribed to a rebrowse upon changes to their values.
         /// </summary>
-        public ServerNamespacesToRebrowseConfig? ServerNamespacesToRebrowse { get; set; }
+        public RebrowseTriggersConfig? RebrowseTriggers { get; set; }
     }
-    public class ServerNamespacesToRebrowseConfig
+    public class RebrowseTriggersConfig
     {
+        public RebrowseTriggersTargets Targets = 
+            new RebrowseTriggersTargets();        
         /// <summary>
-        /// Indicate if the extractor should turn on subscription to namespaces.
+        /// A list of namespaces filters
         /// </summary>
-        public bool Subscribe { get; set; } = false;
-        /// <summary>
-        /// Desired namespace nodes to subscribe to.
-        /// </summary>
-        /// <typeparam name="String"></typeparam>
-        public IEnumerable<String> Namespaces { get; set; } = new List<String>();
+        public IEnumerable<string> Namespaces { get; set; } = new List<string>();
     }
+
+    public class RebrowseTriggersTargets 
+    {
+        private List<string> _toBeSubscribed = new List<string>();
+
+        public bool NamespacePublicationDate { 
+            get => _toBeSubscribed.Contains("NamespacePublicationDate");
+            set {
+                var exists = _toBeSubscribed.Contains("NamespacePublicationDate");
+
+                if (value && !exists) {
+                    _toBeSubscribed.Add("NamespacePublicationDate");
+                } else if (!value && exists) {
+                    _toBeSubscribed.Remove("NamespacePublicationDate");
+                }
+            }
+        }
+
+        // TODO: rename this method appropriately.
+        public List<string> GetValues => _toBeSubscribed;
+    }
+
     public interface IPusherConfig
     {
         /// <summary>

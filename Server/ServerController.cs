@@ -79,11 +79,11 @@ namespace Server
             try
             {
                 var cfg = await app.LoadApplicationConfiguration(Path.Join("config", $"{ConfigRoot}.Config.xml"), false);
-                cfg.ServerConfiguration.BaseAddresses[0] = $"{endpointUrl}:{port}";
+                var address = cfg.ServerConfiguration.BaseAddresses[0] = $"{endpointUrl}:{port}";
                 await app.CheckApplicationInstanceCertificate(false, 0);
                 Server = new TestServer(setups, mqttUrl, provider, logTrace);
                 await Task.Run(async () => await app.Start(Server));
-                log.LogInformation("Server started");
+                log.LogInformation("Server started on address: {address}", address);
                 running = true;
             }
             catch (Exception e)
