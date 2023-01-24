@@ -51,15 +51,17 @@ namespace Cognite.OpcUa
         /// </summary>
         PusherInput? PendingNodes { get; set; }
 
-        public void AddPendingNodes(PusherInput pending, FullPushResult result)
+
+        void AddPendingNodes(PusherInput pending, FullPushResult result)
         {
+            var filtered = pending.Filter(result);
             if (PendingNodes is null)
             {
-                PendingNodes = pending;
+                PendingNodes = filtered;
             }
             else
             {
-                PendingNodes = PendingNodes.Merge(pending, result);
+                PendingNodes = PendingNodes.Merge(filtered);
             }
         }
 

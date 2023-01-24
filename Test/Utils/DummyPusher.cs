@@ -1,6 +1,7 @@
 ﻿using Cognite.Extractor.Common;
 using Cognite.OpcUa;
 using Cognite.OpcUa.History;
+using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.Types;
 using Opc.Ua;
 using System;
@@ -55,9 +56,7 @@ namespace Test.Utils
         public HashSet<UAReference> PushedReferences { get; }
             = new HashSet<UAReference>();
 
-        public List<UANode> PendingNodes { get; } = new List<UANode>();
-
-        public List<UAReference> PendingReferences { get; } = new List<UAReference>();
+        public PusherInput PendingNodes { get; set; }
 
         public DummyPusher(DummyPusherConfig config)
         {

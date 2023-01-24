@@ -81,18 +81,28 @@ namespace Cognite.OpcUa.NodeSources
             return new PusherInput(result.DestinationObjects, result.DestinationVariables, result.DestinationReferences, deleted);
         }
 
-        public PusherInput Merge(PusherInput other, FullPushResult result)
+        public PusherInput Merge(PusherInput other)
         {
-            var objects = result.Objects ? Enumerable.Empty<UANode>() : Objects.Concat(other.Objects).DistinctBy(n => n.Id).ToList();
-            var variables = result.Variables ? Enumerable.Empty<UAVariable>() : Variables.Concat(other.Variables).DistinctBy(n => (n.Index, n.Id)).ToList();
-            var references = result.References ? Enumerable.Empty<UAReference>() : References.Concat(other.References).DistinctBy(n => (n.Source.Id, n.Target.Id, n.Type.Id)).ToList();
+            var objects = Objects.Concat(other.Objects).DistinctBy(n => n.Id).ToList();
+            var variables = Variables.Concat(other.Variables).DistinctBy(n => (n.Index, n.Id)).ToList();
+            var references = References.Concat(other.References).DistinctBy(n => (n.Source.Id, n.Target.Id, n.Type.Id)).ToList();
+            var deleted = Deletes?.Merge(other.Deletes!);
+
+            return new PusherInput(objects, variables, references, deleted);
+        }
+
+        public PusherInput Filter(FullPushResult result)
+        {
+            var objects = result.Objects ? Enumerable.Empty<UANode>() : Objects;
+            var variables = result.Variables ? Enumerable.Empty<UAVariable>() : Variables;
+            var references = result.References ? Enumerable.Empty<UAReference>() : References;
 
             if (result.Variables && !result.Ranges)
             {
-                variables = Variables.Concat(other.Variables.Where(v => v.ReadHistory)).DistinctBy(n => (n.Index, n.Id)).ToList();
+                variables = Variables.Where(v => v.ReadHistory).DistinctBy(n => n.Id).ToList();
             }
 
-            var deleted = result.Deletes ? null : Deletes?.Merge(other.Deletes!);
+            var deleted = result.Deletes ? null : Deletes;
 
             return new PusherInput(objects, variables, references, deleted);
         }

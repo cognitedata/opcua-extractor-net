@@ -855,9 +855,15 @@ namespace Cognite.OpcUa
         /// <param name="pusher">Destination to push to</param>
         /// <param name="initial">True if this counts as initialization of the pusher</param>
         public async Task PushNodes(
-            PusherInput input,
+            PusherInput? input,
             IPusher pusher, bool initial)
         {
+            if (input == null)
+            {
+                log.LogWarning("No input given to pusher {Name}, not initializing", pusher.GetType());
+                return;
+            }
+
             var result = new FullPushResult();
             if (pusher.NoInit)
             {
@@ -866,7 +872,7 @@ namespace Cognite.OpcUa
                 return;
             }
 
-            log.LogInformation("Executing pushes on pusher {Type}", pushers.GetType());
+            log.LogInformation("Executing pushes on pusher {Type}", pusher.GetType());
 
             if (input.Objects.Any() || input.Variables.Any() || input.References.Any())
             {

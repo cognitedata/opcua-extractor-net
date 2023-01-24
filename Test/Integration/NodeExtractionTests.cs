@@ -736,8 +736,9 @@ namespace Test.Integration
 
             Assert.Empty(pusher.PushedNodes);
             Assert.Empty(pusher.PushedVariables);
-            Assert.Equal(22, pusher.PendingNodes.Count);
-            Assert.Equal(32, pusher.PendingReferences.Count);
+            Assert.Equal(6, pusher.PendingNodes.Objects.Count());
+            Assert.Equal(16, pusher.PendingNodes.Variables.Count());
+            Assert.Equal(32, pusher.PendingNodes.References.Count());
 
             Assert.False(pusher.Initialized);
 
@@ -788,12 +789,13 @@ namespace Test.Integration
             {
                 Assert.Empty(pusher.PushedNodes);
                 Assert.Empty(pusher.PushedVariables);
-                Assert.Equal(22, pusher.PendingNodes.Count);
+                Assert.Equal(6, pusher.PendingNodes.Objects.Count());
+                Assert.Equal(16, pusher.PendingNodes.Variables.Count());
             }
             if (failReferences)
             {
                 Assert.Empty(pusher.PushedReferences);
-                Assert.Equal(32, pusher.PendingReferences.Count);
+                Assert.Equal(32, pusher.PendingNodes.References.Count());
             }
 
 
