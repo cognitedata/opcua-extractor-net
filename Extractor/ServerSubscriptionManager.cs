@@ -13,7 +13,7 @@ namespace Cognite.OpcUa
 {
     public class ServerSubscriptionManager
     {
-        private readonly ILogger<ServerSubscriptionManager> _logger;
+        private readonly ILogger<ServerSubscriptionManager> logger;
         private readonly UAClient _uaClient;
         private readonly RebrowseTriggersConfig _config;
         private readonly UAExtractor _extractor;
@@ -25,7 +25,7 @@ namespace Cognite.OpcUa
             UAExtractor extractor
         )
         {
-            _logger = logger;
+            this.logger = logger;
             _uaClient = uaClient;
             _config = config;
             _extractor = extractor;
@@ -33,7 +33,7 @@ namespace Cognite.OpcUa
 
         public async Task EnableCustomServerSubscriptions(CancellationToken token)
         {
-            _logger.LogInformation("{startTime}", UAExtractor.StartTime);
+            logger.LogInformation("{startTime}", UAExtractor.StartTime);
             var targetNodes = _config.Targets.GetValues;
             List<NodeId> nodeIds = new List<NodeId>();
             var filteredNamespaces = _config.Namespaces;
@@ -86,8 +86,8 @@ namespace Cognite.OpcUa
 
             if (shouldFilterNamespaces && processedNamespaces.Count() < filteredNamespacesCount)
             {
-                _logger.LogInformation(
-                    "Some namespaces could not be processed as they do not exist on the server: {namespaces}",
+                logger.LogInformation(
+                    "Some namespaces were not found for rebrowse subscription as they do not exist on the server: {namespaces}",
                     filteredNamespaces.Except(processedNamespaces)
                 );
             }
@@ -103,7 +103,7 @@ namespace Cognite.OpcUa
                 );
             };
 
-            if (nodeIds.Count() > 0) _logger.LogInformation("The following nodes will be subscribed to a rebrowse: {nodes}", nodeIds);
+            if (nodeIds.Count() > 0) logger.LogInformation("The following nodes will be subscribed to a rebrowse: {nodes}", nodeIds);
 
             var nodes = nodeIds.Select(node => new ServerItemSubscriptionState(_uaClient, node)).ToList();
 
@@ -114,18 +114,15 @@ namespace Cognite.OpcUa
         {
             var sub = await _uaClient.AddSubscriptions(
                 nodes, "TriggerRebrowse",
-                async (MonitoredItem item, MonitoredItemNotificationEventArgs _) =>
+                (MonitoredItem item, MonitoredItemNotificationEventArgs _) =>
                 {
-                    var readValueId = new [] { 
-                        new ReadValueId { NodeId = item.ResolvedNodeId, AttributeId = Attributes.Value }
-                    };
-                    var read = await _uaClient.ReadAttributes(new ReadValueIdCollection(readValueId), 1, token);
-                    var value = read.Count() > 0 
-                        ? read[0].GetValue<System.DateTime>(UAExtractor.StartTime)
+                    var values = item.DequeueValues();
+                    var value = values.Count() > 0 
+                        ? values[0].GetValue<System.DateTime>(UAExtractor.StartTime)
                         : UAExtractor.StartTime;
 
                     if (UAExtractor.StartTime < value) {
-                        _logger.LogInformation("Triggering a rebrowse due to a change in the value of {nodeId}", item.ResolvedNodeId);
+                        logger.LogInformation("Triggering a rebrowse due to a change in the value of {nodeId}", item.ResolvedNodeId);
                         _extractor.Looper.QueueRebrowse();
                     }
                 },

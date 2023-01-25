@@ -81,8 +81,8 @@ namespace Cognite.OpcUa
             }
 
             if (
-                config.Subscriptions.RebrowseTriggers is not null 
-                && config.Subscriptions.RebrowseTriggers.Targets == null
+                config.Extraction.RebrowseTriggers is not null 
+                && config.Extraction.RebrowseTriggers.Targets == null
             ) {
                 return "The rebrowse triggers seems to be improperly configured. "
                     + "Please ensure that targets are provided.";

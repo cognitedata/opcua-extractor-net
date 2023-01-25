@@ -442,6 +442,10 @@ namespace Cognite.OpcUa
             }
             return roots.Distinct().ToArray();
         }
+        /// <summary>
+        /// Server namespace nodes the should be subscribed to a rebrowse upon changes to their values.
+        /// </summary>
+        public RebrowseTriggersConfig? RebrowseTriggers { get; set; }
     }
     public class DataTypeConfig
     {
@@ -640,11 +644,6 @@ namespace Cognite.OpcUa
         /// Log bad subscription datapoints
         /// </summary>
         public bool LogBadValues { get; set; } = true;
-
-        /// <summary>
-        /// Server namespace nodes the should be subscribed to a rebrowse upon changes to their values.
-        /// </summary>
-        public RebrowseTriggersConfig? RebrowseTriggers { get; set; }
     }
     public class RebrowseTriggersConfig
     {
@@ -658,23 +657,23 @@ namespace Cognite.OpcUa
 
     public class RebrowseTriggersTargets 
     {
-        private List<string> _toBeSubscribed = new List<string>();
+        private List<string> ToBeSubscribed = new List<string>();
 
         public bool NamespacePublicationDate { 
-            get => _toBeSubscribed.Contains("NamespacePublicationDate");
+            get => ToBeSubscribed.Contains("NamespacePublicationDate");
             set {
-                var exists = _toBeSubscribed.Contains("NamespacePublicationDate");
+                var exists = ToBeSubscribed.Contains("NamespacePublicationDate");
 
                 if (value && !exists) {
-                    _toBeSubscribed.Add("NamespacePublicationDate");
+                    ToBeSubscribed.Add("NamespacePublicationDate");
                 } else if (!value && exists) {
-                    _toBeSubscribed.Remove("NamespacePublicationDate");
+                    ToBeSubscribed.Remove("NamespacePublicationDate");
                 }
             }
         }
 
         // TODO: rename this method appropriately.
-        public List<string> GetValues => _toBeSubscribed;
+        public List<string> GetValues => ToBeSubscribed;
     }
 
     public interface IPusherConfig
