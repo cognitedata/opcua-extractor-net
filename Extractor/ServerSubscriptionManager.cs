@@ -17,29 +17,27 @@ namespace Cognite.OpcUa
         private readonly UAClient _uaClient;
         private readonly RebrowseTriggersConfig _config;
         private readonly UAExtractor _extractor;
-        private readonly CancellationToken _liveToken;
 
         public ServerSubscriptionManager(
             ILogger<ServerSubscriptionManager> logger,
             UAClient uaClient,
             RebrowseTriggersConfig config,
-            UAExtractor extractor,
-            CancellationToken token
+            UAExtractor extractor
         )
         {
             _logger = logger;
             _uaClient = uaClient;
             _config = config;
             _extractor = extractor;
-            _liveToken = token;
         }
 
-        public async Task EnableCustomServerSubscriptions()
+        public async Task EnableCustomServerSubscriptions(CancellationToken token)
         {
+            var targetNodes = _config.Targets?.GetValues;
             List<NodeId> nodeIds = new List<NodeId>();
             var filteredNamespaces = _config.Namespaces;
-            var targetNodes = _config.Targets.GetValues;
-            var shouldFilterNamespaces = filteredNamespaces?.Count() > 0;
+            var filteredNamespacesCount = filteredNamespaces?.Count();
+            var shouldFilterNamespaces = filteredNamespacesCount > 0;
 
             var serverNamespaces = ObjectIds.Server_Namespaces;
 
@@ -62,29 +60,38 @@ namespace Cognite.OpcUa
                         grouping.ContainsKey(parent)
                         // Ensures that the type of node being added is a variable node class
                         && refDef.NodeClass == NodeClass.Variable
-                        // Filters nodes
+                        // Filters targets nodes
                         && targetNodes.Contains(refDef.DisplayName.ToString())
                     )
                     {
                         grouping.GetValueOrDefault(parent).Add(refDef);
                     }
                 },
-                _liveToken,
+                token,
                 maxDepth: 1,
                 doFilter: false,
                 ignoreVisited: false
             );
 
+            // To be used in filtering namespaces
             var availableNamespaces = namespaceNameToId.Keys;
 
             // Filters by namespaces
-            filteredNamespaces = (
+            var processedNamespaces = (
                 shouldFilterNamespaces
                     ? filteredNamespaces.Intersect(availableNamespaces)
                     : availableNamespaces
             ).ToList();
 
-            foreach (var @namespace in filteredNamespaces)
+            if (shouldFilterNamespaces && processedNamespaces.Count() < filteredNamespacesCount)
+            {
+                _logger.LogInformation(
+                    "Some namespaces could not be processed as they do not exist on the server: {namespaces}",
+                    filteredNamespaces.Except(processedNamespaces)
+                );
+            }
+
+            foreach (var @namespace in processedNamespaces)
             {
                 var nodeId = namespaceNameToId.GetValueOrDefault(@namespace);
                 var references = grouping.GetValueOrDefault(nodeId);
@@ -95,20 +102,21 @@ namespace Cognite.OpcUa
                 );
             };
 
+            if (nodeIds.Count() > 0) _logger.LogInformation("The following nodes will be subscribed to a rebrowse: {nodes}", nodeIds);
 
             var nodes = nodeIds.Select(node => new ServerItemSubscriptionState(_uaClient, node)).ToList();
 
-            await Subscribe(nodes);
+            await Subscribe(nodes, token);
         }
 
-        private async Task Subscribe(List<ServerItemSubscriptionState> nodes)
+        private async Task Subscribe(List<ServerItemSubscriptionState> nodes, CancellationToken token)
         {
-            await _uaClient.AddSubscriptions(
+            var sub = await _uaClient.AddSubscriptions(
                 nodes, "TriggerRebrowse",
                 (MonitoredItem item, MonitoredItemNotificationEventArgs _) =>
                 {
                     // Check value.
-                    // Catch errors.
+                    _logger.LogInformation("{value}", item.LastMessage.PublishTime);
                     _extractor.Looper.QueueRebrowse();
                 },
                 state => new MonitoredItem
@@ -121,7 +129,7 @@ namespace Cognite.OpcUa
                     AttributeId = Attributes.Value,
                     NodeClass = NodeClass.Variable,
                     CacheQueueSize = 1
-                }, _liveToken, "namespaces "
+                }, token, "namespaces "
             );
         }
     }

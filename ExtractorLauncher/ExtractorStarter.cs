@@ -79,6 +79,14 @@ namespace Cognite.OpcUa
                 var parsed = CogniteTime.ParseTimestampString(config.History.EndTime);
                 if (parsed == null) return $"Invalid history end time: {config.History.EndTime}";
             }
+
+            if (
+                config.Subscriptions.RebrowseTriggers is not null 
+                && config.Subscriptions.RebrowseTriggers.Targets == null
+            ) {
+                return "The rebrowse triggers seems to be improperly configured. "
+                    + "Please ensure that targets are provided.";
+            }
             return null;
         }
 
