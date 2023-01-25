@@ -79,7 +79,7 @@ namespace Cognite.OpcUa.NodeSources
 
         private readonly Dictionary<NodeId, PlainType> types = new Dictionary<NodeId, PlainType>();
 
-        private readonly Dictionary<NodeId, IList<IReference>> references = new Dictionary<NodeId, IList<IReference>>();
+        private readonly Dictionary<NodeId, Dictionary<(NodeId, NodeId, bool), IReference>> references = new Dictionary<NodeId, Dictionary<(NodeId, NodeId, bool), IReference>>();
         private readonly object buildLock = new object();
         private bool built;
         private bool isFullBrowse;
@@ -114,6 +114,12 @@ namespace Cognite.OpcUa.NodeSources
                 Client.AddExternalNamespaces(set.NamespaceUris);
             }
             set.Import(Client.SystemContext, nodes);
+            Log.LogDebug("Imported nodeset from file {File}, buiding internal data structures", file);
+        }
+
+        private void AddReference(Dictionary<(NodeId, NodeId, bool), IReference> dict, IReference refr)
+        {
+            dict[(Client.ToNodeId(refr.TargetId), refr.ReferenceTypeId, refr.IsInverse)] = refr;
         }
 
         private void LoadReferences()
@@ -124,10 +130,16 @@ namespace Cognite.OpcUa.NodeSources
             {
                 if (!references.TryGetValue(node.NodeId, out var refs))
                 {
-                    references[node.NodeId] = refs = new List<IReference>();
+                    references[node.NodeId] = refs = new Dictionary<(NodeId, NodeId, bool), IReference>();
                 }
-                node.GetReferences(Client.SystemContext, refs);
-                if (node is BaseTypeState type) refs.Add(new BasicReference
+                var rawRefs = new List<IReference>();
+                node.GetReferences(Client.SystemContext, rawRefs);
+                foreach (var rf in rawRefs)
+                {
+                    AddReference(refs, rf);
+                }
+
+                if (node is BaseTypeState type) AddReference(refs, new BasicReference
                 {
                     IsInverse = true,
                     ReferenceTypeId = ReferenceTypeIds.HasSubtype,
@@ -135,13 +147,13 @@ namespace Cognite.OpcUa.NodeSources
                 });
                 if (node is BaseInstanceState instance)
                 {
-                    if (instance.ModellingRuleId != null && !instance.ModellingRuleId.IsNullNodeId) refs.Add(new BasicReference
+                    if (instance.ModellingRuleId != null && !instance.ModellingRuleId.IsNullNodeId) AddReference(refs, new BasicReference
                     {
                         IsInverse = false,
                         ReferenceTypeId = ReferenceTypeIds.HasModellingRule,
                         TargetId = instance.ModellingRuleId
                     });
-                    if (instance.TypeDefinitionId != null && !instance.TypeDefinitionId.IsNullNodeId) refs.Add(new BasicReference
+                    if (instance.TypeDefinitionId != null && !instance.TypeDefinitionId.IsNullNodeId) AddReference(refs, new BasicReference
                     {
                         IsInverse = false,
                         ReferenceTypeId = ReferenceTypeIds.HasTypeDefinition,
@@ -153,20 +165,16 @@ namespace Cognite.OpcUa.NodeSources
             // Create all inverse references
             foreach (var node in nodes)
             {
-                foreach (var reference in references[node.NodeId])
+                foreach (var reference in references[node.NodeId].Values)
                 {
                     var targetId = Client.ToNodeId(reference.TargetId);
                     if (!references.TryGetValue(targetId, out var targetRefs))
                     {
-
-                        references[targetId] = targetRefs = new List<IReference>();
+                        references[targetId] = targetRefs = new Dictionary<(NodeId, NodeId, bool), IReference>();
                     }
-                    if (!targetRefs.Any(targetRef =>
-                        Client.ToNodeId(targetRef.TargetId) == node.NodeId
-                        && targetRef.ReferenceTypeId == reference.ReferenceTypeId
-                        && targetRef.IsInverse == !reference.IsInverse))
+                    if (!targetRefs.ContainsKey((node.NodeId, reference.ReferenceTypeId, reference.IsInverse)))
                     {
-                        targetRefs.Add(new BasicReference
+                        AddReference(targetRefs, new BasicReference
                         {
                             IsInverse = !reference.IsInverse,
                             TargetId = node.NodeId,
@@ -198,7 +206,7 @@ namespace Cognite.OpcUa.NodeSources
             }
             foreach (var (id, type) in types)
             {
-                var parentRef = references[id].FirstOrDefault(rf =>
+                var parentRef = references[id].Values.FirstOrDefault(rf =>
                     rf.ReferenceTypeId == ReferenceTypeIds.HasSubtype
                     && rf.IsInverse);
                 if (parentRef != null)
@@ -208,7 +216,7 @@ namespace Cognite.OpcUa.NodeSources
                 if (type.NodeClass == NodeClass.DataType)
                 {
                     PropertyState? enumVarNode = null;
-                    foreach (var rf in references[id])
+                    foreach (var rf in references[id].Values)
                     {
                         if (rf.ReferenceTypeId != ReferenceTypeIds.HasProperty || rf.IsInverse) continue;
                         if (!nodeDict.TryGetValue(Client.ToNodeId(rf.TargetId), out var node)) continue;
@@ -252,7 +260,7 @@ namespace Cognite.OpcUa.NodeSources
 
         private IEnumerable<IReference> Browse(NodeId node, NodeId referenceTypeId, BrowseDirection direction, bool allowSubTypes)
         {
-            var refs = references[node];
+            var refs = references[node].Values;
             foreach (var reference in refs)
             {
                 if (!allowSubTypes && referenceTypeId != reference.ReferenceTypeId) continue;
@@ -352,8 +360,11 @@ namespace Cognite.OpcUa.NodeSources
                 {
                     nodeDict[node.NodeId] = node;
                 }
+                Log.LogInformation("Loading references into internal data structure");
                 LoadReferences();
+                Log.LogInformation("Loading type tree");
                 LoadTypeTree();
+                Log.LogInformation("Server built, resulted in a total of {Nodes} nodes", nodes.Count);
                 built = true;
             }
         }
@@ -491,7 +502,7 @@ namespace Cognite.OpcUa.NodeSources
                 var parentNode = Extractor.State.GetMappedNode(id);
                 if (parentNode == null) continue;
 
-                foreach (var rf in refs)
+                foreach (var rf in refs.Values)
                 {
                     bool isHierarchical = IsOfType(rf.ReferenceTypeId, ReferenceTypeIds.HierarchicalReferences);
 
@@ -524,7 +535,7 @@ namespace Cognite.OpcUa.NodeSources
             if (parent == ObjectTypeIds.BaseEventType && baseExcludeProperties!.Contains(state.BrowseName.Name)
                         || excludeProperties!.Contains(state.BrowseName.Name)) yield break;
 
-            var refs = references[state.NodeId];
+            var refs = references[state.NodeId].Values;
             var children = refs
                 .Where(rf => !rf.IsInverse && IsOfType(rf.ReferenceTypeId, ReferenceTypeIds.HierarchicalReferences))
                 .Select(rf => nodeDict.GetValueOrDefault(Client.ToNodeId(rf.TargetId)))
@@ -591,7 +602,7 @@ namespace Cognite.OpcUa.NodeSources
                     type.Parent = null;
                 }
 
-                var refs = references[id];
+                var refs = references[id].Values;
                 var children = refs
                     .Where(rf => !rf.IsInverse && IsOfType(rf.ReferenceTypeId, ReferenceTypeIds.HierarchicalReferences))
                     .Select(rf => nodeDict.GetValueOrDefault(Client.ToNodeId(rf.TargetId)))
