@@ -231,6 +231,7 @@ namespace Test.Utils
         public Task<bool> ExecuteDeletes(DeletedNodes deletes, CancellationToken token)
         {
             LastDeleteReq = deletes;
+
             return Task.FromResult(DeleteResult);
         }
 

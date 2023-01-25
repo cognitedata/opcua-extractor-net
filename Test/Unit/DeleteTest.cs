@@ -242,48 +242,25 @@ namespace Test.Unit
             Assert.Single(store.States["known_references"]);
         }
 
-        private NodeSourceResult GetTestResult(UAExtractor extractor)
+        private static NodeSourceResult GetTestResult(UAExtractor extractor, int count)
         {
             // Create some test data
             var root = new NodeId(1);
-            var ids = tester.Server.Ids.Base;
-            var nodes = new List<UANode>
+            var nodes = Enumerable.Range(1, count).Select(i => new UANode(new NodeId($"object{i}"), $"object{i}", root, NodeClass.Object)).ToList();
+            var variables = Enumerable.Range(1, count).Select(i =>
             {
-                new UANode(new NodeId("object1"), "object1", root, NodeClass.Object),
-                new UANode(new NodeId("object2"), "object2", root, NodeClass.Object)
-            };
-            var variables = new List<UAVariable>
-            {
-                new UAVariable(new NodeId("var1"), "var1", root),
-                new UAVariable(new NodeId("var2"), "var2", root)
-            };
-
-            variables[0].VariableAttributes.ReadHistory = true;
-            variables[1].VariableAttributes.ReadHistory = false;
+                var v = new UAVariable(new NodeId($"var{i}"), $"var{i}", root);
+                if (i % 2 == 0)
+                {
+                    v.VariableAttributes.ReadHistory = true;
+                }
+                return v;
+            }).ToList();
 
             var refManager = extractor.ReferenceTypeManager;
 
-            var references = new List<UAReference>
-            {
-                new UAReference(
-                    ReferenceTypeIds.Organizes,
-                    true,
-                    new NodeId("object1"),
-                    new NodeId("var1"),
-                    false,
-                    true,
-                    false,
-                    refManager),
-                new UAReference(
-                    ReferenceTypeIds.Organizes,
-                    true,
-                    new NodeId("object2"),
-                    new NodeId("var2"),
-                    false,
-                    true,
-                    false,
-                    refManager)
-            };
+            var references = Enumerable.Range(1, count).Select(i => new UAReference(
+                ReferenceTypeIds.Organizes, true, new NodeId($"object{i}"), new NodeId($"var{i}"), false, true, false, refManager)).ToList();
 
             return new NodeSourceResult(Enumerable.Empty<UANode>(), Enumerable.Empty<UAVariable>(), nodes, variables, references, true);
         }
@@ -294,21 +271,15 @@ namespace Test.Unit
             var pusher = new DummyPusher(new DummyPusherConfig());
             tester.Config.Extraction.Relationships.Enabled = true;
             tester.Config.Extraction.Deletes.Enabled = true;
-            tester.Config.StateStorage.Database = StateStoreConfig.StorageType.LiteDb;
-            tester.Config.StateStorage.Location = "delete-states-1.db";
+            using var stateStore = new MockStateStore();
 
-            try
-            {
-                File.Delete("delete-states-1.db");
-            } catch { }
-
-            using var extractor = tester.BuildExtractor(pushers: pusher);
+            using var extractor = tester.BuildExtractor(pushers: pusher, stateStore: stateStore);
             // We need a reference to the delete manager
             var deleteManager = extractor.GetType().GetField("deletesManager", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).GetValue(extractor) as DeletesManager;
 
 
             // Register some initial nodes
-            var result = GetTestResult(extractor);
+            var result = GetTestResult(extractor, 2);
 
             // Get the diff
             var input = await PusherInput.FromNodeSourceResult(result, deleteManager, tester.Source.Token);
@@ -318,17 +289,48 @@ namespace Test.Unit
             Assert.Empty(input.Deletes.References);
 
             Assert.Null(pusher.LastDeleteReq);
-
+            // Execute the push, it should succeed and we should get nodes in the pusher.
             await extractor.PushNodes(input, pusher, true);
-
             Assert.NotNull(pusher.LastDeleteReq);
             Assert.Null(pusher.PendingNodes);
 
-            try
-            {
-                File.Delete("delete-states-1.db");
-            }
-            catch { }
+            Assert.Equal(2, pusher.PushedNodes.Count);
+            Assert.Equal(2, pusher.PushedVariables.Count);
+            Assert.Equal(2, pusher.PushedReferences.Count);
+
+            // There should also be states in the state store
+            Assert.Equal(2, stateStore.States["known_objects"].Count);
+            Assert.Equal(2, stateStore.States["known_variables"].Count);
+            Assert.Equal(2, stateStore.States["known_references"].Count);
+
+            // Get some more results, this time a shorter list
+            result = GetTestResult(extractor, 1);
+
+            input = await PusherInput.FromNodeSourceResult(result, deleteManager, tester.Source.Token);
+            // Now there should be one of each
+            Assert.Single(input.Deletes.Objects);
+            Assert.Single(input.Deletes.Variables);
+            Assert.Single(input.Deletes.References);
+
+            await extractor.PushNodes(input, pusher, false);
+            Assert.NotNull(pusher.LastDeleteReq);
+
+            Assert.Single(pusher.LastDeleteReq.Objects);
+            Assert.Single(pusher.LastDeleteReq.Variables);
+            Assert.Single(pusher.LastDeleteReq.References);
+
+            // Also deleted from state store
+            Assert.Single(stateStore.States["known_objects"]);
+            Assert.Single(stateStore.States["known_variables"]);
+            Assert.Single(stateStore.States["known_references"]);
+
+            // Next push with same input should result in no deletes
+            input = await PusherInput.FromNodeSourceResult(result, deleteManager, tester.Source.Token);
+
+            await extractor.PushNodes(input, pusher, false);
+            Assert.Empty(pusher.LastDeleteReq.Objects);
+            Assert.Empty(pusher.LastDeleteReq.Variables);
+            Assert.Empty(pusher.LastDeleteReq.References);
         }
     }
 }

@@ -509,16 +509,29 @@ namespace Cognite.OpcUa
             }));
         }
 
+        private bool ShouldFullyRebrowse()
+        {
+            // If there are any updates, we need to do a full mapping
+            if (Config.Extraction.Update.AnyUpdate) return true;
+            // If relationships are enabled we need to fully map, other wise we won't be able to consistently discover new relationships.
+            if (Config.Extraction.Relationships.Enabled) return true;
+            // If deletes are enabled we want a full map as well, to discover deleted nodes.
+            if (deletesManager != null) return true;
+
+            return false;
+        }
+
         /// <summary>
         /// Redo browse, then schedule history on the looper.
         /// </summary>
         public async Task Rebrowse()
         {
+            var isFull = ShouldFullyRebrowse();
             // If we are updating we want to re-discover nodes in order to run them through mapping again.
             var historyTasks = await RunMapping(RootNodes,
-                !Config.Extraction.Update.AnyUpdate && !Config.Extraction.Relationships.Enabled,
-                false,
-                true);
+                ignoreVisited: !isFull,
+                initial: false,
+                isFull: isFull);
 
             foreach (var task in historyTasks)
             {
