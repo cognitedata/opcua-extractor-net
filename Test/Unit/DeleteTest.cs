@@ -332,5 +332,32 @@ namespace Test.Unit
             Assert.Empty(pusher.LastDeleteReq.Variables);
             Assert.Empty(pusher.LastDeleteReq.References);
         }
+
+        [Fact]
+        public async Task TestFullRunDelete()
+        {
+            var pusher = new DummyPusher(new DummyPusherConfig());
+            tester.Config.Extraction.Deletes.Enabled = true;
+            tester.Config.Extraction.RootNode = tester.Ids.Audit.Root.ToProtoNodeId(tester.Client);
+            using var stateStore = new MockStateStore();
+
+            using var extractor = tester.BuildExtractor(pushers: pusher, stateStore: stateStore);
+
+            var addedId = tester.Server.Server.AddObject(tester.Ids.Audit.Root, "NodeToDelete");
+            var addedExtId = tester.Client.GetUniqueId(addedId);
+
+            // Run the extractor and verify that we got the node.
+            await extractor.RunExtractor(true);
+            Assert.True(pusher.PushedNodes.ContainsKey(addedId));
+
+            Assert.True(stateStore.States["known_objects"].ContainsKey(addedExtId));
+            Assert.Empty(pusher.LastDeleteReq.Objects);
+
+            // Run rebrowse, we should discover the deleted node.
+            tester.Server.Server.RemoveNode(addedId);
+            await extractor.Rebrowse();
+            Assert.False(stateStore.States["known_objects"].ContainsKey(addedExtId));
+            Assert.Contains(addedExtId, pusher.LastDeleteReq.Objects);
+        }
     }
 }
