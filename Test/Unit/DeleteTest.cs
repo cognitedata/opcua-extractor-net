@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -239,6 +240,124 @@ namespace Test.Unit
             Assert.Single(toDelete.References);
             Assert.Equal(3, store.States.Count);
             Assert.Single(store.States["known_references"]);
+        }
+
+        private static NodeSourceResult GetTestResult(UAExtractor extractor, int count)
+        {
+            // Create some test data
+            var root = new NodeId(1);
+            var nodes = Enumerable.Range(1, count).Select(i => new UANode(new NodeId($"object{i}"), $"object{i}", root, NodeClass.Object)).ToList();
+            var variables = Enumerable.Range(1, count).Select(i =>
+            {
+                var v = new UAVariable(new NodeId($"var{i}"), $"var{i}", root);
+                if (i % 2 == 0)
+                {
+                    v.VariableAttributes.ReadHistory = true;
+                }
+                return v;
+            }).ToList();
+
+            var refManager = extractor.ReferenceTypeManager;
+
+            var references = Enumerable.Range(1, count).Select(i => new UAReference(
+                ReferenceTypeIds.Organizes, true, new NodeId($"object{i}"), new NodeId($"var{i}"), false, true, false, refManager)).ToList();
+
+            return new NodeSourceResult(Enumerable.Empty<UANode>(), Enumerable.Empty<UAVariable>(), nodes, variables, references, true);
+        }
+
+        [Fact]
+        public async Task TestNotifyDeletedNodes()
+        {
+            var pusher = new DummyPusher(new DummyPusherConfig());
+            tester.Config.Extraction.Relationships.Enabled = true;
+            tester.Config.Extraction.Deletes.Enabled = true;
+            using var stateStore = new MockStateStore();
+
+            using var extractor = tester.BuildExtractor(pushers: pusher, stateStore: stateStore);
+            // We need a reference to the delete manager
+            var deleteManager = extractor.GetType().GetField("deletesManager", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).GetValue(extractor) as DeletesManager;
+
+
+            // Register some initial nodes
+            var result = GetTestResult(extractor, 2);
+
+            // Get the diff
+            var input = await PusherInput.FromNodeSourceResult(result, deleteManager, tester.Source.Token);
+            // Should be empty
+            Assert.Empty(input.Deletes.Objects);
+            Assert.Empty(input.Deletes.Variables);
+            Assert.Empty(input.Deletes.References);
+
+            Assert.Null(pusher.LastDeleteReq);
+            // Execute the push, it should succeed and we should get nodes in the pusher.
+            await extractor.PushNodes(input, pusher, true);
+            Assert.NotNull(pusher.LastDeleteReq);
+            Assert.Null(pusher.PendingNodes);
+
+            Assert.Equal(2, pusher.PushedNodes.Count);
+            Assert.Equal(2, pusher.PushedVariables.Count);
+            Assert.Equal(2, pusher.PushedReferences.Count);
+
+            // There should also be states in the state store
+            Assert.Equal(2, stateStore.States["known_objects"].Count);
+            Assert.Equal(2, stateStore.States["known_variables"].Count);
+            Assert.Equal(2, stateStore.States["known_references"].Count);
+
+            // Get some more results, this time a shorter list
+            result = GetTestResult(extractor, 1);
+
+            input = await PusherInput.FromNodeSourceResult(result, deleteManager, tester.Source.Token);
+            // Now there should be one of each
+            Assert.Single(input.Deletes.Objects);
+            Assert.Single(input.Deletes.Variables);
+            Assert.Single(input.Deletes.References);
+
+            await extractor.PushNodes(input, pusher, false);
+            Assert.NotNull(pusher.LastDeleteReq);
+
+            Assert.Single(pusher.LastDeleteReq.Objects);
+            Assert.Single(pusher.LastDeleteReq.Variables);
+            Assert.Single(pusher.LastDeleteReq.References);
+
+            // Also deleted from state store
+            Assert.Single(stateStore.States["known_objects"]);
+            Assert.Single(stateStore.States["known_variables"]);
+            Assert.Single(stateStore.States["known_references"]);
+
+            // Next push with same input should result in no deletes
+            input = await PusherInput.FromNodeSourceResult(result, deleteManager, tester.Source.Token);
+
+            await extractor.PushNodes(input, pusher, false);
+            Assert.Empty(pusher.LastDeleteReq.Objects);
+            Assert.Empty(pusher.LastDeleteReq.Variables);
+            Assert.Empty(pusher.LastDeleteReq.References);
+        }
+
+        [Fact]
+        public async Task TestFullRunDelete()
+        {
+            var pusher = new DummyPusher(new DummyPusherConfig());
+            tester.Config.Extraction.Deletes.Enabled = true;
+            tester.Config.Extraction.RootNode = tester.Ids.Audit.Root.ToProtoNodeId(tester.Client);
+            using var stateStore = new MockStateStore();
+
+            using var extractor = tester.BuildExtractor(pushers: pusher, stateStore: stateStore);
+
+            var addedId = tester.Server.Server.AddObject(tester.Ids.Audit.Root, "NodeToDelete");
+            var addedExtId = tester.Client.GetUniqueId(addedId);
+
+            // Run the extractor and verify that we got the node.
+            await extractor.RunExtractor(true);
+            Assert.True(pusher.PushedNodes.ContainsKey(addedId));
+
+            Assert.True(stateStore.States["known_objects"].ContainsKey(addedExtId));
+            Assert.Empty(pusher.LastDeleteReq.Objects);
+
+            // Run rebrowse, we should discover the deleted node.
+            tester.Server.Server.RemoveNode(addedId);
+            await extractor.Rebrowse();
+            Assert.False(stateStore.States["known_objects"].ContainsKey(addedExtId));
+            Assert.Contains(addedExtId, pusher.LastDeleteReq.Objects);
         }
     }
 }

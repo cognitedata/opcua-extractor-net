@@ -50,8 +50,8 @@ namespace Cognite.OpcUa.Pushers
         public bool Initialized { get; set; }
         public bool NoInit { get; set; }
 
-        public List<UANode> PendingNodes { get; } = new List<UANode>();
-        public List<UAReference> PendingReferences { get; } = new List<UAReference>();
+        public PusherInput? PendingNodes { get; set; }
+
         public UAExtractor Extractor { get; set; } = null!;
         public IPusherConfig BaseConfig { get; }
 
