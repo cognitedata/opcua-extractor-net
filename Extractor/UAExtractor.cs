@@ -95,7 +95,7 @@ namespace Cognite.OpcUa
 
         private readonly ServerSubscriptionManager? serverSubscription;
 
-        public static readonly DateTime StartTime = DateTime.UtcNow;
+        public static DateTime StartTime;
 
         /// <summary>
         /// Construct extractor with list of pushers
@@ -308,7 +308,8 @@ namespace Cognite.OpcUa
                 await serverSubscription.EnableCustomServerSubscriptions(Source.Token);
             }
 
-            startTime.Set(new DateTimeOffset(StartTime).ToUnixTimeMilliseconds());
+            UAExtractor.StartTime = DateTime.UtcNow;
+            startTime.Set(new DateTimeOffset(UAExtractor.StartTime).ToUnixTimeMilliseconds());
 
             foreach (var pusher in pushers)
             {
