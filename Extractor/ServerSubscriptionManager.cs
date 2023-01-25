@@ -33,7 +33,8 @@ namespace Cognite.OpcUa
 
         public async Task EnableCustomServerSubscriptions(CancellationToken token)
         {
-            var targetNodes = _config.Targets?.GetValues;
+            _logger.LogInformation("{startTime}", UAExtractor.StartTime);
+            var targetNodes = _config.Targets.GetValues;
             List<NodeId> nodeIds = new List<NodeId>();
             var filteredNamespaces = _config.Namespaces;
             var filteredNamespacesCount = filteredNamespaces?.Count();
@@ -106,18 +107,27 @@ namespace Cognite.OpcUa
 
             var nodes = nodeIds.Select(node => new ServerItemSubscriptionState(_uaClient, node)).ToList();
 
-            await Subscribe(nodes, token);
+            await CreateSubscriptions(nodes, token);
         }
 
-        private async Task Subscribe(List<ServerItemSubscriptionState> nodes, CancellationToken token)
+        private async Task CreateSubscriptions(List<ServerItemSubscriptionState> nodes, CancellationToken token)
         {
             var sub = await _uaClient.AddSubscriptions(
                 nodes, "TriggerRebrowse",
-                (MonitoredItem item, MonitoredItemNotificationEventArgs _) =>
+                async (MonitoredItem item, MonitoredItemNotificationEventArgs _) =>
                 {
-                    // Check value.
-                    _logger.LogInformation("{value}", item.LastMessage.PublishTime);
-                    _extractor.Looper.QueueRebrowse();
+                    var readValueId = new [] { 
+                        new ReadValueId { NodeId = item.ResolvedNodeId, AttributeId = Attributes.Value }
+                    };
+                    var read = await _uaClient.ReadAttributes(new ReadValueIdCollection(readValueId), 1, token);
+                    var value = read.Count() > 0 
+                        ? read[0].GetValue<System.DateTime>(UAExtractor.StartTime)
+                        : UAExtractor.StartTime;
+
+                    if (UAExtractor.StartTime < value) {
+                        _logger.LogInformation("Triggering a rebrowse due to a change in the value of {nodeId}", item.ResolvedNodeId);
+                        _extractor.Looper.QueueRebrowse();
+                    }
                 },
                 state => new MonitoredItem
                 {
