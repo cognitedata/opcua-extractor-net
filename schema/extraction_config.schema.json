@@ -319,6 +319,25 @@
                     "description": "Another filter instance which is applied to the parent node"
                 }
             }
+        },
+        "rebrowse-triggers": {
+            "type": "object",
+            "unevaluatedProperties": false,
+            "description": "Subscribes server namespace nodes to rebrowse which can be filtered by namespaces.",
+            "properties": {
+                "namespace-publication-date": {
+                    "type": "boolean",
+                    "description": "Indicate if the extractor should turn on subscription to namespaces."
+                },
+                "namespaces": {
+                    "type": "array",
+                    "description": "A list of server namespaces by which we should filter the nodes.",
+                    "items": {
+                        "type": "string",
+                        "description": "The display names of the namespaces."
+                    }
+                }
+            }
         }
     }
 }

@@ -46,25 +46,6 @@
             "type": "boolean",
             "description": "Log bad subscription datapoints",
             "default": true
-        },
-        "server-namespaces-to-rebrowse-config": {
-            "type": "object",
-            "unevaluatedProperties": false,
-            "description": "Subscribes provided server namespace nodes to a rebrowse when their values are modified.",
-            "properties": {
-                "subscribe": {
-                    "type": "boolean",
-                    "description": "Indicate if the extractor should turn on subscription to namespaces."
-                },
-                "namespaces": {
-                    "type": "array",
-                    "description": "A list of server namespace nodes to subscribe to rebrowse.",
-                    "items": {
-                        "type": "string",
-                        "description": "The display names of the namespaces."
-                    }
-                }
-            }
         }
     }
 }
