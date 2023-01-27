@@ -256,6 +256,10 @@ namespace Server
         {
             custom.RemoveProperty(parentId, name);
         }
+        public void RemoveNode(NodeId id)
+        {
+            custom.RemoveNode(id);
+        }
         public void MutateNode(NodeId id, Action<NodeState> mutation)
         {
             if (mutation == null) throw new ArgumentNullException(nameof(mutation));

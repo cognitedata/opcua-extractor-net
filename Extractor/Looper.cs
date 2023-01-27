@@ -146,12 +146,9 @@ namespace Cognite.OpcUa
                     var toInit = recovered.Select(pair => pair.pusher).Where(pusher => !pusher.Initialized);
                     foreach (var pusher in toInit)
                     {
-                        var (nodes, timeseries) = ExtractorUtils.SortNodes(pusher.PendingNodes);
-                        var references = pusher.PendingReferences.ToList();
-                        pusher.PendingNodes.Clear();
-                        pusher.PendingReferences.Clear();
                         pusher.NoInit = false;
-                        tasks.Add(extractor.PushNodes(nodes, timeseries, references, pusher, true));
+                        tasks.Add(extractor.PushNodes(pusher.PendingNodes, pusher, true));
+                        pusher.PendingNodes = null;
                     }
 
                     await Task.WhenAll(tasks);

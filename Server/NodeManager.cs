@@ -328,6 +328,19 @@ namespace Server
             prop.Delete(SystemContext);
         }
 
+        public void RemoveNode(NodeId id)
+        {
+            log.LogDebug("Remove node with ID {Id}", id);
+
+            var node = PredefinedNodes[id];
+            var refsToRemove = new List<LocalReference>();
+            RemovePredefinedNode(SystemContext, node, refsToRemove);
+            if (refsToRemove.Any())
+            {
+                Server.NodeManager.RemoveReferences(refsToRemove);
+            }
+        }
+
         public void ReContextualize(NodeId id, NodeId oldParentId, NodeId newParentId, NodeId referenceType)
         {
             log.LogDebug("Move node {Id} from {Old} to {New} with reference type {Ref}",

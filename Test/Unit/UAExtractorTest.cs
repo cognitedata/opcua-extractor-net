@@ -1,6 +1,7 @@
 ﻿using Cognite.Extractor.Testing;
 using Cognite.OpcUa;
 using Cognite.OpcUa.History;
+using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -139,9 +140,8 @@ namespace Test.Unit
                 new UAVariable(new NodeId("var2"), "var2", root)
             };
 
-            extractor.State.SetNodeState(new VariableExtractionState(tester.Client, variables[0], true, true));
-            extractor.State.SetNodeState(new VariableExtractionState(tester.Client, variables[1], false, false));
-
+            variables[0].VariableAttributes.ReadHistory = true;
+            variables[1].VariableAttributes.ReadHistory = false;
 
             var refManager = extractor.ReferenceTypeManager;
 
@@ -158,13 +158,23 @@ namespace Test.Unit
                     refManager)
             };
 
-            await extractor.PushNodes(nodes, variables, references, pusher, true);
+            var input = new PusherInput(nodes, variables, references, null);
+
+            await extractor.PushNodes(input, pusher, true);
 
             Assert.Equal(pushedObjects, pusher.PushedNodes.Count);
             Assert.Equal(pushedVariables, pusher.PushedVariables.Count);
             Assert.Equal(pushedRefs, pusher.PushedReferences.Count);
-            Assert.Equal(failedNodes, pusher.PendingNodes.Count);
-            Assert.Equal(failedRefs, pusher.PendingReferences.Count);
+            if (failAt == 0)
+            {
+                Assert.Null(pusher.PendingNodes);
+            }
+            else
+            {
+                Assert.Equal(failedNodes, pusher.PendingNodes.Objects.Count() + pusher.PendingNodes.Variables.Count());
+                Assert.Equal(failedRefs, pusher.PendingNodes.References.Count());
+            }
+            
 
             if (failAt == 0)
             {
