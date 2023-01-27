@@ -154,6 +154,7 @@ namespace Cognite.OpcUa
                 configManager.UpdatePeriod = new BasicTimeSpanProvider(TimeSpan.FromMinutes(2));
                 OnConfigUpdate += OnNewConfig;
             }
+
             if (config.Extraction.RebrowseTriggers is not null)
             {
                 serverSubscription = new RebrowseTriggerManager(
@@ -314,10 +315,7 @@ namespace Cognite.OpcUa
 
             Started = true;
 
-            if (
-                serverSubscription is not null
-                && Config.Extraction.RebrowseTriggers is not null
-            )
+            if (serverSubscription is not null)
             {
                 await serverSubscription.EnableCustomServerSubscriptions(Source.Token);
             }
@@ -720,10 +718,7 @@ namespace Cognite.OpcUa
                 await uaClient.SubscribeToNodes(subscribeStates, Streamer.DataSubscriptionHandler, Source.Token);
             }
 
-            if (
-                serverSubscription is not null
-                && Config.Extraction.RebrowseTriggers is not null
-            )
+            if (serverSubscription is not null)
             {
                 await serverSubscription.EnableCustomServerSubscriptions(Source.Token);
             }
