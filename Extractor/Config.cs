@@ -647,15 +647,17 @@ namespace Cognite.OpcUa
     }
     public class RebrowseTriggersConfig
     {
-        public RebrowseTriggersTargets Targets = 
-            new RebrowseTriggersTargets();        
+        public RebrowseTriggerTargets Targets { get => targets; set { targets = value ?? targets; } }
+        
+        private RebrowseTriggerTargets targets = new RebrowseTriggerTargets();
+
         /// <summary>
         /// A list of namespaces filters
         /// </summary>
         public IEnumerable<string> Namespaces { get; set; } = new List<string>();
     }
 
-    public class RebrowseTriggersTargets 
+    public class RebrowseTriggerTargets 
     {
         private List<string> ToBeSubscribed = new List<string>();
 

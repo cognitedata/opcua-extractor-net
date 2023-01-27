@@ -93,9 +93,9 @@ namespace Cognite.OpcUa
 
         private readonly ILogger<UAExtractor> log;
 
-        private readonly ServerSubscriptionManager? serverSubscription;
+        private readonly RebrowseTriggerManager? serverSubscription;
 
-        public static DateTime StartTime;
+        public static readonly DateTime StartTime = DateTime.UtcNow;
 
         /// <summary>
         /// Construct extractor with list of pushers
@@ -154,8 +154,8 @@ namespace Cognite.OpcUa
             }
             if (config.Extraction.RebrowseTriggers is not null)
             {
-                serverSubscription = new ServerSubscriptionManager(
-                    provider.GetRequiredService<ILogger<ServerSubscriptionManager>>(),
+                serverSubscription = new RebrowseTriggerManager(
+                    provider.GetRequiredService<ILogger<RebrowseTriggerManager>>(),
                     uaClient, config.Extraction.RebrowseTriggers,
                     this
                 );
@@ -308,7 +308,6 @@ namespace Cognite.OpcUa
                 await serverSubscription.EnableCustomServerSubscriptions(Source.Token);
             }
 
-            UAExtractor.StartTime = DateTime.UtcNow;
             startTime.Set(new DateTimeOffset(UAExtractor.StartTime).ToUnixTimeMilliseconds());
 
             foreach (var pusher in pushers)
