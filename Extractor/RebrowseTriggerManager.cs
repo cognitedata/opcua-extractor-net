@@ -18,6 +18,8 @@ namespace Cognite.OpcUa
         private readonly RebrowseTriggersConfig _config;
         private readonly UAExtractor _extractor;
 
+        public readonly static  string SubscriptionName = "TriggerRebrowse";
+
         public RebrowseTriggerManager(
             ILogger<RebrowseTriggerManager> logger,
             UAClient uaClient,
@@ -112,7 +114,7 @@ namespace Cognite.OpcUa
         private async Task CreateSubscriptions(List<ServerItemSubscriptionState> nodes, CancellationToken token)
         {
             var sub = await _uaClient.AddSubscriptions(
-                nodes, "TriggerRebrowse",
+                nodes, SubscriptionName,
                 (MonitoredItem item, MonitoredItemNotificationEventArgs _) =>
                 {
                     var values = item.DequeueValues();

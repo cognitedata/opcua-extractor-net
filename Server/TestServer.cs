@@ -282,6 +282,11 @@ namespace Server
             ServerInternal.NodeManager.DiagnosticsNodeManager.SetDiagnosticsEnabled(ServerInternal.DefaultSystemContext, value);
         }
 
+        public void SetNamespacePublicationDate(DateTime time)
+        {
+            custom.SetNamespacePublicationDate(time);
+        }
+
         public void DropSubscriptions()
         {
             var subs = ServerInternal.SubscriptionManager.GetSubscriptions();

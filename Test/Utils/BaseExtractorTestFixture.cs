@@ -1,6 +1,5 @@
 ﻿using AdysTech.InfluxDB.Client.Net;
 using Cognite.Extractor.Configuration;
-using Cognite.Extractor.Logging;
 using Cognite.Extractor.StateStorage;
 using Cognite.Extractor.Testing;
 using Cognite.Extractor.Utils;
@@ -15,7 +14,6 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
-using Xunit.Abstractions;
 
 namespace Test.Utils
 {
@@ -120,6 +118,7 @@ namespace Test.Utils
                 Client.RemoveSubscription("EventListener").Wait();
                 Client.RemoveSubscription("DataChangeListener").Wait();
                 Client.RemoveSubscription("AuditListener").Wait();
+                Client.RemoveSubscription(RebrowseTriggerManager.SubscriptionName).Wait();
                 Client.Browser.IgnoreFilters = null;
                 Client.ObjectTypeManager.Reset();
             }

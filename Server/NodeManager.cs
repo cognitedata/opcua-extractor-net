@@ -443,6 +443,7 @@ namespace Server
         {
             var ns = FindPredefinedNode(Ids.NamespaceMetadata, typeof(NamespaceMetadataState)) as NamespaceMetadataState;
             ns.NamespacePublicationDate.Value = time;
+            ns.ClearChangeMasks(SystemContext, true);
         }
         #endregion
 
