@@ -108,7 +108,7 @@ namespace Cognite.OpcUa
 
             var nodes = nodeIds.Select(node => new ServerItemSubscriptionState(_uaClient, node)).ToList();
 
-            await CreateSubscriptions(nodes, token);
+            if (nodes.Any()) await CreateSubscriptions(nodes, token);
         }
 
         private async Task CreateSubscriptions(List<ServerItemSubscriptionState> nodes, CancellationToken token)
