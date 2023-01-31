@@ -674,8 +674,7 @@ namespace Cognite.OpcUa
             }
         }
 
-        // TODO: rename this method appropriately.
-        public List<string> GetValues => ToBeSubscribed;
+        public List<string> GetTargets => ToBeSubscribed;
     }
 
     public interface IPusherConfig

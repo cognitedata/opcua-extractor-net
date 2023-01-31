@@ -95,7 +95,7 @@ namespace Cognite.OpcUa
 
         private readonly ILogger<UAExtractor> log;
 
-        private readonly RebrowseTriggerManager? serverSubscription;
+        private readonly RebrowseTriggerManager? rebrowseTriggerManager;
 
         public static readonly DateTime StartTime = DateTime.UtcNow;
 
@@ -157,7 +157,7 @@ namespace Cognite.OpcUa
 
             if (config.Extraction.RebrowseTriggers is not null)
             {
-                serverSubscription = new RebrowseTriggerManager(
+                rebrowseTriggerManager = new RebrowseTriggerManager(
                     provider.GetRequiredService<ILogger<RebrowseTriggerManager>>(),
                     uaClient, config.Extraction.RebrowseTriggers,
                     this
@@ -315,9 +315,9 @@ namespace Cognite.OpcUa
 
             Started = true;
 
-            if (serverSubscription is not null)
+            if (rebrowseTriggerManager is not null)
             {
-                await serverSubscription.EnableCustomServerSubscriptions(Source.Token);
+                await rebrowseTriggerManager.EnableCustomServerSubscriptions(Source.Token);
             }
 
             startTime.Set(new DateTimeOffset(UAExtractor.StartTime).ToUnixTimeMilliseconds());
@@ -718,9 +718,9 @@ namespace Cognite.OpcUa
                 await uaClient.SubscribeToNodes(subscribeStates, Streamer.DataSubscriptionHandler, Source.Token);
             }
 
-            if (serverSubscription is not null)
+            if (rebrowseTriggerManager is not null)
             {
-                await serverSubscription.EnableCustomServerSubscriptions(Source.Token);
+                await rebrowseTriggerManager.EnableCustomServerSubscriptions(Source.Token);
             }
         }
 

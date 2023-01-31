@@ -35,7 +35,7 @@ namespace Cognite.OpcUa
 
         public async Task EnableCustomServerSubscriptions(CancellationToken token)
         {
-            var targetNodes = _config.Targets.GetValues;
+            var targetNodes = _config.Targets.GetTargets;
             List<NodeId> nodeIds = new List<NodeId>();
             var filteredNamespaces = _config.Namespaces;
             var filteredNamespacesCount = filteredNamespaces?.Count();
@@ -44,8 +44,8 @@ namespace Cognite.OpcUa
             var serverNamespaces = ObjectIds.Server_Namespaces;
 
             var grouping = new Dictionary<NodeId, List<ReferenceDescription>>();
-            // displayName: nodeId
-            var namespaceNameToId = new Dictionary<string, string>();
+            // displayName: NodeId
+            var namespaceNameToId = new Dictionary<string, NodeId>();
 
             await _uaClient.Browser.BrowseDirectory(
                 new[] { serverNamespaces },
@@ -56,17 +56,16 @@ namespace Cognite.OpcUa
                     if (parent == serverNamespaces && !grouping.ContainsKey(nodeId))
                     {
                         grouping.Add(nodeId, new List<ReferenceDescription>());
-                        namespaceNameToId.Add(refDef.DisplayName.ToString(), nodeId.ToString());
+                        namespaceNameToId.Add(refDef.DisplayName.ToString(), nodeId);
                     }
                     else if (
-                        grouping.ContainsKey(parent)
+                        grouping.TryGetValue(parent, out var group)
                         // Ensures that the type of node being added is a variable node class
                         && refDef.NodeClass == NodeClass.Variable
                         // Filters targets nodes
                         && targetNodes.Contains(refDef.DisplayName.ToString())
-                    )
-                    {
-                        grouping.GetValueOrDefault(parent).Add(refDef);
+                    ){
+                        group.Add(refDef);
                     }
                 },
                 token,
