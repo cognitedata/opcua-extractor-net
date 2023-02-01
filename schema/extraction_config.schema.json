@@ -323,18 +323,18 @@
         "rebrowse-triggers": {
             "type": "object",
             "unevaluatedProperties": false,
-            "description": "Subscribes server namespace nodes to rebrowse which can be filtered by namespaces.",
+            "description": "Configuration for triggering rebrowse based on changes to specific nodes.",
             "properties": {
                 "namespace-publication-date": {
                     "type": "boolean",
-                    "description": "Indicate if the extractor should turn on subscription to namespaces."
+                    "description": "Indicate if the extractor should subscribe to namespacePublicationDate on the Server node."
                 },
                 "namespaces": {
                     "type": "array",
-                    "description": "A list of server namespaces by which we should filter the nodes.",
+                    "description": "A list of namespaces uris used to filter which namespacePublicationDates the extractor will subscribe to.",
                     "items": {
                         "type": "string",
-                        "description": "The display names of the namespaces."
+                        "description": "The uri of a namespace."
                     }
                 }
             }

@@ -765,6 +765,15 @@ extraction:
             # historizing:
             # Another instance of NodeFilter which is applied to the parent node.
             # parent:
+    # Configure extractor to trigger a rebrowse when there are changes to specific namespace metadata nodes.
+    # Also supports filtering by namespace uris.
+    rebrowse-triggers:
+        # A dictionary of nodes to which we would like to listen for changes.
+        targets:
+            namespace-publication-date: true
+        # A list of namespace uris from which the targets above will be selected and listen for
+        namespaces:
+        - http://opcfoundation.org/UA/
 
     
 
