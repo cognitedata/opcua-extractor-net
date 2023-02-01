@@ -47,7 +47,7 @@ namespace Test.Unit
             if (!States.TryGetValue(tableName, out var state))
             {
                 if (ThrowOnMissingTable) throw new InvalidOperationException("Table does not exist!");
-                States[tableName] = state = new Dictionary<string, BaseStorableState>();
+                return Task.FromResult(Enumerable.Empty<T>());
             }
             return Task.FromResult(state.Values.OfType<T>());
         }
@@ -157,6 +157,7 @@ namespace Test.Unit
             // No configured tables, and no references, so nothing happens
             tester.Config.StateStorage.KnownObjectsStore = null;
             tester.Config.StateStorage.KnownVariablesStore = null;
+            tester.Config.StateStorage.KnownReferencesStore = null;
             toDelete = await manager.GetDiffAndStoreIds(result, tester.Source.Token);
             Assert.Empty(toDelete.Objects);
             Assert.Empty(toDelete.Variables);

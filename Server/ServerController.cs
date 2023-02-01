@@ -83,7 +83,7 @@ namespace Server
                 await app.CheckApplicationInstanceCertificate(false, 0);
                 Server = new TestServer(setups, mqttUrl, provider, logTrace);
                 await Task.Run(async () => await app.Start(Server));
-                log.LogInformation("Server started on address: {address}", address);
+                log.LogInformation("Server started on address: {Address}", address);
                 running = true;
             }
             catch (Exception e)
