@@ -770,7 +770,7 @@ extraction:
     rebrowse-triggers:
         # A dictionary of nodes to which we would like to listen for changes.
         targets:
-            namespace-publication-date: true
+            namespace-publication-date: false
         # A list of namespace uris from which the targets above will be selected and listen for
         namespaces:
         - http://opcfoundation.org/UA/
