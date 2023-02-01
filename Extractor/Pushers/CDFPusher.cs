@@ -30,6 +30,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 using TimeRange = Cognite.Extractor.Common.TimeRange;
@@ -527,6 +528,34 @@ namespace Cognite.OpcUa.Pushers
 
             log.LogInformation("Sucessfully pushed relationships to CDF");
         }
+        
+        public async Task<bool> ExecuteDeletes(DeletedNodes deletes, CancellationToken token)
+        {
+            var tasks = new List<Task>();
+            if (deletes.Objects.Any())
+            {
+                tasks.Add(MarkAssetsAsDeleted(deletes.Objects, token));
+            }
+            if (deletes.Variables.Any())
+            {
+                tasks.Add(MarkTimeSeriesAsDeleted(deletes.Objects, token));
+            }
+            if (deletes.References.Any())
+            {
+                tasks.Add(MarkReferencesAsDeleted(deletes.References, token));
+            }
+            try
+            {
+                await Task.WhenAll(tasks);
+            }
+            catch (Exception ex)
+            {
+                log.LogError(ex, "Failed to mark resources as deleted: {Message}", ex.Message);
+                return false;
+            }
+
+            return true;
+        }
         #endregion
 
         #region assets
@@ -714,6 +743,36 @@ namespace Cognite.OpcUa.Pushers
                 {
                     await UpdateAssets(assetIds, assets, update, report, token);
                 }
+            }
+        }
+
+        private async Task MarkAssetsAsDeleted(
+            IEnumerable<string> externalIds,
+            CancellationToken token)
+        {
+            bool useRawAssets = config.RawMetadata != null
+                && !string.IsNullOrWhiteSpace(config.RawMetadata.Database)
+                && !string.IsNullOrWhiteSpace(config.RawMetadata.AssetsTable);
+
+            if (useRawAssets)
+            {
+                await MarkRawRowsAsDeleted(config.RawMetadata!.Database!, config.RawMetadata!.AssetsTable!, externalIds, token);
+            }
+            else
+            {
+                var updates = externalIds.Select(extId => new AssetUpdateItem(extId)
+                {
+                    Update = new AssetUpdate
+                    {
+                        Metadata = new UpdateDictionary<string>(new Dictionary<string, string>
+                        {
+                            { extractionConfig.Deletes.DeleteMarker, "true" }
+                        }, Enumerable.Empty<string>())
+                    }
+                });
+                var result = await destination.UpdateAssetsAsync(updates, RetryMode.OnError, SanitationMode.Clean, token);
+                log.LogResult(result, RequestType.UpdateAssets, true);
+                result.ThrowOnFatal();
             }
         }
 
@@ -944,6 +1003,32 @@ namespace Cognite.OpcUa.Pushers
                 await UpdateTimeseries(toPushMeta, timeseries, update, report, token);
             }
         }
+
+        private async Task MarkTimeSeriesAsDeleted(IEnumerable<string> externalIds, CancellationToken token)
+        {
+            bool useRawTss = config.RawMetadata != null
+                && !string.IsNullOrWhiteSpace(config.RawMetadata.Database)
+                && !string.IsNullOrWhiteSpace(config.RawMetadata.TimeseriesTable);
+
+            if (useRawTss)
+            {
+                await MarkRawRowsAsDeleted(config.RawMetadata!.Database!, config.RawMetadata!.TimeseriesTable!, externalIds, token);
+            }
+
+            var updates = externalIds.Select(extId => new TimeSeriesUpdateItem(extId)
+            {
+                Update = new TimeSeriesUpdate
+                {
+                    Metadata = new UpdateDictionary<string>(new Dictionary<string, string>
+                    {
+                        { extractionConfig.Deletes.DeleteMarker, "true" }
+                    }, Enumerable.Empty<string>())
+                }
+            });
+            var result = await destination.UpdateTimeSeriesAsync(updates, RetryMode.OnError, SanitationMode.Clean, token);
+            log.LogResult(result, RequestType.UpdateAssets, true);
+            result.ThrowOnFatal();
+        }
         #endregion
 
         #region raw-utils
@@ -1050,6 +1135,20 @@ namespace Cognite.OpcUa.Pushers
             } while (cursor != null);
             return rows;
         }
+        
+        private async Task MarkRawRowsAsDeleted(string dbName, string tableName, IEnumerable<string> keys, CancellationToken token)
+        {
+            var keySet = new HashSet<string>(keys);
+            var rows = await GetRawRows(dbName, tableName, keys, token);
+            var trueElem = JsonDocument.Parse("true").RootElement;
+            var toMark = rows.Where(r => keySet.Contains(r.Key)).ToList();
+            foreach (var row in toMark)
+            {
+                row.Columns[extractionConfig.Deletes.DeleteMarker]= trueElem;
+            }
+            await destination.InsertRawRowsAsync(dbName, tableName, toMark.ToDictionary(e => e.Key, e => e.Columns), token);
+        }
+
         #endregion
 
         #region references
@@ -1112,6 +1211,24 @@ namespace Cognite.OpcUa.Pushers
                 },
                 new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase },
                 token);
+        }
+        
+        private async Task MarkReferencesAsDeleted(IEnumerable<string> externalIds, CancellationToken token)
+        {
+            bool useRawRelationships = config.RawMetadata != null
+                && !string.IsNullOrWhiteSpace(config.RawMetadata.Database)
+                && !string.IsNullOrWhiteSpace(config.RawMetadata.RelationshipsTable);
+
+            if (useRawRelationships)
+            {
+                await MarkRawRowsAsDeleted(config.RawMetadata!.Database!, config.RawMetadata!.RelationshipsTable!, externalIds, token);
+            }
+            else
+            {
+                var tasks = externalIds.ChunkBy(1000).Select(chunk => destination.CogniteClient.Relationships.DeleteAsync(chunk, true, token));
+                await Task.WhenAll(tasks);
+            }
+
         }
         #endregion
 
