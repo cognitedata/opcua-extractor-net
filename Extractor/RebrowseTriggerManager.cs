@@ -103,7 +103,8 @@ namespace Cognite.OpcUa
                 );
             };
 
-            if (nodeIds.Count > 0) logger.LogInformation("The following nodes will be subscribed to a rebrowse: {nodes}", nodeIds);
+            if (nodeIds.Count > 0) 
+                logger.LogInformation("The following nodes will be subscribed to a rebrowse: {Nodes}", nodeIds);
 
             var nodes = nodeIds.Select(node => new ServerItemSubscriptionState(_uaClient, node)).ToList();
 
