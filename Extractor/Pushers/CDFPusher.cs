@@ -538,7 +538,7 @@ namespace Cognite.OpcUa.Pushers
             }
             if (deletes.Variables.Any())
             {
-                tasks.Add(MarkTimeSeriesAsDeleted(deletes.Objects, token));
+                tasks.Add(MarkTimeSeriesAsDeleted(deletes.Variables, token));
             }
             if (deletes.References.Any())
             {
@@ -1223,7 +1223,7 @@ namespace Cognite.OpcUa.Pushers
             {
                 await MarkRawRowsAsDeleted(config.RawMetadata!.Database!, config.RawMetadata!.RelationshipsTable!, externalIds, token);
             }
-            else
+            else if (config.DeleteRelationships)
             {
                 var tasks = externalIds.ChunkBy(1000).Select(chunk => destination.CogniteClient.Relationships.DeleteAsync(chunk, true, token));
                 await Task.WhenAll(tasks);

@@ -226,6 +226,9 @@ namespace Test
                         case "/relationships":
                             res = HandleCreateRelationships(content);
                             break;
+                        case "/relationships/delete":
+                            res = HandleDeleteRelationships(content);
+                            break;
                         case "/datasets/byids":
                             res = HandleRetrieveDataSets(content);
                             break;
@@ -878,6 +881,7 @@ namespace Test
                     {
                         foreach (var field in upd.metadata.add)
                         {
+                            log.LogInformation("Add metadata: {Field}", field.Key);
                             old.metadata[field.Key] = field.Value;
                         }
                     }
@@ -957,6 +961,7 @@ namespace Test
                     {
                         foreach (var field in upd.metadata.add)
                         {
+                            log.LogInformation("Add metadata: {Field}", field.Key);
                             old.metadata[field.Key] = field.Value;
                         }
                     }
@@ -973,6 +978,21 @@ namespace Test
                 Content = new StringContent(JsonConvert.SerializeObject(result))
             };
         }
+
+        private HttpResponseMessage HandleDeleteRelationships(string content)
+        {
+            var data = JsonConvert.DeserializeObject<ItemsWithoutCursor<CogniteExternalId>>(content);
+            foreach (var id in data.Items)
+            {
+                Relationships.Remove(id.ExternalId);
+            }
+            return new HttpResponseMessage
+            {
+                StatusCode = HttpStatusCode.OK,
+                Content = new StringContent("{}")
+            };
+        }
+
 
         private HttpResponseMessage HandleCallFunction(string content)
         {
@@ -1285,6 +1305,7 @@ namespace Test
         public string targetType { get; set; }
         public long createdTime { get; set; }
         public long lastUpdatedTime { get; set; }
+        public bool deleted { get; set; }
     }
     public class RelationshipsReadWrapper
     {

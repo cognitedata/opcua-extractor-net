@@ -344,20 +344,127 @@ namespace Test.Unit
             using var extractor = tester.BuildExtractor(pushers: pusher, stateStore: stateStore);
 
             var addedId = tester.Server.Server.AddObject(tester.Ids.Audit.Root, "NodeToDelete");
+            var addedVarId = tester.Server.Server.AddVariable(tester.Ids.Audit.Root, "VariableToDelete", DataTypeIds.Double);
             var addedExtId = tester.Client.GetUniqueId(addedId);
+            var addedVarExtId = tester.Client.GetUniqueId(addedVarId);
 
             // Run the extractor and verify that we got the node.
             await extractor.RunExtractor(true);
             Assert.True(pusher.PushedNodes.ContainsKey(addedId));
 
             Assert.True(stateStore.States["known_objects"].ContainsKey(addedExtId));
+            Assert.True(stateStore.States["known_variables"].ContainsKey(addedVarExtId));
             Assert.Empty(pusher.LastDeleteReq.Objects);
+            Assert.Empty(pusher.LastDeleteReq.Variables);
 
             // Run rebrowse, we should discover the deleted node.
             tester.Server.Server.RemoveNode(addedId);
+            tester.Server.Server.RemoveNode(addedVarId);
             await extractor.Rebrowse();
             Assert.False(stateStore.States["known_objects"].ContainsKey(addedExtId));
+            Assert.False(stateStore.States["known_variables"].ContainsKey(addedVarExtId));
             Assert.Contains(addedExtId, pusher.LastDeleteReq.Objects);
+            Assert.Contains(addedVarExtId, pusher.LastDeleteReq.Variables);
+        }
+
+        [Fact]
+        public async Task TestCDFDelete()
+        {
+            var (handler, pusher) = tester.GetCDFPusher();
+            tester.Config.Extraction.Deletes.Enabled = true;
+            tester.Config.Extraction.RootNode = tester.Ids.Audit.Root.ToProtoNodeId(tester.Client);
+            tester.Config.Extraction.Relationships.Enabled = true;
+            tester.Config.Extraction.Relationships.Hierarchical = true;
+            tester.Config.Cognite.DeleteRelationships = true;
+            using var stateStore = new MockStateStore();
+
+            using var extractor = tester.BuildExtractor(pushers: pusher, stateStore: stateStore);
+
+            var addedId = tester.Server.Server.AddObject(tester.Ids.Audit.Root, "NodeToDelete");
+            var addedVarId = tester.Server.Server.AddVariable(tester.Ids.Audit.Root, "VariableToDelete", DataTypeIds.Double);
+            var addedExtId = tester.Client.GetUniqueId(addedId);
+            var addedVarExtId = tester.Client.GetUniqueId(addedVarId);
+
+            // Run the extractor and verify that we got the node.
+            await extractor.RunExtractor(true);
+            Assert.True(handler.Assets.ContainsKey(addedExtId));
+            Assert.True(handler.Timeseries.ContainsKey(addedVarExtId));
+            Assert.False(handler.Assets[addedExtId].metadata.ContainsKey("deleted"));
+            Assert.False(handler.Timeseries[addedVarExtId].metadata.ContainsKey("deleted"));
+            // Need to build the reference externalId late, since it depends on the reference type manager being populated.
+            var refExtId = tester.Client.GetRelationshipId(new UAReference(ReferenceTypeIds.Organizes, true, tester.Ids.Audit.Root, addedId, false, false, true, extractor.ReferenceTypeManager));
+            tester.Log.LogInformation("RefExtId: {Id}", refExtId);
+            Assert.True(handler.Relationships.ContainsKey(refExtId));
+
+            Assert.True(stateStore.States["known_objects"].ContainsKey(addedExtId));
+            Assert.True(stateStore.States["known_variables"].ContainsKey(addedVarExtId));
+            Assert.True(stateStore.States["known_references"].ContainsKey(refExtId));
+
+            // Run rebrowse, we should discover the deleted nodes.
+            tester.Server.Server.RemoveNode(addedId);
+            tester.Server.Server.RemoveNode(addedVarId);
+            await extractor.Rebrowse();
+            Assert.Equal("true", handler.Assets[addedExtId].metadata["deleted"]);
+            Assert.Equal("true", handler.Timeseries[addedVarExtId].metadata["deleted"]);
+            Assert.False(handler.Relationships.ContainsKey(refExtId));
+
+            Assert.False(stateStore.States["known_objects"].ContainsKey(addedExtId));
+            Assert.False(stateStore.States["known_variables"].ContainsKey(addedExtId));
+        }
+
+        [Fact]
+        public async Task TestCDFDeleteRaw()
+        {
+            var (handler, pusher) = tester.GetCDFPusher();
+            tester.Config.Extraction.Deletes.Enabled = true;
+            tester.Config.Extraction.RootNode = tester.Ids.Audit.Root.ToProtoNodeId(tester.Client);
+            tester.Config.Extraction.Relationships.Enabled = true;
+            tester.Config.Extraction.Relationships.Hierarchical = true;
+            tester.Config.Cognite.DeleteRelationships = true;
+            tester.Config.Cognite.RawMetadata = new RawMetadataConfig
+            {
+                AssetsTable = "assets",
+                TimeseriesTable = "timeseries",
+                Database = "metadata",
+                RelationshipsTable = "relationships"
+            };
+            using var stateStore = new MockStateStore();
+
+            using var extractor = tester.BuildExtractor(pushers: pusher, stateStore: stateStore);
+
+            var addedId = tester.Server.Server.AddObject(tester.Ids.Audit.Root, "NodeToDelete");
+            var addedVarId = tester.Server.Server.AddVariable(tester.Ids.Audit.Root, "VariableToDelete", DataTypeIds.Double);
+            var addedExtId = tester.Client.GetUniqueId(addedId);
+            var addedVarExtId = tester.Client.GetUniqueId(addedVarId);
+
+            // Run the extractor and verify that we got the node.
+            await extractor.RunExtractor(true);
+            Assert.True(handler.AssetRaw.ContainsKey(addedExtId));
+            Assert.True(handler.TimeseriesRaw.ContainsKey(addedVarExtId));
+            Assert.True(handler.Timeseries.ContainsKey(addedVarExtId));
+            Assert.False(handler.AssetRaw[addedExtId].TryGetProperty("deleted", out _));
+            Assert.False(handler.TimeseriesRaw[addedVarExtId].TryGetProperty("deleted", out _));
+            Assert.False(handler.Timeseries[addedVarExtId].metadata?.ContainsKey("deleted") ?? false);
+            // Need to build the reference externalId late, since it depends on the reference type manager being populated.
+            var refExtId = tester.Client.GetRelationshipId(new UAReference(ReferenceTypeIds.Organizes, true, tester.Ids.Audit.Root, addedId, false, false, true, extractor.ReferenceTypeManager));
+            tester.Log.LogInformation("RefExtId: {Id}", refExtId);
+            Assert.True(handler.RelationshipsRaw.ContainsKey(refExtId));
+
+            Assert.True(stateStore.States["known_objects"].ContainsKey(addedExtId));
+            Assert.True(stateStore.States["known_variables"].ContainsKey(addedVarExtId));
+            Assert.True(stateStore.States["known_references"].ContainsKey(refExtId));
+
+            // Run rebrowse, we should discover the deleted nodes.
+            tester.Server.Server.RemoveNode(addedId);
+            tester.Server.Server.RemoveNode(addedVarId);
+            await extractor.Rebrowse();
+            Assert.True(handler.AssetRaw[addedExtId].GetProperty("deleted").GetBoolean());
+            Assert.True(handler.TimeseriesRaw[addedVarExtId].GetProperty("deleted").GetBoolean());
+            Assert.True(handler.RelationshipsRaw[refExtId].deleted);
+
+            Assert.False(stateStore.States["known_objects"].ContainsKey(addedExtId));
+            Assert.False(stateStore.States["known_variables"].ContainsKey(addedExtId));
+            Assert.False(stateStore.States["known_references"].ContainsKey(refExtId));
         }
     }
 }
