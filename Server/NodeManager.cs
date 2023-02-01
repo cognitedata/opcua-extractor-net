@@ -416,6 +416,35 @@ namespace Server
                 serverNode.RemoveReferences(ReferenceTypeIds.GeneratesEvent, false);
             }
         }
+
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification =
+            "NodeStates are disposed in CustomNodeManager2, so long as they are added to the list of predefined nodes")]
+        private void CreateNamespaceMetadataNode(IDictionary<NodeId, IList<IReference>> externalReferences)
+        {
+            var serverNamespacesNode = Server.NodeManager.ConfigurationNodeManager
+                    .FindPredefinedNode(ObjectIds.Server_Namespaces, typeof(NamespacesState)) as NamespacesState;
+            var namespaceUri = "opc.tcp://test.localhost";
+            var namespaceMetadataState = new NamespaceMetadataState(serverNamespacesNode);
+            namespaceMetadataState.BrowseName = new QualifiedName(namespaceUri, NamespaceIndex);
+            namespaceMetadataState.Create(SystemContext, null, namespaceMetadataState.BrowseName, null, true);
+            namespaceMetadataState.DisplayName = namespaceUri;
+            namespaceMetadataState.SymbolicName = namespaceUri;
+            namespaceMetadataState.NamespaceUri.Value = namespaceUri;
+
+            // add node as child of ServerNamespaces and in predefined nodes
+            serverNamespacesNode.AddChild(namespaceMetadataState);
+            serverNamespacesNode.ClearChangeMasks(Server.DefaultSystemContext, true);
+            AddPredefinedNode(SystemContext, namespaceMetadataState);
+
+            Ids.NamespaceMetadata = namespaceMetadataState.NodeId;
+        }
+
+        public void SetNamespacePublicationDate(DateTime time)
+        {
+            var ns = FindPredefinedNode(Ids.NamespaceMetadata, typeof(NamespaceMetadataState)) as NamespaceMetadataState;
+            ns.NamespacePublicationDate.Value = time;
+            ns.ClearChangeMasks(SystemContext, true);
+        }
         #endregion
 
 
@@ -440,7 +469,7 @@ namespace Server
                 // Supposedly the "DiagnosticNodeManager" should handle this sort of stuff. But it doesn't, there exists a weird
                 // GetDefaultHistoryCapability, but that seems to create a /new/ duplicate node on the server. This changes the existing one
                 // (Creating a new one makes no sense whatsoever).
-                var cfnm = (ConfigurationNodeManager)Server.NodeManager.NodeManagers.First(nm => nm.GetType() == typeof(ConfigurationNodeManager));
+                var cfnm = Server.NodeManager.ConfigurationNodeManager;
                 lock (cfnm.Lock)
                 {
                     var accessDataCap = (PropertyState)cfnm.Find(VariableIds.HistoryServerCapabilities_AccessHistoryDataCapability);
@@ -501,6 +530,8 @@ namespace Server
                         }
                     }
                 }
+
+                CreateNamespaceMetadataNode(externalReferences);
             }
             catch (Exception ex)
             {
@@ -1850,6 +1881,7 @@ namespace Server
             Audit = new AuditNodeReference();
             Wrong = new WrongNodeReference();
         }
+        public NodeId NamespaceMetadata { get; set; }
         public BaseNodeReference Base { get; set; }
         public FullNodeReference Full { get; set; }
         public CustomNodeReference Custom { get; set; }

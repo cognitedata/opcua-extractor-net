@@ -79,6 +79,7 @@ namespace Cognite.OpcUa
                 var parsed = CogniteTime.ParseTimestampString(config.History.EndTime);
                 if (parsed == null) return $"Invalid history end time: {config.History.EndTime}";
             }
+
             return null;
         }
 

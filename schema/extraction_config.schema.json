@@ -319,6 +319,25 @@
                     "description": "Another filter instance which is applied to the parent node"
                 }
             }
+        },
+        "rebrowse-triggers": {
+            "type": "object",
+            "unevaluatedProperties": false,
+            "description": "Configuration for triggering rebrowse based on changes to specific nodes.",
+            "properties": {
+                "namespace-publication-date": {
+                    "type": "boolean",
+                    "description": "Indicate if the extractor should subscribe to namespacePublicationDate on the Server node."
+                },
+                "namespaces": {
+                    "type": "array",
+                    "description": "A list of namespaces uris used to filter which namespacePublicationDates the extractor will subscribe to.",
+                    "items": {
+                        "type": "string",
+                        "description": "The uri of a namespace."
+                    }
+                }
+            }
         }
     }
 }

@@ -95,6 +95,10 @@ namespace Cognite.OpcUa
 
         private readonly ILogger<UAExtractor> log;
 
+        private readonly RebrowseTriggerManager? rebrowseTriggerManager;
+
+        public static readonly DateTime StartTime = DateTime.UtcNow;
+
         /// <summary>
         /// Construct extractor with list of pushers
         /// </summary>
@@ -149,6 +153,15 @@ namespace Cognite.OpcUa
             {
                 configManager.UpdatePeriod = new BasicTimeSpanProvider(TimeSpan.FromMinutes(2));
                 OnConfigUpdate += OnNewConfig;
+            }
+
+            if (config.Extraction.RebrowseTriggers is not null)
+            {
+                rebrowseTriggerManager = new RebrowseTriggerManager(
+                    provider.GetRequiredService<ILogger<RebrowseTriggerManager>>(),
+                    uaClient, config.Extraction.RebrowseTriggers,
+                    this
+                );
             }
 
             if (config.Extraction.Deletes.Enabled)
@@ -301,7 +314,13 @@ namespace Cognite.OpcUa
             }
 
             Started = true;
-            startTime.Set(new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds());
+
+            if (rebrowseTriggerManager is not null)
+            {
+                await rebrowseTriggerManager.EnableCustomServerSubscriptions(Source.Token);
+            }
+
+            startTime.Set(new DateTimeOffset(UAExtractor.StartTime).ToUnixTimeMilliseconds());
 
             foreach (var pusher in pushers)
             {
@@ -321,7 +340,7 @@ namespace Cognite.OpcUa
 
             if (pubSubManager != null)
             {
-                Looper.Scheduler.ScheduleTask(null, StartPubSub);
+                Scheduler.ScheduleTask(null, StartPubSub);
             }
         }
 
@@ -699,6 +718,10 @@ namespace Cognite.OpcUa
                 await uaClient.SubscribeToNodes(subscribeStates, Streamer.DataSubscriptionHandler, Source.Token);
             }
 
+            if (rebrowseTriggerManager is not null)
+            {
+                await rebrowseTriggerManager.EnableCustomServerSubscriptions(Source.Token);
+            }
         }
 
         /// <summary>
