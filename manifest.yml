@@ -60,6 +60,11 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.11.0":
+    description: Adds support for rebrowse triggers
+    changelog:
+      added:
+        - "Adds support for triggering rebrowse when updates are detected in NamespacePublicationDate"
   "2.10.5":
     description: Improve handling of unknown namespace index
     changelog:
