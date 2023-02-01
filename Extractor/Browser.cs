@@ -267,6 +267,7 @@ namespace Cognite.OpcUa
             using var scheduler = new BrowseScheduler(log, throttler, uaClient, continuationPoints, options, token, purpose);
             await scheduler.RunAsync();
         }
+
         /// <summary>
         /// Clear internal list of visited nodes, allowing callbacks to be called for visited nodes again.
         /// </summary>

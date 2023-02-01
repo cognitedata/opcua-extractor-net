@@ -29,8 +29,6 @@ using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Runtime.Serialization;
-using System.Text.RegularExpressions;
-using System.Threading;
 using YamlDotNet.Serialization;
 
 namespace Cognite.OpcUa
@@ -444,6 +442,10 @@ namespace Cognite.OpcUa
             }
             return roots.Distinct().ToArray();
         }
+        /// <summary>
+        /// Server namespace nodes the should be subscribed to a rebrowse upon changes to their values.
+        /// </summary>
+        public RebrowseTriggersConfig? RebrowseTriggers { get; set; }
     }
     public class DataTypeConfig
     {
@@ -649,6 +651,38 @@ namespace Cognite.OpcUa
         /// </summary>
         public bool LogBadValues { get; set; } = true;
     }
+    public class RebrowseTriggersConfig
+    {
+        public RebrowseTriggerTargets Targets { get => targets; set { targets = value ?? targets; } }
+        
+        private RebrowseTriggerTargets targets = new RebrowseTriggerTargets();
+
+        /// <summary>
+        /// A list of namespaces filters
+        /// </summary>
+        public IEnumerable<string> Namespaces { get; set; } = new List<string>();
+    }
+
+    public class RebrowseTriggerTargets 
+    {
+        private List<string> ToBeSubscribed = new List<string>();
+
+        public bool NamespacePublicationDate { 
+            get => ToBeSubscribed.Contains("NamespacePublicationDate");
+            set {
+                var exists = ToBeSubscribed.Contains("NamespacePublicationDate");
+
+                if (value && !exists) {
+                    ToBeSubscribed.Add("NamespacePublicationDate");
+                } else if (!value && exists) {
+                    ToBeSubscribed.Remove("NamespacePublicationDate");
+                }
+            }
+        }
+
+        public List<string> GetTargets => ToBeSubscribed;
+    }
+
     public interface IPusherConfig
     {
         /// <summary>

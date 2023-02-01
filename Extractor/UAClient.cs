@@ -117,6 +117,7 @@ namespace Cognite.OpcUa
             await StartSession(timeout);
             await StartNodeMetrics();
         }
+
         /// <summary>
         /// Close the Session, cleaning up any client data on the server
         /// </summary>
@@ -598,13 +599,12 @@ namespace Cognite.OpcUa
                 attributeRequests.Inc();
                 return response.Results;
             }
-            catch (OperationCanceledException) when(token.IsCancellationRequested) { return Enumerable.Empty<DataValue>(); }
+            catch (OperationCanceledException) when (token.IsCancellationRequested) { return Enumerable.Empty<DataValue>(); }
             catch (Exception ex)
             {
                 attributeRequestFailures.Inc();
                 throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.ReadAttributes);
             }
-    
         }
 
         /// <summary>
@@ -1122,22 +1122,32 @@ namespace Cognite.OpcUa
         /// <param name="name"></param>
         public async Task RemoveSubscription(string name)
         {
-            if (Session == null || Session.Subscriptions == null) return;
-            var subscription = Session.Subscriptions.FirstOrDefault(sub =>
-                                       sub.DisplayName.StartsWith(name, StringComparison.InvariantCulture));
-            if (subscription == null || !subscription.Created) return;
-            try
-            {
-                await Session.RemoveSubscriptionAsync(subscription);
+            if (TryGetSubscription(name, out var subscription) && subscription!.Created) {
+                try
+                {
+                    await Session!.RemoveSubscriptionAsync(subscription);
+                }
+                catch
+                {
+                    // A failure to delete the subscription generally means it just doesn't exist.
+                }
+                finally
+                {
+                    subscription!.Dispose();
+                }
             }
-            catch
-            {
-                // A failure to delete the subscription generally means it just doesn't exist.
-            }
-            finally
-            {
-                subscription.Dispose();
-            }
+        }
+
+        /// <summary>
+        /// Tries to get an existing subscription from a list of session subscriptions.
+        /// </summary>
+        /// <param name="name"></param>
+        /// <param name="subscription"></param>
+        public bool TryGetSubscription(string name, out Subscription? subscription)
+        {
+            subscription = Session?.Subscriptions?.FirstOrDefault(sub =>
+                sub.DisplayName.StartsWith(name, StringComparison.InvariantCulture));
+            return subscription != null;
         }
         #endregion
 
