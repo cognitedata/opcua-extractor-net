@@ -3,6 +3,7 @@ storage: none
 
 nuget Cognite.ExtractorUtils
 nuget Cognite.Extractor.Testing
+nuget CogniteSdk 3.7.0
 nuget Microsoft.CSharp
 nuget coverlet.msbuild
 nuget Microsoft.NET.Test.Sdk
@@ -11,7 +12,7 @@ nuget xunit.runner.visualstudio
 nuget OPCFoundation.NetStandard.Opc.Ua.Client
 nuget OPCFoundation.NetStandard.Opc.Ua.Configuration
 nuget OPCFoundation.NetStandard.Opc.Ua.Server
-nuget OPCFoundation.NetStandard.Opc.Ua.PubSub 1.4.371.50-beta
+nuget OPCFoundation.NetStandard.Opc.Ua.PubSub 1.4.371.60-beta
 nuget AdysTech.InfluxDB.Client.Net.Core
 nuget Microsoft.Windows.Compatibility
 nuget Microsoft.Extensions.Hosting.WindowsServices

@@ -73,9 +73,7 @@ namespace Cognite.OpcUa
 
         private async Task<IEnumerable<string>> GetDeletedItems(string? tableName, Dictionary<string, NodeExistsState> states, CancellationToken token)
         {
-            // If there are no states we don't check for deletes. This means we can't ever delete the _last_ of a type, but that is likely to be
-            // an issue or a bug either way.
-            if (tableName == null || !states.Any()) return Enumerable.Empty<string>();
+            if (tableName == null) return Enumerable.Empty<string>();
 
             var oldStates = await GetExistingStates(tableName, token);
 

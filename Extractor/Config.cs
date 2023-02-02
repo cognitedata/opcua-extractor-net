@@ -591,6 +591,12 @@ namespace Cognite.OpcUa
         /// Enable deletes.
         /// </summary>
         public bool Enabled { get; set; }
+
+        /// <summary>
+        /// Name of marker for indicating that a node is deleted.
+        /// Added to metadata, as a column on raw rows, or similar.
+        /// </summary>
+        public string DeleteMarker { get; set; } = "deleted";
     }
 
     public class DataSubscriptionConfig
@@ -768,6 +774,13 @@ namespace Cognite.OpcUa
         /// reporting the number changed.
         /// </summary>
         public BrowseCallbackConfig? BrowseCallback { get; set; }
+
+        /// <summary>
+        /// There is no good way to mark relationships as deleted, so they are hard-deleted.
+        /// This has to be enabled to delete relationships deleted from OPC-UA. This requires extraction.deletes to be enabled.
+        /// Alternatively, use Raw, where relationships can be marked as deleted.
+        /// </summary>
+        public bool DeleteRelationships { get; set; }
     }
     public class RawMetadataConfig
     {
