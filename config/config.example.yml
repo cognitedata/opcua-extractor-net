@@ -478,6 +478,9 @@ mqtt:
         assets:
         timeseries:
 
+    # If relationships are eneabled, and written to clean, and deletes are enabled. This needs to be set to
+    # true in order to hard delete the relationships.
+    delete-relationships: false
         
 
 # If a pusher fails to push data for some reason, the failure buffer will automatically store the data,
@@ -774,6 +777,17 @@ extraction:
         # A list of namespace uris from which the targets above will be selected and listen for
         namespaces:
         - http://opcfoundation.org/UA/
+    # Configure soft deletes. When this is enabled, all read nodes are written to a state store after browse,
+    # and nodes that are missing on subsequent browses are marked as deleted from CDF, with a configurable
+    # marker.
+    # A notable exception is relationships in CDF, which has no metadata, so these are hard-deleted if
+    # cognite.delete-relationships is enabled
+    deletes:
+        # True to enable deletes. This requires a state store to be configured.
+        enabled: false
+        # Name of marker indicating that a node is deleted.
+        # Added to metadata, or as a column in Raw.
+        delete-marker: "deleted"
 
     
 

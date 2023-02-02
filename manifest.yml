@@ -60,6 +60,11 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.12.0":
+    description: Add support for marking nodes as deleted
+    changelog:
+      added:
+        - "Support for marking nodes as deleted. See `extraction.deletes`"
   "2.11.0":
     description: Adds support for rebrowse triggers
     changelog:

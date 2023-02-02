@@ -138,6 +138,10 @@
                     "description": "Call callback even if zero items are created or updated."
                 }
             }
+        },
+        "delete-relationships": {
+            "type": "boolean",
+            "description": "If relationships are enabled, and written to clean, and deletes are neabled. This needs to be set to true in order to hard delete the relationships."
         }
     }
 }
