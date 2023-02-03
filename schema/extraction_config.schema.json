@@ -158,12 +158,27 @@
                     "type": {
                         "type": "string",
                         "description": "Transformation type. `Ignore` ignores the node and all descendants, `DropSubscriptions` prevents the extractor from subscribing to this node, `Property` converts timeseries and their descendants into metadata, `TimeSeries` converts metadata into timeseries.",
-                        "enum": ["Ignore", "DropSubscriptions", "Property", "TimeSeries"]
+                        "enum": [ "Ignore", "DropSubscriptions", "Property", "TimeSeries" ]
                     },
                     "filter": {
                         "$ref": "raw-node-filter",
                         "description": "Filter to match. All non-null filters must match each node for the transformation to be applied"
                     }
+                }
+            }
+        },
+        "deletes": {
+            "type": "object",
+            "description": "Configure soft deletes. When this is enabled, all read nodes are written to a state store after browse, and nodes that are missing on subsequent browses are marked as deleted from CDF, with a configurable marker. A notable exception is relationships in CDF, which has no metadata, so these are hard deleted if cognite.delete-relationships is enabled.",
+            "unevaluatedProperties": false,
+            "properties": {
+                "enabled": {
+                    "type": "boolean",
+                    "description": "True to enable deletes. This requires a state store to be configured."
+                },
+                "delete-marker": {
+                    "type": "string",
+                    "description": "Name of marked indicated that a node is deleted. Added to metadata, or as a column in Raw."
                 }
             }
         }
