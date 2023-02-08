@@ -13,7 +13,7 @@ jobs:
             version: ${{ steps.get-version.outputs.version }}
         
         steps:
-        - uses: actions/checkout@v2
+        - uses: actions/checkout@v3
         - id: get-pub-args
           run: echo ::set-output name=args::$(./get-build-args.sh ${GITHUB_REF#refs/tags/})
         - id: get-version
@@ -24,7 +24,7 @@ jobs:
         needs: create-release
         
         steps:
-        - uses: actions/checkout@v2
+        - uses: actions/checkout@v3
         - name: Setup .NET
           uses: actions/setup-dotnet@v1
           with:
@@ -94,7 +94,7 @@ jobs:
         needs: create-release
 
         steps:
-        - uses: actions/checkout@v2
+        - uses: actions/checkout@v3
         - name: Setup .NET
           uses: actions/setup-dotnet@v1
           with:
@@ -157,7 +157,7 @@ jobs:
         needs: [build-linux, build-installer, create-release]
 
         steps:
-        - uses: actions/checkout@v2
+        - uses: actions/checkout@v3
           name: Checkout
 
         - name: Download Linux Artifacts
@@ -218,7 +218,7 @@ jobs:
         needs: create-release
 
         steps:
-        - uses: actions/checkout@v2
+        - uses: actions/checkout@v3
           name: Checkout
 
         - id: image_tags
