@@ -116,7 +116,7 @@ jobs:
             path-to-binary: .\extractorbuild\OpcuaExtractor.exe
 
         - name: Add msbuild to path
-          uses: microsoft/setup-msbuild@v1.1
+          uses: microsoft/setup-msbuild@v1.3
 
         - name: Build service manager
           run: msbuild .\OpcUaServiceManager\OpcUaServiceManager.csproj /t:rebuild /p:Configuration=Release
