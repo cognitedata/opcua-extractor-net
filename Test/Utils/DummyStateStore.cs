@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace Test.Utils
 {
-    internal class DummyStateStore : IExtractionStateStore
+    internal sealed class DummyStateStore : IExtractionStateStore
     {
         public int NumDeleteState { get; private set; }
         public int NumRestoreState { get; private set; }

@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 [assembly: CLSCompliant(false)]
 namespace Cognite.Bridge
 {
-    internal class Program
+    internal sealed class Program
     {
         private static void Main(string[] args)
         {
@@ -66,7 +66,7 @@ namespace Cognite.Bridge
 
             quitEvent.WaitOne();
 
-            Serilog.Log.CloseAndFlush();
+            await Serilog.Log.CloseAndFlushAsync();
         }
     }
 }

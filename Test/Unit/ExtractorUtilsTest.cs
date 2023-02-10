@@ -67,14 +67,14 @@ namespace Test.Unit
             Assert.Equal(root, ExtractorUtils.GetRootExceptionOfType<ExtractorFailureException>(aex2));
         }
 
-        private class LogEvent
+        private sealed class LogEvent
         {
             public LogLevel LogLevel { get; set; }
             public EventId EventId { get; set; }
             public Exception Exception { get; set; }
         }
 
-        private class DummyLogger : ILogger
+        private sealed class DummyLogger : ILogger
         {
             public List<LogEvent> Events { get; } = new List<LogEvent>();
             private readonly object mutex = new object();

@@ -32,7 +32,7 @@ namespace Server
     /// 
     /// Generating new nodes, History, and setting up the node hierarchy.
     /// </summary>
-    internal class TestNodeManager : CustomNodeManager2
+    internal sealed class TestNodeManager : CustomNodeManager2
     {
         private readonly HistoryMemoryStore store;
         private uint nextId;
@@ -1839,6 +1839,15 @@ namespace Server
             return fields;
         }
         #endregion
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                pubSub?.Dispose();
+            }
+            base.Dispose(disposing);
+        }
     }
 
     internal class InternalHistoryRequest
@@ -1852,7 +1861,7 @@ namespace Server
         public bool IsReverse;
     }
 
-    internal class InternalEventHistoryRequest : InternalHistoryRequest
+    internal sealed class InternalEventHistoryRequest : InternalHistoryRequest
     {
         public FilterContext FilterContext;
         public EventFilter Filter;

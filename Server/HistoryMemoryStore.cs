@@ -26,7 +26,7 @@ namespace Server
     /// <summary>
     /// Class managing history in memory. Contains methods for reading and writing both datapoint and event history.
     /// </summary>
-    internal class HistoryMemoryStore
+    internal sealed class HistoryMemoryStore
     {
         private const int maxHistoryDatapoints = 100000;
         private const int maxHistoryEvents = 10000;
