@@ -18,7 +18,7 @@ using Xunit.Abstractions;
 
 namespace Test.Unit
 {
-    class MockStateStore : IExtractionStateStore
+    sealed class MockStateStore : IExtractionStateStore
     {
         public Dictionary<string, Dictionary<string, BaseStorableState>> States { get; } = new();
 

@@ -60,6 +60,11 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.13.0":
+    description: Update to .NET 7
+    changelog:
+      changed:
+        - "Update to .NET 7"
   "2.12.0":
     description: Add support for marking nodes as deleted
     changelog:

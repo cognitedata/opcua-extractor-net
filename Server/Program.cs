@@ -34,7 +34,7 @@ namespace Server
 {
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA1812:ServerOptions never instantiated",
         Justification = "Instantiated through reflection.")]
-    internal class ServerOptions
+    internal sealed class ServerOptions
     {
         [CommandLineOption("Endpoint to run the server on, defaults to opc.tcp://localhost", true, "-e")]
         public string EndpointUrl { get; set; }
@@ -107,7 +107,7 @@ namespace Server
     }
 
 
-    internal class Program
+    internal sealed class Program
     {
         private static async Task<int> Main(string[] args)
         {

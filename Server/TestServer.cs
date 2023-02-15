@@ -25,7 +25,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Server
 {
-    internal class DummyValidator : ICertificateValidator
+    internal sealed class DummyValidator : ICertificateValidator
     {
         public void Validate(X509Certificate2 certificate)
         {

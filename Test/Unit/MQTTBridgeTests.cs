@@ -841,24 +841,24 @@ namespace Test.Unit
             Assert.True(tester.Handler.Relationships.ContainsKey("test-3"));
         }
 
-        private class StatelessEventCreate : EventCreate
+        private sealed class StatelessEventCreate : EventCreate
         {
             public IEnumerable<string> AssetExternalIds { get; set; }
         }
 
-        private class StatelessTimeSeriesCreate : TimeSeriesCreate
+        private sealed class StatelessTimeSeriesCreate : TimeSeriesCreate
         {
             public string AssetExternalId { get; set; }
         }
 
-        private class RawRequestWrapper<T>
+        private sealed class RawRequestWrapper<T>
         {
             public string Database { get; set; }
             public string Table { get; set; }
             public IEnumerable<RawRowCreateDto<T>> Rows { get; set; }
         }
 
-        private class RawRowCreateDto<T>
+        private sealed class RawRowCreateDto<T>
         {
             public string Key { get; set; }
             public T Columns { get; set; }
