@@ -19,8 +19,7 @@ namespace OpcUaServiceManager
         private ServiceController[] _winServices;
         private List<ServiceController> _cogniteServices;
         private List<string> _serviceNamesInUse;
-        private readonly string _opcuaExtractorDir;
-        private readonly string _opcuaExtractorExe = @"OpcUaExtractor\bin\OpcuaExtractor.exe";
+        private readonly string _opcuaExtractorExe;
         private readonly bool _opcuaExtractorCanCreateService = false;
         private int _nextServiceNumber;
 
@@ -32,27 +31,49 @@ namespace OpcUaServiceManager
             InitializeComponent();
 
             // Set some default values
-            lblOpcUaExtractorFound.Text = "OpcUaService executeable not found.";
-            lblOpcUaExtractorFound.ForeColor = Color.Red;
             lblCmdRunStatus.Text = "";
             lblServices.ForeColor = Color.Green;
 
             GetOpcUaExtractorServices();
 
             // Get installdir from registry, created by the installer.
-            RegistryKey key = Registry.LocalMachine.OpenSubKey(@"Software\Cognite\OpcUaExtractor");
 
-            if (key != null)
-            {
-                _opcuaExtractorDir = key.GetValue("InstallFolder").ToString();
-            }
+            _opcuaExtractorExe = GetOpcUaExecutablePath();
 
-            if (File.Exists(_opcuaExtractorDir + _opcuaExtractorExe))
+            if (File.Exists(_opcuaExtractorExe))
             {
-                lblOpcUaExtractorFound.Text = "OpcUaService found: " + _opcuaExtractorDir + _opcuaExtractorExe;
+                lblOpcUaExtractorFound.Text = $"OpcUaService found: {_opcuaExtractorExe}";
                 lblOpcUaExtractorFound.ForeColor = Color.Green;
                 _opcuaExtractorCanCreateService = true;
             }
+            else
+            {
+                lblOpcUaExtractorFound.Text = $"OpcUaService executeable not found at {_opcuaExtractorExe}";
+                lblOpcUaExtractorFound.ForeColor = Color.Red;
+
+            }
+        }
+
+        private string GetOpcUaExecutablePath()
+        {
+            // Priority 1, use a local file named opcuabinpath.txt
+            var localDir = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
+
+            var cfgPath = Path.Combine(localDir, "opcuabinpath.txt");
+            if (File.Exists(cfgPath))
+            {
+                return File.ReadAllText(cfgPath).Trim();
+            }
+
+            // Priority 2, use the installation registry key (this is the default).
+            RegistryKey key = Registry.LocalMachine.OpenSubKey(@"Software\Cognite\OpcUaExtractor");
+            if (key != null)
+            {
+                return Path.Combine(key.GetValue("InstallFolder").ToString(), @"OpcUaExtractor\bin\OpcuaExtractor.exe");
+            }
+
+            // Priorty 3, use a relative path
+            return Path.Combine(localDir, @"..\bin\OpcuaExtractor.exe");
         }
 
         /// <summary>
@@ -94,7 +115,7 @@ namespace OpcUaServiceManager
             }
 
             string cmd = string.Format(@"/C sc create {2} binPath= ""\""{0}\"" -s -w \""{1}\"" "" DisplayName= ""{3}""",
-                _opcuaExtractorDir + _opcuaExtractorExe, txtSvcFolder.Text, _serviceBaseName + _nextServiceNumber, txtSvcName.Text);
+                _opcuaExtractorExe, txtSvcFolder.Text, _serviceBaseName + _nextServiceNumber, txtSvcName.Text);
             string result = RunCommand.Run(cmd);
             if (result.Contains("SUCCESS"))
             {
