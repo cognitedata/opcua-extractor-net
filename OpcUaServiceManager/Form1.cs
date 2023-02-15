@@ -33,6 +33,9 @@ namespace OpcUaServiceManager
             // Set some default values
             lblCmdRunStatus.Text = "";
             lblServices.ForeColor = Color.Green;
+            lblCmdRunStatus.AutoSize = true;
+            lblOpcUaExtractorFound.AutoSize = true;
+            AutoSize = true;
 
             GetOpcUaExtractorServices();
 
@@ -126,7 +129,7 @@ namespace OpcUaServiceManager
             }
             else
             {
-                lblCmdRunStatus.Text = "Failed to create service.";
+                lblCmdRunStatus.Text = $"Failed to create service: {result}";
                 lblCmdRunStatus.ForeColor = Color.Red;
             }
 
@@ -177,7 +180,7 @@ namespace OpcUaServiceManager
                 }
                 else
                 {
-                    lblCmdRunStatus.Text = "Failed to delete service.";
+                    lblCmdRunStatus.Text = $"Failed to delete service: {result}";
                     lblCmdRunStatus.ForeColor = Color.Red;
                 }
 
@@ -237,7 +240,8 @@ namespace OpcUaServiceManager
             if (!string.IsNullOrWhiteSpace(path))
             {
                 var pathItems = path.Split(' ');
-                path = (!string.IsNullOrWhiteSpace(pathItems[1])) ? pathItems[1].Replace(@"""", "") : "";
+                var restPath = string.Concat(pathItems.Skip(3));
+                path = (!string.IsNullOrWhiteSpace(restPath)) ? restPath.Replace(@"""", "") : "";
             }
 
             txtSvcName.Text = service.DisplayName;
