@@ -60,6 +60,14 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.13.1":
+    description: Minor improvements to the service manager
+    changelog:
+      added:
+        - "A file opcuabinpath.txt in the same folder as the service manager can be used to set the binary path"
+        - "If there is no opcuabinpath.txt and no installation registry entry, the service manager defaults to ../bin/OpcUaExtractor.exe"
+      fixed:
+        - "Display expected path if the service manager cannot find the executable"
   "2.13.0":
     description: Update to .NET 7
     changelog:
