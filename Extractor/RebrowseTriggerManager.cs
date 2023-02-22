@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 
 using Opc.Ua;
 using Opc.Ua.Client;
+using System;
 
 namespace Cognite.OpcUa
 {
@@ -104,7 +105,7 @@ namespace Cognite.OpcUa
             };
 
             if (nodeIds.Count > 0) 
-                logger.LogInformation("The following nodes will be subscribed to a rebrowse: {Nodes}", nodeIds);
+                logger.LogInformation("The following nodes will be subscribed to for rebrowse triggers: {Nodes}", nodeIds);
 
             var nodes = nodeIds.Select(node => new ServerItemSubscriptionState(_uaClient, node)).ToList();
 
@@ -117,15 +118,30 @@ namespace Cognite.OpcUa
                 nodes, SubscriptionName,
                 (MonitoredItem item, MonitoredItemNotificationEventArgs _) =>
                 {
-                    var values = item.DequeueValues();
-                    var value = values.Count > 0 
-                        ? values[0].GetValue<System.DateTime>(UAExtractor.StartTime)
-                        : UAExtractor.StartTime;
+                    try
+                    {
+                        var values = item.DequeueValues();
+                        var value = values.Count > 0
+                            ? values[0].GetValue(UAExtractor.StartTime)
+                            : UAExtractor.StartTime;
 
-                    if (UAExtractor.StartTime < value) {
-                        logger.LogInformation("Triggering a rebrowse due to a change in the value of {NodeId}", item.ResolvedNodeId);
-                        _extractor.Looper.QueueRebrowse();
+                        if (UAExtractor.StartTime < value)
+                        {
+                            logger.LogInformation("Triggering a rebrowse due to a change in the value of {NodeId} to {Value}", item.ResolvedNodeId, value);
+                            _extractor.Looper.QueueRebrowse();
+                        }
+                        else
+                        {
+                            logger.LogDebug("Received a rebrowse trigger notification with time {Time}, which is not greater than extractor start time {StartTime}",
+                                value,
+                                UAExtractor.StartTime);
+                        }
                     }
+                    catch (Exception ex)
+                    {
+                        logger.LogError(ex, "Unexpected error handling rebrowse trigger");
+                    }
+                    
                 },
                 state => new MonitoredItem
                 {
@@ -137,7 +153,7 @@ namespace Cognite.OpcUa
                     AttributeId = Attributes.Value,
                     NodeClass = NodeClass.Variable,
                     CacheQueueSize = 1
-                }, token, "namespaces "
+                }, token, "namespaces"
             );
         }
     }
