@@ -79,24 +79,11 @@ namespace Cognite.OpcUa.NodeSources
         /// <param name="node">Variable to write</param>
         protected virtual void AddVariableToLists(UAVariable node)
         {
-            if (node.IsObject)
-            {
-                FinalDestinationVariables.AddRange(node.CreateTimeseries());
-                FinalDestinationObjects.Add(node);
-            }
-            else
-            {
-                FinalDestinationVariables.Add(node);
-            }
-
-            if (node.NodeClass == NodeClass.Variable)
-            {
-                FinalSourceVariables.Add(node);
-            }
-            else
-            {
-                FinalSourceObjects.Add(node);
-            }
+            var map = node.GetVariableGroups(Extractor.DataTypeManager);
+            if (map.DestinationVariable) FinalDestinationVariables.AddRange(node.CreateTimeseries());
+            if (map.DestinationObject) FinalDestinationObjects.Add(node);
+            if (map.SourceVariable) FinalSourceVariables.Add(node);
+            if (map.SourceObject) FinalSourceObjects.Add(node);
         }
         protected async Task EstimateArraySizes(IEnumerable<UAVariable> nodes, CancellationToken token)
         {
@@ -289,7 +276,6 @@ namespace Cognite.OpcUa.NodeSources
         /// <param name="node">Node to sort.</param>
         protected void SortVariable(TypeUpdateConfig update, UAVariable node)
         {
-            if (!Extractor.DataTypeManager.AllowTSMap(node)) return;
             if (FilterObject(update, node)) AddVariableToLists(node);
         }
 
