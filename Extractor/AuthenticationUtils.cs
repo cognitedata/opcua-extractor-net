@@ -15,6 +15,7 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using Cognite.OpcUa.Config;
 using Opc.Ua;
 using System.Security.Cryptography.X509Certificates;
 
@@ -63,7 +64,7 @@ namespace Cognite.OpcUa
             return cert;
         }
 
-        public static UserIdentity GetUserIdentity(UAClientConfig config)
+        public static UserIdentity GetUserIdentity(SourceConfig config)
         {
             if (!string.IsNullOrEmpty(config.Username)) return new UserIdentity(config.Username, config.Password);
             if (config.X509Certificate != null)

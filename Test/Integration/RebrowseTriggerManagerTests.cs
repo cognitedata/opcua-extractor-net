@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Cognite.Extractor.Testing;
 using Cognite.OpcUa;
+using Cognite.OpcUa.Config;
 using Test.Utils;
 using Xunit;
 using Xunit.Abstractions;

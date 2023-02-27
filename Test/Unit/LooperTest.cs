@@ -1,5 +1,6 @@
 ﻿using Cognite.Extractor.Testing;
 using Cognite.OpcUa;
+using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.Types;

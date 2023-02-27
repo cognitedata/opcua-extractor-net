@@ -9,6 +9,7 @@ using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using Opc.Ua.Client;
 using System;
+using Cognite.OpcUa.Config;
 
 namespace Cognite.OpcUa
 {

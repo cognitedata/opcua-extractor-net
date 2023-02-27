@@ -10,12 +10,13 @@ using System.Threading;
 using Prometheus;
 using Metrics = Prometheus.Metrics;
 using System.Linq;
+using Cognite.OpcUa.Config;
 
 namespace Cognite.OpcUa
 {
     public class SessionManager : IDisposable
     {
-        private UAClientConfig config;
+        private SourceConfig config;
         private UAClient client;
         private ReverseConnectManager? reverseConnectManager;
         private SessionReconnectHandler? reconnectHandler;
@@ -35,7 +36,7 @@ namespace Cognite.OpcUa
 
         public string? EndpointUrl { get; private set; }
 
-        public SessionManager(UAClientConfig config, UAClient parent, ApplicationConfiguration appConfig, ILogger log, CancellationToken token, int timeout = -1)
+        public SessionManager(SourceConfig config, UAClient parent, ApplicationConfiguration appConfig, ILogger log, CancellationToken token, int timeout = -1)
         {
             client = parent;
             this.config = config;
