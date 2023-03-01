@@ -11,8 +11,9 @@ namespace Cognite.OpcUa
 {
     internal class NodeExistsState : BaseExtractionState
     {
-        public NodeExistsState(string id) : base(id)
+        public NodeExistsState(string id, DateTime time) : base(id)
         {
+            LastTimeModified = time;
         }
     }
 
@@ -77,17 +78,19 @@ namespace Cognite.OpcUa
 
             var oldStates = await GetExistingStates(tableName, token);
 
+            var time = DateTime.UtcNow;
             var deletedStates = oldStates.Where(s => !states.ContainsKey(s.Key)).Select(kvp => kvp.Value).ToList();
             if (deletedStates.Any())
             {
                 logger.LogInformation("Found {Del} stored nodes in {Tab} that no longer exist and will be marked as deleted", deletedStates.Count, tableName);
-                await stateStore.DeleteExtractionState(deletedStates.Select(d => new NodeExistsState(d.Id)), tableName, token);
+                await stateStore.DeleteExtractionState(deletedStates.Select(d => new NodeExistsState(d.Id, time)), tableName, token);
             }
 
             var newStates = states.Values.Where(s => !oldStates.ContainsKey(s.Id)).ToList();
             if (newStates.Any())
             {
                 logger.LogInformation("Found {New} new nodes in {Tab}, adding to state store...", newStates.Count, tableName);
+                var now = DateTime.UtcNow;
                 await stateStore.StoreExtractionState(newStates, tableName, s => new BaseStorableState { Id = s.Id }, token);
             }
 
@@ -98,10 +101,11 @@ namespace Cognite.OpcUa
         {
             if (!result.CanBeUsedForDeletes) return new DeletedNodes();
 
+            var time = DateTime.UtcNow.AddSeconds(-1);
             var newVariables = result.DestinationVariables.Select(v => client.GetUniqueId(v.Id, v.Index)!).ToDictionary(
-                i => i, i => new NodeExistsState(i));
-            var newObjects = result.DestinationObjects.Select(o => client.GetUniqueId(o.Id)!).ToDictionary(i => i, i => new NodeExistsState(i));
-            var newReferences = result.DestinationReferences.Select(r => client.GetRelationshipId(r)!).ToDictionary(i => i, i => new NodeExistsState(i));
+                i => i, i => new NodeExistsState(i, time));
+            var newObjects = result.DestinationObjects.Select(o => client.GetUniqueId(o.Id)!).ToDictionary(i => i, i => new NodeExistsState(i, time));
+            var newReferences = result.DestinationReferences.Select(r => client.GetRelationshipId(r)!).ToDictionary(i => i, i => new NodeExistsState(i, time));
 
             var res = await Task.WhenAll(
                 GetDeletedItems(config.StateStorage?.KnownObjectsStore, newObjects, token),
