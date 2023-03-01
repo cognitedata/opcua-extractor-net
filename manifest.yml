@@ -60,6 +60,14 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.14.0":
+    description: Workaround for NAT, various fixes
+    changelog:
+      fixed:
+        - "Make sure delete states are saved correctly"
+        - "Fix handling of variable children when the parent variable is ignored"
+      added:
+        - "Support for overriding endpoints returned by discovery servers, to work around NAT"
   "2.13.2":
     description: Improve logging in rebrowse manager
     changelog:
