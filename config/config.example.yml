@@ -10,7 +10,8 @@
 version: 1
 
 source:
-    # The URL of the OPC-UA server to connect to
+    # The URL of the OPC-UA server to connect to.
+    # This is used as discovery URL.
     endpoint-url: "opc.tcp://localhost:4840"
     # A list of URLs to connect to if the endpoint-url fails.
     # These are connected to in order, and the one with the highest ServiceLevel is selected.
@@ -20,6 +21,11 @@ source:
     alt-endpoint-urls:
     # - opc.tcp://some-other-server:1234
     # - opc.tcp://some-third-server:4321
+    # Details used to override default endpoint behavior.
+    endpoint-details:
+        # Endpoint URL to override URLs returned from discovery.
+        # This can be used if the server is behind NAT, or similar URL rewrites.
+        override-endpoint-url:
     # Auto accept connections from unknown servers.
     # There is not yet a feature to accept new certificates, but you can manually move rejected certificates to accepted.
     # Paths are defined in opc.ua.net.extractor.Config.xml

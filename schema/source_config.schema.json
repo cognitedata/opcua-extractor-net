@@ -16,6 +16,17 @@
                 "description": "URL of OPC-UA server endpoint"
             }
         },
+        "endpoint-details": {
+            "type": "object",
+            "description": "Details used to override default endpoint behavior",
+            "unevaluatedProperties": false,
+            "properties": {
+                "override-endpoint-url": {
+                    "type": "string",
+                    "description": "Endpoint URL to override URLs returned from discovery. This can be used if the server is behind NAT, or similar URL rewrites."
+                }
+            }
+        },
         "auto-accept": {
             "type": "boolean",
             "default": true,

@@ -209,7 +209,9 @@ namespace Cognite.OpcUa
 
         private async Task<Session> CreateSessionDirect(string endpointUrl)
         {
-            log.LogInformation("Attempt to select endpoint from: {EndpointURL}", endpointUrl);
+            log.LogInformation("Attempt to select endpoint from: {EndpointURL}", CoreClientUtils.GetDiscoveryUrl(endpointUrl));
+
+            var identity = AuthenticationUtils.GetUserIdentity(config);
             EndpointDescription selectedEndpoint;
             try
             {
@@ -219,14 +221,20 @@ namespace Cognite.OpcUa
             {
                 throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.SelectEndpoint);
             }
+            if (config.EndpointDetails != null && !string.IsNullOrWhiteSpace(config.EndpointDetails.OverrideEndpointUrl))
+            {
+                log.LogInformation("Discovered endpoint is {Url}, using override {Override} instead",
+                    selectedEndpoint.EndpointUrl, config.EndpointDetails.OverrideEndpointUrl);
+                selectedEndpoint.EndpointUrl = config.EndpointDetails.OverrideEndpointUrl;
+            }
+
             var endpointConfiguration = EndpointConfiguration.Create(appConfig);
             client.LogDump("Endpoint configuration", endpointConfiguration);
 
             var endpoint = new ConfiguredEndpoint(null, selectedEndpoint, endpointConfiguration);
             client.LogDump("Endpoint", endpoint);
-
-            var identity = AuthenticationUtils.GetUserIdentity(config);
-            log.LogInformation("Attempt to connect to endpoint with security: {SecurityPolicyUri} using user identity {Identity}",
+            log.LogInformation("Attempt to connect to endpoint at {Endpoint} with security: {SecurityPolicyUri} using user identity {Identity}",
+                endpoint.Description.EndpointUrl,
                 endpoint.Description.SecurityPolicyUri,
                 identity.DisplayName);
             try
