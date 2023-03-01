@@ -80,10 +80,10 @@ namespace Cognite.OpcUa.NodeSources
         protected virtual void AddVariableToLists(UAVariable node)
         {
             var map = node.GetVariableGroups(Extractor.DataTypeManager);
-            if (map.DestinationVariable) FinalDestinationVariables.AddRange(node.CreateTimeseries());
-            if (map.DestinationObject) FinalDestinationObjects.Add(node);
-            if (map.SourceVariable) FinalSourceVariables.Add(node);
-            if (map.SourceObject) FinalSourceObjects.Add(node);
+            if (map.IsDestinationVariable) FinalDestinationVariables.AddRange(node.CreateTimeseries());
+            if (map.IsDestinationObject) FinalDestinationObjects.Add(node);
+            if (map.IsSourceVariable) FinalSourceVariables.Add(node);
+            if (map.IsSourceObject) FinalSourceObjects.Add(node);
         }
         protected async Task EstimateArraySizes(IEnumerable<UAVariable> nodes, CancellationToken token)
         {

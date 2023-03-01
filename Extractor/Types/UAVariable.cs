@@ -224,10 +224,10 @@ namespace Cognite.OpcUa.Types
 
         public struct VariableGroups
         {
-            public bool SourceObject;
-            public bool SourceVariable;
-            public bool DestinationObject;
-            public bool DestinationVariable;
+            public bool IsSourceObject;
+            public bool IsSourceVariable;
+            public bool IsDestinationObject;
+            public bool IsDestinationVariable;
         }
 
         public VariableGroups GetVariableGroups(DataTypeManager dataTypeManager)
@@ -236,16 +236,16 @@ namespace Cognite.OpcUa.Types
             return new VariableGroups
             {
                 // Source object if it's not a variable
-                SourceObject = NodeClass != NodeClass.Variable,
+                IsSourceObject = NodeClass != NodeClass.Variable,
                 // Source variable if we wish to subscribe to it
-                SourceVariable = allowTsMap && NodeClass == NodeClass.Variable,
+                IsSourceVariable = allowTsMap && NodeClass == NodeClass.Variable,
                 // Destination object if it's an object directly (through isObject)
                 // it's a mapped array, or it's not a variable.
-                DestinationObject = IsArray && Index == -1 && allowTsMap
+                IsDestinationObject = IsArray && Index == -1 && allowTsMap
                     || isObject
                     || NodeClass != NodeClass.Variable,
                 // Destination variable if allowTsMap is true and it's a variable.
-                DestinationVariable = allowTsMap && NodeClass == NodeClass.Variable,
+                IsDestinationVariable = allowTsMap && NodeClass == NodeClass.Variable,
             };
         }
 
