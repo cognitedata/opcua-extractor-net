@@ -1,9 +1,14 @@
 source https://www.nuget.org/api/v2
 storage: none
 
-nuget Cognite.ExtractorUtils
-nuget Cognite.Extractor.Testing
-nuget CogniteSdk 3.7.0
+nuget Cognite.ExtractorUtils 1.6.1
+nuget Cognite.Extractor.Testing 1.6.1
+nuget Cognite.Extensions 1.6.1
+nuget Cognite.Extractor.Common 1.6.1
+nuget Cognite.Extractor.Configuration 1.6.1
+nuget Cognite.Extractor.Logging 1.6.1
+nuget Cognite.Extractor.Metrics 1.6.1
+nuget Cognite.Extractor.StateStorage 1.6.1
 nuget Microsoft.CSharp
 nuget coverlet.msbuild
 nuget Microsoft.NET.Test.Sdk
@@ -22,5 +27,3 @@ nuget Microsoft.Extensions.Hosting.Abstractions
 nuget Microsoft.Extensions.Logging.EventLog
 nuget System.ComponentModel.Annotations
 nuget MQTTnet 3.1.2
-# There appears to be some issue with prometheus-net 7.0.0, investigate further in the future
-nuget prometheus-net 6
