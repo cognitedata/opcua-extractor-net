@@ -24,9 +24,11 @@ using Opc.Ua;
 using Prometheus;
 using Server;
 using System;
+using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
@@ -75,9 +77,19 @@ namespace Test
 
         private static Collector GetCollector(string name)
         {
-            var prop = Metrics.DefaultRegistry.GetType().GetField("_collectors", BindingFlags.NonPublic | BindingFlags.Instance);
-            var dict = (ConcurrentDictionary<string, Collector>)prop.GetValue(Metrics.DefaultRegistry);
-            return dict.GetValueOrDefault(name);
+            var prop = Metrics.DefaultRegistry.GetType().GetField("_families", BindingFlags.NonPublic | BindingFlags.Instance);
+            var dict = (IDictionary) prop.GetValue(Metrics.DefaultRegistry);
+            object family;
+            try
+            {
+                family = /* CollectorFamily */ dict[name];
+            } catch
+            {
+                return null;
+            }
+            if (family == null) return null;
+            var collectors = /* ConcurrentDictionary<CollectorIdentity, Collector> */ family.GetType().GetProperty("Collectors").GetValue(family);
+            return ((IEnumerable<Collector>)collectors.GetType().GetProperty("Values").GetValue(collectors)).FirstOrDefault();
         }
 
         public static double GetMetricValue(string name)
