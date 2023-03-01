@@ -531,7 +531,7 @@ namespace Test.Unit
         {
             var id = new NodeId("test");
             var node = new UAVariable(id, "name", NodeId.Null);
-            Assert.Empty(node.CreateTimeseries());
+            Assert.Single(node.CreateTimeseries());
             Assert.Null(node.ArrayChildren);
 
             node.VariableAttributes.AccessLevel = AccessLevels.CurrentRead | AccessLevels.HistoryRead;

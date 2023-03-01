@@ -200,7 +200,7 @@ namespace Cognite.OpcUa.Types
 
         public IEnumerable<UAVariable> CreateTimeseries()
         {
-            if (IsArray)
+            if (IsArray && Index == -1)
             {
                 return CreateArrayChildren();
             }
@@ -212,7 +212,41 @@ namespace Cognite.OpcUa.Types
                 }
                 return new[] { TimeSeries };
             }
-            return Enumerable.Empty<UAVariable>();
+            else if (NodeClass != NodeClass.Variable)
+            {
+                return Enumerable.Empty<UAVariable>();
+            }
+            else
+            {
+                return new[] { this };
+            }
+        }
+
+        public struct VariableGroups
+        {
+            public bool IsSourceObject;
+            public bool IsSourceVariable;
+            public bool IsDestinationObject;
+            public bool IsDestinationVariable;
+        }
+
+        public VariableGroups GetVariableGroups(DataTypeManager dataTypeManager)
+        {
+            var allowTsMap = dataTypeManager.AllowTSMap(this);
+            return new VariableGroups
+            {
+                // Source object if it's not a variable
+                IsSourceObject = NodeClass != NodeClass.Variable,
+                // Source variable if we wish to subscribe to it
+                IsSourceVariable = allowTsMap && NodeClass == NodeClass.Variable,
+                // Destination object if it's an object directly (through isObject)
+                // it's a mapped array, or it's not a variable.
+                IsDestinationObject = IsArray && Index == -1 && allowTsMap
+                    || isObject
+                    || NodeClass != NodeClass.Variable,
+                // Destination variable if allowTsMap is true and it's a variable.
+                IsDestinationVariable = allowTsMap && NodeClass == NodeClass.Variable,
+            };
         }
 
         /// <summary>

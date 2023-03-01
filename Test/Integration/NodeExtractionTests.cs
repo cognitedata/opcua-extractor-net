@@ -554,6 +554,35 @@ namespace Test.Integration
             var numberVarObj = pusher.PushedNodes[ids.NumberVar];
             Assert.Equal(ids.NumberVar, numberVar.ParentId);
         }
+
+        [Fact]
+        public async Task TestMapVariableChildrenSkipParent()
+        {
+            using var pusher = new DummyPusher(new DummyPusherConfig());
+            var extraction = tester.Config.Extraction;
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+
+            var ids = tester.Server.Ids.Custom;
+            tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Custom.Root, tester.Client);
+
+            extraction.DataTypes.AllowStringVariables = true;
+            extraction.DataTypes.MaxArraySize = -1;
+            extraction.DataTypes.AutoIdentifyTypes = true;
+            extraction.MapVariableChildren = true;
+            extraction.DataTypes.IgnoreDataTypes = new[]
+            {
+                CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Custom.NumberType, tester.Client)
+            };
+
+            await extractor.RunExtractor(true);
+
+            Assert.Equal(9, pusher.PushedNodes.Count);
+            Assert.Equal(15, pusher.PushedVariables.Count);
+
+            var numberVarObj = pusher.PushedNodes[ids.NumberVar];
+            Assert.False(pusher.PushedVariables.ContainsKey((ids.NumberVar, -1)));
+
+        }
         #endregion
 
         #region custommetadata

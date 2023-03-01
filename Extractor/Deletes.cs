@@ -90,7 +90,6 @@ namespace Cognite.OpcUa
             if (newStates.Any())
             {
                 logger.LogInformation("Found {New} new nodes in {Tab}, adding to state store...", newStates.Count, tableName);
-                var now = DateTime.UtcNow;
                 await stateStore.StoreExtractionState(newStates, tableName, s => new BaseStorableState { Id = s.Id }, token);
             }
 
