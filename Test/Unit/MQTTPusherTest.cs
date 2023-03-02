@@ -62,7 +62,7 @@ namespace Test.Unit
         private readonly CDFMockHandler handler;
         private readonly MQTTPusher pusher;
 
-        public MQTTPusherTest(ITestOutputHelper output, MQTTPusherTestFixture tester) 
+        public MQTTPusherTest(ITestOutputHelper output, MQTTPusherTestFixture tester)
         {
             this.tester = tester ?? throw new ArgumentNullException(nameof(tester));
             tester.ResetConfig();

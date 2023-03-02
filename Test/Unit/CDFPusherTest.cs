@@ -583,7 +583,7 @@ namespace Test.Unit
                 Id = 1234,
                 ReportOnEmpty = true
             };
-            
+
             (handler, pusher) = tester.GetCDFPusher();
             using var extractor = tester.BuildExtractor(true, null, pusher);
             var log = tester.Provider.GetRequiredService<ILogger<ReferenceTypeManager>>();

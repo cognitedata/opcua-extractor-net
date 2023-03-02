@@ -20,7 +20,7 @@ namespace Cognite.OpcUa
         private readonly RebrowseTriggersConfig _config;
         private readonly UAExtractor _extractor;
 
-        public readonly static  string SubscriptionName = "TriggerRebrowse";
+        public readonly static string SubscriptionName = "TriggerRebrowse";
 
         public RebrowseTriggerManager(
             ILogger<RebrowseTriggerManager> logger,
@@ -66,7 +66,8 @@ namespace Cognite.OpcUa
                         && refDef.NodeClass == NodeClass.Variable
                         // Filters targets nodes
                         && targetNodes.Contains(refDef.DisplayName.ToString())
-                    ){
+                    )
+                    {
                         group.Add(refDef);
                     }
                 },
@@ -105,7 +106,7 @@ namespace Cognite.OpcUa
                 );
             };
 
-            if (nodeIds.Count > 0) 
+            if (nodeIds.Count > 0)
                 logger.LogInformation("The following nodes will be subscribed to for rebrowse triggers: {Nodes}", nodeIds);
 
             var nodes = nodeIds.Select(node => new ServerItemSubscriptionState(_uaClient, node)).ToList();
@@ -142,7 +143,7 @@ namespace Cognite.OpcUa
                     {
                         logger.LogError(ex, "Unexpected error handling rebrowse trigger");
                     }
-                    
+
                 },
                 state => new MonitoredItem
                 {

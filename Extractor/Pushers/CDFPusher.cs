@@ -529,7 +529,7 @@ namespace Cognite.OpcUa.Pushers
 
             log.LogInformation("Sucessfully pushed relationships to CDF");
         }
-        
+
         public async Task<bool> ExecuteDeletes(DeletedNodes deletes, CancellationToken token)
         {
             var tasks = new List<Task>();
@@ -950,7 +950,7 @@ namespace Cognite.OpcUa.Pushers
                     }
                 }
             }
-            
+
             if (updates.Any())
             {
                 var res = await destination.UpdateTimeSeriesAsync(updates, RetryMode.OnError, SanitationMode.Clean, token);
@@ -1136,7 +1136,7 @@ namespace Cognite.OpcUa.Pushers
             } while (cursor != null);
             return rows;
         }
-        
+
         private async Task MarkRawRowsAsDeleted(string dbName, string tableName, IEnumerable<string> keys, CancellationToken token)
         {
             var keySet = new HashSet<string>(keys);
@@ -1145,7 +1145,7 @@ namespace Cognite.OpcUa.Pushers
             var toMark = rows.Where(r => keySet.Contains(r.Key)).ToList();
             foreach (var row in toMark)
             {
-                row.Columns[extractionConfig.Deletes.DeleteMarker]= trueElem;
+                row.Columns[extractionConfig.Deletes.DeleteMarker] = trueElem;
             }
             await destination.InsertRawRowsAsync(dbName, tableName, toMark.ToDictionary(e => e.Key, e => e.Columns), token);
         }
@@ -1213,7 +1213,7 @@ namespace Cognite.OpcUa.Pushers
                 new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase },
                 token);
         }
-        
+
         private async Task MarkReferencesAsDeleted(IEnumerable<string> externalIds, CancellationToken token)
         {
             bool useRawRelationships = config.RawMetadata != null

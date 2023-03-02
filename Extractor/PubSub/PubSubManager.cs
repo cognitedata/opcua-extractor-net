@@ -178,7 +178,8 @@ namespace Cognite.OpcUa.PubSub
                 app?.Stop();
                 app?.Dispose();
                 app = null;
-            } catch { }
+            }
+            catch { }
         }
     }
 }

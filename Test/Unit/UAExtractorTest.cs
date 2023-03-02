@@ -175,7 +175,7 @@ namespace Test.Unit
                 Assert.Equal(failedNodes, pusher.PendingNodes.Objects.Count() + pusher.PendingNodes.Variables.Count());
                 Assert.Equal(failedRefs, pusher.PendingNodes.References.Count());
             }
-            
+
 
             if (failAt == 0)
             {

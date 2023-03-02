@@ -1123,7 +1123,8 @@ namespace Cognite.OpcUa
         /// <param name="name"></param>
         public async Task RemoveSubscription(string name)
         {
-            if (TryGetSubscription(name, out var subscription) && subscription!.Created) {
+            if (TryGetSubscription(name, out var subscription) && subscription!.Created)
+            {
                 try
                 {
                     await Session!.RemoveSubscriptionAsync(subscription);

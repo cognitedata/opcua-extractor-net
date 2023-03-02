@@ -79,12 +79,13 @@ namespace Test
         private static Collector GetCollector(string name)
         {
             var prop = Metrics.DefaultRegistry.GetType().GetField("_families", BindingFlags.NonPublic | BindingFlags.Instance);
-            var dict = (IDictionary) prop.GetValue(Metrics.DefaultRegistry);
+            var dict = (IDictionary)prop.GetValue(Metrics.DefaultRegistry);
             object family;
             try
             {
                 family = /* CollectorFamily */ dict[name];
-            } catch
+            }
+            catch
             {
                 return null;
             }

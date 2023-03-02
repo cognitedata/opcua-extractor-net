@@ -59,7 +59,7 @@ namespace Cognite.OpcUa
         public string? WorkingDir { get; set; }
         [CommandLineOption("Run extractor without a yml config file. The .xml config file is still needed", true, "-n")]
         public bool NoConfig { get; set; }
-        
+
         public bool ConfigTool { get; set; }
         public FullConfig? Config { get; set; }
         public FullConfig? BaseConfig { get; set; }

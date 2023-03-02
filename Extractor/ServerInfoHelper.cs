@@ -68,7 +68,7 @@ namespace Cognite.OpcUa
                     }
                     catch { }
                 }
-                
+
                 if ((cVal > val || cVal == 0) && val > 0)
                 {
                     log.LogInformation("Max {Name} is restricted to {Val}", name, val);

@@ -83,7 +83,8 @@ namespace Cognite.OpcUa
                 try
                 {
                     session.Close();
-                } catch { }
+                }
+                catch { }
                 session.KeepAlive -= ClientKeepAlive;
                 session.PublishError -= OnPublishError;
                 session.Dispose();
@@ -280,7 +281,7 @@ namespace Cognite.OpcUa
                             NodeId = VariableIds.Server_ServiceLevel,
                             AttributeId = Attributes.Value
                         }
-                    }, liveToken);                    
+                    }, liveToken);
                     var dv = res.Results[0];
                     byte value = dv.GetValue<byte>(0);
 
@@ -381,7 +382,8 @@ namespace Cognite.OpcUa
                 }
                 if (!liveToken.IsCancellationRequested)
                 {
-                    var _ =Task.Run(async () => {
+                    var _ = Task.Run(async () =>
+                    {
                         log.LogInformation("Attempting to reconnect to server");
                         await Connect();
                         if (!liveToken.IsCancellationRequested)

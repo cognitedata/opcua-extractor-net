@@ -192,7 +192,7 @@ namespace Test.Integration
         [Fact]
         public async Task TestWrongData()
         {
-            
+
 
             using var pusher = new DummyPusher(new DummyPusherConfig());
             using var extractor = tester.BuildExtractor(true, null, pusher);

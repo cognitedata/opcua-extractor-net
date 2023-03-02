@@ -43,7 +43,7 @@ namespace Test.Utils
             Provider = Services.BuildServiceProvider();
 
             Log = Provider.GetRequiredService<ILogger<BaseExtractorTestFixture>>();
-            
+
             if (setups == null)
             {
                 setups = new[] {

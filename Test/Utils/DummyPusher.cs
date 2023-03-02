@@ -104,7 +104,7 @@ namespace Test.Utils
                     PushedReferences.Add(rel);
                 }
             }
-            
+
             lock (dpLock)
             {
                 if (variables != null && PushNodesResult)

@@ -85,7 +85,7 @@ namespace Cognite.OpcUa.Config
             baseConfig.Source.AttributesChunk = Config.Source.AttributesChunk;
         }
 
-        
+
         /// <summary>
         /// Populate the nodeList if it has not already been populated.
         /// </summary>
@@ -178,7 +178,7 @@ namespace Cognite.OpcUa.Config
                 NodeId = nodeidstr
             };
         }
-        
+
         /// <summary>
         /// Generate an abbreviated string for each namespace,
         /// splits on non-numeric characters, then uses the first letter of each part,
