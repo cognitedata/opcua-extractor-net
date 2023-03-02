@@ -60,6 +60,11 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.14.1":
+    description: Avoid crashing on duplicated namespaces
+    changelog:
+      fixed:
+        - "Avoid crashing on duplicated namespaces with rebrowse triggers enabled"
   "2.14.0":
     description: Workaround for NAT, various fixes
     changelog:
