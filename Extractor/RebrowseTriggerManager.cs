@@ -57,7 +57,11 @@ namespace Cognite.OpcUa
                     if (parent == serverNamespaces && !grouping.ContainsKey(nodeId))
                     {
                         grouping.Add(nodeId, new List<ReferenceDescription>());
-                        namespaceNameToId.Add(refDef.DisplayName.ToString(), nodeId);
+                        if (!namespaceNameToId.TryAdd(refDef.DisplayName.ToString(), nodeId))
+                        {
+                            logger.LogWarning("Duplicate namespace {Namespace} found on the server, this is a bug in the server. Rebrowse triggers may not work properly.",
+                                refDef.DisplayName);
+                        }
                     }
                     else if (
                         grouping.TryGetValue(parent, out var group)
