@@ -29,6 +29,7 @@ namespace Test.Utils
         public ServiceProvider Provider { get; protected set; }
         protected ServiceCollection Services { get; }
         protected PredefinedSetup[] Setups { get; }
+        public DummyClientCallbacks Callbacks { get; private set; }
         public ILogger Log { get; }
         protected BaseExtractorTestFixture(PredefinedSetup[] setups = null)
         {
@@ -60,6 +61,8 @@ namespace Test.Utils
 
             Client = new UAClient(Provider, Config);
             Source = new CancellationTokenSource();
+            Callbacks = new DummyClientCallbacks(Source.Token);
+            Client.Callbacks = Callbacks;
             await Client.Run(Source.Token, 0);
         }
 

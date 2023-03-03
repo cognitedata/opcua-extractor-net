@@ -499,11 +499,11 @@ namespace Cognite.OpcUa.History
 
             if (Frontfill)
             {
-                node.State.UpdateFromFrontfill(last, node.Completed);
+                if (extractor.AllowUpdateState) node.State.UpdateFromFrontfill(last, node.Completed);
             }
             else
             {
-                node.State.UpdateFromBackfill(first, node.Completed);
+                if (extractor.AllowUpdateState) node.State.UpdateFromBackfill(first, node.Completed);
             }
 
             int cnt = 0;
@@ -531,7 +531,7 @@ namespace Cognite.OpcUa.History
             if (buffered.Any())
             {
                 log.LogDebug("Read {Count} datapoints from buffer of state {Id}", buffered.Count(), node.State.Id);
-                nodeState.UpdateFromStream(buffered);
+                if (extractor.AllowUpdateState) nodeState.UpdateFromStream(buffered);
                 extractor.Streamer.Enqueue(buffered);
             }
         }
@@ -643,11 +643,11 @@ namespace Cognite.OpcUa.History
 
             if (Frontfill)
             {
-                node.State.UpdateFromFrontfill(last, node.Completed);
+                if (extractor.AllowUpdateState) node.State.UpdateFromFrontfill(last, node.Completed);
             }
             else
             {
-                node.State.UpdateFromBackfill(first, node.Completed);
+                if (extractor.AllowUpdateState) node.State.UpdateFromBackfill(first, node.Completed);
             }
 
             extractor.Streamer.Enqueue(createdEvents);
@@ -663,7 +663,7 @@ namespace Cognite.OpcUa.History
             if (buffered.Any())
             {
                 var (smin, smax) = buffered.MinMax(dp => dp.Time);
-                emitterState.UpdateFromStream(smin, smax);
+                if (extractor.AllowUpdateState) emitterState.UpdateFromStream(smin, smax);
                 log.LogDebug("Read {Count} events from buffer of state {Id}", buffered.Count(), node.State.Id);
                 extractor.Streamer.Enqueue(buffered);
             }

@@ -367,6 +367,7 @@ namespace Server
 
                 // update server capabilities.
                 serverObject.ServiceLevel.Value = serviceLevel;
+                serverObject.ServiceLevel.ClearChangeMasks(SystemContext, true);
                 serverObject.ServerRedundancy.RedundancySupport.Value = support;
             }
         }

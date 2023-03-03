@@ -349,13 +349,13 @@ namespace Cognite.OpcUa
             {
                 var evt = DpAsEvent(datapoint, node);
                 log.LogTrace("Subscription DataPoint treated as event {Event}", node);
-                node.UpdateFromStream(DateTime.MaxValue, datapoint.SourceTimestamp);
+                if (extractor.AllowUpdateState) node.UpdateFromStream(DateTime.MaxValue, datapoint.SourceTimestamp);
                 Enqueue(evt);
                 return;
             }
 
             var buffDps = ToDataPoint(datapoint, node);
-            node.UpdateFromStream(buffDps);
+            if (extractor.AllowUpdateState) node.UpdateFromStream(buffDps);
 
             if ((extractor.StateStorage == null || config.StateStorage.IntervalValue.Value == Timeout.InfiniteTimeSpan)
                  && (node.IsFrontfilling && datapoint.SourceTimestamp > node.SourceExtractedRange.Last
@@ -478,7 +478,7 @@ namespace Cognite.OpcUa
 
                 timeToExtractorEvents.Observe((DateTime.UtcNow - buffEvent.Time).TotalSeconds);
 
-                eventState.UpdateFromStream(buffEvent);
+                if (extractor.AllowUpdateState) eventState.UpdateFromStream(buffEvent);
 
                 // Either backfill/frontfill is done, or we are not outside of each respective bound
                 if ((extractor.StateStorage == null || config.StateStorage.IntervalValue.Value == Timeout.InfiniteTimeSpan)

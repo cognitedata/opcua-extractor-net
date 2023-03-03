@@ -11,6 +11,8 @@ using Prometheus;
 using Metrics = Prometheus.Metrics;
 using System.Linq;
 using Cognite.OpcUa.Config;
+using Cognite.OpcUa.History;
+using System.Net;
 
 namespace Cognite.OpcUa
 {
@@ -22,6 +24,10 @@ namespace Cognite.OpcUa
         private SessionReconnectHandler? reconnectHandler;
         private ApplicationConfiguration appConfig;
         private ILogger log;
+
+        public byte CurrentServiceLevel { get; private set; } = 255;
+        private DateTime? lastLowSLConnectAttempt = null;
+        private SemaphoreSlim redundancyReconnectLock = new SemaphoreSlim(1);
 
         private ISession? session;
         private CancellationToken liveToken;
@@ -43,7 +49,7 @@ namespace Cognite.OpcUa
             this.appConfig = appConfig;
             this.log = log;
             liveToken = token;
-            this.Timeout = timeout;
+            Timeout = timeout;
             EndpointUrl = config.EndpointUrl;
         }
 
@@ -76,6 +82,14 @@ namespace Cognite.OpcUa
             }
         }
 
+        private void SetNewSession(ISession session)
+        {
+            session.KeepAliveInterval = config.KeepAliveInterval;
+            session.KeepAlive += ClientKeepAlive;
+            session.PublishError += OnPublishError;
+            this.session = session;
+        }
+
         public async Task Connect()
         {
             if (session != null)
@@ -95,23 +109,23 @@ namespace Cognite.OpcUa
 
             Func<Task> generator = async () =>
             {
-                Session newSession;
+                ISession newSession;
                 if (!string.IsNullOrEmpty(config.ReverseConnectUrl))
                 {
                     newSession = await WaitForReverseConnect();
                 }
-                else if (config.AltEndpointUrls != null && config.AltEndpointUrls.Any())
+                else if (config.IsRedundancyEnabled)
                 {
-                    newSession = await CreateSessionWithRedundancy(config.EndpointUrl!, config.AltEndpointUrls);
+                    var result = await CreateSessionWithRedundancy(config.EndpointUrl!, config.AltEndpointUrls!, null, null, liveToken);
+                    newSession = result.Session;
+                    EndpointUrl = result.EndpointUrl;
+                    await UpdateServiceLevel(result.ServiceLevel, true);
                 }
                 else
                 {
                     newSession = await CreateSessionDirect(config.EndpointUrl!);
                 }
-                newSession.KeepAliveInterval = config.KeepAliveInterval;
-                newSession.KeepAlive += ClientKeepAlive;
-                newSession.PublishError += OnPublishError;
-                session = newSession;
+                SetNewSession(newSession);
             };
             await TryWithBackoff(generator, 6, liveToken);
             if (!liveToken.IsCancellationRequested)
@@ -119,6 +133,17 @@ namespace Cognite.OpcUa
                 log.LogInformation("Successfully connected to server");
                 connects.Inc();
                 connected.Set(1);
+            }
+
+            if (config.Redundancy.MonitorServiceLevel)
+            {
+                await EnsureServiceLevelSubscription();
+                if (config.Redundancy.ReconnectIntervalValue.Value != System.Threading.Timeout.InfiniteTimeSpan
+                    && !client.Callbacks.TaskScheduler.ContainsTask("CheckServiceLevel"))
+                {
+                    client.Callbacks.TaskScheduler.SchedulePeriodicTask("CheckServiceLevel",
+                        config.Redundancy.ReconnectIntervalValue, async (_) => await RecheckServiceLevel());
+                }
             }
         }
 
@@ -259,45 +284,71 @@ namespace Cognite.OpcUa
             }
         }
 
-        public async Task<Session> CreateSessionWithRedundancy(string initialUrl, IEnumerable<string> endpointUrls)
+        private class SessionRedundancyResult
+        {
+            public ISession Session { get; }
+            public string EndpointUrl { get; }
+            public byte ServiceLevel { get; }
+            public SessionRedundancyResult(ISession session, string endpointUrl, byte serviceLevel)
+            {
+                Session = session;
+                EndpointUrl = endpointUrl;
+                ServiceLevel = serviceLevel;
+            }
+        }
+
+        private async Task<SessionRedundancyResult> CreateSessionWithRedundancy(string initialUrl, IEnumerable<string> endpointUrls, ISession? initialSession, byte? initialServiceLevel, CancellationToken token)
         {
             string? bestUrl = null;
             byte bestServiceLevel = 0;
 
+            if (initialServiceLevel != null)
+            {
+                if (initialSession == null) throw new InvalidOperationException("InitialSession must be passed along with initialServiceLevel");
+                bestServiceLevel = initialServiceLevel.Value;
+            }
+
             endpointUrls = endpointUrls.Prepend(initialUrl).Distinct().ToList();
 
-            Session? activeSession = null;
+            ISession? activeSession = initialSession;
+
+            string? activeEndpoint = null;
+            if (activeSession != null)
+            {
+                if (EndpointUrl == null) throw new InvalidOperationException("EndpointUrl must be set if initialSession is passed");
+                bestUrl = EndpointUrl;
+            }
             var exceptions = new List<Exception>();
 
             foreach (var url in endpointUrls)
             {
                 try
                 {
-                    var session = await CreateSessionDirect(url);
-                    var res = await session.ReadAsync(null, 0, TimestampsToReturn.Neither, new ReadValueIdCollection
+                    ISession session;
+                    if (url == EndpointUrl)
                     {
-                        new ReadValueId
-                        {
-                            NodeId = VariableIds.Server_ServiceLevel,
-                            AttributeId = Attributes.Value
-                        }
-                    }, liveToken);
-                    var dv = res.Results[0];
-                    byte value = dv.GetValue<byte>(0);
+                        session = initialSession!;
+                    }
+                    else
+                    {
+                        session = await CreateSessionDirect(url);
+                    }
 
-                    if (value > bestServiceLevel)
+                    var serviceLevel = await ReadServiceLevel(session);
+
+                    if (serviceLevel > bestServiceLevel)
                     {
-                        if (activeSession != null)
+                        if (activeSession != null && url != activeEndpoint)
                         {
                             activeSession.Close();
                             activeSession.Dispose();
                         }
                         activeSession = session;
-                        bestServiceLevel = value;
+                        bestServiceLevel = serviceLevel;
                         bestUrl = url;
                     }
 
-                    log.LogInformation("Connected to session with endpoint {Endpoint}. ServiceLevel: {Level}", url, value);
+                    log.LogInformation("Connected to session with endpoint {Endpoint}. ServiceLevel: {Level}", url, serviceLevel);
                 }
                 catch (Exception ex)
                 {
@@ -311,9 +362,23 @@ namespace Cognite.OpcUa
             }
 
             liveToken.ThrowIfCancellationRequested();
-            EndpointUrl = bestUrl;
             log.LogInformation("Successfully connected to server with endpoint: {Endpoint}, ServiceLevel: {Level}", bestUrl, bestServiceLevel);
-            return activeSession;
+
+            return new SessionRedundancyResult(activeSession, bestUrl!, bestServiceLevel);
+        }
+
+        private async Task<byte> ReadServiceLevel(ISession session)
+        {
+            var res = await session.ReadAsync(null, 0, TimestampsToReturn.Neither, new ReadValueIdCollection
+            {
+                new ReadValueId
+                {
+                    NodeId = VariableIds.Server_ServiceLevel,
+                    AttributeId = Attributes.Value
+                }
+            }, liveToken);
+            var dv = res.Results[0];
+            return dv.GetValue<byte>(0);
         }
 
         /// <summary>
@@ -327,7 +392,10 @@ namespace Cognite.OpcUa
             reconnectHandler.Dispose();
             log.LogWarning("--- RECONNECTED ---");
 
-            client.TriggerOnServerReconnect();
+            client.Callbacks.TaskScheduler.ScheduleTask(null, async (_) =>
+            {
+                await client.Callbacks.OnServerReconnect(client);
+            });
 
             connects.Inc();
             connected.Set(1);
@@ -382,20 +450,20 @@ namespace Cognite.OpcUa
                 }
                 if (!liveToken.IsCancellationRequested)
                 {
-                    var _ = Task.Run(async () =>
+                    client.Callbacks.TaskScheduler.ScheduleTask(null, async (_) =>
                     {
                         log.LogInformation("Attempting to reconnect to server");
-                        await Connect();
                         if (!liveToken.IsCancellationRequested)
                         {
-                            client.TriggerOnServerReconnect();
+                            await Connect();
+                            await client.Callbacks.OnServerReconnect(client);
                             connects.Inc();
                             connected.Set(1);
                         }
-                    }, liveToken);
+                    });
                 }
             }
-            client.TriggerOnServerDisconnect();
+            client.Callbacks.TaskScheduler.ScheduleTask(null, async (_) => await client.Callbacks.OnServerDisconnect(client));
         }
 
         public async Task Close(CancellationToken token)
@@ -431,6 +499,135 @@ namespace Cognite.OpcUa
             {
                 connected.Set(0);
             }
+        }
+
+        private async Task UpdateServiceLevel(byte newLevel, bool fromConnectAttempt)
+        {
+            // Ensure that UpdateServiceLevel is only called once in parallel.
+            await redundancyReconnectLock.WaitAsync();
+            try
+            {
+                await UpdateServiceLevelInner(newLevel, fromConnectAttempt);
+            }
+            catch (Exception ex)
+            {
+                ExtractorUtils.LogException(log, ex, "Failed to update service level");
+            }
+            finally
+            {
+                redundancyReconnectLock.Release();
+            }
+        }
+
+        private async Task UpdateServiceLevelInner(byte newLevel, bool fromConnectionChange)
+        {
+            if (!config.Redundancy.MonitorServiceLevel) return;
+            // The rule is as follows:
+            // If we are below the threshold service level we should reconnect.
+            // Unless this update comes from a reconnect, or we reconnected too recently.
+            
+            bool shouldReconnect = false;
+            if (newLevel < config.Redundancy.ServiceLevelThreshold)
+            {
+                // We're not reconnecting off the back of a connect attempt.
+                shouldReconnect = true;
+                if (fromConnectionChange)
+                {
+                    shouldReconnect = false;
+                }
+
+                // We don't want to reconnect too frequently
+                if (lastLowSLConnectAttempt != null)
+                {
+                    var timeSinceLastAttempt = DateTime.UtcNow - lastLowSLConnectAttempt.Value;
+                    if (config.Redundancy.ReconnectIntervalValue.Value != System.Threading.Timeout.InfiniteTimeSpan
+                        && timeSinceLastAttempt < config.Redundancy.ReconnectIntervalValue.Value)
+                    {
+                        shouldReconnect = false;
+                    }
+                }
+                if (CurrentServiceLevel >= config.Redundancy.ServiceLevelThreshold)
+                {
+                    log.LogWarning("Service level dropped below threshold. Until it is recovered, the extractor will not update history state");
+                }
+            }
+            else if (CurrentServiceLevel < config.Redundancy.ServiceLevelThreshold && !fromConnectionChange)
+            {
+                // We have moved from being at low SL to high, so we should restart history before we set the service level.
+                log.LogInformation("New service level {Level} is a above threshold {Threshold}, triggering callback", newLevel, config.Redundancy.ServiceLevelThreshold);
+                await client.Callbacks.OnServiceLevelAboveThreshold(client);
+            }
+
+            log.LogDebug("Server ServiceLevel updated {From} -> {To}", CurrentServiceLevel, newLevel);
+
+            CurrentServiceLevel = newLevel;
+            if (shouldReconnect && config.IsRedundancyEnabled)
+            {
+                log.LogWarning("ServiceLevel is low ({Level}), attempting background reconnect", CurrentServiceLevel);
+                lastLowSLConnectAttempt = DateTime.UtcNow;
+                var _ = Task.Run(async () =>
+                {
+                    var result = await CreateSessionWithRedundancy(config.EndpointUrl!, config.AltEndpointUrls!, session, CurrentServiceLevel, liveToken);
+                    if (result.EndpointUrl == EndpointUrl)
+                    {
+                        log.LogWarning("Attempted reconnect due to low service level resulted in same server {Url}. Proceeding with ServiceLevel {Level}", result.EndpointUrl, result.ServiceLevel);
+                        await UpdateServiceLevel(result.ServiceLevel, false);
+                    }
+                    else
+                    {
+                        log.LogInformation("Reconnect due to low ServiceLevel resulted in new server {Url} (Old {Old}) with ServiceLevel {Level}",
+                            result.EndpointUrl,
+                            EndpointUrl,
+                            result.ServiceLevel);
+                        EndpointUrl = result.EndpointUrl;
+                        SetNewSession(result.Session);
+                        await UpdateServiceLevel(result.ServiceLevel, true);
+                        await client.Callbacks.OnServerReconnect(client);
+                    }
+                });
+            }
+        }
+
+        public async Task RecheckServiceLevel()
+        {
+            await UpdateServiceLevel(CurrentServiceLevel, false);
+        }
+
+        public async Task EnsureServiceLevelSubscription()
+        {
+            var state = new UAHistoryExtractionState(client, VariableIds.Server_ServiceLevel, false, false);
+            await client.AddSubscriptions(new[] { state }, "ServiceLevel", (MonitoredItem item, MonitoredItemNotificationEventArgs _) =>
+            {
+                try
+                {
+                    var values = item.DequeueValues();
+                    var value = values.FirstOrDefault()
+                        ?.GetValue<byte>(0);
+                    if (value == null)
+                    {
+                        log.LogWarning("Received null or invalid ServiceLevel");
+                        return;
+                    }
+
+                    log.LogDebug("Received new ServiceLevel from current server: {Level}", value);
+
+                    var __ = Task.Run(async () => await UpdateServiceLevel(value.Value, false));
+                }
+                catch (Exception ex)
+                {
+                    log.LogError(ex, "Unexpected error handling ServiceLevel trigger");
+                }
+            }, state => new MonitoredItem
+            {
+                StartNodeId = state.SourceId,
+                SamplingInterval = 1000,
+                DisplayName = "Value " + state.Id,
+                QueueSize = 1,
+                DiscardOldest = true,
+                AttributeId = Attributes.Value,
+                NodeClass = NodeClass.Variable,
+                CacheQueueSize = 1
+            }, liveToken, "service level");
         }
 
         protected virtual void Dispose(bool disposing)
