@@ -1,4 +1,5 @@
 ﻿using Cognite.OpcUa;
+using Cognite.OpcUa.Config;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.DependencyInjection;

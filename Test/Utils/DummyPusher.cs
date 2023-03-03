@@ -1,5 +1,6 @@
 ﻿using Cognite.Extractor.Common;
 using Cognite.OpcUa;
+using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.Types;
@@ -103,7 +104,7 @@ namespace Test.Utils
                     PushedReferences.Add(rel);
                 }
             }
-            
+
             lock (dpLock)
             {
                 if (variables != null && PushNodesResult)

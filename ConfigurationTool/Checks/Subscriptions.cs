@@ -29,7 +29,7 @@ namespace Cognite.OpcUa.Config
 {
     public partial class UAServerExplorer : UAClient
     {
-        private readonly ICollection<int> testSubscriptionChunkSizes = new []
+        private readonly ICollection<int> testSubscriptionChunkSizes = new[]
         {
             10000,
             1000,

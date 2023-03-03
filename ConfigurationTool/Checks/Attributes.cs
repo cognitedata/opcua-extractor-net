@@ -27,7 +27,7 @@ namespace Cognite.OpcUa.Config
 {
     public partial class UAServerExplorer : UAClient
     {
-        private readonly ICollection<int> testAttributeChunkSizes = new []
+        private readonly ICollection<int> testAttributeChunkSizes = new[]
         {
             100000,
             10000,

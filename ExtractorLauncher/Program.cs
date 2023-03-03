@@ -16,6 +16,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using Cognite.Extractor.Utils.CommandLine;
+using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Service;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -31,7 +32,7 @@ using System.Threading.Tasks;
 [assembly: CLSCompliant(false)]
 namespace Cognite.OpcUa
 {
-    
+
 
     public class BaseExtractorParams
     {
@@ -58,7 +59,7 @@ namespace Cognite.OpcUa
         public string? WorkingDir { get; set; }
         [CommandLineOption("Run extractor without a yml config file. The .xml config file is still needed", true, "-n")]
         public bool NoConfig { get; set; }
-        
+
         public bool ConfigTool { get; set; }
         public FullConfig? Config { get; set; }
         public FullConfig? BaseConfig { get; set; }

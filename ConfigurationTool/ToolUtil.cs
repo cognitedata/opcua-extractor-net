@@ -216,7 +216,7 @@ namespace Cognite.OpcUa.Config
                         {
                             log.LogDebug("Bad streaming datapoint: {BadDatapointExternalId} {SourceTimestamp} {Code}", state.Id,
                                 datapoint.SourceTimestamp, datapoint.StatusCode);
-                            
+
                             if (!writeBadDatapoints) continue;
                         }
 

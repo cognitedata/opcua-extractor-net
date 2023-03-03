@@ -316,7 +316,7 @@ namespace Cognite.OpcUa.Config
             log.LogInformation("Server analysis successfully completed, no critical issues were found");
             log.LogInformation("==== SUMMARY ====");
             log.LogInformation("");
-            
+
             Session.Log(log);
             log.LogInformation("");
 

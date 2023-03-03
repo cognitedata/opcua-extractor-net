@@ -1,5 +1,6 @@
 ﻿using Cognite.Extractor.StateStorage;
 using Cognite.OpcUa;
+using Cognite.OpcUa.Config;
 using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
@@ -205,7 +206,7 @@ namespace Test.Unit
                 Enumerable.Empty<UAVariable>(),
                 new[] { GetObject("obj1"), GetObject("obj2") },
                 new[] { GetVariable("var1"), GetVariable("var2") },
-                new[] { GetReference("obj1", "obj2", refManager), GetReference("var1", "var2", refManager)}, true);
+                new[] { GetReference("obj1", "obj2", refManager), GetReference("var1", "var2", refManager) }, true);
 
             // No configured tables, and no references, so nothing happens
             tester.Config.StateStorage.KnownObjectsStore = null;

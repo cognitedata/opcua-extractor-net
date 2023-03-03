@@ -2,6 +2,7 @@
 using Cognite.Extractor.StateStorage;
 using Cognite.Extractor.Testing;
 using Cognite.OpcUa;
+using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -191,7 +192,7 @@ namespace Test.Integration
         [Fact]
         public async Task TestWrongData()
         {
-            
+
 
             using var pusher = new DummyPusher(new DummyPusherConfig());
             using var extractor = tester.BuildExtractor(true, null, pusher);

@@ -1,5 +1,4 @@
 ﻿using Cognite.Extractor.Configuration;
-using Cognite.Extractor.Logging;
 using Cognite.Extractor.Testing;
 using Cognite.Extractor.Utils;
 using Cognite.OpcUa;
@@ -9,7 +8,6 @@ using Server;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Xunit;

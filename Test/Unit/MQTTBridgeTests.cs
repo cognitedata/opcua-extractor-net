@@ -47,7 +47,7 @@ namespace Test.Unit
             {
                 var services = new ServiceCollection();
                 Config = services.AddConfig<BridgeConfig>("config.bridge.yml");
-                
+
                 Config.Logger.Console.Level = "debug";
                 CommonTestUtils.AddDummyProvider(Config.Cognite.Project, mode, true, services);
                 services.AddTestLogging(output);

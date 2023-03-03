@@ -65,7 +65,7 @@ namespace Cognite.OpcUa
                     return "EndpointUrl is not a valid URI";
                 }
             }
-            
+
             if (string.IsNullOrEmpty(config.Extraction.IdPrefix)) log.LogWarning("No id-prefix specified in config file");
             if (config.Cognite == null && config.Influx == null && config.Mqtt == null) log.LogWarning("No destination system specified");
             if (config.Extraction.IdPrefix == "events.") return "Do not use events. as id-prefix, as it is used internally";

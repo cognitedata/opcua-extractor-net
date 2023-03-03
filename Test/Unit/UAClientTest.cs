@@ -2,6 +2,7 @@
 using Cognite.Extractor.Testing;
 using Cognite.Extractor.Utils;
 using Cognite.OpcUa;
+using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.DependencyInjection;
@@ -156,7 +157,7 @@ namespace Test.Unit
             try
             {
                 await tester.Client.Run(tester.Source.Token, 10);
-                
+
                 Assert.True(CommonTestUtils.TestMetricValue("opcua_connected", 1));
                 tester.Server.Stop();
                 await TestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_connected", 0) && !connected, 20,

@@ -10,12 +10,13 @@ using System.Threading;
 using Prometheus;
 using Metrics = Prometheus.Metrics;
 using System.Linq;
+using Cognite.OpcUa.Config;
 
 namespace Cognite.OpcUa
 {
     public class SessionManager : IDisposable
     {
-        private UAClientConfig config;
+        private SourceConfig config;
         private UAClient client;
         private ReverseConnectManager? reverseConnectManager;
         private SessionReconnectHandler? reconnectHandler;
@@ -35,7 +36,7 @@ namespace Cognite.OpcUa
 
         public string? EndpointUrl { get; private set; }
 
-        public SessionManager(UAClientConfig config, UAClient parent, ApplicationConfiguration appConfig, ILogger log, CancellationToken token, int timeout = -1)
+        public SessionManager(SourceConfig config, UAClient parent, ApplicationConfiguration appConfig, ILogger log, CancellationToken token, int timeout = -1)
         {
             client = parent;
             this.config = config;
@@ -82,7 +83,8 @@ namespace Cognite.OpcUa
                 try
                 {
                     session.Close();
-                } catch { }
+                }
+                catch { }
                 session.KeepAlive -= ClientKeepAlive;
                 session.PublishError -= OnPublishError;
                 session.Dispose();
@@ -279,7 +281,7 @@ namespace Cognite.OpcUa
                             NodeId = VariableIds.Server_ServiceLevel,
                             AttributeId = Attributes.Value
                         }
-                    }, liveToken);                    
+                    }, liveToken);
                     var dv = res.Results[0];
                     byte value = dv.GetValue<byte>(0);
 
@@ -380,7 +382,8 @@ namespace Cognite.OpcUa
                 }
                 if (!liveToken.IsCancellationRequested)
                 {
-                    var _ =Task.Run(async () => {
+                    var _ = Task.Run(async () =>
+                    {
                         log.LogInformation("Attempting to reconnect to server");
                         await Connect();
                         if (!liveToken.IsCancellationRequested)
