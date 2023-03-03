@@ -16,6 +16,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using Cognite.Extractor.Common;
+using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.TypeCollectors;
@@ -1122,7 +1123,8 @@ namespace Cognite.OpcUa
         /// <param name="name"></param>
         public async Task RemoveSubscription(string name)
         {
-            if (TryGetSubscription(name, out var subscription) && subscription!.Created) {
+            if (TryGetSubscription(name, out var subscription) && subscription!.Created)
+            {
                 try
                 {
                     await Session!.RemoveSubscriptionAsync(subscription);

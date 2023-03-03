@@ -15,6 +15,7 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.Types;
 using Opc.Ua;
@@ -64,11 +65,11 @@ namespace Cognite.OpcUa
     public class NodeMetricsManager
     {
         private readonly NodeMetricsConfig config;
-        private readonly UAClientConfig sourceConfig;
+        private readonly SourceConfig sourceConfig;
         private readonly UAClient client;
         private readonly Dictionary<NodeId, NodeMetricState> metrics = new Dictionary<NodeId, NodeMetricState>();
 
-        public NodeMetricsManager(UAClient client, UAClientConfig sourceConfig, NodeMetricsConfig config)
+        public NodeMetricsManager(UAClient client, SourceConfig sourceConfig, NodeMetricsConfig config)
         {
             this.config = config;
             this.sourceConfig = sourceConfig;

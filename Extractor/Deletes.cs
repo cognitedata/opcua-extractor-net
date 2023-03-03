@@ -1,4 +1,5 @@
 ﻿using Cognite.Extractor.StateStorage;
+using Cognite.OpcUa.Config;
 using Cognite.OpcUa.NodeSources;
 using Microsoft.Extensions.Logging;
 using System;

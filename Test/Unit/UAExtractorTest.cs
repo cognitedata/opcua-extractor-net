@@ -1,5 +1,6 @@
 ﻿using Cognite.Extractor.Testing;
 using Cognite.OpcUa;
+using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.Types;
@@ -174,7 +175,7 @@ namespace Test.Unit
                 Assert.Equal(failedNodes, pusher.PendingNodes.Objects.Count() + pusher.PendingNodes.Variables.Count());
                 Assert.Equal(failedRefs, pusher.PendingNodes.References.Count());
             }
-            
+
 
             if (failAt == 0)
             {

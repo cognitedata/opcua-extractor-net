@@ -5,6 +5,7 @@ using Cognite.Extractor.StateStorage;
 using Cognite.Extractor.Testing;
 using Cognite.Extractor.Utils;
 using Cognite.OpcUa;
+using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Pushers;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
@@ -61,7 +62,7 @@ namespace Test.Unit
         private readonly CDFMockHandler handler;
         private readonly MQTTPusher pusher;
 
-        public MQTTPusherTest(ITestOutputHelper output, MQTTPusherTestFixture tester) 
+        public MQTTPusherTest(ITestOutputHelper output, MQTTPusherTestFixture tester)
         {
             this.tester = tester ?? throw new ArgumentNullException(nameof(tester));
             tester.ResetConfig();

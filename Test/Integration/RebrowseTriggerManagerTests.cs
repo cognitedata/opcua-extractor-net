@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Cognite.Extractor.Testing;
 using Cognite.OpcUa;
+using Cognite.OpcUa.Config;
 using Test.Utils;
 using Xunit;
 using Xunit.Abstractions;
@@ -86,8 +87,8 @@ namespace Test.Integration
                 Targets = new RebrowseTriggerTargets { NamespacePublicationDate = true }
             };
             using var extractor = tester.BuildExtractor(true, pushers: pusher);
-            
-            
+
+
             // Act
             var runTask = extractor.RunExtractor();
             await extractor.WaitForSubscriptions();
@@ -100,7 +101,7 @@ namespace Test.Integration
                () => tester.Client.Started,
                10
             );
-             Assert.False(pusher.PushedNodes.ContainsKey(addedId));
+            Assert.False(pusher.PushedNodes.ContainsKey(addedId));
 
             tester.Server.Server.RemoveNode(addedId);
             await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
@@ -116,8 +117,8 @@ namespace Test.Integration
                 Targets = new RebrowseTriggerTargets { NamespacePublicationDate = true }
             };
             using var extractor = tester.BuildExtractor(true, pushers: pusher);
-            
-            
+
+
             // Act
             var runTask = extractor.RunExtractor();
             await extractor.WaitForSubscriptions();
@@ -130,7 +131,7 @@ namespace Test.Integration
                () => tester.Client.Started,
                10
             );
-             Assert.False(pusher.PushedNodes.ContainsKey(addedId));
+            Assert.False(pusher.PushedNodes.ContainsKey(addedId));
 
             tester.Server.Server.RemoveNode(addedId);
             await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
@@ -166,18 +167,18 @@ namespace Test.Integration
         {
             new object[] { new RebrowseTriggersConfig () },
             new object[] { null },
-            new object[] { 
+            new object[] {
                 new RebrowseTriggersConfig {
                     Targets = new RebrowseTriggerTargets { NamespacePublicationDate = false }
                 }
             },
-            new object[] { 
+            new object[] {
                 new RebrowseTriggersConfig {
                     Targets = new RebrowseTriggerTargets { NamespacePublicationDate = false },
                     Namespaces = new List<string> { "unknown://uri" }
                 }
             },
-            new object[] { 
+            new object[] {
                 new RebrowseTriggersConfig {
                     Targets = new RebrowseTriggerTargets { NamespacePublicationDate = true },
                     Namespaces = new List<string> { "unknown://uri" }

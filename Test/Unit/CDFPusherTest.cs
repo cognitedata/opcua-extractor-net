@@ -1,6 +1,7 @@
 ﻿using Cognite.Extractor.Common;
 using Cognite.Extractor.Testing;
 using Cognite.OpcUa;
+using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.Pushers;
@@ -582,7 +583,7 @@ namespace Test.Unit
                 Id = 1234,
                 ReportOnEmpty = true
             };
-            
+
             (handler, pusher) = tester.GetCDFPusher();
             using var extractor = tester.BuildExtractor(true, null, pusher);
             var log = tester.Provider.GetRequiredService<ILogger<ReferenceTypeManager>>();
