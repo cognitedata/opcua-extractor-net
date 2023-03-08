@@ -3,24 +3,24 @@ NUGET
   remote: https://www.nuget.org/api/v2
     AdysTech.InfluxDB.Client.Net.Core (0.25)
       Newtonsoft.Json (>= 10.0.3) - restriction: || (>= net46) (>= netstandard2.0)
-    Cognite.Extensions (1.6.1)
-      Cognite.Extractor.Common (>= 1.6.1) - restriction: >= netstandard2.0
+    Cognite.Extensions (1.6.2) - restriction: >= netstandard2.0
+      Cognite.Extractor.Common (>= 1.6.2) - restriction: >= netstandard2.0
       CogniteSdk (>= 3.7) - restriction: >= netstandard2.0
       Microsoft.Extensions.Http (>= 7.0) - restriction: >= netstandard2.0
       Microsoft.Extensions.Http.Polly (>= 7.0.3) - restriction: >= netstandard2.0
       Microsoft.Identity.Client (>= 4.50) - restriction: >= netstandard2.0
       Polly.Extensions.Http (>= 3.0) - restriction: >= netstandard2.0
       prometheus-net (>= 8.0) - restriction: >= netstandard2.0
-    Cognite.Extractor.Common (1.6.1)
+    Cognite.Extractor.Common (1.6.2) - restriction: >= netstandard2.0
       Cronos (>= 0.7.1) - restriction: >= netstandard2.0
       Microsoft.Extensions.Logging.Abstractions (>= 7.0) - restriction: >= netstandard2.0
       System.Text.Json (>= 7.0.2) - restriction: >= netstandard2.0
-    Cognite.Extractor.Configuration (1.6.1)
-      Cognite.Extractor.Common (>= 1.6.1) - restriction: >= netstandard2.0
+    Cognite.Extractor.Configuration (1.6.2) - restriction: >= netstandard2.0
+      Cognite.Extractor.Common (>= 1.6.2) - restriction: >= netstandard2.0
       Microsoft.CSharp (>= 4.7) - restriction: >= netstandard2.0
       Microsoft.Extensions.DependencyInjection (>= 7.0) - restriction: >= netstandard2.0
       YamlDotNet (>= 13.0.1) - restriction: >= netstandard2.0
-    Cognite.Extractor.Logging (1.6.1)
+    Cognite.Extractor.Logging (1.6.2) - restriction: >= netstandard2.0
       Microsoft.Bcl.AsyncInterfaces (>= 7.0) - restriction: >= netstandard2.0
       Microsoft.Extensions.DependencyInjection (>= 7.0) - restriction: >= netstandard2.0
       Serilog (>= 2.12) - restriction: >= netstandard2.0
@@ -28,29 +28,29 @@ NUGET
       Serilog.Sinks.Async (>= 1.5) - restriction: >= netstandard2.0
       Serilog.Sinks.Console (>= 4.1) - restriction: >= netstandard2.0
       Serilog.Sinks.File (>= 5.0) - restriction: >= netstandard2.0
-    Cognite.Extractor.Metrics (1.6.1)
-      Cognite.Extractor.Common (>= 1.6.1) - restriction: >= netstandard2.0
-      Cognite.Extractor.Logging (>= 1.6.1) - restriction: >= netstandard2.0
+    Cognite.Extractor.Metrics (1.6.2) - restriction: >= netstandard2.0
+      Cognite.Extractor.Common (>= 1.6.2) - restriction: >= netstandard2.0
+      Cognite.Extractor.Logging (>= 1.6.2) - restriction: >= netstandard2.0
       Microsoft.Extensions.Http (>= 7.0) - restriction: >= netstandard2.0
       Microsoft.Extensions.Http.Polly (>= 7.0.3) - restriction: >= netstandard2.0
       Polly.Extensions.Http (>= 3.0) - restriction: >= netstandard2.0
       prometheus-net (>= 8.0) - restriction: >= netstandard2.0
-    Cognite.Extractor.StateStorage (1.6.1)
-      Cognite.Extractor.Common (>= 1.6.1) - restriction: >= netstandard2.0
-      Cognite.Extractor.Logging (>= 1.6.1) - restriction: >= netstandard2.0
-      Cognite.Extractor.Metrics (>= 1.6.1) - restriction: >= netstandard2.0
+    Cognite.Extractor.StateStorage (1.6.2) - restriction: >= netstandard2.0
+      Cognite.Extractor.Common (>= 1.6.2) - restriction: >= netstandard2.0
+      Cognite.Extractor.Logging (>= 1.6.2) - restriction: >= netstandard2.0
+      Cognite.Extractor.Metrics (>= 1.6.2) - restriction: >= netstandard2.0
       LiteDB (>= 5.0.15) - restriction: >= netstandard2.0
-    Cognite.Extractor.Testing (1.6.1)
-      Cognite.ExtractorUtils (>= 1.6.1) - restriction: >= netstandard2.0
+    Cognite.Extractor.Testing (1.6.2)
+      Cognite.ExtractorUtils (>= 1.6.2) - restriction: >= netstandard2.0
       xunit.assert (>= 2.4.2) - restriction: >= netstandard2.0
       xunit.core (>= 2.4.2) - restriction: >= netstandard2.0
-    Cognite.ExtractorUtils (1.6.1)
-      Cognite.Extensions (>= 1.6.1) - restriction: >= netstandard2.0
-      Cognite.Extractor.Common (>= 1.6.1) - restriction: >= netstandard2.0
-      Cognite.Extractor.Configuration (>= 1.6.1) - restriction: >= netstandard2.0
-      Cognite.Extractor.Logging (>= 1.6.1) - restriction: >= netstandard2.0
-      Cognite.Extractor.Metrics (>= 1.6.1) - restriction: >= netstandard2.0
-      Cognite.Extractor.StateStorage (>= 1.6.1) - restriction: >= netstandard2.0
+    Cognite.ExtractorUtils (1.6.2)
+      Cognite.Extensions (>= 1.6.2) - restriction: >= netstandard2.0
+      Cognite.Extractor.Common (>= 1.6.2) - restriction: >= netstandard2.0
+      Cognite.Extractor.Configuration (>= 1.6.2) - restriction: >= netstandard2.0
+      Cognite.Extractor.Logging (>= 1.6.2) - restriction: >= netstandard2.0
+      Cognite.Extractor.Metrics (>= 1.6.2) - restriction: >= netstandard2.0
+      Cognite.Extractor.StateStorage (>= 1.6.2) - restriction: >= netstandard2.0
       Microsoft.Bcl.AsyncInterfaces (>= 7.0) - restriction: >= netstandard2.0
       Microsoft.CSharp (>= 4.7) - restriction: >= netstandard2.0
       Microsoft.Extensions.DependencyInjection (>= 7.0) - restriction: >= netstandard2.0
@@ -71,7 +71,7 @@ NUGET
     FsToolkit.ErrorHandling (4.4) - restriction: >= netstandard2.0
       FSharp.Core (>= 4.7.2) - restriction: && (>= netstandard2.0) (< netstandard2.1)
       FSharp.Core (>= 7.0) - restriction: >= netstandard2.1
-    Google.Protobuf (3.22) - restriction: >= netstandard2.0
+    Google.Protobuf (3.22.1) - restriction: >= netstandard2.0
       System.Memory (>= 4.5.3) - restriction: || (>= net45) (&& (< net5.0) (>= netstandard2.0)) (&& (>= netstandard1.1) (< netstandard2.0))
       System.Runtime.CompilerServices.Unsafe (>= 4.5.2) - restriction: && (< net45) (< net5.0) (>= netstandard2.0)
     LiteDB (5.0.15) - restriction: >= netstandard2.0
@@ -390,7 +390,7 @@ NUGET
       System.Threading.Timer (>= 4.3) - restriction: || (&& (< net45) (>= netstandard1.2) (< netstandard1.3) (< win8) (< wpa81)) (&& (< net45) (>= netstandard1.3) (< netstandard1.4) (< win8) (< wpa81)) (&& (< net45) (>= netstandard1.4) (< netstandard1.5) (< win8) (< wpa81)) (&& (< net45) (>= netstandard1.5) (< netstandard1.6) (< win8) (< wpa81)) (&& (< net45) (>= netstandard1.6) (< netstandard2.0) (< win8) (< wpa81)) (&& (< netstandard1.5) (>= uap10.0) (< uap10.1))
       System.Xml.ReaderWriter (>= 4.3) - restriction: || (&& (< net45) (>= netstandard1.1) (< netstandard1.2) (< win8)) (&& (< net45) (>= netstandard1.2) (< netstandard1.3) (< win8) (< wpa81)) (&& (< net45) (>= netstandard1.3) (< netstandard1.4) (< win8) (< wpa81)) (&& (< net45) (>= netstandard1.4) (< netstandard1.5) (< win8) (< wpa81)) (&& (< net45) (>= netstandard1.5) (< netstandard1.6) (< win8) (< wpa81)) (&& (< net45) (>= netstandard1.6) (< netstandard2.0) (< win8) (< wpa81)) (&& (>= net46) (< netstandard1.4)) (&& (>= netstandard1.0) (< portable-net45+win8+wpa81) (< wp8)) (&& (< netstandard1.5) (>= uap10.0) (< uap10.1))
       System.Xml.XDocument (>= 4.3) - restriction: || (&& (< net45) (>= netstandard1.1) (< netstandard1.2) (< win8)) (&& (< net45) (>= netstandard1.2) (< netstandard1.3) (< win8) (< wpa81)) (&& (< net45) (>= netstandard1.3) (< netstandard1.4) (< win8) (< wpa81)) (&& (< net45) (>= netstandard1.4) (< netstandard1.5) (< win8) (< wpa81)) (&& (< net45) (>= netstandard1.5) (< netstandard1.6) (< win8) (< wpa81)) (&& (< net45) (>= netstandard1.6) (< netstandard2.0) (< win8) (< wpa81)) (&& (>= netstandard1.0) (< portable-net45+win8+wpa81) (< wp8)) (&& (< netstandard1.5) (>= uap10.0) (< uap10.1))
-    Newtonsoft.Json (13.0.2) - restriction: || (>= net46) (>= netstandard2.0)
+    Newtonsoft.Json (13.0.3) - restriction: || (>= net46) (>= netstandard2.0)
     NuGet.Frameworks (6.5) - restriction: >= netcoreapp3.1
     OPCFoundation.NetStandard.Opc.Ua.Client (1.4.371.60)
       OPCFoundation.NetStandard.Opc.Ua.Configuration (>= 1.4.371.60) - restriction: || (>= net462) (>= netstandard2.0)
@@ -899,7 +899,7 @@ NUGET
       System.Threading (>= 4.3) - restriction: && (< monoandroid) (< monotouch) (< net46) (>= netstandard1.3) (< xamarinios) (< xamarinmac) (< xamarintvos) (< xamarinwatchos)
       System.Threading.Tasks (>= 4.3) - restriction: && (< monoandroid) (< monotouch) (< net46) (>= netstandard1.3) (< xamarinios) (< xamarinmac) (< xamarintvos) (< xamarinwatchos)
       System.Threading.Timer (>= 4.3) - restriction: && (< monoandroid) (< monotouch) (< net46) (>= netstandard1.3) (< xamarinios) (< xamarinmac) (< xamarintvos) (< xamarinwatchos)
-    System.Numerics.Vectors (4.5) - restriction: || (&& (< net45) (< netcoreapp2.0) (>= netstandard2.0) (< xamarinios) (< xamarinmac) (< xamarintvos) (< xamarinwatchos)) (&& (>= net461) (>= netstandard2.0)) (>= net462) (&& (>= net6.0) (< xamarinios) (< xamarinmac) (< xamarintvos) (< xamarinwatchos)) (&& (< net6.0) (>= netstandard2.0))
+    System.Numerics.Vectors (4.5) - restriction: || (&& (< net45) (< netcoreapp2.0) (>= netstandard2.0) (< xamarinios) (< xamarinmac) (< xamarintvos) (< xamarinwatchos)) (&& (>= net461) (>= netstandard2.0)) (&& (>= net462) (>= netstandard2.0)) (&& (>= net6.0) (< xamarinios) (< xamarinmac) (< xamarintvos) (< xamarinwatchos)) (&& (< net6.0) (>= netstandard2.0))
     System.ObjectModel (4.3) - restriction: || (&& (< monoandroid) (< monotouch) (< net45) (>= netstandard1.3) (< netstandard2.0) (< win8) (< wpa81) (< xamarintvos) (< xamarinwatchos)) (&& (< monoandroid) (< monotouch) (< net45) (>= netstandard1.6) (< netstandard2.0) (< win8) (< wpa81) (< xamarintvos) (< xamarinwatchos)) (&& (< monoandroid) (< net45) (>= netstandard1.0) (< netstandard1.3) (< win8) (< wp8) (< wpa81)) (&& (< monoandroid) (< net45) (< netstandard1.3) (>= netstandard1.6) (< win8) (< wpa81))
       System.Collections (>= 4.3) - restriction: && (< monoandroid) (< monotouch) (< net45) (>= netstandard1.3) (< win8) (< wpa81) (< xamarinios) (< xamarinmac) (< xamarintvos) (< xamarinwatchos)
       System.Diagnostics.Debug (>= 4.3) - restriction: && (< monoandroid) (< monotouch) (< net45) (>= netstandard1.3) (< win8) (< wpa81) (< xamarinios) (< xamarinmac) (< xamarintvos) (< xamarinwatchos)
@@ -1346,10 +1346,10 @@ NUGET
       Xamarin.AndroidX.Collection (>= 1.2.0.6) - restriction: >= monoandroid12.0
     Xamarin.Google.Guava.ListenableFuture (1.0.0.11) - restriction: && (>= monoandroid12.0) (< net6.0)
     Xamarin.Jetbrains.Annotations (24.0.0.1) - restriction: && (>= monoandroid12.0) (< net6.0)
-    Xamarin.Kotlin.StdLib (1.8.0.1) - restriction: && (>= monoandroid12.0) (< net6.0)
+    Xamarin.Kotlin.StdLib (1.8.10) - restriction: && (>= monoandroid12.0) (< net6.0)
       Xamarin.Jetbrains.Annotations (>= 24.0.0.1) - restriction: >= monoandroid12.0
-      Xamarin.Kotlin.StdLib.Common (>= 1.8.0.1) - restriction: >= monoandroid12.0
-    Xamarin.Kotlin.StdLib.Common (1.8.0.1) - restriction: && (>= monoandroid12.0) (< net6.0)
+      Xamarin.Kotlin.StdLib.Common (>= 1.8.10) - restriction: >= monoandroid12.0
+    Xamarin.Kotlin.StdLib.Common (1.8.10) - restriction: && (>= monoandroid12.0) (< net6.0)
     xunit (2.4.2)
       xunit.analyzers (>= 1.0)
       xunit.assert (>= 2.4.2)
