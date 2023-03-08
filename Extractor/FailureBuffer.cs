@@ -192,7 +192,7 @@ namespace Cognite.OpcUa
                     if (state == null || state.FrontfillEnabled) continue;
                     nodeBufferStates[key] = bufferState = new InfluxBufferState(state);
                 }
-                bufferState.UpdateDestinationRange(value.First, value.Last);
+                if (extractor.AllowUpdateState) bufferState.UpdateDestinationRange(value.First, value.Last);
             }
             if (config.InfluxStateStore && extractor.StateStorage != null)
             {
@@ -314,7 +314,7 @@ namespace Cognite.OpcUa
                     if (emitterState == null) continue;
                     eventBufferStates[group.Id] = bufferState = new InfluxBufferState(emitterState);
                 }
-                bufferState.UpdateDestinationRange(group.Range.Min, group.Range.Max);
+                if (extractor.AllowUpdateState) bufferState.UpdateDestinationRange(group.Range.Min, group.Range.Max);
             }
 
             if (config.InfluxStateStore && extractor.StateStorage != null)
@@ -459,7 +459,7 @@ namespace Cognite.OpcUa
                     {
                         var state = extractor.State.GetNodeState(group.Id);
                         if (state == null) continue;
-                        state.UpdateDestinationRange(group.Range.Min, group.Range.Max);
+                        if (extractor.AllowUpdateState) state.UpdateDestinationRange(group.Range.Min, group.Range.Max);
                     }
 
                 } while (!final && !token.IsCancellationRequested);
@@ -528,7 +528,7 @@ namespace Cognite.OpcUa
                     {
                         var state = extractor.State.GetEmitterState(group.Id);
                         if (state == null) continue;
-                        state.UpdateDestinationRange(group.Range.Min, group.Range.Max);
+                        if (extractor.AllowUpdateState) state.UpdateDestinationRange(group.Range.Min, group.Range.Max);
                     }
 
                 } while (!final && !token.IsCancellationRequested);

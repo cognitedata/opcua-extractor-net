@@ -532,7 +532,10 @@ namespace Cognite.OpcUa
             // The rule is as follows:
             // If we are below the threshold service level we should reconnect.
             // Unless this update comes from a reconnect, or we reconnected too recently.
-            
+
+            var oldServiceLevel = CurrentServiceLevel;
+            CurrentServiceLevel = newLevel;
+
             bool shouldReconnect = false;
             if (newLevel < config.Redundancy.ServiceLevelThreshold)
             {
@@ -553,24 +556,24 @@ namespace Cognite.OpcUa
                         shouldReconnect = false;
                     }
                 }
-                if (CurrentServiceLevel >= config.Redundancy.ServiceLevelThreshold)
+                if (oldServiceLevel >= config.Redundancy.ServiceLevelThreshold)
                 {
                     log.LogWarning("Service level dropped below threshold. Until it is recovered, the extractor will not update history state");
+                    await client.Callbacks.OnServicelevelBelowThreshold(client);
                 }
             }
-            else if (CurrentServiceLevel < config.Redundancy.ServiceLevelThreshold && !fromConnectionChange)
+            else if (oldServiceLevel < config.Redundancy.ServiceLevelThreshold && !fromConnectionChange)
             {
                 // We have moved from being at low SL to high, so we should restart history before we set the service level.
                 log.LogInformation("New service level {Level} is a above threshold {Threshold}, triggering callback", newLevel, config.Redundancy.ServiceLevelThreshold);
                 await client.Callbacks.OnServiceLevelAboveThreshold(client);
             }
 
-            if (newLevel != CurrentServiceLevel)
+            if (newLevel != oldServiceLevel)
             {
-                log.LogDebug("Server ServiceLevel updated {From} -> {To}", CurrentServiceLevel, newLevel);
+                log.LogDebug("Server ServiceLevel updated {From} -> {To}", oldServiceLevel, newLevel);
             }
 
-            CurrentServiceLevel = newLevel;
             if (shouldReconnect && config.IsRedundancyEnabled)
             {
                 log.LogWarning("ServiceLevel is low ({Level}), attempting background reconnect", CurrentServiceLevel);

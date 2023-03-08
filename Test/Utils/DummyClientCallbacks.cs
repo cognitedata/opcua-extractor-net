@@ -10,6 +10,7 @@ namespace Test.Utils
         public PeriodicScheduler TaskScheduler { get; }
         public bool Connected { get; set; }
         public int ServiceLevelCbCount { get; set; }
+        public int LowServiceLevelCbCount { get; set; }
 
         public DummyClientCallbacks(CancellationToken token)
         {
@@ -31,6 +32,12 @@ namespace Test.Utils
         public Task OnServiceLevelAboveThreshold(UAClient source)
         {
             ServiceLevelCbCount++;
+            return Task.CompletedTask;
+        }
+
+        public Task OnServicelevelBelowThreshold(UAClient source)
+        {
+            LowServiceLevelCbCount++;
             return Task.CompletedTask;
         }
     }

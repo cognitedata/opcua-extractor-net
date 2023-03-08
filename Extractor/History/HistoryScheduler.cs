@@ -326,7 +326,7 @@ namespace Cognite.OpcUa.History
                 "Took a total of {NumOps} operations", type, nodeCount, numReads);
             if (!extractor.AllowUpdateState)
             {
-                log.LogWarning("ServiceLevel is low, so known ranges are not currently beign updated. History will run again once ServiceLevel improves");
+                log.LogWarning("ServiceLevel is low, so destination ranges are not currently beign updated. History will run again once ServiceLevel improves");
             }
             if (exceptions.Any())
             {
@@ -503,11 +503,11 @@ namespace Cognite.OpcUa.History
 
             if (Frontfill)
             {
-                if (extractor.AllowUpdateState) node.State.UpdateFromFrontfill(last, node.Completed);
+                node.State.UpdateFromFrontfill(last, node.Completed);
             }
             else
             {
-                if (extractor.AllowUpdateState) node.State.UpdateFromBackfill(first, node.Completed);
+                node.State.UpdateFromBackfill(first, node.Completed);
             }
 
             int cnt = 0;
@@ -535,7 +535,7 @@ namespace Cognite.OpcUa.History
             if (buffered.Any())
             {
                 log.LogDebug("Read {Count} datapoints from buffer of state {Id}", buffered.Count(), node.State.Id);
-                if (extractor.AllowUpdateState) nodeState.UpdateFromStream(buffered);
+                nodeState.UpdateFromStream(buffered);
                 extractor.Streamer.Enqueue(buffered);
             }
         }
@@ -647,11 +647,11 @@ namespace Cognite.OpcUa.History
 
             if (Frontfill)
             {
-                if (extractor.AllowUpdateState) node.State.UpdateFromFrontfill(last, node.Completed);
+                node.State.UpdateFromFrontfill(last, node.Completed);
             }
             else
             {
-                if (extractor.AllowUpdateState) node.State.UpdateFromBackfill(first, node.Completed);
+                node.State.UpdateFromBackfill(first, node.Completed);
             }
 
             extractor.Streamer.Enqueue(createdEvents);
@@ -667,7 +667,7 @@ namespace Cognite.OpcUa.History
             if (buffered.Any())
             {
                 var (smin, smax) = buffered.MinMax(dp => dp.Time);
-                if (extractor.AllowUpdateState) emitterState.UpdateFromStream(smin, smax);
+                emitterState.UpdateFromStream(smin, smax);
                 log.LogDebug("Read {Count} events from buffer of state {Id}", buffered.Count(), node.State.Id);
                 extractor.Streamer.Enqueue(buffered);
             }

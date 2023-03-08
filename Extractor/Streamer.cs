@@ -206,7 +206,7 @@ namespace Cognite.OpcUa
             foreach ((string id, var range) in pointRanges)
             {
                 var state = extractor.State.GetNodeState(id);
-                state?.UpdateDestinationRange(range.First, range.Last);
+                if (extractor.AllowUpdateState) state?.UpdateDestinationRange(range.First, range.Last);
             }
             return restartHistory;
         }
@@ -297,7 +297,7 @@ namespace Cognite.OpcUa
             foreach (var (id, range) in eventRanges)
             {
                 var state = extractor.State.GetEmitterState(id);
-                state?.UpdateDestinationRange(range.First, range.Last);
+                if (extractor.AllowUpdateState) state?.UpdateDestinationRange(range.First, range.Last);
             }
 
 
@@ -349,13 +349,13 @@ namespace Cognite.OpcUa
             {
                 var evt = DpAsEvent(datapoint, node);
                 log.LogTrace("Subscription DataPoint treated as event {Event}", node);
-                if (extractor.AllowUpdateState) node.UpdateFromStream(DateTime.MaxValue, datapoint.SourceTimestamp);
+                node.UpdateFromStream(DateTime.MaxValue, datapoint.SourceTimestamp);
                 Enqueue(evt);
                 return;
             }
 
             var buffDps = ToDataPoint(datapoint, node);
-            if (extractor.AllowUpdateState) node.UpdateFromStream(buffDps);
+            node.UpdateFromStream(buffDps);
 
             if ((extractor.StateStorage == null || config.StateStorage.IntervalValue.Value == Timeout.InfiniteTimeSpan)
                  && (node.IsFrontfilling && datapoint.SourceTimestamp > node.SourceExtractedRange.Last
@@ -363,7 +363,6 @@ namespace Cognite.OpcUa
 
             foreach (var buffDp in buffDps)
             {
-                log.LogTrace("Subscription DataPoint {DataPoint}", buffDp);
                 Enqueue(buffDp);
             }
         }
@@ -478,7 +477,7 @@ namespace Cognite.OpcUa
 
                 timeToExtractorEvents.Observe((DateTime.UtcNow - buffEvent.Time).TotalSeconds);
 
-                if (extractor.AllowUpdateState) eventState.UpdateFromStream(buffEvent);
+                eventState.UpdateFromStream(buffEvent);
 
                 // Either backfill/frontfill is done, or we are not outside of each respective bound
                 if ((extractor.StateStorage == null || config.StateStorage.IntervalValue.Value == Timeout.InfiniteTimeSpan)

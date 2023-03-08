@@ -25,5 +25,11 @@ namespace Cognite.OpcUa
         /// the configured threshold.
         /// </summary>
         Task OnServiceLevelAboveThreshold(UAClient source);
+
+        /// <summary>
+        /// Invoked whenever the client service level goes from above to below
+        /// the configured threshold.
+        /// </summary>
+        Task OnServicelevelBelowThreshold(UAClient source);
     }
 }

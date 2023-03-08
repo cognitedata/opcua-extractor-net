@@ -224,6 +224,26 @@ namespace Cognite.OpcUa
             }
         }
 
+        public Task OnServicelevelBelowThreshold(UAClient source)
+        {
+            if (Source.IsCancellationRequested) return Task.CompletedTask;
+
+            if (historyReader != null)
+            {
+                foreach (var state in State.NodeStates)
+                {
+                    if (!state.IsFrontfilling && !state.IsBackfilling) state.RestartHistory();
+                }
+
+                foreach (var state in State.EmitterStates)
+                {
+                    if (!state.IsFrontfilling && !state.IsBackfilling) state.RestartHistory();
+                }
+            }
+
+            return Task.CompletedTask;
+        }
+
         /// <summary>
         /// Event handler for UAClient reconnect
         /// </summary>
