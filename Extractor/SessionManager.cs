@@ -144,6 +144,13 @@ namespace Cognite.OpcUa
                     client.Callbacks.TaskScheduler.SchedulePeriodicTask("CheckServiceLevel",
                         config.Redundancy.ReconnectIntervalValue, async (_) => await RecheckServiceLevel());
                 }
+                // When starting with redundancy we read the service level as part of the startup process.
+                // If not running with redundancy, we want to make sure that we still get the servicelevel on startup.
+                if (!config.IsRedundancyEnabled)
+                {
+                    var sl = await ReadServiceLevel(Session!);
+                    await UpdateServiceLevel(sl, true);
+                }
             }
         }
 
@@ -558,16 +565,20 @@ namespace Cognite.OpcUa
                 await client.Callbacks.OnServiceLevelAboveThreshold(client);
             }
 
-            log.LogDebug("Server ServiceLevel updated {From} -> {To}", CurrentServiceLevel, newLevel);
+            if (newLevel != CurrentServiceLevel)
+            {
+                log.LogDebug("Server ServiceLevel updated {From} -> {To}", CurrentServiceLevel, newLevel);
+            }
 
             CurrentServiceLevel = newLevel;
             if (shouldReconnect && config.IsRedundancyEnabled)
             {
                 log.LogWarning("ServiceLevel is low ({Level}), attempting background reconnect", CurrentServiceLevel);
                 lastLowSLConnectAttempt = DateTime.UtcNow;
-                var _ = Task.Run(async () =>
+
+                client.Callbacks.TaskScheduler.ScheduleTask(null, async (token) =>
                 {
-                    var result = await CreateSessionWithRedundancy(config.EndpointUrl!, config.AltEndpointUrls!, session, CurrentServiceLevel, liveToken);
+                    var result = await CreateSessionWithRedundancy(config.EndpointUrl!, config.AltEndpointUrls!, session, CurrentServiceLevel, token);
                     if (result.EndpointUrl == EndpointUrl)
                     {
                         log.LogWarning("Attempted reconnect due to low service level resulted in same server {Url}. Proceeding with ServiceLevel {Level}", result.EndpointUrl, result.ServiceLevel);
@@ -608,10 +619,7 @@ namespace Cognite.OpcUa
                         log.LogWarning("Received null or invalid ServiceLevel");
                         return;
                     }
-
-                    log.LogDebug("Received new ServiceLevel from current server: {Level}", value);
-
-                    var __ = Task.Run(async () => await UpdateServiceLevel(value.Value, false));
+                    client.Callbacks.TaskScheduler.ScheduleTask(null, async (_) => await UpdateServiceLevel(value.Value, false));
                 }
                 catch (Exception ex)
                 {

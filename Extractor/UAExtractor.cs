@@ -104,7 +104,7 @@ namespace Cognite.OpcUa
         public static readonly DateTime StartTime = DateTime.UtcNow;
 
         public bool AllowUpdateState =>
-            !Config.Source.IsRedundancyEnabled
+            !Config.Source.Redundancy.MonitorServiceLevel
             || uaClient.SessionManager != null
             && uaClient.SessionManager.CurrentServiceLevel >= Config.Source.Redundancy.ServiceLevelThreshold;
 

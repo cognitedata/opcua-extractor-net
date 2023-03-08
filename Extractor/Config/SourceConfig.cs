@@ -207,7 +207,8 @@ namespace Cognite.OpcUa.Config
 
         public bool IsRedundancyEnabled => EndpointUrl != null
             && AltEndpointUrls != null
-            && AltEndpointUrls.Any();
+            && AltEndpointUrls.Any()
+            && string.IsNullOrEmpty(ReverseConnectUrl);
     }
 
     public class EndpointDetails

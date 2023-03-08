@@ -324,6 +324,10 @@ namespace Cognite.OpcUa.History
             await base.RunAsync();
             log.LogInformation("Finish reading history of type {Type} for {Count} nodes. " +
                 "Took a total of {NumOps} operations", type, nodeCount, numReads);
+            if (!extractor.AllowUpdateState)
+            {
+                log.LogWarning("ServiceLevel is low, so known ranges are not currently beign updated. History will run again once ServiceLevel improves");
+            }
             if (exceptions.Any())
             {
                 throw new AggregateException(exceptions);
