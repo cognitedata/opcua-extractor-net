@@ -49,7 +49,7 @@
                     "description": "If true, the extractor will subscribe to changes in ServiceLevel and trigger reconnect once it drops below service-level-threshold, and history restart once it goes back above the threshold. This also makes the server not update extraction state if it is connected to a server with service level below the threshold. If a server does not want the extractor to trust the available data ranges it should set the ServiceLevel below the threshold."
                 }
             }
-        }
+        },
         "auto-accept": {
             "type": "boolean",
             "default": true,
