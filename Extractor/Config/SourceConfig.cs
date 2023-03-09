@@ -59,18 +59,15 @@ namespace Cognite.OpcUa.Config
         [DefaultValue(500)]
         public int PublishingInterval { get; set; } = 500;
         /// <summary>
-        /// Requested sample interval per variable on the server.
-        /// This is how often the extractor requests the server sample changes to values.
-        /// The server has no obligation to use this value, or to use sampling at all,
-        /// but on compliant servers this sets the lowest rate of changes.
+        /// DEPRECATED, see subscriptions.sampling-interval
         /// </summary>
         [DefaultValue(100)]
-        public int SamplingInterval { get; set; } = 100;
+        public int? SamplingInterval { get; set; } = null;
         /// <summary>
-        /// Requested length of queue for each variable on the server.
+        /// DEPRECATED, see subscriptions.queue-length
         /// </summary>
         [DefaultValue(100)]
-        public int QueueLength { get; set; } = 100;
+        public int? QueueLength { get; set; } = null;
         /// <summary>
         /// OPC-UA username, can be left out to use anonymous authentication.
         /// </summary>

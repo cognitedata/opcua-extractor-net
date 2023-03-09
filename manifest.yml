@@ -60,6 +60,14 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.15.0":
+    description: Add support for variable subscription config per node.
+    changelog:
+      deprecated:
+        - "source.sampling-interval and source.queue-length"
+      added:
+        - "subscriptions.sampling-interval and subscriptions.queue-length"
+        - "subscriptions.alternative-configs containing a list of alternative subscription configurations"
   "2.14.1":
     description: Avoid crashing on duplicated namespaces
     changelog:

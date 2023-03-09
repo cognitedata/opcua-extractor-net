@@ -38,18 +38,6 @@
             "minimum": 0,
             "default": 500
         },
-        "sampling-interval": {
-            "type": "integer",
-            "description": "Requested sample interval per variable on the server. This is how often the extractor requests the server sample changes to values. The server has no obligation to use this value, or to use any form of sampling at all, but according to the standard this should limit the _lowest_ allowed rate of updates.",
-            "default": 100,
-            "minimum": 0
-        },
-        "queue-length": {
-            "type": "integer",
-            "description": "Requested length of queue for each variable on the server. This is how many data points the server will buffer. It should in general be set to at least 2 * `publishing-interval` / `sampling-interval`",
-            "default": 100,
-            "minimum": 0
-        },
         "username": {
             "type": "string",
             "description": "OPC-UA username"

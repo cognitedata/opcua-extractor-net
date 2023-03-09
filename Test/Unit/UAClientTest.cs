@@ -1146,7 +1146,7 @@ namespace Test.Unit
         public async Task TestEventSubscriptions()
         {
             tester.Config.Events.Enabled = true;
-            tester.Config.Source.QueueLength = 100;
+            tester.Config.Subscriptions.QueueLength = 100;
 
             var emitters = new[]
             {
@@ -1338,7 +1338,7 @@ namespace Test.Unit
             {
                 ServerMetrics = true
             };
-            var mgr = new NodeMetricsManager(tester.Client, tester.Config.Source, tester.Config.Metrics.Nodes);
+            var mgr = new NodeMetricsManager(tester.Client, tester.Config.Subscriptions, tester.Config.Metrics.Nodes);
             await mgr.StartNodeMetrics(tester.Source.Token);
 
             tester.Server.SetDiagnosticsEnabled(true);
@@ -1364,7 +1364,7 @@ namespace Test.Unit
             };
             tester.Server.UpdateNode(ids.DoubleVar1, 0);
             tester.Server.UpdateNode(ids.DoubleVar2, 0);
-            var mgr = new NodeMetricsManager(tester.Client, tester.Config.Source, tester.Config.Metrics.Nodes);
+            var mgr = new NodeMetricsManager(tester.Client, tester.Config.Subscriptions, tester.Config.Metrics.Nodes);
             await mgr.StartNodeMetrics(tester.Source.Token);
 
             tester.Server.UpdateNode(ids.DoubleVar1, 15);
