@@ -61,11 +61,14 @@ schema:
 
 versions:
   "2.15.0":
-    description: Add support for variable subscription config per node.
+    description: Add live monitoring of ServiceLevel, variable subscription config
     changelog:
       deprecated:
         - "source.sampling-interval and source.queue-length"
+      fixed:
+        - "Fix issue causing delete states to not be properly fetched"
       added:
+        - "Support for monitoring ServiceLevel and not updating extraction state if it drops below a threshold"
         - "subscriptions.sampling-interval and subscriptions.queue-length"
         - "subscriptions.alternative-configs containing a list of alternative subscription configurations"
   "2.14.1":

@@ -44,6 +44,11 @@ namespace Cognite.OpcUa.Config
         /// Alternate endpoint URLs, used for redundancy if the server supports it.
         /// </summary>
         public IEnumerable<string>? AltEndpointUrls { get; set; }
+        /// <summary>
+        /// Extra configuration options for redundancy
+        /// </summary>
+        public RedundancyConfig Redundancy { get => _redundancy; set => _redundancy = value ?? _redundancy; }
+        private RedundancyConfig _redundancy = new RedundancyConfig();
 
         public EndpointDetails? EndpointDetails { get; set; }
         /// <summary>
@@ -196,6 +201,11 @@ namespace Cognite.OpcUa.Config
         /// </summary>
         public UARetryConfig Retries { get => retries; set => retries = value ?? retries; }
         private UARetryConfig retries = new UARetryConfig();
+
+        public bool IsRedundancyEnabled => EndpointUrl != null
+            && AltEndpointUrls != null
+            && AltEndpointUrls.Any()
+            && string.IsNullOrEmpty(ReverseConnectUrl);
     }
 
     public class EndpointDetails
@@ -250,6 +260,14 @@ namespace Cognite.OpcUa.Config
                 return finalRetryStatusCodes;
             }
         }
+    }
+
+    public class RedundancyConfig
+    {
+        public int ServiceLevelThreshold { get; set; } = 200;
+        public TimeSpanWrapper ReconnectIntervalValue { get; } = new TimeSpanWrapper(true, "m", "10m");
+        public string ReconnectInterval { get => ReconnectIntervalValue.RawValue; set => ReconnectIntervalValue.RawValue = value; }
+        public bool MonitorServiceLevel { get; set; }
     }
 
     public enum X509CertificateLocation

@@ -47,10 +47,12 @@ namespace Cognite.OpcUa
     public class UAClient : IDisposable, IUAClientAccess
     {
         protected FullConfig Config { get; set; }
-        protected ISession? Session => sessionManager?.Session;
+        protected ISession? Session => SessionManager?.Session;
         protected ApplicationConfiguration? AppConfig { get; set; }
         public DataTypeManager DataTypeManager { get; }
         public NodeTypeManager ObjectTypeManager { get; }
+
+        public IClientCallbacks Callbacks { get; set; } = null!;
 
         private readonly SemaphoreSlim subscriptionSem = new SemaphoreSlim(1);
         private readonly Dictionary<NodeId, string> nodeOverrides = new Dictionary<NodeId, string>();
@@ -59,9 +61,6 @@ namespace Cognite.OpcUa
         private Dictionary<NodeId, UAEventType>? eventFields;
 
         private readonly Dictionary<ushort, string> nsPrefixMap = new Dictionary<ushort, string>();
-
-        public event EventHandler? OnServerDisconnect;
-        public event EventHandler? OnServerReconnect;
 
         private static readonly Counter attributeRequests = Metrics
             .CreateCounter("opcua_attribute_requests", "Number of attributes fetched from the server");
@@ -80,7 +79,7 @@ namespace Cognite.OpcUa
 
         private readonly NodeMetricsManager? metricsManager;
 
-        private SessionManager? sessionManager;
+        public SessionManager? SessionManager { get; private set; }
 
         private readonly ILogger<UAClient> log;
         private readonly ILogger<Tracing> traceLog;
@@ -126,9 +125,9 @@ namespace Cognite.OpcUa
         {
             try
             {
-                if (sessionManager != null)
+                if (SessionManager != null)
                 {
-                    await sessionManager.Close(token);
+                    await SessionManager.Close(token);
                 }
             }
             finally
@@ -235,6 +234,8 @@ namespace Cognite.OpcUa
         /// </summary>
         private async Task StartSession(int timeout = -1)
         {
+            if (Callbacks == null) throw new InvalidOperationException("Attempted to start UAClient without setting callbacks");
+
             Browser.ResetVisitedNodes();
             // A restarted Session might mean a restarted server, so all server-relevant data must be cleared.
             // This includes any stored NodeId, which may refer to an outdated namespaceIndex
@@ -243,31 +244,21 @@ namespace Cognite.OpcUa
 
             await LoadAppConfig();
 
-            if (sessionManager == null)
+            if (SessionManager == null)
             {
-                sessionManager = new SessionManager(Config.Source, this, AppConfig!, log, liveToken, timeout);
+                SessionManager = new SessionManager(Config.Source, this, AppConfig!, log, liveToken, timeout);
             }
             else
             {
-                sessionManager.Timeout = timeout;
+                SessionManager.Timeout = timeout;
             }
 
-            await sessionManager.Connect();
+            await SessionManager.Connect();
 
             liveToken.ThrowIfCancellationRequested();
 
             Started = true;
-            log.LogInformation("Successfully connected to server at {EndpointURL}", sessionManager.EndpointUrl);
-        }
-
-        public void TriggerOnServerDisconnect()
-        {
-            OnServerDisconnect?.Invoke(this, EventArgs.Empty);
-        }
-
-        public void TriggerOnServerReconnect()
-        {
-            OnServerReconnect?.Invoke(this, EventArgs.Empty);
+            log.LogInformation("Successfully connected to server at {EndpointURL}", SessionManager.EndpointUrl);
         }
 
         private bool ShouldRetryException(Exception ex)
@@ -1633,7 +1624,7 @@ namespace Cognite.OpcUa
                 AppConfig.CertificateValidator.CertificateValidation -= CertificateValidationHandler;
             }
             subscriptionSem.Dispose();
-            sessionManager?.Dispose();
+            SessionManager?.Dispose();
         }
         #endregion
     }

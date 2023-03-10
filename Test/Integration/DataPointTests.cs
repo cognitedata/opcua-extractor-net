@@ -820,6 +820,66 @@ namespace Test.Integration
             Assert.Equal(3u, session.Subscriptions.First(sub => sub.DisplayName.StartsWith("DataChangeListener", StringComparison.InvariantCulture)).MonitoredItemCount);
             await TestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 3), 5);
         }
+
+        [Fact]
+        public async Task TestLowServiceLevelStates()
+        {
+            using var pusher = new DummyPusher(new DummyPusherConfig());
+
+            using var stateStore = new DummyStateStore();
+
+            using var extractor = tester.BuildExtractor(true, stateStore, pusher);
+
+            var ids = tester.Server.Ids.Base;
+
+            tester.Config.History.Enabled = true;
+            tester.Config.History.Data = true;
+            tester.Config.Source.Redundancy.MonitorServiceLevel = true;
+            tester.Config.StateStorage.Interval = "10h";
+
+            tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Base.Root, tester.Client);
+
+            // Need to reset connection to server in order to begin measuring service level
+            tester.Server.SetServerRedundancyStatus(190, RedundancySupport.Hot);
+
+            await tester.Client.Run(tester.Source.Token);
+            var start = DateTime.UtcNow.AddSeconds(-5);
+            tester.WipeBaseHistory();
+            tester.Server.PopulateBaseHistory(start);
+
+            try
+            {
+                var runTask = extractor.RunExtractor();
+                await extractor.WaitForSubscriptions();
+
+                await TestUtils.WaitForCondition(() => extractor.State.NodeStates.All(node =>
+                    !node.IsFrontfilling && !node.IsBackfilling), 10);
+
+                var state = extractor.State.GetNodeState(ids.DoubleVar1);
+                // Range should be empty
+                Assert.True(state.DestinationExtractedRange.First == CogniteTime.DateTimeEpoch);
+                Assert.True(state.DestinationExtractedRange.Last == CogniteTime.DateTimeEpoch);
+                // Source extracted range should be populated properly.
+                Assert.False(state.SourceExtractedRange.IsEmpty);
+
+                // Changes should not trigger state updates either
+                tester.Server.UpdateBaseNodes(0);
+                await TestUtils.WaitForCondition(() => pusher.DataPoints[(ids.DoubleVar1, -1)].Count >= 1001, 10);
+
+                Assert.True(state.DestinationExtractedRange.First == CogniteTime.DateTimeEpoch);
+                Assert.True(state.DestinationExtractedRange.Last == CogniteTime.DateTimeEpoch);
+
+                // Set service level back up and wait for history to catch up.
+                tester.Server.SetServerRedundancyStatus(255, RedundancySupport.Hot);
+                await TestUtils.WaitForCondition(() => extractor.State.NodeStates.All(node =>
+                    node.DestinationExtractedRange == node.SourceExtractedRange), 10);
+            }
+            finally
+            {
+                tester.Config.Source.Redundancy.MonitorServiceLevel = false;
+                await tester.Client.Run(tester.Source.Token);
+            }
+        }
         #endregion
 
         #region buffer

@@ -50,7 +50,7 @@ namespace Cognite.OpcUa.Config
         /// </summary>
         public async Task Run(CancellationToken token)
         {
-            using var explorer = new UAServerExplorer(provider, config, baseConfig);
+            using var explorer = new UAServerExplorer(provider, config, baseConfig, token);
 
             using var source = CancellationTokenSource.CreateLinkedTokenSource(token);
 

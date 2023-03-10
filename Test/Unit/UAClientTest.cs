@@ -19,6 +19,7 @@ using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using Test.Utils;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -32,6 +33,7 @@ namespace Test.Unit
         public CancellationTokenSource Source { get; private set; }
         public ServiceProvider Provider { get; }
         public ILogger Logger { get; }
+        public DummyClientCallbacks Callbacks { get; private set; }
         public UAClientTestFixture()
         {
             var services = new ServiceCollection();
@@ -72,6 +74,8 @@ namespace Test.Unit
             await Server.Start();
             Client = new UAClient(Provider, Config);
             Source = new CancellationTokenSource();
+            Callbacks = new DummyClientCallbacks(Source.Token);
+            Client.Callbacks = Callbacks;
             await Client.Run(Source.Token, 0);
         }
 
@@ -143,30 +147,19 @@ namespace Test.Unit
             tester.Config.Source.KeepAliveInterval = 1000;
             tester.Config.Source.ForceRestart = forceRestart;
 
-            bool connected = true;
-
-            tester.Client.OnServerDisconnect += (client, args) =>
-            {
-                connected = false;
-            };
-            tester.Client.OnServerReconnect += (client, args) =>
-            {
-                connected = true;
-            };
-
             try
             {
                 await tester.Client.Run(tester.Source.Token, 10);
 
                 Assert.True(CommonTestUtils.TestMetricValue("opcua_connected", 1));
                 tester.Server.Stop();
-                await TestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_connected", 0) && !connected, 20,
+                await TestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_connected", 0) && !tester.Callbacks.Connected, 20,
                     "Expected client to disconnect");
-                Assert.False(connected);
+                Assert.False(tester.Callbacks.Connected);
                 await tester.Server.Start();
-                await TestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_connected", 1) && connected, 20,
+                await TestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_connected", 1) && tester.Callbacks.Connected, 20,
                     "Expected client to reconnect");
-                Assert.True(connected);
+                Assert.True(tester.Callbacks.Connected);
             }
             finally
             {
@@ -303,8 +296,7 @@ namespace Test.Unit
             try
             {
                 await tester.Client.Run(tester.Source.Token, 0);
-                var sm = tester.Client.GetType().GetField("sessionManager", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
-                    .GetValue(tester.Client) as SessionManager;
+                var sm = tester.Client.SessionManager;
                 Assert.Equal("opc.tcp://localhost:62300", sm.EndpointUrl);
 
                 altServer.Stop();
@@ -316,6 +308,73 @@ namespace Test.Unit
                 tester.Config.Source.AltEndpointUrls = null;
                 tester.Config.Source.ForceRestart = false;
                 tester.Config.Source.KeepAliveInterval = 10000;
+                tester.Server.SetServerRedundancyStatus(255, RedundancySupport.Hot);
+                await tester.Client.Run(tester.Source.Token, 0);
+            }
+        }
+
+        [Fact]
+        public async Task TestServiceLevelSwitch()
+        {
+            await tester.Client.Close(tester.Source.Token);
+            tester.Server.SetServerRedundancyStatus(230, RedundancySupport.Hot);
+            tester.Config.Source.Redundancy.MonitorServiceLevel = true;
+            tester.Callbacks.ServiceLevelCbCount = 0;
+            var altServer = new ServerController(new[] {
+                PredefinedSetup.Base
+            }, tester.Provider, 62300)
+            {
+                ConfigRoot = "Server.Test.UaClient"
+            };
+            await altServer.Start();
+            altServer.SetServerRedundancyStatus(240, RedundancySupport.Hot);
+            tester.Config.Source.AltEndpointUrls = new[]
+            {
+                "opc.tcp://localhost:62300"
+            };
+            tester.Config.Source.ForceRestart = true;
+
+            try
+            {
+                // Should connect to altServer
+                await tester.Client.Run(tester.Source.Token, 0);
+                var sm = tester.Client.SessionManager;
+                Assert.Equal("opc.tcp://localhost:62300", sm.EndpointUrl);
+
+                // Should trigger a reconnect attempt, which finds the main server with status 230
+                altServer.SetServerRedundancyStatus(190, RedundancySupport.Hot);
+                await TestUtils.WaitForCondition(() => sm.CurrentServiceLevel == 230, 10, "Expected session to reconnect to original server");
+
+                Assert.Equal(230, sm.CurrentServiceLevel);
+                Assert.Equal(0, tester.Callbacks.ServiceLevelCbCount);
+                Assert.Equal(sm.EndpointUrl, tester.Config.Source.EndpointUrl);
+
+
+                // This method is called by the extractor, so we call it here to ensure the test passes.
+                // There is technically a tiny race condition here. If we connect to a new server, then that server immediately changes
+                // its service level, we _may_ not be able to pick up the change until it changes again.
+                // Some servers also send value updates on subscription creation, in which case this will not happen.
+                await sm.EnsureServiceLevelSubscription();
+                // Should trigger a reconnect attempt, but it will not find a better alternative.
+                tester.Server.SetServerRedundancyStatus(190, RedundancySupport.Hot);
+                await TestUtils.WaitForCondition(() => sm.CurrentServiceLevel == 190, 10, "Expected service level to drop");
+
+                Assert.Equal(sm.EndpointUrl, tester.Config.Source.EndpointUrl);
+
+                // Set the servicelevel back up, should trigger a callback, but no switch
+                tester.Server.SetServerRedundancyStatus(255, RedundancySupport.Hot);
+                await TestUtils.WaitForCondition(() => tester.Callbacks.ServiceLevelCbCount == 1, 10);
+                Assert.Equal(sm.EndpointUrl, tester.Config.Source.EndpointUrl);
+                Assert.Equal(255, sm.CurrentServiceLevel);
+            }
+            finally
+            {
+                tester.Config.Source.AltEndpointUrls = null;
+                tester.Config.Source.ForceRestart = false;
+                tester.Config.Source.KeepAliveInterval = 10000;
+                altServer.Stop();
+                altServer.Dispose();
+                tester.Server.SetServerRedundancyStatus(255, RedundancySupport.Hot);
                 await tester.Client.Run(tester.Source.Token, 0);
             }
         }

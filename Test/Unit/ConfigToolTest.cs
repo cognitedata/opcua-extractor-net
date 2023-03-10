@@ -46,8 +46,8 @@ namespace Test.Unit
         {
             await Server.Start();
 
-            Explorer = new UAServerExplorer(Provider, Config, BaseConfig);
             Source = new CancellationTokenSource();
+            Explorer = new UAServerExplorer(Provider, Config, BaseConfig, Source.Token);
             await Explorer.Run(Source.Token, 0);
         }
 

@@ -27,6 +27,29 @@
                 }
             }
         },
+        "redundancy": {
+            "type": "object",
+            "description": "Extra configuration options related to redundancy and ServiceLevel monitoring",
+            "unevaluatedProperties": false,
+            "properties": {
+                "service-level-threshold": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 255,
+                    "default": 200,
+                    "description": "Servers above this threshold are considered good"
+                },
+                "reconnect-interval": {
+                    "type": "string",
+                    "description": "If using redundancy, the extractor will attempt to find a better server with this interval if service level is below threshold. Format is `N[timeunit]` where `timeunit` is one of `w`, `d`, `h`, `m`, `s`, or `ms`.",
+                    "default": "10m"
+                },
+                "monitor-service-level": {
+                    "type": "boolean",
+                    "description": "If true, the extractor will subscribe to changes in ServiceLevel and trigger reconnect once it drops below service-level-threshold, and history restart once it goes back above the threshold. This also makes the server not update extraction state if it is connected to a server with service level below the threshold. If a server does not want the extractor to trust the available data ranges it should set the ServiceLevel below the threshold."
+                }
+            }
+        },
         "auto-accept": {
             "type": "boolean",
             "default": true,
