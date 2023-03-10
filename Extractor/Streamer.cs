@@ -206,7 +206,7 @@ namespace Cognite.OpcUa
             foreach ((string id, var range) in pointRanges)
             {
                 var state = extractor.State.GetNodeState(id);
-                state?.UpdateDestinationRange(range.First, range.Last);
+                if (extractor.AllowUpdateState) state?.UpdateDestinationRange(range.First, range.Last);
             }
             return restartHistory;
         }
@@ -297,7 +297,7 @@ namespace Cognite.OpcUa
             foreach (var (id, range) in eventRanges)
             {
                 var state = extractor.State.GetEmitterState(id);
-                state?.UpdateDestinationRange(range.First, range.Last);
+                if (extractor.AllowUpdateState) state?.UpdateDestinationRange(range.First, range.Last);
             }
 
 
@@ -363,7 +363,6 @@ namespace Cognite.OpcUa
 
             foreach (var buffDp in buffDps)
             {
-                log.LogTrace("Subscription DataPoint {DataPoint}", buffDp);
                 Enqueue(buffDp);
             }
         }

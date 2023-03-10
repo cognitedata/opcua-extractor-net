@@ -60,18 +60,6 @@ namespace Test.Unit
             Assert.Contains(pusher.PushedNodes.Values, node => node.DisplayName == "DeepObject 4, 25");
             Assert.Contains(pusher.PushedVariables.Values, node => node.DisplayName == "SubVariable 1234");
         }
-        private static void TriggerEventExternally(string field, object parent)
-        {
-            var dg = parent.GetType()
-                .GetField(field, System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
-                .GetValue(parent) as MulticastDelegate;
-            foreach (var handler in dg.GetInvocationList())
-            {
-                handler.Method.Invoke(
-                    handler.Target,
-                    new object[] { parent, EventArgs.Empty });
-            }
-        }
 
         [Fact]
         public async Task TestRestartOnReconnect()
@@ -87,7 +75,7 @@ namespace Test.Unit
             await extractor.WaitForSubscriptions();
             Assert.True(pusher.PushedNodes.Any());
             pusher.PushedNodes.Clear();
-            TriggerEventExternally("OnServerReconnect", tester.Client);
+            await extractor.OnServerReconnect(tester.Client);
 
             Assert.True(pusher.OnReset.WaitOne(10000));
 

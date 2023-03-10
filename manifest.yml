@@ -60,6 +60,13 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.15.0":
+    description: Add live monitoring of ServiceLevel
+    changelog:
+      fixed:
+        - "Fix issue causing delete states to not be properly fetched"
+      added:
+        - "Support for monitoring ServiceLevel and not updating extraction state if it drops below a threshold"
   "2.14.1":
     description: Avoid crashing on duplicated namespaces
     changelog:

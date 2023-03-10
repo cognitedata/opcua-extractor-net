@@ -22,6 +22,17 @@ using System;
 
 namespace Cognite.OpcUa.History
 {
+    /// <summary>
+    /// History extraction state.
+    /// 
+    /// History in the utils works using a two-step process, which we use extensively:
+    /// 
+    ///  - History is read from the source, and SourceExtractedRange is updated.
+    ///  - Data is written to destinations, and DestinationExtractedRange is updated.
+    ///  
+    /// This lets us consider SourceExtractedRange our internal history range, and DestinationExtractedRange
+    /// a subset of this, which is the data actually committed to CDF.
+    /// </summary>
     public class UAHistoryExtractionState : HistoryExtractionState
     {
         public NodeId SourceId { get; }

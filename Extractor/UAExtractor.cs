@@ -35,6 +35,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -45,7 +46,7 @@ namespace Cognite.OpcUa
     /// <summary>
     /// Main extractor class, tying together the <see cref="uaClient"/> and CDF client.
     /// </summary>
-    public class UAExtractor : BaseExtractor<FullConfig>, IUAClientAccess
+    public class UAExtractor : BaseExtractor<FullConfig>, IUAClientAccess, IClientCallbacks
     {
         private readonly UAClient uaClient;
         public Looper Looper { get; private set; } = null!;
@@ -54,6 +55,8 @@ namespace Cognite.OpcUa
         public State State { get; }
         public Streamer Streamer { get; }
         public DataTypeManager DataTypeManager => uaClient.DataTypeManager;
+
+        public PeriodicScheduler TaskScheduler => Scheduler;
 
         private HistoryReader historyReader = null!;
         public ReferenceTypeManager? ReferenceTypeManager { get; private set; }
@@ -100,6 +103,11 @@ namespace Cognite.OpcUa
 
         public static readonly DateTime StartTime = DateTime.UtcNow;
 
+        public bool AllowUpdateState =>
+            !Config.Source.Redundancy.MonitorServiceLevel
+            || uaClient.SessionManager != null
+            && uaClient.SessionManager.CurrentServiceLevel >= Config.Source.Redundancy.ServiceLevelThreshold;
+
         /// <summary>
         /// Construct extractor with list of pushers
         /// </summary>
@@ -116,12 +124,10 @@ namespace Cognite.OpcUa
         {
             this.uaClient = uaClient;
             this.pushers = pushers.Where(pusher => pusher != null).ToList();
+            this.uaClient.Callbacks = this;
             log = provider.GetRequiredService<ILogger<UAExtractor>>();
 
             log.LogDebug("Config:{NewLine}{Config}", Environment.NewLine, ExtractorUtils.ConfigToString(Config));
-
-            this.uaClient.OnServerReconnect += UaClient_OnServerReconnect;
-            this.uaClient.OnServerDisconnect += UaClient_OnServerDisconnect;
 
             State = new State();
             Streamer = new Streamer(provider.GetRequiredService<ILogger<Streamer>>(), this, config);
@@ -190,12 +196,52 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="sender">UAClient that generated this event</param>
         /// <param name="e">EventArgs for this event</param>
-        private void UaClient_OnServerDisconnect(object sender, EventArgs e)
+        public Task OnServerDisconnect(UAClient source)
         {
-            /* if (Config.Source.ForceRestart && !Source.IsCancellationRequested)
+            return Task.CompletedTask;
+        }
+
+        public async Task OnServiceLevelAboveThreshold(UAClient source)
+        {
+            if (Source.IsCancellationRequested) return;
+
+            if (historyReader != null)
             {
-                Close().Wait();
-            } */
+                await historyReader.Terminate(Source.Token);
+                foreach (var state in State.NodeStates)
+                {
+                    state.RestartHistory();
+                }
+
+                foreach (var state in State.EmitterStates)
+                {
+                    state.RestartHistory();
+                }
+                Scheduler.ScheduleTask(null, async t =>
+                {
+                    await RestartHistory();
+                });
+            }
+        }
+
+        public Task OnServicelevelBelowThreshold(UAClient source)
+        {
+            if (Source.IsCancellationRequested) return Task.CompletedTask;
+
+            if (historyReader != null)
+            {
+                foreach (var state in State.NodeStates)
+                {
+                    if (!state.IsFrontfilling && !state.IsBackfilling) state.RestartHistory();
+                }
+
+                foreach (var state in State.EmitterStates)
+                {
+                    if (!state.IsFrontfilling && !state.IsBackfilling) state.RestartHistory();
+                }
+            }
+
+            return Task.CompletedTask;
         }
 
         /// <summary>
@@ -203,40 +249,37 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="sender">UAClient that generated this event</param>
         /// <param name="e">EventArgs for this event</param>
-        private void UaClient_OnServerReconnect(object sender, EventArgs e)
+        public async Task OnServerReconnect(UAClient source)
         {
-            if (sender is not UAClient client || Source.IsCancellationRequested) return;
+            if (Source.IsCancellationRequested) return;
 
-            Scheduler.ScheduleTask(null, async t =>
+            await EnsureSubscriptions();
+            if (Config.Source.RestartOnReconnect)
             {
-                await EnsureSubscriptions();
-                if (Config.Source.RestartOnReconnect)
+                source.DataTypeManager.Configure();
+                source.ClearNodeOverrides();
+                source.ClearEventFields();
+                source.Browser.ResetVisitedNodes();
+                await RestartExtractor();
+            }
+            else
+            {
+                if (historyReader != null)
                 {
-                    client.DataTypeManager.Configure();
-                    client.ClearNodeOverrides();
-                    client.ClearEventFields();
-                    client.Browser.ResetVisitedNodes();
-                    await RestartExtractor();
-                }
-                else
-                {
-                    if (historyReader != null)
+                    await historyReader.Terminate(Source.Token);
+                    foreach (var state in State.NodeStates)
                     {
-                        await historyReader.Terminate(Source.Token);
-                        foreach (var state in State.NodeStates)
-                        {
-                            state.RestartHistory();
-                        }
-
-                        foreach (var state in State.EmitterStates)
-                        {
-                            state.RestartHistory();
-                        }
-
-                        await RestartHistory();
+                        state.RestartHistory();
                     }
+
+                    foreach (var state in State.EmitterStates)
+                    {
+                        state.RestartHistory();
+                    }
+
+                    Scheduler.ScheduleTask(null, async (_) => await RestartHistory());
                 }
-            });
+            }
         }
         #region Interface
 
@@ -722,6 +765,11 @@ namespace Cognite.OpcUa
             if (rebrowseTriggerManager is not null)
             {
                 await rebrowseTriggerManager.EnableCustomServerSubscriptions(Source.Token);
+            }
+
+            if (Config.Source.Redundancy.MonitorServiceLevel && uaClient.SessionManager != null)
+            {
+                await uaClient.SessionManager.EnsureServiceLevelSubscription();
             }
         }
 
@@ -1235,8 +1283,6 @@ namespace Cognite.OpcUa
             {
                 Starting.Set(0);
                 historyReader?.Dispose();
-                uaClient.OnServerDisconnect -= UaClient_OnServerDisconnect;
-                uaClient.OnServerReconnect -= UaClient_OnServerReconnect;
                 pubSubManager?.Dispose();
             }
             base.Dispose(disposing);
