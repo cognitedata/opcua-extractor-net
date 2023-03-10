@@ -65,14 +65,14 @@ namespace Cognite.OpcUa
     public class NodeMetricsManager
     {
         private readonly NodeMetricsConfig config;
-        private readonly SourceConfig sourceConfig;
+        private readonly SubscriptionConfig subscriptionConfig;
         private readonly UAClient client;
         private readonly Dictionary<NodeId, NodeMetricState> metrics = new Dictionary<NodeId, NodeMetricState>();
 
-        public NodeMetricsManager(UAClient client, SourceConfig sourceConfig, NodeMetricsConfig config)
+        public NodeMetricsManager(UAClient client, SubscriptionConfig subscriptionConfig, NodeMetricsConfig config)
         {
             this.config = config;
-            this.sourceConfig = sourceConfig;
+            this.subscriptionConfig = subscriptionConfig;
             this.client = client;
         }
 
@@ -159,7 +159,7 @@ namespace Cognite.OpcUa
                 state => new MonitoredItem
                 {
                     StartNodeId = state.SourceId,
-                    SamplingInterval = sourceConfig.SamplingInterval,
+                    SamplingInterval = subscriptionConfig.SamplingInterval,
                     DisplayName = "Value " + state.Id,
                     QueueSize = 1,
                     DiscardOldest = true,

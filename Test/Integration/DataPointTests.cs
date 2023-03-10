@@ -349,7 +349,62 @@ namespace Test.Integration
                 Assert.Equal(ids.BoolVar, evt.SourceNode);
                 Assert.Equal(ids.BoolVar, evt.EmittingNode);
             });
+        }
 
+        [Fact]
+        public async Task TestVariableDataPointsConfig()
+        {
+            using var pusher = new DummyPusher(new DummyPusherConfig());
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+
+            var dataTypes = tester.Config.Extraction.DataTypes;
+            var ids = tester.Ids.Base;
+
+            tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(ids.Root, tester.Client);
+
+            tester.Config.Subscriptions.AlternativeConfigs = new[] {
+                new FilteredSubscriptionConfig
+                {
+                    Filter = new SubscriptionConfigFilter
+                    {
+                        Id = $"i={ids.DoubleVar2.Identifier}"
+                    },
+                }
+            };
+
+            tester.Config.Subscriptions.DataChangeFilter = new DataSubscriptionConfig
+            {
+                DeadbandType = DeadbandType.Absolute,
+                Trigger = DataChangeTrigger.StatusValue,
+                DeadbandValue = 0.6,
+            };
+
+            tester.Server.UpdateNode(ids.DoubleVar1, 0.0);
+            tester.Server.UpdateNode(ids.DoubleVar2, 0.0);
+
+            var runTask = extractor.RunExtractor();
+
+            pusher.DataPoints[(ids.DoubleVar1, -1)] = new List<UADataPoint>();
+
+            await extractor.WaitForSubscriptions();
+            // Middle value is skipped due to deadband, but only on DoubleVar1
+            tester.Server.UpdateNode(ids.DoubleVar1, 0.0);
+            tester.Server.UpdateNode(ids.DoubleVar2, 0.0);
+            await Task.Delay(100);
+            tester.Server.UpdateNode(ids.DoubleVar1, 0.5);
+            tester.Server.UpdateNode(ids.DoubleVar2, 0.5);
+            await Task.Delay(100);
+            tester.Server.UpdateNode(ids.DoubleVar1, 1.0);
+            tester.Server.UpdateNode(ids.DoubleVar2, 1.0);
+
+            await TestUtils.WaitForCondition(() => pusher.DataPoints[(ids.DoubleVar1, -1)].Count == 2, 5,
+                () => $"Expected 2 datapoints, got {pusher.DataPoints[(ids.DoubleVar1, -1)].Count}");
+
+            var dps = pusher.DataPoints[(ids.DoubleVar1, -1)];
+            Assert.Equal(0.0, dps[0].DoubleValue);
+            Assert.Equal(1.0, dps[1].DoubleValue);
+            var dps2 = pusher.DataPoints[(ids.DoubleVar2, -1)];
+            Assert.True(dps2.Count >= 3);
         }
         #endregion
         #region history

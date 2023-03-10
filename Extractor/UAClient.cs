@@ -102,7 +102,7 @@ namespace Cognite.OpcUa
             ObjectTypeManager = new NodeTypeManager(provider.GetRequiredService<ILogger<NodeTypeManager>>(), this);
             if (config.Metrics.Nodes != null)
             {
-                metricsManager = new NodeMetricsManager(this, config.Source, config.Metrics.Nodes);
+                metricsManager = new NodeMetricsManager(this, config.Subscriptions, config.Metrics.Nodes);
             }
             StringConverter = new StringConverter(provider.GetRequiredService<ILogger<StringConverter>>(), this, config);
             Browser = new Browser(provider.GetRequiredService<ILogger<Browser>>(), this, config);
@@ -1059,16 +1059,19 @@ namespace Cognite.OpcUa
                 nodeList,
                 "DataChangeListener",
                 subscriptionHandler,
-                node => new MonitoredItem
-                {
-                    StartNodeId = node.SourceId,
-                    DisplayName = "Value: " + (node as VariableExtractionState)?.DisplayName,
-                    SamplingInterval = Config.Source.SamplingInterval,
-                    QueueSize = (uint)Math.Max(0, Config.Source.QueueLength),
-                    AttributeId = Attributes.Value,
-                    NodeClass = NodeClass.Variable,
-                    CacheQueueSize = Math.Max(0, Config.Source.QueueLength),
-                    Filter = Config.Subscriptions.DataChangeFilter?.Filter
+                node => {
+                    var config = Config.Subscriptions.GetMatchingConfig(node);
+                    return new MonitoredItem
+                    {
+                        StartNodeId = node.SourceId,
+                        DisplayName = "Value: " + (node as VariableExtractionState)?.DisplayName,
+                        SamplingInterval = config.SamplingInterval,
+                        QueueSize = (uint)Math.Max(0, config.QueueLength),
+                        AttributeId = Attributes.Value,
+                        NodeClass = NodeClass.Variable,
+                        CacheQueueSize = Math.Max(0, config.QueueLength),
+                        Filter = config.DataChangeFilter?.Filter
+                    };
                 }, token, "datapoint");
 
             numSubscriptions.Set(sub.MonitoredItemCount);
@@ -1093,15 +1096,18 @@ namespace Cognite.OpcUa
                 emitters,
                 "EventListener",
                 subscriptionHandler,
-                node => new MonitoredItem
-                {
-                    StartNodeId = node.SourceId,
-                    AttributeId = Attributes.EventNotifier,
-                    DisplayName = "Events: " + node.Id,
-                    SamplingInterval = Config.Source.SamplingInterval,
-                    QueueSize = (uint)Math.Max(0, Config.Source.QueueLength),
-                    Filter = filter,
-                    NodeClass = NodeClass.Object
+                node => {
+                    var config = Config.Subscriptions.GetMatchingConfig(node);
+                    return new MonitoredItem
+                    {
+                        StartNodeId = node.SourceId,
+                        AttributeId = Attributes.EventNotifier,
+                        DisplayName = "Events: " + node.Id,
+                        SamplingInterval = config.SamplingInterval,
+                        QueueSize = (uint)Math.Max(0, config.QueueLength),
+                        Filter = filter,
+                        NodeClass = NodeClass.Object
+                    };
                 },
                 token, "event");
         }
@@ -1322,8 +1328,8 @@ namespace Cognite.OpcUa
                     StartNodeId = ObjectIds.Server,
                     Filter = filter,
                     AttributeId = Attributes.EventNotifier,
-                    SamplingInterval = Config.Source.SamplingInterval,
-                    QueueSize = (uint)Math.Max(0, Config.Source.QueueLength),
+                    SamplingInterval = Config.Subscriptions.SamplingInterval,
+                    QueueSize = (uint)Math.Max(0, Config.Subscriptions.QueueLength),
                     NodeClass = NodeClass.Object,
                     DisplayName = "Audit: Server"
                 };

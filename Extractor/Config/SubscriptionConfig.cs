@@ -15,8 +15,11 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using Cognite.OpcUa.History;
 using Opc.Ua;
+using System.Collections.Generic;
 using System.ComponentModel;
+using System.Text.RegularExpressions;
 
 namespace Cognite.OpcUa.Config
 {
@@ -46,7 +49,7 @@ namespace Cognite.OpcUa.Config
         };
         public DataChangeFilter Filter => filter;
     }
-    public class SubscriptionConfig
+    public class SubscriptionInstanceConfig
     {
         /// <summary>
         /// Modify the DataChangeFilter used for datapoint subscriptions. See OPC-UA reference part 4 7.17.2 for details.
@@ -54,6 +57,23 @@ namespace Cognite.OpcUa.Config
         /// Filters are applied to all nodes, but deadband should only affect some, according to the standard.
         /// </summary>
         public DataSubscriptionConfig? DataChangeFilter { get; set; }
+        /// <summary>
+        /// Requested sample interval per variable on the server.
+        /// This is how often the extractor requests the server sample changes to values.
+        /// The server has no obligation to use this value, or to use sampling at all,
+        /// but on compliant servers this sets the lowest rate of changes.
+        /// </summary>
+        [DefaultValue(100)]
+        public int SamplingInterval { get; set; } = 100;
+        /// <summary>
+        /// Requested length of queue for each variable on the server.
+        /// </summary>
+        [DefaultValue(100)]
+        public int QueueLength { get; set; } = 100;
+    }
+
+    public class SubscriptionConfig : SubscriptionInstanceConfig
+    {
         /// <summary>
         /// Enable subscriptions on data-points.
         /// </summary>
@@ -71,5 +91,72 @@ namespace Cognite.OpcUa.Config
         /// Log bad subscription datapoints
         /// </summary>
         public bool LogBadValues { get; set; } = true;
+        /// <summary>
+        /// List of alternative subscription configurations.
+        /// The first match will be applied, or the top level if none match.
+        /// </summary>
+        public IEnumerable<FilteredSubscriptionConfig>? AlternativeConfigs { get; set; }
+
+        public SubscriptionInstanceConfig GetMatchingConfig(UAHistoryExtractionState state)
+        {
+            if (AlternativeConfigs == null) return this;
+            foreach (var config in AlternativeConfigs)
+            {
+                if (config.Filter == null || config.Filter.IsMatch(state)) return config;
+            }
+            return this;
+        }
+    }
+
+    public class FilteredSubscriptionConfig : SubscriptionInstanceConfig
+    {
+        /// <summary>
+        /// Filter required to match in order to apply this config.
+        /// </summary>
+        public SubscriptionConfigFilter? Filter { get; set; }
+    }
+
+
+
+    public class SubscriptionConfigFilter
+    {
+        private string? id;
+        private Regex? idRegex;
+        public string? Id
+        {
+            get => id; set
+            {
+                id = value;
+                idRegex = new Regex(value, RegexOptions.Compiled);
+            }
+        }
+        private string? dataType;
+        private Regex? dataTypeRegex;
+        public string? DataType
+        {
+            get => dataType; set
+            {
+                dataType = value;
+                dataTypeRegex = new Regex(value, RegexOptions.Compiled);
+            }
+        }
+
+        public bool? IsEventState { get; set; }
+
+        public bool IsMatch(UAHistoryExtractionState state)
+        {
+            if (idRegex != null && !idRegex.IsMatch(state.Id)) return false;
+            if (dataTypeRegex != null)
+            {
+                if (state is not VariableExtractionState varState) return false;
+                if (!dataTypeRegex.IsMatch(varState.DataType.ToString())) return false;
+            }
+            if (IsEventState != null)
+            {
+                if (IsEventState.Value && state is not EventExtractionState) return false;
+                if (!IsEventState.Value && state is not VariableExtractionState) return false;
+            }
+            return true;
+        }
     }
 }
