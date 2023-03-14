@@ -309,22 +309,20 @@ namespace Cognite.OpcUa
             string? bestUrl = null;
             byte bestServiceLevel = 0;
 
-            if (initialServiceLevel != null)
-            {
-                if (initialSession == null) throw new InvalidOperationException("InitialSession must be passed along with initialServiceLevel");
-                bestServiceLevel = initialServiceLevel.Value;
-            }
-
             endpointUrls = endpointUrls.Prepend(initialUrl).Distinct().ToList();
+            log.LogInformation("Create session with redundant connections to {Urls}", string.Join(", ", endpointUrls));
 
             ISession? activeSession = initialSession;
 
-            string? activeEndpoint = null;
             if (activeSession != null)
             {
+                if (initialServiceLevel == null) throw new InvalidOperationException("InitialServiceLevel required when initialSession is non-null");
                 if (EndpointUrl == null) throw new InvalidOperationException("EndpointUrl must be set if initialSession is passed");
                 bestUrl = EndpointUrl;
+                bestServiceLevel = initialServiceLevel.Value;
             }
+
+            string? activeEndpoint = null;
             var exceptions = new List<Exception>();
 
             foreach (var url in endpointUrls)
@@ -332,9 +330,9 @@ namespace Cognite.OpcUa
                 try
                 {
                     ISession session;
-                    if (url == EndpointUrl)
+                    if (url == bestUrl && activeSession != null)
                     {
-                        session = initialSession!;
+                        session = activeSession;
                     }
                     else
                     {
@@ -359,6 +357,7 @@ namespace Cognite.OpcUa
                 }
                 catch (Exception ex)
                 {
+                    log.LogError("Failed to connect to endpoint {Url}: {Error}", url, ex.Message);
                     exceptions.Add(ex);
                 }
             }
