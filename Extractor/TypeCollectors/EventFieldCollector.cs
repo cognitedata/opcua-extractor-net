@@ -129,11 +129,7 @@ namespace Cognite.OpcUa.TypeCollectors
 
             var result = new Dictionary<NodeId, UAEventType>();
 
-            HashSet<NodeId>? whitelist = null;
-            if (config.EventIds != null && config.EventIds.Any())
-            {
-                whitelist = new HashSet<NodeId>(config.EventIds.Select(proto => proto.ToNodeId(uaClient, ObjectTypeIds.BaseEventType)));
-            }
+            HashSet<NodeId>? whitelist = config.GetWhitelist(uaClient, log);
 
             foreach (var type in types.Values)
             {

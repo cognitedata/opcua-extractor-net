@@ -853,7 +853,7 @@ namespace Cognite.OpcUa
         /// </summary>
         private async Task ConfigureExtractor()
         {
-            RootNodes = Config.Extraction.GetRootNodes(uaClient);
+            RootNodes = Config.Extraction.GetRootNodes(uaClient, log);
 
             DataTypeManager.Configure();
 
@@ -885,10 +885,8 @@ namespace Cognite.OpcUa
                 if (Config.Events.EmitterIds != null && Config.Events.EmitterIds.Any()
                     || Config.Events.HistorizingEmitterIds != null && Config.Events.HistorizingEmitterIds.Any())
                 {
-                    var histEmitterIds = new HashSet<NodeId>((Config.Events.HistorizingEmitterIds ?? Enumerable.Empty<ProtoNodeId>())
-                        .Select(proto => proto.ToNodeId(uaClient, ObjectIds.Server)));
-                    var emitterIds = new HashSet<NodeId>((Config.Events.EmitterIds ?? Enumerable.Empty<ProtoNodeId>())
-                        .Select(proto => proto.ToNodeId(uaClient, ObjectIds.Server)));
+                    var histEmitterIds = Config.Events.GetHistorizingEmitterIds(uaClient, log);
+                    var emitterIds = Config.Events.GetEmitterIds(uaClient, log);
                     var eventEmitterIds = new HashSet<NodeId>(histEmitterIds.Concat(emitterIds));
 
                     foreach (var id in eventEmitterIds)

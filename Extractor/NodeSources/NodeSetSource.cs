@@ -613,11 +613,7 @@ namespace Cognite.OpcUa.NodeSources
                 foreach (var child in children) type.Properties.Add(child);
             }
 
-            HashSet<NodeId>? whitelist = null;
-            if (Config.Events.EventIds != null && Config.Events.EventIds.Any())
-            {
-                whitelist = new HashSet<NodeId>(Config.Events.EventIds.Select(proto => proto.ToNodeId(Client, ObjectTypeIds.BaseEventType)));
-            }
+            HashSet<NodeId>? whitelist = Config.Events.GetWhitelist(Client, Log);
             Regex? ignoreFilter = Config.Events.ExcludeEventFilter == null ? null : new Regex(Config.Events.ExcludeEventFilter);
 
             var result = new Dictionary<NodeId, UAEventType>();
