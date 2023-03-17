@@ -1,6 +1,7 @@
 ﻿using Cognite.Bridge;
 using Cognite.Extractor.Common;
 using Cognite.Extractor.Configuration;
+using Cognite.Extractor.Logging;
 using Cognite.Extractor.Testing;
 using Cognite.Extractor.Utils;
 using CogniteSdk;
@@ -10,6 +11,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using MQTTnet;
 using MQTTnet.Client;
+using MQTTnet.Client.Options;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -63,7 +65,7 @@ namespace Test.Unit
                     .Build();
                 client = new MqttFactory().CreateMqttClient();
                 baseBuilder = new MqttApplicationMessageBuilder()
-                    .WithQualityOfServiceLevel(MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce);
+                    .WithAtLeastOnceQoS();
                 client.ConnectAsync(options).Wait();
             }
 

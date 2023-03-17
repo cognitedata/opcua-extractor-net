@@ -1,6 +1,8 @@
 ﻿using Microsoft.Extensions.Logging;
 using MQTTnet;
 using MQTTnet.Client;
+using MQTTnet.Client.Options;
+using MQTTnet.Client.Subscribing;
 using MQTTnet.Protocol;
 using System;
 using System.Threading;
@@ -11,7 +13,7 @@ namespace Cognite.Bridge
     public sealed class MQTTBridge : IDisposable
     {
         private readonly BridgeConfig config;
-        private readonly MqttClientOptions options;
+        private readonly IMqttClientOptions options;
         private readonly IMqttClient client;
 
         private readonly ILogger log;
@@ -63,7 +65,7 @@ namespace Cognite.Bridge
         /// <returns>True on success</returns>
         public async Task<bool> StartBridge(CancellationToken token)
         {
-            client.DisconnectedAsync += async e =>
+            client.UseDisconnectedHandler(async e =>
             {
                 log.LogWarning("MQTT Client disconnected");
                 log.LogDebug(e.Exception, "MQTT client disconnected");
@@ -77,8 +79,8 @@ namespace Cognite.Bridge
                 {
                     log.LogWarning("Failed to reconnect to broker: {Message}", ex.Message);
                 }
-            };
-            client.ConnectedAsync += async _ =>
+            });
+            client.UseConnectedHandler(async _ =>
             {
                 log.LogInformation("MQTT client connected");
                 await client.SubscribeAsync(new MqttClientSubscribeOptionsBuilder()
@@ -90,8 +92,8 @@ namespace Cognite.Bridge
                     .WithTopicFilter(config.Mqtt.RelationshipTopic, MqttQualityOfServiceLevel.AtLeastOnce)
                     .Build(), token);
                 log.LogInformation("Subscribed to topics");
-            };
-            client.ApplicationMessageReceivedAsync += async msg =>
+            });
+            client.UseApplicationMessageReceivedHandler(async msg =>
             {
                 bool success;
 
@@ -185,7 +187,7 @@ namespace Cognite.Bridge
                 {
                     if (waitTopic == null || waitTopic == msg.ApplicationMessage.Topic) waitSource?.SetResult();
                 }
-            };
+            });
             if (!client.IsConnected)
             {
                 try
