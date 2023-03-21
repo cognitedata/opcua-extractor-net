@@ -9,6 +9,11 @@ mkdir -p $configuration/
 mv ExtractorLauncher/bin/Release/net7.0/$configuration/publish/* ./$configuration/
 rm -f ./$configuration/*.config ./$configuration/*.pdb ./$configuration/*.xml
 mkdir -p ./$configuration/config
+
+dotnet sbom-tool generate -b ./$configuration/ -bc ExtractorLauncher/ -pn OpcuaExtractor -pv $version -ps Cognite -nsb https://sbom.cognite.com
+cp ./$configuration/_manifest/spdx_2.2/* ./$configuration/
+rm -r ./$configuration/_manifest/
+
 cp ./LICENSE.md ./$configuration/
 cp ./config/config.example.yml ./$configuration/config/
 cp ./config/config.minimal.yml ./$configuration/config/
