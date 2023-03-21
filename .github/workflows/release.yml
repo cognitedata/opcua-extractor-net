@@ -118,7 +118,7 @@ jobs:
             CERTIFICATE_PASSWORD: ${{ secrets.CODE_SIGNING_CERTIFICATE_PASSWORD }}
           uses: cognitedata/code-sign-action/@v1
           with:
-            path-to-binary: .\extractorbuild\OpcuaExtractor.exe
+            path-to-binary: .\installerbuild\extractorbuild\OpcuaExtractor.exe
 
         - name: Add msbuild to path
           uses: microsoft/setup-msbuild@v1.3
