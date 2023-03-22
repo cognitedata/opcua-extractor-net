@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "isRoot": true,
+  "tools": {
+    "microsoft.sbom.dotnettool": {
+      "version": "0.3.3",
+      "commands": [
+        "sbom-tool"
+      ]
+    }
+  }
+}

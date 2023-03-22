@@ -60,6 +60,8 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.15.2":
+    description: Add bill of materials
   "2.15.1":
     description: Fix connecting to redundant servers
     changelog:

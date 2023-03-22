@@ -29,6 +29,8 @@ cp config/config.minimal.yml %{buildroot}/etc/cognite/opcua/
 cp config/config.example.yml %{buildroot}/etc/cognite/opcua/
 
 mkdir -p %{buildroot}/var/lib/cognite/opcua
+cp manifest.spdx.json %{buildroot}/var/lib/cognite/opcua/
+cp manifest.spdx.json.sha256 %{buildroot}/var/lib/cognite/opcua/
 mkdir -p %{buildroot}/var/log/cognite/opcua
 mkdir -p %{buildroot}/etc/systemd/system
 cp %{name}.service %{buildroot}/etc/systemd/system/
@@ -44,6 +46,8 @@ cp %{name}@.service %{buildroot}/etc/systemd/system/
 /etc/cognite/opcua/opc.ua.net.extractor.Config.xml
 /var/log/cognite/opcua/
 /var/lib/cognite/opcua/
+/var/lib/cognite/opcua/manifest.spdx.json
+/var/lib/cognite/opcua/manifest.spdx.json.sha256
 
 %post
 ln -sfn /var/log/cognite/opcua/ /var/lib/cognite/opcua/logs
@@ -58,4 +62,6 @@ fi
 %changelog
  * Thu Aug 19 2021 Einar Omang <einar.omang@cognite.com> - 2.4.0
  - Initial release of rpm package
+ * Tue Mar 21 2023 Einar Omang <einar.omang@cognite.com> - 2.15.2
+ - Add SBOM files
 

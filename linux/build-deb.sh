@@ -31,6 +31,8 @@ cp ../publish/OpcuaExtractor usr/bin/opcua-extractor
 chmod 0755 usr/bin/opcua-extractor
 
 mkdir -p var/lib/cognite/opcua
+cp ../manifest.spdx.json var/lib/cognite/opcua/
+cp ../manifest.spdx.json.sha256 var/lib/cognite/opcua/
 mkdir -p var/log/cognite/opcua
 mkdir -p etc/cognite/opcua
 cp -r ../config/* etc/cognite/opcua/
