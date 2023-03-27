@@ -5,6 +5,7 @@
     <?define Name="$(var.product_name) $(var.target_version)" ?>
     <?define NameSimple="$(var.product_name)" ?>
 	<?define ManagerBuild=$(var.manager_build)?>
+	<?define ManifestsDir=$(var.manifests_dir)?>
 
     <Product Id="$(var.ProductId)"
              Name="$(var.Name)"
@@ -46,6 +47,7 @@
             <ComponentGroupRef Id="ExecutableComponentGroup" />
             <ComponentGroupRef Id="OpcUaExtractorConfigFilesComponentGroup" />
 			<ComponentGroupRef Id="OpcUaServiceManagerFilesComponentGroup"/>
+			<ComponentGroupRef Id="OpcUaManifestFilesComponentGroup"/>
             <!-- If you are referencing multiple separate products, add them here -->
         </Feature>
     </Product>
@@ -59,6 +61,7 @@
                         <Directory Id="LogsFolder" Name="logs" />
                         <Directory Id="ExecutableFolder" Name="bin" />
 						<Directory Id="OpcUaServiceManagerFolder" Name="OpcUaServiceManager" />
+						<Directory Id="ManifestsFolder" Name="manifests" />
                         <!-- Additional directories can be added here -->
                     </Directory>
                 </Directory>
@@ -150,6 +153,27 @@
 			</Component>
 			<Component Id="README_txt" Guid="C6FD919D-2A91-49FD-BAB1-C6CF4F508AEE" Directory="OpcUaServiceManagerFolder">
 				<File Id="README.txt" Name="README.txt" Source="$(var.ManagerBuild)\README.txt" />
+			</Component>
+		</ComponentGroup>
+		<!-- Manifests -->
+		<ComponentGroup Id="OpcUaManifestFilesComponentGroup">
+			<Component Id="manifest_extractor_spdx_json" Guid="E1CEAB0E-2DAC-4CFB-BF0A-47AD1CE11B8F" Directory="ManifestsFolder">
+				<File Id="manifest.extractor.spdx.json" Name="manifest.extractor.spdx.json" Source="$(var.ManifestsDir)\manifest.extractor.spdx.json" />
+			</Component>
+			<Component Id="manifest_extractor_spdx_json_sha256" Guid="36000313-FB05-49F3-8404-8AD12C5F2A50" Directory="ManifestsFolder">
+				<File Id="manifest.extractor.spdx.json.sha256" Name="manifest.extractor.spdx.json.sha256" Source="$(var.ManifestsDir)\manifest.extractor.spdx.json.sha256" />
+			</Component>
+			<Component Id="manifest_manager_spdx_json" Guid="ADE84F3B-0BF0-4A07-9C0A-36C0BC07C9FF" Directory="ManifestsFolder">
+				<File Id="manifest.manager.spdx.json" Name="manifest.manager.spdx.json" Source="$(var.ManifestsDir)\manifest.manager.spdx.json" />
+			</Component>
+			<Component Id="manifest_manager_spdx_json_sha256" Guid="C2B9A8C7-C172-4A1B-94A5-31F22F78B9C1" Directory="ManifestsFolder">
+				<File Id="manifest.manager.spdx.json.sha256" Name="manifest.manager.spdx.json.sha256" Source="$(var.ManifestsDir)\manifest.manager.spdx.json.sha256" />
+			</Component>
+			<Component Id="manifest_spdx_json" Guid="4908EF02-576C-4670-BEC5-57487A5B486A" Directory="ManifestsFolder">
+				<File Id="manifest.spdx.json" Name="manifest.spdx.json" Source="$(var.ManifestsDir)\manifest.spdx.json" />
+			</Component>
+			<Component Id="manifest_spdx_json_sha256" Guid="5E58B07B-E279-4C0E-B27E-3FDCC83F3807" Directory="ManifestsFolder">
+				<File Id="manifest.spdx.json.sha256" Name="manifest.spdx.json.sha256" Source="$(var.ManifestsDir)\manifest.spdx.json.sha256" />
 			</Component>
 		</ComponentGroup>
     </Fragment>

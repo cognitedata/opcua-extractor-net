@@ -60,11 +60,13 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
-  "2.15.2":
+  "2.15.3":
     description: Improve handling of incorrect proto node ids
     changelog:
       changed:
         - "Incorrect proto node ids no longer default to anything, and are instead always skipped."
+  "2.15.2":
+    description: Add bill of materials
   "2.15.1":
     description: Fix connecting to redundant servers
     changelog:

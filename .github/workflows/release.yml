@@ -29,10 +29,12 @@ jobs:
           uses: actions/setup-dotnet@v3
           with:
               dotnet-version: 7.0.x
-        - name: Restore paket
-          run: dotnet tool restore
         - name: Restore dependencies
           run: dotnet restore
+
+        - name: Restore tools
+          run: dotnet tool restore
+
         - name: Build
           run: dotnet build ExtractorLauncher/
 
@@ -99,10 +101,11 @@ jobs:
           uses: actions/setup-dotnet@v3
           with:
               dotnet-version: 7.0.x
-        - name: Restore paket
-          run: dotnet tool restore
         - name: Restore dependencies
           run: dotnet restore
+
+        - name: Restore tools
+          run: dotnet tool restore
 
         - name: Build Executable
           run: dotnet publish -c Release -r win-x64 ${{ needs.create-release.outputs.publish-args }} .\ExtractorLauncher\ -o extractorbuild\
@@ -130,6 +133,9 @@ jobs:
           uses: cognitedata/code-sign-action/@v1
           with:
             path-to-binary: .\managerbuild\OpcUaServiceManager.exe
+
+        - name: Build SBOM
+          run: .\installer-sbom.ps1 ${{ needs.create-release.outputs.version }}
 
         - name: Build MSI
           working-directory: .\OpcUaExtractorSetup

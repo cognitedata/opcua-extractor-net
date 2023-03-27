@@ -2,10 +2,10 @@
   "version": 1,
   "isRoot": true,
   "tools": {
-    "paket": {
-      "version": "7.2.1",
+    "microsoft.sbom.dotnettool": {
+      "version": "0.3.3",
       "commands": [
-        "paket"
+        "sbom-tool"
       ]
     }
   }
