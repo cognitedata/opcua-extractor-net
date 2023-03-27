@@ -27,7 +27,7 @@ namespace Cognite.OpcUa.Config
 {
     public partial class UAServerExplorer : UAClient
     {
-        private readonly ICollection<int> testAttributeChunkSizes = new []
+        private readonly ICollection<int> testAttributeChunkSizes = new[]
         {
             100000,
             10000,
@@ -47,7 +47,7 @@ namespace Cognite.OpcUa.Config
 
             if (Session == null || !Session.Connected)
             {
-                await Run(token);
+                await Run(token, 0);
                 await LimitConfigValues(token);
             }
 

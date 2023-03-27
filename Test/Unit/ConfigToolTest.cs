@@ -1,5 +1,4 @@
 ﻿using Cognite.Extractor.Configuration;
-using Cognite.Extractor.Logging;
 using Cognite.Extractor.Testing;
 using Cognite.Extractor.Utils;
 using Cognite.OpcUa;
@@ -9,7 +8,6 @@ using Server;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
@@ -48,9 +46,9 @@ namespace Test.Unit
         {
             await Server.Start();
 
-            Explorer = new UAServerExplorer(Provider, Config, BaseConfig);
             Source = new CancellationTokenSource();
-            await Explorer.Run(Source.Token);
+            Explorer = new UAServerExplorer(Provider, Config, BaseConfig, Source.Token);
+            await Explorer.Run(Source.Token, 0);
         }
 
         public async Task DisposeAsync()
@@ -73,7 +71,7 @@ namespace Test.Unit
             this.tester = tester;
             tester.Init(output);
         }
-        [Fact]
+        [Fact(Timeout = 10000)]
         public async Task TestEndpointDiscovery()
         {
             // Test while connected

@@ -1,6 +1,8 @@
 ﻿using Cognite.Extractor.Common;
 using Cognite.OpcUa;
+using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
+using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.Types;
 using Opc.Ua;
 using System;
@@ -31,6 +33,7 @@ namespace Test.Utils
         public bool? PushDataPointResult { get; set; } = true;
         public bool? PushEventResult { get; set; } = true;
         public bool PushReferenceResult { get; set; } = true;
+        public bool DeleteResult { get; set; } = true;
         public ManualResetEvent OnReset { get; } = new ManualResetEvent(false);
 
         private readonly object dpLock = new object();
@@ -47,6 +50,7 @@ namespace Test.Utils
 
         public UAExtractor Extractor { get; set; }
 
+        public DeletedNodes LastDeleteReq { get; set; }
 
         public Dictionary<NodeId, UANode> PushedNodes { get; }
             = new Dictionary<NodeId, UANode>();
@@ -55,9 +59,7 @@ namespace Test.Utils
         public HashSet<UAReference> PushedReferences { get; }
             = new HashSet<UAReference>();
 
-        public List<UANode> PendingNodes { get; } = new List<UANode>();
-
-        public List<UAReference> PendingReferences { get; } = new List<UAReference>();
+        public PusherInput PendingNodes { get; set; }
 
         public DummyPusher(DummyPusherConfig config)
         {
@@ -102,7 +104,7 @@ namespace Test.Utils
                     PushedReferences.Add(rel);
                 }
             }
-            
+
             lock (dpLock)
             {
                 if (variables != null && PushNodesResult)
@@ -225,6 +227,13 @@ namespace Test.Utils
             }
 
             return Task.FromResult(PushDataPointResult);
+        }
+
+        public Task<bool> ExecuteDeletes(DeletedNodes deletes, CancellationToken token)
+        {
+            LastDeleteReq = deletes;
+
+            return Task.FromResult(DeleteResult);
         }
 
         public void Reset()

@@ -1,0 +1,128 @@
+{
+    "$id": "subscription_config.schema.json",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "unevaluatedProperties": false,
+    "description": "Configuration for the subscriptions created on the server.",
+    "properties": {
+        "data-change-filter": {
+            "type": "object",
+            "description": "Modify the DataChangeFilter used for datapoint subscriptions. See OPC-UA reference part 4 7.17.2 for details. These are just passed to hte server, they have no further effect on extractor behavior. Filters are applied to all noes, but deadband should only affect some, according to the standard.",
+            "unevaluatedProperties": false,
+            "properties": {
+                "trigger": {
+                    "type": "string",
+                    "description": "What changes to a variable trigger an update. One of `Status`, `StatusValue` or `StatusValueTimestamp`",
+                    "enum": [ "Status", "StatusValue", "StatusValueTimestamp" ],
+                    "default": "StatusValue"
+                },
+                "deadband-type": {
+                    "type": "string",
+                    "description": "Enable deadband for numeric nodes. One of `None`, `Absolute` or `Percent`",
+                    "enum": [ "None", "Absolute", "Percent" ],
+                    "default": "None"
+                },
+                "deadband-value": {
+                    "type": "number",
+                    "description": "Deadband value, effect depends on deadband type."
+                }
+            }
+        },
+        "sampling-interval": {
+            "type": "integer",
+            "description": "Requested sample interval per variable on the server. This is how often the extractor requests the server sample changes to values. The server has no obligation to use this value, or to use any form of sampling at all, but according to the standard this should limit the _lowest_ allowed rate of updates.",
+            "default": 100,
+            "minimum": 0
+        },
+        "queue-length": {
+            "type": "integer",
+            "description": "Requested length of queue for each variable on the server. This is how many data points the server will buffer. It should in general be set to at least 2 * `publishing-interval` / `sampling-interval`",
+            "default": 100,
+            "minimum": 0
+        },
+        "data-points": {
+            "type": "boolean",
+            "description": "Enable subscriptions on data-points",
+            "default": true
+        },
+        "events": {
+            "type": "boolean",
+            "description": "Enable subscriptions on events. Requires `events.enabled` to be set to `true`",
+            "default": true
+        },
+        "ignore-access-level": {
+            "type": "boolean",
+            "description": "Ignore the access level parameter for history and datapoints. This means using the `Historizing` parameter for history, and subscribing to all timeseries."
+        },
+        "log-bad-values": {
+            "type": "boolean",
+            "description": "Log bad subscription datapoints",
+            "default": true
+        },
+        "alternative-configs": {
+            "type": "array",
+            "description": "List of alternative subscription configurations. The first entry with a matching filter will be used for each node.",
+            "items": {
+                "type": "object",
+                "unevaluatedProperties": false,
+                "description": "Alternative subscription configuration",
+                "properties": {
+                    "filter": {
+                        "type": "object",
+                        "description": "Filter on node, if this matches or is null, the config will be applied.",
+                        "unevaluatedProperties": false,
+                        "properties": {
+                            "id": {
+                                "type": "string",
+                                "descritpion": "Regex match on node external ID"
+                            },
+                            "data-type": {
+                                "type": "string",
+                                "description": "Regex match on node data type, if it is a variable"
+                            },
+                            "is-event-state": {
+                                "type": [ "boolean", "null" ],
+                                "description": "Match on whether this subscription is for data points or events"
+                            }
+                        }
+                    },
+                    "data-change-filter": {
+                        "type": "object",
+                        "description": "Modify the DataChangeFilter used for datapoint subscriptions. See OPC-UA reference part 4 7.17.2 for details. These are just passed to hte server, they have no further effect on extractor behavior. Filters are applied to all noes, but deadband should only affect some, according to the standard.",
+                        "unevaluatedProperties": false,
+                        "properties": {
+                            "trigger": {
+                                "type": "string",
+                                "description": "What changes to a variable trigger an update. One of `Status`, `StatusValue` or `StatusValueTimestamp`",
+                                "enum": [ "Status", "StatusValue", "StatusValueTimestamp" ],
+                                "default": "StatusValue"
+                            },
+                            "deadband-type": {
+                                "type": "string",
+                                "description": "Enable deadband for numeric nodes. One of `None`, `Absolute` or `Percent`",
+                                "enum": [ "None", "Absolute", "Percent" ],
+                                "default": "None"
+                            },
+                            "deadband-value": {
+                                "type": "number",
+                                "description": "Deadband value, effect depends on deadband type."
+                            }
+                        }
+                    },
+                    "sampling-interval": {
+                        "type": "integer",
+                        "description": "Requested sample interval per variable on the server. This is how often the extractor requests the server sample changes to values. The server has no obligation to use this value, or to use any form of sampling at all, but according to the standard this should limit the _lowest_ allowed rate of updates.",
+                        "default": 100,
+                        "minimum": 0
+                    },
+                    "queue-length": {
+                        "type": "integer",
+                        "description": "Requested length of queue for each variable on the server. This is how many data points the server will buffer. It should in general be set to at least 2 * `publishing-interval` / `sampling-interval`",
+                        "default": 100,
+                        "minimum": 0
+                    }
+                }
+            }
+        }
+    }
+}

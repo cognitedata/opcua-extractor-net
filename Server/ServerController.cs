@@ -79,11 +79,11 @@ namespace Server
             try
             {
                 var cfg = await app.LoadApplicationConfiguration(Path.Join("config", $"{ConfigRoot}.Config.xml"), false);
-                cfg.ServerConfiguration.BaseAddresses[0] = $"{endpointUrl}:{port}";
+                var address = cfg.ServerConfiguration.BaseAddresses[0] = $"{endpointUrl}:{port}";
                 await app.CheckApplicationInstanceCertificate(false, 0);
                 Server = new TestServer(setups, mqttUrl, provider, logTrace);
                 await Task.Run(async () => await app.Start(Server));
-                log.LogInformation("Server started");
+                log.LogInformation("Server started on address: {Address}", address);
                 running = true;
             }
             catch (Exception e)
@@ -93,6 +93,7 @@ namespace Server
         }
         public void Stop()
         {
+            log.LogInformation("Closing server");
             Server.Stop();
             running = false;
         }
@@ -339,6 +340,11 @@ namespace Server
             UpdateNode(Ids.Custom.EnumVar2, idx % 2 == 0 ? 123 : 321);
             UpdateNode(Ids.Custom.EnumVar3, idx % 2 == 0
                 ? new[] { 123, 123, 321, 123 } : new[] { 123, 123, 123, 321 });
+        }
+
+        public void SetServerRedundancyStatus(byte serviceLevel, RedundancySupport support)
+        {
+            Server.SetServerRedundancyStatus(serviceLevel, support);
         }
     }
 }

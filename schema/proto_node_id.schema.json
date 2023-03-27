@@ -1,0 +1,16 @@
+{
+    "$id": "proto_node_id.schema.json",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "unevaluatedProperties": false,
+    "properties": {
+        "namespace-uri": {
+            "type": "string",
+            "description": "Full URI of the node namespace. If left out it is assumed to be the base namespace"
+        },
+        "node-id": {
+            "type": "string",
+            "description": "Identifier of the node id, on the form i=123, s=string, etc. See the OPC-UA standard"
+        }
+    }
+}

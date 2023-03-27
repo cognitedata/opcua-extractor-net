@@ -22,7 +22,7 @@ namespace Cognite.Bridge
     /// <summary>
     /// Contains methods for pushing contents of MQTT payload to CDF.
     /// </summary>
-    public class Destination
+    public sealed class Destination
     {
         private readonly CogniteDestConfig config;
 
@@ -700,18 +700,18 @@ namespace Cognite.Bridge
         }
 
         [SuppressMessage("Microsoft.Performance", "CA1812")]
-        internal class StatelessEventCreate : EventCreate
+        internal sealed class StatelessEventCreate : EventCreate
         {
             public IEnumerable<string>? AssetExternalIds { get; set; }
         }
         [SuppressMessage("Microsoft.Performance", "CA1812")]
-        internal class StatelessTimeSeriesCreate : TimeSeriesCreate
+        internal sealed class StatelessTimeSeriesCreate : TimeSeriesCreate
         {
             public string? AssetExternalId { get; set; }
             public new JsonDocument? Metadata { get; set; }
         }
         [SuppressMessage("Microsoft.Performance", "CA1812")]
-        internal class RawRequestWrapper
+        internal sealed class RawRequestWrapper
         {
             public string? Database { get; set; }
             public string? Table { get; set; }

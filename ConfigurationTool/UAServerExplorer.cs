@@ -15,6 +15,7 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using Cognite.Extractor.Common;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -29,7 +30,7 @@ using System.Threading.Tasks;
 [assembly: CLSCompliant(false)]
 namespace Cognite.OpcUa.Config
 {
-    public partial class UAServerExplorer : UAClient
+    public partial class UAServerExplorer : UAClient, IClientCallbacks
     {
         private readonly FullConfig baseConfig;
         private readonly HashSet<UANode> dataTypes = new HashSet<UANode>();
@@ -44,17 +45,19 @@ namespace Cognite.OpcUa.Config
         private bool dataTypesRead;
         private bool nodeDataRead;
 
-        public UAServerExplorer(IServiceProvider provider, FullConfig config, FullConfig baseConfig) : base(provider, config)
+        public UAServerExplorer(IServiceProvider provider, FullConfig config, FullConfig baseConfig, CancellationToken token) : base(provider, config)
         {
             log = provider.GetRequiredService<ILogger<UAServerExplorer>>();
             this.provider = provider;
             this.baseConfig = baseConfig ?? new FullConfig();
             this.Config = config ?? throw new ArgumentNullException(nameof(config));
+            this.Callbacks = this;
 
             this.baseConfig.Source.EndpointUrl = config.Source.EndpointUrl;
             this.baseConfig.Source.Password = config.Source.Password;
             this.baseConfig.Source.Username = config.Source.Username;
             this.baseConfig.Source.Secure = config.Source.Secure;
+            scheduler = new PeriodicScheduler(token);
         }
         public Summary Summary { get; private set; } = new Summary();
         public void ResetSummary()
@@ -85,7 +88,7 @@ namespace Cognite.OpcUa.Config
             baseConfig.Source.AttributesChunk = Config.Source.AttributesChunk;
         }
 
-        
+
         /// <summary>
         /// Populate the nodeList if it has not already been populated.
         /// </summary>
@@ -178,7 +181,7 @@ namespace Cognite.OpcUa.Config
                 NodeId = nodeidstr
             };
         }
-        
+
         /// <summary>
         /// Generate an abbreviated string for each namespace,
         /// splits on non-numeric characters, then uses the first letter of each part,
@@ -247,6 +250,29 @@ namespace Cognite.OpcUa.Config
             baseConfig.Extraction.NamespaceMap = namespaceMap;
         }
 
+        public Task OnServerDisconnect(UAClient source)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task OnServerReconnect(UAClient source)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task OnServiceLevelAboveThreshold(UAClient source)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task OnServicelevelBelowThreshold(UAClient source)
+        {
+            return Task.CompletedTask;
+        }
+
         public FullConfig FinalConfig => baseConfig;
+
+        private PeriodicScheduler scheduler = null!;
+        public PeriodicScheduler TaskScheduler => scheduler;
     }
 }

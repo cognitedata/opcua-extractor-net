@@ -11,13 +11,11 @@ jobs:
         runs-on: ubuntu-latest
         
         steps:
-        - uses: actions/checkout@v2
+        - uses: actions/checkout@v3
         - name: Setup .NET
-          uses: actions/setup-dotnet@v1
+          uses: actions/setup-dotnet@v3
           with:
-              dotnet-version: 6.0.x
-        - name: Restore paket
-          run: dotnet tool restore
+              dotnet-version: 7.0.x
         - name: Restore dependencies
           run: dotnet restore
         - name: Build
@@ -31,6 +29,27 @@ jobs:
         - name: Run tests
           run: sh test.sh
         - name: Upload coverage to Codecov
-          uses: codecov/codecov-action@v1
+          uses: codecov/codecov-action@v3
           with:
             token: ${{ secrets.CODECOV_TOKEN }}
+    verify-schema:
+        runs-on: ubuntu-latest
+
+        steps:
+        - uses: actions/checkout@v3
+        - name: Install python
+          uses: actions/setup-python@v4
+          with:
+            python-version: '3.10'
+
+        - name: Install extractor uploader
+          env: 
+            PYPI_ARTIFACTORY_USERNAME: ${{ secrets.ARTIFACTORY_READONLY_TOKEN_USER_PUBLIC_REPOS }}
+            PYPI_ARTIFACTORY_PASSWORD: ${{ secrets.ARTIFACTORY_READONLY_TOKEN_PUBLIC_REPOS }}
+          run: |
+            python -m pip install --upgrade pip
+            pip install cognite-extractor-publisher --extra-index-url "https://${PYPI_ARTIFACTORY_USERNAME}:${PYPI_ARTIFACTORY_PASSWORD}@cognite.jfrog.io/cognite/api/pypi/snakepit/simple"
+
+        - name: Verify manifest
+          run: |
+            publish-extractor validate --manifest manifest.yml --config-files Test/config.test.yml

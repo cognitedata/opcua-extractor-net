@@ -29,7 +29,7 @@ namespace Cognite.OpcUa.Config
 {
     public partial class UAServerExplorer : UAClient
     {
-        private readonly ICollection<int> testBrowseNodesChunkSizes = new []
+        private readonly ICollection<int> testBrowseNodesChunkSizes = new[]
         {
             1000,
             100,
@@ -37,7 +37,7 @@ namespace Cognite.OpcUa.Config
             1
         };
 
-        private readonly ICollection<int> testBrowseChunkSizes = new []
+        private readonly ICollection<int> testBrowseChunkSizes = new[]
         {
             10000,
             1000,
@@ -133,7 +133,7 @@ namespace Cognite.OpcUa.Config
         {
             if (Session == null || !Session.Connected)
             {
-                await Run(token);
+                await Run(token, 0);
                 await LimitConfigValues(token);
             }
 

@@ -1,6 +1,8 @@
 ﻿using Cognite.Extractor.Testing;
 using Cognite.OpcUa;
+using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
+using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.Types;
 using Opc.Ua;
 using System;
@@ -271,16 +273,6 @@ namespace Test.Unit
             Assert.Equal(100, evts3.Count);
 
             // Add some missing nodes to each of the pushers, and verify that they are pushed on recovery
-
-            var nodes = new List<UANode>
-            {
-                new UANode(new NodeId("missing1"), "missing1", new NodeId("test"), NodeClass.Object),
-                new UAVariable(new NodeId("missing2"), "missing2", new NodeId("test"))
-            };
-
-            pusher1.PendingNodes.AddRange(nodes);
-            pusher2.PendingNodes.Add(nodes.First());
-
             var refManager = extractor.ReferenceTypeManager;
 
             var reference = new UAReference(
@@ -292,8 +284,21 @@ namespace Test.Unit
                 false,
                 refManager);
 
-            pusher1.PendingReferences.Add(reference);
-            pusher2.PendingReferences.Add(reference);
+            var objects = new[] { new UANode(new NodeId("missing1"), "missing1", new NodeId("test"), NodeClass.Object) };
+            var variables = new[] { new UAVariable(new NodeId("missing2"), "missing2", new NodeId("test")) };
+
+            var input = new PusherInput(
+                objects,
+                variables,
+                new[] { reference }, null);
+
+            var input2 = new PusherInput(
+                objects,
+                Enumerable.Empty<UAVariable>(),
+                new[] { reference }, null);
+
+            (pusher1 as IPusher).AddPendingNodes(input, new FullPushResult());
+            (pusher2 as IPusher).AddPendingNodes(input2, new FullPushResult());
 
             extractor.Streamer.Enqueue(dps);
             extractor.Streamer.Enqueue(evts);
@@ -320,10 +325,8 @@ namespace Test.Unit
             Assert.True(pusher1.Initialized);
             Assert.True(pusher2.Initialized);
 
-            Assert.Empty(pusher1.PendingNodes);
-            Assert.Empty(pusher1.PendingReferences);
-            Assert.Empty(pusher2.PendingNodes);
-            Assert.Empty(pusher2.PendingReferences);
+            Assert.Null(pusher1.PendingNodes);
+            Assert.Null(pusher2.PendingNodes);
         }
     }
 }

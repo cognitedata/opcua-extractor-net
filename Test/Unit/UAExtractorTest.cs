@@ -1,6 +1,8 @@
 ﻿using Cognite.Extractor.Testing;
 using Cognite.OpcUa;
+using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
+using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -35,12 +37,12 @@ namespace Test.Unit
             try
             {
                 using var extractor = tester.BuildExtractor();
-                await Assert.ThrowsAsync<SilentServiceException>(() => extractor.RunExtractor(true));
+                await Assert.ThrowsAsync<SilentServiceException>(() => extractor.RunExtractor(true, 0));
             }
             finally
             {
                 tester.Config.Source.EndpointUrl = oldEP;
-                await tester.Client.Run(tester.Source.Token);
+                await tester.Client.Run(tester.Source.Token, 0);
             }
         }
         [Fact]
@@ -58,43 +60,12 @@ namespace Test.Unit
             Assert.Contains(pusher.PushedNodes.Values, node => node.DisplayName == "DeepObject 4, 25");
             Assert.Contains(pusher.PushedVariables.Values, node => node.DisplayName == "SubVariable 1234");
         }
-        private static void TriggerEventExternally(string field, object parent)
-        {
-            var dg = parent.GetType()
-                .GetField(field, System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
-                .GetValue(parent) as MulticastDelegate;
-            foreach (var handler in dg.GetInvocationList())
-            {
-                handler.Method.Invoke(
-                    handler.Target,
-                    new object[] { parent, EventArgs.Empty });
-            }
-        }
 
-        [Fact]
-        public async Task TestForceRestart()
-        {
-            tester.Config.Source.ForceRestart = true;
-            var pusher = new DummyPusher(new DummyPusherConfig());
-            if (!tester.Client.Started) await tester.Client.Run(tester.Source.Token);
-            tester.Config.Extraction.RootNode = tester.Ids.Base.Root.ToProtoNodeId(tester.Client);
-            using var extractor = tester.BuildExtractor(pushers: pusher);
-
-            var task = extractor.RunExtractor();
-            await extractor.WaitForSubscriptions();
-
-            Assert.False(task.IsCompleted);
-
-            TriggerEventExternally("OnServerDisconnect", tester.Client);
-
-            await Task.WhenAny(task, Task.Delay(10000));
-            Assert.True(task.IsCompleted);
-        }
         [Fact]
         public async Task TestRestartOnReconnect()
         {
             tester.Config.Source.RestartOnReconnect = true;
-            if (!tester.Client.Started) await tester.Client.Run(tester.Source.Token);
+            if (!tester.Client.Started) await tester.Client.Run(tester.Source.Token, 0);
             tester.Config.Extraction.RootNode = tester.Ids.Base.Root.ToProtoNodeId(tester.Client);
 
             var pusher = new DummyPusher(new DummyPusherConfig());
@@ -104,14 +75,14 @@ namespace Test.Unit
             await extractor.WaitForSubscriptions();
             Assert.True(pusher.PushedNodes.Any());
             pusher.PushedNodes.Clear();
-            TriggerEventExternally("OnServerReconnect", tester.Client);
+            await extractor.OnServerReconnect(tester.Client);
 
             Assert.True(pusher.OnReset.WaitOne(10000));
 
             await TestUtils.WaitForCondition(() => pusher.PushedNodes.Count > 0, 10);
 
             await extractor.Close();
-            await tester.Client.Run(tester.Source.Token);
+            await tester.Client.Run(tester.Source.Token, 0);
         }
         [Theory]
         [InlineData(0, 2, 2, 1, 0, 0)]
@@ -158,9 +129,8 @@ namespace Test.Unit
                 new UAVariable(new NodeId("var2"), "var2", root)
             };
 
-            extractor.State.SetNodeState(new VariableExtractionState(tester.Client, variables[0], true, true));
-            extractor.State.SetNodeState(new VariableExtractionState(tester.Client, variables[1], false, false));
-
+            variables[0].VariableAttributes.ReadHistory = true;
+            variables[1].VariableAttributes.ReadHistory = false;
 
             var refManager = extractor.ReferenceTypeManager;
 
@@ -177,13 +147,23 @@ namespace Test.Unit
                     refManager)
             };
 
-            await extractor.PushNodes(nodes, variables, references, pusher, true);
+            var input = new PusherInput(nodes, variables, references, null);
+
+            await extractor.PushNodes(input, pusher, true);
 
             Assert.Equal(pushedObjects, pusher.PushedNodes.Count);
             Assert.Equal(pushedVariables, pusher.PushedVariables.Count);
             Assert.Equal(pushedRefs, pusher.PushedReferences.Count);
-            Assert.Equal(failedNodes, pusher.PendingNodes.Count);
-            Assert.Equal(failedRefs, pusher.PendingReferences.Count);
+            if (failAt == 0)
+            {
+                Assert.Null(pusher.PendingNodes);
+            }
+            else
+            {
+                Assert.Equal(failedNodes, pusher.PendingNodes.Objects.Count() + pusher.PendingNodes.Variables.Count());
+                Assert.Equal(failedRefs, pusher.PendingNodes.References.Count());
+            }
+
 
             if (failAt == 0)
             {

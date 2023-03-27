@@ -10,8 +10,37 @@
 version: 1
 
 source:
-    # The URL of the OPC-UA server to connect to
+    # The URL of the OPC-UA server to connect to.
+    # This is used as discovery URL.
     endpoint-url: "opc.tcp://localhost:4840"
+    # A list of URLs to connect to if the endpoint-url fails.
+    # These are connected to in order, and the one with the highest ServiceLevel is selected.
+    # See the OPC-UA standard part 4 6.6.2, this is for non-transparent redundancy.
+    # When using this, setting force-restart: true is recommended, as otherwise the extractor will only try to
+    # reconnect to the same server on failure.
+    alt-endpoint-urls:
+    # - opc.tcp://some-other-server:1234
+    # - opc.tcp://some-third-server:4321
+    # Details used to override default endpoint behavior.
+    endpoint-details:
+        # Endpoint URL to override URLs returned from discovery.
+        # This can be used if the server is behind NAT, or similar URL rewrites.
+        override-endpoint-url:
+    # Extra configuration options related to redundancy and ServiceLevel monitoring
+    redundancy:
+        # Servers above this threshold are considered "good"
+        service-level-threshold: 200
+        # If using redundancy, the extractor will attempt to find a better server
+        # with this interval if service level is below threshold.
+        reconnect-interval: 10m
+        # If true, the extractor will subscribe to changes in ServiceLevel
+        # and trigger reconnect once it drops below service-level-threshold,
+        # and history restart once it goes back above the threshold.
+        # This also makes the server not update extraction state if it is connected to a server
+        # with service level below the threshold.
+        # If a server does not want the extractor to trust the available data ranges
+        # it should set the ServiceLevel below the threshold.
+        monitor-service-level: false
     # Auto accept connections from unknown servers.
     # There is not yet a feature to accept new certificates, but you can manually move rejected certificates to accepted.
     # Paths are defined in opc.ua.net.extractor.Config.xml
@@ -20,12 +49,6 @@ source:
     # 0 updates at maximum rate set by server
     # This decides the maximum rate points are pushed to CDF. Higher reduces network and server load.
     publishing-interval: 500
-    # How often the server requests updates from the source system (the source system is often the server itself)
-    # 0 uses maximum rate set by server
-    # Lower increases server load. This should be set to below the maximum update frequency of the source system.
-    sampling-interval: 100
-    # Length of internal server queue for each subscribed item. < 2 means that any updates occuring between publish requests are lost.
-    queue-length: 10
     # OPC-UA username, leave blank for anonymous user. (no authentication)
     username:
     # OPC-UA password
@@ -51,7 +74,9 @@ source:
     # Note that enabling this makes the connection less secure, and that a better solution is to resolve these issues on
     # the server.
     ignore-certificate-issues: false
-    # If true, force restart the extractor on disconnect. Required for some servers
+    # If true, exit the session and reconnect on restart, this means that subscriptions will need to be recreated,
+    # which has some performance cost.
+    # Required for failover if alt-endpoint-urls is set.
     force-restart: false
     # Completely exit the extractor on failure, instead of doing an internal restart. Internal reset should re-initialize everything relevant,
     # but this can be set to do restart with some external tool instead.
@@ -102,6 +127,24 @@ source:
     # Default certificate expiration in months. You may also replace the certificate with your own, by modifying
     # the .xml config file
     certificate-expiry: 60
+    # Configuration for retrying operations against the OPC-UA server.
+    retries:
+        # Total timeout, after this much time has elapsed no more retries will be started.
+        # Syntax is N[timeunit] where timeunit is w, d, h, m, s or ms.
+        # Set to 0 to disable timeout.
+        timeout: 0s
+        # Maximum number of retries per operation
+        max-tries: 5
+        # Maximum delay between retries, 0 limits it to roughly 10 minutes.
+        # Syntax is N[timeunit] where timeunit is w, d, h, m, s or ms
+        max-delay: 0s
+        # Initial delay between retries, basis for exponential backoff.
+        # Syntax is N[timeunit] where timeunit is w, d, h, m, s or ms
+        initial-delay: 500ms
+        # Additional list of numeric status codes to retry. In addition to default codes:
+        # Bad, BadConnectionClosed, BadConnectionRejected, BadNotConnected, BadServerHalted,
+        # BadServerNotConnected, BadTimeout, BadSecureChannelClosed, and generic loss of connection to the server.
+        retry-status-codes:
 
 # Config for reading of history from the server
 history:
@@ -162,7 +205,6 @@ history:
         max-node-parallelism: 0
     # Log bad history datapoints, count per read at debug and each datapoint at verbose
     log-bad-values: true
-
 
 # Configuration for the pusher to CDF.
 cognite:
@@ -319,7 +361,7 @@ cognite:
     # Configure an extraction pipeline manager
     extraction-pipeline:
         # ExternalId of extraction pipeline
-        # pipeline-id: 
+        # external-id:
     # Call a cognite function with the number of assets, timeseries and relationships created/updated
     # after each browse/rebrowse operation.
     # The function is called with the following object:
@@ -347,7 +389,6 @@ cognite:
         # so you can handle this logic yourself.
         report-on-empty: false
 
-
 # Push to an influx-database. Data-variables are mapped to series with the given id.
 # Events are mapped to series with ids on the form [id].[eventId] where id is given by the source node.
 influx:
@@ -371,7 +412,6 @@ influx:
     # Max number of points to send in each request to influx
     point-chunk-size: 100000
 
-
 # Push to an MQTT broker. Requres a separate application to be running with access to CDF
 # that translates MQTT messages to requests to CDF and handles missing ids etc.
 # This setup allows the extractor to run in secure environments like zone 3.
@@ -386,6 +426,10 @@ mqtt:
     password:
     # True to enable TLS
     use-tls:
+    # Allow untrusted server SSL certificates. This is fundamentally unsafe
+    allow-untrusted-certificates: false
+    # Optional path to a custom certificate authority file for SSL
+    custom-certificate-authority:
     # Mqtt client id. Should be unique for a given broker.
     client-id: cognite-opcua-extractor
     # Data set to use for new objects. Existing objects will not be updated
@@ -445,7 +489,9 @@ mqtt:
         assets:
         timeseries:
 
-        
+    # If relationships are eneabled, and written to clean, and deletes are enabled. This needs to be set to
+    # true in order to hard delete the relationships.
+    delete-relationships: false
 
 # If a pusher fails to push data for some reason, the failure buffer will automatically store the data,
 # then add it back into the queue once a push succeeds.
@@ -489,7 +535,6 @@ state-storage:
     # Interval between each write to the buffer file, in seconds. 0 or less disables the state storage.
     # Alternatively, use N[timeunit] where timeunit is w, d, h, m, s or ms.
     interval: 10
-
 
 logger:
     # Writes log events at this level to the Console. One of verbose, debug, information, warning, error, fatal.
@@ -568,7 +613,7 @@ extraction:
     # Map OPC-UA namespaces to prefixes in CDF. If not mapped, the full namespace URI is used.
     # Saves space compared to using the full URL. Using the ns index is not safe as the order can change on the server.
     # For example:
-    # NamespaceMap:
+    # namespace-map:
     #   "urn:cognite:net:server": cns
     #   "urn:freeopcua:python:server": fps
     #   "http://examples.freeopcua.github.io": efg
@@ -732,8 +777,26 @@ extraction:
             # historizing:
             # Another instance of NodeFilter which is applied to the parent node.
             # parent:
-
-    
+    # Configure extractor to trigger a rebrowse when there are changes to specific namespace metadata nodes.
+    # Also supports filtering by namespace uris.
+    rebrowse-triggers:
+        # A dictionary of nodes to which we would like to listen for changes.
+        targets:
+            namespace-publication-date: false
+        # A list of namespace uris from which the targets above will be selected and listen for
+        namespaces:
+        - http://opcfoundation.org/UA/
+    # Configure soft deletes. When this is enabled, all read nodes are written to a state store after browse,
+    # and nodes that are missing on subsequent browses are marked as deleted from CDF, with a configurable
+    # marker.
+    # A notable exception is relationships in CDF, which has no metadata, so these are hard-deleted if
+    # cognite.delete-relationships is enabled
+    deletes:
+        # True to enable deletes. This requires a state store to be configured.
+        enabled: false
+        # Name of marker indicating that a node is deleted.
+        # Added to metadata, or as a column in Raw.
+        delete-marker: "deleted"
 
 subscriptions:
     # Enable subscriptions on data-points.
@@ -755,6 +818,29 @@ subscriptions:
     # Ignore the access level parameter for history and datapoints.
     # This means using the "Historizing" parameter for history, and subscribing to all timeseries, independent of AccessLevel.
     ignore-access-level: false
+    # How often the server requests updates from the source system (the source system is often the server itself)
+    # 0 uses maximum rate set by server
+    # Lower increases server load. This should be set to below the maximum update frequency of the source system.
+    sampling-interval: 100
+    # Length of internal server queue for each subscribed item. < 2 means that any updates occuring between publish requests are lost.
+    queue-length: 10
+    # List of alternative subscription configurations.
+    # The first entry with a matching filter will be used for each node.
+    alternative-configs:
+        # Filter on node, if this matches or is null, the config will be applied.
+        #- filter:
+             # Regex match on node external ID.
+        #    id:
+             # Regex match on node data type, if it is a variable.
+        #    data-type:
+             # Match on whether this subscription is for data points or events.
+        #    is-event-state:
+           # See subscriptions.data-change-filter
+        #  data-change-filter:
+           # See subscriptions.sampling-interval
+        #  sampling-interval: 100
+           # See subscriptions.queue-length
+        #  queue-length: 10
 
 events:
     # Events are extracted with the following rules: By default all events are extracted.
@@ -832,3 +918,24 @@ pub-sub:
     # from server configuration. If this is pre-created manually, the server does not need to expose
     # pubsub configuration.
     file-name:
+
+# Configure the extractor to support high availability.
+high-availability:
+    # Index of the extractor. Each extractor running in high availability needs a unique index.
+    # When running with remote configs, this can be provided using an environment variable.
+    index:
+
+    # Use CDF Raw as high availability store
+    # Must be identical for each instance of the extractor.
+    raw:
+        # Raw database name
+        database-name:
+        # Raw table name
+        table-name:
+
+    # Use a redis store for high availability.
+    redis:
+        # Redis connection string
+        connection-string:
+        # Redis table name
+        table-name:

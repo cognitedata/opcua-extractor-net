@@ -1,10 +1,10 @@
 ﻿using AdysTech.InfluxDB.Client.Net;
 using Cognite.Extractor.Configuration;
-using Cognite.Extractor.Logging;
 using Cognite.Extractor.StateStorage;
 using Cognite.Extractor.Testing;
 using Cognite.Extractor.Utils;
 using Cognite.OpcUa;
+using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Pushers;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -15,7 +15,6 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
-using Xunit.Abstractions;
 
 namespace Test.Utils
 {
@@ -30,6 +29,7 @@ namespace Test.Utils
         public ServiceProvider Provider { get; protected set; }
         protected ServiceCollection Services { get; }
         protected PredefinedSetup[] Setups { get; }
+        public DummyClientCallbacks Callbacks { get; private set; }
         public ILogger Log { get; }
         protected BaseExtractorTestFixture(PredefinedSetup[] setups = null)
         {
@@ -44,7 +44,7 @@ namespace Test.Utils
             Provider = Services.BuildServiceProvider();
 
             Log = Provider.GetRequiredService<ILogger<BaseExtractorTestFixture>>();
-            
+
             if (setups == null)
             {
                 setups = new[] {
@@ -61,7 +61,9 @@ namespace Test.Utils
 
             Client = new UAClient(Provider, Config);
             Source = new CancellationTokenSource();
-            await Client.Run(Source.Token);
+            Callbacks = new DummyClientCallbacks(Source.Token);
+            Client.Callbacks = Callbacks;
+            await Client.Run(Source.Token, 0);
         }
 
         private void ResetType(object obj, object reference)
@@ -120,6 +122,7 @@ namespace Test.Utils
                 Client.RemoveSubscription("EventListener").Wait();
                 Client.RemoveSubscription("DataChangeListener").Wait();
                 Client.RemoveSubscription("AuditListener").Wait();
+                Client.RemoveSubscription(RebrowseTriggerManager.SubscriptionName).Wait();
                 Client.Browser.IgnoreFilters = null;
                 Client.ObjectTypeManager.Reset();
             }

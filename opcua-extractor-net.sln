@@ -46,6 +46,26 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".github", ".github", "{BE79
 		.github\workflows\release.yml = .github\workflows\release.yml
 	EndProjectSection
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "schema", "schema", "{54673CD4-18CD-4F07-9036-A32598F16ECC}"
+	ProjectSection(SolutionItems) = preProject
+		schema\cognite_config.schema.json = schema\cognite_config.schema.json
+		schema\continuation_point_throttling.schema.json = schema\continuation_point_throttling.schema.json
+		schema\event_config.schema.json = schema\event_config.schema.json
+		schema\extraction_config.schema.json = schema\extraction_config.schema.json
+		schema\failure_buffer_config.schema.json = schema\failure_buffer_config.schema.json
+		schema\full_config.schema.json = schema\full_config.schema.json
+		schema\history_config.schema.json = schema\history_config.schema.json
+		schema\influx_config.schema.json = schema\influx_config.schema.json
+		schema\logger_config.schema.json = schema\logger_config.schema.json
+		schema\metrics_config.schema.json = schema\metrics_config.schema.json
+		schema\mqtt_config.schema.json = schema\mqtt_config.schema.json
+		schema\proto_node_id.schema.json = schema\proto_node_id.schema.json
+		schema\source_config.schema.json = schema\source_config.schema.json
+		schema\state_storage_config.schema.json = schema\state_storage_config.schema.json
+		schema\subscription_config.schema.json = schema\subscription_config.schema.json
+		schema\ua_retries_config.schema.json = schema\ua_retries_config.schema.json
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -122,6 +142,7 @@ Global
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{BE79E646-2AD9-47EF-BE33-0F08A9AFB9A7} = {F9D856F4-28DD-4A99-A325-E37860B8FDB4}
+		{54673CD4-18CD-4F07-9036-A32598F16ECC} = {F9D856F4-28DD-4A99-A325-E37860B8FDB4}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {801363C6-DCE6-4CA6-9935-27119F06737B}

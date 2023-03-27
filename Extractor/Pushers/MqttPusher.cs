@@ -18,6 +18,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using Cognite.Extensions;
 using Cognite.Extractor.Common;
 using Cognite.Extractor.StateStorage;
+using Cognite.OpcUa.Config;
+using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.Types;
 using CogniteSdk;
 using Com.Cognite.V1.Timeseries.Proto;
@@ -32,6 +34,7 @@ using Prometheus;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -44,8 +47,7 @@ namespace Cognite.OpcUa.Pushers
         public bool EventsFailing { get; set; }
         public bool Initialized { get; set; }
         public bool NoInit { get; set; }
-        public List<UANode> PendingNodes { get; } = new List<UANode>();
-        public List<UAReference> PendingReferences { get; } = new List<UAReference>();
+        public PusherInput? PendingNodes { get; set; }
         public UAExtractor Extractor { get; set; } = null!;
         public IPusherConfig BaseConfig => config;
         private readonly MqttPusherConfig config;
@@ -103,7 +105,41 @@ namespace Cognite.OpcUa.Pushers
 
             if (config.UseTls)
             {
-                builder = builder.WithTls();
+                builder = builder.WithTls(new MqttClientOptionsBuilderTlsParameters
+                {
+                    AllowUntrustedCertificates = config.AllowUntrustedCertificates,
+                    UseTls = true,
+                    CertificateValidationHandler = (context) =>
+                    {
+                        if (context.SslPolicyErrors == System.Net.Security.SslPolicyErrors.None)
+                        {
+                            return true;
+                        }
+                        if (string.IsNullOrWhiteSpace(config.CustomCertificateAuthority)) return false;
+
+                        var privateChain = new X509Chain();
+                        privateChain.ChainPolicy.RevocationMode = X509RevocationMode.Offline;
+
+                        var certificate = new X509Certificate2(context.Certificate);
+                        var signerCertificate = new X509Certificate2(config.CustomCertificateAuthority);
+
+                        privateChain.ChainPolicy.ExtraStore.Add(certificate);
+                        privateChain.Build(signerCertificate);
+
+                        bool isValid = true;
+
+                        foreach (X509ChainStatus chainStatus in privateChain.ChainStatus)
+                        {
+                            if (chainStatus.Status != X509ChainStatusFlags.NoError)
+                            {
+                                isValid = false;
+                                break;
+                            }
+                        }
+                        return isValid;
+
+                    }
+                });
                 if (!string.IsNullOrEmpty(config.Username) && !string.IsNullOrEmpty(config.Host))
                 {
                     builder = builder.WithCredentials(config.Username, config.Password);
@@ -118,8 +154,7 @@ namespace Cognite.OpcUa.Pushers
 
             client.UseDisconnectedHandler(async e =>
             {
-                log.LogWarning("MQTT Client disconnected");
-                log.LogDebug(e.Exception, "MQTT client disconnected");
+                log.LogWarning(e.Exception, "MQTT client disconnected");
                 async Task TryReconnect(int retries)
                 {
                     if (client.IsConnected || retries == 0 || closed) return;

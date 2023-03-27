@@ -1,12 +1,13 @@
 ﻿using Cognite.Extractor.StateStorage;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace Test.Utils
 {
-    internal class DummyStateStore : IExtractionStateStore
+    internal sealed class DummyStateStore : IExtractionStateStore
     {
         public int NumDeleteState { get; private set; }
         public int NumRestoreState { get; private set; }
@@ -20,6 +21,11 @@ namespace Test.Utils
 
         public void Dispose()
         {
+        }
+
+        public Task<IEnumerable<T>> GetAllExtractionStates<T>(string tableName, CancellationToken token) where T : BaseStorableState
+        {
+            return Task.FromResult(Enumerable.Empty<T>());
         }
 
         public Task RestoreExtractionState<T, K>(IDictionary<string, K> extractionStates, string tableName, Action<K, T> restoreStorableState, CancellationToken token)

@@ -2,6 +2,7 @@
 using Cognite.Extractor.StateStorage;
 using Cognite.Extractor.Testing;
 using Cognite.OpcUa;
+using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -191,7 +192,7 @@ namespace Test.Integration
         [Fact]
         public async Task TestWrongData()
         {
-            
+
 
             using var pusher = new DummyPusher(new DummyPusherConfig());
             using var extractor = tester.BuildExtractor(true, null, pusher);
@@ -348,7 +349,62 @@ namespace Test.Integration
                 Assert.Equal(ids.BoolVar, evt.SourceNode);
                 Assert.Equal(ids.BoolVar, evt.EmittingNode);
             });
+        }
 
+        [Fact]
+        public async Task TestVariableDataPointsConfig()
+        {
+            using var pusher = new DummyPusher(new DummyPusherConfig());
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+
+            var dataTypes = tester.Config.Extraction.DataTypes;
+            var ids = tester.Ids.Base;
+
+            tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(ids.Root, tester.Client);
+
+            tester.Config.Subscriptions.AlternativeConfigs = new[] {
+                new FilteredSubscriptionConfig
+                {
+                    Filter = new SubscriptionConfigFilter
+                    {
+                        Id = $"i={ids.DoubleVar2.Identifier}"
+                    },
+                }
+            };
+
+            tester.Config.Subscriptions.DataChangeFilter = new DataSubscriptionConfig
+            {
+                DeadbandType = DeadbandType.Absolute,
+                Trigger = DataChangeTrigger.StatusValue,
+                DeadbandValue = 0.6,
+            };
+
+            tester.Server.UpdateNode(ids.DoubleVar1, 0.0);
+            tester.Server.UpdateNode(ids.DoubleVar2, 0.0);
+
+            var runTask = extractor.RunExtractor();
+
+            pusher.DataPoints[(ids.DoubleVar1, -1)] = new List<UADataPoint>();
+
+            await extractor.WaitForSubscriptions();
+            // Middle value is skipped due to deadband, but only on DoubleVar1
+            tester.Server.UpdateNode(ids.DoubleVar1, 0.0);
+            tester.Server.UpdateNode(ids.DoubleVar2, 0.0);
+            await Task.Delay(100);
+            tester.Server.UpdateNode(ids.DoubleVar1, 0.5);
+            tester.Server.UpdateNode(ids.DoubleVar2, 0.5);
+            await Task.Delay(100);
+            tester.Server.UpdateNode(ids.DoubleVar1, 1.0);
+            tester.Server.UpdateNode(ids.DoubleVar2, 1.0);
+
+            await TestUtils.WaitForCondition(() => pusher.DataPoints[(ids.DoubleVar1, -1)].Count == 2, 5,
+                () => $"Expected 2 datapoints, got {pusher.DataPoints[(ids.DoubleVar1, -1)].Count}");
+
+            var dps = pusher.DataPoints[(ids.DoubleVar1, -1)];
+            Assert.Equal(0.0, dps[0].DoubleValue);
+            Assert.Equal(1.0, dps[1].DoubleValue);
+            var dps2 = pusher.DataPoints[(ids.DoubleVar2, -1)];
+            Assert.True(dps2.Count >= 3);
         }
         #endregion
         #region history
@@ -763,6 +819,66 @@ namespace Test.Integration
             await extractor.WaitForSubscriptions();
             Assert.Equal(3u, session.Subscriptions.First(sub => sub.DisplayName.StartsWith("DataChangeListener", StringComparison.InvariantCulture)).MonitoredItemCount);
             await TestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 3), 5);
+        }
+
+        [Fact]
+        public async Task TestLowServiceLevelStates()
+        {
+            using var pusher = new DummyPusher(new DummyPusherConfig());
+
+            using var stateStore = new DummyStateStore();
+
+            using var extractor = tester.BuildExtractor(true, stateStore, pusher);
+
+            var ids = tester.Server.Ids.Base;
+
+            tester.Config.History.Enabled = true;
+            tester.Config.History.Data = true;
+            tester.Config.Source.Redundancy.MonitorServiceLevel = true;
+            tester.Config.StateStorage.Interval = "10h";
+
+            tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Base.Root, tester.Client);
+
+            // Need to reset connection to server in order to begin measuring service level
+            tester.Server.SetServerRedundancyStatus(190, RedundancySupport.Hot);
+
+            await tester.Client.Run(tester.Source.Token);
+            var start = DateTime.UtcNow.AddSeconds(-5);
+            tester.WipeBaseHistory();
+            tester.Server.PopulateBaseHistory(start);
+
+            try
+            {
+                var runTask = extractor.RunExtractor();
+                await extractor.WaitForSubscriptions();
+
+                await TestUtils.WaitForCondition(() => extractor.State.NodeStates.All(node =>
+                    !node.IsFrontfilling && !node.IsBackfilling), 10);
+
+                var state = extractor.State.GetNodeState(ids.DoubleVar1);
+                // Range should be empty
+                Assert.True(state.DestinationExtractedRange.First == CogniteTime.DateTimeEpoch);
+                Assert.True(state.DestinationExtractedRange.Last == CogniteTime.DateTimeEpoch);
+                // Source extracted range should be populated properly.
+                Assert.False(state.SourceExtractedRange.IsEmpty);
+
+                // Changes should not trigger state updates either
+                tester.Server.UpdateBaseNodes(0);
+                await TestUtils.WaitForCondition(() => pusher.DataPoints[(ids.DoubleVar1, -1)].Count >= 1001, 10);
+
+                Assert.True(state.DestinationExtractedRange.First == CogniteTime.DateTimeEpoch);
+                Assert.True(state.DestinationExtractedRange.Last == CogniteTime.DateTimeEpoch);
+
+                // Set service level back up and wait for history to catch up.
+                tester.Server.SetServerRedundancyStatus(255, RedundancySupport.Hot);
+                await TestUtils.WaitForCondition(() => extractor.State.NodeStates.All(node =>
+                    node.DestinationExtractedRange == node.SourceExtractedRange), 10);
+            }
+            finally
+            {
+                tester.Config.Source.Redundancy.MonitorServiceLevel = false;
+                await tester.Client.Run(tester.Source.Token);
+            }
         }
         #endregion
 

@@ -54,7 +54,133 @@ extractor:
       type: "externalDocumentation"
   image: opc-ua.png
 
+schema:
+  rootSchema: schema/full_config.schema.json
+  additionalUris:
+   - "https://raw.githubusercontent.com/"
+
 versions:
+  "2.15.2":
+    description: Add bill of materials
+  "2.15.1":
+    description: Fix connecting to redundant servers
+    changelog:
+      fixed:
+        - "Fix issue causing the extractor to only connect to alt endpoints"
+  "2.15.0":
+    description: Add live monitoring of ServiceLevel, variable subscription config
+    changelog:
+      deprecated:
+        - "source.sampling-interval and source.queue-length"
+      fixed:
+        - "Fix issue causing delete states to not be properly fetched"
+      added:
+        - "Support for monitoring ServiceLevel and not updating extraction state if it drops below a threshold"
+        - "subscriptions.sampling-interval and subscriptions.queue-length"
+        - "subscriptions.alternative-configs containing a list of alternative subscription configurations"
+  "2.14.1":
+    description: Avoid crashing on duplicated namespaces
+    changelog:
+      fixed:
+        - "Avoid crashing on duplicated namespaces with rebrowse triggers enabled"
+  "2.14.0":
+    description: Workaround for NAT, various fixes
+    changelog:
+      fixed:
+        - "Make sure delete states are saved correctly"
+        - "Fix handling of variable children when the parent variable is ignored"
+      added:
+        - "Support for overriding endpoints returned by discovery servers, to work around NAT"
+  "2.13.2":
+    description: Improve logging in rebrowse manager
+    changelog:
+      changed:
+        - "Improve logging in rebrowse manager"
+  "2.13.1":
+    description: Minor improvements to the service manager
+    changelog:
+      added:
+        - "A file opcuabinpath.txt in the same folder as the service manager can be used to set the binary path"
+        - "If there is no opcuabinpath.txt and no installation registry entry, the service manager defaults to ../bin/OpcUaExtractor.exe"
+      fixed:
+        - "Display expected path if the service manager cannot find the executable"
+  "2.13.0":
+    description: Update to .NET 7
+    changelog:
+      changed:
+        - "Update to .NET 7"
+  "2.12.0":
+    description: Add support for marking nodes as deleted
+    changelog:
+      added:
+        - "Support for marking nodes as deleted. See `extraction.deletes`"
+  "2.11.0":
+    description: Adds support for rebrowse triggers
+    changelog:
+      added:
+        - "Adds support for triggering rebrowse when updates are detected in NamespacePublicationDate"
+  "2.10.5":
+    description: Improve handling of unknown namespace index
+    changelog:
+      fixed:
+        - "Improve handling of unknown namespace index"
+  "2.10.4":
+    description: Fix to a few bugs
+    changelog:
+      fixed:
+        - "Fix config to not being properly reloaded"
+        - "Fix data-set-external-id not working correctly"
+        - "Fix an error when restarting the extractor"
+        - "Fix logging of retries"
+  "2.10.3":
+    description: Fix bug related to external server references
+    changelog:
+      fixed:
+        - "Properly ignore external server references"
+  "2.10.2":
+    description: Fix to retries on some operations
+    changelog:
+      fixed:
+        - "Fix retries not working on certain operations"
+  "2.10.1":
+    description: Fixes internal performance issue
+    changelog:
+      fixed:
+        - "Fix performance issues during start up"
+  "2.10.0":
+    description: Add more options for SSL certificates in the MQTT destination
+    changelog:
+      added:
+        - "Option to add an additional certificate authority cert in MQTT destination"
+        - "Option to skip certificate checks entirely in MQTT destination"
+  "2.9.2":
+    description: Improve configuration of certificates in docker containers
+    changelog:
+      changed:
+        - "Docker containers now use a local certificate directory for application certificates by default, they also use a static signature not dependent on the host machine."
+  "2.9.1":
+    description: Actual fix to missing `cognite` section bug.
+    changelog:
+      fixed:
+        - "Bug causing extractor to fail if the `cognite` section was missing in remote config."
+  "2.9.0":
+    description: Support for non-transparent server redundancy.
+    changelog:
+      added:
+        - Support for non-transparent server redundancy ref. OPC-UA standard chapter 4 6.6.2
+        - "`extraction-pipeline: external-id` as alias for `pipeline-id` in config, to align with python extractors."
+      fixed:
+        - "Bug causing extractor to fail if the `cognite` section was missing in remote config."
+      changed:
+        - Improved performance of force-restart, the extractor will no-longer rebrowse automatically if force-restart is enabled. Instead use restart-on-reconnect if that is desired.
+  "2.8.0":
+    description: Basic support for high availability.
+    changelog:
+      added:
+        - Configuration options to use Raw or a Redis store for high availability
+        - Support for remote configuration files
+  "2.8.0-beta2":
+    description: Utility release to publish Extractor to public Docker registry
   "2.8.0-beta1":
     description: Support for remote configuration files
     changelog:

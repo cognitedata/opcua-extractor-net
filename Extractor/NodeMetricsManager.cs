@@ -15,6 +15,7 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.Types;
 using Opc.Ua;
@@ -64,14 +65,14 @@ namespace Cognite.OpcUa
     public class NodeMetricsManager
     {
         private readonly NodeMetricsConfig config;
-        private readonly UAClientConfig sourceConfig;
+        private readonly SubscriptionConfig subscriptionConfig;
         private readonly UAClient client;
         private readonly Dictionary<NodeId, NodeMetricState> metrics = new Dictionary<NodeId, NodeMetricState>();
 
-        public NodeMetricsManager(UAClient client, UAClientConfig sourceConfig, NodeMetricsConfig config)
+        public NodeMetricsManager(UAClient client, SubscriptionConfig subscriptionConfig, NodeMetricsConfig config)
         {
             this.config = config;
-            this.sourceConfig = sourceConfig;
+            this.subscriptionConfig = subscriptionConfig;
             this.client = client;
         }
 
@@ -158,7 +159,7 @@ namespace Cognite.OpcUa
                 state => new MonitoredItem
                 {
                     StartNodeId = state.SourceId,
-                    SamplingInterval = sourceConfig.SamplingInterval,
+                    SamplingInterval = subscriptionConfig.SamplingInterval,
                     DisplayName = "Value " + state.Id,
                     QueueSize = 1,
                     DiscardOldest = true,

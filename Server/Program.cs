@@ -34,7 +34,7 @@ namespace Server
 {
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA1812:ServerOptions never instantiated",
         Justification = "Instantiated through reflection.")]
-    internal class ServerOptions
+    internal sealed class ServerOptions
     {
         [CommandLineOption("Endpoint to run the server on, defaults to opc.tcp://localhost", true, "-e")]
         public string EndpointUrl { get; set; }
@@ -92,12 +92,22 @@ namespace Server
         public string LogLevel { get; set; }
         [CommandLineOption("Path to log files, this enables logging to file")]
         public string LogFile { get; set; }
-        [CommandLineOption("Write OPC-UA SDK trace to log at debug level")]
+        [CommandLineOption("Write OPC-UA SDK trace to log.")]
         public bool LogTrace { get; set; }
+
+        [CommandLineOption("Manually set server service level, 0-255")]
+        public byte ServiceLevel { get; set; } = 255;
+
+        [CommandLineOption("Set server redundancy support. One of None, Cold, Warm, Hot, Transparent, HotAndMirrored")]
+        public string RedundancySupport { get; set; }
+
+        [CommandLineOption("Server issue: This is the denominator for a probability that an arbitrary browse operation will fail " +
+            "I.e. 5 means that 1/5 browse ops will fail with BadNoCommunication")]
+        public int RandomBrowseFail { get; set; }
     }
 
 
-    internal class Program
+    internal sealed class Program
     {
         private static async Task<int> Main(string[] args)
         {
@@ -137,6 +147,12 @@ namespace Server
             server.Server.Issues.MaxSubscriptions = opt.MaxSubscriptions;
             server.Server.Issues.MaxHistoryNodes = opt.MaxHistoryNodes;
             server.Server.Issues.RemainingBrowseCount = opt.RemainingBrowseCount;
+            server.Server.Issues.BrowseFailDenom = opt.RandomBrowseFail;
+
+            if (opt.RedundancySupport != null)
+            {
+                server.SetServerRedundancyStatus(opt.ServiceLevel, Enum.Parse<Opc.Ua.RedundancySupport>(opt.RedundancySupport));
+            }
 
             int idx = 0;
 

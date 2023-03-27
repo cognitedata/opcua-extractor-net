@@ -1,4 +1,5 @@
 ﻿using Cognite.OpcUa;
+using Cognite.OpcUa.Config;
 using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
@@ -53,29 +54,31 @@ namespace Test.Unit
             var source = new NodeSetSource(log, tester.Config, extractor, tester.Client);
 
             // Base, nothing enabled
-            source.BuildNodes(new[] { tester.Ids.Custom.Root });
+            source.BuildNodes(new[] { tester.Ids.Custom.Root }, true);
             var result = await source.ParseResults(tester.Source.Token);
             Assert.Equal(3, result.SourceVariables.Count());
             Assert.Equal(3, result.DestinationVariables.Count());
             Assert.Equal(3, result.DestinationObjects.Count());
             Assert.Equal(3, result.SourceObjects.Count());
             Assert.Empty(result.DestinationReferences);
+            Assert.True(result.CanBeUsedForDeletes);
 
             // Enable arrays
             extractor.State.Clear();
             tester.Config.Extraction.DataTypes.MaxArraySize = 4;
-            source.BuildNodes(new[] { tester.Ids.Custom.Root });
+            source.BuildNodes(new[] { tester.Ids.Custom.Root }, false);
             result = await source.ParseResults(tester.Source.Token);
             Assert.Equal(5, result.SourceVariables.Count());
             Assert.Equal(11, result.DestinationVariables.Count());
             Assert.Equal(5, result.DestinationObjects.Count());
             Assert.Equal(3, result.SourceObjects.Count());
             Assert.Empty(result.DestinationReferences);
+            Assert.False(result.CanBeUsedForDeletes);
 
             // Enable strings
             extractor.State.Clear();
             tester.Config.Extraction.DataTypes.AllowStringVariables = true;
-            source.BuildNodes(new[] { tester.Ids.Custom.Root });
+            source.BuildNodes(new[] { tester.Ids.Custom.Root }, true);
             result = await source.ParseResults(tester.Source.Token);
             Assert.Equal(9, result.SourceVariables.Count());
             Assert.Equal(16, result.DestinationVariables.Count());
@@ -90,7 +93,7 @@ namespace Test.Unit
                 CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Custom.IgnoreType, tester.Client)
             };
             extractor.DataTypeManager.Configure();
-            source.BuildNodes(new[] { tester.Ids.Custom.Root });
+            source.BuildNodes(new[] { tester.Ids.Custom.Root }, true);
             result = await source.ParseResults(tester.Source.Token);
             Assert.Equal(8, result.SourceVariables.Count());
             Assert.Equal(15, result.DestinationVariables.Count());
@@ -101,7 +104,7 @@ namespace Test.Unit
             // Map variable children to objects
             extractor.State.Clear();
             tester.Config.Extraction.MapVariableChildren = true;
-            source.BuildNodes(new[] { tester.Ids.Custom.Root });
+            source.BuildNodes(new[] { tester.Ids.Custom.Root }, true);
             result = await source.ParseResults(tester.Source.Token);
             Assert.Equal(8, result.SourceVariables.Count());
             Assert.Equal(15, result.DestinationVariables.Count());
@@ -114,7 +117,7 @@ namespace Test.Unit
             // Enable non-hierarchical relations
             extractor.State.Clear();
             tester.Config.Extraction.Relationships.Enabled = true;
-            source.BuildNodes(new[] { tester.Ids.Custom.Root });
+            source.BuildNodes(new[] { tester.Ids.Custom.Root }, true);
             result = await source.ParseResults(tester.Source.Token);
             foreach (var rf in result.DestinationReferences)
             {
@@ -139,7 +142,7 @@ namespace Test.Unit
             // Enable forward hierarchical relations
             extractor.State.Clear();
             tester.Config.Extraction.Relationships.Hierarchical = true;
-            source.BuildNodes(new[] { tester.Ids.Custom.Root });
+            source.BuildNodes(new[] { tester.Ids.Custom.Root }, true);
             result = await source.ParseResults(tester.Source.Token);
             Assert.Equal(18, result.DestinationReferences.Count());
             Assert.Equal(14, result.DestinationReferences.Count(rel => rel.IsForward));
@@ -157,7 +160,7 @@ namespace Test.Unit
             // Enable inverse hierarchical relations
             extractor.State.Clear();
             tester.Config.Extraction.Relationships.InverseHierarchical = true;
-            source.BuildNodes(new[] { tester.Ids.Custom.Root });
+            source.BuildNodes(new[] { tester.Ids.Custom.Root }, true);
             result = await source.ParseResults(tester.Source.Token);
             Assert.Equal(28, result.DestinationReferences.Count());
             Assert.Equal(14, result.DestinationReferences.Count(rel => rel.IsForward));
@@ -173,6 +176,7 @@ namespace Test.Unit
                 Assert.Contains(result.DestinationReferences, orel => orel.Source.Id == rel.Target.Id
                     && orel.Target.Id == rel.Source.Id && orel.IsForward == !rel.IsForward);
             });
+            Assert.True(result.CanBeUsedForDeletes);
         }
 
         [Fact]
@@ -194,7 +198,7 @@ namespace Test.Unit
             tester.Config.Extraction.Relationships.InverseHierarchical = true;
             tester.Config.Extraction.Relationships.Enabled = true;
 
-            source.BuildNodes(new[] { tester.Ids.Custom.Root, ObjectIds.TypesFolder });
+            source.BuildNodes(new[] { tester.Ids.Custom.Root, ObjectIds.TypesFolder }, true);
             var result = await source.ParseResults(tester.Source.Token);
             Assert.Equal(9, result.SourceVariables.Count());
             Assert.Equal(16, result.DestinationVariables.Count());
@@ -214,6 +218,7 @@ namespace Test.Unit
                 Assert.Contains(result.DestinationReferences, orel => orel.Source.Id == rel.Target.Id
                     && orel.Target.Id == rel.Source.Id && orel.IsForward == !rel.IsForward);
             });
+            Assert.True(result.CanBeUsedForDeletes);
         }
 
 
@@ -224,7 +229,7 @@ namespace Test.Unit
             var log = tester.Provider.GetRequiredService<ILogger<NodeSetSource>>();
             var source = new NodeSetSource(log, tester.Config, extractor, tester.Client);
 
-            source.BuildNodes(new[] { ObjectIds.ObjectsFolder });
+            source.BuildNodes(new[] { ObjectIds.ObjectsFolder }, true);
 
             tester.Config.Events.AllEvents = true;
             tester.Config.Events.Enabled = true;
@@ -293,7 +298,7 @@ namespace Test.Unit
             var log = tester.Provider.GetRequiredService<ILogger<NodeSetSource>>();
             var source = new NodeSetSource(log, tester.Config, extractor, tester.Client);
 
-            source.BuildNodes(new[] { tester.Ids.Wrong.Root });
+            source.BuildNodes(new[] { tester.Ids.Wrong.Root }, true);
             var extConfig = tester.Config.Extraction;
             extConfig.DataTypes.MaxArraySize = 6;
             extConfig.DataTypes.EstimateArraySizes = true;

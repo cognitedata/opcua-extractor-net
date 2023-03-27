@@ -1,0 +1,73 @@
+{
+    "$id": "event_config.schema.json",
+    "type": "object",
+    "unevaluatedProperties": false,
+    "description": "Configuration for extraction OPC-UA events and alarams as CDF events or litedb time series",
+    "required": ["enabled"],
+    "properties": {
+        "event-ids": {
+            "type": "array",
+            "description": "Event ids to map. Custom events must be subtypes of `BaseEventType`. This is used to specify which events should be extracted, instead of just extracting all events",
+            "items": {
+                "$ref": "proto_node_id.schema.json"
+            }
+        },
+        "emitter-ids": {
+            "type": "array",
+            "description": "Id of nodes to be subscribed to as event emitters. Empty defaults to the server node. This is used to add extra emitters that are not in the extracted node hierarchy, or that does not correctly specify the `EventNotifier` property",
+            "items": {
+                "$ref": "proto_node_id.schema.json"
+            }
+        },
+        "historizing-emitter-ids": {
+            "type": "array",
+            "description": "Should be a subset of the `emitter-ids` property. Used to make the extractor read history from certain emitter nodes. Requires `events.history` to be `true`",
+            "items": {
+                "$ref": "proto_node_id.schema.json"
+            }
+        },
+        "enabled": {
+            "type": "boolean",
+            "description": "`true` enables reading events from the server"
+        },
+        "discover-emitters": {
+            "type": "boolean",
+            "description": "Automatically treat nodes with suitable `EventNotifier` as event emitters",
+            "default": true
+        },
+        "all-events": {
+            "type": "boolean",
+            "description": "Enable reading both custom and base OPC-UA events",
+            "default": true
+        },
+        "history": {
+            "type": "boolean",
+            "description": "`true` enables reading event history"
+        },
+        "exclude-event-filter": {
+            "type": "string",
+            "description": "Regex filter on event type `DisplayName`, matches will be ignored"
+        },
+        "read-server": {
+            "type": "boolean",
+            "description": "`true` enables checking the server node when looking for event emitters",
+            "default": true
+        },
+        "exclude-properties": {
+            "type": "array",
+            "description": "List of `BrowseName`s of event properties that are to be excluded from automatic mapping to destination metadata. `LocalTime` and `ReceiveTime` are excluded by default. Be aware that a maximum of 16 metadata entries are allowed in CDF",
+            "items": {
+                "type": "string",
+                "description": "`BrowseName` of an event property"
+            }
+        },
+        "destination-name-map": {
+            "type": "object",
+            "description": "Map source browse names to other values in the destination. For CDF, internal properties may be overwritten, by default `Message` is mapped to `description`, `SourceNode` is used to set the `assetIds`, and `EventType` is mapped to `type`. These may be replaced by overrides in `destination-name-map`. If `StartTime`, `EndTime`, or `SubType` are specified, either on the event in OPC-UA itself, or translated through this map, they are set directly on the CDF event. `StartTime` and `EndTime` should be either `DateTime`, or a number corresponding to the number of milliseconds since 01/01/1970. If no `StartTime` or `EndTime` are specified, both are set to the `Time` property.",
+            "examples": [{
+                "MyProperty": "SubType",
+                "MyEndTime": "EndTime"
+            }]
+        }
+    }
+}

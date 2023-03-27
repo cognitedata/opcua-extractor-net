@@ -1,5 +1,6 @@
 ﻿using Cognite.Extractor.Testing;
 using Cognite.OpcUa;
+using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -554,6 +555,35 @@ namespace Test.Integration
             var numberVarObj = pusher.PushedNodes[ids.NumberVar];
             Assert.Equal(ids.NumberVar, numberVar.ParentId);
         }
+
+        [Fact]
+        public async Task TestMapVariableChildrenSkipParent()
+        {
+            using var pusher = new DummyPusher(new DummyPusherConfig());
+            var extraction = tester.Config.Extraction;
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+
+            var ids = tester.Server.Ids.Custom;
+            tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Custom.Root, tester.Client);
+
+            extraction.DataTypes.AllowStringVariables = true;
+            extraction.DataTypes.MaxArraySize = -1;
+            extraction.DataTypes.AutoIdentifyTypes = true;
+            extraction.MapVariableChildren = true;
+            extraction.DataTypes.IgnoreDataTypes = new[]
+            {
+                CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Custom.NumberType, tester.Client)
+            };
+
+            await extractor.RunExtractor(true);
+
+            Assert.Equal(9, pusher.PushedNodes.Count);
+            Assert.Equal(15, pusher.PushedVariables.Count);
+
+            var numberVarObj = pusher.PushedNodes[ids.NumberVar];
+            Assert.False(pusher.PushedVariables.ContainsKey((ids.NumberVar, -1)));
+
+        }
         #endregion
 
         #region custommetadata
@@ -736,8 +766,9 @@ namespace Test.Integration
 
             Assert.Empty(pusher.PushedNodes);
             Assert.Empty(pusher.PushedVariables);
-            Assert.Equal(22, pusher.PendingNodes.Count);
-            Assert.Equal(32, pusher.PendingReferences.Count);
+            Assert.Equal(6, pusher.PendingNodes.Objects.Count());
+            Assert.Equal(16, pusher.PendingNodes.Variables.Count());
+            Assert.Equal(32, pusher.PendingNodes.References.Count());
 
             Assert.False(pusher.Initialized);
 
@@ -788,12 +819,13 @@ namespace Test.Integration
             {
                 Assert.Empty(pusher.PushedNodes);
                 Assert.Empty(pusher.PushedVariables);
-                Assert.Equal(22, pusher.PendingNodes.Count);
+                Assert.Equal(6, pusher.PendingNodes.Objects.Count());
+                Assert.Equal(16, pusher.PendingNodes.Variables.Count());
             }
             if (failReferences)
             {
                 Assert.Empty(pusher.PushedReferences);
-                Assert.Equal(32, pusher.PendingReferences.Count);
+                Assert.Equal(32, pusher.PendingNodes.References.Count());
             }
 
 

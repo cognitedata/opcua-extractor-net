@@ -18,6 +18,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using Cognite.Extensions;
 using Cognite.Extractor.Common;
 using Cognite.Extractor.Utils;
+using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.Pushers.FDM;
@@ -33,6 +34,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 using TimeRange = Cognite.Extractor.Common.TimeRange;
@@ -53,8 +55,8 @@ namespace Cognite.OpcUa.Pushers
         public bool Initialized { get; set; }
         public bool NoInit { get; set; }
 
-        public List<UANode> PendingNodes { get; } = new List<UANode>();
-        public List<UAReference> PendingReferences { get; } = new List<UAReference>();
+        public PusherInput? PendingNodes { get; set; }
+
         public UAExtractor Extractor { get; set; } = null!;
         public IPusherConfig BaseConfig { get; }
 
@@ -296,7 +298,25 @@ namespace Cognite.OpcUa.Pushers
                 return result;
             }
 
+<<<<<<< HEAD
             if (fdmDestination != null)
+=======
+            try
+            {
+                await EnsureConfigInit(token);
+            }
+            catch (Exception e)
+            {
+                log.LogError(e, "Failed to initialize config");
+                result.Objects = false;
+                result.References = false;
+                result.Variables = false;
+                nodeEnsuringFailures.Inc();
+                return result;
+            }
+
+            try
+>>>>>>> master
             {
                 bool pushResult = true;
                 try
@@ -515,20 +535,13 @@ namespace Cognite.OpcUa.Pushers
                 }
             }
 
-            if (!config.DataSetId.HasValue && !string.IsNullOrEmpty(config.DataSetExternalId))
+            try
             {
-                try
-                {
-                    var dataSet = await destination.CogniteClient.DataSets.RetrieveAsync(new[] { config.DataSetExternalId }, false, token);
-                    config.DataSetId = dataSet.First().Id;
-                }
-                catch (ResponseException ex)
-                {
-                    log.LogError("Could not fetch data set by external id. It may not exist, or the user may lack" +
-                        " sufficient access rights. Project {Project} at {Host}, id {Id}: {Message}",
-                        config.Project, config.Host, config.DataSetExternalId, ex.Message);
-                    return false;
-                }
+                await EnsureConfigInit(token);
+            }
+            catch
+            {
+                return false;
             }
 
             return true;
@@ -563,6 +576,34 @@ namespace Cognite.OpcUa.Pushers
             }
 
             log.LogInformation("Sucessfully pushed relationships to CDF");
+        }
+
+        public async Task<bool> ExecuteDeletes(DeletedNodes deletes, CancellationToken token)
+        {
+            var tasks = new List<Task>();
+            if (deletes.Objects.Any())
+            {
+                tasks.Add(MarkAssetsAsDeleted(deletes.Objects, token));
+            }
+            if (deletes.Variables.Any())
+            {
+                tasks.Add(MarkTimeSeriesAsDeleted(deletes.Variables, token));
+            }
+            if (deletes.References.Any())
+            {
+                tasks.Add(MarkReferencesAsDeleted(deletes.References, token));
+            }
+            try
+            {
+                await Task.WhenAll(tasks);
+            }
+            catch (Exception ex)
+            {
+                log.LogError(ex, "Failed to mark resources as deleted: {Message}", ex.Message);
+                return false;
+            }
+
+            return true;
         }
         #endregion
 
@@ -754,6 +795,36 @@ namespace Cognite.OpcUa.Pushers
             }
         }
 
+        private async Task MarkAssetsAsDeleted(
+            IEnumerable<string> externalIds,
+            CancellationToken token)
+        {
+            bool useRawAssets = config.RawMetadata != null
+                && !string.IsNullOrWhiteSpace(config.RawMetadata.Database)
+                && !string.IsNullOrWhiteSpace(config.RawMetadata.AssetsTable);
+
+            if (useRawAssets)
+            {
+                await MarkRawRowsAsDeleted(config.RawMetadata!.Database!, config.RawMetadata!.AssetsTable!, externalIds, token);
+            }
+            else
+            {
+                var updates = externalIds.Select(extId => new AssetUpdateItem(extId)
+                {
+                    Update = new AssetUpdate
+                    {
+                        Metadata = new UpdateDictionary<string>(new Dictionary<string, string>
+                        {
+                            { extractionConfig.Deletes.DeleteMarker, "true" }
+                        }, Enumerable.Empty<string>())
+                    }
+                });
+                var result = await destination.UpdateAssetsAsync(updates, RetryMode.OnError, SanitationMode.Clean, token);
+                log.LogResult(result, RequestType.UpdateAssets, true);
+                result.ThrowOnFatal();
+            }
+        }
+
         #endregion
 
         #region timeseries
@@ -927,7 +998,7 @@ namespace Cognite.OpcUa.Pushers
                     }
                 }
             }
-            
+
             if (updates.Any())
             {
                 var res = await destination.UpdateTimeSeriesAsync(updates, RetryMode.OnError, SanitationMode.Clean, token);
@@ -980,6 +1051,32 @@ namespace Cognite.OpcUa.Pushers
             {
                 await UpdateTimeseries(toPushMeta, timeseries, update, report, token);
             }
+        }
+
+        private async Task MarkTimeSeriesAsDeleted(IEnumerable<string> externalIds, CancellationToken token)
+        {
+            bool useRawTss = config.RawMetadata != null
+                && !string.IsNullOrWhiteSpace(config.RawMetadata.Database)
+                && !string.IsNullOrWhiteSpace(config.RawMetadata.TimeseriesTable);
+
+            if (useRawTss)
+            {
+                await MarkRawRowsAsDeleted(config.RawMetadata!.Database!, config.RawMetadata!.TimeseriesTable!, externalIds, token);
+            }
+
+            var updates = externalIds.Select(extId => new TimeSeriesUpdateItem(extId)
+            {
+                Update = new TimeSeriesUpdate
+                {
+                    Metadata = new UpdateDictionary<string>(new Dictionary<string, string>
+                    {
+                        { extractionConfig.Deletes.DeleteMarker, "true" }
+                    }, Enumerable.Empty<string>())
+                }
+            });
+            var result = await destination.UpdateTimeSeriesAsync(updates, RetryMode.OnError, SanitationMode.Clean, token);
+            log.LogResult(result, RequestType.UpdateAssets, true);
+            result.ThrowOnFatal();
         }
         #endregion
 
@@ -1087,6 +1184,20 @@ namespace Cognite.OpcUa.Pushers
             } while (cursor != null);
             return rows;
         }
+
+        private async Task MarkRawRowsAsDeleted(string dbName, string tableName, IEnumerable<string> keys, CancellationToken token)
+        {
+            var keySet = new HashSet<string>(keys);
+            var rows = await GetRawRows(dbName, tableName, keys, token);
+            var trueElem = JsonDocument.Parse("true").RootElement;
+            var toMark = rows.Where(r => keySet.Contains(r.Key)).ToList();
+            foreach (var row in toMark)
+            {
+                row.Columns[extractionConfig.Deletes.DeleteMarker] = trueElem;
+            }
+            await destination.InsertRawRowsAsync(dbName, tableName, toMark.ToDictionary(e => e.Key, e => e.Columns), token);
+        }
+
         #endregion
 
         #region references
@@ -1150,7 +1261,48 @@ namespace Cognite.OpcUa.Pushers
                 new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase },
                 token);
         }
+
+        private async Task MarkReferencesAsDeleted(IEnumerable<string> externalIds, CancellationToken token)
+        {
+            bool useRawRelationships = config.RawMetadata != null
+                && !string.IsNullOrWhiteSpace(config.RawMetadata.Database)
+                && !string.IsNullOrWhiteSpace(config.RawMetadata.RelationshipsTable);
+
+            if (useRawRelationships)
+            {
+                await MarkRawRowsAsDeleted(config.RawMetadata!.Database!, config.RawMetadata!.RelationshipsTable!, externalIds, token);
+            }
+            else if (config.DeleteRelationships)
+            {
+                var tasks = externalIds.ChunkBy(1000).Select(chunk => destination.CogniteClient.Relationships.DeleteAsync(chunk, true, token));
+                await Task.WhenAll(tasks);
+            }
+
+        }
         #endregion
+
+        /// <summary>
+        /// Make sure any configuration that requires synchronizing with CDF is properly initialized.
+        /// </summary>
+        private async Task EnsureConfigInit(CancellationToken token)
+        {
+            if (!config.DataSetId.HasValue && !string.IsNullOrEmpty(config.DataSetExternalId))
+            {
+                try
+                {
+                    var dataSet = await destination.CogniteClient.DataSets.RetrieveAsync(new[] { config.DataSetExternalId }, false, token);
+                    config.DataSetId = dataSet.First().Id;
+                }
+                catch (ResponseException ex)
+                {
+                    log.LogError("Could not fetch data set by external id. It may not exist, or the user may lack" +
+                        " sufficient access rights. Project {Project} at {Host}, id {Id}: {Message}",
+                        config.Project, config.Host, config.DataSetExternalId, ex.Message);
+                    throw;
+                }
+            }
+        }
+
         public void Dispose() { }
     }
 }

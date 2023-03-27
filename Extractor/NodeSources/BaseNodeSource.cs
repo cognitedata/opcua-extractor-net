@@ -15,6 +15,7 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.Logging;
@@ -79,24 +80,11 @@ namespace Cognite.OpcUa.NodeSources
         /// <param name="node">Variable to write</param>
         protected virtual void AddVariableToLists(UAVariable node)
         {
-            if (node.IsObject)
-            {
-                FinalDestinationVariables.AddRange(node.CreateTimeseries());
-                FinalDestinationObjects.Add(node);
-            }
-            else
-            {
-                FinalDestinationVariables.Add(node);
-            }
-
-            if (node.NodeClass == NodeClass.Variable)
-            {
-                FinalSourceVariables.Add(node);
-            }
-            else
-            {
-                FinalSourceObjects.Add(node);
-            }
+            var map = node.GetVariableGroups(Extractor.DataTypeManager);
+            if (map.IsDestinationVariable) FinalDestinationVariables.AddRange(node.CreateTimeseries());
+            if (map.IsDestinationObject) FinalDestinationObjects.Add(node);
+            if (map.IsSourceVariable) FinalSourceVariables.Add(node);
+            if (map.IsSourceObject) FinalSourceObjects.Add(node);
         }
         protected async Task EstimateArraySizes(IEnumerable<UAVariable> nodes, CancellationToken token)
         {
@@ -299,11 +287,14 @@ namespace Cognite.OpcUa.NodeSources
         /// <param name="node">Node to sort.</param>
         protected void SortVariable(TypeUpdateConfig update, UAVariable node)
         {
+<<<<<<< HEAD
             if (!Extractor.DataTypeManager.AllowTSMap(node))
             {
                 if (!Config.Extraction.DataTypes.UnmappableAsProperties) return;
                 node.VariableAttributes.IsProperty = true;
             }
+=======
+>>>>>>> master
             if (FilterObject(update, node)) AddVariableToLists(node);
         }
 
@@ -315,7 +306,8 @@ namespace Cognite.OpcUa.NodeSources
         /// <returns>True if node should be considered for mapping, false otherwise.</returns>
         protected bool FilterObject(TypeUpdateConfig update, UANode node)
         {
-            if (update.AnyUpdate)
+            // If deletes are enabled, we are not able to filter any nodes, even if that has a real cost in terms of memory usage.
+            if (update.AnyUpdate && !Config.Extraction.Deletes.Enabled)
             {
                 var oldChecksum = Extractor.State.GetMappedNode(node.Id)?.Checksum;
                 if (oldChecksum != null)

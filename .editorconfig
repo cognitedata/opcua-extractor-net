@@ -43,3 +43,6 @@ dotnet_diagnostic.CA1848.severity = none
 
 # IDE0090: Use 'new(...)' - avoiding this.
 dotnet_diagnostic.IDE0090.severity = none
+
+# CA1851: Possible multiple enumerations. Nice in theory, but this one is a bit overzealous.
+dotnet_diagnostic.CA1851.severity = none

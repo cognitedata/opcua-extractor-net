@@ -99,15 +99,13 @@ namespace Cognite.OpcUa.Config
             {
                 try
                 {
-                    Session!.Read(
+                    var results = await Session!.ReadAsync(
                         null,
                         0,
                         TimestampsToReturn.Neither,
                         new ReadValueIdCollection(new[] { new ReadValueId { NodeId = VariableIds.Server_Auditing, AttributeId = Attributes.Value } }),
-                        out var results,
-                        out var _
-                        );
-                    var result = (bool)results.First().GetValue(typeof(bool));
+                        token);
+                    var result = results.Results.First().GetValue<bool>(false);
                     if (result)
                     {
                         log.LogInformation("Server capabilities indicate that auditing is enabled");

@@ -13,7 +13,7 @@ jobs:
             version: ${{ steps.get-version.outputs.version }}
         
         steps:
-        - uses: actions/checkout@v2
+        - uses: actions/checkout@v3
         - id: get-pub-args
           run: echo ::set-output name=args::$(./get-build-args.sh ${GITHUB_REF#refs/tags/})
         - id: get-version
@@ -24,15 +24,17 @@ jobs:
         needs: create-release
         
         steps:
-        - uses: actions/checkout@v2
+        - uses: actions/checkout@v3
         - name: Setup .NET
-          uses: actions/setup-dotnet@v1
+          uses: actions/setup-dotnet@v3
           with:
-              dotnet-version: 6.0.x
-        - name: Restore paket
-          run: dotnet tool restore
+              dotnet-version: 7.0.x
         - name: Restore dependencies
           run: dotnet restore
+
+        - name: Restore tools
+          run: dotnet tool restore
+
         - name: Build
           run: dotnet build ExtractorLauncher/
 
@@ -94,15 +96,16 @@ jobs:
         needs: create-release
 
         steps:
-        - uses: actions/checkout@v2
+        - uses: actions/checkout@v3
         - name: Setup .NET
-          uses: actions/setup-dotnet@v1
+          uses: actions/setup-dotnet@v3
           with:
-              dotnet-version: 6.0.x
-        - name: Restore paket
-          run: dotnet tool restore
+              dotnet-version: 7.0.x
         - name: Restore dependencies
           run: dotnet restore
+
+        - name: Restore tools
+          run: dotnet tool restore
 
         - name: Build Executable
           run: dotnet publish -c Release -r win-x64 ${{ needs.create-release.outputs.publish-args }} .\ExtractorLauncher\ -o extractorbuild\
@@ -116,7 +119,7 @@ jobs:
             path-to-binary: .\extractorbuild\OpcuaExtractor.exe
 
         - name: Add msbuild to path
-          uses: microsoft/setup-msbuild@v1.1
+          uses: microsoft/setup-msbuild@v1.3
 
         - name: Build service manager
           run: msbuild .\OpcUaServiceManager\OpcUaServiceManager.csproj /t:rebuild /p:Configuration=Release
@@ -130,6 +133,9 @@ jobs:
           uses: cognitedata/code-sign-action/@v1
           with:
             path-to-binary: .\managerbuild\OpcUaServiceManager.exe
+
+        - name: Build SBOM
+          run: .\installer-sbom.ps1 ${{ needs.create-release.outputs.version }}
 
         - name: Build MSI
           working-directory: .\OpcUaExtractorSetup
@@ -157,7 +163,7 @@ jobs:
         needs: [build-linux, build-installer, create-release]
 
         steps:
-        - uses: actions/checkout@v2
+        - uses: actions/checkout@v3
           name: Checkout
 
         - name: Download Linux Artifacts
@@ -202,8 +208,8 @@ jobs:
 
         - name: Install extractor uploader
           env: 
-            PYPI_ARTIFACTORY_USERNAME: ${{ secrets.ARTIFACTORY_READONLY_TOKEN_USER }}
-            PYPI_ARTIFACTORY_PASSWORD: ${{ secrets.ARTIFACTORY_READONLY_TOKEN }}
+            PYPI_ARTIFACTORY_USERNAME: ${{ secrets.ARTIFACTORY_READONLY_TOKEN_USER_PUBLIC_REPOS }}
+            PYPI_ARTIFACTORY_PASSWORD: ${{ secrets.ARTIFACTORY_READONLY_TOKEN_PUBLIC_REPOS }}
           run: |
             python -m pip install --upgrade pip
             pip install cognite-extractor-publisher --extra-index-url "https://${PYPI_ARTIFACTORY_USERNAME}:${PYPI_ARTIFACTORY_PASSWORD}@cognite.jfrog.io/cognite/api/pypi/snakepit/simple"
@@ -211,20 +217,22 @@ jobs:
         - name: Run extractor uploader
           env:
             EXTRACTOR_DOWNLOAD_API_ADMIN_SECRET: ${{ secrets.EXTRACTOR_DOWNLOAD_ADMIN_SECRET }}
-          run: publish-extractor --manifest manifest.yml --version ${{ needs.create-release.outputs.version }}
+          run: publish-extractor publish --manifest manifest.yml --version ${{ needs.create-release.outputs.version }}
 
     build-docker:
         runs-on: ubuntu-latest
         needs: create-release
 
         steps:
-        - uses: actions/checkout@v2
+        - uses: actions/checkout@v3
           name: Checkout
 
         - id: image_tags
           run: |
             echo ::set-output name=extractor::"eu.gcr.io/cognite-registry/opcua-extractor-net:${{ needs.create-release.outputs.version }}"
+            echo ::set-output name=extractor_dockerhub::"cognite/opcua-extractor-net:${{ needs.create-release.outputs.version }}"
             echo ::set-output name=bridge::"eu.gcr.io/cognite-registry/mqtt-cdf-bridge:${{ needs.create-release.outputs.version }}"
+            echo ::set-output name=bridge_dockerhub::"cognite/mqtt-cdf-bridge:${{ needs.create-release.outputs.version }}"
             echo ::set-output name=desc::"$(git describe --tags --dirty) $(git log -1  --format=%ai)"
 
         - name: Build extractor image
@@ -234,6 +242,7 @@ jobs:
             docker cp $id:/build/deploy .
             docker rm -v $id
             docker build -t ${{ steps.image_tags.outputs.extractor }} .
+            docker tag ${{ steps.image_tags.outputs.extractor }} ${{ steps.image_tags.outputs.extractor_dockerhub }}
 
         - name: Build bridge image
           run: |
@@ -242,6 +251,7 @@ jobs:
             docker cp $id:/build/deploy .
             docker rm -v $id
             docker build -f Dockerfile.bridge -t ${{ steps.image_tags.outputs.bridge }} .
+            docker tag ${{ steps.image_tags.outputs.bridge }} ${{ steps.image_tags.outputs.bridge_dockerhub }}
 
         - name: Push images
           run: |
@@ -249,3 +259,15 @@ jobs:
             echo ${{ secrets.COGNITE_REGISTRY_KEY }} | base64 -d | docker login -u _json_key --password-stdin https://eu.gcr.io
             docker push ${{ steps.image_tags.outputs.extractor }}
             docker push ${{ steps.image_tags.outputs.bridge }}
+        
+
+        - name: "Log in to the Dockerhub"
+          uses: docker/login-action@v2
+          with:
+            username: ${{ secrets.DOCKERHUB_USER }}
+            password: ${{ secrets.DOCKERHUB_ACCESS_TOKEN }}
+        - name: Push images dockerhub
+          run: |
+            echo "Images being pushed as ${{ steps.image_tags.outputs.extractor_dockerhub }}, ${{ steps.image_tags.outputs.bridge_dockerhub }}"
+            docker push ${{ steps.image_tags.outputs.extractor_dockerhub }}
+            docker push ${{ steps.image_tags.outputs.bridge_dockerhub }}

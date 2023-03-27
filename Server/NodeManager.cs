@@ -32,7 +32,7 @@ namespace Server
     /// 
     /// Generating new nodes, History, and setting up the node hierarchy.
     /// </summary>
-    internal class TestNodeManager : CustomNodeManager2
+    internal sealed class TestNodeManager : CustomNodeManager2
     {
         private readonly HistoryMemoryStore store;
         private uint nextId;
@@ -328,6 +328,19 @@ namespace Server
             prop.Delete(SystemContext);
         }
 
+        public void RemoveNode(NodeId id)
+        {
+            log.LogDebug("Remove node with ID {Id}", id);
+
+            var node = PredefinedNodes[id];
+            var refsToRemove = new List<LocalReference>();
+            RemovePredefinedNode(SystemContext, node, refsToRemove);
+            if (refsToRemove.Any())
+            {
+                Server.NodeManager.RemoveReferences(refsToRemove);
+            }
+        }
+
         public void ReContextualize(NodeId id, NodeId oldParentId, NodeId newParentId, NodeId referenceType)
         {
             log.LogDebug("Move node {Id} from {Old} to {New} with reference type {Ref}",
@@ -343,6 +356,22 @@ namespace Server
             state.AddReference(referenceType, true, newParentId);
         }
 
+        public void SetServerRedundancyStatus(byte serviceLevel, RedundancySupport support)
+        {
+            log.LogInformation("Set server redundancy statues: Level: {Level}, Support: {Support}", serviceLevel, support);
+            lock (Server.DiagnosticsNodeManager.Lock)
+            {
+                ServerObjectState serverObject = (ServerObjectState)Server.DiagnosticsNodeManager.FindPredefinedNode(
+                    ObjectIds.Server,
+                    typeof(ServerObjectState));
+
+                // update server capabilities.
+                serverObject.ServiceLevel.Value = serviceLevel;
+                serverObject.ServiceLevel.ClearChangeMasks(SystemContext, true);
+                serverObject.ServerRedundancy.RedundancySupport.Value = support;
+            }
+        }
+
         public void SetEventConfig(bool auditing, bool server, bool serverAuditing)
         {
             log.LogInformation("Set server event options. Auditing: {Auditing}, Server emitting events: {Server}", auditing, server);
@@ -353,13 +382,14 @@ namespace Server
                 serverAud.Value = auditing;
             }
 
-            Server.EventManager.GetType().GetField("m_ServerAuditing", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
-                .SetValue(Server.EventManager, new Lazy<bool>(() => auditing));
+            Server.GetType().GetField("m_auditing", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                .SetValue(Server, auditing);
 
             var dfnm = Server.DiagnosticsNodeManager;
             lock (dfnm.Lock)
             {
                 var serverAud = (PropertyState)cfnm.Find(VariableIds.Server_Auditing);
+                log.LogInformation("Auditing node: {Val}, {Id}, {Parent}", serverAud.Value, serverAud.NodeId, serverAud.Parent.NodeId);
                 serverAud.Value = auditing;
             }
 
@@ -387,6 +417,35 @@ namespace Server
                 serverNode.RemoveReferences(ReferenceTypeIds.GeneratesEvent, false);
             }
         }
+
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification =
+            "NodeStates are disposed in CustomNodeManager2, so long as they are added to the list of predefined nodes")]
+        private void CreateNamespaceMetadataNode(IDictionary<NodeId, IList<IReference>> externalReferences)
+        {
+            var serverNamespacesNode = Server.NodeManager.ConfigurationNodeManager
+                    .FindPredefinedNode(ObjectIds.Server_Namespaces, typeof(NamespacesState)) as NamespacesState;
+            var namespaceUri = "opc.tcp://test.localhost";
+            var namespaceMetadataState = new NamespaceMetadataState(serverNamespacesNode);
+            namespaceMetadataState.BrowseName = new QualifiedName(namespaceUri, NamespaceIndex);
+            namespaceMetadataState.Create(SystemContext, null, namespaceMetadataState.BrowseName, null, true);
+            namespaceMetadataState.DisplayName = namespaceUri;
+            namespaceMetadataState.SymbolicName = namespaceUri;
+            namespaceMetadataState.NamespaceUri.Value = namespaceUri;
+
+            // add node as child of ServerNamespaces and in predefined nodes
+            serverNamespacesNode.AddChild(namespaceMetadataState);
+            serverNamespacesNode.ClearChangeMasks(Server.DefaultSystemContext, true);
+            AddPredefinedNode(SystemContext, namespaceMetadataState);
+
+            Ids.NamespaceMetadata = namespaceMetadataState.NodeId;
+        }
+
+        public void SetNamespacePublicationDate(DateTime time)
+        {
+            var ns = FindPredefinedNode(Ids.NamespaceMetadata, typeof(NamespaceMetadataState)) as NamespaceMetadataState;
+            ns.NamespacePublicationDate.Value = time;
+            ns.ClearChangeMasks(SystemContext, true);
+        }
         #endregion
 
 
@@ -411,7 +470,7 @@ namespace Server
                 // Supposedly the "DiagnosticNodeManager" should handle this sort of stuff. But it doesn't, there exists a weird
                 // GetDefaultHistoryCapability, but that seems to create a /new/ duplicate node on the server. This changes the existing one
                 // (Creating a new one makes no sense whatsoever).
-                var cfnm = (ConfigurationNodeManager)Server.NodeManager.NodeManagers.First(nm => nm.GetType() == typeof(ConfigurationNodeManager));
+                var cfnm = Server.NodeManager.ConfigurationNodeManager;
                 lock (cfnm.Lock)
                 {
                     var accessDataCap = (PropertyState)cfnm.Find(VariableIds.HistoryServerCapabilities_AccessHistoryDataCapability);
@@ -472,6 +531,8 @@ namespace Server
                         }
                     }
                 }
+
+                CreateNamespaceMetadataNode(externalReferences);
             }
             catch (Exception ex)
             {
@@ -1779,6 +1840,15 @@ namespace Server
             return fields;
         }
         #endregion
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                pubSub?.Dispose();
+            }
+            base.Dispose(disposing);
+        }
     }
 
     internal class InternalHistoryRequest
@@ -1792,7 +1862,7 @@ namespace Server
         public bool IsReverse;
     }
 
-    internal class InternalEventHistoryRequest : InternalHistoryRequest
+    internal sealed class InternalEventHistoryRequest : InternalHistoryRequest
     {
         public FilterContext FilterContext;
         public EventFilter Filter;
@@ -1821,6 +1891,7 @@ namespace Server
             Audit = new AuditNodeReference();
             Wrong = new WrongNodeReference();
         }
+        public NodeId NamespaceMetadata { get; set; }
         public BaseNodeReference Base { get; set; }
         public FullNodeReference Full { get; set; }
         public CustomNodeReference Custom { get; set; }

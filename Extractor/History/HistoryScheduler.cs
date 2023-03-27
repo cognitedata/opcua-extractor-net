@@ -16,6 +16,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using Cognite.Extractor.Common;
+using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
@@ -323,6 +324,10 @@ namespace Cognite.OpcUa.History
             await base.RunAsync();
             log.LogInformation("Finish reading history of type {Type} for {Count} nodes. " +
                 "Took a total of {NumOps} operations", type, nodeCount, numReads);
+            if (!extractor.AllowUpdateState)
+            {
+                log.LogWarning("ServiceLevel is low, so destination ranges are not currently beign updated. History will run again once ServiceLevel improves");
+            }
             if (exceptions.Any())
             {
                 throw new AggregateException(exceptions);

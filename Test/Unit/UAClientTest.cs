@@ -2,6 +2,7 @@
 using Cognite.Extractor.Testing;
 using Cognite.Extractor.Utils;
 using Cognite.OpcUa;
+using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.DependencyInjection;
@@ -18,6 +19,7 @@ using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using Test.Utils;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -30,6 +32,8 @@ namespace Test.Unit
         public FullConfig Config { get; }
         public CancellationTokenSource Source { get; private set; }
         public ServiceProvider Provider { get; }
+        public ILogger Logger { get; }
+        public DummyClientCallbacks Callbacks { get; private set; }
         public UAClientTestFixture()
         {
             var services = new ServiceCollection();
@@ -37,6 +41,7 @@ namespace Test.Unit
             Config.Source.EndpointUrl = $"opc.tcp://localhost:62000";
             Configure(services);
             Provider = services.BuildServiceProvider();
+            Logger = Provider.GetRequiredService<ILogger<UAClientTestFixture>>();
 
             Server = new ServerController(new[] {
                 PredefinedSetup.Base, PredefinedSetup.Full, PredefinedSetup.Auditing,
@@ -69,7 +74,9 @@ namespace Test.Unit
             await Server.Start();
             Client = new UAClient(Provider, Config);
             Source = new CancellationTokenSource();
-            await Client.Run(Source.Token);
+            Callbacks = new DummyClientCallbacks(Source.Token);
+            Client.Callbacks = Callbacks;
+            await Client.Run(Source.Token, 0);
         }
 
         public async Task DisposeAsync()
@@ -98,7 +105,7 @@ namespace Test.Unit
             Assert.Equal(4, tester.Client.NamespaceTable.Count);
             Assert.Equal("opc.tcp://test.localhost", tester.Client.NamespaceTable.GetString(2));
         }
-        [Fact]
+        [Fact(Timeout = 10000)]
         public async Task TestConnectionFailure()
         {
             string oldEP = tester.Config.Source.EndpointUrl;
@@ -106,14 +113,14 @@ namespace Test.Unit
             tester.Config.Source.EndpointUrl = "opc.tcp://localhost:62009";
             try
             {
-                var exc = await Assert.ThrowsAsync<SilentServiceException>(() => tester.Client.Run(tester.Source.Token));
+                var exc = await Assert.ThrowsAsync<SilentServiceException>(() => tester.Client.Run(tester.Source.Token, 0));
                 Assert.Equal(StatusCodes.BadNotConnected, exc.StatusCode);
                 Assert.Equal(ExtractorUtils.SourceOp.SelectEndpoint, exc.Operation);
             }
             finally
             {
                 tester.Config.Source.EndpointUrl = "opc.tcp://localhost:62000";
-                await tester.Client.Run(tester.Source.Token);
+                await tester.Client.Run(tester.Source.Token, 0);
             }
         }
         [Fact]
@@ -123,61 +130,36 @@ namespace Test.Unit
             tester.Config.Source.ConfigRoot = "wrong";
             try
             {
-                var exc = await Assert.ThrowsAsync<ExtractorFailureException>(() => tester.Client.Run(tester.Source.Token));
+                var exc = await Assert.ThrowsAsync<ExtractorFailureException>(() => tester.Client.Run(tester.Source.Token, 0));
             }
             finally
             {
                 tester.Config.Source.ConfigRoot = "config";
-                await tester.Client.Run(tester.Source.Token);
+                await tester.Client.Run(tester.Source.Token, 0);
             }
         }
-        [Fact]
-        public async Task TestReconnect()
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public async Task TestReconnect(bool forceRestart)
         {
             await tester.Client.Close(tester.Source.Token);
             tester.Config.Source.KeepAliveInterval = 1000;
-
-            bool connected = true;
-
-            tester.Client.OnServerDisconnect += (client, args) =>
-            {
-                connected = false;
-            };
-            tester.Client.OnServerReconnect += (client, args) =>
-            {
-                connected = true;
-            };
+            tester.Config.Source.ForceRestart = forceRestart;
 
             try
             {
+                await tester.Client.Run(tester.Source.Token, 10);
 
-                Exception exception = null;
-                for (int i = 0; i < 10; i++)
-                {
-                    await Task.Delay(1000);
-                    try
-                    {
-                        await tester.Client.Run(tester.Source.Token);
-                        exception = null;
-                        break;
-                    }
-                    catch (Exception ex)
-                    {
-                        exception = ex;
-                    }
-                }
-
-                if (exception != null) throw exception;
-                
                 Assert.True(CommonTestUtils.TestMetricValue("opcua_connected", 1));
                 tester.Server.Stop();
-                await TestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_connected", 0) && !connected, 20,
+                await TestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_connected", 0) && !tester.Callbacks.Connected, 20,
                     "Expected client to disconnect");
-                Assert.False(connected);
+                Assert.False(tester.Callbacks.Connected);
                 await tester.Server.Start();
-                await TestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_connected", 1) && connected, 20,
+                await TestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_connected", 1) && tester.Callbacks.Connected, 20,
                     "Expected client to reconnect");
-                Assert.True(connected);
+                Assert.True(tester.Callbacks.Connected);
             }
             finally
             {
@@ -186,7 +168,7 @@ namespace Test.Unit
                 await tester.Client.Close(tester.Source.Token);
                 tester.Config.Source.KeepAliveInterval = 10000;
                 tester.Config.Logger.UaSessionTracing = false;
-                await tester.Client.Run(tester.Source.Token);
+                await tester.Client.Run(tester.Source.Token, 0);
             }
         }
         [Fact]
@@ -200,7 +182,7 @@ namespace Test.Unit
             try
             {
                 Environment.SetEnvironmentVariable("OPCUA_CERTIFICATE_DIR", "certificates-test");
-                await tester.Client.Run(tester.Source.Token);
+                await tester.Client.Run(tester.Source.Token, 0);
                 var dir = new DirectoryInfo("./certificates-test/pki/trusted/certs/");
                 Assert.Single(dir.GetFiles());
             }
@@ -209,7 +191,7 @@ namespace Test.Unit
                 await tester.Client.Close(tester.Source.Token);
                 Environment.SetEnvironmentVariable("OPCUA_CERTIFICATE_DIR", null);
                 Directory.Delete("./certificates-test/", true);
-                await tester.Client.Run(tester.Source.Token);
+                await tester.Client.Run(tester.Source.Token, 0);
             }
         }
         [Fact]
@@ -230,18 +212,18 @@ namespace Test.Unit
 
                 tester.Server.Server.SetValidator(true);
 
-                await Assert.ThrowsAsync<SilentServiceException>(async () => await tester.Client.Run(tester.Source.Token));
+                await Assert.ThrowsAsync<SilentServiceException>(async () => await tester.Client.Run(tester.Source.Token, 0));
 
                 tester.Server.Server.SetValidator(false);
 
-                await tester.Client.Run(tester.Source.Token);
+                await tester.Client.Run(tester.Source.Token, 0);
             }
             finally
             {
                 tester.Server.Server.AllowAnonymous = true;
                 tester.Config.Source.X509Certificate = null;
                 tester.Server.Server.SetValidator(false);
-                await tester.Client.Run(tester.Source.Token);
+                await tester.Client.Run(tester.Source.Token, 0);
             }
         }
 
@@ -256,18 +238,18 @@ namespace Test.Unit
                 tester.Config.Source.Username = "testuser";
                 tester.Config.Source.Password = "wrongpassword";
 
-                await Assert.ThrowsAsync<SilentServiceException>(async () => await tester.Client.Run(tester.Source.Token));
+                await Assert.ThrowsAsync<SilentServiceException>(async () => await tester.Client.Run(tester.Source.Token, 0));
 
                 tester.Config.Source.Password = "testpassword";
 
-                await tester.Client.Run(tester.Source.Token);
+                await tester.Client.Run(tester.Source.Token, 0);
             }
             finally
             {
                 tester.Server.Server.AllowAnonymous = true;
                 tester.Config.Source.Username = null;
                 tester.Config.Source.Password = null;
-                await tester.Client.Run(tester.Source.Token);
+                await tester.Client.Run(tester.Source.Token, 0);
             }
         }
         [Fact]
@@ -278,7 +260,7 @@ namespace Test.Unit
             tester.Config.Source.ReverseConnectUrl = "opc.tcp://localhost:61000";
             try
             {
-                await tester.Client.Run(tester.Source.Token);
+                await tester.Client.Run(tester.Source.Token, 0);
                 Assert.True(tester.Client.Started);
                 // Just check that we are able to read, indicating an established connection
                 await tester.Client.ReadRawValues(new[] { VariableIds.Server_ServerStatus }, tester.Source.Token);
@@ -287,7 +269,113 @@ namespace Test.Unit
             {
                 tester.Server.Server.RemoveReverseConnection(new Uri("opc.tcp://localhost:61000"));
                 tester.Config.Source.ReverseConnectUrl = null;
-                await tester.Client.Run(tester.Source.Token);
+                await tester.Client.Run(tester.Source.Token, 0);
+            }
+        }
+
+        [Fact]
+        public async Task TestRedundancy()
+        {
+            await tester.Client.Close(tester.Source.Token);
+            tester.Server.SetServerRedundancyStatus(230, RedundancySupport.Hot);
+            tester.Config.Source.KeepAliveInterval = 1000;
+            var altServer = new ServerController(new[] {
+                PredefinedSetup.Base
+            }, tester.Provider, 62300)
+            {
+                ConfigRoot = "Server.Test.UaClient"
+            };
+            await altServer.Start();
+            altServer.SetServerRedundancyStatus(240, RedundancySupport.Hot);
+            tester.Config.Source.AltEndpointUrls = new[]
+            {
+                "opc.tcp://localhost:62300"
+            };
+            tester.Config.Source.ForceRestart = true;
+
+            try
+            {
+                await tester.Client.Run(tester.Source.Token, 0);
+                var sm = tester.Client.SessionManager;
+                Assert.Equal("opc.tcp://localhost:62300", sm.EndpointUrl);
+
+                altServer.Stop();
+                altServer.Dispose();
+                await TestUtils.WaitForCondition(() => sm.EndpointUrl == tester.Config.Source.EndpointUrl, 20, "Expected session to reconnect to original server");
+            }
+            finally
+            {
+                tester.Config.Source.AltEndpointUrls = null;
+                tester.Config.Source.ForceRestart = false;
+                tester.Config.Source.KeepAliveInterval = 10000;
+                tester.Server.SetServerRedundancyStatus(255, RedundancySupport.Hot);
+                await tester.Client.Run(tester.Source.Token, 0);
+            }
+        }
+
+        [Fact]
+        public async Task TestServiceLevelSwitch()
+        {
+            await tester.Client.Close(tester.Source.Token);
+            tester.Server.SetServerRedundancyStatus(230, RedundancySupport.Hot);
+            tester.Config.Source.Redundancy.MonitorServiceLevel = true;
+            tester.Callbacks.ServiceLevelCbCount = 0;
+            var altServer = new ServerController(new[] {
+                PredefinedSetup.Base
+            }, tester.Provider, 62300)
+            {
+                ConfigRoot = "Server.Test.UaClient"
+            };
+            await altServer.Start();
+            altServer.SetServerRedundancyStatus(240, RedundancySupport.Hot);
+            tester.Config.Source.AltEndpointUrls = new[]
+            {
+                "opc.tcp://localhost:62300"
+            };
+            tester.Config.Source.ForceRestart = true;
+
+            try
+            {
+                // Should connect to altServer
+                await tester.Client.Run(tester.Source.Token, 0);
+                var sm = tester.Client.SessionManager;
+                Assert.Equal("opc.tcp://localhost:62300", sm.EndpointUrl);
+
+                // Should trigger a reconnect attempt, which finds the main server with status 230
+                altServer.SetServerRedundancyStatus(190, RedundancySupport.Hot);
+                await TestUtils.WaitForCondition(() => sm.CurrentServiceLevel == 230, 10, "Expected session to reconnect to original server");
+
+                Assert.Equal(230, sm.CurrentServiceLevel);
+                Assert.Equal(0, tester.Callbacks.ServiceLevelCbCount);
+                Assert.Equal(sm.EndpointUrl, tester.Config.Source.EndpointUrl);
+
+
+                // This method is called by the extractor, so we call it here to ensure the test passes.
+                // There is technically a tiny race condition here. If we connect to a new server, then that server immediately changes
+                // its service level, we _may_ not be able to pick up the change until it changes again.
+                // Some servers also send value updates on subscription creation, in which case this will not happen.
+                await sm.EnsureServiceLevelSubscription();
+                // Should trigger a reconnect attempt, but it will not find a better alternative.
+                tester.Server.SetServerRedundancyStatus(190, RedundancySupport.Hot);
+                await TestUtils.WaitForCondition(() => sm.CurrentServiceLevel == 190, 10, "Expected service level to drop");
+
+                Assert.Equal(sm.EndpointUrl, tester.Config.Source.EndpointUrl);
+
+                // Set the servicelevel back up, should trigger a callback, but no switch
+                tester.Server.SetServerRedundancyStatus(255, RedundancySupport.Hot);
+                await TestUtils.WaitForCondition(() => tester.Callbacks.ServiceLevelCbCount == 1, 10);
+                Assert.Equal(sm.EndpointUrl, tester.Config.Source.EndpointUrl);
+                Assert.Equal(255, sm.CurrentServiceLevel);
+            }
+            finally
+            {
+                tester.Config.Source.AltEndpointUrls = null;
+                tester.Config.Source.ForceRestart = false;
+                tester.Config.Source.KeepAliveInterval = 10000;
+                altServer.Stop();
+                altServer.Dispose();
+                tester.Server.SetServerRedundancyStatus(255, RedundancySupport.Hot);
+                await tester.Client.Run(tester.Source.Token, 0);
             }
         }
 
@@ -588,12 +676,12 @@ namespace Test.Unit
             );
 
             var root = ex.InnerException;
-            Assert.IsType<FatalException>(root);
+            Assert.IsType<SilentServiceException>(root);
 
             // Root node is browsed once
             Assert.Equal(21, nodes.Aggregate(0, (seed, kvp) => seed + kvp.Value.Count));
-            Assert.True(CommonTestUtils.TestMetricValue("opcua_browse_operations", 5));
-            Assert.True(CommonTestUtils.TestMetricValue("opcua_tree_depth", 5));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_browse_operations", 4, tester.Logger));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_tree_depth", 5, tester.Logger));
         }
 
         #endregion
@@ -1117,7 +1205,7 @@ namespace Test.Unit
         public async Task TestEventSubscriptions()
         {
             tester.Config.Events.Enabled = true;
-            tester.Config.Source.QueueLength = 100;
+            tester.Config.Subscriptions.QueueLength = 100;
 
             var emitters = new[]
             {
@@ -1216,6 +1304,8 @@ namespace Test.Unit
                 count++;
             }
 
+            tester.Server.SetEventConfig(true, true, true);
+
             try
             {
                 await tester.Client.SubscribeToAuditEvents(handler, tester.Source.Token);
@@ -1232,6 +1322,7 @@ namespace Test.Unit
             }
             finally
             {
+                tester.Server.SetEventConfig(false, true, false);
                 await tester.Client.RemoveSubscription("AuditListener");
             }
         }
@@ -1306,7 +1397,7 @@ namespace Test.Unit
             {
                 ServerMetrics = true
             };
-            var mgr = new NodeMetricsManager(tester.Client, tester.Config.Source, tester.Config.Metrics.Nodes);
+            var mgr = new NodeMetricsManager(tester.Client, tester.Config.Subscriptions, tester.Config.Metrics.Nodes);
             await mgr.StartNodeMetrics(tester.Source.Token);
 
             tester.Server.SetDiagnosticsEnabled(true);
@@ -1332,7 +1423,7 @@ namespace Test.Unit
             };
             tester.Server.UpdateNode(ids.DoubleVar1, 0);
             tester.Server.UpdateNode(ids.DoubleVar2, 0);
-            var mgr = new NodeMetricsManager(tester.Client, tester.Config.Source, tester.Config.Metrics.Nodes);
+            var mgr = new NodeMetricsManager(tester.Client, tester.Config.Subscriptions, tester.Config.Metrics.Nodes);
             await mgr.StartNodeMetrics(tester.Source.Token);
 
             tester.Server.UpdateNode(ids.DoubleVar1, 15);

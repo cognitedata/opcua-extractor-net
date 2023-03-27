@@ -16,6 +16,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using Cognite.Extractor.Common;
+using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
@@ -37,10 +38,12 @@ namespace Cognite.OpcUa.NodeSources
 
         private readonly List<(ReferenceDescription Node, NodeId ParentId)> references = new List<(ReferenceDescription, NodeId)>();
         public Action<ReferenceDescription, NodeId> Callback => HandleNode;
+        private readonly bool isFullBrowse;
 
-        public UANodeSource(ILogger<UANodeSource> log, FullConfig config, UAExtractor extractor, UAClient client)
+        public UANodeSource(ILogger<UANodeSource> log, FullConfig config, UAExtractor extractor, UAClient client, bool isFullBrowse)
             : base(log, config, extractor, client)
         {
+            this.isFullBrowse = isFullBrowse;
         }
 
         /// <summary>
@@ -121,7 +124,8 @@ namespace Cognite.OpcUa.NodeSources
                 FinalSourceVariables,
                 FinalDestinationObjects,
                 FinalDestinationVariables,
-                FinalReferences);
+                FinalReferences,
+                isFullBrowse);
         }
 
         /// <summary>

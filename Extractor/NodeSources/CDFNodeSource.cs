@@ -16,6 +16,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using Cognite.Extractor.Common;
+using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Pushers;
 using Cognite.OpcUa.Types;
 using CogniteSdk;
@@ -164,11 +165,14 @@ namespace Cognite.OpcUa.NodeSources
             FinalSourceObjects.AddRange(readNodes);
             foreach (var variable in readVariables)
             {
+<<<<<<< HEAD
                 if (!Extractor.DataTypeManager.AllowTSMap(variable))
                 {
                     if (!Config.Extraction.DataTypes.UnmappableAsProperties) continue;
                     variable.VariableAttributes.IsProperty = true;
                 }
+=======
+>>>>>>> master
                 AddVariableToLists(variable);
             }
 
@@ -196,7 +200,8 @@ namespace Cognite.OpcUa.NodeSources
                 FinalSourceVariables,
                 FinalDestinationObjects,
                 FinalDestinationVariables,
-                FinalReferences);
+                FinalReferences,
+                false);
         }
 
         private async Task GetExtraNodeData(CancellationToken token)

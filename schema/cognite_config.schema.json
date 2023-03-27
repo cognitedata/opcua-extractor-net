@@ -1,0 +1,147 @@
+{
+    "$id": "cognite_config.schema.json",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "description": "Configuration for pushing data to Cognite Data Fusion (CDF)",
+    "allOf": [{ "$ref": "https://raw.githubusercontent.com/cognitedata/dotnet-extractor-utils/v1.4.2/schema/cognite_config.schema.json" }],
+    "unevaluatedProperties": false,
+    "properties": {
+        "data-set-id": {
+            "type": "integer",
+            "description": "Data set used for new objects. Existing objects will not be updated"
+        },
+        "data-set-external-id": {
+            "type": "string",
+            "description": "Data set used for new objects, overridden by `data-set-id`. Requires the capability `datasets:Read` for the given data set"
+        },
+        "debug": {
+            "type": "boolean",
+            "description": "Debug mode. If `true`, the extractor will not push to target"
+        },
+        "read-extracted-ranges": {
+            "type": "boolean",
+            "description": "Whether to read start/end-points on startup, where possible. At least one pusher should be able to do this, or `state-store` should be enabled, otherwise back/frontfill will run for the entire history every restart",
+            "default": true
+        },
+        "skip-metadata": {
+            "type": "boolean",
+            "description": "Do not push any metadata at all. If this is `true`, plain timeseries without metadata will be created, similarly to `raw-metadata`, and datapoints will be pushed. Nothing will be written to raw, band no assets will be created. Events will be created, but without being contextualized to assets"
+        },
+        "raw-metadata": {
+            "type": "object",
+            "description": "Store assets/timeseries metadata and relationships in raw. Assets will not be created at all, timeseries will be created with just `externalId`, `isStep`, and `isString`. Both timeseries and assets will be persisted in their entirity to CDF Raw. Datapoints are not affected, events will be created but without being contextualized to assets. The externalId of the source node is added to metadata if applicable",
+            "unevaluatedProperties": false,
+            "required": ["database"],
+            "properties": {
+                "database": {
+                    "type": "string",
+                    "description": "Raw database"
+                },
+                "assets-table": {
+                    "type": "string",
+                    "description": "Raw table to use for assets"
+                },
+                "timeseries-table": {
+                    "type": "string",
+                    "description": "Raw table to use for timeseries"
+                },
+                "relationships-table": {
+                    "type": "string",
+                    "description": "Raw table to use for relationships"
+                }
+            }
+        },
+        "metadata-mapping": {
+            "type": "object",
+            "description": "Map metadata to asset/timeseries attributes. This lets you assign properties in OPC-UA directly to fields like `description` and `unit` in CDF",
+            "examples": [{
+                "timeseries": {
+                    "EngineeringUnits": "unit",
+                    "EURange": "description"
+                },
+                "assets": {
+                    "Name": "name"
+                }
+            }],
+            "unevaluatedProperties": false,
+            "properties": {
+                "assets": {
+                    "type": "object",
+                    "description": "Map metadata for assets",
+                    "patternProperties": {
+                        ".*": {
+                            "type": "string",
+                            "enum": ["description", "name", "parentId"]
+                        }
+                    }
+                },
+                "timeseries": {
+                    "type": "object",
+                    "description": "Map metadata for timeseries",
+                    "patternProperties": {
+                        ".*": {
+                            "type": "string",
+                            "enum": ["description", "name", "parentId", "unit"]
+                        }
+                    }
+                }
+            }
+        },
+        "raw-node-buffer": {
+            "type": "object",
+            "description": "Read from CDF instead of OPC-UA when starting, to speed up start on slow servers. Requires `extraction-data-types.expand-node-ids` and `append-internal-values` to be set to `true`. This should generaly be enabled along with `skip-metadata` or `raw-metadata`. If `browse-on-empty` is set to `true` and `raw-metadata` is configured with the same database and tables the extractor will read into raw on first run, then use raw as source for later runs. The Raw database can be deleted to reset on next read.",
+            "unevaluatedProperties": false,
+            "required": ["enable", "database"],
+            "properties": {
+                "enable": {
+                    "type": "boolean",
+                    "description": "Enable the raw node buffer"
+                },
+                "database": {
+                    "type": "string",
+                    "description": "Raw database to read from"
+                },
+                "assets-table": {
+                    "type": "string",
+                    "description": "Table to read assets from, used for events"
+                },
+                "timeseries-table": {
+                    "type": "string",
+                    "description": "Table to read timeseries from"
+                },
+                "browse-on-empty": {
+                    "type": "boolean",
+                    "description": "Run normal browse if nothing is found when reading from CDF, either because the tables are empty, or because they do not exist. This applies if no valid nodes are found, meaning it will apply if there are nodes, but none of them are valid extraction targets"
+                }
+            }
+        },
+        "non-finite-replacement": {
+            "type": ["number", "null"],
+            "description": "Replacement for NaN values. Deprecated in favor of `nan-replacement`",
+            "deprecated": true
+        },
+        "browse-callback": {
+            "type": "object",
+            "unevaluatedProperties": false,
+            "description": "Specify a CDF function that is called after nodes are pushed to CDF, reporting the number of changed and created nodes",
+            "properties": {
+                "id": {
+                    "type": "integer",
+                    "description": "InternalId of function to call"
+                },
+                "external-id": {
+                    "type": "string",
+                    "description": "ExternalId of function to call"
+                },
+                "report-on-empty": {
+                    "type": "boolean",
+                    "description": "Call callback even if zero items are created or updated."
+                }
+            }
+        },
+        "delete-relationships": {
+            "type": "boolean",
+            "description": "If relationships are enabled, and written to clean, and deletes are neabled. This needs to be set to true in order to hard delete the relationships."
+        }
+    }
+}

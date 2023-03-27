@@ -16,6 +16,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using Cognite.Extractor.Common;
+using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.TypeCollectors;
@@ -36,6 +37,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Xml.Linq;
 
 namespace Cognite.OpcUa
 {
@@ -45,12 +47,12 @@ namespace Cognite.OpcUa
     public class UAClient : IDisposable, IUAClientAccess
     {
         protected FullConfig Config { get; set; }
-        protected Session? Session { get; set; }
+        protected ISession? Session => SessionManager?.Session;
         protected ApplicationConfiguration? AppConfig { get; set; }
-        private ReverseConnectManager? reverseConnectManager;
-        private SessionReconnectHandler? reconnectHandler;
         public DataTypeManager DataTypeManager { get; }
         public NodeTypeManager ObjectTypeManager { get; }
+
+        public IClientCallbacks Callbacks { get; set; } = null!;
 
         private readonly SemaphoreSlim subscriptionSem = new SemaphoreSlim(1);
         private readonly Dictionary<NodeId, string> nodeOverrides = new Dictionary<NodeId, string>();
@@ -60,13 +62,6 @@ namespace Cognite.OpcUa
 
         private readonly Dictionary<ushort, string> nsPrefixMap = new Dictionary<ushort, string>();
 
-        public event EventHandler? OnServerDisconnect;
-        public event EventHandler? OnServerReconnect;
-
-        private static readonly Counter connects = Metrics
-            .CreateCounter("opcua_connects", "Number of times the client has connected to and mapped the opcua server");
-        private static readonly Gauge connected = Metrics
-            .CreateGauge("opcua_connected", "Whether or not the client is currently connected to the opcua server");
         private static readonly Counter attributeRequests = Metrics
             .CreateCounter("opcua_attribute_requests", "Number of attributes fetched from the server");
         private static readonly Gauge numSubscriptions = Metrics
@@ -83,6 +78,8 @@ namespace Cognite.OpcUa
             .CreateCounter("opcua_browse_failures", "Number of failures on browse operations");
 
         private readonly NodeMetricsManager? metricsManager;
+
+        public SessionManager? SessionManager { get; private set; }
 
         private readonly ILogger<UAClient> log;
         private readonly ILogger<Tracing> traceLog;
@@ -105,7 +102,7 @@ namespace Cognite.OpcUa
             ObjectTypeManager = new NodeTypeManager(provider.GetRequiredService<ILogger<NodeTypeManager>>(), this);
             if (config.Metrics.Nodes != null)
             {
-                metricsManager = new NodeMetricsManager(this, config.Source, config.Metrics.Nodes);
+                metricsManager = new NodeMetricsManager(this, config.Subscriptions, config.Metrics.Nodes);
             }
             StringConverter = new StringConverter(provider.GetRequiredService<ILogger<StringConverter>>(), this, config);
             Browser = new Browser(provider.GetRequiredService<ILogger<Browser>>(), this, config);
@@ -114,41 +111,29 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Entrypoint for starting the opcua Session. Must be called before any further requests can be made.
         /// </summary>
-        public async Task Run(CancellationToken token)
+        public async Task Run(CancellationToken token, int timeout = -1)
         {
             liveToken = token;
-            await StartSession();
+            await StartSession(timeout);
             await StartNodeMetrics();
         }
+
         /// <summary>
         /// Close the Session, cleaning up any client data on the server
         /// </summary>
         public async Task Close(CancellationToken token)
         {
-            reconnectHandler?.Dispose();
-            reconnectHandler = null;
             try
             {
-                if (Session != null && !Session.Disposed)
+                if (SessionManager != null)
                 {
-#pragma warning disable CA1508 // Avoid dead conditional code
-                    var closeTask = Session?.CloseSessionAsync(null, true, token);
-                    var resultTask = await Task.WhenAny(Task.Delay(5000, token), closeTask);
-                    if (closeTask != resultTask)
-                    {
-                        log.LogWarning("Failed to close session, timed out");
-                    }
-                    Session?.Dispose();
-#pragma warning restore CA1508 // Avoid dead conditional code
-                    Session = null;
+                    await SessionManager.Close(token);
                 }
             }
             finally
             {
-                connected.Set(0);
                 Started = false;
             }
-
         }
 
         private void ConfigureUtilsTrace()
@@ -156,55 +141,21 @@ namespace Cognite.OpcUa
             if (Config.Logger?.UaTraceLevel == null) return;
             Utils.SetTraceMask(Utils.TraceMasks.All);
             if (traceLevel != null) return;
-            Utils.Tracing.TraceEventHandler += TraceEventHandler;
-            switch (Config.Logger.UaTraceLevel)
+            traceLevel = Config.Logger.UaTraceLevel switch
             {
-                case "verbose": traceLevel = LogLevel.Trace; break;
-                case "debug": traceLevel = LogLevel.Debug; break;
-                case "information": traceLevel = LogLevel.Information; break;
-                case "warning": traceLevel = LogLevel.Warning; break;
-                case "error": traceLevel = LogLevel.Error; break;
-                case "fatal": traceLevel = LogLevel.Critical; break;
-            }
+                "verbose" => LogLevel.Trace,
+                "debug" => LogLevel.Debug,
+                "information" => LogLevel.Information,
+                "warning" => LogLevel.Warning,
+                "error" => LogLevel.Error,
+                "fatal" => LogLevel.Critical,
+                _ => LogLevel.Trace
+            };
+            Utils.SetLogger(traceLog);
+            Utils.SetLogLevel(traceLevel.Value);
         }
 
-        private Regex traceGroups = new Regex("{([0-9]+)}");
-        private object[] ReOrderArguments(string format, object[] args)
-        {
-            // OPC-UA Trace uses the stringbuilder style of arguments, which allows them to be out of order
-            // If we want nice coloring in logs (we do), then we have to re-order arguments like this.
-            // There's a cost, but this is only enabled when debugging anyway.
-            if (!args.Any()) return args;
-
-            var matches = traceGroups.Matches(format);
-            var indices = matches.Select(m => Convert.ToInt32(m.Groups[1].Value)).ToArray();
-
-            return indices.Select(i => args[i]).ToArray();
-        }
-
-        private void TraceEventHandler(object sender, TraceEventArgs e)
-        {
-            object[] args = e.Arguments;
-            try
-            {
-                args = ReOrderArguments(e.Format, e.Arguments);
-            } catch
-            {
-            }
-
-            if (e.Exception != null)
-            {
-#pragma warning disable CA2254 // Template should be a static expression - we are injecting format from a different logger
-                traceLog.Log(traceLevel!.Value, e.Exception, e.Format, args);
-            }
-            else
-            {
-                traceLog.Log(traceLevel!.Value, e.Format, args);
-#pragma warning restore CA2254 // Template should be a static expression
-            }
-        }
-
-        private void LogDump<T>(string message, T item)
+        public void LogDump<T>(string message, T item)
         {
             if (Config.Logger.UaSessionTracing) log.LogDump(message, item);
         }
@@ -239,12 +190,25 @@ namespace Cognite.OpcUa
                 throw new ExtractorFailureException("Failed to load OPC-UA xml configuration file", exc);
             }
 
+            string ownCertificateDir = Environment.GetEnvironmentVariable("OPCUA_OWN_CERTIFICATE_DIR");
             string certificateDir = Environment.GetEnvironmentVariable("OPCUA_CERTIFICATE_DIR");
+            string certificateSubject = Environment.GetEnvironmentVariable("OPCUA_CERTIFICATE_SUBJECT");
             if (!string.IsNullOrEmpty(certificateDir))
             {
                 AppConfig.SecurityConfiguration.TrustedIssuerCertificates.StorePath = $"{certificateDir}/pki/issuer";
                 AppConfig.SecurityConfiguration.TrustedPeerCertificates.StorePath = $"{certificateDir}/pki/trusted";
                 AppConfig.SecurityConfiguration.RejectedCertificateStore.StorePath = $"{certificateDir}/pki/rejected";
+            }
+
+            if (!string.IsNullOrEmpty(ownCertificateDir))
+            {
+                AppConfig.SecurityConfiguration.ApplicationCertificate.StoreType = "Directory";
+                AppConfig.SecurityConfiguration.ApplicationCertificate.StorePath = $"{ownCertificateDir}";
+            }
+
+            if (!string.IsNullOrEmpty(certificateSubject))
+            {
+                AppConfig.SecurityConfiguration.ApplicationCertificate.SubjectName = certificateSubject;
             }
 
             bool validAppCert = await application.CheckApplicationInstanceCertificate(false, 0, Config.Source.CertificateExpiry);
@@ -265,134 +229,13 @@ namespace Cognite.OpcUa
             ConfigureUtilsTrace();
         }
 
-        private async Task CreateSessionDirect()
-        {
-            log.LogInformation("Attempt to select endpoint from: {EndpointURL}", Config.Source.EndpointUrl);
-            EndpointDescription selectedEndpoint;
-            try
-            {
-                selectedEndpoint = CoreClientUtils.SelectEndpoint(Config.Source.EndpointUrl, Config.Source.Secure);
-            }
-            catch (Exception ex)
-            {
-                throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.SelectEndpoint);
-            }
-            var endpointConfiguration = EndpointConfiguration.Create(AppConfig);
-            LogDump("Endpoint configuration", endpointConfiguration);
-
-            var endpoint = new ConfiguredEndpoint(null, selectedEndpoint, endpointConfiguration);
-            LogDump("Endpoint", endpoint);
-
-            var identity = AuthenticationUtils.GetUserIdentity(Config.Source);
-            log.LogInformation("Attempt to connect to endpoint with security: {SecurityPolicyUri} using user identity {Identity}",
-                endpoint.Description.SecurityPolicyUri,
-                identity.DisplayName);
-            try
-            {
-                if (Session?.Connected ?? false)
-                {
-                    Session.Close();
-                }
-                Session?.Dispose();
-
-
-                Session = await Session.Create(
-                    AppConfig,
-                    endpoint,
-                    false,
-                    ".NET OPC-UA Extractor Client",
-                    0,
-                    identity,
-                    null
-                );
-            }
-            catch (Exception ex)
-            {
-                throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.CreateSession);
-            }
-        }
-        private async Task WaitForReverseConnect()
-        {
-            if (AppConfig == null) throw new InvalidOperationException("AppConfig must be initialized");
-            reverseConnectManager?.Dispose();
-
-            AppConfig.ClientConfiguration.ReverseConnect = new ReverseConnectClientConfiguration
-            {
-                WaitTimeout = 300000,
-                HoldTime = 30000
-            };
-
-            reverseConnectManager = new ReverseConnectManager();
-            var endpointUrl = new Uri(Config.Source.EndpointUrl);
-            var reverseUrl = new Uri(Config.Source.ReverseConnectUrl);
-            reverseConnectManager.AddEndpoint(reverseUrl);
-            reverseConnectManager.StartService(AppConfig);
-
-            log.LogInformation("Waiting for reverse connection from: {EndpointURL}", Config.Source.EndpointUrl);
-            var connection = await reverseConnectManager.WaitForConnection(endpointUrl, null);
-            if (connection == null)
-            {
-                log.LogError("Reverse connect failed, no connection established");
-                throw new ExtractorFailureException("Failed to obtain reverse connection from server");
-            }
-            EndpointDescription selectedEndpoint;
-            try
-            {
-                selectedEndpoint = CoreClientUtils.SelectEndpoint(AppConfig, connection, Config.Source.Secure, 30000);
-            }
-            catch (Exception ex)
-            {
-                throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.SelectEndpoint);
-            }
-            var endpointConfiguration = EndpointConfiguration.Create(AppConfig);
-            LogDump("Reverse connect endpoint configuration", endpointConfiguration);
-
-            var endpoint = new ConfiguredEndpoint(null, selectedEndpoint, endpointConfiguration);
-            LogDump("Reverse connect endpoint", endpoint);
-
-            var identity = AuthenticationUtils.GetUserIdentity(Config.Source);
-            log.LogInformation("Attempt to connect to endpoint with security: {SecurityPolicyUri} using user identity {Identity}",
-                endpoint.Description.SecurityPolicyUri,
-                identity.DisplayName);
-
-            try
-            {
-                if (Session?.Connected ?? false)
-                {
-                    Session.Close();
-                }
-                Session?.Dispose();
-
-                connection = await reverseConnectManager.WaitForConnection(endpointUrl, null);
-                if (connection == null)
-                {
-                    log.LogError("Reverse connect failed, no connection established");
-                    throw new ExtractorFailureException("Failed to obtain reverse connection from server");
-                }
-
-
-                Session = await Session.Create(
-                    AppConfig,
-                    connection,
-                    endpoint,
-                    false,
-                    false,
-                    ".NET OPC-UA Extractor Client",
-                    0,
-                    identity,
-                    null);
-            }
-            catch (Exception ex)
-            {
-                throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.CreateSession);
-            }
-        }
-
         /// <summary>
         /// Load security configuration for the Session, then start the server.
         /// </summary>
-        private async Task StartSession()
+        private async Task StartSession(int timeout = -1)
         {
+            if (Callbacks == null) throw new InvalidOperationException("Attempted to start UAClient without setting callbacks");
+
             Browser.ResetVisitedNodes();
             // A restarted Session might mean a restarted server, so all server-relevant data must be cleared.
             // This includes any stored NodeId, which may refer to an outdated namespaceIndex
@@ -401,93 +244,50 @@ namespace Cognite.OpcUa
 
             await LoadAppConfig();
 
-            if (!string.IsNullOrEmpty(Config.Source.ReverseConnectUrl))
+            if (SessionManager == null)
             {
-                await WaitForReverseConnect();
+                SessionManager = new SessionManager(Config.Source, this, AppConfig!, log, liveToken, timeout);
             }
             else
             {
-                await CreateSessionDirect();
+                SessionManager.Timeout = timeout;
             }
-            if (Session == null) return;
-            Session.KeepAliveInterval = Config.Source.KeepAliveInterval;
-            Session.KeepAlive += ClientKeepAlive;
-            Session.PublishError += OnPublishError;
+
+            await SessionManager.Connect();
+
+            liveToken.ThrowIfCancellationRequested();
+
             Started = true;
-            connects.Inc();
-            connected.Set(1);
-            log.LogInformation("Successfully connected to server at {EndpointURL}", Config.Source.EndpointUrl);
+            log.LogInformation("Successfully connected to server at {EndpointURL}", SessionManager.EndpointUrl);
         }
 
-        /// <summary>
-        /// Event triggered when a publish request fails.
-        /// </summary>
-        private void OnPublishError(Session session, PublishErrorEventArgs e)
+        private bool ShouldRetryException(Exception ex)
         {
-            string symId = StatusCode.LookupSymbolicId(e.Status.Code);
-
-            var sub = session.Subscriptions.FirstOrDefault(sub => sub.Id == e.SubscriptionId);
-
-            if (sub != null)
+            if (ex is ServiceResultException serviceExc)
             {
-                log.LogError("Unexpected error on publish: {Code}, subscription: {Name}", symId, sub.DisplayName);
+                var code = serviceExc.StatusCode;
+                return Config.Source.Retries.FinalRetryStatusCodes.Contains(code);
             }
-        }
-
-        /// <summary>
-        /// Event triggered after a succesfull reconnect.
-        /// </summary>
-        private void ClientReconnectComplete(object sender, EventArgs eventArgs)
-        {
-            if (!ReferenceEquals(sender, reconnectHandler)) return;
-            if (reconnectHandler == null) return;
-            Session = reconnectHandler.Session;
-            reconnectHandler.Dispose();
-            log.LogWarning("--- RECONNECTED ---");
-
-            OnServerReconnect?.Invoke(this, EventArgs.Empty);
-
-            connects.Inc();
-            connected.Set(1);
-            reconnectHandler = null;
-        }
-
-        /// <summary>
-        /// Called on client keep alive, handles the case where the server has stopped responding and the connection timed out.
-        /// </summary>
-        private void ClientKeepAlive(Session sender, KeepAliveEventArgs eventArgs)
-        {
-            LogDump("Keep Alive", eventArgs);
-            if (eventArgs.Status == null || !ServiceResult.IsNotGood(eventArgs.Status)) return;
-            log.LogWarning("Keep alive failed: {Status}", eventArgs.Status);
-            if (reconnectHandler != null) return;
-            connected.Set(0);
-            log.LogWarning("--- RECONNECTING ---");
-            if (!Config.Source.ForceRestart && !liveToken.IsCancellationRequested)
+            else if (ex is ServiceCallFailureException failureExc)
             {
-                reconnectHandler = new SessionReconnectHandler();
-                if (reverseConnectManager != null)
+                return failureExc.Cause == ServiceCallFailure.SessionMissing;
+            }
+            else if (ex is SilentServiceException silentExc)
+            {
+                if (silentExc.InnerServiceException != null)
                 {
-                    reconnectHandler.BeginReconnect(sender, reverseConnectManager, 5000, ClientReconnectComplete);
-                }
-                else
-                {
-                    reconnectHandler.BeginReconnect(sender, 5000, ClientReconnectComplete);
+                    return Config.Source.Retries.FinalRetryStatusCodes.Contains(silentExc.InnerServiceException.StatusCode);
                 }
             }
-            else
+            else if (ex is AggregateException aex)
             {
-                try
-                {
-                    Session?.Close();
-                }
-                catch
-                {
-                    log.LogWarning("Client failed to close, quitting");
-                }
+                // Only retry aggregate exceptions if one of the inner exceptions should be retried...
+                var flat = aex.Flatten();
+                return aex.InnerExceptions.Any(e => ShouldRetryException(e));
             }
-            OnServerDisconnect?.Invoke(this, EventArgs.Empty);
+            return false;
         }
+
         /// <summary>
         /// Called after succesful validation of a server certificate. Handles the case where the certificate is untrusted.
         /// </summary>
@@ -583,7 +383,7 @@ namespace Cognite.OpcUa
                         break;
                     }
                 }
-                throw new FatalException($"Incorrect number of results from {op} service. Got {results.Count}, expected {nodes.Count}. " +
+                throw new ServiceCallFailureException($"Incorrect number of results from {op} service. Got {results.Count}, expected {nodes.Count}. " +
                     $"This is illegal behavior, and caused by a bug in the server. Status: {code}");
             }
 
@@ -593,11 +393,6 @@ namespace Cognite.OpcUa
                 var node = nodes[i];
                 LogDump("Browse node", node);
                 LogDump("Browse result", result);
-                if (StatusCode.IsBad(result.StatusCode)
-                    && result.StatusCode != StatusCodes.BadNodeIdUnknown)
-                {
-                    throw ExtractorUtils.HandleServiceResult(log, new ServiceResultException(result.StatusCode), op);
-                }
 
                 node.AddReferences(result.References);
                 node.ContinuationPoint = result.ContinuationPoint;
@@ -608,8 +403,12 @@ namespace Cognite.OpcUa
 
         public async Task GetReferences(BrowseParams browseParams, bool readToCompletion, CancellationToken token)
         {
+            await RetryUtil.RetryAsync("browse", async () => await GetReferencesInternal(browseParams, readToCompletion, token), Config.Source.Retries, ShouldRetryException, log, token);
+        }
+
+        private async Task GetReferencesInternal(BrowseParams browseParams, bool readToCompletion, CancellationToken token)
+        {
             if (browseParams == null || browseParams.Nodes == null) throw new ArgumentNullException(nameof(browseParams));
-            if (Session == null) throw new InvalidOperationException("Requires open session");
 
             var toBrowse = new List<BrowseNode>();
             var toBrowseNext = new List<BrowseNode>();
@@ -623,28 +422,7 @@ namespace Cognite.OpcUa
 
             if (toBrowse.Any())
             {
-                var descriptions = new BrowseDescriptionCollection(toBrowse.Select(node => browseParams.ToDescription(node)));
-                BrowseResultCollection results;
-                try
-                {
-                    var result = await Session.BrowseAsync(
-                        null,
-                        null,
-                        browseParams.MaxPerNode,
-                        descriptions,
-                        token);
-
-                    results = result.Results;
-                    numBrowse.Inc();
-                    LogDump("Browse diagnostics", result.DiagnosticInfos);
-                    LogDump("Browse header", result.ResponseHeader);
-                }
-                catch (OperationCanceledException) when (token.IsCancellationRequested) { return; }
-                catch (Exception ex)
-                {
-                    browseFailures.Inc();
-                    throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.Browse);
-                }
+                var results = await RetryUtil.RetryResultAsync("browse", async () => await GetReferencesChunk(browseParams, toBrowse, token), Config.Source.Retries, ShouldRetryException, log, token);
 
                 var next = HandleBrowseResult(toBrowse, results, ExtractorUtils.SourceOp.Browse);
                 if (readToCompletion) toBrowseNext.AddRange(next);
@@ -652,36 +430,90 @@ namespace Cognite.OpcUa
 
             while (toBrowseNext.Any())
             {
-                var cps = new ByteStringCollection(toBrowseNext.Select(node => node.ContinuationPoint));
-                BrowseResultCollection results;
-                try
-                {
-                    var result = await Session.BrowseNextAsync(
-                        null,
-                        false,
-                        cps,
-                        token);
+                var results = await RetryUtil.RetryResultAsync("browse next", async () => await GetNextReferencesChunk(toBrowseNext, token), Config.Source.Retries, ShouldRetryException, log, token);
 
-                    results = result.Results;
-                    numBrowse.Inc();
-                    LogDump("BrowseNext diagnostics", result.DiagnosticInfos);
-                    LogDump("BrowseNext header", result.ResponseHeader);
-                }
-                catch (OperationCanceledException) when (token.IsCancellationRequested) { return; }
-                catch (Exception ex)
-                {
-                    browseFailures.Inc();
-                    throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.BrowseNext);
-                }
                 var next = HandleBrowseResult(toBrowseNext, results, ExtractorUtils.SourceOp.BrowseNext);
                 if (readToCompletion) toBrowseNext = next;
                 else break;
             }
         }
 
+        private async Task<BrowseResultCollection> GetReferencesChunk(BrowseParams browseParams, List<BrowseNode> toBrowse, CancellationToken token)
+        {
+            if (Session == null) throw new ServiceCallFailureException("Session is not connected", ServiceCallFailure.SessionMissing);
+            var descriptions = new BrowseDescriptionCollection(toBrowse.Select(node => browseParams.ToDescription(node)));
+            try
+            {
+                token.ThrowIfCancellationRequested();
+                var result = await Session.BrowseAsync(
+                    null,
+                    null,
+                    browseParams.MaxPerNode,
+                    descriptions,
+                    token);
+
+                numBrowse.Inc();
+                LogDump("Browse diagnostics", result.DiagnosticInfos);
+                LogDump("Browse header", result.ResponseHeader);
+
+                foreach (var res in result.Results)
+                {
+                    if (StatusCode.IsBad(res.StatusCode)
+                    && res.StatusCode != StatusCodes.BadNodeIdUnknown)
+                    {
+                        throw ExtractorUtils.HandleServiceResult(log, new ServiceResultException(res.StatusCode), ExtractorUtils.SourceOp.Browse);
+                    }
+                }
+
+                return result.Results;
+            }
+            catch (Exception ex)
+            {
+                token.ThrowIfCancellationRequested();
+                browseFailures.Inc();
+                throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.Browse);
+            }
+        }
+
+        private async Task<BrowseResultCollection> GetNextReferencesChunk(List<BrowseNode> toBrowse, CancellationToken token)
+        {
+            if (Session == null) throw new ServiceCallFailureException("Session is not connected", ServiceCallFailure.SessionMissing);
+            var cps = new ByteStringCollection(toBrowse.Select(node => node.ContinuationPoint));
+            try
+            {
+                token.ThrowIfCancellationRequested();
+                var result = await Session.BrowseNextAsync(
+                    null,
+                    false,
+                    cps,
+                    token);
+
+                numBrowse.Inc();
+                LogDump("BrowseNext diagnostics", result.DiagnosticInfos);
+                LogDump("BrowseNext header", result.ResponseHeader);
+
+                foreach (var res in result.Results)
+                {
+                    if (StatusCode.IsBad(res.StatusCode)
+                    && res.StatusCode != StatusCodes.BadNodeIdUnknown)
+                    {
+                        throw ExtractorUtils.HandleServiceResult(log, new ServiceResultException(res.StatusCode), ExtractorUtils.SourceOp.BrowseNext);
+                    }
+                }
+
+                return result.Results;
+            }
+            catch (Exception ex)
+            {
+                token.ThrowIfCancellationRequested();
+                browseFailures.Inc();
+                throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.BrowseNext);
+            }
+        }
+
         public async Task AbortBrowse(IEnumerable<BrowseNode> nodes)
         {
-            if (Session == null) throw new InvalidOperationException("Requires open session");
+            if (Session == null) throw new ServiceCallFailureException("Session is not connected", ServiceCallFailure.SessionMissing);
             var toAbort = nodes.Where(node => node.ContinuationPoint != null).ToList();
             if (!toAbort.Any()) return;
             var cps = new ByteStringCollection(nodes.Select(node => node.ContinuationPoint));
@@ -717,7 +549,6 @@ namespace Cognite.OpcUa
             CancellationToken token,
             string purpose = "")
         {
-            if (Session == null) throw new InvalidOperationException("Requires open session");
             var values = new List<DataValue>();
             if (readValueIds == null || !readValueIds.Any()) return values;
             if (!string.IsNullOrEmpty(purpose)) purpose = $" for {purpose}";
@@ -725,45 +556,47 @@ namespace Cognite.OpcUa
             using var operation = waiter.GetInstance();
             int total = readValueIds.Count;
             int attrCount = 0;
+
+            int count = 0;
+            foreach (var nextValues in readValueIds.ChunkBy(Config.Source.AttributesChunk))
+            {
+                if (token.IsCancellationRequested) break;
+
+                count++;
+                var chunk = await RetryUtil.RetryResultAsync($"read for {purpose}", async () => await ReadAttributesChunk(nextValues, token), Config.Source.Retries, ShouldRetryException, log, token);
+                values.AddRange(chunk);
+                attrCount += chunk.Count();
+                log.LogDebug("Read {NumAttributesRead} / {Total} attributes{Purpose}", attrCount, total, purpose);
+            }
+            log.LogInformation(
+                "Read {TotalAttributesRead} attributes with {NumAttributeReadOperations} operations for {NodeCount} nodes{Purpose}",
+                values.Count, count, distinctNodeCount, purpose);
+
+            return values;
+        }
+
+        private async Task<IEnumerable<DataValue>> ReadAttributesChunk(IEnumerable<ReadValueId> readValueIds, CancellationToken token)
+        {
+            if (token.IsCancellationRequested) return Enumerable.Empty<DataValue>();
+            if (Session == null) throw new ServiceCallFailureException("Session is not connected", ServiceCallFailure.SessionMissing);
             try
             {
-                int count = 0;
-                foreach (var nextValues in readValueIds.ChunkBy(Config.Source.AttributesChunk))
-                {
-                    if (token.IsCancellationRequested) break;
-                    count++;
-                    await Session.ReadAsync(
-                        null,
-                        0,
-                        TimestampsToReturn.Source,
-                        new ReadValueIdCollection(nextValues),
-                        token);
+                var response = await Session.ReadAsync(
+                    null,
+                    0,
+                    TimestampsToReturn.Source,
+                    new ReadValueIdCollection(readValueIds),
+                    token);
 
-                    Session.Read(
-                        null,
-                        0,
-                        TimestampsToReturn.Source,
-                        new ReadValueIdCollection(nextValues),
-                        out DataValueCollection lvalues,
-                        out _
-                    );
-                    attributeRequests.Inc();
-                    values.AddRange(lvalues);
-                    attrCount += lvalues.Count;
-                    log.LogDebug("Read {NumAttributesRead} / {Total} attributes{Purpose}", attrCount, total, purpose);
-                }
-                log.LogInformation(
-                    "Read {TotalAttributesRead} attributes with {NumAttributeReadOperations} operations for {NodeCount} nodes{Purpose}",
-                    values.Count, count, distinctNodeCount, purpose);
+                attributeRequests.Inc();
+                return response.Results;
             }
-            catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+            catch (OperationCanceledException) when (token.IsCancellationRequested) { return Enumerable.Empty<DataValue>(); }
             catch (Exception ex)
             {
                 attributeRequestFailures.Inc();
                 throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.ReadAttributes);
             }
-
-            return values;
         }
 
         /// <summary>
@@ -787,21 +620,15 @@ namespace Cognite.OpcUa
             }
 
             IList<DataValue> values;
-            try
-            {
-                values = await ReadAttributes(readValueIds, nodes.Count(), token, "node hierarchy information");
-            }
-            catch (Exception ex)
-            {
-                throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.ReadAttributes);
-            }
+            values = await ReadAttributes(readValueIds, nodes.Count(), token, "node hierarchy information");
+
             int total = values.Count;
 
             log.LogInformation("Retrieved {Total}/{Expected} core attributes for {Count} nodes",
                 total, expected, nodes.Count());
             if (total < expected && !token.IsCancellationRequested)
             {
-                throw new ExtractorFailureException(
+                throw new ServiceCallFailureException(
                     $"Too few results in ReadNodeData, this is a bug in the OPC-UA server implementation, total : {total}, expected: {expected}");
             }
 
@@ -843,15 +670,9 @@ namespace Cognite.OpcUa
             var readValueIds = new ReadValueIdCollection(
                 nodes.Select(node => new ReadValueId { AttributeId = Attributes.Value, NodeId = node.Id }));
             IEnumerable<DataValue> values;
-            try
-            {
-                var attributes = new List<uint> { Attributes.Value };
-                values = await ReadAttributes(readValueIds, nodes.Count(), token, "node values");
-            }
-            catch (Exception ex)
-            {
-                throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.ReadAttributes);
-            }
+
+            var attributes = new List<uint> { Attributes.Value };
+            values = await ReadAttributes(readValueIds, nodes.Count(), token, "node values");
 
             var enumerator = values.GetEnumerator();
             foreach (var node in nodes)
@@ -873,7 +694,7 @@ namespace Cognite.OpcUa
         /// <exception cref="InvalidOperationException"></exception>
         public async Task AbortHistoryRead(HistoryReadParams readParams, CancellationToken token)
         {
-            if (Session == null) throw new InvalidOperationException("Requires open session");
+            if (Session == null) throw new ServiceCallFailureException("Session is not connected", ServiceCallFailure.SessionMissing);
             using var operation = waiter.GetInstance();
 
             var ids = new HistoryReadValueIdCollection();
@@ -935,7 +756,6 @@ namespace Cognite.OpcUa
         /// <returns>Pairs of NodeId and history read results as IEncodable</returns>
         public async Task DoHistoryRead(HistoryReadParams readParams, CancellationToken token)
         {
-            if (Session == null) throw new InvalidOperationException("Requires open session");
             using var operation = waiter.GetInstance();
 
             var ids = new HistoryReadValueIdCollection();
@@ -948,54 +768,63 @@ namespace Cognite.OpcUa
                 });
             }
 
-            try
+            var results = await RetryUtil.RetryResultAsync(
+                readParams.Details is ReadEventDetails ? "read history events" : "read history datapoints",
+                () => ReadHistoryChunk(readParams, ids, token),
+                Config.Source.Retries,
+                ShouldRetryException,
+                log,
+                token);
+
+            for (int i = 0; i < readParams.Nodes.Count; i++)
             {
-                var response = await Session.HistoryReadAsync(
+                var data = results[i];
+                var node = readParams.Nodes[i];
+                LogDump("HistoryRead node", node);
+                LogDump("HistoryRead data", data);
+
+                node.LastResult = ExtensionObject.ToEncodeable(data.HistoryData);
+                if (data.ContinuationPoint == null)
+                {
+                    node.Completed = true;
+                    node.ContinuationPoint = null;
+                }
+                else
+                {
+                    node.ContinuationPoint = data.ContinuationPoint;
+                }
+            }
+
+            log.LogDebug("Fetched historical {Type} for {NodeCount} nodes",
+                    readParams.Details is ReadEventDetails ? "events" : "datapoints",
+                    readParams.Nodes.Count);
+
+        }
+
+        private async Task<HistoryReadResultCollection> ReadHistoryChunk(HistoryReadParams readParams, HistoryReadValueIdCollection ids, CancellationToken token)
+        {
+            if (Session == null) throw new ServiceCallFailureException("Session is not connected", ServiceCallFailure.SessionMissing);
+            var response = await Session.HistoryReadAsync(
                     null,
                     new ExtensionObject(readParams.Details),
                     TimestampsToReturn.Source,
                     false,
                     ids,
                     token);
-                var results = response.Results;
-                LogDump("HistoryRead diagnostics", response.DiagnosticInfos);
-                LogDump("HistoryRead header", response.ResponseHeader);
+            var results = response.Results;
+            LogDump("HistoryRead diagnostics", response.DiagnosticInfos);
+            LogDump("HistoryRead header", response.ResponseHeader);
 
-                numHistoryReads.Inc();
-                for (int i = 0; i < readParams.Nodes.Count; i++)
-                {
-                    var data = results[i];
-                    var node = readParams.Nodes[i];
-                    LogDump("HistoryRead node", node);
-                    LogDump("HistoryRead data", data);
-                    if (StatusCode.IsBad(data.StatusCode))
-                    {
-                        throw new ServiceResultException(data.StatusCode);
-                    }
-                    node.LastResult = ExtensionObject.ToEncodeable(data.HistoryData);
-                    if (data.ContinuationPoint == null)
-                    {
-                        node.Completed = true;
-                        node.ContinuationPoint = null;
-                    }
-                    else
-                    {
-                        node.ContinuationPoint = data.ContinuationPoint;
-                    }
-                }
+            numHistoryReads.Inc();
 
-                log.LogDebug("Fetched historical {Type} for {NodeCount} nodes",
-                        readParams.Details is ReadEventDetails ? "events" : "datapoints",
-                        readParams.Nodes.Count);
-            }
-            catch (OperationCanceledException) when (token.IsCancellationRequested) { }
-            catch (Exception ex)
+            foreach (var result in results)
             {
-                historyReadFailures.Inc();
-                throw ExtractorUtils.HandleServiceResult(log, ex, readParams.Details is ReadEventDetails
-                    ? ExtractorUtils.SourceOp.HistoryReadEvents
-                    : ExtractorUtils.SourceOp.HistoryRead);
+                if (StatusCode.IsBad(result.StatusCode))
+                {
+                    throw new ServiceResultException(result.StatusCode);
+                }
             }
+            return results;
         }
 
         /// <summary>
@@ -1016,46 +845,13 @@ namespace Cognite.OpcUa
             CancellationToken token,
             string purpose = "")
         {
-            if (Session == null) throw new InvalidOperationException("Requires open session");
-
             if (!string.IsNullOrEmpty(purpose)) purpose = $"{purpose} ";
             await subscriptionSem.WaitAsync(token);
-
-            Subscription? subscription = null;
 
             using var operation = waiter.GetInstance();
             try
             {
-                subscription = Session.Subscriptions
-                    .FirstOrDefault(sub => sub.DisplayName.StartsWith(subName, StringComparison.InvariantCulture));
-
-                if (subscription == null)
-                {
-                    subscription = new Subscription(Session.DefaultSubscription)
-                    {
-                        PublishingInterval = Config.Source.PublishingInterval,
-                        DisplayName = subName
-                    };
-                    subscription.PublishStatusChanged += OnSubscriptionPublishStatusChange;
-                    try
-                    {
-                        Session.AddSubscription(subscription);
-                        await subscription.CreateAsync(token);
-                    }
-                    catch (Exception ex)
-                    {
-                        try
-                        {
-                            await Session.RemoveSubscriptionAsync(subscription);
-                        }
-                        finally
-                        {
-                            subscription.Dispose();
-                        }
-                        throw ExtractorUtils.HandleServiceResult(log, ex,
-                            ExtractorUtils.SourceOp.CreateSubscription);
-                    }
-                }
+                var subscription = await RetryUtil.RetryResultAsync("create subscription", () => CreateSubscription(subName, token), Config.Source.Retries, ShouldRetryException, log, token);
 
                 int count = 0;
                 var hasSubscription = subscription.MonitoredItems.Select(sub => sub.ResolvedNodeId).ToHashSet();
@@ -1078,23 +874,70 @@ namespace Cognite.OpcUa
                         purpose, lcount, count, total);
                     count += lcount;
 
-                    if (lcount > 0 && subscription.Created)
+                    if (lcount > 0)
                     {
-                        try
-                        {
-                            await subscription.CreateItemsAsync(token);
-                        }
-                        catch (Exception ex)
-                        {
-                            throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.CreateMonitoredItems);
-                        }
+                        await RetryUtil.RetryAsync("create monitored items", () => CreateMonitoredItemsChunk(subscription, token), Config.Source.Retries, ShouldRetryException, log, token);
                     }
                 }
+                return subscription;
             }
             finally
             {
                 subscriptionSem.Release();
             }
+        }
+
+        private async Task CreateMonitoredItemsChunk(Subscription subscription, CancellationToken token)
+        {
+            if (Session == null) throw new ServiceCallFailureException("Session is not connected", ServiceCallFailure.SessionMissing);
+            try
+            {
+                await subscription.CreateItemsAsync(token);
+            }
+            catch (Exception ex)
+            {
+                throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.CreateMonitoredItems);
+            }
+        }
+
+        private async Task<Subscription> CreateSubscription(string name, CancellationToken token)
+        {
+            if (Session == null) throw new ServiceCallFailureException("Session is not connected", ServiceCallFailure.SessionMissing);
+            var subscription = Session.Subscriptions
+                .FirstOrDefault(sub => sub.DisplayName.StartsWith(name, StringComparison.InvariantCulture));
+
+            if (subscription == null)
+            {
+                subscription = new Subscription(Session.DefaultSubscription)
+                {
+                    PublishingInterval = Config.Source.PublishingInterval,
+                    DisplayName = name
+                };
+                subscription.PublishStatusChanged += OnSubscriptionPublishStatusChange;
+            }
+            if (!subscription.Created)
+            {
+                try
+                {
+                    Session.AddSubscription(subscription);
+                    await subscription.CreateAsync(token);
+                }
+                catch (Exception ex)
+                {
+                    try
+                    {
+                        await Session.RemoveSubscriptionAsync(subscription);
+                    }
+                    finally
+                    {
+                        subscription.PublishStatusChanged -= OnSubscriptionPublishStatusChange;
+                        subscription.Dispose();
+                    }
+                    throw ExtractorUtils.HandleServiceResult(log, ex,
+                        ExtractorUtils.SourceOp.CreateSubscription);
+                }
+            }
+
             return subscription;
         }
 
@@ -1102,7 +945,7 @@ namespace Cognite.OpcUa
 
         private async Task RecreateSubscription(Subscription sub, CancellationToken token)
         {
-            if (Session == null || !Session.Connected || reconnectHandler != null || token.IsCancellationRequested) return;
+            if (Session == null || !Session.Connected || token.IsCancellationRequested) return;
 
             if (!sub.PublishingStopped) return;
 
@@ -1159,33 +1002,7 @@ namespace Cognite.OpcUa
 
                 // Create a new subscription with the same name and monitored items
                 var name = sub.DisplayName.Split(' ').First();
-#pragma warning disable CA2000 // Dispose objects before losing scope
-                var newSub = new Subscription(Session.DefaultSubscription)
-                {
-                    PublishingInterval = Config.Source.PublishingInterval,
-                    DisplayName = name
-                };
-#pragma warning restore CA2000 // Dispose objects before losing scope
-                newSub.PublishStatusChanged += OnSubscriptionPublishStatusChange;
-                try
-                {
-                    Session.AddSubscription(newSub);
-                    await newSub.CreateAsync(token);
-                }
-                catch (Exception ex)
-                {
-                    try
-                    {
-                        await Session.RemoveSubscriptionAsync(newSub);
-                    }
-                    finally
-                    {
-                        newSub.Dispose();
-                    }
-                    throw ExtractorUtils.HandleServiceResult(log, ex,
-                        ExtractorUtils.SourceOp.CreateSubscription);
-                }
-                
+                var newSub = await RetryUtil.RetryResultAsync("create subscription", () => CreateSubscription(name, token), Config.Source.Retries, ShouldRetryException, log, token);
 
                 int count = 0;
                 uint total = sub.MonitoredItemCount;
@@ -1197,9 +1014,9 @@ namespace Cognite.OpcUa
                     log.LogDebug("Recreate subscriptions for {Name} for {NumNodes} nodes, {Subscribed} / {Total} done.",
                         name, lcount, count, total);
                     count += lcount;
-
                     newSub.AddItems(chunk);
-                    await newSub.CreateItemsAsync(token);
+
+                    await RetryUtil.RetryAsync("create monitored items", () => CreateMonitoredItemsChunk(newSub, token), Config.Source.Retries, ShouldRetryException, log, token);
                 }
             }
             catch (Exception ex)
@@ -1242,16 +1059,19 @@ namespace Cognite.OpcUa
                 nodeList,
                 "DataChangeListener",
                 subscriptionHandler,
-                node => new MonitoredItem
-                {
-                    StartNodeId = node.SourceId,
-                    DisplayName = "Value: " + (node as VariableExtractionState)?.DisplayName,
-                    SamplingInterval = Config.Source.SamplingInterval,
-                    QueueSize = (uint)Math.Max(0, Config.Source.QueueLength),
-                    AttributeId = Attributes.Value,
-                    NodeClass = NodeClass.Variable,
-                    CacheQueueSize = Math.Max(0, Config.Source.QueueLength),
-                    Filter = Config.Subscriptions.DataChangeFilter?.Filter
+                node => {
+                    var config = Config.Subscriptions.GetMatchingConfig(node);
+                    return new MonitoredItem
+                    {
+                        StartNodeId = node.SourceId,
+                        DisplayName = "Value: " + (node as VariableExtractionState)?.DisplayName,
+                        SamplingInterval = config.SamplingInterval,
+                        QueueSize = (uint)Math.Max(0, config.QueueLength),
+                        AttributeId = Attributes.Value,
+                        NodeClass = NodeClass.Variable,
+                        CacheQueueSize = Math.Max(0, config.QueueLength),
+                        Filter = config.DataChangeFilter?.Filter
+                    };
                 }, token, "datapoint");
 
             numSubscriptions.Set(sub.MonitoredItemCount);
@@ -1276,15 +1096,18 @@ namespace Cognite.OpcUa
                 emitters,
                 "EventListener",
                 subscriptionHandler,
-                node => new MonitoredItem
-                {
-                    StartNodeId = node.SourceId,
-                    AttributeId = Attributes.EventNotifier,
-                    DisplayName = "Events: " + node.Id,
-                    SamplingInterval = Config.Source.SamplingInterval,
-                    QueueSize = (uint)Math.Max(0, Config.Source.QueueLength),
-                    Filter = filter,
-                    NodeClass = NodeClass.Object
+                node => {
+                    var config = Config.Subscriptions.GetMatchingConfig(node);
+                    return new MonitoredItem
+                    {
+                        StartNodeId = node.SourceId,
+                        AttributeId = Attributes.EventNotifier,
+                        DisplayName = "Events: " + node.Id,
+                        SamplingInterval = config.SamplingInterval,
+                        QueueSize = (uint)Math.Max(0, config.QueueLength),
+                        Filter = filter,
+                        NodeClass = NodeClass.Object
+                    };
                 },
                 token, "event");
         }
@@ -1297,18 +1120,33 @@ namespace Cognite.OpcUa
         /// <param name="name"></param>
         public async Task RemoveSubscription(string name)
         {
-            if (Session == null || Session.Subscriptions == null) return;
-            var subscription = Session.Subscriptions.FirstOrDefault(sub =>
-                                       sub.DisplayName.StartsWith(name, StringComparison.InvariantCulture));
-            if (subscription == null || !subscription.Created) return;
-            try
+            if (TryGetSubscription(name, out var subscription) && subscription!.Created)
             {
-                await Session.RemoveSubscriptionAsync(subscription);
+                try
+                {
+                    await Session!.RemoveSubscriptionAsync(subscription);
+                }
+                catch
+                {
+                    // A failure to delete the subscription generally means it just doesn't exist.
+                }
+                finally
+                {
+                    subscription!.Dispose();
+                }
             }
-            finally
-            {
-                subscription.Dispose();
-            }
+        }
+
+        /// <summary>
+        /// Tries to get an existing subscription from a list of session subscriptions.
+        /// </summary>
+        /// <param name="name"></param>
+        /// <param name="subscription"></param>
+        public bool TryGetSubscription(string name, out Subscription? subscription)
+        {
+            subscription = Session?.Subscriptions?.FirstOrDefault(sub =>
+                sub.DisplayName.StartsWith(name, StringComparison.InvariantCulture));
+            return subscription != null;
         }
         #endregion
 
@@ -1471,29 +1309,27 @@ namespace Cognite.OpcUa
             Justification = "Bad analysis")]
         public async Task SubscribeToAuditEvents(MonitoredItemNotificationEventHandler callback, CancellationToken token)
         {
-            if (Session == null) throw new InvalidOperationException("Requires open session");
+            if (Session == null) throw new ServiceCallFailureException("Session is not connected", ServiceCallFailure.SessionMissing);
             var filter = BuildAuditFilter();
             LogDump("Audit filter", filter);
             await subscriptionSem.WaitAsync(token);
 
+            using var operation = waiter.GetInstance();
+
             Subscription? subscription = null;
             try
             {
-                subscription = Session.Subscriptions.FirstOrDefault(sub => sub.DisplayName.StartsWith("AuditListener", StringComparison.InvariantCulture))
-                ?? new Subscription(Session.DefaultSubscription)
-                {
-                    PublishingInterval = Config.Source.PublishingInterval,
-                    DisplayName = "AuditListener"
-                };
+                subscription = await RetryUtil.RetryResultAsync("create subscription", () => CreateSubscription("AuditListener", token), Config.Source.Retries, ShouldRetryException, log, token);
 
                 if (subscription.MonitoredItemCount != 0) return;
+
                 var item = new MonitoredItem
                 {
                     StartNodeId = ObjectIds.Server,
                     Filter = filter,
                     AttributeId = Attributes.EventNotifier,
-                    SamplingInterval = Config.Source.SamplingInterval,
-                    QueueSize = (uint)Math.Max(0, Config.Source.QueueLength),
+                    SamplingInterval = Config.Subscriptions.SamplingInterval,
+                    QueueSize = (uint)Math.Max(0, Config.Subscriptions.QueueLength),
                     NodeClass = NodeClass.Object,
                     DisplayName = "Audit: Server"
                 };
@@ -1501,18 +1337,7 @@ namespace Cognite.OpcUa
                 subscription.AddItem(item);
                 log.LogInformation("Subscribe to auditing events on the server node");
 
-                using var operation = waiter.GetInstance();
-
-                if (subscription.Created && subscription.MonitoredItemCount == 0)
-                {
-                    await subscription.CreateItemsAsync(token);
-                }
-                else if (!subscription.Created)
-                {
-                    log.LogInformation("Add audit events subscription to the Session");
-                    Session.AddSubscription(subscription);
-                    await subscription.CreateAsync(token);
-                }
+                await RetryUtil.RetryAsync("create monitored items", () => CreateMonitoredItemsChunk(subscription, token), Config.Source.Retries, ShouldRetryException, log, token);
             }
             catch (Exception)
             {
@@ -1521,9 +1346,7 @@ namespace Cognite.OpcUa
             }
             finally
             {
-#pragma warning disable CA1508 // Avoid dead conditional code - the warning is due to a dotnet bug
                 if (subscription != null && !subscription.Created)
-#pragma warning restore CA1508
                 {
                     subscription.Dispose();
                 }
@@ -1649,7 +1472,24 @@ namespace Cognite.OpcUa
             if (!nsPrefixMap.TryGetValue(nodeId.NamespaceIndex, out var prefix))
             {
                 var namespaceUri = id.NamespaceUri ?? NamespaceTable!.GetString(nodeId.NamespaceIndex);
-                string newPrefix = Config.Extraction.NamespaceMap.TryGetValue(namespaceUri, out string prefixNode) ? prefixNode : (namespaceUri + ":");
+                string newPrefix;
+                if (namespaceUri is not null)
+                {
+                    if (Config.Extraction.NamespaceMap.TryGetValue(namespaceUri, out string prefixNode))
+                    {
+                        newPrefix = prefixNode;
+                    }
+                    else
+                    {
+                        newPrefix = namespaceUri + ":";
+                    }
+                }
+                else
+                {
+                    log.LogWarning("NodeID received with null NamespaceUri, and index not in NamespaceTable. This is likely a bug in the server. {Id}, {Index}",
+                        nodeId, nodeId.NamespaceIndex);
+                    newPrefix = $"UNKNOWN_NS_{nodeId.NamespaceIndex}";
+                }
                 nsPrefixMap[nodeId.NamespaceIndex] = prefix = newPrefix;
             }
 
@@ -1778,19 +1618,13 @@ namespace Cognite.OpcUa
             {
                 log.LogWarning("Failed to close UAClient: {Message}", ex.Message);
             }
-            reconnectHandler?.Dispose();
-            reverseConnectManager?.Dispose();
             waiter.Dispose();
-            Utils.Tracing.TraceEventHandler -= TraceEventHandler;
             if (AppConfig != null)
             {
                 AppConfig.CertificateValidator.CertificateValidation -= CertificateValidationHandler;
             }
-            if (Session != null)
-            {
-                Session.KeepAlive -= ClientKeepAlive;
-            }
             subscriptionSem.Dispose();
+            SessionManager?.Dispose();
         }
         #endregion
     }

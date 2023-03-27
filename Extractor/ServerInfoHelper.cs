@@ -15,6 +15,7 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using Cognite.OpcUa.Config;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using System;
@@ -67,7 +68,7 @@ namespace Cognite.OpcUa
                     }
                     catch { }
                 }
-                
+
                 if ((cVal > val || cVal == 0) && val > 0)
                 {
                     log.LogInformation("Max {Name} is restricted to {Val}", name, val);

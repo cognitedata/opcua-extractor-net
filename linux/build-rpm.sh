@@ -26,6 +26,8 @@ cp publish/OpcuaExtractor rpmbuild/BUILD/opcua-extractor
 cp -r config rpmbuild/BUILD/config
 cp installer/opcua-extractor.service rpmbuild/BUILD/
 cp installer/opcua-extractor@.service rpmbuild/BUILD/
+cp manifest.spdx.json rpmbuild/BUILD/
+cp manifest.spdx.json.sha256 rpmbuild/BUILD/
 
 cd rpmbuild/
 

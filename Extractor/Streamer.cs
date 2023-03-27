@@ -16,6 +16,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using Cognite.Extractor.Common;
+using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
@@ -205,7 +206,7 @@ namespace Cognite.OpcUa
             foreach ((string id, var range) in pointRanges)
             {
                 var state = extractor.State.GetNodeState(id);
-                state?.UpdateDestinationRange(range.First, range.Last);
+                if (extractor.AllowUpdateState) state?.UpdateDestinationRange(range.First, range.Last);
             }
             return restartHistory;
         }
@@ -296,7 +297,7 @@ namespace Cognite.OpcUa
             foreach (var (id, range) in eventRanges)
             {
                 var state = extractor.State.GetEmitterState(id);
-                state?.UpdateDestinationRange(range.First, range.Last);
+                if (extractor.AllowUpdateState) state?.UpdateDestinationRange(range.First, range.Last);
             }
 
 
@@ -362,7 +363,6 @@ namespace Cognite.OpcUa
 
             foreach (var buffDp in buffDps)
             {
-                log.LogTrace("Subscription DataPoint {DataPoint}", buffDp);
                 Enqueue(buffDp);
             }
         }

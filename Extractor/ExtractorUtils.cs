@@ -16,6 +16,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using Cognite.Extractor.Configuration;
+using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
@@ -178,6 +179,10 @@ namespace Cognite.OpcUa
             else if (ex is ServiceResultException serviceEx)
             {
                 return HandleServiceResult(log, serviceEx, op);
+            }
+            else if (ex is SilentServiceException silentEx)
+            {
+                return silentEx;
             }
             else
             {
@@ -572,5 +577,38 @@ namespace Cognite.OpcUa
         public FatalException(string message, Exception innerException) : base(message, innerException) { }
 
         public FatalException() { }
+    }
+
+    public enum ServiceCallFailure
+    {
+        SessionMissing,
+        ServerFault,
+        ExtractorError
+    }
+
+    public class ServiceCallFailureException : Exception
+    {
+        public ServiceCallFailure Cause { get; }
+        public ServiceCallFailureException(string message, ServiceCallFailure cause, Exception innerException) : base(message, innerException)
+        {
+            Cause = cause;
+        }
+
+        public ServiceCallFailureException(string message, ServiceCallFailure cause) : base(message)
+        {
+            Cause = cause;
+        }
+
+        public ServiceCallFailureException() : this("Unspecified extractor error", ServiceCallFailure.ExtractorError)
+        {
+        }
+
+        public ServiceCallFailureException(string message) : this(message, ServiceCallFailure.ExtractorError)
+        {
+        }
+
+        public ServiceCallFailureException(string message, Exception innerException) : this(message, ServiceCallFailure.ExtractorError, innerException)
+        {
+        }
     }
 }

@@ -18,18 +18,21 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using Opc.Ua;
 using Opc.Ua.Server;
 using System;
-using System.Linq;
 using System.Collections.Generic;
 using System.Security.Cryptography.X509Certificates;
-using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Server
 {
-    internal class DummyValidator : ICertificateValidator
+    internal sealed class DummyValidator : ICertificateValidator
     {
         public void Validate(X509Certificate2 certificate)
+        {
+            throw ServiceResultException.Create(StatusCodes.BadCertificateInvalid, "Bad certificate");
+        }
+
+        public void Validate(X509Certificate2Collection certificates)
         {
             throw ServiceResultException.Create(StatusCodes.BadCertificateInvalid, "Bad certificate");
         }
@@ -88,45 +91,9 @@ namespace Server
             if (!logTrace) return;
             Utils.SetTraceMask(Utils.TraceMasks.All);
             if (traceLevel != null) return;
-            Utils.Tracing.TraceEventHandler += TraceEventHandler;
-            traceLevel = LogLevel.Debug;
-        }
-
-        private Regex traceGroups = new Regex("{([0-9]+)}");
-        private object[] ReOrderArguments(string format, object[] args)
-        {
-            // OPC-UA Trace uses the stringbuilder style of arguments, which allows them to be out of order
-            // If we want nice coloring in logs (we do), then we have to re-order arguments like this.
-            // There's a cost, but this is only enabled when debugging anyway.
-            if (!args.Any()) return args;
-
-            var matches = traceGroups.Matches(format);
-            var indices = matches.Select(m => Convert.ToInt32(m.Groups[1].Value)).ToArray();
-
-            return indices.Select(i => args[i]).ToArray();
-        }
-
-        private void TraceEventHandler(object sender, TraceEventArgs e)
-        {
-            object[] args = e.Arguments;
-            try
-            {
-                args = ReOrderArguments(e.Format, e.Arguments);
-            }
-            catch
-            {
-            }
-
-            if (e.Exception != null)
-            {
-#pragma warning disable CA2254 // Template should be a static expression - we are injecting format from a different logger
-                traceLog.Log(traceLevel!.Value, e.Exception, e.Format, args);
-            }
-            else
-            {
-                traceLog.Log(traceLevel!.Value, e.Format, args);
-#pragma warning restore CA2254 // Template should be a static expression
-            }
+            traceLevel = LogLevel.Trace;
+            Utils.SetLogLevel(traceLevel.Value);
+            Utils.SetLogger(traceLog);
         }
 
         public void SetValidator(bool failAlways)
@@ -210,6 +177,9 @@ namespace Server
                 if (!AllowAnonymous) throw ServiceResultException.Create(StatusCodes.BadIdentityTokenRejected,
                         "Anonymous token not permitted");
             }
+            args.Identity = new UserIdentity();
+            args.Identity.GrantedRoleIds.Add(ObjectIds.WellKnownRole_ConfigureAdmin);
+            args.Identity.GrantedRoleIds.Add(ObjectIds.WellKnownRole_SecurityAdmin);
         }
 
         public void UpdateNode(NodeId id, object value)
@@ -247,6 +217,11 @@ namespace Server
         {
             custom.SetEventConfig(auditing, server, serverAuditing);
         }
+
+        public void SetServerRedundancyStatus(byte serviceLevel, RedundancySupport support)
+        {
+            custom.SetServerRedundancyStatus(serviceLevel, support);
+        }
         public void PopulateEventHistory<T>(NodeId eventId,
             NodeId emitter,
             NodeId source,
@@ -281,6 +256,10 @@ namespace Server
         {
             custom.RemoveProperty(parentId, name);
         }
+        public void RemoveNode(NodeId id)
+        {
+            custom.RemoveNode(id);
+        }
         public void MutateNode(NodeId id, Action<NodeState> mutation)
         {
             if (mutation == null) throw new ArgumentNullException(nameof(mutation));
@@ -301,6 +280,11 @@ namespace Server
         public void SetDiagnosticsEnabled(bool value)
         {
             ServerInternal.NodeManager.DiagnosticsNodeManager.SetDiagnosticsEnabled(ServerInternal.DefaultSystemContext, value);
+        }
+
+        public void SetNamespacePublicationDate(DateTime time)
+        {
+            custom.SetNamespacePublicationDate(time);
         }
 
         public void DropSubscriptions()
@@ -325,15 +309,6 @@ namespace Server
             if (cnt > 0)
             {
                 Console.WriteLine($"Deleted {cnt} subscriptions manually");
-            }
-        }
-
-        protected override void Dispose(bool disposing)
-        {
-            base.Dispose(disposing);
-            if (disposing)
-            {
-                Utils.Tracing.TraceEventHandler -= TraceEventHandler;
             }
         }
     }

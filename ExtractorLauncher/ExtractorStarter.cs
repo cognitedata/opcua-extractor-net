@@ -65,7 +65,7 @@ namespace Cognite.OpcUa
                     return "EndpointUrl is not a valid URI";
                 }
             }
-            
+
             if (string.IsNullOrEmpty(config.Extraction.IdPrefix)) log.LogWarning("No id-prefix specified in config file");
             if (config.Cognite == null && config.Influx == null && config.Mqtt == null) log.LogWarning("No destination system specified");
             if (config.Extraction.IdPrefix == "events.") return "Do not use events. as id-prefix, as it is used internally";
@@ -79,6 +79,17 @@ namespace Cognite.OpcUa
                 var parsed = CogniteTime.ParseTimestampString(config.History.EndTime);
                 if (parsed == null) return $"Invalid history end time: {config.History.EndTime}";
             }
+            if (config.Source.SamplingInterval != null)
+            {
+                log.LogWarning("source.sampling-interval is deprecated. Use subscriptions.sampling-interval instead.");
+                config.Subscriptions.SamplingInterval = config.Source.SamplingInterval.Value;
+            }
+            if (config.Source.QueueLength != null)
+            {
+                log.LogWarning("source.queue-length is deprecated. Use subscriptions.queue-length instead.");
+                config.Subscriptions.QueueLength = config.Source.QueueLength.Value;
+            }
+
             return null;
         }
 

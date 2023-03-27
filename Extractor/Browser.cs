@@ -16,6 +16,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using Cognite.Extractor.Common;
+using Cognite.OpcUa.Config;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using System;
@@ -267,6 +268,7 @@ namespace Cognite.OpcUa
             using var scheduler = new BrowseScheduler(log, throttler, uaClient, continuationPoints, options, token, purpose);
             await scheduler.RunAsync();
         }
+
         /// <summary>
         /// Clear internal list of visited nodes, allowing callbacks to be called for visited nodes again.
         /// </summary>

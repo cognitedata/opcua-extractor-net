@@ -15,7 +15,9 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
+using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.Types;
 using System;
 using System.Collections.Generic;
@@ -48,11 +50,21 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Nodes not yet pushed due to pusher failure, should be cleared to free up memory after a successfull push.
         /// </summary>
-        List<UANode> PendingNodes { get; }
-        /// <summary>
-        /// References not yet pushed due to pusher failure.
-        /// </summary>
-        List<UAReference> PendingReferences { get; }
+        PusherInput? PendingNodes { get; set; }
+
+
+        void AddPendingNodes(PusherInput pending, FullPushResult result)
+        {
+            var filtered = pending.Filter(result);
+            if (PendingNodes is null)
+            {
+                PendingNodes = filtered;
+            }
+            else
+            {
+                PendingNodes = PendingNodes.Merge(filtered);
+            }
+        }
 
         /// <summary>
         /// Push nodes, emptying the queue
@@ -114,6 +126,17 @@ namespace Cognite.OpcUa
         Task<bool?> PushDataPoints(IEnumerable<UADataPoint> points, CancellationToken token)
         {
             return Task.FromResult((bool?)true);
+        }
+
+        /// <summary>
+        /// Mark the given nodes as deleted in destinations.
+        /// </summary>
+        /// <param name="deletes"></param>
+        /// <param name="token"></param>
+        /// <returns></returns>
+        Task<bool> ExecuteDeletes(DeletedNodes deletes, CancellationToken token)
+        {
+            return Task.FromResult(true);
         }
 
         /// <summary>
