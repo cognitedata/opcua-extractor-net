@@ -165,14 +165,7 @@ namespace Cognite.OpcUa.NodeSources
             FinalSourceObjects.AddRange(readNodes);
             foreach (var variable in readVariables)
             {
-<<<<<<< HEAD
-                if (!Extractor.DataTypeManager.AllowTSMap(variable))
-                {
-                    if (!Config.Extraction.DataTypes.UnmappableAsProperties) continue;
-                    variable.VariableAttributes.IsProperty = true;
-                }
-=======
->>>>>>> master
+                variable.AllowTSMap = Extractor.DataTypeManager.AllowTSMap(variable);
                 AddVariableToLists(variable);
             }
 

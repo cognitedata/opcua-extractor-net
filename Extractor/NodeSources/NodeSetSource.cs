@@ -171,11 +171,7 @@ namespace Cognite.OpcUa.NodeSources
                     var targetId = Client.ToNodeId(reference.TargetId);
                     if (!references.TryGetValue(targetId, out var targetRefs))
                     {
-<<<<<<< HEAD
-                        references[targetId] = targetRefs = new List<IReference>();
-=======
                         references[targetId] = targetRefs = new Dictionary<(NodeId, NodeId, bool), IReference>();
->>>>>>> master
                     }
                     if (!targetRefs.ContainsKey((node.NodeId, reference.ReferenceTypeId, reference.IsInverse)))
                     {

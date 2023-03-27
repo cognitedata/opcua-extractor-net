@@ -229,24 +229,27 @@ namespace Cognite.OpcUa.Types
             public bool IsSourceVariable;
             public bool IsDestinationObject;
             public bool IsDestinationVariable;
+            public bool AllowTsMap;
         }
 
-        public VariableGroups GetVariableGroups(DataTypeManager dataTypeManager)
+        public bool? AllowTSMap { get; set; }
+
+        public VariableGroups GetVariableGroups()
         {
-            var allowTsMap = dataTypeManager.AllowTSMap(this);
+            if (AllowTSMap is null) throw new InvalidOperationException("Must set AllowTSMap before getting variable groups");
             return new VariableGroups
             {
                 // Source object if it's not a variable
                 IsSourceObject = NodeClass != NodeClass.Variable,
                 // Source variable if we wish to subscribe to it
-                IsSourceVariable = allowTsMap && NodeClass == NodeClass.Variable,
+                IsSourceVariable = AllowTSMap.Value && NodeClass == NodeClass.Variable,
                 // Destination object if it's an object directly (through isObject)
                 // it's a mapped array, or it's not a variable.
-                IsDestinationObject = IsArray && Index == -1 && allowTsMap
+                IsDestinationObject = IsArray && Index == -1 && AllowTSMap.Value
                     || isObject
                     || NodeClass != NodeClass.Variable,
                 // Destination variable if allowTsMap is true and it's a variable.
-                IsDestinationVariable = allowTsMap && NodeClass == NodeClass.Variable,
+                IsDestinationVariable = AllowTSMap.Value && NodeClass == NodeClass.Variable,
             };
         }
 

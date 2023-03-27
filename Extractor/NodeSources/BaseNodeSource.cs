@@ -80,7 +80,7 @@ namespace Cognite.OpcUa.NodeSources
         /// <param name="node">Variable to write</param>
         protected virtual void AddVariableToLists(UAVariable node)
         {
-            var map = node.GetVariableGroups(Extractor.DataTypeManager);
+            var map = node.GetVariableGroups();
             if (map.IsDestinationVariable) FinalDestinationVariables.AddRange(node.CreateTimeseries());
             if (map.IsDestinationObject) FinalDestinationObjects.Add(node);
             if (map.IsSourceVariable) FinalSourceVariables.Add(node);
@@ -242,6 +242,17 @@ namespace Cognite.OpcUa.NodeSources
                     || node.NodeClass != NodeClass.DataType && node.ParentId == ObjectIds.DataTypesFolder;
             }
 
+            var variable = node as UAVariable;
+
+            if (variable is not null)
+            {
+                variable.AllowTSMap = Extractor.DataTypeManager.AllowTSMap(variable);
+                if (Config.Extraction.DataTypes.UnmappedAsProperties && !variable.AllowTSMap)
+                {
+                    variable.Attributes.IsProperty = true;
+                }
+            }
+
             if (Extractor.Transformations != null)
             {
                 foreach (var trns in Extractor.Transformations)
@@ -265,12 +276,12 @@ namespace Cognite.OpcUa.NodeSources
                 node.Parent.AddProperty(node);
                 // Edge-case, since attributes are read before transformations, if transformations cause a node to become a property,
                 // ArrayDimensions won't be read. We can just read them later at minimal cost.
-                if (!initialProperty && Config.Extraction.DataTypes.MaxArraySize == 0 && (node is UAVariable variable) && variable.ValueRank >= 0)
+                if (!initialProperty && Config.Extraction.DataTypes.MaxArraySize == 0 && (variable is not null) && variable.ValueRank >= 0)
                 {
                     node.Attributes.DataRead = false;
                 }
             }
-            else if (node is UAVariable variable)
+            else if (variable is not null)
             {
                 RawVariables.Add(variable);
             }
@@ -287,14 +298,6 @@ namespace Cognite.OpcUa.NodeSources
         /// <param name="node">Node to sort.</param>
         protected void SortVariable(TypeUpdateConfig update, UAVariable node)
         {
-<<<<<<< HEAD
-            if (!Extractor.DataTypeManager.AllowTSMap(node))
-            {
-                if (!Config.Extraction.DataTypes.UnmappableAsProperties) return;
-                node.VariableAttributes.IsProperty = true;
-            }
-=======
->>>>>>> master
             if (FilterObject(update, node)) AddVariableToLists(node);
         }
 

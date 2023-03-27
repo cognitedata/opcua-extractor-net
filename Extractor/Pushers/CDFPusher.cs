@@ -298,9 +298,6 @@ namespace Cognite.OpcUa.Pushers
                 return result;
             }
 
-<<<<<<< HEAD
-            if (fdmDestination != null)
-=======
             try
             {
                 await EnsureConfigInit(token);
@@ -315,8 +312,7 @@ namespace Cognite.OpcUa.Pushers
                 return result;
             }
 
-            try
->>>>>>> master
+            if (fdmDestination != null)
             {
                 bool pushResult = true;
                 try
