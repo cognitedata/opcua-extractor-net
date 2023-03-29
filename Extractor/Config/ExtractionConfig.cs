@@ -16,9 +16,11 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using Cognite.Extractor.Common;
+using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 
 namespace Cognite.OpcUa.Config
 {
@@ -144,17 +146,35 @@ namespace Cognite.OpcUa.Config
         /// It is possible to have multiple of each filter type.
         /// </summary>
         public IEnumerable<RawNodeTransformation>? Transformations { get; set; }
-        public IEnumerable<NodeId> GetRootNodes(UAClient client)
+        public IEnumerable<NodeId> GetRootNodes(UAClient client, ILogger logger)
         {
             var roots = new List<NodeId>();
             if (RootNode != null)
             {
-                roots.Add(RootNode.ToNodeId(client, ObjectIds.ObjectsFolder));
+                var id = RootNode.ToNodeId(client);
+                if (id.IsNullNodeId)
+                {
+                    logger.LogWarning("Failed to convert configured root node {Namespace} {Id} to NodeId", RootNode.NamespaceUri, RootNode.NodeId);
+                }
+                else
+                {
+                    roots.Add(id);
+                }
             }
             if (RootNodes != null)
             {
-                roots.AddRange(RootNodes.Select(proto =>
-                    proto.ToNodeId(client, ObjectIds.ObjectsFolder)));
+                foreach (var root in RootNodes)
+                {
+                    var id = root.ToNodeId(client);
+                    if (id.IsNullNodeId)
+                    {
+                        logger.LogWarning("Failed to convert configured root node {Namespace} {Id} to NodeId", root.NamespaceUri, root.NodeId);
+                    }
+                    else
+                    {
+                        roots.Add(id);
+                    }
+                }
             }
             if (!roots.Any())
             {
