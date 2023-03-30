@@ -51,8 +51,9 @@ namespace Cognite.OpcUa
 
             await _uaClient.Browser.BrowseDirectory(
                 new[] { serverNamespaces },
-                (refDef, parent) =>
+                (refDef, parent, visited) =>
                 {
+                    if (visited) return;
                     var nodeId = (NodeId)refDef.NodeId;
 
                     if (parent == serverNamespaces && !grouping.ContainsKey(nodeId))

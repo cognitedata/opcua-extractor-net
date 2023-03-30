@@ -109,7 +109,7 @@ namespace Cognite.OpcUa.Config
                         if (docb)
                         {
                             log.LogTrace("Discovered new node {NodeId}", nodeId);
-                            callback?.Invoke(rd, parentId);
+                            callback?.Invoke(rd, parentId, false);
                         }
                         if (rd.NodeClass == NodeClass.Variable) continue;
                         if (localVisitedNodes.Add(nodeId))

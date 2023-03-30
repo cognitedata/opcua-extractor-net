@@ -106,6 +106,11 @@ namespace Cognite.OpcUa.Config
         /// Alternatively, use Raw, where relationships can be marked as deleted.
         /// </summary>
         public bool DeleteRelationships { get; set; }
+
+        /// <summary>
+        /// Configuration for writing to a custom OPC-UA flexible data model.
+        /// </summary>
+        public FdmDestinationConfig? FlexibleDataModels { get; set; }
     }
     public class RawMetadataConfig
     {
@@ -163,5 +168,46 @@ namespace Cognite.OpcUa.Config
         /// Call callback even if zero items are created or updated.
         /// </summary>
         public bool ReportOnEmpty { get; set; }
+    }
+
+    public enum TypesToMap
+    {
+        Referenced,
+        Custom,
+        All
+    }
+
+    public class FdmDestinationConfig
+    {
+        /// <summary>
+        /// Instance space to write to
+        /// </summary>
+        public string Space { get; set; } = "opcua_test";
+        /// <summary>
+        /// True to enable. This will not produce meaningful results unless
+        /// extraction.types.as-nodes, extraction.relationships.enabled, extraction.relationships.hierarchical,
+        /// are all set to "true", and there is exactly one root node i=84
+        /// </summary>
+        public bool Enabled { get; set; }
+
+        /// <summary>
+        /// Exclude any nodes that are not somehow referenced by a custom node.
+        /// The following node types are included:
+        /// Custom nodes
+        /// Nodes referenced non-hierarchically by any other included node, recursively.
+        /// Ancestors of any included node.
+        /// 
+        /// This is all applied recursively meaning that the excluded nodes are generally:
+        /// Unused reference types
+        /// Unused object types
+        /// Unused variable types
+        /// Children of unused types
+        /// </summary>
+        public bool ExcludeNonReferenced { get; set; }
+
+        /// <summary>
+        /// Enum for which types to map to FDM
+        /// </summary>
+        public TypesToMap TypesToMap { get; set; } = TypesToMap.Custom;
     }
 }

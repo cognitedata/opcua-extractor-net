@@ -234,6 +234,11 @@ namespace Cognite.OpcUa.Config
         /// reasonable or useful values.
         /// </summary>
         public bool EstimateArraySizes { get; set; }
+
+        /// <summary>
+        /// If true, variables not mapped due to array dimensions or data type are all mapped to properties instead.
+        /// </summary>
+        public bool UnmappedAsProperties { get; set; }
     }
 
     public class RelationshipConfig

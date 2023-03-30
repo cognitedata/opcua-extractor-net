@@ -112,10 +112,11 @@ namespace Cognite.OpcUa.Config
         /// <param name="target">List to write to</param>
         /// <param name="client">UAClient instance for namespaces</param>
         /// <returns>Callback for Browse in UAClient</returns>
-        public static Action<ReferenceDescription, NodeId> GetSimpleListWriterCallback(ICollection<UANode> target, UAClient client, ILogger log)
+        public static Action<ReferenceDescription, NodeId, bool> GetSimpleListWriterCallback(ICollection<UANode> target, UAClient client, ILogger log)
         {
-            return (node, parentId) =>
+            return (node, parentId, visited) =>
             {
+                if (visited) return;
                 if (node.NodeClass == NodeClass.Object || node.NodeClass == NodeClass.DataType || node.NodeClass == NodeClass.ObjectType)
                 {
                     var bufferedNode = new UANode(client.ToNodeId(node.NodeId),

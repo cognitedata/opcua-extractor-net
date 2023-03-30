@@ -16,6 +16,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using Cognite.Extractor.Common;
+using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
@@ -26,17 +27,13 @@ namespace Cognite.OpcUa.Pushers.FDM
 {
     internal class NodeTrimmer
     {
-        private Dictionary<NodeId, IEnumerable<UAReference>> referencesByTargetId;
-        private Dictionary<NodeId, IEnumerable<UAReference>> referencesBySourceId;
-        private HashSet<NodeId> visitedIds = new HashSet<NodeId>();
-        private Dictionary<NodeId, UANode> nodeMap;
+        private NodeHierarchy nodes;
+        private readonly HashSet<NodeId> visitedIds = new();
         private FullConfig config;
         private ILogger log;
-        public NodeTrimmer(IEnumerable<UANode> nodes, IEnumerable<UAReference> references, FullConfig config, ILogger log)
+        public NodeTrimmer(NodeHierarchy nodes, FullConfig config, ILogger log)
         {
-            referencesByTargetId = references.GroupBy(rf => rf.Target.Id).ToDictionary(group => group.Key, group => (IEnumerable<UAReference>)group);
-            referencesBySourceId = references.GroupBy(rf => rf.Source.Id).ToDictionary(group => group.Key, group => (IEnumerable<UAReference>)group);
-            nodeMap = nodes.ToDictionary(node => node.Id);
+            this.nodes = nodes;
             this.config = config;
             this.log = log;
         }
@@ -46,8 +43,8 @@ namespace Cognite.OpcUa.Pushers.FDM
             if (reference != null) refResult.Add(reference);
             if (!visitedIds.Add(node.Id)) return;
             result.Add(node);
-            var bySource = referencesBySourceId.GetValueOrDefault(node.Id) ?? Enumerable.Empty<UAReference>();
-            var byTarget = referencesByTargetId.GetValueOrDefault(node.Id) ?? Enumerable.Empty<UAReference>();
+            var bySource = nodes.BySource(node.Id);
+            var byTarget = nodes.ByTarget(node.Id);
 
             if (!bySource.Any() && !byTarget.Any())
             {
@@ -57,7 +54,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             if (node.NodeClass == NodeClass.Variable || node.NodeClass == NodeClass.VariableType)
             {
                 var dataTypeId = (node as UAVariable)!.VariableAttributes.DataType?.Raw;
-                if (dataTypeId != null && !dataTypeId.IsNullNodeId) TraverseNode(result, refResult, null, nodeMap[dataTypeId]);
+                if (dataTypeId != null && !dataTypeId.IsNullNodeId) TraverseNode(result, refResult, null, nodes.Get(dataTypeId));
             }
 
             if (node.Id.NamespaceIndex != 0)
@@ -65,11 +62,11 @@ namespace Cognite.OpcUa.Pushers.FDM
                 // We explore all references for custom nodes
                 foreach (var rf in bySource)
                 {
-                    TraverseNode(result, refResult, rf, nodeMap[rf.Target.Id]);
+                    TraverseNode(result, refResult, rf, nodes.Get(rf.Target.Id));
                 }
                 foreach (var rf in byTarget)
                 {
-                    TraverseNode(result, refResult, rf, nodeMap[rf.Source.Id]);
+                    TraverseNode(result, refResult, rf, nodes.Get(rf.Source.Id));
                 }
             }
             else
@@ -78,7 +75,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                 // we also follow non-hierarchical references, but only outward.
                 foreach (var rf in bySource)
                 {
-                    var target = nodeMap[rf.Target.Id];
+                    var target = nodes.Get(rf.Target.Id);
                     if (rf.IsHierarchical)
                     {
                         // These nodes in particular we skip here, as they are huge, and we only need custom members.
@@ -98,7 +95,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                 {
                     if (rf.IsHierarchical)
                     {
-                        TraverseNode(result, refResult, rf, nodeMap[rf.Source.Id]);
+                        TraverseNode(result, refResult, rf, nodes.Get(rf.Source.Id));
                     }
                 }
             }
@@ -108,12 +105,12 @@ namespace Cognite.OpcUa.Pushers.FDM
         {
             if (reference != null) refResult.Add(reference);
             if (visitedIds.Add(node.Id)) result.Add(node);
-            var bySource = referencesBySourceId.GetValueOrDefault(node.Id) ?? Enumerable.Empty<UAReference>();
+            var bySource = nodes.BySource(node.Id);
 
             if (node.NodeClass == NodeClass.Variable || node.NodeClass == NodeClass.VariableType)
             {
                 var dataTypeId = (node as UAVariable)!.VariableAttributes.DataType?.Raw;
-                if (dataTypeId != null && !dataTypeId.IsNullNodeId) TraverseNode(result, refResult, null, nodeMap[dataTypeId]);
+                if (dataTypeId != null && !dataTypeId.IsNullNodeId) TraverseNode(result, refResult, null, nodes.Get(dataTypeId));
             }
 
             // For hierarchical nodes we just follow all outgoing references.
@@ -121,11 +118,11 @@ namespace Cognite.OpcUa.Pushers.FDM
             {
                 if (rf.IsHierarchical)
                 {
-                    TraverseHierarchy(result, refResult, rf, nodeMap[rf.Target.Id]);
+                    TraverseHierarchy(result, refResult, rf, nodes.Get(rf.Target.Id));
                 }
                 else
                 {
-                    TraverseNode(result, refResult, rf, nodeMap[rf.Target.Id]);
+                    TraverseNode(result, refResult, rf, nodes.Get(rf.Target.Id));
                 }
             }
         }
@@ -136,7 +133,7 @@ namespace Cognite.OpcUa.Pushers.FDM
         {
             var result = new List<UANode>();
             var refResult = new List<UAReference>();
-            var roots = nodeMap.Values.Where(nd => nd.Id.NamespaceIndex != 0).ToList();
+            var roots = nodes.NodeMap.Values.Where(nd => nd.Id.NamespaceIndex != 0).ToList();
 
             foreach (var node in roots)
             {
@@ -144,7 +141,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             }
 
             // If we have enabled all events we need to explore the event hierarchy
-            if (config.Events.Enabled && config.Events.AllEvents && nodeMap.TryGetValue(ObjectTypeIds.BaseEventType, out var baseEvt))
+            if (config.Events.Enabled && config.Events.AllEvents && nodes.NodeMap.TryGetValue(ObjectTypeIds.BaseEventType, out var baseEvt))
             {
                 TraverseNode(result, refResult, null, baseEvt);
                 TraverseHierarchy(result, refResult, null, baseEvt);
@@ -153,7 +150,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             // Make sure we get all used reference types
             foreach (var type in refResult.Select(rf => rf.Type.Id).Distinct().ToList())
             {
-                TraverseNode(result, refResult, null, nodeMap[type]);
+                TraverseNode(result, refResult, null, nodes.Get(type));
             }
 
             refResult = refResult.DistinctBy(rf => (rf.Source.Id, rf.Target.Id, rf.Type.Id)).ToList();

@@ -367,12 +367,12 @@ namespace Cognite.OpcUa.PubSub
             config = new PubSubConfigurationDataType();
 
             var root = await client.Browser.GetRootNodes(new[] { ObjectIds.PublishSubscribe }, token);
-            HandleNode(root.First(), NodeId.Null);
+            HandleNode(root.First(), NodeId.Null, false);
 
             log.LogInformation("Browse server PubSub hierarchy to identify settings");
             await client.Browser.BrowseDirectory(
                 new[] { ObjectIds.PublishSubscribe },
-                (desc, id) => HandleNode(desc, id),
+                HandleNode,
                 token,
                 ignoreVisited: false,
                 doFilter: false,
@@ -394,8 +394,9 @@ namespace Cognite.OpcUa.PubSub
             return config;
         }
 
-        private InternalNode HandleNode(ReferenceDescription node, NodeId parentId)
+        private void HandleNode(ReferenceDescription node, NodeId parentId, bool visited)
         {
+            if (visited) return;
             var parent = parentId == null || parentId.IsNullNodeId ? null : nodeMap.GetValueOrDefault(parentId);
             var id = client.ToNodeId(node.NodeId);
             var child = new InternalNode(
@@ -407,7 +408,6 @@ namespace Cognite.OpcUa.PubSub
                 parent);
 
             nodeMap[id] = child;
-            return child;
         }
     }
 

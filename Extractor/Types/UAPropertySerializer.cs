@@ -37,6 +37,12 @@ namespace Cognite.OpcUa.Types
         ReversibleJson
     }
 
+    class StringWrapper
+    {
+        [JsonPropertyName("value")]
+        public string? Value { get; set; }
+    }
+
 
     /// <summary>
     /// Class used for converting properties and property values to strings.
@@ -74,6 +80,15 @@ namespace Cognite.OpcUa.Types
             TypeInfo? typeInfo = null,
             StringConverterMode mode = StringConverterMode.Simple)
         {
+            if (mode == StringConverterMode.ReversibleJson && uaClient != null && value is Variant variant)
+            {
+                using var encoder = new JsonEncoder(uaClient.MessageContext, true, null, false);
+                encoder.WriteVariant(null, variant, true);
+                var result = encoder.CloseAndReturnText();
+
+                return result[1..^1];
+            }
+
             var jsonMode = mode == StringConverterMode.ReversibleJson ? StringConverterMode.ReversibleJson : StringConverterMode.Json;
             if (value == null)
             {
@@ -93,25 +108,11 @@ namespace Cognite.OpcUa.Types
             {
                 try
                 {
-                    bool topLevelIsArray = typeInfo.ValueRank >= ValueRanks.OneDimension;
-
-                    using var encoder = new JsonEncoder(uaClient.MessageContext, mode == StringConverterMode.ReversibleJson, null, topLevelIsArray);
+                    using var encoder = new JsonEncoder(uaClient.MessageContext, mode == StringConverterMode.ReversibleJson, null, false);
                     encoder.WriteVariantContents(value, typeInfo);
                     var result = encoder.CloseAndReturnText();
 
-                    // Workaround for a silly problem, it really likes to write JSON like this, for some reason.
-                    if (result == "{null}")
-                    {
-                        return mode != StringConverterMode.Simple ? "null" : "";
-                    }
-
-                    // JsonEncoder for some reason spits out {{ ... }} from WriteVariantContents.
-                    if (topLevelIsArray)
-                    {
-                        return result[1..^1];
-                    }
-
-                    return result;
+                    return result[1..^1];
                 }
                 catch (Exception ex)
                 {
@@ -176,7 +177,19 @@ namespace Cognite.OpcUa.Types
             }
             else if (typeInfo != null && typeInfo.BuiltInType == BuiltInType.StatusCode && value is uint uintVal)
             {
-                returnStr = StatusCode.LookupSymbolicId(uintVal);
+                if (mode == StringConverterMode.ReversibleJson)
+                {
+                    var builder = new StringBuilder();
+                    builder.Append("{");
+                    builder.Append(@"""value"":");
+                    builder.Append(uintVal);
+                    builder.Append("}");
+                    return builder.ToString();
+                }
+                else
+                {
+                    returnStr = StatusCode.LookupSymbolicId(uintVal);
+                }
             }
             else if (value is System.Xml.XmlElement xml) return Newtonsoft.Json.JsonConvert.SerializeXmlNode(xml);
             else if (value is Uuid uuid) returnStr = uuid.GuidString;
@@ -213,6 +226,22 @@ namespace Cognite.OpcUa.Types
             else if (IsNumber(value)) return value.ToString();
             else returnStr = value.ToString();
 
+            switch (mode) {
+                case StringConverterMode.Simple:
+                    return returnStr;
+                case StringConverterMode.Json:
+                    return JsonSerializer.Serialize(returnStr);
+                case StringConverterMode.ReversibleJson:
+                    if (returnStr.StartsWith("{"))
+                    {
+                        return JsonSerializer.Serialize(returnStr);
+                    }
+                    else
+                    {
+                        return JsonSerializer.Serialize(new StringWrapper { Value = returnStr });
+                    }
+            }
+
             return mode != StringConverterMode.Simple ? JsonSerializer.Serialize(returnStr) : returnStr;
         }
 
@@ -240,7 +269,7 @@ namespace Cognite.OpcUa.Types
         {
             typeof(NodeId), typeof(DataValue), typeof(ExpandedNodeId), typeof(LocalizedText),
             typeof(QualifiedName), typeof(Opc.Ua.Range), typeof(Opc.Ua.KeyValuePair), typeof(System.Xml.XmlElement),
-            typeof(EUInformation), typeof(EnumValueType), typeof(Variant), typeof(Uuid), typeof(DiagnosticInfo)
+            typeof(EUInformation), typeof(EnumValueType), typeof(DiagnosticInfo), typeof(Variant), typeof(Uuid), typeof(StatusCode)
         };
 
         /// <summary>

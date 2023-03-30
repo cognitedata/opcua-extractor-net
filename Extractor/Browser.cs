@@ -59,7 +59,7 @@ namespace Cognite.OpcUa
         /// <param name="callback">Callback to call for each found node</param>
         /// <param name="ignoreVisited">Default true, do not call callback for previously visited nodes</param>
         public Task BrowseNodeHierarchy(NodeId root,
-            Action<ReferenceDescription, NodeId?> callback,
+            Action<ReferenceDescription, NodeId?, bool> callback,
             CancellationToken token,
             bool ignoreVisited = true,
             string purpose = "")
@@ -73,7 +73,7 @@ namespace Cognite.OpcUa
         /// <param name="callback">Callback for each mapped node, takes a description of a single node, and its parent id</param>
         /// <param name="ignoreVisited">Default true, do not call callback for previously visited nodes</param>
         public async Task BrowseNodeHierarchy(IEnumerable<NodeId> roots,
-            Action<ReferenceDescription, NodeId> callback,
+            Action<ReferenceDescription, NodeId, bool> callback,
             CancellationToken token,
             bool ignoreVisited = true,
             string purpose = "")
@@ -86,14 +86,18 @@ namespace Cognite.OpcUa
             foreach (var root in rootRefs)
             {
                 bool docb = true;
-                lock (visitedNodesLock)
+                if (ignoreVisited)
                 {
-                    if (!visitedNodes.Add(uaClient.ToNodeId(root.NodeId)) && ignoreVisited)
+                    lock (visitedNodesLock)
                     {
-                        docb = false;
+                        if (!visitedNodes.Add(uaClient.ToNodeId(root.NodeId)))
+                        {
+                            docb = false;
+                        }
                     }
                 }
-                if (docb) callback?.Invoke(root, NodeId.Null);
+                
+                if (docb) callback?.Invoke(root, NodeId.Null, false);
             }
             uint classMask = (uint)NodeClass.Variable | (uint)NodeClass.Object;
             if (config.Extraction.NodeTypes.AsNodes)
@@ -176,11 +180,12 @@ namespace Cognite.OpcUa
             return roots.Values;
         }
 
-        private static Action<ReferenceDescription, NodeId> GetDictWriteCallback(Dictionary<NodeId, ReferenceDescriptionCollection> dict)
+        private static Action<ReferenceDescription, NodeId, bool> GetDictWriteCallback(Dictionary<NodeId, ReferenceDescriptionCollection> dict)
         {
             object lck = new object();
-            return (rd, nodeId) =>
+            return (rd, nodeId, visited) =>
             {
+                if (visited) return;
                 lock (lck)
                 {
                     if (!dict.TryGetValue(nodeId, out var refs))
@@ -235,7 +240,7 @@ namespace Cognite.OpcUa
         /// <param name="readVariableChildren">Read the children of variables.</param>
         public async Task BrowseDirectory(
             IEnumerable<NodeId> roots,
-            Action<ReferenceDescription, NodeId>? callback,
+            Action<ReferenceDescription, NodeId, bool>? callback,
             CancellationToken token,
             NodeId? referenceTypes = null,
             uint nodeClassMask = (uint)NodeClass.Variable | (uint)NodeClass.Object,

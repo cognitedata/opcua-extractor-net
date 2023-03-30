@@ -18,15 +18,15 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using Cognite.Extractor.Common;
 using Cognite.Extractor.Utils;
 using Cognite.OpcUa.Types;
-using CogniteSdk;
-using CogniteSdk.Beta;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Cognite.OpcUa.Config;
+using CogniteSdk.Beta.DataModels;
+using System.Text.Json;
 
 namespace Cognite.OpcUa.Pushers.FDM
 {
@@ -36,16 +36,16 @@ namespace Cognite.OpcUa.Pushers.FDM
         private FullConfig config;
         private ILogger<FDMWriter> log;
         private string instSpace;
-        private bool initialized;
+        public UAExtractor Extractor { get; set; } = null!;
         public FDMWriter(FullConfig config, CogniteDestination destination, ILogger<FDMWriter> log)
         {
             this.config = config;
             this.destination = destination;
             this.log = log;
-            instSpace = config.Cognite!.FlexibleDataModels!.InstanceSpace;
+            instSpace = config.Cognite!.FlexibleDataModels!.Space;
         }
 
-        private async Task IngestNodes<T>(string model, IEnumerable<T> items, CancellationToken token) where T : BaseNode
+        /* private async Task IngestNodes<T>(string model, IEnumerable<T> items, CancellationToken token) where T : BaseNode
         {
             if (!items.Any()) return;
 
@@ -95,88 +95,85 @@ namespace Cognite.OpcUa.Pushers.FDM
                     throw;
                 }
             }
-        }
+        } */
 
-        class SelectAllTemp : IDMSFilter, ICompositeDMSFilter
+        private async Task Initialize(NodeHierarchy nodes, TypeHierarchyBuilder builder, CancellationToken token)
         {
-        }
-
-        private async Task Initialize(CancellationToken token)
-        {
-            if (initialized) return;
-
-            await destination.CogniteClient.Beta.DataModels.CreateSpaces(new[]
+            if (config.Cognite!.Debug)
             {
-                new Space { ExternalId = FDMDataModel.Space },
-                new Space { ExternalId = instSpace }
-            }.DistinctBy(s => s.ExternalId), token);
-
-            while (!token.IsCancellationRequested)
-            {
-                var res = await destination.CogniteClient.Beta.DataModels.GraphQuery<Dictionary<string, IEnumerable<Dictionary<string, Dictionary<string, JsonElement>>>>>(new GraphQuery
+                var tps = builder.ConstructTypes(nodes);
+                var options = new JsonSerializerOptions(Oryx.Cognite.Common.jsonOptions) { WriteIndented = true };
+                foreach (var type in tps.Containers)
                 {
-                    Select = new Dictionary<string, SelectModelProperties>
-                    {
-                        { "externalId", new SelectModelProperties { Limit = 1000, Models = new Dictionary<string, ModelQueryProperties>
-                        {
-                            { "node", new ModelQueryProperties { Model = ModelIdentifier.Node, Properties = new [] { "externalId" } } }
-                        } } },
-                        { "edgeExternalId", new SelectModelProperties { Limit = 1000, Models = new Dictionary<string, ModelQueryProperties>
-                        {
-                            { "edge", new ModelQueryProperties { Model = ModelIdentifier.Edge, Properties = new [] { "externalId" } } }
-                        } } }
-                    },
-                    With = new Dictionary<string, QueryExpression>
-                    {
-                        { "externalId", new QueryExpression
-                        {
-                            Nodes = new NodeQueryExpression
-                            {
-                                Filter = new SelectAllTemp()
-                            },
-                        } },
-                        { "edgeExternalId", new QueryExpression
-                        {
-                            Edges = new EdgeQueryExpression
-                            {
-                                Filter = new SelectAllTemp()
-                            },
-                        } }
-                    }
-                }, token);
-
-                var nodes = res["externalId"].Where(r => r["node"]["spaceExternalId"].Deserialize<string>() == instSpace).Select(r => r["node"]["externalId"]).Select(el => el.Deserialize<string>()).ToList();
-                var edges = res["edgeExternalId"].Where(r => r["edge"]["spaceExternalId"].Deserialize<string>() == instSpace).Select(r => r["edge"]["externalId"]).Select(el => el.Deserialize<string>()).ToList();
-                if (nodes.Any())
-                {
-                    log.LogInformation("Delete {Count} nodes: {Nodes}", nodes.Count, string.Join(", ", nodes));
-                    await destination.CogniteClient.Beta.DataModels.DeleteNodes(nodes, instSpace, token);
+                    log.LogDebug("Build container: {Type}", JsonSerializer.Serialize(type.Value, options));
                 }
-
-                if (edges.Any())
+                foreach (var type in tps.Views)
                 {
-                    log.LogInformation("Delete {Count} edges: {Edges}", edges.Count, string.Join(", ", edges));
-                    await destination.CogniteClient.Beta.DataModels.DeleteNodes(edges, instSpace, token);
+                    log.LogDebug("Build view: {Type}", JsonSerializer.Serialize(type.Value, options));
                 }
-
-                if (!nodes.Any() && !edges.Any()) break;
+                return;
             }
 
-            await destination.CogniteClient.Beta.DataModels.ApplyModels(FDMDataModel.GetModels(), FDMDataModel.Space, token);
-            initialized = true;
+            await destination.CogniteClient.Beta.DataModels.UpsertSpaces(new[]
+            {
+                new SpaceCreate
+                {
+                    Space = instSpace
+                }
+            }, token);
 
+            var types = builder.ConstructTypes(nodes);
 
+            foreach (var chunk in types.Containers.Values.ChunkBy(100))
+            {
+                await destination.CogniteClient.Beta.DataModels.UpsertContainers(chunk, token);
+            }
+
+            foreach (var level in types.Views.Values.ChunkByHierarchy(0, v => v.ExternalId, v => v.Implements?.FirstOrDefault()?.ExternalId))
+            {
+                foreach (var item in level)
+                {
+                    log.LogTrace("Create type {Id} parent: {Parent}", item.ExternalId, item.Implements?.FirstOrDefault()?.ExternalId);
+                }
+
+                log.LogInformation("Inserting level with {Count} items", level.Count());
+                foreach (var chunk in level.ChunkBy(100))
+                {
+                    log.LogInformation("Inserting {Count} items", chunk.Count());
+                    await destination.CogniteClient.Beta.DataModels.UpsertViews(chunk, token);
+                }
+            }
+
+            var model = new DataModelCreate
+            {
+                Name = "OPC-UA",
+                ExternalId = "OPC_UA_DM",
+                Space = instSpace,
+                Version = "1",
+                Views = types.Views.Select(v => new ViewIdentifier(instSpace, v.Value.ExternalId, v.Value.Version))
+            };
+            await destination.CogniteClient.Beta.DataModels.UpsertDataModels(new[] { model }, token);
+        }
+
+        private IEnumerable<UANode> GetModellingRules()
+        {
+            return new[] {
+                new UANode(ObjectIds.ModellingRule_Mandatory, "Mandatory", NodeId.Null, NodeClass.Object),
+                new UANode(ObjectIds.ModellingRule_Optional, "Optional", NodeId.Null, NodeClass.Object),
+                new UANode(ObjectIds.ModellingRule_MandatoryPlaceholder, "MandatoryPlaceholder", NodeId.Null, NodeClass.Object),
+                new UANode(ObjectIds.ModellingRule_OptionalPlaceholder, "OptionalPlaceholder", NodeId.Null, NodeClass.Object),
+                new UANode(ObjectIds.ModellingRule_ExposesItsArray, "ExposesItsArray", NodeId.Null, NodeClass.Object),
+            };
         }
 
         public async Task<bool> PushNodes(
             IEnumerable<UANode> objects,
             IEnumerable<UAVariable> variables,
             IEnumerable<UAReference> references,
-            IUAClientAccess uaClient,
+            IUAClientAccess client,
             CancellationToken token)
         {
-            // Initialize if needed
-            await Initialize(token);
+            var builder = new TypeHierarchyBuilder(log, client, config);
 
             // First, collect all nodes, including properties.
             var nodes = objects
@@ -184,12 +181,32 @@ namespace Cognite.OpcUa.Pushers.FDM
                 .Concat(objects)
                 .Concat(variables.SelectMany(variable => variable.GetAllProperties()))
                 .Concat(variables)
+                .Concat(GetModellingRules())
                 // This has the additional effect of deduplicating array variables
                 // Which means we get a single node referencing a non-existing timeseries (missing array indexer)
                 // which is currently fine, but might be problematic in the future.
                 .DistinctBy(node => node.Id)
                 .Where(node => node.Id != null && !node.Id.IsNullNodeId)
                 .ToList();
+
+            // Inject modelling rule nodes
+
+
+            var nodeHierarchy = new NodeHierarchy(references, nodes);
+
+            foreach (var node in nodeHierarchy.NodeMap.Values)
+            {
+                log.LogTrace("Map node {Id}", node.Id);
+            }
+
+            foreach (var rf in nodeHierarchy.ReferencesBySourceId.Values.SelectMany(r => r))
+            {
+                log.LogTrace("Map reference {Source} to {Target}. Type: {Type}",
+                    rf.Source.Id, rf.Target.Id, rf.Type.Id);
+            }
+
+            // Initialize if needed
+            await Initialize(nodeHierarchy, builder, token);
 
             var nodeIds = nodes.Select(node => node.Id).ToHashSet();
 
@@ -231,12 +248,12 @@ namespace Cognite.OpcUa.Pushers.FDM
             // Run the node filter unless we are writing everything.
             if (config.Cognite!.FlexibleDataModels!.ExcludeNonReferenced)
             {
-                var trimmer = new NodeTrimmer(nodes, finalReferences, config, log);
+                var trimmer = new NodeTrimmer(nodeHierarchy, config, log);
                 (nodes, finalReferences) = trimmer.Filter();
                 log.LogInformation("After filtering {Nodes} nodes and {Edges} edges are left", nodes.Count, finalReferences.Count);
             }
 
-            var serverMetadata = new FDMServer(instSpace, config.Extraction.IdPrefix ?? "", uaClient, ObjectIds.RootFolder, uaClient.NamespaceTable!, config.Extraction.NamespaceMap);
+            /* var serverMetadata = new FDMServer(instSpace, config.Extraction.IdPrefix ?? "", uaClient, ObjectIds.RootFolder, uaClient.NamespaceTable!, config.Extraction.NamespaceMap);
 
             var fdmObjects = new List<FDMBaseInstance>();
             var fdmVariables = new List<FDMVariable>();
@@ -297,7 +314,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             await Task.WhenAll(
                 IngestEdges("Reference", fdmReferences, token),
                 IngestNodes("Server", new[] { serverMetadata }, token)
-            );
+            );   */
 
             return true;
         }

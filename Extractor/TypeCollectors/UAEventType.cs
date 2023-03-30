@@ -45,7 +45,17 @@ namespace Cognite.OpcUa.TypeCollectors
             var node = new ChildNode(desc.BrowseName, desc.NodeClass);
             if (children == null)
             {
-                children = new List<ChildNode> { node };
+                children = new List<ChildNode>();
+            }
+            children.Add(node);
+            return node;
+        }
+
+        public ChildNode AddChild(ChildNode node)
+        {
+            if (children == null)
+            {
+                children = new List<ChildNode>();
             }
             children.Add(node);
             return node;
@@ -105,6 +115,12 @@ namespace Cognite.OpcUa.TypeCollectors
         internal ChildNode AddChild(ReferenceDescription desc)
         {
             var node = new ChildNode(desc.BrowseName, desc.NodeClass);
+            children.Add(node);
+            return node;
+        }
+
+        internal ChildNode AddChild(ChildNode node)
+        {
             children.Add(node);
             return node;
         }

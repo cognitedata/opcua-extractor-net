@@ -57,7 +57,14 @@ namespace Cognite.OpcUa.Pushers
 
         public PusherInput? PendingNodes { get; set; }
 
-        public UAExtractor Extractor { get; set; } = null!;
+        private UAExtractor extractor;
+        public UAExtractor Extractor { get => extractor; set {
+            extractor = value;
+            if (fdmDestination != null)
+            {
+                fdmDestination.Extractor = value;
+            }
+        } }
         public IPusherConfig BaseConfig { get; }
 
         private readonly HashSet<string> mismatchedTimeseries = new HashSet<string>();
@@ -74,6 +81,7 @@ namespace Cognite.OpcUa.Pushers
             CogniteDestination destination,
             IServiceProvider provider)
         {
+            extractor = null!;
             this.log = log;
             this.config = config;
             BaseConfig = config;
@@ -295,6 +303,11 @@ namespace Cognite.OpcUa.Pushers
                     log.LogTrace("{Node}", node);
                 }
                 log.LogInformation("Pusher is in debug mode, no nodes will be pushed to CDF");
+
+                if (fdmDestination != null)
+                {
+                    await fdmDestination.PushNodes(objects, variables, references, Extractor, token);
+                }
                 return result;
             }
 

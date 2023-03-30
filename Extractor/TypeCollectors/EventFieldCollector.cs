@@ -155,12 +155,13 @@ namespace Cognite.OpcUa.TypeCollectors
         /// </summary>
         /// <param name="child">Type or property to be handled</param>
         /// <param name="parent">Parent type id</param>
-        private void EventTypeCallback(ReferenceDescription child, NodeId parent)
+        private void EventTypeCallback(ReferenceDescription child, NodeId parent, bool visited)
         {
             var id = uaClient.ToNodeId(child.NodeId);
 
             if (child.NodeClass == NodeClass.ObjectType)
             {
+                if (visited) return;
                 var parentType = types.GetValueOrDefault(parent);
                 types[id] = new UAEventType(id, child.DisplayName)
                 {
@@ -170,15 +171,31 @@ namespace Cognite.OpcUa.TypeCollectors
             else if (child.NodeClass == NodeClass.Object || child.NodeClass == NodeClass.Variable)
             {
                 ChildNode node;
+                
                 if (types.TryGetValue(parent, out var parentType))
                 {
                     if (parent == ObjectTypeIds.BaseEventType && baseExcludeProperties.Contains(child.BrowseName.Name)
                         || excludeProperties.Contains(child.BrowseName.Name)) return;
-                    node = parentType.AddChild(child);
+                    if (visited && nodes.TryGetValue(id, out var existingNode))
+                    {
+                        node = parentType.AddChild(existingNode);
+                    }
+                    else
+                    {
+                        node = parentType.AddChild(child);
+                    }
+                    
                 }
                 else if (nodes.TryGetValue(parent, out var parentNode))
                 {
-                    node = parentNode.AddChild(child);
+                    if (visited && nodes.TryGetValue(id, out var existingNode))
+                    {
+                        node = parentNode.AddChild(existingNode);
+                    }
+                    else
+                    {
+                        node = parentNode.AddChild(child);
+                    }
                 }
                 else
                 {

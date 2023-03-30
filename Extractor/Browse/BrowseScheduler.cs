@@ -31,7 +31,7 @@ namespace Cognite.OpcUa
     internal class DirectoryBrowseParams
     {
         public IEnumerable<NodeFilter>? Filters { get; set; }
-        public Action<ReferenceDescription, NodeId>? Callback { get; set; }
+        public Action<ReferenceDescription, NodeId, bool>? Callback { get; set; }
         public int NodesChunk { get; set; }
         public int MaxNodeParallelism { get; set; }
         public BrowseParams? InitialParams { get; set; }
@@ -46,7 +46,7 @@ namespace Cognite.OpcUa
 
         private readonly IEnumerable<NodeFilter>? filters;
         private readonly ISet<NodeId> visitedNodes;
-        private readonly Action<ReferenceDescription, NodeId>? callback;
+        private readonly Action<ReferenceDescription, NodeId, bool>? callback;
         private readonly ISet<NodeId> localVisitedNodes = new HashSet<NodeId>();
 
         private readonly ILogger log;
@@ -179,17 +179,13 @@ namespace Cognite.OpcUa
                         continue;
                     }
 
-                    bool docb = true;
+                    bool visited = false;
                     if (visitedNodes != null && !visitedNodes.Add(nodeId))
                     {
-                        docb = false;
+                        visited = true;
                         log.LogTrace("Ignoring visited {NodeId}", nodeId);
                     }
-                    if (docb)
-                    {
-                        log.LogTrace("Discovered new node {NodeId}", nodeId);
-                        callback?.Invoke(rd, node.Id);
-                    }
+                    callback?.Invoke(rd, node.Id, visited);
 
                     if (node.Depth + 1 == depthCounts.Count) depthCounts.Add(1);
                     else depthCounts[node.Depth + 1]++;

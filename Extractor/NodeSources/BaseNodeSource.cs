@@ -64,6 +64,12 @@ namespace Cognite.OpcUa.NodeSources
         protected UAExtractor Extractor { get; }
         protected UAClient Client { get; }
 
+        protected HashSet<NodeId> ModellingRules { get; } = new HashSet<NodeId>(new[]
+{
+            ObjectIds.ModellingRule_ExposesItsArray, ObjectIds.ModellingRule_Mandatory, ObjectIds.ModellingRule_Optional,
+            ObjectIds.ModellingRule_OptionalPlaceholder, ObjectIds.ModellingRule_MandatoryPlaceholder
+        });
+
         protected BaseNodeSource(ILogger log, FullConfig config, UAExtractor extractor, UAClient client)
         {
             Log = log;
@@ -247,7 +253,7 @@ namespace Cognite.OpcUa.NodeSources
             if (variable is not null)
             {
                 variable.AllowTSMap = Extractor.DataTypeManager.AllowTSMap(variable);
-                if (Config.Extraction.DataTypes.UnmappedAsProperties && !variable.AllowTSMap)
+                if (Config.Extraction.DataTypes.UnmappedAsProperties && !variable.AllowTSMap!.Value)
                 {
                     variable.Attributes.IsProperty = true;
                 }
@@ -334,16 +340,40 @@ namespace Cognite.OpcUa.NodeSources
         /// <param name="reference">Reference to filter.</param>
         /// <param name="requireChild">True to require a child node in nodeMap</param>
         /// <returns>True if reference should be mapped.</returns>
-        protected bool FilterReference(UAReference reference, bool mapProperties)
+        protected bool FilterReference(UAReference reference, bool mapProperties, HashSet<NodeId> additionalKnownNodes)
         {
             var source = Extractor.State.GetMappedNode(reference.Source.Id);
-            if (source == null || source.IsProperty && !mapProperties) return false;
+            if ((source == null || source.IsProperty && !mapProperties) && !additionalKnownNodes.Contains(reference.Source.Id))
+            {
+                if (source == null) Log.LogTrace("Skipping relationship from {Src} to {Trg} due to missing source",
+                    reference.Source.Id, reference.Target.Id);
+                else Log.LogTrace("Skipping relationship from {Src} to {Trg} since the source is a property",
+                    reference.Source.Id, reference.Target.Id);
+                return false;
+            }
 
             var target = Extractor.State.GetMappedNode(reference.Target.Id);
-            if (target == null || target.IsProperty && !mapProperties) return false;
+            if ((target == null || target.IsProperty && !mapProperties) && !additionalKnownNodes.Contains(reference.Target.Id))
+            {
+                if (target == null) Log.LogTrace("Skipping relationship from {Src} to {Trg} due to missing target",
+                    reference.Source.Id, reference.Target.Id);
+                else Log.LogTrace("Skipping relationship from {Src} to {Trg} since the target is a property",
+                    reference.Source.Id, reference.Target.Id);
+                return false;
+            }
 
-            if (reference.IsHierarchical && !Config.Extraction.Relationships.Hierarchical) return false;
-            if (reference.IsHierarchical && !reference.IsForward && !Config.Extraction.Relationships.InverseHierarchical) return false;
+            if (reference.IsHierarchical && !Config.Extraction.Relationships.Hierarchical)
+            {
+                Log.LogTrace("Skipping relationship from {Src} to {Trg} since it is hierarchical, and hierarchical references are disabled",
+                    reference.Source.Id, reference.Target.Id);
+                return false;
+            }
+            if (reference.IsHierarchical && !reference.IsForward && !Config.Extraction.Relationships.InverseHierarchical)
+            {
+                Log.LogTrace("Skipping relationship from {Src} to {Trg} since it is inverse hierarchical, and inverse hierarchical references are disabled",
+                    reference.Source.Id, reference.Target.Id);
+                return false;
+            }
 
             return true;
         }

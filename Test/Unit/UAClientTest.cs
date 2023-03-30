@@ -55,11 +55,12 @@ namespace Test.Unit
                 Directory.Delete("./uaclienttestcerts/pki/", true);
             }
         }
-        public static (Action<ReferenceDescription, NodeId>, IDictionary<NodeId, ReferenceDescriptionCollection>) GetCallback()
+        public static (Action<ReferenceDescription, NodeId, bool>, IDictionary<NodeId, ReferenceDescriptionCollection>) GetCallback()
         {
             var toWrite = new Dictionary<NodeId, ReferenceDescriptionCollection>();
-            return ((desc, parentId) =>
+            return ((desc, parentId, visited) =>
             {
+                if (visited) return;
                 if (parentId == null || parentId == NodeId.Null) parentId = ObjectIds.ObjectsFolder;
                 if (!toWrite.TryGetValue(parentId, out var children))
                 {
