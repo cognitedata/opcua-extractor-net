@@ -27,6 +27,7 @@ using System.Threading.Tasks;
 using Cognite.OpcUa.Config;
 using CogniteSdk.Beta.DataModels;
 using System.Text.Json;
+using System;
 
 namespace Cognite.OpcUa.Pushers.FDM
 {
@@ -97,17 +98,45 @@ namespace Cognite.OpcUa.Pushers.FDM
             }
         } */
 
-        private async Task Initialize(NodeHierarchy nodes, TypeHierarchyBuilder builder, CancellationToken token)
+        private async Task IngestInstances(IEnumerable<BaseInstanceWrite> instances, CancellationToken token)
+        {
+            var chunks = instances.ChunkBy(1000).ToList();
+            var results = new IEnumerable<SlimInstance>[chunks.Count];
+            var generators = chunks
+                .Select<IEnumerable<BaseInstanceWrite>, Func<Task>>((c, idx) => async () =>
+                {
+                    var req = new InstanceWriteRequest
+                    {
+                        AutoCreateEndNodes = true,
+                        AutoCreateStartNodes = true,
+                        Items = instances,
+                        Replace = true
+                    };
+                    results[idx] = await destination.CogniteClient.Beta.DataModels.UpsertInstances(req, token);
+                });
+
+            int taskNum = 0;
+            await generators.RunThrottled(
+                10,
+                (_) =>
+                {
+                    if (chunks.Count > 1)
+                        log.LogDebug("{MethodName} completed {NumDone}/{TotalNum} tasks",
+                            nameof(IngestInstances), ++taskNum, chunks.Count);
+                },
+                token);
+        }
+
+        private async Task Initialize(FDMTypeBatch types, CancellationToken token)
         {
             if (config.Cognite!.Debug)
             {
-                var tps = builder.ConstructTypes(nodes);
                 var options = new JsonSerializerOptions(Oryx.Cognite.Common.jsonOptions) { WriteIndented = true };
-                foreach (var type in tps.Containers)
+                foreach (var type in types.Containers)
                 {
                     log.LogDebug("Build container: {Type}", JsonSerializer.Serialize(type.Value, options));
                 }
-                foreach (var type in tps.Views)
+                foreach (var type in types.Views)
                 {
                     log.LogDebug("Build view: {Type}", JsonSerializer.Serialize(type.Value, options));
                 }
@@ -122,14 +151,12 @@ namespace Cognite.OpcUa.Pushers.FDM
                 }
             }, token);
 
-            var types = builder.ConstructTypes(nodes);
-
             foreach (var chunk in types.Containers.Values.ChunkBy(100))
             {
                 await destination.CogniteClient.Beta.DataModels.UpsertContainers(chunk, token);
             }
 
-            foreach (var level in types.Views.Values.ChunkByHierarchy(0, v => v.ExternalId, v => v.Implements?.FirstOrDefault()?.ExternalId))
+            foreach (var level in types.Views.Values.ChunkByHierarchy(100, v => v.ExternalId, v => v.Implements?.FirstOrDefault()?.ExternalId))
             {
                 foreach (var item in level)
                 {
@@ -173,8 +200,8 @@ namespace Cognite.OpcUa.Pushers.FDM
             IUAClientAccess client,
             CancellationToken token)
         {
-            var builder = new TypeHierarchyBuilder(log, client, config);
-
+            var converter = new DMSValueConverter(client.StringConverter, instSpace);
+            var builder = new TypeHierarchyBuilder(log, client, converter, config);
             // First, collect all nodes, including properties.
             var nodes = objects
                 .SelectMany(obj => obj.GetAllProperties())
@@ -205,8 +232,10 @@ namespace Cognite.OpcUa.Pushers.FDM
                     rf.Source.Id, rf.Target.Id, rf.Type.Id);
             }
 
+            var types = builder.ConstructTypes(nodeHierarchy);
+
             // Initialize if needed
-            await Initialize(nodeHierarchy, builder, token);
+            await Initialize(types, token);
 
             var nodeIds = nodes.Select(node => node.Id).ToHashSet();
 
@@ -249,9 +278,40 @@ namespace Cognite.OpcUa.Pushers.FDM
             if (config.Cognite!.FlexibleDataModels!.ExcludeNonReferenced)
             {
                 var trimmer = new NodeTrimmer(nodeHierarchy, config, log);
-                (nodes, finalReferences) = trimmer.Filter();
-                log.LogInformation("After filtering {Nodes} nodes and {Edges} edges are left", nodes.Count, finalReferences.Count);
+                nodeHierarchy = trimmer.Filter();
+                log.LogInformation("After filtering {Nodes} nodes are left", nodeHierarchy.NodeMap.Count);
             }
+
+            var instanceBuilder = new InstanceBuilder(nodeHierarchy, types, converter, client, instSpace, log);
+            log.LogInformation("Begin building instances");
+            instanceBuilder.Build();
+
+            if (config.Cognite!.Debug)
+            {
+                instanceBuilder.DebugLog(log);
+                return true;
+            }
+
+            // Ingest types first
+            log.LogInformation("Ingesting {Count1} object types, {Count2} reference types, {Count3} dataTypes",
+                instanceBuilder.ObjectTypes.Count,
+                instanceBuilder.ReferenceTypes.Count,
+                instanceBuilder.DataTypes.Count);
+            await IngestInstances(instanceBuilder.ObjectTypes
+                .Concat(instanceBuilder.ReferenceTypes)
+                .Concat(instanceBuilder.DataTypes), token);
+
+            // Then ingest variable types
+            log.LogInformation("Ingesting {Count} variable types", instanceBuilder.VariableTypes.Count);
+            await IngestInstances(instanceBuilder.VariableTypes, token);
+
+            // Ingest instances
+            log.LogInformation("Ingesting {Count1} objects, {Count2} variables", instanceBuilder.Objects.Count, instanceBuilder.Variables.Count);
+            await IngestInstances(instanceBuilder.Objects.Concat(instanceBuilder.Variables), token);
+
+            // Finally, ingest edges
+            log.LogInformation("Ingesting {Count} references", instanceBuilder.References.Count);
+            await IngestInstances(instanceBuilder.References, token);
 
             /* var serverMetadata = new FDMServer(instSpace, config.Extraction.IdPrefix ?? "", uaClient, ObjectIds.RootFolder, uaClient.NamespaceTable!, config.Extraction.NamespaceMap);
 

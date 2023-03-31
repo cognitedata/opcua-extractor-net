@@ -231,7 +231,6 @@ namespace Cognite.OpcUa.Pushers.FDM
                         Nullable = true,
                         Name = "InverseName"
                     } },
-
                 }
             };
         }

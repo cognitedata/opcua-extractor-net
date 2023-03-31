@@ -12,9 +12,13 @@ namespace Cognite.OpcUa.Pushers.FDM
     public class DMSValueConverter
     {
         private readonly StringConverter converter;
-        public DMSValueConverter(StringConverter converter)
+
+        public StringConverter Converter => converter;
+        private readonly string space;
+        public DMSValueConverter(StringConverter converter, string space)
         {
             this.converter = converter;
+            this.space = space;
         }
 
         public IDMSValue? ConvertVariant(PropertyTypeVariant type, Variant? value)
@@ -37,7 +41,11 @@ namespace Cognite.OpcUa.Pushers.FDM
                     return new RawPropertyValue<DateTime>(Convert.ToDateTime(value.Value.Value));
                 case PropertyTypeVariant.text:
                 case PropertyTypeVariant.direct:
-                    return new RawPropertyValue<string>(value.Value.Value.ToString());
+                    if (value.Value.Value is NodeId id && !id.IsNullNodeId)
+                    {
+                        return new RawPropertyValue<DirectRelationIdentifier>(new DirectRelationIdentifier(space, id.ToString()));
+                    }
+                    return null;
                 case PropertyTypeVariant.json:
                     var val = converter.ConvertToString(value, null, null, Types.StringConverterMode.ReversibleJson);
                     Console.WriteLine(val + ", " + value.Value.TypeInfo);

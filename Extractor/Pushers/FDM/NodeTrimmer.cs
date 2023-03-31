@@ -111,6 +111,15 @@ namespace Cognite.OpcUa.Pushers.FDM
             {
                 var dataTypeId = (node as UAVariable)!.VariableAttributes.DataType?.Raw;
                 if (dataTypeId != null && !dataTypeId.IsNullNodeId) TraverseNode(result, refResult, null, nodes.Get(dataTypeId));
+
+                if ((node as UAVariable)?.Value.Value is NodeId id && !id.IsNullNodeId)
+                {
+                    TraverseNode(result, refResult, null, nodes.Get(id));
+                }
+            }
+            if (node.NodeType?.Id != null)
+            {
+                TraverseNode(result, refResult, null, nodes.Get(node.NodeType.Id));
             }
 
             // For hierarchical nodes we just follow all outgoing references.
@@ -129,7 +138,7 @@ namespace Cognite.OpcUa.Pushers.FDM
 
 
 
-        public (List<UANode>, List<UAReference>) Filter()
+        public NodeHierarchy Filter()
         {
             var result = new List<UANode>();
             var refResult = new List<UAReference>();
@@ -155,7 +164,7 @@ namespace Cognite.OpcUa.Pushers.FDM
 
             refResult = refResult.DistinctBy(rf => (rf.Source.Id, rf.Target.Id, rf.Type.Id)).ToList();
 
-            return (result, refResult);
+            return new NodeHierarchy(refResult, result);
         }
     }
 }

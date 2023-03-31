@@ -28,6 +28,7 @@ namespace Cognite.OpcUa.Pushers.FDM
 
         public Dictionary<string, ContainerCreate> Containers { get; } = new();
         public Dictionary<string, ViewCreate> Views { get; } = new();
+        public Dictionary<NodeId, FullUANodeType> Types { get; } = new();
 
         public void Add(ContainerCreate container, string? baseView = null)
         {
@@ -39,13 +40,22 @@ namespace Cognite.OpcUa.Pushers.FDM
         {
             log.LogInformation("Add type {Name} {Id} impl {Parent}", type.Node.DisplayName, type.Node.Id, type.Parent?.ExternalId);
             // If the type is in views, it and all its parents are already added
-            if (Views.ContainsKey(type.Node.DisplayName)) return;
+            if (Views.ContainsKey(type.Node.DisplayName))
+            {
+                if (type.Node.Id == ObjectTypeIds.BaseObjectType || type.Node.Id == VariableTypeIds.BaseVariableType)
+                {
+                    Types[type.Node.Id] = type;
+                }
+                return;
+            }
 
             if (type.Parent == null)
             {
                 log.LogWarning("Found type {Name} that is not a subtype of a base type", type.Node.DisplayName);
                 return;
             }
+
+            Types.Add(type.Node.Id, type);
 
             // Only create a container if the node has properties
             bool shouldCreateContainer = type.Properties.Values.Any();
@@ -102,6 +112,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             foreach (var kvp in type.Properties)
             {
                 var typ = GetPropertyType(kvp.Value);
+                kvp.Value.TypeVariant = typ.Type;
                 res[kvp.Value.ExternalId] = new ContainerPropertyDefinition
                 {
                     Description = type.Node.Description,
@@ -159,14 +170,14 @@ namespace Cognite.OpcUa.Pushers.FDM
         private readonly DMSValueConverter converter;
         private readonly string space;
         private readonly Dictionary<NodeId, FullUANodeType> typeMap = new();
-        public TypeHierarchyBuilder(ILogger log, IUAClientAccess client, FullConfig config)
+        public TypeHierarchyBuilder(ILogger log, IUAClientAccess client, DMSValueConverter converter, FullConfig config)
         {
             this.log = log;
             this.config = config;
             nodeTypes = new NodeTypeCollector(log, config);
             space = config.Cognite!.FlexibleDataModels!.Space;
             fdmConfig = config.Cognite.FlexibleDataModels!;
-            converter = new DMSValueConverter(client.StringConverter);
+            this.converter = converter;
         }
 
         public FDMTypeBatch ConstructTypes(NodeHierarchy nodes)
