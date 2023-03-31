@@ -1361,6 +1361,7 @@ namespace Server
         {
             var simpleVarProp1 = node.AddProperty<long[]>("LongProp", DataTypeIds.Int64, ValueRanks.OneDimension);
             simpleVarProp1.NodeId = GenerateNodeId();
+            simpleVarProp1.ArrayDimensions = new uint[] { 3 };
             simpleVarProp1.Value = lValue;
             var simpleVarProp2 = node.AddProperty<EUInformation>("EUInformation", DataTypeIds.String, ValueRanks.Scalar);
             simpleVarProp2.NodeId = GenerateNodeId();

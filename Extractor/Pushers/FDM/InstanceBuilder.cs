@@ -135,7 +135,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                     IDMSValue? value;
                     if (variable.IsProperty)
                     {
-                        value = converter.ConvertVariant(property.TypeVariant, variable.Value);
+                        value = converter.ConvertVariant(property.DMSType, variable.Value);
                     }
                     else
                     {

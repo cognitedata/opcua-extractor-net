@@ -111,21 +111,21 @@ namespace Cognite.OpcUa.Pushers.FDM
             var res = new Dictionary<string, ContainerPropertyDefinition>();
             foreach (var kvp in type.Properties)
             {
-                var typ = GetPropertyType(kvp.Value);
-                kvp.Value.TypeVariant = typ.Type;
+                var typ = GetPropertyType(kvp.Value, kvp.Value.Node.IsArray);
+                kvp.Value.DMSType = typ;
                 res[kvp.Value.ExternalId] = new ContainerPropertyDefinition
                 {
                     Description = type.Node.Description,
                     Name = kvp.Value.BrowseName,
                     Type = typ,
                     Nullable = kvp.Value.ModellingRule != ModellingRule.Mandatory || (typ is DirectRelationPropertyType),
-                    DefaultValue = (typ is DirectRelationPropertyType) ? null : converter.ConvertVariant(typ.Type, kvp.Value.Node.Value)
+                    DefaultValue = (typ is DirectRelationPropertyType) ? null : converter.ConvertVariant(typ, kvp.Value.Node.Value)
                 };
             }
             return res;
         }
 
-        private BasePropertyType GetPropertyType(NodeTypeProperty prop)
+        private BasePropertyType GetPropertyType(NodeTypeProperty prop, bool isArray)
         {
             if (prop.Node.DataType == null)
             {
@@ -137,25 +137,28 @@ namespace Cognite.OpcUa.Pushers.FDM
                 || dt.Raw == DataTypeIds.SByte
                 || dt.Raw == DataTypeIds.UInt16
                 || dt.Raw == DataTypeIds.Int16
-                || dt.Raw == DataTypeIds.Int32) return BasePropertyType.Create(PropertyTypeVariant.int32);
+                || dt.Raw == DataTypeIds.Int32) return BasePropertyType.Create(PropertyTypeVariant.int32, isArray);
             if (dt.Raw == DataTypeIds.Int64
                 || dt.Raw == DataTypeIds.UInt32
                 || dt.Raw == DataTypeIds.UInt64
                 || dt.Raw == DataTypeIds.UInteger
-                || dt.Raw == DataTypeIds.Integer) return BasePropertyType.Create(PropertyTypeVariant.int64);
-            if (dt.Raw == DataTypeIds.Float) return BasePropertyType.Create(PropertyTypeVariant.float32);
+                || dt.Raw == DataTypeIds.Integer) return BasePropertyType.Create(PropertyTypeVariant.int64, isArray);
+            if (dt.Raw == DataTypeIds.Float) return BasePropertyType.Create(PropertyTypeVariant.float32, isArray);
             if (dt.Raw == DataTypeIds.Double
                 || dt.Raw == DataTypeIds.Duration
-                || !dt.IsString) return BasePropertyType.Create(PropertyTypeVariant.float64);
+                || !dt.IsString) return BasePropertyType.Create(PropertyTypeVariant.float64, isArray);
             if (dt.Raw == DataTypeIds.LocalizedText
-                || dt.Raw == DataTypeIds.QualifiedName) return BasePropertyType.Text();
+                || dt.Raw == DataTypeIds.QualifiedName) return BasePropertyType.Text(isArray);
             if (dt.Raw == DataTypeIds.DateTime
                 || dt.Raw == DataTypeIds.Date
                 || dt.Raw == DataTypeIds.Time
-                || dt.Raw == DataTypeIds.UtcTime) return BasePropertyType.Create(PropertyTypeVariant.timestamp);
+                || dt.Raw == DataTypeIds.UtcTime) return BasePropertyType.Create(PropertyTypeVariant.timestamp, isArray);
 
             if (dt.Raw == DataTypeIds.NodeId || dt.Raw == DataTypeIds.ExpandedNodeId)
+            {
+                if (isArray) return BasePropertyType.Create(PropertyTypeVariant.json);
                 return BasePropertyType.Direct(new ContainerIdentifier(space, "BaseNode"));
+            }
 
             return BasePropertyType.Create(PropertyTypeVariant.json);
         }

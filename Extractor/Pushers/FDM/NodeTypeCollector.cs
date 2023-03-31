@@ -243,7 +243,7 @@ namespace Cognite.OpcUa.Pushers.FDM
     public class NodeTypeProperty : BaseNodeTypeReference
     {
         public UAVariable Node { get; set; }
-        public PropertyTypeVariant TypeVariant { get; set; } = PropertyTypeVariant.json;
+        public BasePropertyType? DMSType { get; set; }
         public NodeTypeProperty(UAVariable node, UAReference reference, string externalId)
             : base(node.NodeClass, node.BrowseName, externalId, reference)
         {
