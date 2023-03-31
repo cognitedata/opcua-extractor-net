@@ -528,6 +528,9 @@ namespace Server
                             case PredefinedSetup.PubSub:
                                 CreatePubSubNodes(externalReferences);
                                 break;
+                            case PredefinedSetup.Types:
+                                CreateTypeAddressSpace(externalReferences);
+                                break;
                         }
                     }
                 }
@@ -792,8 +795,8 @@ namespace Server
 
                 // Custom object and variable type
                 var objType = CreateObjectType("CustomObjectType", ObjectTypeIds.BaseObjectType, externalReferences);
-                var variableType = CreateVariableType("CustomVariableType", VariableTypeIds.BaseDataVariableType,
-                    externalReferences, DataTypeIds.Double);
+                var variableType = CreateVariableType("CustomVariableType", VariableTypeIds.BaseDataVariableType, DataTypeIds.Double,
+                    externalReferences);
                 variableType.Value = 123.123;
 
                 AddTypesToTypeTree(objType);
@@ -1237,6 +1240,153 @@ namespace Server
             pubSub.Start();
         }
 
+        public void CreateTypeAddressSpace(IDictionary<NodeId, IList<IReference>> externalReferences)
+        {
+            log.LogInformation("Create types address space");
+            lock (Lock)
+            {
+                var root = CreateObject("TypesRoot");
+                AddNodeToExt(root, ObjectIds.ObjectsFolder, ReferenceTypeIds.Organizes, externalReferences);
+
+                // Create a handful of object and variable types
+                // Trivial type
+                var trivialType = CreateObjectType("TrivialType");
+                AddNodeToExt(trivialType, ObjectTypeIds.BaseObjectType, ReferenceTypeIds.HasSubtype, externalReferences);
+
+                // Simple type with 3 properties and 2 simple variables
+                var simpleType = CreateObjectType("SimpleType");
+                AddNodeToExt(simpleType, ObjectTypeIds.BaseObjectType, ReferenceTypeIds.HasSubtype, externalReferences);
+                CreateSimpleInstance(simpleType, 123L, "Default", 123.123);
+
+                // Simple variable type with more complex properties
+                var simpleVarType = CreateVariableType("SimpleVarType", DataTypeIds.Double);
+                AddNodeToExt(simpleVarType, VariableTypeIds.BaseDataVariableType, ReferenceTypeIds.HasSubtype, externalReferences);
+                CreateSimpleVarInstance(simpleVarType, new long[] { 1, 2, 3 }, NodeId.Null);
+
+                // Subtype with nested subfields
+                var nestedType = CreateObjectType("NestedType");
+                AddNodeRelation(nestedType, simpleType, ReferenceTypeIds.HasSubtype);
+                CreateNestedInstance(nestedType, "Default", 123.123);
+
+                // Complex supertype. Consists of multiple varTypes, one trivial type, and one nested type
+                var complexType = CreateObjectType("ComplexType");
+                AddNodeToExt(complexType, ObjectTypeIds.BaseObjectType, ReferenceTypeIds.HasSubtype, externalReferences);
+
+                var placeholder = CreateVariable("<VarPlaceholder>", DataTypeIds.Double);
+                placeholder.TypeDefinitionId = simpleVarType.NodeId;
+                CreateSimpleVarInstance(placeholder, new long[] { 1, 2, 3 }, complexType.NodeId);
+                placeholder.AddReference(ReferenceTypeIds.HasModellingRule, false, ObjectIds.ModellingRule_OptionalPlaceholder);
+                AddNodeRelation(placeholder, complexType, ReferenceTypeIds.HasComponent);
+
+                var trivial = CreateObject("Trivial");
+                trivial.TypeDefinitionId = trivialType.NodeId;
+                AddNodeRelation(trivial, complexType, ReferenceTypeIds.HasComponent);
+
+                var nested = CreateObject("Data");
+                nested.TypeDefinitionId = nestedType.NodeId;
+                AddNodeRelation(nested, complexType, ReferenceTypeIds.HasComponent);
+                CreateSimpleInstance(nested, 123L, "Default", 123.123);
+                CreateNestedInstance(nested, "Default", 123.123);
+
+                Ids.Types.Root = root.NodeId;
+                Ids.Types.TrivialType = trivialType.NodeId;
+                Ids.Types.SimpleType = simpleType.NodeId;
+                Ids.Types.SimpleVarType = simpleVarType.NodeId;
+                Ids.Types.ComplexType = complexType.NodeId;
+                Ids.Types.NestedType = nestedType.NodeId;
+
+
+                // Add three instances with different sets of variables
+                var complex1 = CreateComplexInstance("DeviceOne", new[] { "Reading", "Store", "Measurement" }, 42, "Device One", 3.14);
+                AddNodeRelation(complex1, root, ReferenceTypeIds.Organizes);
+                var complex2 = CreateComplexInstance("DeviceTwo", Array.Empty<string>(), 15, "Device Two", 7.3);
+                AddNodeRelation(complex2, root, ReferenceTypeIds.Organizes);
+                var complex3 = CreateComplexInstance("DeviceThree", new[] { "Reading" }, 19, "Device Three", 0);
+                AddNodeRelation(complex3, root, ReferenceTypeIds.Organizes);
+
+                AddPredefinedNodes(SystemContext, root, trivialType, simpleType, simpleVarType, nestedType, complexType, placeholder,
+                    trivial, nested, complex1, complex2, complex3);
+            }
+        }
+
+        private NodeState CreateComplexInstance(string name, string[] variables, long lValue, string sValue, double dValue)
+        {
+            var node = CreateObject(name);
+            node.TypeDefinitionId = Ids.Types.ComplexType;
+
+            foreach (var nm in variables)
+            {
+                var placeholder = CreateVariable(nm, DataTypeIds.Double);
+                placeholder.TypeDefinitionId = Ids.Types.SimpleVarType;
+                CreateSimpleVarInstance(placeholder, new long[] { 1, 2, 3 }, node.NodeId);
+                AddNodeRelation(placeholder, node, ReferenceTypeIds.HasComponent);
+                AddPredefinedNodes(SystemContext, placeholder);
+            }
+
+            var trivial = CreateObject("Trivial");
+            trivial.TypeDefinitionId = Ids.Types.TrivialType;
+            AddNodeRelation(trivial, node, ReferenceTypeIds.HasComponent);
+
+            var nested = CreateObject("Data");
+            nested.TypeDefinitionId = Ids.Types.NestedType;
+            AddNodeRelation(nested, node, ReferenceTypeIds.HasComponent);
+            CreateSimpleInstance(nested, lValue, sValue, dValue);
+            CreateNestedInstance(nested, sValue, dValue);
+
+            AddPredefinedNodes(SystemContext, trivial, nested);
+
+            return node;
+        }
+
+        private void CreateSimpleInstance(NodeState node, long lValue, string sValue, double dValue)
+        {
+            var simpleProp1 = node.AddProperty<long>("LongProp", DataTypeIds.Int64, ValueRanks.Scalar);
+            simpleProp1.NodeId = GenerateNodeId();
+            simpleProp1.Value = lValue;
+            var simpleProp2 = node.AddProperty<string>("StringProp", DataTypeIds.String, ValueRanks.Scalar);
+            simpleProp2.NodeId = GenerateNodeId();
+            simpleProp2.Value = sValue;
+            var simpleProp3 = node.AddProperty<double>("DoubleProp", DataTypeIds.Double, ValueRanks.Scalar);
+            simpleProp3.NodeId = GenerateNodeId();
+            simpleProp3.Value = dValue;
+
+            var simpleVar1 = CreateVariable("VarChild1", DataTypeIds.Double);
+            AddNodeRelation(simpleVar1, node, ReferenceTypeIds.HasComponent);
+            var simpleVar2 = CreateVariable("VarChild2", DataTypeIds.String);
+            AddNodeRelation(simpleVar2, node, ReferenceTypeIds.HasComponent);
+            AddPredefinedNodes(SystemContext, simpleProp1, simpleProp2, simpleProp3, simpleVar1, simpleVar2);
+        }
+
+        private void CreateSimpleVarInstance(NodeState node, long[] lValue, NodeId refValue)
+        {
+            var simpleVarProp1 = node.AddProperty<long[]>("LongProp", DataTypeIds.Int64, ValueRanks.OneDimension);
+            simpleVarProp1.NodeId = GenerateNodeId();
+            simpleVarProp1.Value = lValue;
+            var simpleVarProp2 = node.AddProperty<EUInformation>("EUInformation", DataTypeIds.String, ValueRanks.Scalar);
+            simpleVarProp2.NodeId = GenerateNodeId();
+            simpleVarProp2.Value = new EUInformation("Degrees Celsius", "°C", "opc.tcp://test.localhost");
+            var simpleVarProp3 = node.AddProperty<NodeId>("RefProp", DataTypeIds.NodeId, ValueRanks.Scalar);
+            simpleVarProp3.NodeId = GenerateNodeId();
+            simpleVarProp3.Value = refValue;
+
+            AddPredefinedNodes(SystemContext, simpleVarProp1, simpleVarProp2, simpleVarProp3);
+        }
+
+        private void CreateNestedInstance(NodeState node, string sValue, double dValue)
+        {
+            var childObj = CreateObject("Sub");
+            AddNodeRelation(childObj, node, ReferenceTypeIds.HasComponent);
+
+            var subProp1 = childObj.AddProperty<string>("StringProp", DataTypeIds.String, ValueRanks.Scalar);
+            subProp1.NodeId = GenerateNodeId();
+            subProp1.Value = sValue;
+            var subProp2 = childObj.AddProperty<double>("DoubleProp", DataTypeIds.Double, ValueRanks.Scalar);
+            subProp2.NodeId = GenerateNodeId();
+            subProp2.Value = dValue;
+
+            AddPredefinedNodes(SystemContext, childObj, subProp1, subProp2);
+        }
+
         // Utility methods to create nodes
         private void AddNodeToExt(NodeState state, NodeId id, NodeId typeId,
             IDictionary<NodeId, IList<IReference>> externalReferences)
@@ -1378,7 +1528,7 @@ namespace Server
             return type;
         }
 
-        private BaseObjectTypeState CreateObjectType(string name, NodeId parent, IDictionary<NodeId, IList<IReference>> externalReferences)
+        private BaseObjectTypeState CreateObjectType(string name, NodeId parent = null, IDictionary<NodeId, IList<IReference>> externalReferences = null)
         {
             var type = new BaseObjectTypeState
             {
@@ -1400,8 +1550,8 @@ namespace Server
             return type;
         }
 
-        private BaseDataVariableTypeState CreateVariableType(string name, NodeId parent,
-            IDictionary<NodeId, IList<IReference>> externalReferences, NodeId dataType)
+        private BaseDataVariableTypeState CreateVariableType(string name, NodeId dataType, NodeId parent = null,
+            IDictionary<NodeId, IList<IReference>> externalReferences = null)
         {
             var type = new BaseDataVariableTypeState
             {
@@ -1410,6 +1560,9 @@ namespace Server
                 DataType = dataType
             };
             type.DisplayName = type.BrowseName.Name;
+
+            if (parent == null) return type;
+
             if (!externalReferences.TryGetValue(parent, out var references))
             {
                 externalReferences[parent] = references = new List<IReference>();
@@ -1876,7 +2029,8 @@ namespace Server
         Auditing,
         Wrong,
         VeryLarge,
-        PubSub
+        PubSub,
+        Types
     }
 
     #region nodeid_reference
@@ -1890,6 +2044,7 @@ namespace Server
             Event = new EventNodeReference();
             Audit = new AuditNodeReference();
             Wrong = new WrongNodeReference();
+            Types = new TypesNodeReference();
         }
         public NodeId NamespaceMetadata { get; set; }
         public BaseNodeReference Base { get; set; }
@@ -1898,6 +2053,7 @@ namespace Server
         public EventNodeReference Event { get; set; }
         public AuditNodeReference Audit { get; set; }
         public WrongNodeReference Wrong { get; set; }
+        public TypesNodeReference Types { get; set; }
     }
 
     public class BaseNodeReference
@@ -1981,6 +2137,16 @@ namespace Server
         public NodeId NullType { get; set; }
         public NodeId NoDim { get; set; }
         public NodeId DimInProp { get; set; }
+    }
+
+    public class TypesNodeReference
+    {
+        public NodeId Root { get; set; }
+        public NodeId TrivialType { get; set; }
+        public NodeId ComplexType { get; set; }
+        public NodeId SimpleType { get; set; }
+        public NodeId SimpleVarType { get; set; }
+        public NodeId NestedType { get; set; }
     }
     #endregion
 }

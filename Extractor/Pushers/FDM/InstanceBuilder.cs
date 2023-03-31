@@ -204,7 +204,11 @@ namespace Cognite.OpcUa.Pushers.FDM
             var currentType = type;
             while (currentType != null)
             {
-                if (currentType.RawChildren.Any()) continue;
+                if (!currentType.RawChildren.Any())
+                {
+                    currentType = currentType.Parent;
+                    continue;
+                }
 
                 var props = new Dictionary<string, IDMSValue?>();
                 CollectProperties(node, currentType.RawChildren, Enumerable.Empty<string>(), props, currentType, true);
@@ -219,7 +223,6 @@ namespace Cognite.OpcUa.Pushers.FDM
 
                 currentType = currentType.Parent;
             }
-
             return data;
         }
 

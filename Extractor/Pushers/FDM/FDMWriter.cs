@@ -174,7 +174,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             var model = new DataModelCreate
             {
                 Name = "OPC-UA",
-                ExternalId = "OPC_UA_DM",
+                ExternalId = "OPC_UA",
                 Space = instSpace,
                 Version = "1",
                 Views = types.Views.Select(v => new ViewIdentifier(instSpace, v.Value.ExternalId, v.Value.Version))
