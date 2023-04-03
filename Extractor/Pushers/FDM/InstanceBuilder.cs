@@ -139,7 +139,14 @@ namespace Cognite.OpcUa.Pushers.FDM
                     }
                     else
                     {
-                        value = new RawPropertyValue<string>(client.GetUniqueId(variable.Id)!);
+                        if (variable.IsArray)
+                        {
+                            value = new RawPropertyValue<string[]>(variable.ArrayChildren.Select(v => client.GetUniqueId(v.Id, v.Index)!).ToArray());
+                        }
+                        else
+                        {
+                            value = new RawPropertyValue<string>(client.GetUniqueId(variable.Id)!);
+                        }
                     }
                     properties[name] = value;
                     collected = true;
@@ -347,7 +354,7 @@ namespace Cognite.OpcUa.Pushers.FDM
     class VariableData
     {
         [JsonPropertyName("DataType")]
-        public DirectRelationIdentifier DataType { get; }
+        public DirectRelationIdentifier? DataType { get; }
         [JsonPropertyName("ArrayDimensions")]
         public int[]? ArrayDimensions { get; }
         [JsonPropertyName("ValueRank")]
@@ -386,17 +393,34 @@ namespace Cognite.OpcUa.Pushers.FDM
         }
     }
 
-    class ObjectTypeData
+    class TypeData
+    {
+        [JsonPropertyName("TypeHierarchy")]
+        public IEnumerable<string> TypeHierarchy { get; }
+        public TypeData(UANode node)
+        {
+            var current = node;
+            var items = new List<string>();
+            while (current != null)
+            {
+                items.Add(current.Id.ToString());
+                current = current.Parent;
+            }
+            TypeHierarchy = items;
+        }
+    }
+
+    class ObjectTypeData : TypeData
     {
         [JsonPropertyName("IsAbstract")]
         public bool IsAbstract { get; }
-        public ObjectTypeData(UANode node)
+        public ObjectTypeData(UANode node) : base(node)
         {
             IsAbstract = node.Attributes.TypeAttributes?.IsAbstract ?? false;
         }
     }
 
-    class VariableTypeData
+    class VariableTypeData : TypeData
     {
         [JsonPropertyName("IsAbstract")]
         public bool IsAbstract { get; }
@@ -409,7 +433,7 @@ namespace Cognite.OpcUa.Pushers.FDM
         [JsonPropertyName("Value")]
         public JsonElement Value { get; }
 
-        public VariableTypeData(UAVariable variable, DMSValueConverter converter, string space)
+        public VariableTypeData(UAVariable variable, DMSValueConverter converter, string space) : base(variable)
         {
             IsAbstract = variable.Attributes.TypeAttributes?.IsAbstract ?? false;
             if (!variable.DataType.Raw.IsNullNodeId) DataType = new DirectRelationIdentifier(space, variable.DataType.Raw.ToString());
@@ -420,28 +444,28 @@ namespace Cognite.OpcUa.Pushers.FDM
         }
     }
 
-    class ReferenceTypeData
+    class ReferenceTypeData : TypeData
     {
         [JsonPropertyName("IsAbstract")]
         public bool IsAbstract { get; }
         [JsonPropertyName("InverseName")]
         public string? InverseName { get; }
 
-        public ReferenceTypeData(UANode node)
+        public ReferenceTypeData(UANode node) : base(node)
         {
             IsAbstract = node.Attributes.TypeAttributes?.IsAbstract ?? false;
             InverseName = node.Attributes.TypeAttributes?.InverseName;
         }
     }
 
-    class DataTypeData
+    class DataTypeData : TypeData
     {
         [JsonPropertyName("IsAbstract")]
         public bool IsAbstract { get; }
         [JsonPropertyName("DataTypeDefinition")]
         public JsonElement? DataTypeDefinition { get; }
 
-        public DataTypeData(UANode node, DMSValueConverter converter)
+        public DataTypeData(UANode node, DMSValueConverter converter) : base(node)
         {
             var def = node.Attributes.TypeAttributes?.DataTypeDefinition;
             if (def != null)

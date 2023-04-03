@@ -90,9 +90,13 @@ namespace Cognite.OpcUa.Types
         /// </summary>
         public UANodeType? NodeType => Attributes.NodeType;
         /// <summary>
+        /// True if this node is part of the type hierarchy
+        /// </summary>
+        public bool IsChildOfType { get; set; }
+        /// <summary>
         /// True if node is a property
         /// </summary>
-        public bool IsProperty => Attributes.IsProperty;
+        public bool IsProperty => Attributes.IsRawProperty || IsChildOfType && NodeClass == NodeClass.Variable;
         /// <summary>
         /// Parent node
         /// </summary>
@@ -425,7 +429,7 @@ namespace Cognite.OpcUa.Types
             Attributes.NodeType = client.ObjectTypeManager.GetObjectType(id, NodeClass == NodeClass.Variable);
             if (NodeClass == NodeClass.Variable && id == VariableTypeIds.PropertyType)
             {
-                Attributes.IsProperty = true;
+                Attributes.IsRawProperty = true;
             }
         }
     }

@@ -224,9 +224,9 @@ namespace Cognite.OpcUa.NodeSources
             }
         }
 
-        protected bool IsDecendantOfType(UANode node)
+        protected bool IsDescendantOfType(UANode node)
         {
-            return node.Parent != null && (node.Parent.IsType || IsDecendantOfType(node.Parent));
+            return node.Parent != null && (node.Parent.IsType || node.Parent.IsChildOfType);
         }
 
         /// <summary>
@@ -240,12 +240,11 @@ namespace Cognite.OpcUa.NodeSources
             {
                 node.Parent = parent;
                 node.Attributes.Ignore |= node.Parent.Ignore;
-                node.Attributes.IsProperty |= node.Parent.IsProperty
+                node.Attributes.IsRawProperty |= node.Parent.Attributes.IsRawProperty
                     || !Config.Extraction.MapVariableChildren && node.Parent.NodeClass == NodeClass.Variable
-                    // Children of types are generally not timeseries
-                    || IsDecendantOfType(node) && node.NodeClass == NodeClass.Variable
                     // This refers to the big schema types
                     || node.NodeClass != NodeClass.DataType && node.ParentId == ObjectIds.DataTypesFolder;
+                node.IsChildOfType = IsDescendantOfType(node);
             }
 
             var variable = node as UAVariable;
@@ -255,7 +254,7 @@ namespace Cognite.OpcUa.NodeSources
                 variable.AllowTSMap = Extractor.DataTypeManager.AllowTSMap(variable);
                 if (Config.Extraction.DataTypes.UnmappedAsProperties && !variable.AllowTSMap!.Value)
                 {
-                    variable.Attributes.IsProperty = true;
+                    variable.Attributes.IsRawProperty = true;
                 }
             }
 

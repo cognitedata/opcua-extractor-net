@@ -46,58 +46,6 @@ namespace Cognite.OpcUa.Pushers.FDM
             instSpace = config.Cognite!.FlexibleDataModels!.Space;
         }
 
-        /* private async Task IngestNodes<T>(string model, IEnumerable<T> items, CancellationToken token) where T : BaseNode
-        {
-            if (!items.Any()) return;
-
-            foreach (var chunk in items.ChunkBy(1000))
-            {
-                var request = new NodeIngestRequest<T>
-                {
-                    Items = chunk,
-                    Model = new ModelIdentifier(FDMDataModel.Space, model),
-                    Overwrite = true,
-                    SpaceExternalId = instSpace
-                };
-                try
-                {
-                    await destination.CogniteClient.Beta.DataModels.IngestNodes(request, token);
-                }
-                catch (ResponseException ex)
-                {
-                    log.LogError("Failed to write to FDM: {Extras}", ex.Extra);
-                    throw;
-                }
-            }
-        }
-
-        private async Task IngestEdges<T>(string model, IEnumerable<T> items, CancellationToken token) where T : BaseEdge
-        {
-            if (!items.Any()) return;
-
-            foreach (var chunk in items.ChunkBy(1000))
-            {
-                var request = new EdgeIngestRequest<T>
-                {
-                    Items = chunk,
-                    AutoCreateEndNodes = true,
-                    AutoCreateStartNodes = true,
-                    Model = new ModelIdentifier(FDMDataModel.Space, model),
-                    Overwrite = true,
-                    SpaceExternalId = instSpace
-                };
-                try
-                {
-                    await destination.CogniteClient.Beta.DataModels.IngestEdges(request, token);
-                }
-                catch (ResponseException ex)
-                {
-                    log.LogError("Failed to write to FDM: {Extras}", ex.Extra);
-                    throw;
-                }
-            }
-        } */
-
         private async Task IngestInstances(IEnumerable<BaseInstanceWrite> instances, CancellationToken token)
         {
             var chunks = instances.ChunkBy(1000).ToList();

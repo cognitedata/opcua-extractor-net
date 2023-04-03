@@ -77,6 +77,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             }
             else
             {
+                var baseNodeType = type.Node.NodeClass == NodeClass.VariableType ? "BaseVariableType" : "BaseObjectType";
                 view = new ViewCreate
                 {
                     Description = type.Node.Description,
@@ -85,7 +86,16 @@ namespace Cognite.OpcUa.Pushers.FDM
                     Version = viewVersion,
                     Space = space,
                     Implements = new[] { new ViewIdentifier(space, type.Parent.ExternalId, viewVersion) },
-                    Properties = new Dictionary<string, ICreateViewProperty>()
+                    Properties = new Dictionary<string, ICreateViewProperty>(),
+                    Filter = new NestedFilter
+                    {
+                        Scope = new[] { space, baseNodeType, "TypeDefinition" },
+                        Filter = new ContainsAnyFilter
+                        {
+                            Property = new[] { space, "BaseType", "TypeHierarchy" },
+                            Values = new[] { new RawPropertyValue<string>(type.Node.Id.ToString()) }
+                        }
+                    }
                 };
             }
 
@@ -99,7 +109,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                         Name = rf.BrowseName,
                         Direction = ConnectionDirection.outwards,
                         Source = new ViewIdentifier(space, rf.Type!.ExternalId, viewVersion),
-                        Type = new DirectRelationIdentifier(space, rf.Reference.Type.GetName(false))
+                        Type = new DirectRelationIdentifier(space, rf.Reference.Type.Id.ToString())
                     });
                 }
             }
@@ -111,7 +121,15 @@ namespace Cognite.OpcUa.Pushers.FDM
             var res = new Dictionary<string, ContainerPropertyDefinition>();
             foreach (var kvp in type.Properties)
             {
-                var typ = GetPropertyType(kvp.Value, kvp.Value.Node.IsArray);
+                BasePropertyType typ;
+                if (kvp.Value.Node.Attributes.IsRawProperty)
+                {
+                    typ = GetPropertyType(kvp.Value, kvp.Value.Node.IsArray);
+                }
+                else
+                {
+                    typ = BasePropertyType.Text(kvp.Value.Node.IsArray);
+                }
                 kvp.Value.DMSType = typ;
                 res[kvp.Value.ExternalId] = new ContainerPropertyDefinition
                 {
@@ -119,7 +137,8 @@ namespace Cognite.OpcUa.Pushers.FDM
                     Name = kvp.Value.BrowseName,
                     Type = typ,
                     Nullable = kvp.Value.ModellingRule != ModellingRule.Mandatory || (typ is DirectRelationPropertyType),
-                    DefaultValue = (typ is DirectRelationPropertyType) ? null : converter.ConvertVariant(typ, kvp.Value.Node.Value)
+                    DefaultValue = (typ.Type == PropertyTypeVariant.direct || kvp.Value.Node.IsArray && typ.Type != PropertyTypeVariant.json)
+                        ? null : converter.ConvertVariant(typ, kvp.Value.Node.Value)
                 };
             }
             return res;
@@ -188,12 +207,13 @@ namespace Cognite.OpcUa.Pushers.FDM
             var batch = new FDMTypeBatch("1", space, log);
             // Add core containers and views
             batch.Add(BaseDataModelDefinitions.BaseNode(space));
+            batch.Add(BaseDataModelDefinitions.BaseType(space), "BaseNode");
             batch.Add(BaseDataModelDefinitions.BaseVariable(space), "BaseNode");
             batch.Add(BaseDataModelDefinitions.BaseObject(space), "BaseNode");
-            batch.Add(BaseDataModelDefinitions.ObjectType(space), "BaseNode");
-            batch.Add(BaseDataModelDefinitions.VariableType(space), "BaseNode");
-            batch.Add(BaseDataModelDefinitions.ReferenceType(space), "BaseNode");
-            batch.Add(BaseDataModelDefinitions.DataType(space), "BaseNode");
+            batch.Add(BaseDataModelDefinitions.ObjectType(space), "BaseType");
+            batch.Add(BaseDataModelDefinitions.VariableType(space), "BaseType");
+            batch.Add(BaseDataModelDefinitions.ReferenceType(space), "BaseType");
+            batch.Add(BaseDataModelDefinitions.DataType(space), "BaseType");
 
             nodeTypes.MapNodeTypes(nodes);
 

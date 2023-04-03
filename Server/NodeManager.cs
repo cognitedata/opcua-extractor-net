@@ -795,7 +795,7 @@ namespace Server
 
                 // Custom object and variable type
                 var objType = CreateObjectType("CustomObjectType", ObjectTypeIds.BaseObjectType, externalReferences);
-                var variableType = CreateVariableType("CustomVariableType", VariableTypeIds.BaseDataVariableType, DataTypeIds.Double,
+                var variableType = CreateVariableType("CustomVariableType", DataTypeIds.Double, VariableTypeIds.BaseDataVariableType,
                     externalReferences);
                 variableType.Value = 123.123;
 

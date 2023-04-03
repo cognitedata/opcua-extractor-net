@@ -115,6 +115,10 @@ namespace Cognite.OpcUa.Pushers.FDM
                         Type = BasePropertyType.Create(PropertyTypeVariant.float64),
                         Nullable = true,
                         Name = "MinimumSamplingInterval"
+                    } },
+                    { "TypeDefinition", new ContainerPropertyDefinition
+                    {
+                        Type = BasePropertyType.Direct(new ContainerIdentifier(space, "VariableType"))
                     } }
                 }
             };
@@ -134,6 +138,31 @@ namespace Cognite.OpcUa.Pushers.FDM
                     { "EventNotifier", new ContainerPropertyDefinition
                     {
                         Type = BasePropertyType.Create(PropertyTypeVariant.int32)
+                    } },
+                    { "TypeDefinition", new ContainerPropertyDefinition
+                    {
+                        Type = BasePropertyType.Direct(new ContainerIdentifier(space, "ObjectType"))
+                    } }
+                }
+            };
+        }
+
+        public static ContainerCreate BaseType(string space)
+        {
+            return new ContainerCreate
+            {
+                Description = "Base container for all OPC UA types",
+                ExternalId = "BaseType",
+                Name = "BaseType",
+                Space = space,
+                UsedFor = UsedFor.node,
+                Properties = new Dictionary<string, ContainerPropertyDefinition>
+                {
+                    { "TypeHierarchy", new ContainerPropertyDefinition
+                    {
+                        Type = BasePropertyType.Text(true),
+                        Nullable = false,
+                        Name = "TypeHierarchy"
                     } }
                 }
             };

@@ -41,7 +41,7 @@ namespace Cognite.OpcUa.Types
         public string? Description { get; set; }
         public byte EventNotifier { get; set; }
         public UANodeType? NodeType { get; set; }
-        public bool IsProperty { get; set; }
+        public bool IsRawProperty { get; set; }
         public bool Ignore { get; set; }
         public IList<UANode>? Properties { get; set; }
         public NodeClass NodeClass { get; }
@@ -87,7 +87,7 @@ namespace Cognite.OpcUa.Types
                     }
                     result.Add(Attributes.DataType);
                     result.Add(Attributes.ValueRank);
-                    if (IsProperty || config.Extraction.DataTypes.MaxArraySize != 0)
+                    if (IsRawProperty || config.Extraction.DataTypes.MaxArraySize != 0)
                     {
                         result.Add(Attributes.ArrayDimensions);
                     }
@@ -96,7 +96,7 @@ namespace Cognite.OpcUa.Types
                     result.Add(Attributes.IsAbstract);
                     result.Add(Attributes.DataType);
                     result.Add(Attributes.ValueRank);
-                    if (IsProperty || config.Extraction.DataTypes.MaxArraySize != 0)
+                    if (IsRawProperty || config.Extraction.DataTypes.MaxArraySize != 0)
                     {
                         result.Add(Attributes.ArrayDimensions);
                     }

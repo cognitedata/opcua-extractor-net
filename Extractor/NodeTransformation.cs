@@ -281,7 +281,7 @@ namespace Cognite.OpcUa
                         log.LogTrace("Ignoring node {Name} {Id} due to matching ignore filter {Idx}", node.DisplayName, node.Id, index);
                         break;
                     case TransformationType.Property:
-                        node.Attributes.IsProperty = true;
+                        node.Attributes.IsRawProperty = true;
                         log.LogTrace("Treating node {Name} {Id} as property due to matching filter {Idx}", node.DisplayName, node.Id, index);
                         break;
                     case TransformationType.DropSubscriptions:
@@ -293,7 +293,7 @@ namespace Cognite.OpcUa
                         log.LogDebug("Dropping subscriptions on node {Name} {Id} due to matching filter {Idx}", node.DisplayName, node.Id, index);
                         break;
                     case TransformationType.TimeSeries:
-                        node.Attributes.IsProperty = false;
+                        node.Attributes.IsRawProperty = false;
                         log.LogTrace("Treating node {Name} {Id} as timeseries due to matching filter {Idx}", node.DisplayName, node.Id, index);
                         break;
                     case TransformationType.AsEvents:
