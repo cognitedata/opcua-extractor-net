@@ -1295,7 +1295,6 @@ namespace Test.Integration
 
             // Enable types only
             tester.Config.Source.NodeSetSource.Types = true;
-            tester.Client.Browser.ResetVisitedNodes();
             tester.Client.ClearEventFields();
             tester.Client.DataTypeManager.Reset();
             tester.Client.ObjectTypeManager.Reset();
@@ -1307,7 +1306,6 @@ namespace Test.Integration
             pusher.Wipe();
 
             tester.Config.Source.NodeSetSource.Instance = true;
-            tester.Client.Browser.ResetVisitedNodes();
             tester.Client.ClearEventFields();
             tester.Client.DataTypeManager.Reset();
             tester.Client.ObjectTypeManager.Reset();

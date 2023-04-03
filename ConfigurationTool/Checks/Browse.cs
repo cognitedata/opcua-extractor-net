@@ -105,14 +105,13 @@ namespace Cognite.OpcUa.Config
                     foreach (var rd in children)
                     {
                         var nodeId = ToNodeId(rd.NodeId);
-                        bool docb = true;
-                        if (docb)
-                        {
-                            log.LogTrace("Discovered new node {NodeId}", nodeId);
-                            callback?.Invoke(rd, parentId);
-                        }
+                        bool visited = !localVisitedNodes.Add(nodeId);
+
+                        log.LogTrace("Discovered new node {NodeId}", nodeId);
+                        callback?.Invoke(rd, parentId, visited);
+
                         if (rd.NodeClass == NodeClass.Variable) continue;
-                        if (localVisitedNodes.Add(nodeId))
+                        if (!visited)
                         {
                             nextIds.Add(nodeId);
                         }

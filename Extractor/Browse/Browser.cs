@@ -25,7 +25,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Cognite.OpcUa
+namespace Cognite.OpcUa.Browse
 {
     public sealed class Browser : IDisposable
     {
@@ -33,7 +33,6 @@ namespace Cognite.OpcUa
         private readonly UAClient uaClient;
         private readonly FullConfig config;
         private readonly object visitedNodesLock = new object();
-        private readonly ISet<NodeId> visitedNodes = new HashSet<NodeId>();
 
         private readonly ContinuationPointThrottlingConfig throttling;
         private readonly TaskThrottler throttler;
@@ -57,25 +56,21 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="root">Root node to browse for</param>
         /// <param name="callback">Callback to call for each found node</param>
-        /// <param name="ignoreVisited">Default true, do not call callback for previously visited nodes</param>
         public Task BrowseNodeHierarchy(NodeId root,
-            Action<ReferenceDescription, NodeId?> callback,
+            Action<ReferenceDescription, NodeId?, bool> callback,
             CancellationToken token,
-            bool ignoreVisited = true,
             string purpose = "")
         {
-            return BrowseNodeHierarchy(new[] { root }, callback, token, ignoreVisited, purpose);
+            return BrowseNodeHierarchy(new[] { root }, callback, token, purpose);
         }
         /// <summary>
         /// Browse an opcua directory, calling callback for all relevant nodes found.
         /// </summary>
         /// <param name="roots">Initial nodes to start mapping.</param>
         /// <param name="callback">Callback for each mapped node, takes a description of a single node, and its parent id</param>
-        /// <param name="ignoreVisited">Default true, do not call callback for previously visited nodes</param>
         public async Task BrowseNodeHierarchy(IEnumerable<NodeId> roots,
-            Action<ReferenceDescription, NodeId> callback,
+            Action<ReferenceDescription, NodeId, bool> callback,
             CancellationToken token,
-            bool ignoreVisited = true,
             string purpose = "")
         {
             if (roots == null) throw new ArgumentNullException(nameof(roots));
@@ -85,15 +80,7 @@ namespace Cognite.OpcUa
 
             foreach (var root in rootRefs)
             {
-                bool docb = true;
-                lock (visitedNodesLock)
-                {
-                    if (!visitedNodes.Add(uaClient.ToNodeId(root.NodeId)) && ignoreVisited)
-                    {
-                        docb = false;
-                    }
-                }
-                if (docb) callback?.Invoke(root, NodeId.Null);
+                callback?.Invoke(root, NodeId.Null, false);
             }
             uint classMask = (uint)NodeClass.Variable | (uint)NodeClass.Object;
             if (config.Extraction.NodeTypes.AsNodes)
@@ -101,7 +88,7 @@ namespace Cognite.OpcUa
                 classMask |= (uint)NodeClass.VariableType | (uint)NodeClass.ObjectType;
             }
 
-            await BrowseDirectory(roots, callback, token, null, classMask, ignoreVisited, true, purpose: purpose);
+            await BrowseDirectory(roots, callback, token, null, classMask, true, purpose: purpose);
         }
         public async Task<IEnumerable<ReferenceDescription>> GetRootNodes(IEnumerable<NodeId> ids, CancellationToken token)
         {
@@ -176,11 +163,12 @@ namespace Cognite.OpcUa
             return roots.Values;
         }
 
-        private static Action<ReferenceDescription, NodeId> GetDictWriteCallback(Dictionary<NodeId, ReferenceDescriptionCollection> dict)
+        private static Action<ReferenceDescription, NodeId, bool> GetDictWriteCallback(Dictionary<NodeId, ReferenceDescriptionCollection> dict)
         {
             object lck = new object();
-            return (rd, nodeId) =>
+            return (rd, nodeId, visited) =>
             {
+                if (visited) return;
                 lock (lck)
                 {
                     if (!dict.TryGetValue(nodeId, out var refs))
@@ -196,7 +184,6 @@ namespace Cognite.OpcUa
             BrowseParams baseParams,
             CancellationToken token,
             bool doFilter = true,
-            bool ignoreVisited = false,
             string purpose = "")
         {
             var result = new Dictionary<NodeId, ReferenceDescriptionCollection>();
@@ -208,7 +195,6 @@ namespace Cognite.OpcUa
                 InitialParams = baseParams,
                 MaxNodeParallelism = throttling.MaxNodeParallelism,
                 NodesChunk = config.Source.BrowseNodesChunk,
-                VisitedNodes = ignoreVisited ? null : visitedNodes,
                 MaxDepth = 0
             };
 
@@ -231,15 +217,12 @@ namespace Cognite.OpcUa
         /// <param name="referenceTypes">Permitted reference types, defaults to HierarchicalReferences</param>
         /// <param name="nodeClassMask">Mask for node classes as described in the OPC-UA specification</param>
         /// <param name="doFilter">True to apply the node filter to discovered nodes</param>
-        /// <param name="ignoreVisited">True to not call callback on already visited nodes.</param>
-        /// <param name="readVariableChildren">Read the children of variables.</param>
         public async Task BrowseDirectory(
             IEnumerable<NodeId> roots,
-            Action<ReferenceDescription, NodeId>? callback,
+            Action<ReferenceDescription, NodeId, bool>? callback,
             CancellationToken token,
             NodeId? referenceTypes = null,
             uint nodeClassMask = (uint)NodeClass.Variable | (uint)NodeClass.Object,
-            bool ignoreVisited = true,
             bool doFilter = true,
             int maxDepth = -1,
             string purpose = "")
@@ -261,25 +244,12 @@ namespace Cognite.OpcUa
                 MaxDepth = maxDepth,
                 Filters = doFilter ? IgnoreFilters : null,
                 InitialParams = baseParams,
-                MaxNodeParallelism = throttling.MaxNodeParallelism,
-                VisitedNodes = ignoreVisited ? visitedNodes : null
+                MaxNodeParallelism = throttling.MaxNodeParallelism
             };
 
             using var scheduler = new BrowseScheduler(log, throttler, uaClient, continuationPoints, options, token, purpose);
             await scheduler.RunAsync();
         }
-
-        /// <summary>
-        /// Clear internal list of visited nodes, allowing callbacks to be called for visited nodes again.
-        /// </summary>
-        public void ResetVisitedNodes()
-        {
-            lock (visitedNodesLock)
-            {
-                visitedNodes.Clear();
-            }
-        }
-
 
         public void Dispose()
         {
