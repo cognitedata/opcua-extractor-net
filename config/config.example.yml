@@ -1,6 +1,6 @@
 ﻿# Template for the config file,
 # Defaults to config.yml in ./config.
-# The config tool defaults to config/config.config-tool.yml, and uses the same config 
+# The config tool defaults to config/config.config-tool.yml, and uses the same config
 # options, though only EndpointURL and if needed username/password/secure are required.
 # The values here are generally the default values, except for the contents of lists etc.
 # Your config file can contain only a subset of these config options. Any extra options will
@@ -299,6 +299,14 @@ cognite:
         # scopes:
         #   - scopeA
         #   - scopeB
+        # Certificate/key pair to authenticate to AAD with (alternative to secret)
+        certificate:
+            # Path to certificate file
+            path:
+            # Authority url, if tenant is not configured
+            authority-url:
+            # Password for certificate, if set
+            password:
         scopes:
         # Audience parameter
         audience:
@@ -557,7 +565,7 @@ logger:
     # WARNING: This produces an enormous amount of logs. Only use this when running against a small
     # number of nodes, producing a limited number of datapoints, and make sure it is not turned on in production.
     ua-session-tracing: false
-    
+
 metrics:
     # Start a metrics server in the extractor for Prometheus scrape
     server:
@@ -568,7 +576,7 @@ metrics:
         - host:
           job:
           username:
-          password: 
+          password:
     # Configuration to treat OPC-UA nodes as metrics.
     # Values will be mapped to opcua_nodes_NODE-DISPLAY-NAME in prometheus.
     nodes:
@@ -587,7 +595,7 @@ extraction:
     # Delay in ms between each push of data points to targets
     # Alternatively, use N[timeunit] where timeunit is w, d, h, m, s or ms.
     data-push-delay: 1000
-    
+
     # Source node in the OPC-UA server. Leave empty to use the top level Objects node.
     # If root-nodes is set, this is added to the list of root nodes.
     root-node:
@@ -601,15 +609,15 @@ extraction:
     # Specifying nodes connected with hierarchical references can result in some strange behavior:
     # generally, the node deeper in the hierarchy will be detached from its parent and excluded from the hierarchy of the other node.
     root-nodes:
-        # - namespace-uri: 
-        #   node-id: 
+        # - namespace-uri:
+        #   node-id:
 
     # Override mappings between OPC UA node id and externalId, allowing e.g. the RootNode to be mapped to
     # a particular asset in CDF. Applies to both assets and time series.
     # NodeMap:
     #   "externalId": { NamespaceUri: "uri", NodeId: "i=123" }
     node-map:
-  
+
     # Map OPC-UA namespaces to prefixes in CDF. If not mapped, the full namespace URI is used.
     # Saves space compared to using the full URL. Using the ns index is not safe as the order can change on the server.
     # For example:
@@ -624,10 +632,10 @@ extraction:
         # Add custom numeric types using their nodeId. is-step indicates whether the datatype is discrete,
         # enum indicates that it is an enumeration, which may be mapped to a string if enums-as-strings is true.
         # This also overwrite default behavior, so it is possible to make Integer discrete, etc.
-        # Note that the type in question needs to have a sensible numerical conversion in C#, unless it is an array type or similar, 
+        # Note that the type in question needs to have a sensible numerical conversion in C#, unless it is an array type or similar,
         # in which case each element needs a conversion
         custom-numeric-types:
-        #    - node-id: 
+        #    - node-id:
         #          namespace-uri:
         #          node-id:
         #      is-step: false
@@ -647,7 +655,7 @@ extraction:
         # Note that some server implementations have issues with the ArrayDimensions property, so it is not fetched at all if MaxArraySize is 0
         # -1 indicates that there is no limit to array length, though only 1-dimensional structures will be read either way.
         max-array-size: 0
-   
+
         # Set to true to allow fetching string variables. This means that all variables with non-numeric type is converted to string in some way.
         allow-string-variables: false
 
@@ -674,7 +682,7 @@ extraction:
         # Add attributes generally used internally like AccessLevel, Historizing, ArrayDimensions, ValueRank etc.
         # to data pushed to Raw.
         append-internal-values: false
-        
+
         # If max-array-size is set, this looks for the MaxArraySize property on each node with one-dimension ValueRank,
         # if it is not found, it tries to read the value as well, and look at the current size.
         # ArrayDimensions is still the prefered way to identify array sizes, this is not guaranteed to generate
@@ -728,7 +736,7 @@ extraction:
 
     # Config related to mapping object- and variable types to destinations.
     node-types:
-        # Add the TypeDefinition as a metadata field to all nodes 
+        # Add the TypeDefinition as a metadata field to all nodes
         metadata: false
         # Allow reading object- and vairable types as normal nodes and map them to destinations.
         # They will need to be in the mapped hierarchy.
@@ -874,7 +882,7 @@ events:
         #- Property1
         #- Property2
     # Map source browse names to other values in the destination. For CDF, internal properties may be overwritten, by default
-    # "Message" is mapped to description, "SourceNode" is used for context and "EventType" is used for type. These may also be excluded or replaced by 
+    # "Message" is mapped to description, "SourceNode" is used for context and "EventType" is used for type. These may also be excluded or replaced by
     # overrides in DestinationNameMap. If multiple properties are mapped to the same value, the first non-null is used.
 
     # If "StartTime", "EndTime" or "SubType" are specified, either directly or through the map, these are used as event properties instead of metadata.
@@ -893,7 +901,7 @@ events:
         #    node-id:
     # Id of nodes to be observed as event emitters. Empty Namespace/NodeId defaults to the server node.
     # This is used to add extra emitters that are not in the extracted node hierarchy, or that does not
-    # correctly specify the EventNotifier property. 
+    # correctly specify the EventNotifier property.
     emitter-ids:
         #-   namespace-uri:
         #    node-id:
