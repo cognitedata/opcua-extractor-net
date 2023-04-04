@@ -34,10 +34,9 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Xml.Linq;
+using Browser = Cognite.OpcUa.Browse.Browser;
 
 namespace Cognite.OpcUa
 {
@@ -236,7 +235,6 @@ namespace Cognite.OpcUa
         {
             if (Callbacks == null) throw new InvalidOperationException("Attempted to start UAClient without setting callbacks");
 
-            Browser.ResetVisitedNodes();
             // A restarted Session might mean a restarted server, so all server-relevant data must be cleared.
             // This includes any stored NodeId, which may refer to an outdated namespaceIndex
             eventFields?.Clear();

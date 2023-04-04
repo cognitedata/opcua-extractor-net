@@ -31,11 +31,10 @@ namespace Cognite.OpcUa
     internal class DirectoryBrowseParams
     {
         public IEnumerable<NodeFilter>? Filters { get; set; }
-        public Action<ReferenceDescription, NodeId>? Callback { get; set; }
+        public Action<ReferenceDescription, NodeId, bool>? Callback { get; set; }
         public int NodesChunk { get; set; }
         public int MaxNodeParallelism { get; set; }
         public BrowseParams? InitialParams { get; set; }
-        public ISet<NodeId>? VisitedNodes { get; set; }
         public int MaxDepth { get; set; } = -1;
     }
 
@@ -45,8 +44,7 @@ namespace Cognite.OpcUa
         private readonly DirectoryBrowseParams options;
 
         private readonly IEnumerable<NodeFilter>? filters;
-        private readonly ISet<NodeId> visitedNodes;
-        private readonly Action<ReferenceDescription, NodeId>? callback;
+        private readonly Action<ReferenceDescription, NodeId, bool>? callback;
         private readonly ISet<NodeId> localVisitedNodes = new HashSet<NodeId>();
 
         private readonly ILogger log;
@@ -79,7 +77,6 @@ namespace Cognite.OpcUa
             this.log = log;
             this.client = client;
             this.options = options;
-            visitedNodes = options.VisitedNodes ?? new HashSet<NodeId>();
             callback = options.Callback;
 
             if (options == null) throw new ArgumentNullException(nameof(options));
@@ -93,7 +90,6 @@ namespace Cognite.OpcUa
                 foreach (var node in baseParams.Nodes)
                 {
                     localVisitedNodes.Add(node.Value.Id);
-                    visitedNodes.Add(node.Value.Id);
                 }
             }
             depthCounts.Add(baseParams.Nodes.Count);
@@ -179,23 +175,14 @@ namespace Cognite.OpcUa
                         continue;
                     }
 
-                    bool docb = true;
-                    if (visitedNodes != null && !visitedNodes.Add(nodeId))
-                    {
-                        docb = false;
-                        log.LogTrace("Ignoring visited {NodeId}", nodeId);
-                    }
-                    if (docb)
-                    {
-                        log.LogTrace("Discovered new node {NodeId}", nodeId);
-                        callback?.Invoke(rd, node.Id);
-                    }
+                    bool visited = !localVisitedNodes.Add(nodeId);
+                    callback?.Invoke(rd, node.Id, visited);
 
                     if (node.Depth + 1 == depthCounts.Count) depthCounts.Add(1);
                     else depthCounts[node.Depth + 1]++;
 
                     if (rd.TypeDefinition == VariableTypeIds.PropertyType) continue;
-                    if ((options.MaxDepth < 0 || node.Depth < options.MaxDepth) && localVisitedNodes.Add(nodeId))
+                    if ((options.MaxDepth < 0 || node.Depth < options.MaxDepth) && !visited)
                     {
                         result.Add(new BrowseNode(nodeId, node));
                     }

@@ -117,7 +117,6 @@ namespace Test.Utils
             {
                 Client.ClearNodeOverrides();
                 Client.ClearEventFields();
-                Client.Browser.ResetVisitedNodes();
                 Client.DataTypeManager.Reset();
                 Client.RemoveSubscription("EventListener").Wait();
                 Client.RemoveSubscription("DataChangeListener").Wait();
