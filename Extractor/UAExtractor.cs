@@ -462,7 +462,7 @@ namespace Cognite.OpcUa
             await uaClient.WaitForOperations(Source.Token);
             await ConfigureExtractor();
 
-            var synchTasks = await RunMapping(RootNodes, initial: true, isFull: true);
+            var synchTasks = await RunMapping(RootNodes, initial: false, isFull: true);
 
             foreach (var task in synchTasks)
             {

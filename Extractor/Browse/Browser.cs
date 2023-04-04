@@ -56,6 +56,7 @@ namespace Cognite.OpcUa.Browse
         /// </summary>
         /// <param name="root">Root node to browse for</param>
         /// <param name="callback">Callback to call for each found node</param>
+        /// <param name="purpose">Purpose of the browse, for logging</param>
         public Task BrowseNodeHierarchy(NodeId root,
             Action<ReferenceDescription, NodeId?, bool> callback,
             CancellationToken token,
@@ -68,6 +69,7 @@ namespace Cognite.OpcUa.Browse
         /// </summary>
         /// <param name="roots">Initial nodes to start mapping.</param>
         /// <param name="callback">Callback for each mapped node, takes a description of a single node, and its parent id</param>
+        /// <param name="purpose">Purpose of the browse, for logging</param>
         public async Task BrowseNodeHierarchy(IEnumerable<NodeId> roots,
             Action<ReferenceDescription, NodeId, bool> callback,
             CancellationToken token,
@@ -90,6 +92,14 @@ namespace Cognite.OpcUa.Browse
 
             await BrowseDirectory(roots, callback, token, null, classMask, true, purpose: purpose);
         }
+
+        /// <summary>
+        /// Get reference descriptions for a list of NodeIds, used to fetch root nodes when browsing.
+        /// </summary>
+        /// <param name="ids">NodeIds to retrieve</param>
+        /// <param name="token"></param>
+        /// <returns>A list of reference descriptions, order is not guaranteed to be the same as the input.</returns>
+        /// <exception cref="ExtractorFailureException"></exception>
         public async Task<IEnumerable<ReferenceDescription>> GetRootNodes(IEnumerable<NodeId> ids, CancellationToken token)
         {
             var attributes = new uint[]
@@ -180,6 +190,13 @@ namespace Cognite.OpcUa.Browse
             };
         }
 
+        /// <summary>
+        /// Browse a list of nodes, returning their children.
+        /// </summary>
+        /// <param name="baseParams">Browse parameters</param>
+        /// <param name="doFilter">True to apply the node filter to discovered nodes</param>
+        /// <param name="purpose">Purpose of the browse, for logging</param>
+        /// <returns>Map from given nodes to list of references. Nodes with no children are not guaranteed to be in the result.</returns>
         public async Task<Dictionary<NodeId, ReferenceDescriptionCollection>> BrowseLevel(
             BrowseParams baseParams,
             CancellationToken token,
@@ -217,6 +234,8 @@ namespace Cognite.OpcUa.Browse
         /// <param name="referenceTypes">Permitted reference types, defaults to HierarchicalReferences</param>
         /// <param name="nodeClassMask">Mask for node classes as described in the OPC-UA specification</param>
         /// <param name="doFilter">True to apply the node filter to discovered nodes</param>
+        /// <param name="maxDepth">Maximum depth to browse to. 0 will browse children of the given roots only.</param>
+        /// <param name="purpose">Purpose of the browse, for logging.</param>
         public async Task BrowseDirectory(
             IEnumerable<NodeId> roots,
             Action<ReferenceDescription, NodeId, bool>? callback,
