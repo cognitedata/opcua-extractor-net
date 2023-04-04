@@ -1,4 +1,5 @@
 ﻿using Cognite.OpcUa.Config;
+using Cognite.OpcUa.TypeCollectors;
 using Opc.Ua;
 using System.Collections.Generic;
 
@@ -17,7 +18,7 @@ namespace Cognite.OpcUa.Nodes
             yield return Attributes.IsAbstract;
         }
 
-        public override void LoadAttribute(DataValue value, uint attributeId)
+        public override void LoadAttribute(DataValue value, uint attributeId, TypeManager typeManager)
         {
             switch (attributeId)
             {
@@ -25,7 +26,7 @@ namespace Cognite.OpcUa.Nodes
                     IsAbstract = value.GetValue(false);
                     break;
                 default:
-                    base.LoadAttribute(value, attributeId);
+                    base.LoadAttribute(value, attributeId, typeManager);
                     break;
             }
         }
@@ -33,9 +34,22 @@ namespace Cognite.OpcUa.Nodes
 
     public class UAObjectType : BaseUANode
     {
-        public UAObjectType(NodeId id, string displayName, NodeId parentId) : base(id, displayName, parentId)
+        public UAObjectType(NodeId id, string? displayName, BaseUANode? parent) : base(id, displayName, parent)
         {
             FullAttributes = new ObjectTypeAttributes();
+        }
+
+        /// <summary>
+        /// Uninitialized constructor, to be used when lazy-initializing
+        /// </summary>
+        public UAObjectType(NodeId id) : this(id, null, null)
+        {
+        }
+
+        public void Initialize(ReferenceDescription referenceDesc, BaseUANode parent)
+        {
+            DisplayName = referenceDesc.DisplayName?.Text;
+            Parent = parent;
         }
 
         public override BaseNodeAttributes Attributes => FullAttributes;

@@ -17,6 +17,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
+using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
 using Opc.Ua;
@@ -152,9 +153,8 @@ namespace Cognite.OpcUa
         /// Add node to overview of known mapped nodes
         /// </summary>
         /// <param name="node">Node to add</param>
-        public void AddActiveNode(UANode node, TypeUpdateConfig update, bool dataTypeMetadata, bool nodeTypeMetadata)
+        public void AddActiveNode(BaseUANode node, TypeUpdateConfig update, bool dataTypeMetadata, bool nodeTypeMetadata)
         {
-            if (node is UAVariable variable && variable.Index != -1) throw new InvalidOperationException();
             mappedNodes[node.Id] = new MappedNode(node, update, dataTypeMetadata, nodeTypeMetadata);
         }
         /// <summary>

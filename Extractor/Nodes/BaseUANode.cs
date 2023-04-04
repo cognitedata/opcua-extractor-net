@@ -1,4 +1,5 @@
 ﻿using Cognite.OpcUa.Config;
+using Cognite.OpcUa.TypeCollectors;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
@@ -30,7 +31,7 @@ namespace Cognite.OpcUa.Nodes
             NodeClass = nodeClass;
         }
 
-        public virtual void LoadAttribute(DataValue value, uint attributeId)
+        public virtual void LoadAttribute(DataValue value, uint attributeId, TypeManager typeManager)
         {
             switch (attributeId)
             {
@@ -52,10 +53,10 @@ namespace Cognite.OpcUa.Nodes
         public NodeClass NodeClass => Attributes.NodeClass;
         public IEnumerable<BaseUANode>? Properties => Attributes.Properties;
 
-        public string DisplayName { get; }
+        public string? DisplayName { get; protected set; }
         public NodeId Id { get; }
-        public NodeId ParentId { get; }
-        public BaseUANode? Parent { get; }
+        public NodeId ParentId => Parent?.Id ?? NodeId.Null;
+        public BaseUANode? Parent { get; protected set; }
 
         public IEnumerable<BaseUANode> GetAllProperties()
         {
@@ -69,11 +70,11 @@ namespace Cognite.OpcUa.Nodes
             return result;
         }
 
-        public BaseUANode(NodeId id, string displayName, NodeId parentId)
+        public BaseUANode(NodeId id, string? displayName, BaseUANode? parent)
         {
             Id = id;
             DisplayName = displayName;
-            ParentId = parentId;
+            Parent = parent;
         }
     }
 }

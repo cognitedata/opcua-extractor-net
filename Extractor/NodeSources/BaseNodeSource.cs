@@ -17,6 +17,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
+using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
@@ -42,8 +43,8 @@ namespace Cognite.OpcUa.NodeSources
     {
         protected virtual ILogger Log { get; }
         // Initial collection of nodes, in a map.
-        protected Dictionary<NodeId, UANode> NodeMap { get; } = new Dictionary<NodeId, UANode>();
-        protected List<UANode> RawObjects { get; } = new List<UANode>();
+        protected Dictionary<NodeId, BaseUANode> NodeMap { get; } = new();
+        protected List<BaseUANode> RawObjects { get; } = new List<BaseUANode>();
         protected List<UAVariable> RawVariables { get; } = new List<UAVariable>();
 
         // Nodes that are treated as variables (and synchronized) in the source system
@@ -51,10 +52,10 @@ namespace Cognite.OpcUa.NodeSources
         // Nodes that are treated as objects (so not synchronized) in the source system.
         // finalSourceVariables and finalSourceObjects should together contain all mapped nodes
         // in the source system.
-        protected List<UANode> FinalSourceObjects { get; } = new List<UANode>();
+        protected List<BaseUANode> FinalSourceObjects { get; } = new List<BaseUANode>();
 
         // Nodes that are treated as objects in the destination systems (i.e. mapped to assets)
-        protected List<UANode> FinalDestinationObjects { get; } = new List<UANode>();
+        protected List<BaseUANode> FinalDestinationObjects { get; } = new List<BaseUANode>();
         // Nodes that are treated as variables in the destination systems (i.e. mapped to timeseries)
         // May contain duplicate NodeIds, but all should produce distinct UniqueIds.
         protected List<UAVariable> FinalDestinationVariables { get; } = new List<UAVariable>();
@@ -112,10 +113,10 @@ namespace Cognite.OpcUa.NodeSources
                 {
                     try
                     {
-                        int size = Convert.ToInt32(varProp.Value.Value);
+                        int size = Convert.ToInt32(varProp.Value!.Value);
                         if (size > 1)
                         {
-                            node.VariableAttributes.ArrayDimensions = new[] { size };
+                            node.FullAttributes.ArrayDimensions = new[] { size };
                         }
                         continue;
                     }
@@ -129,7 +130,7 @@ namespace Cognite.OpcUa.NodeSources
 
             foreach (var node in toReadValues)
             {
-                object val = node.Value.Value;
+                object? val = node.Value?.Value;
                 int size = 0;
                 if (val is ICollection coll)
                 {
@@ -142,7 +143,7 @@ namespace Cognite.OpcUa.NodeSources
                 }
                 if (size > 1)
                 {
-                    node.VariableAttributes.ArrayDimensions = new[] { size };
+                    node.FullAttributes.ArrayDimensions = new[] { size };
                 }
             }
         }
@@ -151,7 +152,7 @@ namespace Cognite.OpcUa.NodeSources
         /// </summary>
         /// <param name="update">Update configuration</param>
         /// <param name="node">Node to store</param>
-        protected virtual void InitNodeState(UpdateConfig update, UANode node)
+        protected virtual void InitNodeState(UpdateConfig update, BaseUANode node)
         {
             var updateConfig = node is UAVariable ? update.Variables : update.Objects;
 
@@ -171,22 +172,20 @@ namespace Cognite.OpcUa.NodeSources
             }
 
             if (Config.Events.Enabled
-                && node.EventNotifier != 0
-                && (node.NodeClass == NodeClass.Variable || node.NodeClass == NodeClass.Object)
+                && node is UAObject objNode
                 && Extractor.State.GetEmitterState(node.Id) == null)
             {
-                bool history = (node.EventNotifier & EventNotifiers.HistoryRead) != 0 && Config.Events.History;
-                bool subscription = (node.EventNotifier & EventNotifiers.SubscribeToEvents) != 0 && Config.Subscriptions.Events
-                    && node.ShouldSubscribeEvents;
-                var eventState = new EventExtractionState(Extractor, node.Id, history, history && Config.History.Backfill, subscription);
-                Extractor.State.SetEmitterState(eventState);
+                bool subscribe = objNode.FullAttributes.ShouldSubscribeToEvents(Config);
+                bool history = objNode.FullAttributes.ShouldReadEventHistory(Config);
+                if (subscribe || history)
+                {
+                    var eventState = new EventExtractionState(Extractor, node.Id, history, history && Config.History.Backfill, subscribe);
+                    Extractor.State.SetEmitterState(eventState);
+                } 
             }
 
-            if (node is UAVariable variable && variable.NodeClass == NodeClass.Variable)
+            if (node is UAVariable variable && variable.NodeClass == NodeClass.Variable && Extractor.State.GetNodeState(node.Id) != null)
             {
-                var state = Extractor.State.GetNodeState(node.Id);
-                if (state != null) return;
-
                 bool setState = Config.Subscriptions.DataPoints
                     || Config.History.Enabled && Config.History.Data
                     || Config.PubSub.Enabled;
@@ -194,11 +193,12 @@ namespace Cognite.OpcUa.NodeSources
 
                 if (setState)
                 {
-                    state = new VariableExtractionState(
+                    var state = new VariableExtractionState(
                         Extractor,
                         variable,
                         variable.ReadHistory,
                         variable.ReadHistory && Config.History.Backfill);
+                    Extractor.State.SetNodeState(state);
                 }
 
 
@@ -213,7 +213,6 @@ namespace Cognite.OpcUa.NodeSources
                 }
                 if (setState && state != null)
                 {
-                    Extractor.State.SetNodeState(state);
                 }
             }
         }

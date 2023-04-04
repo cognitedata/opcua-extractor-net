@@ -33,7 +33,7 @@ namespace Cognite.OpcUa.Types
     /// <summary>
     /// Represents an opcua variable, which may be either a piece of metadata or a cdf timeseries
     /// </summary>
-    public class UAVariable : UANode
+    public class UAVariableOld : UANode
     {
         public override NodeAttributes Attributes => VariableAttributes;
         public VariableAttributes VariableAttributes { get; }

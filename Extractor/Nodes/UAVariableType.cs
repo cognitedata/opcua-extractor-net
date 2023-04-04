@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using Cognite.OpcUa.Config;
+using Cognite.OpcUa.TypeCollectors;
 using Opc.Ua;
 
 namespace Cognite.OpcUa.Nodes
@@ -8,7 +9,7 @@ namespace Cognite.OpcUa.Nodes
     {
         public bool IsAbstract { get; private set; }
         public int ValueRank { get; private set; }
-        public NodeId DataTypeId { get; private set; } = null!;
+        public UADataType DataType { get; private set; } = null!;
         public int[]? ArrayDimensions { get; private set; }
         public Variant? Value { get; private set; }
         public VariableTypeAttributes() : base(NodeClass.VariableType)
@@ -24,7 +25,7 @@ namespace Cognite.OpcUa.Nodes
             yield return Attributes.ValueRank;
         }
 
-        public override void LoadAttribute(DataValue value, uint attributeId)
+        public override void LoadAttribute(DataValue value, uint attributeId, TypeManager typeManager)
         {
             switch (attributeId)
             {
@@ -32,7 +33,8 @@ namespace Cognite.OpcUa.Nodes
                     IsAbstract = value.GetValue(false);
                     break;
                 case Attributes.DataType:
-                    DataTypeId = value.GetValue(NodeId.Null);
+                    var dataTypeId = value.GetValue(NodeId.Null);
+                    DataType = typeManager.GetDataType(dataTypeId);
                     break;
                 case Attributes.ValueRank:
                     ValueRank = value.GetValue(ValueRanks.Any);
@@ -47,7 +49,7 @@ namespace Cognite.OpcUa.Nodes
                     Value = value.WrappedValue;
                     break;
                 default:
-                    base.LoadAttribute(value, attributeId);
+                    base.LoadAttribute(value, attributeId, typeManager);
                     break;
             }
         }
@@ -55,9 +57,22 @@ namespace Cognite.OpcUa.Nodes
 
     public class UAVariableType : BaseUANode
     {
-        public UAVariableType(NodeId id, string displayName, NodeId parentId) : base(id, displayName, parentId)
+        public UAVariableType(NodeId id, string? displayName, BaseUANode? parent) : base(id, displayName, parent)
         {
             FullAttributes = new VariableTypeAttributes();
+        }
+
+        /// <summary>
+        /// Uninitialized constructor, to be used when lazy-initializing
+        /// </summary>
+        public UAVariableType(NodeId id) : this(id, null, null)
+        {
+        }
+
+        public void Initialize(ReferenceDescription referenceDesc, BaseUANode parent)
+        {
+            DisplayName = referenceDesc.DisplayName?.Text;
+            Parent = parent;
         }
 
         public override BaseNodeAttributes Attributes => FullAttributes;

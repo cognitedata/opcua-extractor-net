@@ -15,7 +15,7 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
-using Cognite.OpcUa.Types;
+using Cognite.OpcUa.Nodes;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
@@ -53,13 +53,13 @@ namespace Cognite.OpcUa.History
         /// Constructor. Copies relevant data from BufferedVariable, initializes the buffer if Historizing is true.
         /// </summary>
         /// <param name="variable">Variable to be used as base</param>
-        public VariableExtractionState(IUAClientAccess client, UAVariable variable, bool frontfill, bool backfill)
+        public VariableExtractionState(IUAClientAccess client, UAVariable variable, bool frontfill, bool backfill, bool subscription)
             : base(client, variable.Id, frontfill, backfill)
         {
-            DataType = variable.DataType;
+            DataType = variable.FullAttributes.DataType;
             ArrayDimensions = variable.ArrayDimensions;
-            DisplayName = variable.DisplayName;
-            ShouldSubscribe = variable.ShouldSubscribeData;
+            DisplayName = variable.DisplayName ?? "";
+            ShouldSubscribe = subscription;
             AsEvents = variable.AsEvents;
             if (frontfill)
             {

@@ -1,4 +1,5 @@
 ﻿using Cognite.OpcUa.Config;
+using Cognite.OpcUa.TypeCollectors;
 using Opc.Ua;
 using System.Collections.Generic;
 
@@ -8,8 +9,13 @@ namespace Cognite.OpcUa.Nodes
     {
         public byte EventNotifier { get; private set; }
         public bool SubscribeToEventsOverride { get; set; }
-        public ObjectAttributes() : base(NodeClass.Object)
+        public bool ReadEventHistoryOverride { get; set; }
+
+        public UAObjectType TypeDefinition { get; private set; }
+
+        public ObjectAttributes(UAObjectType objectType) : base(NodeClass.Object)
         {
+            TypeDefinition = objectType;
         }
 
         public override IEnumerable<uint> GetAttributeSet(FullConfig config)
@@ -21,7 +27,7 @@ namespace Cognite.OpcUa.Nodes
             }
         }
 
-        public override void LoadAttribute(DataValue value, uint attributeId)
+        public override void LoadAttribute(DataValue value, uint attributeId, TypeManager typeManager)
         {
             switch (attributeId)
             {
@@ -29,20 +35,28 @@ namespace Cognite.OpcUa.Nodes
                     EventNotifier = value.GetValue(EventNotifiers.None);
                     break;
                 default:
-                    base.LoadAttribute(value, attributeId);
+                    base.LoadAttribute(value, attributeId, typeManager);
                     break;
             }
         }
 
-        public bool ShouldSubscribeToEvents =>
-            SubscribeToEventsOverride || (EventNotifier & EventNotifiers.SubscribeToEvents) != 0;
+        public bool ShouldSubscribeToEvents(FullConfig config)
+        {
+            return config.Events.Enabled && config.Subscriptions.Events && (SubscribeToEventsOverride || (EventNotifier & EventNotifiers.SubscribeToEvents) != 0);
+        }
+            
+        public bool ShouldReadEventHistory(FullConfig config)
+        {
+            return config.Events.Enabled && config.History.Enabled && config.Events.History
+                && (ReadEventHistoryOverride || (EventNotifier & EventNotifiers.HistoryRead) != 0);
+        }
     }
 
     public class UAObject : BaseUANode
     {
-        public UAObject(NodeId id, string displayName, NodeId parentId) : base(id, displayName, parentId)
+        public UAObject(NodeId id, string displayName, BaseUANode? parent, UAObjectType typeDefinition) : base(id, displayName, parent)
         {
-            FullAttributes = new ObjectAttributes();
+            FullAttributes = new ObjectAttributes(typeDefinition);
         }
 
         public override BaseNodeAttributes Attributes => FullAttributes;
