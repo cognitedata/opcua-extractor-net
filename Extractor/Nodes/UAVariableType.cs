@@ -57,7 +57,7 @@ namespace Cognite.OpcUa.Nodes
 
     public class UAVariableType : BaseUANode
     {
-        public UAVariableType(NodeId id, string? displayName, BaseUANode? parent) : base(id, displayName, parent)
+        public UAVariableType(NodeId id, string? displayName, BaseUANode? parent, NodeId? parentId) : base(id, displayName, parent, parentId)
         {
             FullAttributes = new VariableTypeAttributes();
         }
@@ -65,14 +65,15 @@ namespace Cognite.OpcUa.Nodes
         /// <summary>
         /// Uninitialized constructor, to be used when lazy-initializing
         /// </summary>
-        public UAVariableType(NodeId id) : this(id, null, null)
+        public UAVariableType(NodeId id) : this(id, null, null, null)
         {
         }
 
-        public void Initialize(ReferenceDescription referenceDesc, BaseUANode parent)
+        public void Initialize(ReferenceDescription referenceDesc, BaseUANode? parent, NodeId? parentId)
         {
             DisplayName = referenceDesc.DisplayName?.Text;
             Parent = parent;
+            FallbackParentId = parentId;
         }
 
         public override BaseNodeAttributes Attributes => FullAttributes;

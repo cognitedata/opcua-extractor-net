@@ -1,7 +1,11 @@
 ﻿using Cognite.OpcUa.Config;
 using Cognite.OpcUa.TypeCollectors;
 using Opc.Ua;
+using Serilog.Debugging;
+using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
+using System.Linq;
 
 namespace Cognite.OpcUa.Nodes
 {
@@ -69,9 +73,14 @@ namespace Cognite.OpcUa.Nodes
             }
         }
 
+        public bool? ShouldSubscribeOverride { get; set; }
+        public bool? ShouldReadHistoryOverride { get; set; }
+
         public bool ShouldReadHistory(FullConfig config)
         {
             if (!config.History.Enabled || !config.History.Data) return false;
+
+            if (ShouldReadHistoryOverride != null) return ShouldReadHistoryOverride.Value;
 
             if (config.Subscriptions.IgnoreAccessLevel)
             {
@@ -87,6 +96,10 @@ namespace Cognite.OpcUa.Nodes
 
         public bool ShouldSubscribe(FullConfig config)
         {
+            if (!config.Subscriptions.DataPoints) return false;
+
+            if (ShouldSubscribeOverride != null) return ShouldSubscribeOverride.Value;
+
             if (config.Subscriptions.IgnoreAccessLevel)
             {
                 return true;
@@ -97,13 +110,14 @@ namespace Cognite.OpcUa.Nodes
 
     public class UAVariable : BaseUANode
     {
-        public UAVariable(NodeId id, string displayName, BaseUANode? parent, UAVariableType typeDefinition) : base(id, displayName, parent)
+        public UAVariable(NodeId id, string? displayName, BaseUANode? parent, NodeId? parentId, UAVariableType typeDefinition)
+            : base(id, displayName, parent, parentId)
         {
             FullAttributes = new VariableAttributes(typeDefinition);
         }
 
         protected UAVariable(UAVariable other)
-            : base(other.Id, other.DisplayName, other)
+            : base(other.Id, other.DisplayName, other, other.Id)
         {
             FullAttributes = other.FullAttributes;
         }
@@ -114,6 +128,85 @@ namespace Cognite.OpcUa.Nodes
         public int ValueRank => FullAttributes.ValueRank;
         public int[]? ArrayDimensions => FullAttributes.ArrayDimensions;
         public Variant? Value => FullAttributes.Value;
+
+        [MemberNotNullWhen(true, nameof(ArrayDimensions))]
+        public bool IsArray => ArrayDimensions != null && ArrayDimensions.Length == 1 && ArrayDimensions[0] > 0;
+
+        private bool isObject;
+
+        public bool IsObject { get => isObject || IsArray && (this is not UAVariableMember); set => isObject = value; }
+        public bool AsEvents { get; set; }
+
+
+        /// <summary>
+        /// If this is an object, this is the matching timeseries
+        /// </summary>
+        public UAVariableMember? TimeSeries { get; private set; }
+
+        public IEnumerable<UAVariable> CreateTimeseries()
+        {
+            if (IsArray)
+            {
+                return CreateArrayChildren();
+            }
+            else if (IsObject)
+            {
+                if (TimeSeries == null)
+                {
+                    TimeSeries = new UAVariableMember(this, -1);
+                }
+                return new[] { TimeSeries };
+            }
+            else
+            {
+                return new[] { this };
+            }
+        }
+
+        /// <summary>
+        /// Children if this represents the parent in an array
+        /// </summary>
+        public IEnumerable<UAVariable>? ArrayChildren { get; private set; }
+
+        private IEnumerable<UAVariable> CreateArrayChildren()
+        {
+            if (!IsArray) return Enumerable.Empty<UAVariableMember>();
+            if (ArrayChildren != null) return ArrayChildren;
+            var children = new List<UAVariable>();
+            for (int i = 0; i < ArrayDimensions[0]; i++)
+            {
+                children.Add(new UAVariableMember(this, i));
+            }
+            ArrayChildren = children;
+            return children;
+        }
+
+        public override NodeId? TypeDefinition => FullAttributes.TypeDefinition?.Id;
+
+        public struct VariableGroups
+        {
+            public bool IsSourceObject;
+            public bool IsSourceVariable;
+            public bool IsDestinationObject;
+            public bool IsDestinationVariable;
+        }
+
+        public VariableGroups GetVariableGroups(DataTypeManager dataTypeManager)
+        {
+            var allowTsMap = dataTypeManager.AllowTSMap(this);
+            return new VariableGroups
+            {
+                // Source object if it's not a variable
+                IsSourceObject = NodeClass != NodeClass.Variable,
+                // Source variable if we wish to subscribe to it
+                IsSourceVariable = allowTsMap && NodeClass == NodeClass.Variable,
+                // Destination object if it's an object directly (through isObject)
+                // it's a mapped array, or it's not a variable.
+                IsDestinationObject = IsArray && allowTsMap || isObject,
+                // Destination variable if allowTsMap is true and it's a variable.
+                IsDestinationVariable = allowTsMap && NodeClass == NodeClass.Variable,
+            };
+        }
     }
 
     public class UAVariableMember : UAVariable
@@ -125,6 +218,11 @@ namespace Cognite.OpcUa.Nodes
         {
             Index = index;
             TSParent = parent;
+        }
+
+        public override string? GetUniqueId(IUAClientAccess client)
+        {
+            return client.GetUniqueId(Id, Index);
         }
     }
 }

@@ -34,7 +34,7 @@ namespace Cognite.OpcUa.Nodes
 
     public class UAObjectType : BaseUANode
     {
-        public UAObjectType(NodeId id, string? displayName, BaseUANode? parent) : base(id, displayName, parent)
+        public UAObjectType(NodeId id, string? displayName, BaseUANode? parent, NodeId? parentId) : base(id, displayName, parent, parentId)
         {
             FullAttributes = new ObjectTypeAttributes();
         }
@@ -42,14 +42,15 @@ namespace Cognite.OpcUa.Nodes
         /// <summary>
         /// Uninitialized constructor, to be used when lazy-initializing
         /// </summary>
-        public UAObjectType(NodeId id) : this(id, null, null)
+        public UAObjectType(NodeId id) : this(id, null, null, null)
         {
         }
 
-        public void Initialize(ReferenceDescription referenceDesc, BaseUANode parent)
+        public void Initialize(ReferenceDescription referenceDesc, BaseUANode? parent, NodeId? parentId)
         {
             DisplayName = referenceDesc.DisplayName?.Text;
             Parent = parent;
+            FallbackParentId = parentId;
         }
 
         public override BaseNodeAttributes Attributes => FullAttributes;

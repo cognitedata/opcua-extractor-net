@@ -17,6 +17,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using Cognite.Extractor.Common;
 using Cognite.OpcUa.Config;
+using Cognite.OpcUa.Nodes;
+using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
@@ -39,11 +41,13 @@ namespace Cognite.OpcUa.NodeSources
         private readonly List<(ReferenceDescription Node, NodeId ParentId)> references = new List<(ReferenceDescription, NodeId)>();
         public Action<ReferenceDescription, NodeId, bool> Callback => HandleNode;
         private readonly bool isFullBrowse;
+        private readonly TypeManager typeManager;
 
-        public UANodeSource(ILogger<UANodeSource> log, FullConfig config, UAExtractor extractor, UAClient client, bool isFullBrowse)
+        public UANodeSource(ILogger<UANodeSource> log, FullConfig config, UAExtractor extractor, UAClient client, bool isFullBrowse, TypeManager typeManager)
             : base(log, config, extractor, client)
         {
             this.isFullBrowse = isFullBrowse;
+            this.typeManager = typeManager;
         }
 
         /// <summary>
@@ -145,7 +149,7 @@ namespace Cognite.OpcUa.NodeSources
 
             var extraMetaTasks = new List<Task>();
 
-            var distinctDataTypes = allVariables.Select(variable => variable.DataType.Raw).ToHashSet();
+            var distinctDataTypes = allVariables.Select(variable => variable.FullAttributes.DataType.Id).ToHashSet();
             extraMetaTasks.Add(Extractor.DataTypeManager.GetDataTypeMetadataAsync(distinctDataTypes, token));
 
             if (Config.Extraction.NodeTypes.Metadata)
@@ -242,31 +246,20 @@ namespace Cognite.OpcUa.NodeSources
 
             if (!visited)
             {
-                if (node.NodeClass == NodeClass.Object || Config.Extraction.NodeTypes.AsNodes && node.NodeClass == NodeClass.ObjectType)
+                var parent = NodeMap.GetValueOrDefault(parentId);
+
+                var result = BaseUANode.Create(node, parentId, parent, Client, typeManager);
+
+                if (result == null)
                 {
-                    var uaNode = new UANode(Client.ToNodeId(node.NodeId), node.DisplayName.Text, parentId, node.NodeClass);
-                    uaNode.SetNodeType(Client, node.TypeDefinition);
-
-                    Extractor.State.RegisterNode(uaNode.Id, Extractor.GetUniqueId(uaNode.Id));
-                    Log.LogTrace("HandleNode {Class} {Name}", uaNode.NodeClass, uaNode.DisplayName);
-
-                    NodeMap[uaNode.Id] = uaNode;
-                }
-                else if (node.NodeClass == NodeClass.Variable || Config.Extraction.NodeTypes.AsNodes && node.NodeClass == NodeClass.VariableType)
-                {
-                    var variable = new UAVariable(Client.ToNodeId(node.NodeId), node.DisplayName.Text, parentId, node.NodeClass);
-                    variable.SetNodeType(Client, node.TypeDefinition);
-
-                    Extractor.State.RegisterNode(variable.Id, Extractor.GetUniqueId(variable.Id));
-                    Log.LogTrace("HandleNode Variable {Name}", variable.DisplayName);
-
-                    NodeMap[variable.Id] = variable;
-                }
-                else
-                {
-                    mapped = false;
                     Log.LogWarning("Node of unexpected type received: {Type}, {Id}", node.NodeClass, node.NodeId);
+                    return;
                 }
+
+                Log.LogTrace("Handle node {Name}, {Id}: {Class}", result.DisplayName, result.Id, result.NodeClass);
+                Extractor.State.RegisterNode(result.Id, result.GetUniqueId(Extractor));
+                NodeMap[result.Id] = result;
+                NodeList.Add(result);
             }
             else
             {

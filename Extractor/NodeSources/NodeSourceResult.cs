@@ -16,7 +16,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using Cognite.Extractor.Common;
-using Cognite.OpcUa.Types;
+using Cognite.OpcUa.Nodes;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -30,9 +30,9 @@ namespace Cognite.OpcUa.NodeSources
     public class NodeSourceResult
     {
         public NodeSourceResult(
-            IEnumerable<UANode> sourceObjects,
+            IEnumerable<BaseUANode> sourceObjects,
             IEnumerable<UAVariable> sourceVariables,
-            IEnumerable<UANode> destinationObjects,
+            IEnumerable<BaseUANode> destinationObjects,
             IEnumerable<UAVariable> destinationVariables,
             IEnumerable<UAReference> destinationReferences,
             bool canBeUsedForDeletes)
@@ -44,9 +44,9 @@ namespace Cognite.OpcUa.NodeSources
             DestinationReferences = destinationReferences;
             CanBeUsedForDeletes = canBeUsedForDeletes;
         }
-        public IEnumerable<UANode> SourceObjects { get; }
+        public IEnumerable<BaseUANode> SourceObjects { get; }
         public IEnumerable<UAVariable> SourceVariables { get; }
-        public IEnumerable<UANode> DestinationObjects { get; }
+        public IEnumerable<BaseUANode> DestinationObjects { get; }
         public IEnumerable<UAVariable> DestinationVariables { get; }
         public IEnumerable<UAReference> DestinationReferences { get; }
 

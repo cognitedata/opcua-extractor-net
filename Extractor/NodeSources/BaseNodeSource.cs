@@ -42,8 +42,9 @@ namespace Cognite.OpcUa.NodeSources
     public abstract class BaseNodeSource
     {
         protected virtual ILogger Log { get; }
-        // Initial collection of nodes, in a map.
+        // Initial collection of nodes, in a map and list. List is ordered, unlike the map.
         protected Dictionary<NodeId, BaseUANode> NodeMap { get; } = new();
+        protected List<BaseUANode> NodeList { get; } = new();
         protected List<BaseUANode> RawObjects { get; } = new List<BaseUANode>();
         protected List<UAVariable> RawVariables { get; } = new List<UAVariable>();
 
@@ -186,18 +187,18 @@ namespace Cognite.OpcUa.NodeSources
 
             if (node is UAVariable variable && variable.NodeClass == NodeClass.Variable && Extractor.State.GetNodeState(node.Id) != null)
             {
-                bool setState = Config.Subscriptions.DataPoints
-                    || Config.History.Enabled && Config.History.Data
-                    || Config.PubSub.Enabled;
+                bool subscribe = variable.FullAttributes.ShouldSubscribe(Config);
+                bool history = variable.FullAttributes.ShouldReadHistory(Config);
 
-
-                if (setState)
+                VariableExtractionState? state = null;
+                if (subscribe || history)
                 {
-                    var state = new VariableExtractionState(
+                    state = new VariableExtractionState(
                         Extractor,
                         variable,
-                        variable.ReadHistory,
-                        variable.ReadHistory && Config.History.Backfill);
+                        history,
+                        history && Config.History.Backfill,
+                        subscribe);
                     Extractor.State.SetNodeState(state);
                 }
 
@@ -206,36 +207,39 @@ namespace Cognite.OpcUa.NodeSources
                 {
                     foreach (var child in variable.CreateTimeseries())
                     {
-                        var uniqueId = Extractor.GetUniqueId(child.Id, child.Index);
-                        if (setState && state != null) Extractor.State.SetNodeState(state, uniqueId);
+                        var uniqueId = child.GetUniqueId(Extractor);
+                        if (state != null) Extractor.State.SetNodeState(state, uniqueId);
                         Extractor.State.RegisterNode(node.Id, uniqueId);
                     }
                 }
-                if (setState && state != null)
-                {
-                }
             }
+        }
+        protected bool IsDescendantOfType(BaseUANode node)
+        {
+            return node.Parent != null && (node.Parent.IsType || node.Parent.IsChildOfType);
         }
         /// <summary>
         /// Apply transformations and sort the given node as variable, object or property.
         /// </summary>
         /// <param name="node"></param>
-        protected void SortNode(UANode node)
+        protected void SortNode(BaseUANode node)
         {
-            bool initialProperty = node.IsProperty;
-            if (node.ParentId != null && !node.ParentId.IsNullNodeId && NodeMap.TryGetValue(node.ParentId, out var parent))
+            if (node.Parent != null)
             {
-                node.Parent = parent;
-                node.Attributes.Ignore |= node.Parent.Ignore;
-                node.Attributes.IsProperty |= node.Parent.IsProperty
-                    || !Config.Extraction.MapVariableChildren && node.Parent.NodeClass == NodeClass.Variable;
+                node.Ignore = node.Parent.Ignore;
+                node.IsRawProperty = node.Parent.IsRawProperty;
+                if (node.NodeClass == NodeClass.Variable && !Config.Extraction.MapVariableChildren)
+                {
+                    node.IsRawProperty = true;
+                }
+                node.IsChildOfType = IsDescendantOfType(node);
             }
 
             if (Extractor.Transformations != null)
             {
                 foreach (var trns in Extractor.Transformations)
                 {
-                    trns.ApplyTransformation(Log, node, Client.NamespaceTable!);
+                    trns.ApplyTransformation(Log, node, Client.NamespaceTable!, Config);
                     if (node.Ignore) return;
                 }
             }
@@ -251,13 +255,7 @@ namespace Cognite.OpcUa.NodeSources
             if (node.IsProperty)
             {
                 if (node.Parent == null) return;
-                node.Parent.AddProperty(node);
-                // Edge-case, since attributes are read before transformations, if transformations cause a node to become a property,
-                // ArrayDimensions won't be read. We can just read them later at minimal cost.
-                if (!initialProperty && Config.Extraction.DataTypes.MaxArraySize == 0 && (node is UAVariable variable) && variable.ValueRank >= 0)
-                {
-                    node.Attributes.DataRead = false;
-                }
+                node.Parent.Attributes.AddProperty(node);
             }
             else if (node is UAVariable variable)
             {
@@ -285,7 +283,7 @@ namespace Cognite.OpcUa.NodeSources
         /// <param name="update">Update configuration used to determine what nodes are changed.</param>
         /// <param name="node">Node to be filtered.</param>
         /// <returns>True if node should be considered for mapping, false otherwise.</returns>
-        protected bool FilterObject(TypeUpdateConfig update, UANode node)
+        protected bool FilterObject(TypeUpdateConfig update, BaseUANode node)
         {
             // If deletes are enabled, we are not able to filter any nodes, even if that has a real cost in terms of memory usage.
             if (update.AnyUpdate && !Config.Extraction.Deletes.Enabled)

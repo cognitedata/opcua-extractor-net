@@ -16,6 +16,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using Cognite.OpcUa.Config;
+using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
@@ -154,23 +155,23 @@ namespace Cognite.OpcUa.TypeCollectors
         {
             // We don't care about the data type of variable types except for as metadata.
             if (node.NodeClass == NodeClass.VariableType) return true;
-            if (node.DataType == null)
+            if (node.FullAttributes.DataType == null)
             {
                 log.LogWarning("Skipping variable {Name} {Id} due to missing datatype", node.DisplayName, node.Id);
                 return false;
             }
-            var dt = node.DataType;
+            var dt = node.FullAttributes.DataType;
 
-            if (dt.IsString && !config.AllowStringVariables && !overrideString)
+            if (dt.FullAttributes.IsString && !config.AllowStringVariables && !overrideString)
             {
                 log.LogDebug("Skipping variable {Name} {Id} due to string datatype and allow-string-variables being set to false",
                     node.DisplayName, node.Id);
                 return false;
             }
-            if (ignoreDataTypes.Contains(dt.Raw))
+            if (ignoreDataTypes.Contains(dt.Id))
             {
                 log.LogDebug("Skipping variable {Name} {Id} due to raw datatype {Raw} being in list of ignored data types",
-                    node.DisplayName, node.Id, dt.Raw);
+                    node.DisplayName, node.Id, dt.Id);
                 return false;
             }
             if (node.ValueRank == ValueRanks.Scalar) return true;

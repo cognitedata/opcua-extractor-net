@@ -8,8 +8,8 @@ namespace Cognite.OpcUa.Nodes
     public class ObjectAttributes : BaseNodeAttributes
     {
         public byte EventNotifier { get; private set; }
-        public bool SubscribeToEventsOverride { get; set; }
-        public bool ReadEventHistoryOverride { get; set; }
+        public bool? SubscribeToEventsOverride { get; set; }
+        public bool? ReadEventHistoryOverride { get; set; }
 
         public UAObjectType TypeDefinition { get; private set; }
 
@@ -42,24 +42,30 @@ namespace Cognite.OpcUa.Nodes
 
         public bool ShouldSubscribeToEvents(FullConfig config)
         {
-            return config.Events.Enabled && config.Subscriptions.Events && (SubscribeToEventsOverride || (EventNotifier & EventNotifiers.SubscribeToEvents) != 0);
+            if (!config.Events.Enabled || !config.Subscriptions.Events) return false;
+            if (SubscribeToEventsOverride != null) return SubscribeToEventsOverride.Value;
+            return (EventNotifier & EventNotifiers.SubscribeToEvents) != 0;
         }
             
         public bool ShouldReadEventHistory(FullConfig config)
         {
-            return config.Events.Enabled && config.History.Enabled && config.Events.History
-                && (ReadEventHistoryOverride || (EventNotifier & EventNotifiers.HistoryRead) != 0);
+            if (!config.Events.Enabled || !config.History.Enabled || !config.Events.History) return false;
+            if (ReadEventHistoryOverride != null) return ReadEventHistoryOverride.Value;
+            return (EventNotifier & EventNotifiers.HistoryRead) != 0;
         }
     }
 
     public class UAObject : BaseUANode
     {
-        public UAObject(NodeId id, string displayName, BaseUANode? parent, UAObjectType typeDefinition) : base(id, displayName, parent)
+        public UAObject(NodeId id, string? displayName, BaseUANode? parent, NodeId? parentId, UAObjectType typeDefinition)
+            : base(id, displayName, parent, parentId)
         {
             FullAttributes = new ObjectAttributes(typeDefinition);
         }
 
         public override BaseNodeAttributes Attributes => FullAttributes;
         public ObjectAttributes FullAttributes { get; }
+
+        public override NodeId? TypeDefinition => FullAttributes.TypeDefinition?.Id;
     }
 }
