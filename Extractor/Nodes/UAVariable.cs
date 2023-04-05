@@ -1,4 +1,5 @@
 ﻿using Cognite.OpcUa.Config;
+using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.TypeCollectors;
 using Opc.Ua;
 using Serilog.Debugging;
@@ -18,9 +19,9 @@ namespace Cognite.OpcUa.Nodes
         public byte AccessLevel { get; private set; }
         public Variant? Value { get; private set; }
 
-        public UAVariableType TypeDefinition { get; private set; }
+        public UAVariableType? TypeDefinition { get; private set; }
 
-        public VariableAttributes(UAVariableType type) : base(NodeClass.Variable)
+        public VariableAttributes(UAVariableType? type) : base(NodeClass.Variable)
         {
             TypeDefinition = type;
         }
@@ -106,11 +107,33 @@ namespace Cognite.OpcUa.Nodes
             }
             return (AccessLevel & AccessLevels.CurrentRead) != 0;
         }
+
+        public override void LoadFromSavedNode(SavedNode node, TypeManager typeManager)
+        {
+            Historizing = node.InternalInfo!.Historizing;
+            ValueRank = node.InternalInfo.ValueRank;
+            DataType = typeManager.GetDataType(node.DataTypeId!);
+            ArrayDimensions = node.InternalInfo.ArrayDimensions;
+            AccessLevel = node.InternalInfo.AccessLevel;
+
+            base.LoadFromSavedNode(node, typeManager);
+        }
+
+        public void LoadFromNodeState(BaseVariableState state, TypeManager typeManager)
+        {
+            Historizing = state.Historizing;
+            ValueRank = state.ValueRank;
+            DataType = typeManager.GetDataType(state.DataType);
+            ArrayDimensions = state.ArrayDimensions.Cast<int>().ToArray();
+            AccessLevel = state.AccessLevel;
+            Value = state.WrappedValue;
+            LoadFromBaseNodeState(state);
+        }
     }
 
     public class UAVariable : BaseUANode
     {
-        public UAVariable(NodeId id, string? displayName, BaseUANode? parent, NodeId? parentId, UAVariableType typeDefinition)
+        public UAVariable(NodeId id, string? displayName, BaseUANode? parent, NodeId? parentId, UAVariableType? typeDefinition)
             : base(id, displayName, parent, parentId)
         {
             FullAttributes = new VariableAttributes(typeDefinition);

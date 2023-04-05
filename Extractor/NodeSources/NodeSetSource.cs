@@ -16,6 +16,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using Cognite.OpcUa.Config;
+using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.Logging;
@@ -84,8 +85,8 @@ namespace Cognite.OpcUa.NodeSources
         private readonly object buildLock = new object();
         private bool built;
         private bool isFullBrowse;
-        public NodeSetSource(ILogger<NodeSetSource> log, FullConfig config, UAExtractor extractor, UAClient client)
-            : base(log, config, extractor, client)
+        public NodeSetSource(ILogger<NodeSetSource> log, FullConfig config, UAExtractor extractor, UAClient client, TypeManager typeManager)
+            : base(log, config, extractor, client, typeManager)
         {
         }
 
@@ -279,70 +280,11 @@ namespace Cognite.OpcUa.NodeSources
         private bool BuildNode(NodeId id, NodeId parent)
         {
             var node = nodeDict[id];
-            if (node.NodeClass == NodeClass.Variable
-                || Config.Extraction.NodeTypes.AsNodes && node.NodeClass == NodeClass.VariableType)
+
+            var res = BaseUANode.FromNodeState(node, parent, TypeManager);
+            if (res != null)
             {
-                var variable = new UAVariable(id, node.DisplayName?.Text ?? "", parent, node.NodeClass);
-                if (node is BaseVariableState varState)
-                {
-                    variable.VariableAttributes.AccessLevel = varState.AccessLevel;
-                    variable.VariableAttributes.ArrayDimensions =
-                        varState.ArrayDimensions == null || !varState.ArrayDimensions.Any()
-                        ? null
-                        : varState.ArrayDimensions.Select(val => (int)val).ToArray();
-                    variable.VariableAttributes.ValueRank = varState.ValueRank;
-                    variable.VariableAttributes.Description = varState.Description?.Text;
-                    variable.VariableAttributes.Historizing = varState.Historizing;
-                    variable.SetNodeType(Client, varState.TypeDefinitionId);
-                    variable.VariableAttributes.DataType = Client.DataTypeManager.GetDataType(varState.DataType);
-                    variable.SetDataPoint(new Variant(varState.Value));
-                    if (Config.History.Enabled && Config.History.Data)
-                    {
-                        if (Config.Subscriptions.IgnoreAccessLevel)
-                        {
-                            variable.VariableAttributes.ReadHistory = varState.Historizing;
-                        }
-                        else
-                        {
-                            variable.VariableAttributes.ReadHistory = (varState.AccessLevel & AccessLevels.HistoryRead) != 0;
-                        }
-                    }
-                    variable.VariableAttributes.ShouldSubscribeData = Config.Subscriptions.DataPoints && (
-                        Config.Subscriptions.IgnoreAccessLevel
-                        || (varState.AccessLevel & AccessLevels.CurrentRead) != 0);
-                }
-                else if (node is BaseVariableTypeState typeState)
-                {
-                    variable.VariableAttributes.ArrayDimensions =
-                        typeState.ArrayDimensions == null || !typeState.ArrayDimensions.Any()
-                        ? null
-                        : typeState.ArrayDimensions.Select(val => (int)val).ToArray();
-                    variable.VariableAttributes.ValueRank = typeState.ValueRank;
-                    variable.VariableAttributes.Description = typeState.Description?.Text;
-                    variable.SetDataPoint(new Variant(typeState.Value));
-                    variable.ValueRead = true;
-                    variable.VariableAttributes.DataType = Client.DataTypeManager.GetDataType(typeState.DataType);
-                    variable.VariableAttributes.ShouldSubscribeData = false;
-                }
-                NodeMap[id] = variable;
-                return true;
-            }
-            else if (node.NodeClass == NodeClass.Object
-                || Config.Extraction.NodeTypes.AsNodes && node.NodeClass == NodeClass.ObjectType)
-            {
-                if (id == ObjectIds.Server || id == ObjectIds.Aliases) return false;
-                var obj = new UANode(id, node.DisplayName?.Text ?? "", parent, node.NodeClass);
-                if (node is BaseObjectState objState)
-                {
-                    obj.Attributes.Description = objState.Description?.Text;
-                    obj.Attributes.EventNotifier = objState.EventNotifier;
-                    obj.SetNodeType(Client, objState.TypeDefinitionId);
-                }
-                else if (node is BaseObjectTypeState typeState)
-                {
-                    obj.Attributes.Description = typeState.Description?.Text;
-                }
-                NodeMap[id] = obj;
+                Add(res);
                 return true;
             }
             return false;
@@ -379,7 +321,7 @@ namespace Cognite.OpcUa.NodeSources
             Build();
             this.isFullBrowse = isFullBrowse;
 
-            NodeMap.Clear();
+            ClearRaw();
             var visitedNodes = new HashSet<NodeId>();
 
             // Simulate browsing the node hierarchy. We do it this way to ensure that we visit the correct nodes.
@@ -433,17 +375,16 @@ namespace Cognite.OpcUa.NodeSources
 
             var properties = new List<UAVariable>();
 
-            foreach (var node in NodeMap.Values)
+            foreach (var node in NodeList)
             {
                 SortNode(node);
-                node.Attributes.DataRead = true;
-                if ((node.IsProperty || Config.Extraction.NodeTypes.AsNodes && node.NodeClass == NodeClass.VariableType)
-                    && (node is UAVariable variable))
+                node.Attributes.IsDataRead = true;
+                if (node.IsProperty && (node is UAVariable variable))
                 {
                     properties.Add(variable);
                 }
             }
-            if (Config.Source.EndpointUrl != null) await Client.ReadNodeValues(properties, token);
+            if (Config.Source.EndpointUrl != null) await Client.ReadNodeValues(properties, TypeManager, token);
 
             if (Config.Extraction.DataTypes.MaxArraySize != 0 && Config.Extraction.DataTypes.EstimateArraySizes == true)
             {
@@ -469,7 +410,7 @@ namespace Cognite.OpcUa.NodeSources
                 GetRelationshipData();
             }
 
-            NodeMap.Clear();
+            ClearRaw();
 
             if (!FinalDestinationObjects.Any() && !FinalDestinationVariables.Any() && !FinalSourceVariables.Any() && !FinalReferences.Any())
             {

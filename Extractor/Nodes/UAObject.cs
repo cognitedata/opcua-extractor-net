@@ -1,4 +1,5 @@
 ﻿using Cognite.OpcUa.Config;
+using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.TypeCollectors;
 using Opc.Ua;
 using System.Collections.Generic;
@@ -11,9 +12,9 @@ namespace Cognite.OpcUa.Nodes
         public bool? SubscribeToEventsOverride { get; set; }
         public bool? ReadEventHistoryOverride { get; set; }
 
-        public UAObjectType TypeDefinition { get; private set; }
+        public UAObjectType? TypeDefinition { get; private set; }
 
-        public ObjectAttributes(UAObjectType objectType) : base(NodeClass.Object)
+        public ObjectAttributes(UAObjectType? objectType) : base(NodeClass.Object)
         {
             TypeDefinition = objectType;
         }
@@ -53,11 +54,25 @@ namespace Cognite.OpcUa.Nodes
             if (ReadEventHistoryOverride != null) return ReadEventHistoryOverride.Value;
             return (EventNotifier & EventNotifiers.HistoryRead) != 0;
         }
+
+        public override void LoadFromSavedNode(SavedNode node, TypeManager typeManager)
+        {
+            EventNotifier = node.InternalInfo!.EventNotifier;
+            SubscribeToEventsOverride = node.InternalInfo.ShouldSubscribeEvents;
+
+            base.LoadFromSavedNode(node, typeManager);
+        }
+
+        public void LoadFromNodeState(BaseObjectState state)
+        {
+            EventNotifier = state.EventNotifier;
+            LoadFromBaseNodeState(state);
+        }
     }
 
     public class UAObject : BaseUANode
     {
-        public UAObject(NodeId id, string? displayName, BaseUANode? parent, NodeId? parentId, UAObjectType typeDefinition)
+        public UAObject(NodeId id, string? displayName, BaseUANode? parent, NodeId? parentId, UAObjectType? typeDefinition)
             : base(id, displayName, parent, parentId)
         {
             FullAttributes = new ObjectAttributes(typeDefinition);

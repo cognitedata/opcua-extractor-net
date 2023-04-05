@@ -18,6 +18,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using Cognite.Extractor.Common;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
+using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
@@ -339,13 +340,14 @@ namespace Cognite.OpcUa
         /// Retrieve a representation of the server node
         /// </summary>
         /// <returns></returns>
-        public async Task<UANode> GetServerNode(CancellationToken token)
+        public async Task<BaseUANode> GetServerNode(TypeManager typeManager, CancellationToken token)
         {
             var desc = (await Browser.GetRootNodes(new[] { ObjectIds.Server }, token)).FirstOrDefault();
             if (desc == null) throw new ExtractorFailureException("Server node is null. Invalid server configuration");
 
-            var node = new UANode(ObjectIds.Server, desc.DisplayName.Text, NodeId.Null, NodeClass.Object);
-            await ReadNodeData(new[] { node }, token);
+            var node = BaseUANode.Create(desc, NodeId.Null, null, this, typeManager);
+            if (node == null) throw new ExtractorFailureException($"Root node {desc.NodeId} is unexpected node class: {desc.NodeClass}");
+            await ReadNodeData(new[] { node }, typeManager, token);
             return node;
         }
         /// <summary>
@@ -602,17 +604,16 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="nodes">Nodes to be updated with data from the opcua server</param>
         /// <param name="purpose">Purpose, for logging</param>
-        public async Task ReadNodeData(IEnumerable<UANode> nodes, CancellationToken token)
+        public async Task ReadNodeData(IEnumerable<BaseUANode> nodes, TypeManager typeManager, CancellationToken token)
         {
-            nodes = nodes.Where(node => (node is not UAVariable variable || variable.Index == -1) && !node.DataRead).ToList();
-
+            nodes = nodes.DistinctBy(node => node.Attributes).Where(node => !node.Attributes.IsDataRead).ToList();
             if (!nodes.Any()) return;
 
             int expected = 0;
             var readValueIds = new ReadValueIdCollection();
             foreach (var node in nodes)
             {
-                var attributes = node.Attributes.GetAttributeIds(Config);
+                var attributes = node.Attributes.GetAttributeSet(Config);
                 readValueIds.AddRange(attributes.Select(attr => new ReadValueId { AttributeId = attr, NodeId = node.Id }));
                 expected += attributes.Count();
             }
@@ -633,8 +634,12 @@ namespace Cognite.OpcUa
             int idx = 0;
             foreach (var node in nodes)
             {
-                var attributes = node.Attributes.GetAttributeIds(Config);
-                idx = node.Attributes.HandleAttributeRead(Config, values, attributes, idx, this);
+                var attributes = node.Attributes.GetAttributeSet(Config);
+                foreach (var attr in attributes)
+                {
+                    node.Attributes.LoadAttribute(values[idx], attr, typeManager);
+                    idx++;
+                }
             }
         }
 
@@ -660,26 +665,22 @@ namespace Cognite.OpcUa
         /// To avoid complications, avoid fetching data of unknown large size here.
         /// </remarks>
         /// <param name="nodes">List of variables to be updated</param>
-        public async Task ReadNodeValues(IEnumerable<UAVariable> nodes, CancellationToken token)
+        public async Task ReadNodeValues(IEnumerable<BaseUANode> nodes, TypeManager typeManager, CancellationToken token)
         {
-            nodes = nodes.Where(node => !node.ValueRead && node.Index == -1).ToList();
+            nodes = nodes.DistinctBy(node => node.Attributes).ToList();
             if (!nodes.Any()) return;
             log.LogInformation("Get the current values of {Count} variables", nodes.Count());
             var readValueIds = new ReadValueIdCollection(
                 nodes.Select(node => new ReadValueId { AttributeId = Attributes.Value, NodeId = node.Id }));
-            IEnumerable<DataValue> values;
 
             var attributes = new List<uint> { Attributes.Value };
-            values = await ReadAttributes(readValueIds, nodes.Count(), token, "node values");
+            var values = await ReadAttributes(readValueIds, nodes.Count(), token, "node values");
 
-            var enumerator = values.GetEnumerator();
+            var idx = 0;
             foreach (var node in nodes)
             {
-                node.ValueRead = true;
-                enumerator.MoveNext();
-                node.SetDataPoint(enumerator.Current?.WrappedValue ?? Variant.Null);
+                node.Attributes.LoadAttribute(values[idx], Attributes.Value, typeManager);
             }
-            enumerator.Dispose();
         }
         #endregion
 

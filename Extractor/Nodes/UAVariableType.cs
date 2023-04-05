@@ -1,5 +1,7 @@
 ﻿using System.Collections.Generic;
+using System.Linq;
 using Cognite.OpcUa.Config;
+using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.TypeCollectors;
 using Opc.Ua;
 
@@ -53,9 +55,28 @@ namespace Cognite.OpcUa.Nodes
                     break;
             }
         }
+
+        public override void LoadFromSavedNode(SavedNode node, TypeManager typeManager)
+        {
+            ValueRank = node.InternalInfo!.ValueRank;
+            DataType = typeManager.GetDataType(node.DataTypeId!);
+            ArrayDimensions = node.InternalInfo.ArrayDimensions;
+
+            base.LoadFromSavedNode(node, typeManager);
+        }
+
+        public void LoadFromNodeState(BaseVariableTypeState state, TypeManager typeManager)
+        {
+            IsAbstract = state.IsAbstract;
+            ValueRank = state.ValueRank;
+            DataType = typeManager.GetDataType(state.DataType);
+            ArrayDimensions = state.ArrayDimensions.Cast<int>().ToArray();
+            Value = state.WrappedValue;
+            LoadFromBaseNodeState(state);
+        }
     }
 
-    public class UAVariableType : BaseUANode
+    public class UAVariableType : BaseUAType
     {
         public UAVariableType(NodeId id, string? displayName, BaseUANode? parent, NodeId? parentId) : base(id, displayName, parent, parentId)
         {
@@ -67,13 +88,6 @@ namespace Cognite.OpcUa.Nodes
         /// </summary>
         public UAVariableType(NodeId id) : this(id, null, null, null)
         {
-        }
-
-        public void Initialize(ReferenceDescription referenceDesc, BaseUANode? parent, NodeId? parentId)
-        {
-            DisplayName = referenceDesc.DisplayName?.Text;
-            Parent = parent;
-            FallbackParentId = parentId;
         }
 
         public override BaseNodeAttributes Attributes => FullAttributes;

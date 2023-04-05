@@ -18,6 +18,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.Nodes;
+using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
@@ -43,8 +44,11 @@ namespace Cognite.OpcUa.NodeSources
     {
         protected virtual ILogger Log { get; }
         // Initial collection of nodes, in a map and list. List is ordered, unlike the map.
-        protected Dictionary<NodeId, BaseUANode> NodeMap { get; } = new();
-        protected List<BaseUANode> NodeList { get; } = new();
+
+        private readonly List<BaseUANode> nodeList = new();
+        private readonly Dictionary<NodeId, BaseUANode> nodeMap = new();
+        protected IEnumerable<BaseUANode> NodeList => nodeList;
+        protected IReadOnlyDictionary<NodeId, BaseUANode> NodeMap => nodeMap;
         protected List<BaseUANode> RawObjects { get; } = new List<BaseUANode>();
         protected List<UAVariable> RawVariables { get; } = new List<UAVariable>();
 
@@ -65,13 +69,15 @@ namespace Cognite.OpcUa.NodeSources
         protected FullConfig Config { get; }
         protected UAExtractor Extractor { get; }
         protected UAClient Client { get; }
+        protected TypeManager TypeManager { get; }
 
-        protected BaseNodeSource(ILogger log, FullConfig config, UAExtractor extractor, UAClient client)
+        protected BaseNodeSource(ILogger log, FullConfig config, UAExtractor extractor, UAClient client, TypeManager typeManager)
         {
             Log = log;
             Config = config;
             Extractor = extractor;
             Client = client;
+            TypeManager = typeManager;
         }
 
         public abstract Task<NodeSourceResult?> ParseResults(CancellationToken token);
@@ -127,7 +133,7 @@ namespace Cognite.OpcUa.NodeSources
             }
             if (!toReadValues.Any()) return;
 
-            await Client.ReadNodeValues(toReadValues, token);
+            await Client.ReadNodeValues(toReadValues, TypeManager, token);
 
             foreach (var node in toReadValues)
             {
@@ -224,6 +230,11 @@ namespace Cognite.OpcUa.NodeSources
         /// <param name="node"></param>
         protected void SortNode(BaseUANode node)
         {
+            if (node.Parent == null && node.ParentId != null && !node.ParentId.IsNullNodeId)
+            {
+                node.Parent = NodeMap.GetValueOrDefault(node.ParentId);
+            }
+
             if (node.Parent != null)
             {
                 node.Ignore = node.Parent.Ignore;
@@ -322,6 +333,18 @@ namespace Cognite.OpcUa.NodeSources
             if (reference.IsHierarchical && !reference.IsForward && !Config.Extraction.Relationships.InverseHierarchical) return false;
 
             return true;
+        }
+
+        protected void Add(BaseUANode node)
+        {
+            nodeMap[node.Id] = node;
+            nodeList.Add(node);
+        }
+
+        protected void ClearRaw()
+        {
+            nodeMap.Clear();
+            nodeList.Clear();
         }
     }
 }

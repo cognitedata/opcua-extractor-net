@@ -41,13 +41,11 @@ namespace Cognite.OpcUa.NodeSources
         private readonly List<(ReferenceDescription Node, NodeId ParentId)> references = new List<(ReferenceDescription, NodeId)>();
         public Action<ReferenceDescription, NodeId, bool> Callback => HandleNode;
         private readonly bool isFullBrowse;
-        private readonly TypeManager typeManager;
 
         public UANodeSource(ILogger<UANodeSource> log, FullConfig config, UAExtractor extractor, UAClient client, bool isFullBrowse, TypeManager typeManager)
-            : base(log, config, extractor, client)
+            : base(log, config, extractor, client, typeManager)
         {
             this.isFullBrowse = isFullBrowse;
-            this.typeManager = typeManager;
         }
 
         /// <summary>
@@ -62,10 +60,10 @@ namespace Cognite.OpcUa.NodeSources
         {
             if (parsed) throw new InvalidOperationException("Browse result has already been parsed");
             if (!NodeMap.Any()) return null;
-            await Client.ReadNodeData(NodeMap.Values, token);
+            await Client.ReadNodeData(NodeList, TypeManager, token);
 
             var properties = new HashSet<UAVariable>();
-            foreach (var node in NodeMap.Values)
+            foreach (var node in NodeList)
             {
                 SortNode(node);
                 if ((node.IsProperty || Config.Extraction.NodeTypes.AsNodes && node.NodeClass == NodeClass.VariableType)
@@ -75,11 +73,11 @@ namespace Cognite.OpcUa.NodeSources
                 }
             }
             parsed = true;
-            NodeMap.Clear();
+            ClearRaw();
 
-            await Client.ReadNodeData(properties, token);
+            await Client.ReadNodeData(properties, TypeManager, token);
             var propsToReadValues = properties.Where(prop => Extractor.DataTypeManager.AllowTSMap(prop, 10, true)).ToList();
-            await Client.ReadNodeValues(propsToReadValues, token);
+            await Client.ReadNodeValues(propsToReadValues, TypeManager, token);
 
             if (Config.Extraction.DataTypes.MaxArraySize != 0 && Config.Extraction.DataTypes.EstimateArraySizes == true)
             {
@@ -248,7 +246,7 @@ namespace Cognite.OpcUa.NodeSources
             {
                 var parent = NodeMap.GetValueOrDefault(parentId);
 
-                var result = BaseUANode.Create(node, parentId, parent, Client, typeManager);
+                var result = BaseUANode.Create(node, parentId, parent, Client, TypeManager);
 
                 if (result == null)
                 {
@@ -258,8 +256,7 @@ namespace Cognite.OpcUa.NodeSources
 
                 Log.LogTrace("Handle node {Name}, {Id}: {Class}", result.DisplayName, result.Id, result.NodeClass);
                 Extractor.State.RegisterNode(result.Id, result.GetUniqueId(Extractor));
-                NodeMap[result.Id] = result;
-                NodeList.Add(result);
+                Add(result);
             }
             else
             {

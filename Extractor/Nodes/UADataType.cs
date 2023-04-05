@@ -35,9 +35,16 @@ namespace Cognite.OpcUa.Nodes
                     break;
             }
         }
+
+        public void LoadFromNodeState(DataTypeState state)
+        {
+            IsAbstract = state.IsAbstract;
+            DataTypeDefinition = state.DataTypeDefinition;
+            LoadFromBaseNodeState(state);
+        }
     }
 
-    public class UADataType : BaseUANode
+    public class UADataType : BaseUAType
     {
         public UADataType(NodeId id, string? displayName, BaseUANode? parent, NodeId? parentId) : base(id, displayName, parent, parentId)
         {
@@ -49,13 +56,6 @@ namespace Cognite.OpcUa.Nodes
         /// </summary>
         public UADataType(NodeId id) : this(id, null, null, null)
         {
-        }
-
-        public void Initialize(ReferenceDescription referenceDesc, BaseUANode? parent, NodeId? parentId)
-        {
-            DisplayName = referenceDesc.DisplayName?.Text;
-            Parent = parent;
-            FallbackParentId = parentId;
         }
 
         public override BaseNodeAttributes Attributes => FullAttributes;

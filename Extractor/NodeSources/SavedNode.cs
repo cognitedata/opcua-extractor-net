@@ -41,5 +41,6 @@ namespace Cognite.OpcUa.NodeSources
         public int[]? ArrayDimensions { get; set; }
         public int Index { get; set; }
         public NodeClass NodeClass { get; set; }
+        public NodeId? TypeDefinition { get; set; }
     }
 }
