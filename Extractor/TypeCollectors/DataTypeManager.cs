@@ -162,7 +162,7 @@ namespace Cognite.OpcUa.TypeCollectors
             }
             var dt = node.FullAttributes.DataType;
 
-            if (dt.FullAttributes.IsString && !config.AllowStringVariables && !overrideString)
+            if (dt.IsString && !config.AllowStringVariables && !overrideString)
             {
                 log.LogDebug("Skipping variable {Name} {Id} due to string datatype and allow-string-variables being set to false",
                     node.DisplayName, node.Id);

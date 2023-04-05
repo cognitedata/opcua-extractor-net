@@ -240,7 +240,7 @@ namespace Cognite.OpcUa.NodeSources
         /// <param name="parentId">Id of the parent node</param>
         private void HandleNode(ReferenceDescription node, NodeId parentId, bool visited)
         {
-            bool mapped = true;
+            bool mapped;
 
             if (!visited)
             {
@@ -254,9 +254,9 @@ namespace Cognite.OpcUa.NodeSources
                     return;
                 }
 
-                Log.LogTrace("Handle node {Name}, {Id}: {Class}", result.DisplayName, result.Id, result.NodeClass);
+                Log.LogTrace("Handle node {Name}, {Id}: {Class}", result.Attributes.DisplayName, result.Id, result.NodeClass);
                 Extractor.State.RegisterNode(result.Id, result.GetUniqueId(Extractor));
-                Add(result);
+                mapped = TryAdd(result);
             }
             else
             {

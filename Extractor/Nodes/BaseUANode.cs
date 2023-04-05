@@ -1,10 +1,7 @@
 ﻿using Cognite.OpcUa.Config;
 using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.TypeCollectors;
-using CogniteSdk;
 using Opc.Ua;
-using Pipelines.Sockets.Unofficial.Arenas;
-using Serilog;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,6 +10,14 @@ namespace Cognite.OpcUa.Nodes
 {
     public abstract class BaseNodeAttributes
     {
+        /// <summary>
+        /// BrowseName attribute
+        /// </summary>
+        public string? BrowseName { get; set; }
+        /// <summary>
+        /// DisplayName attribute
+        /// </summary>
+        public string? DisplayName { get; set; }
         /// <summary>
         /// OPC-UA Description attribute
         /// </summary>
@@ -42,12 +47,23 @@ namespace Cognite.OpcUa.Nodes
                 case Attributes.Description:
                     Description = value.GetValue<LocalizedText?>(null)?.Text;
                     break;
+                case Attributes.DisplayName:
+                    DisplayName = value.GetValue<LocalizedText?>(null)?.Text;
+                    break;
+                case Attributes.BrowseName:
+                    BrowseName = value.GetValue<QualifiedName?>(null)?.Name;
+                    break;
                 default:
                     throw new InvalidOperationException($"Got unexpected unmatched attributeId, this is a bug: {attributeId}");
             }
         }
 
-        public abstract IEnumerable<uint> GetAttributeSet(FullConfig config);
+        public virtual IEnumerable<uint> GetAttributeSet(FullConfig config)
+        {
+            yield return Attributes.Description;
+            if (DisplayName == null) yield return Attributes.DisplayName;
+            if (BrowseName == null) yield return Attributes.BrowseName;
+        }
 
         /// <summary>
         /// Add property to list, creating the list if it does not exist.
@@ -80,8 +96,6 @@ namespace Cognite.OpcUa.Nodes
 
         public NodeClass NodeClass => Attributes.NodeClass;
         public IEnumerable<BaseUANode>? Properties => Attributes.Properties;
-
-        public string? DisplayName { get; protected set; }
         public NodeId Id { get; }
         protected NodeId? FallbackParentId { get; set; }
         public NodeId ParentId => Parent?.Id ?? FallbackParentId ?? NodeId.Null;
@@ -110,10 +124,9 @@ namespace Cognite.OpcUa.Nodes
             return result;
         }
 
-        public BaseUANode(NodeId id, string? displayName, BaseUANode? parent, NodeId? parentId)
+        public BaseUANode(NodeId id, BaseUANode? parent, NodeId? parentId)
         {
             Id = id;
-            DisplayName = displayName;
             Parent = parent;
             FallbackParentId = parentId;
         }
@@ -132,24 +145,24 @@ namespace Cognite.OpcUa.Nodes
             switch (node.NodeClass)
             {
                 case NodeClass.Object:
-                    return new UAObject(id, node.DisplayName?.Text, parent, parentId, typeManager.GetObjectType(client.ToNodeId(node.TypeDefinition)));
+                    return new UAObject(id, node.DisplayName?.Text, node.BrowseName?.Name, parent, parentId, typeManager.GetObjectType(client.ToNodeId(node.TypeDefinition)));
                 case NodeClass.Variable:
-                    return new UAVariable(id, node.DisplayName?.Text, parent, parentId, typeManager.GetVariableType(client.ToNodeId(node.TypeDefinition)));
+                    return new UAVariable(id, node.DisplayName?.Text, node.BrowseName?.Name, parent, parentId, typeManager.GetVariableType(client.ToNodeId(node.TypeDefinition)));
                 case NodeClass.ObjectType:
                     var objType = typeManager.GetObjectType(id);
-                    objType.Initialize(node.DisplayName?.Text, parent, parentId);
+                    objType.Initialize(node.DisplayName?.Text, node.BrowseName?.Name, parent, parentId);
                     return objType;
                 case NodeClass.VariableType:
                     var varType = typeManager.GetVariableType(id);
-                    varType.Initialize(node.DisplayName?.Text, parent, parentId);
+                    varType.Initialize(node.DisplayName?.Text, node.BrowseName?.Name, parent, parentId);
                     return varType;
                 case NodeClass.ReferenceType:
                     var refType = typeManager.GetReferenceType(id);
-                    refType.Initialize(node.DisplayName?.Text, parent, parentId);
+                    refType.Initialize(node.DisplayName?.Text, node.BrowseName?.Name, parent, parentId);
                     return refType;
                 case NodeClass.DataType:
                     var dtType = typeManager.GetDataType(id);
-                    dtType.Initialize(node.DisplayName?.Text, parent, parentId);
+                    dtType.Initialize(node.DisplayName?.Text, node.BrowseName?.Name, parent, parentId);
                     return dtType;
                 default:
                     return null;
@@ -174,31 +187,31 @@ namespace Cognite.OpcUa.Nodes
             switch (node.InternalInfo.NodeClass)
             {
                 case NodeClass.Object:
-                    res = new UAObject(id, name, null, node.ParentNodeId, node.InternalInfo.TypeDefinition == null
+                    res = new UAObject(id, name, null, null, node.ParentNodeId, node.InternalInfo.TypeDefinition == null
                         ? null : typeManager.GetObjectType(node.InternalInfo.TypeDefinition));
                     break;
                 case NodeClass.Variable:
-                    res = new UAVariable(id, name, null, node.ParentNodeId, node.InternalInfo.TypeDefinition == null
+                    res = new UAVariable(id, name, null, null, node.ParentNodeId, node.InternalInfo.TypeDefinition == null
                         ? null : typeManager.GetVariableType(node.InternalInfo.TypeDefinition));
                     break;
                 case NodeClass.ObjectType:
                     var objType = typeManager.GetObjectType(id);
-                    objType.Initialize(name, null, node.ParentNodeId);
+                    objType.Initialize(name, null, null, node.ParentNodeId);
                     res = objType;
                     break;
                 case NodeClass.VariableType:
                     var varType = typeManager.GetVariableType(id);
-                    varType.Initialize(name, null, node.ParentNodeId);
+                    varType.Initialize(name, null, null, node.ParentNodeId);
                     res = varType;
                     break;
                 case NodeClass.ReferenceType:
                     var refType = typeManager.GetReferenceType(id);
-                    refType.Initialize(name, null, node.ParentNodeId);
+                    refType.Initialize(name, null, null, node.ParentNodeId);
                     res = refType;
                     break;
                 case NodeClass.DataType:
                     var dtType = typeManager.GetDataType(id);
-                    dtType.Initialize(name, null, node.ParentNodeId);
+                    dtType.Initialize(name, null, null, node.ParentNodeId);
                     res = dtType;
                     break;
                 default:
@@ -214,41 +227,41 @@ namespace Cognite.OpcUa.Nodes
             var id = node.NodeId;
             if (node is BaseObjectState objState)
             {
-                var obj = new UAObject(id, node.DisplayName?.Text, null, parentId, typeManager.GetObjectType(objState.TypeDefinitionId));
+                var obj = new UAObject(id, node.DisplayName?.Text, node.BrowseName?.Name, null, parentId, typeManager.GetObjectType(objState.TypeDefinitionId));
                 obj.FullAttributes.LoadFromNodeState(objState);
                 return obj;
             }
             if (node is BaseVariableState varState)
             {
-                var vr = new UAVariable(id, node.DisplayName?.Text, null, parentId, typeManager.GetVariableType(varState.TypeDefinitionId));
+                var vr = new UAVariable(id, node.DisplayName?.Text, node.BrowseName?.Name, null, parentId, typeManager.GetVariableType(varState.TypeDefinitionId));
                 vr.FullAttributes.LoadFromNodeState(varState, typeManager);
                 return vr;
             }
             if (node is BaseObjectTypeState objTState)
             {
                 var objType = typeManager.GetObjectType(id);
-                objType.Initialize(node.DisplayName?.Text, null, parentId);
+                objType.Initialize(node.DisplayName?.Text, node.BrowseName?.Name, null, parentId);
                 objType.FullAttributes.LoadFromNodeState(objTState);
                 return objType;
             }
             if (node is BaseVariableTypeState varTState)
             {
                 var varType = typeManager.GetVariableType(id);
-                varType.Initialize(node.DisplayName?.Text, null, parentId);
+                varType.Initialize(node.DisplayName?.Text, node.BrowseName?.Name, null, parentId);
                 varType.FullAttributes.LoadFromNodeState(varTState, typeManager);
                 return varType;
             }
             if (node is DataTypeState dataTState)
             {
                 var dataType = typeManager.GetDataType(id);
-                dataType.Initialize(node.DisplayName?.Text, null, parentId);
+                dataType.Initialize(node.DisplayName?.Text, node.BrowseName?.Name, null, parentId);
                 dataType.FullAttributes.LoadFromNodeState(dataTState);
                 return dataType;
             }
             if (node is ReferenceTypeState refTState)
             {
                 var refType = typeManager.GetReferenceType(id);
-                refType.Initialize(node.DisplayName?.Text, null, parentId);
+                refType.Initialize(node.DisplayName?.Text, node.BrowseName?.Name, null, parentId);
                 refType.FullAttributes.LoadFromNodeState(refTState);
                 return refType;
             }

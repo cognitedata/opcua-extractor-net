@@ -28,7 +28,6 @@ namespace Cognite.OpcUa.Nodes
 
         public override IEnumerable<uint> GetAttributeSet(FullConfig config)
         {
-            yield return Attributes.Description;
             if (config.History.Enabled)
             {
                 yield return Attributes.Historizing;
@@ -40,6 +39,7 @@ namespace Cognite.OpcUa.Nodes
             yield return Attributes.DataType;
             yield return Attributes.ValueRank;
             yield return Attributes.ArrayDimensions;
+            foreach (var attr in base.GetAttributeSet(config)) yield return attr;
         }
 
         public override void LoadAttribute(DataValue value, uint attributeId, TypeManager typeManager)
@@ -133,14 +133,16 @@ namespace Cognite.OpcUa.Nodes
 
     public class UAVariable : BaseUANode
     {
-        public UAVariable(NodeId id, string? displayName, BaseUANode? parent, NodeId? parentId, UAVariableType? typeDefinition)
-            : base(id, displayName, parent, parentId)
+        public UAVariable(NodeId id, string? displayName, string? browseName, BaseUANode? parent, NodeId? parentId, UAVariableType? typeDefinition)
+            : base(id, parent, parentId)
         {
             FullAttributes = new VariableAttributes(typeDefinition);
+            Attributes.DisplayName = displayName;
+            Attributes.BrowseName = browseName;
         }
 
         protected UAVariable(UAVariable other)
-            : base(other.Id, other.DisplayName, other, other.Id)
+            : base(other.Id, other, other.Id)
         {
             FullAttributes = other.FullAttributes;
         }
@@ -230,6 +232,11 @@ namespace Cognite.OpcUa.Nodes
                 IsDestinationVariable = allowTsMap && NodeClass == NodeClass.Variable,
             };
         }
+
+        public virtual (NodeId, int) DestinationId()
+        {
+            return (Id, -1);
+        }
     }
 
     public class UAVariableMember : UAVariable
@@ -246,6 +253,11 @@ namespace Cognite.OpcUa.Nodes
         public override string? GetUniqueId(IUAClientAccess client)
         {
             return client.GetUniqueId(Id, Index);
+        }
+
+        public override (NodeId, int) DestinationId()
+        {
+            return (Id, Index);
         }
     }
 }

@@ -21,11 +21,11 @@ namespace Cognite.OpcUa.Nodes
 
         public override IEnumerable<uint> GetAttributeSet(FullConfig config)
         {
-            yield return Attributes.Description;
             if (config.Events.Enabled && config.Events.DiscoverEmitters)
             {
                 yield return Attributes.EventNotifier;
             }
+            foreach (var attr in base.GetAttributeSet(config)) yield return attr;
         }
 
         public override void LoadAttribute(DataValue value, uint attributeId, TypeManager typeManager)
@@ -72,10 +72,12 @@ namespace Cognite.OpcUa.Nodes
 
     public class UAObject : BaseUANode
     {
-        public UAObject(NodeId id, string? displayName, BaseUANode? parent, NodeId? parentId, UAObjectType? typeDefinition)
-            : base(id, displayName, parent, parentId)
+        public UAObject(NodeId id, string? displayName, string? browseName, BaseUANode? parent, NodeId? parentId, UAObjectType? typeDefinition)
+            : base(id, parent, parentId)
         {
             FullAttributes = new ObjectAttributes(typeDefinition);
+            Attributes.DisplayName = displayName;
+            Attributes.BrowseName = browseName;
         }
 
         public override BaseNodeAttributes Attributes => FullAttributes;

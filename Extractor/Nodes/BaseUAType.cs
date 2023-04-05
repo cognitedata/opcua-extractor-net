@@ -8,15 +8,16 @@ namespace Cognite.OpcUa.Nodes
 {
     public abstract class BaseUAType : BaseUANode
     {
-        public BaseUAType(NodeId id, string? displayName, BaseUANode? parent, NodeId? parentId) : base(id, displayName, parent, parentId)
+        public BaseUAType(NodeId id, BaseUANode? parent, NodeId? parentId) : base(id, parent, parentId)
         {
         }
 
-        public void Initialize(string? name, BaseUANode? parent, NodeId? parentId)
+        public void Initialize(string? name, string? browseName, BaseUANode? parent, NodeId? parentId)
         {
-            DisplayName = name;
             Parent = parent;
             FallbackParentId = parentId;
+            Attributes.DisplayName = name;
+            Attributes.BrowseName = browseName;
         }
     }
 }

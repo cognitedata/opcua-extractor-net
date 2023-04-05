@@ -335,10 +335,13 @@ namespace Cognite.OpcUa.NodeSources
             return true;
         }
 
-        protected void Add(BaseUANode node)
+        protected bool TryAdd(BaseUANode node)
         {
+            if (!Config.Extraction.NodeTypes.AsNodes && node.IsType) return false;
+
             nodeMap[node.Id] = node;
             nodeList.Add(node);
+            return true;
         }
 
         protected void ClearRaw()

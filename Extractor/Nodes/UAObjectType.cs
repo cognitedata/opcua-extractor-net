@@ -14,8 +14,8 @@ namespace Cognite.OpcUa.Nodes
 
         public override IEnumerable<uint> GetAttributeSet(FullConfig config)
         {
-            yield return Attributes.Description;
             yield return Attributes.IsAbstract;
+            foreach (var attr in base.GetAttributeSet(config)) yield return attr;
         }
 
         public override void LoadAttribute(DataValue value, uint attributeId, TypeManager typeManager)
@@ -40,19 +40,28 @@ namespace Cognite.OpcUa.Nodes
 
     public class UAObjectType : BaseUAType
     {
-        public UAObjectType(NodeId id, string? displayName, BaseUANode? parent, NodeId? parentId) : base(id, displayName, parent, parentId)
+        public UAObjectType(NodeId id, string? displayName, string? browseName, BaseUANode? parent, NodeId? parentId) : base(id, parent, parentId)
         {
             FullAttributes = new ObjectTypeAttributes();
+            Attributes.DisplayName = displayName;
+            Attributes.BrowseName = browseName;
         }
 
         /// <summary>
         /// Uninitialized constructor, to be used when lazy-initializing
         /// </summary>
-        public UAObjectType(NodeId id) : this(id, null, null, null)
+        public UAObjectType(NodeId id) : this(id, null, null, null, null)
         {
         }
 
         public override BaseNodeAttributes Attributes => FullAttributes;
         public ObjectTypeAttributes FullAttributes { get; }
+
+        public bool IsEventType()
+        {
+            if (Id == ObjectTypeIds.BaseEventType) return true;
+            if (Parent != null) return Parent is UAObjectType tp && tp.IsEventType();
+            return false;
+        }
     }
 }

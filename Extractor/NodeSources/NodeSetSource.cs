@@ -284,8 +284,7 @@ namespace Cognite.OpcUa.NodeSources
             var res = BaseUANode.FromNodeState(node, parent, TypeManager);
             if (res != null)
             {
-                Add(res);
-                return true;
+                return TryAdd(res);
             }
             return false;
         }

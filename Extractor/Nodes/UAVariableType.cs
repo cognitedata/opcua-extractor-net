@@ -20,11 +20,11 @@ namespace Cognite.OpcUa.Nodes
 
         public override IEnumerable<uint> GetAttributeSet(FullConfig config)
         {
-            yield return Attributes.Description;
             yield return Attributes.IsAbstract;
             yield return Attributes.DataType;
             yield return Attributes.ArrayDimensions;
             yield return Attributes.ValueRank;
+            foreach (var attr in base.GetAttributeSet(config)) yield return attr;
         }
 
         public override void LoadAttribute(DataValue value, uint attributeId, TypeManager typeManager)
@@ -78,15 +78,17 @@ namespace Cognite.OpcUa.Nodes
 
     public class UAVariableType : BaseUAType
     {
-        public UAVariableType(NodeId id, string? displayName, BaseUANode? parent, NodeId? parentId) : base(id, displayName, parent, parentId)
+        public UAVariableType(NodeId id, string? displayName, string? browseName, BaseUANode? parent, NodeId? parentId) : base(id, parent, parentId)
         {
             FullAttributes = new VariableTypeAttributes();
+            Attributes.DisplayName = displayName;
+            Attributes.BrowseName = browseName;
         }
 
         /// <summary>
         /// Uninitialized constructor, to be used when lazy-initializing
         /// </summary>
-        public UAVariableType(NodeId id) : this(id, null, null, null)
+        public UAVariableType(NodeId id) : this(id, null, null, null, null)
         {
         }
 

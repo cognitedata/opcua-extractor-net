@@ -3,6 +3,11 @@ using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using System.Collections.Generic;
 using System;
+using Cognite.OpcUa.Config;
+using System.Threading.Tasks;
+using System.Threading;
+using CogniteSdk;
+using System.Linq;
 
 namespace Cognite.OpcUa.TypeCollectors
 {
@@ -12,9 +17,16 @@ namespace Cognite.OpcUa.TypeCollectors
 
 
         private readonly ILogger log;
-        public TypeManager(ILogger log)
+        private readonly FullConfig config;
+        private readonly UAClient client;
+
+        private bool eventTypesRead = false;
+        private bool dataTypesRead = false;
+        public TypeManager(FullConfig config, UAClient client, ILogger log)
         {
             this.log = log;
+            this.config = config;
+            this.client = client;
         }
 
         public bool IsTypeNodeClass(NodeClass nodeClass)
@@ -25,35 +37,67 @@ namespace Cognite.OpcUa.TypeCollectors
                 || nodeClass == NodeClass.DataType;
         }
 
-        public BaseUANode BuildType(UAClient client, ReferenceDescription desc, BaseUANode parent)
+        private async Task ReadTypeData(CancellationToken token)
         {
-            var id = client.ToNodeId(desc.NodeId);
-
-            if (NodeMap.TryGetValue(id, out var type))
+            var toRead = new List<BaseUANode>();
+            var toReadValues = new List<UAVariable>();
+            foreach (var tp in NodeMap.Values)
             {
-                if (type is UAVariableType vt) vt.Initialize(desc, parent);
-                else if (type is UAObjectType ot) ot.Initialize(desc, parent);
-                else if (type is UAReferenceType rt) rt.Initialize(desc, parent);
-                else if (type is UADataType dt) dt.Initialize(desc, parent);
-                return type;
+                if (tp.Attributes.IsDataRead) continue;
+                if (tp.NodeClass == NodeClass.ObjectType && !config.Extraction.NodeTypes.Metadata
+                    && (tp is not UAObjectType otp || !otp.IsEventType())) continue;
+                if (tp.NodeClass == NodeClass.VariableType && !config.Extraction.NodeTypes.Metadata) continue;
+                if (tp.NodeClass == NodeClass.DataType && !config.Extraction.DataTypes.DataTypeMetadata
+                    && !config.Extraction.DataTypes.AutoIdentifyTypes) continue;
+                if (tp.NodeClass == NodeClass.ReferenceType && !config.Extraction.Relationships.Enabled) continue;
+                toRead.Add(tp);
+                if (tp.NodeClass == NodeClass.Variable && tp is UAVariable variable) toReadValues.Add(variable);
+            }
+            await client.ReadNodeData(toRead, this, token);
+            await client.ReadNodeValues(toReadValues, this, token);
+        }
+
+        private async Task ReadTypeHiearchies(CancellationToken token)
+        {
+            var rootNodes = new List<NodeId>();
+            var mask = (uint)NodeClass.Variable | (uint)NodeClass.Object;
+            if (config.Extraction.DataTypes.AutoIdentifyTypes && !dataTypesRead)
+            {
+                mask |= (uint)NodeClass.DataType;
+                rootNodes.Add(DataTypeIds.BaseDataType);
+            }
+            if (config.Events.Enabled && !eventTypesRead)
+            {
+                mask |= (uint)NodeClass.ObjectType;
+                rootNodes.Add(ObjectTypeIds.BaseEventType);
+            }
+            if (!rootNodes.Any()) return;
+            await client.Browser.BrowseDirectory(rootNodes, HandleNode, token, ReferenceTypeIds.HierarchicalReferences,
+                mask, doFilter: false, purpose: "the type hierarchy");
+        }
+
+        public async Task LoadTypeData(CancellationToken token)
+        {
+            await ReadTypeHiearchies(token);
+            await ReadTypeData(token);
+        }
+
+        private void HandleNode(ReferenceDescription node, NodeId parentId, bool visited)
+        {
+            if (visited) return;
+
+            var parent = NodeMap.GetValueOrDefault(parentId);
+
+            var result = BaseUANode.Create(node, parentId, parent, client, this);
+
+            if (result == null)
+            {
+                log.LogWarning("Node of unexpected type received: {Type}, {Id}", node.NodeClass, node.NodeId);
+                return;
             }
 
-
-            var name = desc.DisplayName?.Text;
-
-            BaseUANode node;
-            switch (desc.NodeClass)
-            {
-                case NodeClass.VariableType: node = new UAVariableType(id, name, parent); break;
-                case NodeClass.ObjectType: node = new UAObjectType(id, name, parent); break;
-                case NodeClass.ReferenceType: node = new UAReferenceType(id, name, parent); break;
-                case NodeClass.DataType: node = new UADataType(id, name, parent); break;
-                default:
-                    throw new ArgumentException($"Non-type node passed to {nameof(BuildType)}", nameof(desc));
-            }
-
-            NodeMap[node.Id] = node;
-            return node;
+            NodeMap[result.Id] = result;
+            log.LogTrace("Handle node {Name}, {Id}: {Class}", result.Attributes.DisplayName, result.Id, result.NodeClass);
         }
 
         public UADataType GetDataType(NodeId nodeId)
@@ -63,7 +107,7 @@ namespace Cognite.OpcUa.TypeCollectors
                 if (node is not UADataType dt)
                 {
                     log.LogWarning("Requested data type {Type}, but it was not a data type: {Class} {Name}",
-                        nodeId, node.NodeClass, node.DisplayName);
+                        nodeId, node.NodeClass, node.Attributes.DisplayName);
                     // This is a bug in the server, but instead of crashing we return a fresh node. The extracted data may be incomplete,
                     // but not incorrect.
                     return new UADataType(nodeId);
@@ -85,7 +129,7 @@ namespace Cognite.OpcUa.TypeCollectors
                 if (node is not UAReferenceType dt)
                 {
                     log.LogWarning("Requested reference type {Type}, but it was not a reference type: {Class} {Name}",
-                        nodeId, node.NodeClass, node.DisplayName);
+                        nodeId, node.NodeClass, node.Attributes.DisplayName);
                     return new UAReferenceType(nodeId);
                 }
                 return dt;
@@ -105,7 +149,7 @@ namespace Cognite.OpcUa.TypeCollectors
                 if (node is not UAObjectType dt)
                 {
                     log.LogWarning("Requested object type {Type}, but it was not an object type: {Class} {Name}",
-                        nodeId, node.NodeClass, node.DisplayName);
+                        nodeId, node.NodeClass, node.Attributes.DisplayName);
                     return new UAObjectType(nodeId);
                 }
                 return dt;
@@ -125,7 +169,7 @@ namespace Cognite.OpcUa.TypeCollectors
                 if (node is not UAVariableType dt)
                 {
                     log.LogWarning("Requested variable type {Type}, but it was not a variable type: {Class} {Name}",
-                        nodeId, node.NodeClass, node.DisplayName);
+                        nodeId, node.NodeClass, node.Attributes.DisplayName);
                     return new UAVariableType(nodeId);
                 }
                 return dt;
