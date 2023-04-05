@@ -60,6 +60,11 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.16.0":
+    description: "Support for certificate authentication to CDF"
+    changelog:
+      added:
+        - "Support for using a private key and certificate when authenticating towards CDF"
   "2.15.3":
     description: Improve handling of incorrect proto node ids
     changelog:
