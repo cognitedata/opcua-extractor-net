@@ -663,6 +663,8 @@ namespace Cognite.OpcUa
                 log.LogInformation("End mapping main directory");
             }
 
+            State.PopulateActiveEventTypes(typeManager.EventFields);
+
             try
             {
                 var tasks = await MapUAToDestinations(result);

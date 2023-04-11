@@ -173,6 +173,15 @@ namespace Cognite.OpcUa.Browse
             return roots.Values;
         }
 
+        public async Task GetRootNodes(IEnumerable<NodeId> ids, Action<ReferenceDescription, NodeId, bool> callback, CancellationToken token, string purpose = "")
+        {
+            var refs = await GetRootNodes(ids, token);
+            foreach (var rf in refs)
+            {
+                callback(rf, NodeId.Null, false);
+            }
+        }
+
         private static Action<ReferenceDescription, NodeId, bool> GetDictWriteCallback(Dictionary<NodeId, ReferenceDescriptionCollection> dict)
         {
             object lck = new object();

@@ -85,6 +85,7 @@ namespace Cognite.OpcUa.TypeCollectors
                 eventTypesRead = true;
             }
             if (!rootNodes.Any()) return;
+            await client.Browser.GetRootNodes(rootNodes, HandleNode, token, "the type hierarchy");
             await client.Browser.BrowseDirectory(rootNodes, HandleNode, token, ReferenceTypeIds.HierarchicalReferences,
                 mask, doFilter: false, purpose: "the type hierarchy");
         }
@@ -101,7 +102,7 @@ namespace Cognite.OpcUa.TypeCollectors
             typesBuilt = true;
             log.LogInformation("Building type information from nodes in memory");
             BuildNodeChildren();
-            if (config.Events.Enabled) CollectTypes();
+            if (config.Events.Enabled) CollectEventTypes();
             BuildDataTypes();
         }
 
@@ -203,7 +204,7 @@ namespace Cognite.OpcUa.TypeCollectors
         #region events
         public Dictionary<NodeId, UAObjectType> EventFields { get; } = new();
 
-        private void CollectTypes()
+        private void CollectEventTypes()
         {
             Regex? ignoreFilter = null;
             if (!string.IsNullOrEmpty(config.Events.ExcludeEventFilter))
@@ -216,7 +217,7 @@ namespace Cognite.OpcUa.TypeCollectors
 
             foreach (var type in NodeMap.Values.OfType<UAObjectType>())
             {
-                if (type.IsEventType()) continue;
+                if (!type.IsEventType()) continue;
                 if (ignoreFilter != null && ignoreFilter.IsMatch(type.Attributes.DisplayName)) continue;
                 if (whitelist != null && whitelist.Any())
                 {
@@ -224,6 +225,7 @@ namespace Cognite.OpcUa.TypeCollectors
                 }
                 else if (!config.Events.AllEvents && type.Id.NamespaceIndex == 0) continue;
                 EventFields[type.Id] = type;
+                log.LogInformation("Collect type {id}", type.Id);
                 CollectType(type, baseExcludeProperties, excludeProperties);
             }
         }

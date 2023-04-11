@@ -169,6 +169,14 @@ namespace Cognite.OpcUa
             return null;
         }
 
+        public void PopulateActiveEventTypes(Dictionary<NodeId, UAObjectType> types)
+        {
+            foreach (var tp in types.Values)
+            {
+                ActiveEvents[tp.Id] = tp;
+            }
+        }
+
         /// <summary>
         /// Number of currently managed non-property nodes.
         /// </summary>
