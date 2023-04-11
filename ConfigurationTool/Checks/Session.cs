@@ -72,7 +72,7 @@ namespace Cognite.OpcUa.Config
             {
                 try
                 {
-                    await Run(token, 0);
+                    await Run(typeManager, token, 0);
                     await LimitConfigValues(token);
                 }
                 catch (Exception ex)

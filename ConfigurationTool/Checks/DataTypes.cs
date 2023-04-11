@@ -15,6 +15,7 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
@@ -48,7 +49,7 @@ namespace Cognite.OpcUa.Config
         /// custom datatype configuration is needed.
         /// </summary>
         /// <param name="type">Type to test.</param>
-        private void TestDataType(UANode type)
+        private void TestDataType(BaseUANode type)
         {
             if (!IsCustomObject(type.Id)) return;
             uint dataTypeSwitch = 0;
@@ -135,7 +136,7 @@ namespace Cognite.OpcUa.Config
         {
             if (Session == null || !Session.Connected)
             {
-                await Run(token, 0);
+                await Run(typeManager, token, 0);
                 await LimitConfigValues(token);
             }
             await PopulateDataTypes(token);
@@ -181,7 +182,7 @@ namespace Cognite.OpcUa.Config
             bool stringVariables = false;
             int maxLimitedArrayLength = 0;
 
-            var identifiedTypes = new Dictionary<NodeId, UANode>();
+            var identifiedTypes = new Dictionary<NodeId, BaseUANode>();
             var missingTypes = new HashSet<NodeId>();
 
             // Look for ArrayDimensions fields on values, we use these to identify arrays.
@@ -215,27 +216,27 @@ namespace Cognite.OpcUa.Config
                     continue;
                 }
 
-                if (variable.ReadHistory)
+                if (variable.FullAttributes.ShouldReadHistory(Config))
                 {
                     history = true;
                 }
 
-                if (variable.DataType == null || variable.DataType.Raw == null || variable.DataType.Raw.IsNullNodeId)
+                if (variable.FullAttributes.DataType == null || variable.FullAttributes.DataType.Id == null || variable.FullAttributes.DataType.Id.IsNullNodeId)
                 {
                     Summary.DataTypes.NullDataType = true;
                     log.LogWarning("Variable datatype is null on id: {Id}", variable.Id);
                     continue;
                 }
 
-                var dataType = dataTypes.FirstOrDefault(type => type.Id == variable.DataType.Raw);
+                var dataType = dataTypes.FirstOrDefault(type => type.Id == variable.FullAttributes.DataType.Id);
 
                 if (dataType == null)
                 {
-                    if (missingTypes.Add(variable.DataType.Raw))
+                    if (missingTypes.Add(variable.FullAttributes.DataType.Id))
                     {
                         Summary.DataTypes.MissingDataType = true;
                         log.LogWarning("DataType found on node but not in hierarchy, " +
-                                    "this may mean that some datatypes are defined outside of the main datatype hierarchy: {Type}", variable.DataType);
+                                    "this may mean that some datatypes are defined outside of the main datatype hierarchy: {Type}", variable.FullAttributes.DataType);
                     }
                     continue;
                 }
