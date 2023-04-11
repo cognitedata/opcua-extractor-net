@@ -132,7 +132,8 @@ namespace Cognite.OpcUa.NodeSources
         {
             if (!readVariables.Any() && !readObjects.Any()) return null;
 
-            await GetExtraNodeData(token);
+            await TypeManager.LoadTypeData(token);
+            TypeManager.BuildTypeInfo();
 
             FinalDestinationObjects.AddRange(readObjects);
             FinalSourceObjects.AddRange(readObjects);
@@ -167,13 +168,6 @@ namespace Cognite.OpcUa.NodeSources
                 FinalDestinationVariables,
                 FinalReferences,
                 false);
-        }
-
-        private async Task GetExtraNodeData(CancellationToken token)
-        {
-            // Datatype metadata might make sense if we have enum variables, either way this is cheap.
-            var distinctDataTypes = readVariables.Select(variable => variable.DataType.Raw).ToHashSet();
-            await Extractor.DataTypeManager.GetDataTypeMetadataAsync(distinctDataTypes, token);
         }
     }
 }

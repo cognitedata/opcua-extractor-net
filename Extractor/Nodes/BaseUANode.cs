@@ -13,7 +13,7 @@ namespace Cognite.OpcUa.Nodes
         /// <summary>
         /// BrowseName attribute
         /// </summary>
-        public string? BrowseName { get; set; }
+        public QualifiedName? BrowseName { get; set; }
         /// <summary>
         /// DisplayName attribute
         /// </summary>
@@ -51,7 +51,7 @@ namespace Cognite.OpcUa.Nodes
                     DisplayName = value.GetValue<LocalizedText?>(null)?.Text;
                     break;
                 case Attributes.BrowseName:
-                    BrowseName = value.GetValue<QualifiedName?>(null)?.Name;
+                    BrowseName = value.GetValue<QualifiedName?>(null);
                     break;
                 default:
                     throw new InvalidOperationException($"Got unexpected unmatched attributeId, this is a bug: {attributeId}");

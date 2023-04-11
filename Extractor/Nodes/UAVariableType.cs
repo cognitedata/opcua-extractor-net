@@ -78,7 +78,7 @@ namespace Cognite.OpcUa.Nodes
 
     public class UAVariableType : BaseUAType
     {
-        public UAVariableType(NodeId id, string? displayName, string? browseName, BaseUANode? parent, NodeId? parentId) : base(id, parent, parentId)
+        public UAVariableType(NodeId id, string? displayName, QualifiedName? browseName, BaseUANode? parent, NodeId? parentId) : base(id, parent, parentId)
         {
             FullAttributes = new VariableTypeAttributes();
             Attributes.DisplayName = displayName;

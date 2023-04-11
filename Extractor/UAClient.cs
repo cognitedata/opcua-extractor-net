@@ -49,8 +49,6 @@ namespace Cognite.OpcUa
         protected FullConfig Config { get; set; }
         protected ISession? Session => SessionManager?.Session;
         protected ApplicationConfiguration? AppConfig { get; set; }
-        public DataTypeManager DataTypeManager { get; }
-        public NodeTypeManager ObjectTypeManager { get; }
 
         public IClientCallbacks Callbacks { get; set; } = null!;
 
@@ -58,7 +56,6 @@ namespace Cognite.OpcUa
         private readonly Dictionary<NodeId, string> nodeOverrides = new Dictionary<NodeId, string>();
         public bool Started { get; private set; }
         private CancellationToken liveToken;
-        private Dictionary<NodeId, UAEventType>? eventFields;
 
         private readonly Dictionary<ushort, string> nsPrefixMap = new Dictionary<ushort, string>();
 
@@ -1161,36 +1158,6 @@ namespace Cognite.OpcUa
         /// </summary>
         public IServiceMessageContext? MessageContext => Session?.MessageContext;
         /// <summary>
-        /// Fetch event fields from the server and store them on the client
-        /// </summary>
-        /// <param name="token"></param>
-        /// <returns>The collected event fields</returns>
-        public async Task<Dictionary<NodeId, UAEventType>> GetEventFields(IEventFieldSource? source, CancellationToken token)
-        {
-            if (eventFields != null) return eventFields;
-            if (source == null)
-            {
-                source = new EventFieldCollector(log, this, Config.Events);
-            }
-            eventFields = await source.GetEventIdFields(token);
-            foreach (var pair in eventFields)
-            {
-                log.LogTrace("Collected event field: {Id}", pair.Key);
-                foreach (var fields in pair.Value.CollectedFields)
-                {
-                    log.LogTrace("    {Name}", fields.Name);
-                }
-            }
-            return eventFields;
-        }
-        /// <summary>
-        /// Remove collected event fields
-        /// </summary>
-        public void ClearEventFields()
-        {
-            eventFields = null;
-        }
-        /// <summary>
         /// Constructs a filter from the given list of permitted eventids, the already constructed field map and an optional receivedAfter property.
         /// </summary>
         /// <param name="nodeIds">Permitted SourceNode ids</param>
@@ -1204,7 +1171,7 @@ namespace Cognite.OpcUa
              */
             var whereClause = new ContentFilter();
 
-            if (eventFields == null) eventFields = new Dictionary<NodeId, UAEventType>();
+            if (eventFields == null) eventFields = new Dictionary<NodeId, UAObjectType>();
 
             if (eventFields.Keys.Any() && ((Config.Events.EventIds?.Any() ?? false) || !Config.Events.AllEvents))
             {

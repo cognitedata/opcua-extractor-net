@@ -41,7 +41,7 @@ namespace Cognite.OpcUa.Nodes
 
     public class UAReferenceType : BaseUAType
     {
-        public UAReferenceType(NodeId id, string? displayName, string? browseName, BaseUANode? parent, NodeId? parentId) : base(id, parent, parentId)
+        public UAReferenceType(NodeId id, string? displayName, QualifiedName? browseName, BaseUANode? parent, NodeId? parentId) : base(id, parent, parentId)
         {
             FullAttributes = new ReferenceTypeAttributes();
             Attributes.DisplayName = displayName;

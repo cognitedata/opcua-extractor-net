@@ -72,7 +72,7 @@ namespace Cognite.OpcUa.Nodes
 
     public class UAObject : BaseUANode
     {
-        public UAObject(NodeId id, string? displayName, string? browseName, BaseUANode? parent, NodeId? parentId, UAObjectType? typeDefinition)
+        public UAObject(NodeId id, string? displayName, QualifiedName? browseName, BaseUANode? parent, NodeId? parentId, UAObjectType? typeDefinition)
             : base(id, parent, parentId)
         {
             FullAttributes = new ObjectAttributes(typeDefinition);

@@ -48,7 +48,7 @@ namespace Cognite.OpcUa.Types
         /// </summary>
         public ReferenceVertex Target { get; }
         public UAReference(NodeId type, bool isForward, NodeId source, NodeId target,
-            bool sourceTs, bool targetTs, bool isHierarchical, ReferenceTypeManager manager)
+            bool sourceTs, bool targetTs, bool isHierarchical, TypeManager manager)
         {
             Type = manager.GetReferenceType(type);
             IsForward = isForward;

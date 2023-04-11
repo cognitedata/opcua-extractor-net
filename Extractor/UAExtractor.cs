@@ -20,6 +20,7 @@ using Cognite.Extractor.StateStorage;
 using Cognite.Extractor.Utils;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
+using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.PubSub;
 using Cognite.OpcUa.Pushers;
@@ -54,18 +55,16 @@ namespace Cognite.OpcUa
         public IExtractionStateStore? StateStorage { get; }
         public State State { get; }
         public Streamer Streamer { get; }
-        public DataTypeManager DataTypeManager => uaClient.DataTypeManager;
-
         public PeriodicScheduler TaskScheduler => Scheduler;
-
         private HistoryReader historyReader = null!;
-        public ReferenceTypeManager? ReferenceTypeManager { get; private set; }
         public IEnumerable<NodeId> RootNodes { get; private set; } = null!;
         private readonly IEnumerable<IPusher> pushers;
         private readonly ConcurrentQueue<NodeId> extraNodesToBrowse = new ConcurrentQueue<NodeId>();
         public IEnumerable<NodeTransformation>? Transformations { get; private set; }
         public StringConverter StringConverter => uaClient.StringConverter;
         private readonly PubSubManager? pubSubManager;
+
+        private readonly TypeManager typeManager;
 
         private NodeSetSource? nodeSetSource;
 
@@ -132,10 +131,7 @@ namespace Cognite.OpcUa
             State = new State();
             Streamer = new Streamer(provider.GetRequiredService<ILogger<Streamer>>(), this, config);
             StateStorage = stateStore;
-            if (config.Extraction.Relationships.Enabled)
-            {
-                ReferenceTypeManager = new ReferenceTypeManager(Config, provider.GetRequiredService<ILogger<ReferenceTypeManager>>(), uaClient, this);
-            }
+            typeManager = new TypeManager(Config, uaClient, provider.GetRequiredService<ILogger<TypeManager>>());
 
             if (config.FailureBuffer.Enabled)
             {
@@ -256,9 +252,7 @@ namespace Cognite.OpcUa
             await EnsureSubscriptions();
             if (Config.Source.RestartOnReconnect)
             {
-                source.DataTypeManager.Configure();
                 source.ClearNodeOverrides();
-                source.ClearEventFields();
                 await RestartExtractor();
             }
             else
@@ -344,17 +338,11 @@ namespace Cognite.OpcUa
                 Config.Source.LimitToServerConfig = false;
                 Config.Source.NodeSetSource.Types = true;
                 Config.Source.NodeSetSource.Instance = true;
-                nodeSetSource = new NodeSetSource(Provider.GetRequiredService<ILogger<NodeSetSource>>(), Config, this, uaClient);
+                nodeSetSource = new NodeSetSource(Provider.GetRequiredService<ILogger<NodeSetSource>>(), Config, this, uaClient, typeManager);
                 nodeSetSource.Build();
             }
 
             await ConfigureExtractor();
-            if (Config.Source.NodeSetSource == null
-                || (!Config.Source.NodeSetSource.NodeSets?.Any() ?? false)
-                || !Config.Source.NodeSetSource.Types)
-            {
-                await DataTypeManager.GetDataTypeStructureAsync(Source.Token);
-            }
 
             Started = true;
 
@@ -608,12 +596,11 @@ namespace Cognite.OpcUa
             bool readFromOpc = true;
 
             NodeSourceResult? result = null;
-            IEventFieldSource? eventSource = null;
             if ((Config.Cognite?.RawNodeBuffer?.Enable ?? false) && initial)
             {
                 log.LogDebug("Begin fetching data from CDF");
                 var handler = new CDFNodeSource(Provider.GetRequiredService<ILogger<CDFNodeSource>>(),
-                    Config, this, uaClient, pushers.OfType<CDFPusher>().First());
+                    Config, this, uaClient, pushers.OfType<CDFPusher>().First(), typeManager);
                 await handler.ReadRawNodes(Source.Token);
 
                 result = await handler.ParseResults(Source.Token);
@@ -638,7 +625,12 @@ namespace Cognite.OpcUa
                 log.LogDebug("Begin fetching data from internal node set");
                 if (nodeSetSource == null)
                 {
-                    nodeSetSource = new NodeSetSource(Provider.GetRequiredService<ILogger<NodeSetSource>>(), Config, this, uaClient);
+                    nodeSetSource = new NodeSetSource(Provider.GetRequiredService<ILogger<NodeSetSource>>(), Config, this, uaClient, typeManager);
+                }
+
+                if (!Config.Source.NodeSetSource.Types)
+                {
+                    await typeManager.LoadTypeData(Source.Token);
                 }
 
                 var handler = nodeSetSource;
@@ -649,27 +641,13 @@ namespace Cognite.OpcUa
                     result = await handler.ParseResults(Source.Token);
                     readFromOpc = false;
                 }
-                if (Config.Source.NodeSetSource.Types)
-                {
-                    eventSource = handler;
-                }
                 nodeSetSource = null;
-            }
-
-            if (Config.Events.Enabled)
-            {
-                var eventFields = await uaClient.GetEventFields(eventSource, Source.Token);
-                foreach (var field in eventFields)
-                {
-                    State.ActiveEvents[field.Key] = field.Value;
-                    State.RegisterNode(field.Key, uaClient.GetUniqueId(field.Key));
-                }
             }
 
             if (readFromOpc)
             {
                 log.LogInformation("Begin mapping main directory");
-                var handler = new UANodeSource(Provider.GetRequiredService<ILogger<UANodeSource>>(), Config, this, uaClient, isFull);
+                var handler = new UANodeSource(Provider.GetRequiredService<ILogger<UANodeSource>>(), Config, this, uaClient, isFull, typeManager);
                 try
                 {
                     await uaClient.Browser.BrowseNodeHierarchy(nodesToBrowse, handler.Callback, Source.Token,
@@ -838,8 +816,6 @@ namespace Cognite.OpcUa
         {
             RootNodes = Config.Extraction.GetRootNodes(uaClient, log);
 
-            DataTypeManager.Configure();
-
             if (Config.Extraction.NodeMap != null)
             {
                 foreach (var kvp in Config.Extraction.NodeMap)
@@ -882,11 +858,12 @@ namespace Cognite.OpcUa
                 }
                 if (Config.Events.ReadServer)
                 {
-                    var serverNode = await uaClient.GetServerNode(Source.Token);
-                    if (serverNode.EventNotifier != 0)
+                    var serverNode = await uaClient.GetServerNode(typeManager, Source.Token) as UAObject;
+                    if (serverNode == null) throw new ExtractorFailureException("Server node is not an object, or does not exist");
+                    if (serverNode.FullAttributes.EventNotifier != 0)
                     {
-                        var history = (serverNode.EventNotifier & EventNotifiers.HistoryRead) != 0 && Config.Events.History;
-                        var subscription = (serverNode.EventNotifier & EventNotifiers.SubscribeToEvents) != 0 && Config.Subscriptions.Events;
+                        var history = serverNode.FullAttributes.ShouldReadEventHistory(Config);
+                        var subscription = serverNode.FullAttributes.ShouldSubscribeToEvents(Config);
                         State.SetEmitterState(new EventExtractionState(this, serverNode.Id, history, history && Config.History.Backfill, subscription));
                     }
                 }
@@ -903,7 +880,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="input">Nodes that failed to push</param>
         /// <param name="pusher">Pusher pushed to</param>
-        private static void PushNodesFailure(
+        private void PushNodesFailure(
             PusherInput input,
             FullPushResult result,
             IPusher pusher)
@@ -912,7 +889,7 @@ namespace Cognite.OpcUa
             pusher.DataFailing = true;
             pusher.EventsFailing = true;
 
-            pusher.AddPendingNodes(input, result);
+            pusher.AddPendingNodes(input, result, Config);
         }
         /// <summary>
         /// Push nodes to given pusher

@@ -1,6 +1,7 @@
 ﻿using Cognite.OpcUa.Config;
 using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.TypeCollectors;
+using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using Serilog.Debugging;
 using System;
@@ -133,7 +134,7 @@ namespace Cognite.OpcUa.Nodes
 
     public class UAVariable : BaseUANode
     {
-        public UAVariable(NodeId id, string? displayName, string? browseName, BaseUANode? parent, NodeId? parentId, UAVariableType? typeDefinition)
+        public UAVariable(NodeId id, string? displayName, QualifiedName? browseName, BaseUANode? parent, NodeId? parentId, UAVariableType? typeDefinition)
             : base(id, parent, parentId)
         {
             FullAttributes = new VariableAttributes(typeDefinition);
@@ -216,9 +217,18 @@ namespace Cognite.OpcUa.Nodes
             public bool IsDestinationVariable;
         }
 
-        public VariableGroups GetVariableGroups(DataTypeManager dataTypeManager)
+        public bool AllowTSMap(
+            ILogger log,
+            DataTypeConfig config,
+            int? arraySizeOverride = null,
+            bool overrideString = false)
         {
-            var allowTsMap = dataTypeManager.AllowTSMap(this);
+            return FullAttributes.DataType.AllowTSMap(this, log, config, arraySizeOverride, overrideString);
+        }
+
+        public VariableGroups GetVariableGroups(ILogger log, DataTypeConfig config)
+        {
+            var allowTsMap = AllowTSMap(log, config);
             return new VariableGroups
             {
                 // Source object if it's not a variable

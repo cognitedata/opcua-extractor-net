@@ -2,6 +2,7 @@
 using Cognite.OpcUa.TypeCollectors;
 using Opc.Ua;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Cognite.OpcUa.Nodes
 {
@@ -40,7 +41,7 @@ namespace Cognite.OpcUa.Nodes
 
     public class UAObjectType : BaseUAType
     {
-        public UAObjectType(NodeId id, string? displayName, string? browseName, BaseUANode? parent, NodeId? parentId) : base(id, parent, parentId)
+        public UAObjectType(NodeId id, string? displayName, QualifiedName? browseName, BaseUANode? parent, NodeId? parentId) : base(id, parent, parentId)
         {
             FullAttributes = new ObjectTypeAttributes();
             Attributes.DisplayName = displayName;
