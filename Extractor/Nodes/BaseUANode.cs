@@ -11,6 +11,8 @@ using System.Text.Json;
 using System.Text;
 using Microsoft.Extensions.Logging;
 using CogniteSdk;
+using Oryx;
+using System.Globalization;
 
 namespace Cognite.OpcUa.Nodes
 {
@@ -138,9 +140,69 @@ namespace Cognite.OpcUa.Nodes
             FallbackParentId = parentId;
         }
 
+        public IEnumerable<BaseUANode> EnumerateAncestors()
+        {
+            var parent = Parent;
+            while (parent != null)
+            {
+                yield return parent;
+                parent = parent.Parent;
+            }
+        }
+
+        public IEnumerable<T> EnumerateTypedAncestors<T>() where T : BaseUANode
+        {
+            var parent = Parent;
+            while (parent != null && parent is T tP)
+            {
+                yield return tP;
+                parent = parent.Parent;
+            }
+        }
+
         public virtual string? GetUniqueId(IUAClientAccess client)
         {
             return client.GetUniqueId(Id);
+        }
+
+        public virtual void Format(StringBuilder builder, int indent, bool writeParent = true, bool writeProperties = true)
+        {
+            var indt = new string(' ', indent);
+            //builder.AppendFormat(CultureInfo.InvariantCulture, "{0}Variable: {1}", indt, Attributes.DisplayName);
+            //builder.AppendLine();
+            builder.AppendFormat(CultureInfo.InvariantCulture, "{0}Id: {1}", indt, Id);
+            builder.AppendLine();
+            if (Parent != null && writeParent)
+            {
+                builder.AppendFormat(CultureInfo.InvariantCulture, "{0}Parent: {1} {2}", indt, Parent.Attributes.DisplayName, Parent.Id);
+                builder.AppendLine();
+            }
+            else if (ParentId != null && writeParent)
+            {
+                builder.AppendFormat(CultureInfo.InvariantCulture, "{0}Parent: {1}", indt, ParentId);
+                builder.AppendLine();
+            }
+            if (Attributes.Description != null)
+            {
+                builder.AppendFormat(CultureInfo.InvariantCulture, "{0}Description: {1}", indt, Attributes.Description);
+                builder.AppendLine();
+            }
+            if (Properties != null && Properties.Any() && writeProperties)
+            {
+                builder.AppendFormat("{0}Properties:", indt);
+                builder.AppendLine();
+                foreach (var prop in Properties)
+                {
+                    prop.Format(builder, indent + 4, false);
+                }
+            }
+        }
+
+        public override string ToString()
+        {
+            var builder = new StringBuilder();
+            Format(builder, 0);
+            return builder.ToString();
         }
 
         public virtual NodeId? TypeDefinition => null;

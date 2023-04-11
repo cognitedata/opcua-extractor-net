@@ -13,6 +13,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Linq;
+using System.Text;
 
 namespace Cognite.OpcUa.Nodes
 {
@@ -306,6 +307,50 @@ namespace Cognite.OpcUa.Nodes
                 }
             }
             return checksum;
+        }
+
+        public override void Format(StringBuilder builder, int indent, bool writeParent = true, bool writeProperties = true)
+        {
+            builder.AppendFormat(CultureInfo.InvariantCulture, "{0}Variable: {1}", new string(' ', indent), Attributes.DisplayName);
+            builder.AppendLine();
+            base.Format(builder, indent + 4, writeParent);
+
+            var indt = new string(' ', indent + 4);
+            builder.AppendFormat(CultureInfo.InvariantCulture, "{0}DataType: ", indt);
+            builder.AppendLine();
+            FullAttributes.DataType.Format(builder, indent + 8, false);
+            if (FullAttributes.ValueRank != ValueRanks.Scalar)
+            {
+                builder.AppendFormat(CultureInfo.InvariantCulture, "{0}ValueRank: {1}", indt, FullAttributes.ValueRank);
+                builder.AppendLine();
+            }
+            if (FullAttributes.ArrayDimensions != null)
+            {
+                builder.AppendFormat(CultureInfo.InvariantCulture, "{0}ArrayDimensions: {1}", indt, 
+                    string.Join(", ", FullAttributes.ArrayDimensions));
+                builder.AppendLine();
+            }
+            if (FullAttributes.TypeDefinition != null)
+            {
+                builder.AppendFormat(CultureInfo.InvariantCulture, "{0}TypeDefinition: ", indt);
+                builder.AppendLine();
+                FullAttributes.TypeDefinition.Format(builder, indent + 8, false, false);
+            }
+            if (AsEvents)
+            {
+                builder.AppendFormat(CultureInfo.InvariantCulture, "{0}Written as events to destinations", indt);
+                builder.AppendLine();
+            }
+            if (FullAttributes.Historizing)
+            {
+                builder.AppendFormat(CultureInfo.InvariantCulture, "{0}Historizing: {1}", indt, FullAttributes.Historizing);
+                builder.AppendLine();
+            }
+            if (Value != null)
+            {
+                builder.AppendFormat(CultureInfo.InvariantCulture, "{0}Value: {1}", indt, Value.Value);
+                builder.AppendLine();
+            }
         }
 
         #region serialization

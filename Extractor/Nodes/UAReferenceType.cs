@@ -2,6 +2,8 @@
 using Cognite.OpcUa.TypeCollectors;
 using Opc.Ua;
 using System.Collections.Generic;
+using System.Globalization;
+using System.Text;
 using System.Xml.Linq;
 
 namespace Cognite.OpcUa.Nodes
@@ -67,6 +69,17 @@ namespace Cognite.OpcUa.Nodes
         {
             if (isInverse && !string.IsNullOrEmpty(FullAttributes.InverseName)) return FullAttributes.InverseName;
             return Attributes.DisplayName;
+        }
+
+        public override void Format(StringBuilder builder, int indent, bool writeParent = true, bool writeProperties = true)
+        {
+            builder.AppendFormat(CultureInfo.InvariantCulture, "{0}ReferenceType: {1}", new string(' ', indent), Attributes.DisplayName);
+            builder.AppendLine();
+            base.Format(builder, indent + 4, writeParent);
+
+            var indt = new string(' ', indent + 4);
+            builder.AppendFormat(CultureInfo.InvariantCulture, "{0}InverseName: {1}", indt, FullAttributes.InverseName);
+            builder.AppendLine();
         }
     }
 }

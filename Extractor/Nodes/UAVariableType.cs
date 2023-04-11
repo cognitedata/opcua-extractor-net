@@ -1,11 +1,13 @@
 ﻿using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Text;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
 using Opc.Ua;
+using Oryx.Cognite;
 
 namespace Cognite.OpcUa.Nodes
 {
@@ -136,6 +138,35 @@ namespace Cognite.OpcUa.Nodes
                 checksum = checksum * 31 + FullAttributes.Value.GetHashCode();
             }
             return checksum;
+        }
+
+        public override void Format(StringBuilder builder, int indent, bool writeParent = true, bool writeProperties = true)
+        {
+            builder.AppendFormat(CultureInfo.InvariantCulture, "{0}VariableType: {1}", new string(' ', indent), Attributes.DisplayName);
+            builder.AppendLine();
+            base.Format(builder, indent + 4, writeParent);
+
+            var indt = new string(' ', indent + 4);
+            if (FullAttributes.DataType != null)
+            {
+                builder.AppendFormat(CultureInfo.InvariantCulture, "{0}DataType: ", indt);
+                builder.AppendLine();
+                FullAttributes.DataType.Format(builder, indent + 8, false);
+            }
+            if (FullAttributes.ValueRank != ValueRanks.Scalar && FullAttributes.ValueRank > 0)
+            {
+                builder.AppendFormat(CultureInfo.InvariantCulture, "{0}ValueRank: {1}", indt, FullAttributes.ValueRank);
+                builder.AppendLine();
+            }
+            if (FullAttributes.ArrayDimensions != null)
+            {
+                builder.AppendFormat(CultureInfo.InvariantCulture, "{0}ArrayDimensions: {1}", indt, FullAttributes.ArrayDimensions);
+                builder.AppendLine();
+            }
+            if (FullAttributes.Value != null)
+            {
+                builder.AppendFormat(CultureInfo.InvariantCulture, "{0}Value: {1}", indt, FullAttributes.Value.Value);
+            }
         }
     }
 }

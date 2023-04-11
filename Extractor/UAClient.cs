@@ -673,6 +673,7 @@ namespace Cognite.OpcUa
             foreach (var node in nodes)
             {
                 node.Attributes.LoadAttribute(values[idx], Attributes.Value, typeManager);
+                idx++;
             }
         }
         #endregion

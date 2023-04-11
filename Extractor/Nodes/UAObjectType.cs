@@ -2,7 +2,10 @@
 using Cognite.OpcUa.TypeCollectors;
 using Opc.Ua;
 using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
 using System.Linq;
+using System.Text;
 
 namespace Cognite.OpcUa.Nodes
 {
@@ -61,8 +64,18 @@ namespace Cognite.OpcUa.Nodes
         public bool IsEventType()
         {
             if (Id == ObjectTypeIds.BaseEventType) return true;
-            if (Parent != null) return Parent is UAObjectType tp && tp.IsEventType();
-            return false;
+            return EnumerateTypedAncestors<UAObjectType>().Any(tp => tp.Id == ObjectTypeIds.BaseEventType);
+        }
+
+        public override void Format(StringBuilder builder, int indent, bool writeParent = true, bool writeProperties = true)
+        {
+            builder.AppendFormat(CultureInfo.InvariantCulture, "{0}ObjectType: {1}", new string(' ', indent), Attributes.DisplayName);
+            builder.AppendLine();
+            base.Format(builder, indent + 4, writeParent);
+
+            var indt = new string(' ', indent + 4);
+            builder.AppendFormat(CultureInfo.InvariantCulture, "{0}IsAbstract: {1}", indt, FullAttributes.IsAbstract);
+            builder.AppendLine();
         }
     }
 }

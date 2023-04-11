@@ -2,7 +2,9 @@
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
+using System.Text;
 
 namespace Cognite.OpcUa.Nodes
 {
@@ -21,7 +23,7 @@ namespace Cognite.OpcUa.Nodes
         }
 
 
-        public HashSet<TypeField> AllCollectedFields { get; } = null!;
+        public HashSet<TypeField> AllCollectedFields { get; set; } = null!;
 
         public IEnumerable<TypeField> CollectedFields =>
             AllCollectedFields.Where(f => f.Node.NodeClass == NodeClass.Variable);
@@ -75,7 +77,6 @@ namespace Cognite.OpcUa.Nodes
             return true;
         }
     }
-
 
     public class TypeField : RawTypeField
     {

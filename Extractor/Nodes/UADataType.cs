@@ -66,7 +66,8 @@ namespace Cognite.OpcUa.Nodes
             {
                 var identifier = (uint)id.Identifier;
                 IsString = (identifier < DataTypes.Boolean || identifier > DataTypes.Double)
-                                           && identifier != DataTypes.Integer && identifier != DataTypes.UInteger;
+                                           && identifier != DataTypes.Integer && identifier != DataTypes.UInteger
+                                           && identifier != DataTypes.Number;
                 IsStep = identifier == DataTypes.Boolean;
             }
             else
@@ -120,11 +121,30 @@ namespace Cognite.OpcUa.Nodes
 
         public void UpdateFromParent(DataTypeConfig config)
         {
-            if (Parent is not UADataType parentType) return;
-            if (!parentType.IsString)
+            foreach (var node in EnumerateTypedAncestors<UADataType>().Prepend(this))
             {
-                if (EnumValues != null && !config.EnumsAsStrings) return;
-                IsString = false;
+                if (node.Id == DataTypeIds.Number)
+                {
+                    IsString = false;
+                    return;
+                }
+                if (node.Id == DataTypeIds.Boolean)
+                {
+                    IsString = false;
+                    IsStep = true;
+                    return;
+                }
+                if (node.Id == DataTypeIds.Enumeration)
+                {
+                    IsString = config.EnumsAsStrings;
+                    IsStep = !config.EnumsAsStrings;
+                    EnumValues ??= new Dictionary<long, string>();
+                    return;
+                }
+                if (!node.IsString)
+                {
+                    IsString = false;
+                }
             }
         }
 
@@ -232,7 +252,7 @@ namespace Cognite.OpcUa.Nodes
 
         public void SetEnumStrings(ILogger log, Variant? variant)
         {
-            if (variant == null) return;
+            if (variant == null || variant.Value.Value == null) return;
             var value = variant.Value.Value;
 
             if (value is LocalizedText[] strings)
@@ -255,6 +275,29 @@ namespace Cognite.OpcUa.Nodes
             else
             {
                 log.LogWarning("Unknown enum strings type: {Type}", value.GetType());
+            }
+        }
+
+
+        public override void Format(StringBuilder builder, int indent, bool writeParent = true, bool writeProperties = true)
+        {
+            builder.AppendFormat(CultureInfo.InvariantCulture, "{0}DataType: {1}", new string(' ', indent), Attributes.DisplayName);
+            builder.AppendLine();
+            base.Format(builder, indent + 4, writeParent);
+
+            var indt = new string(' ', indent + 4);
+            if (FullAttributes.IsAbstract)
+            {
+                builder.AppendFormat(CultureInfo.InvariantCulture, "{0}IsAbstract: {1}", indt, FullAttributes.IsAbstract);
+                builder.AppendLine();
+            }
+            builder.AppendFormat(CultureInfo.InvariantCulture, "{0}IsString: {1}", indt, IsString);
+            builder.AppendLine();
+
+            if (IsStep)
+            {
+                builder.AppendFormat(CultureInfo.InvariantCulture, "{0}IsStep: {1}", indt, IsStep);
+                builder.AppendLine();
             }
         }
     }

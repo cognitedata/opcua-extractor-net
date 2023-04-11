@@ -283,7 +283,7 @@ namespace Cognite.OpcUa.Pushers
             {
                 foreach (var node in objects.Concat(variables))
                 {
-                    log.LogTrace("{Node}", node);
+                    log.LogDebug("{Node}", node);
                 }
                 log.LogInformation("Pusher is in debug mode, no nodes will be pushed to CDF");
                 return result;

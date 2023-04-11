@@ -4,6 +4,8 @@ using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
 using Opc.Ua;
 using System.Collections.Generic;
+using System.Globalization;
+using System.Text;
 
 namespace Cognite.OpcUa.Nodes
 {
@@ -106,6 +108,23 @@ namespace Cognite.OpcUa.Nodes
                 }
             }
             return checksum;
+        }
+
+        public override void Format(StringBuilder builder, int indent, bool writeParent = true, bool writeProperties = true)
+        {
+            builder.AppendFormat(CultureInfo.InvariantCulture, "{0}Object: {1}", new string(' ', indent), Attributes.DisplayName);
+            builder.AppendLine();
+            base.Format(builder, indent + 4, writeParent);
+
+            var indt = new string(' ', indent + 4);
+            builder.AppendFormat(CultureInfo.InvariantCulture, "{0}IsAbstract: {1}", indt, FullAttributes.EventNotifier);
+            builder.AppendLine();
+            if (FullAttributes.TypeDefinition != null)
+            {
+                builder.AppendFormat(CultureInfo.InvariantCulture, "{0}TypeDefinition: ", indt);
+                builder.AppendLine();
+                FullAttributes.TypeDefinition.Format(builder, indent + 8, false, false);
+            }
         }
     }
 }

@@ -99,6 +99,7 @@ namespace Cognite.OpcUa.TypeCollectors
         {
             if (typesBuilt) return;
             typesBuilt = true;
+            log.LogInformation("Building type information from nodes in memory");
             BuildNodeChildren();
             if (config.Events.Enabled) CollectTypes();
             BuildDataTypes();
@@ -231,6 +232,7 @@ namespace Cognite.OpcUa.TypeCollectors
         {
             if (type.IsCollected) return;
 
+            type.AllCollectedFields = new HashSet<TypeField>();
             // Initialize with any children in parent, or collect parent if it has not yet been collected
             if (type.Parent is BaseUAType parentType)
             {

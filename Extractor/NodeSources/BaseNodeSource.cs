@@ -238,12 +238,20 @@ namespace Cognite.OpcUa.NodeSources
             if (node.Parent != null)
             {
                 node.Ignore = node.Parent.Ignore;
-                node.IsRawProperty = node.Parent.IsRawProperty;
-                if (node.NodeClass == NodeClass.Variable && !Config.Extraction.MapVariableChildren)
+                node.IsRawProperty |= node.Parent.IsRawProperty;
+                if (node.Parent.NodeClass == NodeClass.Variable && !Config.Extraction.MapVariableChildren)
                 {
                     node.IsRawProperty = true;
                 }
                 node.IsChildOfType = IsDescendantOfType(node);
+            }
+
+            if (node is UAVariable vb)
+            {
+                if (vb.FullAttributes.TypeDefinition?.Id == VariableTypeIds.PropertyType)
+                {
+                    vb.IsRawProperty = true;
+                }
             }
 
             if (Extractor.Transformations != null)
