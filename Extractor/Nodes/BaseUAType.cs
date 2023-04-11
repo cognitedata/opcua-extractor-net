@@ -34,23 +34,19 @@ namespace Cognite.OpcUa.Nodes
         }
     }
 
-
-    public class TypeField
+    public class RawTypeField
     {
         public QualifiedNameCollection BrowsePath { get; }
         public string Name => BrowsePath.Last().Name;
-        public BaseUANode Node { get; }
-        public TypeField(BaseUANode node)
+        public RawTypeField(QualifiedName browseName)
         {
-            BrowsePath = new QualifiedNameCollection { node.Attributes.BrowseName };
-            Node = node;
+            BrowsePath = new QualifiedNameCollection { browseName };
         }
-        public TypeField(BaseUANode node, QualifiedNameCollection previousBrowsePath)
+        public RawTypeField(QualifiedNameCollection browsePath)
         {
-            BrowsePath = new QualifiedNameCollection(previousBrowsePath);
-            BrowsePath.Add(node.Attributes.BrowseName);
-            Node = node;
+            BrowsePath = browsePath;
         }
+
 
         public override int GetHashCode()
         {
@@ -67,7 +63,7 @@ namespace Cognite.OpcUa.Nodes
         }
         public override bool Equals(object obj)
         {
-            if (obj is not EventField otherField) return false;
+            if (obj is not RawTypeField otherField) return false;
             if (BrowsePath.Count != otherField.BrowsePath.Count) return false;
 
             for (int i = 0; i < BrowsePath.Count; i++)
@@ -77,6 +73,16 @@ namespace Cognite.OpcUa.Nodes
             }
 
             return true;
+        }
+    }
+
+
+    public class TypeField : RawTypeField
+    {
+        public BaseUANode Node { get; }
+        public TypeField(BaseUANode node) : base(node.Attributes.BrowseName!)
+        {
+            Node = node;
         }
     }
 }

@@ -94,5 +94,18 @@ namespace Cognite.OpcUa.Nodes
             }
             return null;
         }
+
+        public override int GetUpdateChecksum(TypeUpdateConfig update, bool dataTypeMetadata, bool nodeTypeMetadata)
+        {
+            int checksum = base.GetUpdateChecksum(update, dataTypeMetadata, nodeTypeMetadata);
+            unchecked
+            {
+                if (nodeTypeMetadata)
+                {
+                    checksum = checksum * 31 + (FullAttributes.TypeDefinition?.Id?.GetHashCode() ?? 0);
+                }
+            }
+            return checksum;
+        }
     }
 }

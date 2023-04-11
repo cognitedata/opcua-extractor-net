@@ -88,7 +88,7 @@ namespace Cognite.OpcUa.NodeSources
         /// <param name="node">Variable to write</param>
         protected virtual void AddVariableToLists(UAVariable node)
         {
-            var map = node.GetVariableGroups(Extractor.DataTypeManager);
+            var map = node.GetVariableGroups(Log, Config.Extraction.DataTypes);
             if (map.IsDestinationVariable) FinalDestinationVariables.AddRange(node.CreateTimeseries());
             if (map.IsDestinationObject) FinalDestinationObjects.Add(node);
             if (map.IsSourceVariable) FinalSourceVariables.Add(node);
@@ -111,11 +111,11 @@ namespace Cognite.OpcUa.NodeSources
             var toReadValues = new List<UAVariable>();
 
             var maxLengthProperties = nodes
-                .SelectNonNull(node => node.Properties?.FirstOrDefault(prop => prop.DisplayName == "MaxArrayLength") as UAVariable);
+                .SelectNonNull(node => node.Properties?.FirstOrDefault(prop => prop.Attributes.DisplayName == "MaxArrayLength") as UAVariable);
 
             foreach (var node in nodes)
             {
-                var maxLengthProp = node.Properties?.FirstOrDefault(prop => prop.DisplayName == "MaxArrayLength");
+                var maxLengthProp = node.Properties?.FirstOrDefault(prop => prop.Attributes.DisplayName == "MaxArrayLength");
                 if (maxLengthProp != null && maxLengthProp is UAVariable varProp)
                 {
                     try

@@ -1,12 +1,15 @@
 ﻿using Cognite.OpcUa.Config;
 using Cognite.OpcUa.NodeSources;
+using Cognite.OpcUa.Pushers;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
+using CogniteSdk;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using Serilog.Debugging;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Linq;
@@ -282,6 +285,155 @@ namespace Cognite.OpcUa.Nodes
             }
             return fields;
         }
+
+        public override int GetUpdateChecksum(TypeUpdateConfig update, bool dataTypeMetadata, bool nodeTypeMetadata)
+        {
+            int checksum = base.GetUpdateChecksum(update, dataTypeMetadata, nodeTypeMetadata);
+            unchecked
+            {
+                if (dataTypeMetadata)
+                {
+                    checksum = checksum * 31 + FullAttributes.DataType.Id.GetHashCode();
+                }
+                if (NodeClass == NodeClass.VariableType)
+                {
+                    checksum = checksum * 31 + FullAttributes.Value.GetHashCode();
+                }
+
+                if (nodeTypeMetadata)
+                {
+                    checksum = checksum * 31 + (FullAttributes.TypeDefinition?.Id?.GetHashCode() ?? 0);
+                }
+            }
+            return checksum;
+        }
+
+        #region serialization
+        /// <summary>
+        /// Set special timeseries attributes from metadata, as given by <paramref name="metaMap"/>.
+        /// </summary>
+        /// <param name="metaMap">Configured mapping from property name to one of the special timeseries attributes:
+        /// description, name, unit or parentId</param>
+        /// <param name="writePoco">TimeSeries to write to</param>
+        /// <param name="parentIdHandler">Method called for each string mapped to parentId, should set
+        /// parentId as dictated by external context.</param>
+        private void HandleMetaMap(
+            Dictionary<string, string>? metaMap,
+            TimeSeriesCreate writePoco,
+            Action<string> parentIdHandler,
+            StringConverter converter)
+        {
+            if (Properties == null || !Properties.Any() || metaMap == null || !metaMap.Any()) return;
+            foreach (var prop in Properties)
+            {
+                if (prop is not UAVariable propVar) continue;
+                if (metaMap.TryGetValue(prop.Attributes.DisplayName ?? "", out var mapped))
+                {
+                    var value = converter.ConvertToString(propVar.Value, propVar.FullAttributes.DataType.EnumValues);
+                    if (string.IsNullOrWhiteSpace(value)) continue;
+                    switch (mapped)
+                    {
+                        case "description": writePoco.Description = value; break;
+                        case "name": writePoco.Name = value; break;
+                        case "unit": writePoco.Unit = value; break;
+                        case "parentId":
+                            parentIdHandler(value);
+                            break;
+                    }
+                }
+            }
+        }
+        /// <summary>
+        /// Create a stateless timeseries, setting the AssetExternalId property, from this variable.
+        /// </summary>
+        /// <param name="dataSetId">Optional dataSetId</param>
+        /// <param name="metaMap">Configured mapping from property name to timeseries attribute</param>
+        /// <returns>Stateless timeseries to create or null.</returns>
+        public StatelessTimeSeriesCreate? ToStatelessTimeSeries(
+            FullConfig config,
+            IUAClientAccess client,
+            long? dataSetId,
+            Dictionary<string, string>? metaMap)
+        {
+            string? externalId = GetUniqueId(client);
+            var writePoco = new StatelessTimeSeriesCreate
+            {
+                Description = FullAttributes.Description,
+                ExternalId = externalId,
+                AssetExternalId = client.GetUniqueId(ParentId),
+                Name = FullAttributes.DisplayName,
+                LegacyName = externalId,
+                IsString = FullAttributes.DataType.IsString,
+                IsStep = FullAttributes.DataType.IsStep,
+                DataSetId = dataSetId
+            };
+            writePoco.Metadata = BuildMetadata(config, client, true);
+
+            HandleMetaMap(metaMap, writePoco, value => writePoco.AssetExternalId = value, client.StringConverter);
+
+            return writePoco;
+        }
+        /// <summary>
+        /// Create a timeseries object, setting assetId based from <paramref name="nodeToAssetIds"/>.
+        /// </summary>
+        /// <param name="extractor">Active extractor, used for metadata.</param>
+        /// <param name="dataSetId">Optional dataSetId</param>
+        /// <param name="nodeToAssetIds">Mapping from ids to assets, used for creating AssetId</param>
+        /// <param name="metaMap">Configured mapping from property name to timeseries attribute</param>
+        /// <param name="minimal">True to only add minimal metadata.</param>
+        /// <returns>Timeseries to create or null</returns>
+        public TimeSeriesCreate ToTimeseries(
+            FullConfig config,
+            IUAClientAccess client,
+            UAExtractor extractor,
+            long? dataSetId,
+            IDictionary<NodeId, long>? nodeToAssetIds,
+            Dictionary<string, string>? metaMap,
+            bool minimal = false)
+        {
+            string? externalId = GetUniqueId(client);
+
+            if (minimal)
+            {
+                return new TimeSeriesCreate
+                {
+                    ExternalId = externalId,
+                    IsString = FullAttributes.DataType.IsString,
+                    IsStep = FullAttributes.DataType.IsStep,
+                    DataSetId = dataSetId
+                };
+            }
+
+            var writePoco = new TimeSeriesCreate
+            {
+                Description = FullAttributes.Description,
+                ExternalId = externalId,
+                Name = FullAttributes.DisplayName,
+                LegacyName = externalId,
+                IsString = FullAttributes.DataType.IsString,
+                IsStep = FullAttributes.DataType.IsStep,
+                DataSetId = dataSetId
+            };
+
+            if (nodeToAssetIds != null && nodeToAssetIds.TryGetValue(ParentId, out long parent))
+            {
+                writePoco.AssetId = parent;
+            }
+
+            writePoco.Metadata = BuildMetadata(config, client, true);
+
+            HandleMetaMap(metaMap, writePoco, value =>
+            {
+                var id = extractor.State.GetNodeId(value);
+                if (id != null && nodeToAssetIds != null && nodeToAssetIds.TryGetValue(id, out long assetId))
+                {
+                    writePoco.AssetId = assetId;
+                }
+            }, extractor.StringConverter);
+
+            return writePoco;
+        }
+        #endregion
     }
 
     public class UAVariableMember : UAVariable

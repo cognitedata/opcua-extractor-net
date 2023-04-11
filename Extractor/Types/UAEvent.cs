@@ -334,9 +334,9 @@ namespace Cognite.OpcUa.Types
     }
     public class EventFieldValue
     {
-        public TypeField Field { get; }
+        public RawTypeField Field { get; }
         public Variant Value { get; }
-        public EventFieldValue(TypeField field, Variant value)
+        public EventFieldValue(RawTypeField field, Variant value)
         {
             Field = field;
             Value = value;

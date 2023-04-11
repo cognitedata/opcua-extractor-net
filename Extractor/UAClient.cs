@@ -94,9 +94,6 @@ namespace Cognite.OpcUa
             this.Config = config;
             log = provider.GetRequiredService<ILogger<UAClient>>();
             traceLog = provider.GetRequiredService<ILogger<Tracing>>();
-            DataTypeManager = new DataTypeManager(provider.GetRequiredService<ILogger<DataTypeManager>>(),
-                this, config.Extraction.DataTypes);
-            ObjectTypeManager = new NodeTypeManager(provider.GetRequiredService<ILogger<NodeTypeManager>>(), this);
             if (config.Metrics.Nodes != null)
             {
                 metricsManager = new NodeMetricsManager(this, config.Subscriptions, config.Metrics.Nodes);
@@ -108,11 +105,11 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Entrypoint for starting the opcua Session. Must be called before any further requests can be made.
         /// </summary>
-        public async Task Run(CancellationToken token, int timeout = -1)
+        public async Task Run(TypeManager typeManager, CancellationToken token, int timeout = -1)
         {
             liveToken = token;
             await StartSession(timeout);
-            await StartNodeMetrics();
+            await StartNodeMetrics(typeManager);
         }
 
         /// <summary>
@@ -235,7 +232,6 @@ namespace Cognite.OpcUa
 
             // A restarted Session might mean a restarted server, so all server-relevant data must be cleared.
             // This includes any stored NodeId, which may refer to an outdated namespaceIndex
-            eventFields?.Clear();
             nodeOverrides?.Clear();
 
             await LoadAppConfig();
@@ -325,10 +321,10 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Start collecting metrics from configured nodes, if enabled.
         /// </summary>
-        private async Task StartNodeMetrics()
+        private async Task StartNodeMetrics(TypeManager typeManager)
         {
             if (metricsManager == null) return;
-            await metricsManager.StartNodeMetrics(liveToken);
+            await metricsManager.StartNodeMetrics(typeManager, liveToken);
         }
         #endregion
 
@@ -1083,9 +1079,10 @@ namespace Cognite.OpcUa
             Justification = "Bad analysis")]
         public async Task SubscribeToEvents(IEnumerable<EventExtractionState> emitters,
             MonitoredItemNotificationEventHandler subscriptionHandler,
+            Dictionary<NodeId, UAObjectType> eventFields,
             CancellationToken token)
         {
-            var filter = BuildEventFilter();
+            var filter = BuildEventFilter(eventFields);
             LogDump("Event filter", filter);
 
             await AddSubscriptions(
@@ -1163,15 +1160,13 @@ namespace Cognite.OpcUa
         /// <param name="nodeIds">Permitted SourceNode ids</param>
         /// <param name="receivedAfter">Optional, if defined, attempt to filter out events with [ReceiveTimeProperty] > receivedAfter</param>
         /// <returns>The final event filter</returns>
-        public EventFilter BuildEventFilter()
+        public EventFilter BuildEventFilter(Dictionary<NodeId, UAObjectType> eventFields)
         {
             /*
              * Essentially equivalent to SELECT Message, EventId, SourceNode, Time FROM [source] WHERE EventId IN eventIds;
              * using the internal query language in OPC-UA
              */
             var whereClause = new ContentFilter();
-
-            if (eventFields == null) eventFields = new Dictionary<NodeId, UAObjectType>();
 
             if (eventFields.Keys.Any() && ((Config.Events.EventIds?.Any() ?? false) || !Config.Events.AllEvents))
             {
@@ -1193,7 +1188,7 @@ namespace Cognite.OpcUa
 
 
             var fieldList = eventFields
-                .Aggregate((IEnumerable<EventField>)new List<EventField>(), (agg, kvp) => agg.Concat(kvp.Value.CollectedFields))
+                .Aggregate((IEnumerable<TypeField>)new List<TypeField>(), (agg, kvp) => agg.Concat(kvp.Value.CollectedFields))
                 .Distinct();
 
             if (!fieldList.Any())

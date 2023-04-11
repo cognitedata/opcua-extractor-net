@@ -285,7 +285,7 @@ namespace Cognite.OpcUa
             }
             Looper = new Looper(Provider.GetRequiredService<ILogger<Looper>>(), Scheduler, this, Config, pushers);
             historyReader = new HistoryReader(Provider.GetRequiredService<ILogger<HistoryReader>>(),
-                uaClient, this, Config.History, Source.Token);
+                uaClient, this, typeManager, Config.History, Source.Token);
         }
 
         public void InitExternal(CancellationToken token)
@@ -307,7 +307,7 @@ namespace Cognite.OpcUa
                 log.LogInformation("Start UAClient");
                 try
                 {
-                    await uaClient.Run(Source.Token, startTimeout);
+                    await uaClient.Run(typeManager, Source.Token, startTimeout);
                 }
                 catch (OperationCanceledException)
                 {
@@ -713,7 +713,7 @@ namespace Cognite.OpcUa
             {
                 var subscribeStates = State.EmitterStates.Where(state => state.ShouldSubscribe);
 
-                await uaClient.SubscribeToEvents(subscribeStates, Streamer.EventSubscriptionHandler, Source.Token);
+                await uaClient.SubscribeToEvents(subscribeStates, Streamer.EventSubscriptionHandler, typeManager.EventFields, Source.Token);
             }
 
             if (Config.Subscriptions.DataPoints)
@@ -1037,7 +1037,7 @@ namespace Cognite.OpcUa
             {
                 var subscribeStates = State.EmitterStates.Where(state => state.ShouldSubscribe);
 
-                await uaClient.SubscribeToEvents(subscribeStates, Streamer.EventSubscriptionHandler, Source.Token);
+                await uaClient.SubscribeToEvents(subscribeStates, Streamer.EventSubscriptionHandler, typeManager.EventFields, Source.Token);
             }
 
             Interlocked.Increment(ref subscribed);

@@ -5,7 +5,12 @@ using Cognite.OpcUa.Types;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Text.Json;
+using System.Text;
+using Microsoft.Extensions.Logging;
+using CogniteSdk;
 
 namespace Cognite.OpcUa.Nodes
 {
@@ -101,6 +106,7 @@ namespace Cognite.OpcUa.Nodes
         protected NodeId? FallbackParentId { get; set; }
         public NodeId ParentId => Parent?.Id ?? FallbackParentId ?? NodeId.Null;
         public BaseUANode? Parent { get; set; }
+        public NodeSource Source { get; set; } = NodeSource.OPCUA;
 
         public bool Ignore { get; set; }
         public bool IsRawProperty { get; set; }
@@ -220,6 +226,7 @@ namespace Cognite.OpcUa.Nodes
             }
 
             res.Attributes.LoadFromSavedNode(node, typeManager);
+            res.Source = NodeSource.CDF;
             return res;
         }
 
@@ -275,5 +282,174 @@ namespace Cognite.OpcUa.Nodes
             return null;
         }
 
+        public virtual int GetUpdateChecksum(TypeUpdateConfig update, bool dataTypeMetadata, bool nodeTypeMetadata)
+        {
+            if (update == null || !update.AnyUpdate) return 0;
+            int checksum = 0;
+            unchecked
+            {
+                if (update.Context)
+                {
+                    checksum += (ParentId?.GetHashCode() ?? 0);
+                }
+                if (update.Description)
+                {
+                    checksum = checksum * 31 + (Attributes.Description?.GetHashCode(StringComparison.InvariantCulture) ?? 0);
+                }
+                if (update.Name)
+                {
+                    checksum = checksum * 31 + (Attributes.DisplayName?.GetHashCode(StringComparison.InvariantCulture) ?? 0);
+                }
+                if (update.Metadata)
+                {
+                    int metaHash = 0;
+                    if (Properties != null)
+                    {
+                        foreach (var prop in Properties.OrderBy(prop => prop.Attributes.DisplayName))
+                        {
+                            metaHash *= 31;
+                            if (prop.Attributes.DisplayName == null) continue;
+                            if (prop is UAVariable propVariable)
+                            {
+                                metaHash += (prop.Attributes.DisplayName, propVariable.Value?.Value).GetHashCode();
+                            }
+                            if (prop.Properties?.Any() ?? false)
+                            {
+                                metaHash += prop.GetUpdateChecksum(new TypeUpdateConfig { Metadata = true }, false, false);
+                            }
+                        }
+                    }
+                    checksum = checksum * 31 + metaHash;
+                }
+            }
+            return checksum;
+        }
+
+        #region serialization
+        public JsonDocument? ToJson(ILogger log, StringConverter converter, ConverterType type)
+        {
+            var options = new JsonSerializerOptions();
+            converter.AddConverters(options, type);
+
+            using var stream = new MemoryStream();
+            JsonSerializer.Serialize(stream, this, options);
+            stream.Seek(0, SeekOrigin.Begin);
+
+            try
+            {
+                return JsonDocument.Parse(stream);
+            }
+            catch (Exception ex)
+            {
+                stream.Seek(0, SeekOrigin.Begin);
+                log.LogError("Failed to parse JSON data: {Message}, invalid JSON: {Data}", ex.Message, Encoding.UTF8.GetString(stream.ToArray()));
+                return null;
+            }
+        }
+
+        private void PopulateAssetCreate(
+            IUAClientAccess client,
+            long? dataSetId,
+            Dictionary<string, string>? metaMap,
+            AssetCreate asset)
+        {
+            var id = GetUniqueId(client);
+            asset.Description = Attributes.Description;
+            asset.ExternalId = id;
+            asset.Name = string.IsNullOrEmpty(Attributes.DisplayName) ? id : Attributes.DisplayName;
+            asset.DataSetId = dataSetId;
+            if (ParentId != null && !ParentId.IsNullNodeId)
+            {
+                asset.ParentExternalId = client.GetUniqueId(ParentId);
+            }
+            if (Properties != null && Properties.Any() && (metaMap?.Any() ?? false))
+            {
+                foreach (var prop in Properties)
+                {
+                    if (prop is not UAVariable propVar) continue;
+                    if (metaMap.TryGetValue(prop.Attributes.DisplayName ?? "", out var mapped))
+                    {
+                        var value = client.StringConverter.ConvertToString(propVar.Value, propVar.FullAttributes.DataType.EnumValues);
+                        if (string.IsNullOrWhiteSpace(value)) continue;
+                        switch (mapped)
+                        {
+                            case "description": asset.Description = value; break;
+                            case "name": asset.Name = value; break;
+                            case "parentId": asset.ParentExternalId = value; break;
+                        }
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Convert to CDF Asset.
+        /// </summary>
+        /// <param name="config">Active configuration object</param>
+        /// <param name="client">Access to OPC-UA session</param>
+        /// <param name="converter">StringConverter for converting fields</param>
+        /// <param name="dataSetId">Optional dataSetId</param>
+        /// <param name="metaMap">Map from metadata to asset attributes.</param>
+        /// <returns></returns>
+        public AssetCreate ToCDFAsset(
+            FullConfig config,
+            IUAClientAccess client,
+            long? dataSetId,
+            Dictionary<string, string>? metaMap)
+        {
+            var asset = new AssetCreate();
+            PopulateAssetCreate(client, dataSetId, metaMap, asset);
+            asset.Metadata = BuildMetadata(config, client, true);
+
+            return asset;
+        }
+        protected Dictionary<string, string> BuildMetadataBase(Dictionary<string, string>? extras, IUAClientAccess client)
+        {
+            var result = extras ?? new Dictionary<string, string>();
+
+            if (Properties == null) return result;
+
+            foreach (var prop in Properties)
+            {
+                if (prop != null && !string.IsNullOrEmpty(prop.Attributes.DisplayName))
+                {
+                    if (prop is UAVariable variable)
+                    {
+                        result[prop.Attributes.DisplayName] = client.StringConverter.ConvertToString(variable.Value, variable.FullAttributes.DataType?.EnumValues)
+                            ?? variable.Value.ToString();
+                    }
+
+                    if (prop.Properties != null)
+                    {
+                        var nestedProperties = prop.BuildMetadataBase(null, client);
+                        foreach (var sprop in nestedProperties)
+                        {
+                            result[$"{prop.Attributes.DisplayName}_{sprop.Key}"] = sprop.Value;
+                        }
+                    }
+                }
+            }
+            return result;
+        }
+
+
+        /// <summary>
+        /// Return a dictionary of metadata fields for this node.
+        /// </summary>
+        /// <param name="config">Extraction config object</param>
+        /// <param name="manager">DataTypeManager used to get information about the datatype</param>
+        /// <param name="converter">StringConverter used for building metadata</param>
+        /// <param name="getExtras">True to get extra metadata</param>
+        /// <returns>Created metadata dictionary.</returns>
+        public Dictionary<string, string> BuildMetadata(FullConfig config, IUAClientAccess client, bool getExtras)
+        {
+            Dictionary<string, string>? extras = null;
+            if (getExtras)
+            {
+                extras = GetExtraMetadata(config, client);
+            }
+            return BuildMetadataBase(extras, client);
+        }
+        #endregion
     }
 }

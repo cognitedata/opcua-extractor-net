@@ -18,6 +18,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using Cognite.Extensions;
 using Cognite.Extractor.Common;
 using Cognite.OpcUa.Config;
+using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
 using CogniteSdk;
@@ -63,7 +64,7 @@ namespace Cognite.OpcUa.Pushers
         public static JsonElement? CreateRawUpdate(
             ILogger log,
             StringConverter converter,
-            UANode node,
+            BaseUANode node,
             RawRow<Dictionary<string, JsonElement>>? raw,
             ConverterType type)
         {
@@ -95,9 +96,8 @@ namespace Cognite.OpcUa.Pushers
         /// <param name="nodeToAssetIds">Map from NodeIds to assetIds, necessary for setting parents</param>
         /// <returns>Update object, or null if updating was unnecessary</returns>
         public static TimeSeriesUpdate? GetTSUpdate(
-            ExtractionConfig config,
-            DataTypeManager manager,
-            StringConverter converter,
+            FullConfig config,
+            IUAClientAccess client,
             TimeSeries old,
             UAVariable newTs,
             TypeUpdateConfig update,
@@ -117,17 +117,17 @@ namespace Cognite.OpcUa.Pushers
                 }
             }
 
-            var newDesc = Sanitation.Truncate(newTs.Description, Sanitation.TimeSeriesDescriptionMax);
+            var newDesc = Sanitation.Truncate(newTs.FullAttributes.Description, Sanitation.TimeSeriesDescriptionMax);
             if (update.Description && !string.IsNullOrEmpty(newDesc) && newDesc != old.Description)
                 tsUpdate.Description = new UpdateNullable<string>(newDesc);
 
-            var newName = Sanitation.Truncate(newTs.DisplayName, Sanitation.TimeSeriesNameMax);
+            var newName = Sanitation.Truncate(newTs.FullAttributes.DisplayName, Sanitation.TimeSeriesNameMax);
             if (update.Name && !string.IsNullOrEmpty(newName) && newName != old.Name)
                 tsUpdate.Name = new UpdateNullable<string>(newName);
 
             if (update.Metadata)
             {
-                var newMetaData = newTs.BuildMetadata(config, manager, converter, true)
+                var newMetaData = newTs.BuildMetadata(config, client, true)
                     .Where(kvp => !string.IsNullOrEmpty(kvp.Value))
                     .ToDictionary(kvp => kvp.Key, kvp => kvp.Value)
                     .SanitizeMetadata(
@@ -155,9 +155,9 @@ namespace Cognite.OpcUa.Pushers
         /// <param name="update">Configuration for which fields to update</param>
         /// <returns>Update object, or null if updating was unnecessary</returns>
         public static AssetUpdate? GetAssetUpdate(
-            ExtractionConfig config,
+            FullConfig config,
             Asset old,
-            UANode newAsset,
+            BaseUANode newAsset,
             UAExtractor extractor,
             TypeUpdateConfig update)
         {
@@ -174,15 +174,15 @@ namespace Cognite.OpcUa.Pushers
                 }
             }
 
-            if (update.Description && !string.IsNullOrEmpty(newAsset.Description) && newAsset.Description != old.Description)
-                assetUpdate.Description = new UpdateNullable<string>(newAsset.Description.Truncate(Sanitation.AssetDescriptionMax)!);
+            if (update.Description && !string.IsNullOrEmpty(newAsset.Attributes.Description) && newAsset.Attributes.Description != old.Description)
+                assetUpdate.Description = new UpdateNullable<string>(newAsset.Attributes.Description.Truncate(Sanitation.AssetDescriptionMax)!);
 
-            if (update.Name && !string.IsNullOrEmpty(newAsset.DisplayName) && newAsset.DisplayName != old.Name)
-                assetUpdate.Name = new UpdateNullable<string>(newAsset.DisplayName.Truncate(Sanitation.AssetNameMax)!);
+            if (update.Name && !string.IsNullOrEmpty(newAsset.Attributes.DisplayName) && newAsset.Attributes.DisplayName != old.Name)
+                assetUpdate.Name = new UpdateNullable<string>(newAsset.Attributes.DisplayName.Truncate(Sanitation.AssetNameMax)!);
 
             if (update.Metadata)
             {
-                var newMetaData = newAsset.BuildMetadata(config, extractor.DataTypeManager, extractor.StringConverter, true)
+                var newMetaData = newAsset.BuildMetadata(config, extractor, true)
                     .Where(kvp => !string.IsNullOrEmpty(kvp.Value))
                     .ToDictionary(kvp => kvp.Key, kvp => kvp.Value)
                     .SanitizeMetadata(
