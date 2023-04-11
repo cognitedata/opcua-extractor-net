@@ -48,8 +48,8 @@ namespace Cognite.OpcUa
         private readonly ConcurrentDictionary<string, EventExtractionState> emitterStatesByExtId =
             new ConcurrentDictionary<string, EventExtractionState>();
 
-        public ConcurrentDictionary<NodeId, UAEventType> ActiveEvents { get; }
-            = new ConcurrentDictionary<NodeId, UAEventType>();
+        public ConcurrentDictionary<NodeId, UAObjectType> ActiveEvents { get; }
+            = new ConcurrentDictionary<NodeId, UAObjectType>();
 
         private readonly ConcurrentDictionary<NodeId, MappedNode> mappedNodes =
             new ConcurrentDictionary<NodeId, MappedNode>();

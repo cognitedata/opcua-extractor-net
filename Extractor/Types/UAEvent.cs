@@ -17,6 +17,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using Cognite.Extensions;
 using Cognite.Extractor.Common;
+using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.Pushers;
 using Cognite.OpcUa.TypeCollectors;
 using CogniteSdk;
@@ -58,7 +59,7 @@ namespace Cognite.OpcUa.Types
         /// <summary>
         /// NodeId of the eventType of this event.
         /// </summary>
-        public UAEventType? EventType { get; set; }
+        public UAObjectType? EventType { get; set; }
         /// <summary>
         /// Metadata fields
         /// </summary>
@@ -75,7 +76,7 @@ namespace Cognite.OpcUa.Types
             builder.AppendLine();
             builder.AppendFormat(CultureInfo.InvariantCulture, "Time: {0}", Time);
             builder.AppendLine();
-            builder.AppendFormat(CultureInfo.InvariantCulture, "Type: {0}", EventType?.DisplayName);
+            builder.AppendFormat(CultureInfo.InvariantCulture, "Type: {0}", EventType?.Attributes.DisplayName);
             builder.AppendLine();
             builder.AppendFormat(CultureInfo.InvariantCulture, "Emitter: {0}", EmittingNode);
             builder.AppendLine();
@@ -122,7 +123,7 @@ namespace Cognite.OpcUa.Types
                     {
                         next[field.Field.BrowsePath[i].Name] = current = new EventFieldNode();
                     }
-                    next = current.Children;
+                    next = current!.Children;
                 }
                 if (current != null)
                 {
@@ -239,7 +240,7 @@ namespace Cognite.OpcUa.Types
 
             var finalMetaData = new Dictionary<string, string>();
             finalMetaData["Emitter"] = client.GetUniqueId(EmittingNode) ?? "null";
-            finalMetaData["TypeName"] = EventType?.DisplayName?.Text ?? "null";
+            finalMetaData["TypeName"] = EventType?.Attributes.DisplayName ?? "null";
             if (MetaData == null)
             {
                 evt.Metadata = finalMetaData;
@@ -333,9 +334,9 @@ namespace Cognite.OpcUa.Types
     }
     public class EventFieldValue
     {
-        public EventField Field { get; }
+        public TypeField Field { get; }
         public Variant Value { get; }
-        public EventFieldValue(EventField field, Variant value)
+        public EventFieldValue(TypeField field, Variant value)
         {
             Field = field;
             Value = value;

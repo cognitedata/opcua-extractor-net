@@ -1,6 +1,7 @@
 ﻿using Cognite.OpcUa.Config;
 using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.TypeCollectors;
+using Cognite.OpcUa.Types;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
@@ -266,6 +267,11 @@ namespace Cognite.OpcUa.Nodes
                 return refType;
             }
 
+            return null;
+        }
+
+        public virtual Dictionary<string, string>? GetExtraMetadata(FullConfig config, IUAClientAccess client)
+        {
             return null;
         }
 

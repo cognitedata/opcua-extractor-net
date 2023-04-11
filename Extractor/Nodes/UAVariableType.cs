@@ -1,8 +1,10 @@
 ﻿using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.TypeCollectors;
+using Cognite.OpcUa.Types;
 using Opc.Ua;
 
 namespace Cognite.OpcUa.Nodes
@@ -94,5 +96,32 @@ namespace Cognite.OpcUa.Nodes
 
         public override BaseNodeAttributes Attributes => FullAttributes;
         public VariableTypeAttributes FullAttributes { get; }
+
+        public override Dictionary<string, string>? GetExtraMetadata(FullConfig config, IUAClientAccess client)
+        {
+            Dictionary<string, string>? fields = new Dictionary<string, string>();
+            var dt = FullAttributes.DataType;
+            if (dt.EnumValues != null)
+            {
+                foreach (var kvp in dt.EnumValues)
+                {
+                    fields[kvp.Key.ToString(CultureInfo.InvariantCulture)] = kvp.Value;
+                }
+            }
+            if (config.Extraction.DataTypes.DataTypeMetadata)
+            {
+                if (dt.Id.NamespaceIndex == 0)
+                {
+                    fields["dataType"] = DataTypes.GetBuiltInType(dt.Id).ToString();
+                }
+                else
+                {
+                    fields["dataType"] = dt.Attributes.DisplayName ?? dt.GetUniqueId(client) ?? "null";
+                }
+            }
+            fields["Value"] = client.StringConverter.ConvertToString(FullAttributes.Value, dt.EnumValues);
+
+            return fields;
+        }
     }
 }

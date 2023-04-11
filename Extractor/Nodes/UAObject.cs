@@ -1,6 +1,7 @@
 ﻿using Cognite.OpcUa.Config;
 using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.TypeCollectors;
+using Cognite.OpcUa.Types;
 using Opc.Ua;
 using System.Collections.Generic;
 
@@ -84,5 +85,14 @@ namespace Cognite.OpcUa.Nodes
         public ObjectAttributes FullAttributes { get; }
 
         public override NodeId? TypeDefinition => FullAttributes.TypeDefinition?.Id;
+
+        public override Dictionary<string, string>? GetExtraMetadata(FullConfig config, IUAClientAccess client)
+        {
+            if (config.Extraction.NodeTypes.Metadata && FullAttributes.TypeDefinition?.Attributes?.DisplayName != null)
+            {
+                return new Dictionary<string, string> { { "TypeDefinition", FullAttributes.TypeDefinition.Attributes.DisplayName } };
+            }
+            return null;
+        }
     }
 }

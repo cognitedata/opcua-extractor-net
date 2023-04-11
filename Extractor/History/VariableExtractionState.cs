@@ -16,6 +16,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using Cognite.OpcUa.Nodes;
+using Cognite.OpcUa.Types;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
@@ -58,7 +59,7 @@ namespace Cognite.OpcUa.History
         {
             DataType = variable.FullAttributes.DataType;
             ArrayDimensions = variable.ArrayDimensions;
-            DisplayName = variable.DisplayName ?? "";
+            DisplayName = variable.Attributes.DisplayName ?? "";
             ShouldSubscribe = subscription;
             AsEvents = variable.AsEvents;
             if (frontfill)

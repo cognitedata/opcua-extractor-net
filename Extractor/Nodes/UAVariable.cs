@@ -1,12 +1,14 @@
 ﻿using Cognite.OpcUa.Config;
 using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.TypeCollectors;
+using Cognite.OpcUa.Types;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using Serilog.Debugging;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using System.Linq;
 
 namespace Cognite.OpcUa.Nodes
@@ -246,6 +248,39 @@ namespace Cognite.OpcUa.Nodes
         public virtual (NodeId, int) DestinationId()
         {
             return (Id, -1);
+        }
+
+        public override Dictionary<string, string>? GetExtraMetadata(FullConfig config, IUAClientAccess client)
+        {
+            Dictionary<string, string>? fields = null;
+            if (config.Extraction.NodeTypes.Metadata && FullAttributes.TypeDefinition?.Attributes?.DisplayName != null)
+            {
+                fields ??= new Dictionary<string, string>();
+                fields["TypeDefinition"] = FullAttributes.TypeDefinition.Attributes.DisplayName;
+            }
+
+            var dt = FullAttributes.DataType;
+            if (dt.EnumValues != null)
+            {
+                fields ??= new Dictionary<string, string>();
+                foreach (var kvp in dt.EnumValues)
+                {
+                    fields[kvp.Key.ToString(CultureInfo.InvariantCulture)] = kvp.Value;
+                }
+            }
+            if (config.Extraction.DataTypes.DataTypeMetadata)
+            {
+                fields ??= new Dictionary<string, string>();
+                if (dt.Id.NamespaceIndex == 0)
+                {
+                    fields["dataType"] = DataTypes.GetBuiltInType(dt.Id).ToString();
+                }
+                else
+                {
+                    fields["dataType"] = dt.Attributes.DisplayName ?? dt.GetUniqueId(client) ?? "null";
+                }
+            }
+            return fields;
         }
     }
 
