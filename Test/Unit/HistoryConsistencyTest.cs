@@ -2,6 +2,7 @@
 using Cognite.OpcUa;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
+using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -117,7 +118,7 @@ namespace Test.Unit
             cfg.Throttling.MaxNodeParallelism = nodeParallelism;
             cfg.StartTime = tester.HistoryStart.AddSeconds(-10).ToUnixTimeMilliseconds().ToString();
 
-            using var reader = new HistoryReader(logger, tester.Client, extractor, cfg, tester.Source.Token);
+            using var reader = new HistoryReader(logger, tester.Client, extractor, extractor.TypeManager, cfg, tester.Source.Token);
 
             var dt = new UADataType(DataTypeIds.Double);
             var dt2 = new UADataType(DataTypeIds.String);
@@ -130,7 +131,7 @@ namespace Test.Unit
                         idx == 2 ? dt2 : dt,
                         idx == 1 ? 4 : 0,
                         id),
-                    true, true))
+                    true, true, true))
                 .ToList();
 
             var start = backfill ? tester.HistoryStart.AddSeconds(5) : tester.HistoryStart;
@@ -196,7 +197,7 @@ namespace Test.Unit
             cfg.Throttling.MaxNodeParallelism = nodeParallelism;
             cfg.StartTime = tester.HistoryStart.AddSeconds(-10).ToUnixTimeMilliseconds().ToString();
 
-            using var reader = new HistoryReader(logger, tester.Client, extractor, cfg, tester.Source.Token);
+            using var reader = new HistoryReader(logger, tester.Client, extractor, extractor.TypeManager, cfg, tester.Source.Token);
 
             var states = new[]
             {
@@ -217,7 +218,9 @@ namespace Test.Unit
                 .GetField("eventQueue", BindingFlags.NonPublic | BindingFlags.Instance)
                 .GetValue(extractor.Streamer);
 
-            var fields = await tester.Client.GetEventFields(null, tester.Source.Token);
+            await extractor.TypeManager.LoadTypeData(tester.Source.Token);
+            extractor.TypeManager.BuildTypeInfo();
+            var fields = extractor.TypeManager.EventFields;
             foreach (var pair in fields)
             {
                 extractor.State.ActiveEvents[pair.Key] = pair.Value;

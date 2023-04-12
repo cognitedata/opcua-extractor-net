@@ -1,5 +1,6 @@
 ﻿using Cognite.Extractor.Common;
 using Cognite.OpcUa;
+using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
@@ -22,37 +23,37 @@ namespace Test.Unit
         public void TestSortNodes()
         {
             // Empty
-            IEnumerable<UANode> objects;
+            IEnumerable<BaseUANode> objects;
             IEnumerable<UAVariable> variables;
-            (objects, variables) = ExtractorUtils.SortNodes(Enumerable.Empty<UANode>());
+            (objects, variables) = ExtractorUtils.SortNodes(Enumerable.Empty<BaseUANode>());
             Assert.Empty(objects);
             Assert.Empty(variables);
 
             // Null
             Assert.Throws<ArgumentNullException>(() => ExtractorUtils.SortNodes(null));
 
-            var arrParent = new UAVariable(new NodeId("arr1"), "arr1", NodeId.Null);
-            arrParent.VariableAttributes.ValueRank = 1;
-            arrParent.VariableAttributes.ArrayDimensions = new[] { 2 };
+            var arrParent = new UAVariable(new NodeId("arr1"), "arr1", null, null, NodeId.Null, null);
+            arrParent.FullAttributes.ValueRank = 1;
+            arrParent.FullAttributes.ArrayDimensions = new[] { 2 };
             var children = arrParent.CreateTimeseries();
             // Populated
-            var nodes = new UANode[]
+            var nodes = new BaseUANode[]
             {
-                new UANode(new NodeId("object1"), "obj1", NodeId.Null, NodeClass.Object),
-                new UANode(new NodeId("object2"), "obj2", NodeId.Null, NodeClass.Object),
-                new UAVariable(new NodeId("var1"), "var1", NodeId.Null),
-                new UAVariable(new NodeId("var2"), "var2", NodeId.Null),
+                new UAObject(new NodeId("object1"), "obj1", null, null, NodeId.Null, null),
+                new UAObject(new NodeId("object2"), "obj2", null, null, NodeId.Null, null),
+                new UAVariable(new NodeId("var1"), "var1", null, null, NodeId.Null, null),
+                new UAVariable(new NodeId("var2"), "var2", null, null, NodeId.Null, null),
                 arrParent,
-                new UAVariable(new NodeId("arr2"), "arr2", NodeId.Null)
+                new UAVariable(new NodeId("arr2"), "arr2", null, null, NodeId.Null, null)
             };
-            (nodes[5].Attributes as Cognite.OpcUa.Types.VariableAttributes).ValueRank = 1;
-            (nodes[5].Attributes as Cognite.OpcUa.Types.VariableAttributes).ArrayDimensions = new[] { 2 };
+            (nodes[5].Attributes as Cognite.OpcUa.Nodes.VariableAttributes).ValueRank = 1;
+            (nodes[5].Attributes as Cognite.OpcUa.Nodes.VariableAttributes).ArrayDimensions = new[] { 2 };
 
             (objects, variables) = ExtractorUtils.SortNodes(nodes.Concat(children));
             Assert.Equal(4, objects.Count());
             Assert.Equal(4, variables.Count());
 
-            Assert.Equal(8, objects.Concat(variables).DistinctBy(node => (node.Id, node is UAVariable variable ? variable.Index : -1)).Count());
+            Assert.Equal(8, objects.Concat(variables).DistinctBy(node => (node.Id, node is UAVariableMember variable ? variable.Index : -1)).Count());
         }
         [Fact]
         public void TestGetRootException()

@@ -2,6 +2,7 @@
 using Cognite.Extractor.Common;
 using Cognite.OpcUa;
 using Cognite.OpcUa.History;
+using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
 using Opc.Ua;
@@ -95,10 +96,10 @@ namespace Test.Unit
 
             var state1 = new VariableExtractionState(tester.Client,
                 CommonTestUtils.GetSimpleVariable("test-ts-double", new UADataType(DataTypeIds.Double)),
-                true, true);
+                true, true, true);
             var state2 = new VariableExtractionState(tester.Client,
                 CommonTestUtils.GetSimpleVariable("test-ts-string", new UADataType(DataTypeIds.String)),
-                true, true);
+                true, true, true);
 
 
             extractor.State.SetNodeState(state1, "test-ts-double");
@@ -180,7 +181,7 @@ namespace Test.Unit
 
             var state3 = new VariableExtractionState(tester.Client,
                 CommonTestUtils.GetSimpleVariable("test-ts-double-2", new UADataType(DataTypeIds.Double)),
-                true, true);
+                true, true, true);
             extractor.State.SetNodeState(state3, "test-ts-double-2");
 
             // The error response is not easy to parse, and the most reasonable thing is to just ignore it.
@@ -222,7 +223,7 @@ namespace Test.Unit
             Assert.Null(await pusher.PushEvents(invalidEvents, tester.Source.Token));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_skipped_events_influx", 2));
 
-            var eventType = new UAEventType(new NodeId("type"), "EventType");
+            var eventType = new UAObjectType(new NodeId("type"));
             extractor.State.ActiveEvents[eventType.Id] = eventType;
 
             var time = DateTime.UtcNow;
@@ -294,7 +295,7 @@ namespace Test.Unit
                 Time = time,
                 EmittingNode = new NodeId("emitter"),
                 SourceNode = new NodeId("source"),
-                EventType = new UAEventType(new NodeId("type"), "EventType"),
+                EventType = new UAObjectType(new NodeId("type")),
                 EventId = "someid3"
             }).ToArray();
 
@@ -313,11 +314,11 @@ namespace Test.Unit
             VariableExtractionState[] GetStates()
             {
                 var state1 = new VariableExtractionState(tester.Client,
-                    CommonTestUtils.GetSimpleVariable("double", new UADataType(DataTypeIds.Double)), true, true);
+                    CommonTestUtils.GetSimpleVariable("double", new UADataType(DataTypeIds.Double)), true, true, true);
                 var state2 = new VariableExtractionState(tester.Client,
-                    CommonTestUtils.GetSimpleVariable("string", new UADataType(DataTypeIds.String)), true, true);
+                    CommonTestUtils.GetSimpleVariable("string", new UADataType(DataTypeIds.String)), true, true, true);
                 var state3 = new VariableExtractionState(tester.Client,
-                    CommonTestUtils.GetSimpleVariable("array", new UADataType(DataTypeIds.Double), 3), true, true);
+                    CommonTestUtils.GetSimpleVariable("array", new UADataType(DataTypeIds.Double), 3), true, true, true);
                 extractor.State.SetNodeState(state1, state1.Id);
                 extractor.State.SetNodeState(state2, state2.Id);
                 extractor.State.SetNodeState(state3, state3.Id);
@@ -446,28 +447,28 @@ namespace Test.Unit
                 {
                     Time = GetTs(1000),
                     EmittingNode = new NodeId("emitter"),
-                    EventType = new UAEventType(new NodeId("type"), "EventType"),
+                    EventType = new UAObjectType (new NodeId("type")),
                     EventId = "someid"
                 },
                 new UAEvent
                 {
                     Time = GetTs(3000),
                     EmittingNode = new NodeId("emitter"),
-                    EventType = new UAEventType(new NodeId("type2"), "EventType2"),
+                    EventType = new UAObjectType(new NodeId("type2")),
                     EventId = "someid2"
                 },
                 new UAEvent
                 {
                     Time = GetTs(1000),
                     EmittingNode = new NodeId("emitter2"),
-                    EventType = new UAEventType(new NodeId("type"), "EventType"),
+                    EventType = new UAObjectType (new NodeId("type")),
                     EventId = "someid3"
                 },
                 new UAEvent
                 {
                     Time = GetTs(2000),
                     EmittingNode = new NodeId("emitter2"),
-                    EventType = new UAEventType(new NodeId("type"), "EventType"),
+                    EventType = new UAObjectType (new NodeId("type")),
                     EventId = "someid4"
                 }
             };

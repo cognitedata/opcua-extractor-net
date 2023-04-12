@@ -19,14 +19,14 @@ namespace Cognite.OpcUa.Nodes
 {
     public class VariableAttributes : BaseNodeAttributes
     {
-        public bool Historizing { get; private set; }
-        public int ValueRank { get; private set; }
-        public UADataType DataType { get; private set; } = null!;
+        public bool Historizing { get; set; }
+        public int ValueRank { get; set; }
+        public UADataType DataType { get; set; } = null!;
         public int[]? ArrayDimensions { get; set; }
-        public byte AccessLevel { get; private set; }
-        public Variant? Value { get; private set; }
+        public byte AccessLevel { get; set; }
+        public Variant? Value { get; set; }
 
-        public UAVariableType? TypeDefinition { get; private set; }
+        public UAVariableType? TypeDefinition { get; set; }
 
         public VariableAttributes(UAVariableType? type) : base(NodeClass.Variable)
         {

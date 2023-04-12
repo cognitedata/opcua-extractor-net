@@ -29,7 +29,7 @@ namespace Cognite.OpcUa.Nodes
         /// <summary>
         /// OPC-UA Description attribute
         /// </summary>
-        public string? Description { get; private set; }
+        public string? Description { get; set; }
         /// <summary>
         /// True if this attribute collection has had its data populated at some point.
         /// </summary>
@@ -37,7 +37,7 @@ namespace Cognite.OpcUa.Nodes
         /// <summary>
         /// List of properties belonging to this node.
         /// </summary>
-        public IList<BaseUANode>? Properties { get; private set; }
+        public IList<BaseUANode>? Properties { get; set; }
         /// <summary>
         /// NodeClass of this node
         /// </summary>

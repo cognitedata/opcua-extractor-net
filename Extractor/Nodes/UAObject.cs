@@ -11,11 +11,11 @@ namespace Cognite.OpcUa.Nodes
 {
     public class ObjectAttributes : BaseNodeAttributes
     {
-        public byte EventNotifier { get; private set; }
+        public byte EventNotifier { get; set; }
         public bool? SubscribeToEventsOverride { get; set; }
         public bool? ReadEventHistoryOverride { get; set; }
 
-        public UAObjectType? TypeDefinition { get; private set; }
+        public UAObjectType? TypeDefinition { get; set; }
 
         public ObjectAttributes(UAObjectType? objectType) : base(NodeClass.Object)
         {

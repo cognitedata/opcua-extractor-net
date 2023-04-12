@@ -191,7 +191,7 @@ namespace Cognite.OpcUa.NodeSources
                 } 
             }
 
-            if (node is UAVariable variable && variable.NodeClass == NodeClass.Variable && Extractor.State.GetNodeState(node.Id) != null)
+            if (node is UAVariable variable)
             {
                 bool subscribe = variable.FullAttributes.ShouldSubscribe(Config);
                 bool history = variable.FullAttributes.ShouldReadHistory(Config);

@@ -1,5 +1,6 @@
 ﻿using Cognite.OpcUa;
 using Cognite.OpcUa.History;
+using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.Types;
 using Opc.Ua;
 using Opc.Ua.Client;
@@ -54,8 +55,8 @@ namespace Test.Unit
             var start = DateTime.UtcNow;
 
             var state = new VariableExtractionState(tester.Client,
-                new UAVariable(new NodeId("id"), "test", NodeId.Null),
-                false, false);
+                new UAVariable(new NodeId("id"), "test", null, null, NodeId.Null, null),
+                false, false, true);
             state.InitToEmpty();
             state.FinalizeRangeInit();
 
@@ -181,8 +182,8 @@ namespace Test.Unit
             var start = DateTime.UtcNow;
 
             var state = new VariableExtractionState(tester.Client,
-                new UAVariable(new NodeId("id"), "test", NodeId.Null),
-                true, true);
+                new UAVariable(new NodeId("id"), "test", null, null, NodeId.Null, null),
+                true, true, true);
             state.InitToEmpty();
             state.FinalizeRangeInit();
             state.UpdateFromBackfill(DateTime.MaxValue, true);
@@ -283,9 +284,9 @@ namespace Test.Unit
         public void TestDataHandler()
         {
             using var extractor = tester.BuildExtractor();
-            var var1 = new UAVariable(new NodeId("id"), "node", NodeId.Null);
-            var1.VariableAttributes.DataType = new UADataType(DataTypeIds.Double);
-            var node = new VariableExtractionState(tester.Client, var1, true, true);
+            var var1 = new UAVariable(new NodeId("id"), "node", null, null, NodeId.Null, null);
+            var1.FullAttributes.DataType = new UADataType(DataTypeIds.Double);
+            var node = new VariableExtractionState(tester.Client, var1, true, true, true);
             extractor.State.SetNodeState(node, "id");
 
             var queue = (Queue<UADataPoint>)extractor.Streamer.GetType()
@@ -342,9 +343,9 @@ namespace Test.Unit
         {
             CommonTestUtils.ResetMetricValue("opcua_array_points_missed");
             using var extractor = tester.BuildExtractor();
-            var var1 = new UAVariable(new NodeId("id"), "node", NodeId.Null);
-            var1.VariableAttributes.DataType = new UADataType(DataTypeIds.Double);
-            var node1 = new VariableExtractionState(tester.Client, var1, true, true);
+            var var1 = new UAVariable(new NodeId("id"), "node", null, null, NodeId.Null, null);
+            var1.FullAttributes.DataType = new UADataType(DataTypeIds.Double);
+            var node1 = new VariableExtractionState(tester.Client, var1, true, true, true);
 
             var ts = DateTime.UtcNow;
 
@@ -370,7 +371,7 @@ namespace Test.Unit
             // array node
             var node2 = new VariableExtractionState(tester.Client,
                 CommonTestUtils.GetSimpleVariable("node2", new UADataType(DataTypeIds.Double), 4),
-                true, true);
+                true, true, true);
 
             // scalar value on array
             var dps4 = extractor.Streamer.ToDataPoint(new DataValue(1.0, StatusCodes.Good, ts), node2);
@@ -414,7 +415,7 @@ namespace Test.Unit
             // Very long array name
             var node3 = new VariableExtractionState(tester.Client,
                 CommonTestUtils.GetSimpleVariable(new string('x', 300), new UADataType(DataTypeIds.Double), 20),
-                true, true);
+                true, true, true);
             var dps8 = extractor.Streamer.ToDataPoint(new DataValue(Enumerable.Range(1, 20).Select(val => (double)val).ToArray(),
                 StatusCodes.Good, ts), node3);
             Assert.Equal(20, dps8.Count());
@@ -583,10 +584,10 @@ namespace Test.Unit
         {
             CommonTestUtils.ResetMetricValue("opcua_array_points_missed");
             using var extractor = tester.BuildExtractor();
-            var var1 = new UAVariable(new NodeId("id"), "node", NodeId.Null);
-            var1.VariableAttributes.DataType = new UADataType(DataTypeIds.Double);
+            var var1 = new UAVariable(new NodeId("id"), "node", null, null, NodeId.Null, null);
+            var1.FullAttributes.DataType = new UADataType(DataTypeIds.Double);
             var1.AsEvents = true;
-            var node1 = new VariableExtractionState(tester.Client, var1, true, true);
+            var node1 = new VariableExtractionState(tester.Client, var1, true, true, true);
 
             extractor.Streamer.AllowEvents = true;
 

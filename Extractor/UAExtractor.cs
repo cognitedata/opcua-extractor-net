@@ -64,7 +64,7 @@ namespace Cognite.OpcUa
         public StringConverter StringConverter => uaClient.StringConverter;
         private readonly PubSubManager? pubSubManager;
 
-        private readonly TypeManager typeManager;
+        public TypeManager TypeManager { get; }
 
         private NodeSetSource? nodeSetSource;
 
@@ -131,7 +131,7 @@ namespace Cognite.OpcUa
             State = new State();
             Streamer = new Streamer(provider.GetRequiredService<ILogger<Streamer>>(), this, config);
             StateStorage = stateStore;
-            typeManager = new TypeManager(Config, uaClient, provider.GetRequiredService<ILogger<TypeManager>>());
+            TypeManager = new TypeManager(Config, uaClient, provider.GetRequiredService<ILogger<TypeManager>>());
 
             if (config.FailureBuffer.Enabled)
             {
@@ -285,7 +285,7 @@ namespace Cognite.OpcUa
             }
             Looper = new Looper(Provider.GetRequiredService<ILogger<Looper>>(), Scheduler, this, Config, pushers);
             historyReader = new HistoryReader(Provider.GetRequiredService<ILogger<HistoryReader>>(),
-                uaClient, this, typeManager, Config.History, Source.Token);
+                uaClient, this, TypeManager, Config.History, Source.Token);
         }
 
         public void InitExternal(CancellationToken token)
@@ -307,7 +307,7 @@ namespace Cognite.OpcUa
                 log.LogInformation("Start UAClient");
                 try
                 {
-                    await uaClient.Run(typeManager, Source.Token, startTimeout);
+                    await uaClient.Run(TypeManager, Source.Token, startTimeout);
                 }
                 catch (OperationCanceledException)
                 {
@@ -338,7 +338,7 @@ namespace Cognite.OpcUa
                 Config.Source.LimitToServerConfig = false;
                 Config.Source.NodeSetSource.Types = true;
                 Config.Source.NodeSetSource.Instance = true;
-                nodeSetSource = new NodeSetSource(Provider.GetRequiredService<ILogger<NodeSetSource>>(), Config, this, uaClient, typeManager);
+                nodeSetSource = new NodeSetSource(Provider.GetRequiredService<ILogger<NodeSetSource>>(), Config, this, uaClient, TypeManager);
                 nodeSetSource.Build();
             }
 
@@ -600,7 +600,7 @@ namespace Cognite.OpcUa
             {
                 log.LogDebug("Begin fetching data from CDF");
                 var handler = new CDFNodeSource(Provider.GetRequiredService<ILogger<CDFNodeSource>>(),
-                    Config, this, uaClient, pushers.OfType<CDFPusher>().First(), typeManager);
+                    Config, this, uaClient, pushers.OfType<CDFPusher>().First(), TypeManager);
                 await handler.ReadRawNodes(Source.Token);
 
                 result = await handler.ParseResults(Source.Token);
@@ -625,12 +625,12 @@ namespace Cognite.OpcUa
                 log.LogDebug("Begin fetching data from internal node set");
                 if (nodeSetSource == null)
                 {
-                    nodeSetSource = new NodeSetSource(Provider.GetRequiredService<ILogger<NodeSetSource>>(), Config, this, uaClient, typeManager);
+                    nodeSetSource = new NodeSetSource(Provider.GetRequiredService<ILogger<NodeSetSource>>(), Config, this, uaClient, TypeManager);
                 }
 
                 if (!Config.Source.NodeSetSource.Types)
                 {
-                    await typeManager.LoadTypeData(Source.Token);
+                    await TypeManager.LoadTypeData(Source.Token);
                 }
 
                 var handler = nodeSetSource;
@@ -647,7 +647,7 @@ namespace Cognite.OpcUa
             if (readFromOpc)
             {
                 log.LogInformation("Begin mapping main directory");
-                var handler = new UANodeSource(Provider.GetRequiredService<ILogger<UANodeSource>>(), Config, this, uaClient, isFull, typeManager);
+                var handler = new UANodeSource(Provider.GetRequiredService<ILogger<UANodeSource>>(), Config, this, uaClient, isFull, TypeManager);
                 try
                 {
                     await uaClient.Browser.BrowseNodeHierarchy(nodesToBrowse, handler.Callback, Source.Token,
@@ -663,7 +663,7 @@ namespace Cognite.OpcUa
                 log.LogInformation("End mapping main directory");
             }
 
-            State.PopulateActiveEventTypes(typeManager.EventFields);
+            State.PopulateActiveEventTypes(TypeManager.EventFields);
 
             try
             {
@@ -715,7 +715,7 @@ namespace Cognite.OpcUa
             {
                 var subscribeStates = State.EmitterStates.Where(state => state.ShouldSubscribe);
 
-                await uaClient.SubscribeToEvents(subscribeStates, Streamer.EventSubscriptionHandler, typeManager.EventFields, Source.Token);
+                await uaClient.SubscribeToEvents(subscribeStates, Streamer.EventSubscriptionHandler, TypeManager.EventFields, Source.Token);
             }
 
             if (Config.Subscriptions.DataPoints)
@@ -860,7 +860,7 @@ namespace Cognite.OpcUa
                 }
                 if (Config.Events.ReadServer)
                 {
-                    var serverNode = await uaClient.GetServerNode(typeManager, Source.Token) as UAObject;
+                    var serverNode = await uaClient.GetServerNode(TypeManager, Source.Token) as UAObject;
                     if (serverNode == null) throw new ExtractorFailureException("Server node is not an object, or does not exist");
                     if (serverNode.FullAttributes.EventNotifier != 0)
                     {
@@ -1039,7 +1039,7 @@ namespace Cognite.OpcUa
             {
                 var subscribeStates = State.EmitterStates.Where(state => state.ShouldSubscribe);
 
-                await uaClient.SubscribeToEvents(subscribeStates, Streamer.EventSubscriptionHandler, typeManager.EventFields, Source.Token);
+                await uaClient.SubscribeToEvents(subscribeStates, Streamer.EventSubscriptionHandler, TypeManager.EventFields, Source.Token);
             }
 
             Interlocked.Increment(ref subscribed);

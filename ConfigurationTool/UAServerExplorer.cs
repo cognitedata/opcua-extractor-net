@@ -76,6 +76,10 @@ namespace Cognite.OpcUa.Config
             dataTypes.Clear();
             nodeDataRead = false;
         }
+        public async Task Run(CancellationToken token, int timeout = 0)
+        {
+            await Run(typeManager, token, timeout);
+        }
 
         private async Task LimitConfigValues(CancellationToken token)
         {

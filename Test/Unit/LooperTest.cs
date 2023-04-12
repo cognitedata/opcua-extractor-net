@@ -2,6 +2,7 @@
 using Cognite.OpcUa;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
+using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.Types;
 using Opc.Ua;
@@ -107,8 +108,8 @@ namespace Test.Unit
             extractor.State.SetEmitterState(evtState);
 
             var dpState = new VariableExtractionState(tester.Client,
-                new UAVariable(new NodeId("id"), "test", NodeId.Null),
-                false, false);
+                new UAVariable(new NodeId("id"), "test", null, null, NodeId.Null, null),
+                false, false, true);
             dpState.InitToEmpty();
             dpState.FinalizeRangeInit();
             extractor.State.SetNodeState(dpState, "id");
@@ -273,7 +274,7 @@ namespace Test.Unit
             Assert.Equal(100, evts3.Count);
 
             // Add some missing nodes to each of the pushers, and verify that they are pushed on recovery
-            var refManager = extractor.ReferenceTypeManager;
+            var refManager = extractor.TypeManager;
 
             var reference = new UAReference(
                 ReferenceTypeIds.Organizes,
@@ -284,8 +285,8 @@ namespace Test.Unit
                 false,
                 refManager);
 
-            var objects = new[] { new UANode(new NodeId("missing1"), "missing1", new NodeId("test"), NodeClass.Object) };
-            var variables = new[] { new UAVariable(new NodeId("missing2"), "missing2", new NodeId("test")) };
+            var objects = new[] { new UAObject(new NodeId("missing1"), "missing1", null, null, new NodeId("test"), null) };
+            var variables = new[] { new UAVariable(new NodeId("missing2"), "missing2", null, null, new NodeId("test"), null) };
 
             var input = new PusherInput(
                 objects,
@@ -297,8 +298,8 @@ namespace Test.Unit
                 Enumerable.Empty<UAVariable>(),
                 new[] { reference }, null);
 
-            (pusher1 as IPusher).AddPendingNodes(input, new FullPushResult());
-            (pusher2 as IPusher).AddPendingNodes(input2, new FullPushResult());
+            (pusher1 as IPusher).AddPendingNodes(input, new FullPushResult(), tester.Config);
+            (pusher2 as IPusher).AddPendingNodes(input2, new FullPushResult(), tester.Config);
 
             extractor.Streamer.Enqueue(dps);
             extractor.Streamer.Enqueue(evts);

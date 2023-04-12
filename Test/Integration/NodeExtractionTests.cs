@@ -1,12 +1,14 @@
 ﻿using Cognite.Extractor.Testing;
 using Cognite.OpcUa;
 using Cognite.OpcUa.Config;
+using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -49,28 +51,28 @@ namespace Test.Integration
 
             Assert.Equal(3, pusher.PushedNodes.Count);
             var node = pusher.PushedNodes[ids.Root];
-            Assert.Equal("CustomRoot", node.DisplayName);
+            Assert.Equal("CustomRoot", node.Attributes.DisplayName);
             Assert.True(node.ParentId == null || node.ParentId.IsNullNodeId);
             Assert.True(node.Properties == null || !node.Properties.Any());
-            Assert.False(node is UAVariable);
+            Assert.True(node is UAObject);
 
             node = pusher.PushedNodes[ids.Obj1];
-            Assert.Equal("ChildObject", node.DisplayName);
+            Assert.Equal("ChildObject", node.Attributes.DisplayName);
             Assert.Equal(ids.Root, node.ParentId);
             Assert.True(node.Properties == null || !node.Properties.Any());
-            Assert.False(node is UAVariable);
+            Assert.True(node is UAObject);
 
             node = pusher.PushedNodes[ids.Obj2];
-            Assert.Equal("ChildObject2", node.DisplayName);
+            Assert.Equal("ChildObject2", node.Attributes.DisplayName);
             Assert.Equal(ids.Root, node.ParentId);
             Assert.Equal(2, node.Properties.Count());
-            var prop = node.Properties.First(prop => prop.DisplayName == "NumericProp") as UAVariable;
-            Assert.Equal(DataTypeIds.Int64, prop.DataType.Raw);
+            var prop = node.Properties.First(prop => prop.Attributes.DisplayName == "NumericProp") as UAVariable;
+            Assert.Equal(DataTypeIds.Int64, prop.FullAttributes.DataType.Id);
             Assert.Equal(new Variant(1234L), prop.Value);
-            prop = node.Properties.First(prop => prop.DisplayName == "StringProp") as UAVariable;
-            Assert.Equal(DataTypeIds.String, prop.DataType.Raw);
+            prop = node.Properties.First(prop => prop.Attributes.DisplayName == "StringProp") as UAVariable;
+            Assert.Equal(DataTypeIds.String, prop.FullAttributes.DataType.Id);
             Assert.Equal(new Variant("String prop value"), prop.Value);
-            Assert.False(node is UAVariable);
+            Assert.True(node is UAObject);
 
             // No normal datatypes here
             Assert.Empty(pusher.PushedVariables);
@@ -91,22 +93,22 @@ namespace Test.Integration
 
             Assert.Equal(3, pusher.PushedNodes.Count);
             Assert.Equal(6, pusher.PushedVariables.Count);
-            Assert.All(pusher.PushedVariables.Values, variable => Assert.True(variable.DataType.IsString));
+            Assert.All(pusher.PushedVariables.Values, variable => Assert.True(variable.FullAttributes.DataType.IsString));
 
             var vnode = pusher.PushedVariables[(ids.MysteryVar, -1)];
-            Assert.Equal("MysteryVar", vnode.DisplayName);
-            Assert.Equal(ids.MysteryType, vnode.DataType.Raw);
+            Assert.Equal("MysteryVar", vnode.Attributes.DisplayName);
+            Assert.Equal(ids.MysteryType, vnode.FullAttributes.DataType.Id);
             Assert.Equal(ids.Root, vnode.ParentId);
             Assert.Equal(2, vnode.Properties.Count());
-            var prop = vnode.Properties.First(prop => prop.DisplayName == "EngineeringUnits") as UAVariable;
-            Assert.Equal(DataTypeIds.EUInformation, prop.DataType.Raw);
+            var prop = vnode.Properties.First(prop => prop.Attributes.DisplayName == "EngineeringUnits") as UAVariable;
+            Assert.Equal(DataTypeIds.EUInformation, prop.FullAttributes.DataType.Id);
             Assert.Equal("°C: degree Celsius", extractor.StringConverter.ConvertToString(prop.Value));
-            prop = vnode.Properties.First(prop => prop.DisplayName == "EURange") as UAVariable;
-            Assert.Equal(DataTypeIds.Range, prop.DataType.Raw);
+            prop = vnode.Properties.First(prop => prop.Attributes.DisplayName == "EURange") as UAVariable;
+            Assert.Equal(DataTypeIds.Range, prop.FullAttributes.DataType.Id);
             Assert.Equal("(0, 100)", extractor.StringConverter.ConvertToString(prop.Value));
 
-            Assert.All(pusher.PushedVariables.Values.Where(variable => variable.DisplayName != "MysteryVar"
-                && variable.DisplayName != "NumberVar"),
+            Assert.All(pusher.PushedVariables.Values.Where(variable => variable.Attributes.DisplayName != "MysteryVar"
+                && variable.Attributes.DisplayName != "NumberVar"),
                 variable => Assert.True(variable.Properties == null || !variable.Properties.Any()));
         }
         [Fact]
@@ -125,29 +127,29 @@ namespace Test.Integration
 
             Assert.Equal(4, pusher.PushedNodes.Count);
             Assert.Equal(8, pusher.PushedVariables.Count);
-            Assert.All(pusher.PushedVariables.Values, variable => Assert.True(variable.DataType.IsString));
+            Assert.All(pusher.PushedVariables.Values, variable => Assert.True(variable.FullAttributes.DataType.IsString));
 
             var node = pusher.PushedNodes[ids.StringArray];
-            Assert.Equal("Variable StringArray", node.DisplayName);
+            Assert.Equal("Variable StringArray", node.Attributes.DisplayName);
             var arr = Assert.IsType<UAVariable>(node);
             Assert.NotNull(arr);
             Assert.True(arr.Properties == null || !arr.Properties.Any());
             Assert.True(arr.IsArray);
             Assert.Equal(2, arr.ArrayDimensions[0]);
             Assert.Equal(2, arr.ArrayChildren.Count());
-            Assert.Equal(DataTypeIds.String, arr.DataType.Raw);
-            Assert.Equal(-1, arr.Index);
+            Assert.Equal(DataTypeIds.String, arr.FullAttributes.DataType.Id);
+            Assert.False(arr is UAVariableMember);
 
             var vnode = pusher.PushedVariables[(ids.StringArray, 0)];
             Assert.True(vnode.IsArray);
-            Assert.Equal(0, vnode.Index);
+            Assert.Equal(0, (vnode as UAVariableMember).Index);
             Assert.Contains(vnode, arr.ArrayChildren);
             Assert.Equal(2, vnode.ArrayDimensions[0]);
-            Assert.Equal(arr, vnode.ArrayParent);
-            Assert.Equal(DataTypeIds.String, vnode.DataType.Raw);
+            Assert.Equal(arr, (vnode as UAVariableMember).TSParent);
+            Assert.Equal(DataTypeIds.String, vnode.FullAttributes.DataType.Id);
             vnode = pusher.PushedVariables[(ids.StringArray, 1)];
             Assert.Contains(vnode, arr.ArrayChildren);
-            Assert.Equal(1, vnode.Index);
+            Assert.Equal(1, (vnode as UAVariableMember).Index);
             Assert.False(pusher.PushedVariables.ContainsKey((ids.StringArray, 2)));
         }
         [Fact]
@@ -167,24 +169,24 @@ namespace Test.Integration
             Assert.Equal(6, pusher.PushedNodes.Count);
             Assert.Equal(16, pusher.PushedVariables.Count);
             Assert.All(pusher.PushedVariables.Values, variable =>
-                Assert.True(variable.DataType.IsString
-                    || variable.DisplayName.StartsWith("Variable Array", StringComparison.InvariantCulture)));
+                Assert.True(variable.FullAttributes.DataType.IsString
+                    || variable.Attributes.DisplayName.StartsWith("Variable Array", StringComparison.InvariantCulture)));
 
             var node = pusher.PushedNodes[ids.Array];
-            Assert.Equal("Variable Array", node.DisplayName);
+            Assert.Equal("Variable Array", node.Attributes.DisplayName);
             var arr = Assert.IsType<UAVariable>(node);
             Assert.NotNull(arr);
             Assert.Equal(2, arr.Properties.Count());
-            var prop = arr.Properties.First(prop => prop.DisplayName == "EngineeringUnits") as UAVariable;
-            Assert.Equal(DataTypeIds.EUInformation, prop.DataType.Raw);
+            var prop = arr.Properties.First(prop => prop.Attributes.DisplayName == "EngineeringUnits") as UAVariable;
+            Assert.Equal(DataTypeIds.EUInformation, prop.FullAttributes.DataType.Id);
             Assert.Equal("°C: degree Celsius", extractor.StringConverter.ConvertToString(prop.Value));
-            prop = arr.Properties.First(prop => prop.DisplayName == "EURange") as UAVariable;
-            Assert.Equal(DataTypeIds.Range, prop.DataType.Raw);
+            prop = arr.Properties.First(prop => prop.Attributes.DisplayName == "EURange") as UAVariable;
+            Assert.Equal(DataTypeIds.Range, prop.FullAttributes.DataType.Id);
             Assert.Equal("(0, 100)", extractor.StringConverter.ConvertToString(prop.Value));
             Assert.True(arr.IsArray);
             Assert.Equal(4, arr.ArrayDimensions[0]);
             Assert.Equal(4, arr.ArrayChildren.Count());
-            Assert.Equal(DataTypeIds.Double, arr.DataType.Raw);
+            Assert.Equal(DataTypeIds.Double, arr.FullAttributes.DataType.Id);
         }
         [Fact]
         public async Task TestAutoIdentifyTypes()
@@ -203,24 +205,24 @@ namespace Test.Integration
 
             Assert.Equal(6, pusher.PushedNodes.Count);
             Assert.Equal(16, pusher.PushedVariables.Count);
-            Assert.Equal(6, pusher.PushedVariables.Count(vb => vb.Value.DataType.EnumValues != null));
-            Assert.Equal(5, pusher.PushedVariables.Count(vb => vb.Value.DataType.IsString));
+            Assert.Equal(6, pusher.PushedVariables.Count(vb => vb.Value.FullAttributes.DataType.EnumValues != null));
+            Assert.Equal(5, pusher.PushedVariables.Count(vb => vb.Value.FullAttributes.DataType.IsString));
 
             var enumv = pusher.PushedVariables[(ids.EnumVar1, -1)];
-            Assert.Equal(ids.EnumType1, enumv.DataType.Raw);
-            Assert.Equal(3, enumv.DataType.EnumValues.Count);
-            var dp = enumv.DataType.ToDataPoint(extractor, 1, DateTime.UtcNow, "test");
+            Assert.Equal(ids.EnumType1, enumv.FullAttributes.DataType.Id);
+            Assert.Equal(3, enumv.FullAttributes.DataType.EnumValues.Count);
+            var dp = enumv.FullAttributes.DataType.ToDataPoint(extractor, 1, DateTime.UtcNow, "test");
             Assert.Equal(1, dp.DoubleValue);
 
             var node = pusher.PushedNodes[ids.EnumVar3];
             var enumArr = Assert.IsType<UAVariable>(node);
-            Assert.Equal(ids.EnumType2, enumArr.DataType.Raw);
-            Assert.Equal(2, enumArr.DataType.EnumValues.Count);
-            dp = enumArr.DataType.ToDataPoint(extractor, 123, DateTime.UtcNow, "test");
+            Assert.Equal(ids.EnumType2, enumArr.FullAttributes.DataType.Id);
+            Assert.Equal(2, enumArr.FullAttributes.DataType.EnumValues.Count);
+            dp = enumArr.FullAttributes.DataType.ToDataPoint(extractor, 123, DateTime.UtcNow, "test");
             Assert.Equal(123, dp.DoubleValue);
 
             var vnode = pusher.PushedVariables[(ids.MysteryVar, -1)];
-            Assert.False(vnode.DataType.IsString);
+            Assert.False(vnode.FullAttributes.DataType.IsString);
 
             var nnode = pusher.PushedVariables[(ids.NumberVar, -1)];
             Assert.Equal(4, nnode.GetAllProperties().Count());
@@ -244,24 +246,24 @@ namespace Test.Integration
 
             Assert.Equal(6, pusher.PushedNodes.Count);
             Assert.Equal(16, pusher.PushedVariables.Count);
-            Assert.Equal(6, pusher.PushedVariables.Count(vb => vb.Value.DataType.EnumValues != null));
-            Assert.Equal(11, pusher.PushedVariables.Count(vb => vb.Value.DataType.IsString));
+            Assert.Equal(6, pusher.PushedVariables.Count(vb => vb.Value.FullAttributes.DataType.EnumValues != null));
+            Assert.Equal(11, pusher.PushedVariables.Count(vb => vb.Value.FullAttributes.DataType.IsString));
 
             var enumv = pusher.PushedVariables[(ids.EnumVar1, -1)];
-            Assert.Equal(ids.EnumType1, enumv.DataType.Raw);
-            Assert.Equal(3, enumv.DataType.EnumValues.Count);
-            var dp = enumv.DataType.ToDataPoint(extractor, 1, DateTime.UtcNow, "test");
+            Assert.Equal(ids.EnumType1, enumv.FullAttributes.DataType.Id);
+            Assert.Equal(3, enumv.FullAttributes.DataType.EnumValues.Count);
+            var dp = enumv.FullAttributes.DataType.ToDataPoint(extractor, 1, DateTime.UtcNow, "test");
             Assert.Equal("Enum2", dp.StringValue);
 
             var node = pusher.PushedNodes[ids.EnumVar3];
             var enumArr = Assert.IsType<UAVariable>(node);
-            Assert.Equal(ids.EnumType2, enumArr.DataType.Raw);
-            Assert.Equal(2, enumArr.DataType.EnumValues.Count);
-            dp = enumArr.DataType.ToDataPoint(extractor, 123, DateTime.UtcNow, "test");
+            Assert.Equal(ids.EnumType2, enumArr.FullAttributes.DataType.Id);
+            Assert.Equal(2, enumArr.FullAttributes.DataType.EnumValues.Count);
+            dp = enumArr.FullAttributes.DataType.ToDataPoint(extractor, 123, DateTime.UtcNow, "test");
             Assert.Equal("VEnum2", dp.StringValue);
 
             var vnode = pusher.PushedVariables[(ids.MysteryVar, -1)];
-            Assert.False(vnode.DataType.IsString);
+            Assert.False(vnode.FullAttributes.DataType.IsString);
         }
         [Fact]
         public async Task TestIgnoreDataType()
@@ -315,9 +317,9 @@ namespace Test.Integration
             Assert.Equal(16, pusher.PushedVariables.Count);
 
             var node = pusher.PushedVariables[(ids.NumberVar, -1)];
-            Assert.True(node.DataType.IsStep);
-            Assert.False(node.DataType.IsString);
-            Assert.Equal(ids.NumberType, node.DataType.Raw);
+            Assert.True(node.FullAttributes.DataType.IsStep);
+            Assert.False(node.FullAttributes.DataType.IsString);
+            Assert.Equal(ids.NumberType, node.FullAttributes.DataType.Id);
         }
         [Theory]
         [InlineData(true)]
@@ -340,9 +342,9 @@ namespace Test.Integration
             Assert.Single(pusher.PushedVariables);
 
             var node = pusher.PushedVariables.Values.First();
-            Assert.Equal("NullType", node.DisplayName);
-            Assert.Equal(NodeId.Null, node.DataType.Raw);
-            Assert.NotEqual(nullAsNumeric, node.DataType.IsString);
+            Assert.Equal("NullType", node.Attributes.DisplayName);
+            Assert.Equal(NodeId.Null, node.FullAttributes.DataType.Id);
+            Assert.NotEqual(nullAsNumeric, node.FullAttributes.DataType.IsString);
 
             dataTypes.AllowStringVariables = false;
             dataTypes.AutoIdentifyTypes = false;
@@ -368,7 +370,7 @@ namespace Test.Integration
             Assert.Equal(10, pusher.PushedVariables.Count);
 
             var vnode = pusher.PushedVariables[(ids.RankImpreciseNoDim, -1)];
-            Assert.Equal("RankImpreciseNoDim", vnode.DisplayName);
+            Assert.Equal("RankImpreciseNoDim", vnode.Attributes.DisplayName);
 
             var node = pusher.PushedNodes[ids.RankImprecise];
             var arr = Assert.IsType<UAVariable>(node);
@@ -405,7 +407,7 @@ namespace Test.Integration
 
             var vnode = pusher.PushedVariables[(ids.MysteryVar, -1)];
             Assert.Single(vnode.Properties);
-            Assert.DoesNotContain(vnode.Properties, prop => prop.DisplayName == "EURange");
+            Assert.DoesNotContain(vnode.Properties, prop => prop.Attributes.DisplayName == "EURange");
 
             var node = pusher.PushedNodes[ids.Obj2];
             Assert.Single(node.Properties);
@@ -437,7 +439,7 @@ namespace Test.Integration
 
             var vnode = pusher.PushedVariables[(ids.MysteryVar, -1)];
             Assert.Single(vnode.Properties);
-            Assert.DoesNotContain(vnode.Properties, prop => prop.DisplayName == "EURange");
+            Assert.DoesNotContain(vnode.Properties, prop => prop.Attributes.DisplayName == "EURange");
 
             var node = pusher.PushedNodes[ids.Obj2];
             Assert.Single(node.Properties);
@@ -469,17 +471,17 @@ namespace Test.Integration
 
             var node = pusher.PushedNodes[ids.Root];
             Assert.Equal(5, node.Properties.Count());
-            var prop = node.Properties.First(prop => prop.DisplayName == "Variable StringArray") as UAVariable;
+            var prop = node.Properties.First(prop => prop.Attributes.DisplayName == "Variable StringArray") as UAVariable;
             Assert.Equal(@"[""test1"",""test2""]", extractor.StringConverter.ConvertToString(prop.Value));
-            prop = node.Properties.First(prop => prop.DisplayName == "Variable Array") as UAVariable;
+            prop = node.Properties.First(prop => prop.Attributes.DisplayName == "Variable Array") as UAVariable;
             Assert.Equal("[0,0,0,0]", extractor.StringConverter.ConvertToString(prop.Value));
-            prop = node.Properties.First(prop => prop.DisplayName == "EnumVar1") as UAVariable;
-            Assert.Equal("Enum2", extractor.StringConverter.ConvertToString(prop.Value, prop.DataType.EnumValues));
-            prop = node.Properties.First(prop => prop.DisplayName == "EnumVar2") as UAVariable;
-            Assert.Equal("VEnum2", extractor.StringConverter.ConvertToString(prop.Value, prop.DataType.EnumValues));
-            prop = node.Properties.First(prop => prop.DisplayName == "EnumVar3") as UAVariable;
+            prop = node.Properties.First(prop => prop.Attributes.DisplayName == "EnumVar1") as UAVariable;
+            Assert.Equal("Enum2", extractor.StringConverter.ConvertToString(prop.Value, prop.FullAttributes.DataType.EnumValues));
+            prop = node.Properties.First(prop => prop.Attributes.DisplayName == "EnumVar2") as UAVariable;
+            Assert.Equal("VEnum2", extractor.StringConverter.ConvertToString(prop.Value, prop.FullAttributes.DataType.EnumValues));
+            prop = node.Properties.First(prop => prop.Attributes.DisplayName == "EnumVar3") as UAVariable;
             Assert.Equal(@"[""VEnum2"",""VEnum2"",""VEnum1"",""VEnum2""]",
-                extractor.StringConverter.ConvertToString(prop.Value, prop.DataType.EnumValues));
+                extractor.StringConverter.ConvertToString(prop.Value, prop.FullAttributes.DataType.EnumValues));
         }
         [Fact]
         public async Task TestPropertyIdFilter()
@@ -504,8 +506,8 @@ namespace Test.Integration
 
             var node = pusher.PushedNodes[ids.Root];
             Assert.Single(node.Properties);
-            var prop = node.Properties.First(prop => prop.DisplayName == "EnumVar2") as UAVariable;
-            Assert.Equal("VEnum2", extractor.StringConverter.ConvertToString(prop.Value, prop.DataType.EnumValues));
+            var prop = node.Properties.First(prop => prop.Attributes.DisplayName == "EnumVar2") as UAVariable;
+            Assert.Equal("VEnum2", extractor.StringConverter.ConvertToString(prop.Value, prop.FullAttributes.DataType.EnumValues));
         }
         [Fact]
         public async Task TestMultipleSourceNodes()
@@ -608,35 +610,35 @@ namespace Test.Integration
             Assert.Equal(6, pusher.PushedNodes.Count);
             Assert.Equal(16, pusher.PushedVariables.Count);
 
-            var node = pusher.PushedNodes[ids.Root];
-            var metadata = node.GetExtraMetadata(tester.Config.Extraction, extractor.DataTypeManager, extractor.StringConverter);
+            var node = pusher.PushedNodes[ids.Root] as UAObject;
+            var metadata = node.GetExtraMetadata(tester.Config, extractor);
             Assert.Single(metadata);
             Assert.Equal("BaseObjectType", metadata["TypeDefinition"]);
 
-            node = pusher.PushedNodes[ids.Array];
-            metadata = node.GetExtraMetadata(tester.Config.Extraction, extractor.DataTypeManager, extractor.StringConverter);
+            node = pusher.PushedNodes[ids.Array] as UAObject;
+            metadata = node.GetExtraMetadata(tester.Config, extractor);
             Assert.Equal(2, metadata.Count);
             Assert.Equal("BaseDataVariableType", metadata["TypeDefinition"]);
             Assert.Equal("Double", metadata["dataType"]);
 
-            node = pusher.PushedNodes[ids.EnumVar3];
-            metadata = node.GetExtraMetadata(tester.Config.Extraction, extractor.DataTypeManager, extractor.StringConverter);
+            node = pusher.PushedNodes[ids.EnumVar3] as UAObject;
+            metadata = node.GetExtraMetadata(tester.Config, extractor);
             Assert.Equal(4, metadata.Count);
             Assert.Equal("BaseDataVariableType", metadata["TypeDefinition"]);
             Assert.Equal("CustomEnumType2", metadata["dataType"]);
             Assert.Equal("VEnum1", metadata["321"]);
             Assert.Equal("VEnum2", metadata["123"]);
 
-            node = pusher.PushedVariables[(ids.EnumVar3, 1)];
-            metadata = node.GetExtraMetadata(tester.Config.Extraction, extractor.DataTypeManager, extractor.StringConverter);
+            var vb = pusher.PushedVariables[(ids.EnumVar3, 1)];
+            metadata = node.GetExtraMetadata(tester.Config, extractor);
             Assert.Equal(4, metadata.Count);
             Assert.Equal("BaseDataVariableType", metadata["TypeDefinition"]);
             Assert.Equal("CustomEnumType2", metadata["dataType"]);
             Assert.Equal("VEnum1", metadata["321"]);
             Assert.Equal("VEnum2", metadata["123"]);
 
-            node = pusher.PushedVariables[(ids.MysteryVar, -1)];
-            metadata = node.GetExtraMetadata(tester.Config.Extraction, extractor.DataTypeManager, extractor.StringConverter);
+            vb = pusher.PushedVariables[(ids.MysteryVar, -1)];
+            metadata = node.GetExtraMetadata(tester.Config, extractor);
             Assert.Equal(2, metadata.Count);
             Assert.Equal("BaseDataVariableType", metadata["TypeDefinition"]);
             Assert.Equal("MysteryType", metadata["dataType"]);
@@ -684,7 +686,6 @@ namespace Test.Integration
                 Assert.False(rel.Target.Id.IsNullNodeId);
                 Assert.NotNull(rel.Type);
                 Assert.NotNull(rel.Type.Id);
-                Assert.True(rel.Type.HasName);
                 Assert.Contains(pusher.PushedReferences, orel => orel.Source.Id == rel.Target.Id
                     && orel.Target.Id == rel.Source.Id && orel.IsForward == !rel.IsForward);
             });
@@ -710,7 +711,6 @@ namespace Test.Integration
                 Assert.False(rel.Target.Id.IsNullNodeId);
                 Assert.NotNull(rel.Type);
                 Assert.NotNull(rel.Type.Id);
-                Assert.True(rel.Type.HasName);
             });
         }
         [Fact]
@@ -734,7 +734,6 @@ namespace Test.Integration
                 Assert.False(rel.Target.Id.IsNullNodeId);
                 Assert.NotNull(rel.Type);
                 Assert.NotNull(rel.Type.Id);
-                Assert.True(rel.Type.HasName);
                 Assert.Contains(pusher.PushedReferences, orel => orel.Source.Id == rel.Target.Id
                     && orel.Target.Id == rel.Source.Id && orel.IsForward == !rel.IsForward);
             });
@@ -1057,8 +1056,8 @@ namespace Test.Integration
 
             await extractor.RunExtractor(true);
 
-            var root = pusher.PushedNodes[ObjectIds.ObjectsFolder];
-            var meta = root.BuildMetadata(tester.Config.Extraction, extractor.DataTypeManager, extractor.StringConverter, false);
+            var root = pusher.PushedNodes[ObjectIds.ObjectsFolder] as UAObject;
+            var meta = root.BuildMetadata(tester.Config, extractor, false);
             Assert.Equal(17, meta.Count);
             // Verify that the metadata fields get values
             Assert.Equal("[0,0,0,0]", meta["CustomRoot_Variable Array"]);
@@ -1104,8 +1103,8 @@ namespace Test.Integration
 
             await extractor.RunExtractor(true);
 
-            var root = pusher.PushedNodes[ObjectIds.ObjectsFolder];
-            var meta = root.BuildMetadata(tester.Config.Extraction, extractor.DataTypeManager, extractor.StringConverter, false);
+            var root = pusher.PushedNodes[ObjectIds.ObjectsFolder] as UAObject;
+            var meta = root.BuildMetadata(tester.Config, extractor, false);
             Assert.Equal(17, meta.Count);
             // Verify that the metadata fields get values
             Assert.Equal("[0,0,0,0]", meta["CustomRoot_Variable Array"]);
@@ -1171,14 +1170,14 @@ namespace Test.Integration
 
             Assert.Equal(475, pusher.PushedNodes.Count);
             Assert.Equal(418, pusher.PushedVariables.Count);
-            var customVarType = pusher.PushedNodes[tester.Server.Ids.Custom.VariableType];
-            Assert.Equal("CustomVariableType", customVarType.DisplayName);
+            var customVarType = pusher.PushedNodes[tester.Server.Ids.Custom.VariableType] as UAVariableType;
+            Assert.Equal("CustomVariableType", customVarType.Attributes.DisplayName);
             Assert.Equal(NodeClass.VariableType, customVarType.NodeClass);
-            var meta = customVarType.BuildMetadata(tester.Config.Extraction, extractor.DataTypeManager, extractor.StringConverter, true);
+            var meta = customVarType.BuildMetadata(tester.Config, extractor, true);
             Assert.Single(meta);
             Assert.Equal("123.123", meta["Value"]);
             var customObjType = pusher.PushedNodes[tester.Server.Ids.Custom.ObjectType];
-            Assert.Equal("CustomObjectType", customObjType.DisplayName);
+            Assert.Equal("CustomObjectType", customObjType.Attributes.DisplayName);
             Assert.Equal(NodeClass.ObjectType, customObjType.NodeClass);
         }
         #endregion
@@ -1223,7 +1222,7 @@ namespace Test.Integration
             var tss = pusher.PushedVariables.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
             var refs = pusher.PushedReferences.ToHashSet();
 
-            void CompareProperties(UANode node, UANode other)
+            void CompareProperties(BaseUANode node, BaseUANode other)
             {
                 var props = node.GetAllProperties();
                 var otherProps = other.GetAllProperties();
@@ -1232,20 +1231,20 @@ namespace Test.Integration
                 foreach (var prop in props)
                 {
                     Assert.True(dict.TryGetValue(prop.Id, out var otherProp));
-                    Assert.Equal(prop.DisplayName, otherProp.DisplayName);
+                    Assert.Equal(prop.Attributes.DisplayName, otherProp.Attributes.DisplayName);
                     Assert.True(prop.IsProperty);
                     Assert.True(otherProp.IsProperty);
                     if (otherProp is UAVariable otherVar)
                     {
                         var propVar = Assert.IsType<UAVariable>(prop);
-                        Assert.Equal(otherVar.DataType.Raw, propVar.DataType.Raw);
+                        Assert.Equal(otherVar.FullAttributes.DataType.Id, propVar.FullAttributes.DataType.Id);
                         Assert.Equal(otherVar.Value, propVar.Value);
                     }
                 }
             }
 
 
-            void Compare(IEnumerable<UANode> nodes, IEnumerable<UAVariable> variables, HashSet<UAReference> references)
+            void Compare(IEnumerable<BaseUANode> nodes, IEnumerable<UAVariable> variables, HashSet<UAReference> references)
             {
                 Assert.Equal(assets.Count, nodes.Count());
                 Assert.Equal(tss.Count, variables.Count());
@@ -1253,34 +1252,36 @@ namespace Test.Integration
                 foreach (var node in nodes)
                 {
                     Assert.True(assets.TryGetValue(node.Id, out var other));
-                    Assert.Equal(other.DisplayName, node.DisplayName);
-                    Assert.Equal(other.ShouldSubscribeEvents, node.ShouldSubscribeEvents);
-                    Assert.Equal(other.NodeType?.Id, node.NodeType?.Id);
+                    Assert.Equal(other.Attributes.DisplayName, node.Attributes.DisplayName);
+                    if (other is UAObject oobj)
+                    {
+                        var obj = node as UAObject;
+                        Assert.Equal(oobj.FullAttributes.ShouldSubscribeToEvents(tester.Config), obj.FullAttributes.ShouldSubscribeToEvents(tester.Config));
+                        Assert.Equal(oobj.FullAttributes.TypeDefinition.Id, obj.FullAttributes.TypeDefinition.Id);
+                        Assert.Equal(oobj.FullAttributes.EventNotifier, obj.FullAttributes.EventNotifier);
+                    }
                     Assert.False(node.IsProperty);
                     Assert.Equal(other.ParentId, node.ParentId);
-                    Assert.Equal(other.EventNotifier, node.EventNotifier);
                     CompareProperties(node, other);
                 }
 
                 foreach (var node in variables)
                 {
-                    Assert.True(tss.TryGetValue((node.Id, node.Index), out var other));
-                    Assert.Equal(other.DisplayName, node.DisplayName);
-                    Assert.Equal(other.ShouldSubscribeData, node.ShouldSubscribeData);
-                    Assert.Equal(other.NodeType?.Id, node.NodeType?.Id);
+                    Assert.True(tss.TryGetValue(node.DestinationId(), out var other));
+                    Assert.Equal(other.Attributes.DisplayName, node.Attributes.DisplayName);
+                    Assert.Equal(other.FullAttributes.ShouldSubscribe(tester.Config), node.FullAttributes.ShouldSubscribe(tester.Config));
+                    Assert.Equal(other.FullAttributes.TypeDefinition.Id, node.FullAttributes.TypeDefinition.Id);
                     Assert.False(node.IsProperty);
                     Assert.Equal(other.ParentId, node.ParentId);
-                    Assert.Equal(other.EventNotifier, node.EventNotifier);
-                    Assert.Equal(other.DataType.Raw, node.DataType.Raw);
+                    Assert.Equal(other.FullAttributes.DataType.Id, node.FullAttributes.DataType.Id);
                     // This is a really, really weird issue. Turns out there is a discrepancy in the C# language and
                     // .NET runtime, so an array can be uint under the hood, but int in code, which the language
                     // doesn't allow, but the runtime is fine with. Shouldn't matter when running, but we get this magic.
                     // Your IDE/compiler might complain about meaningless casts here, but it's wrong.
-                    Assert.Equal(other.ArrayDimensions?.Select(i => i),
-                        other.ArrayDimensions?.Select(i => i));
-                    Assert.Equal(other.ReadHistory, node.ReadHistory);
-                    Assert.Equal(other.Index, node.Index);
-                    Assert.Equal(other.ValueRank, node.ValueRank);
+                    Assert.Equal(other.FullAttributes.ArrayDimensions?.Select(i => i),
+                        node.FullAttributes.ArrayDimensions?.Select(i => i));
+                    Assert.Equal(other.FullAttributes.ShouldReadHistory(tester.Config), node.FullAttributes.ShouldReadHistory(tester.Config));
+                    Assert.Equal(other.FullAttributes.ValueRank, node.FullAttributes.ValueRank);
                     Assert.Equal(other.IsArray, node.IsArray);
                     CompareProperties(node, other);
                 }
@@ -1295,9 +1296,6 @@ namespace Test.Integration
 
             // Enable types only
             tester.Config.Source.NodeSetSource.Types = true;
-            tester.Client.ClearEventFields();
-            tester.Client.DataTypeManager.Reset();
-            tester.Client.ObjectTypeManager.Reset();
             await extractor.RunExtractor(true);
             Compare(pusher.PushedNodes.Values, pusher.PushedVariables.Values, pusher.PushedReferences);
 
@@ -1306,9 +1304,6 @@ namespace Test.Integration
             pusher.Wipe();
 
             tester.Config.Source.NodeSetSource.Instance = true;
-            tester.Client.ClearEventFields();
-            tester.Client.DataTypeManager.Reset();
-            tester.Client.ObjectTypeManager.Reset();
             await extractor.RunExtractor(true);
             Compare(pusher.PushedNodes.Values, pusher.PushedVariables.Values, pusher.PushedReferences);
         }

@@ -23,7 +23,6 @@ namespace Cognite.OpcUa.TypeCollectors
 
         private bool eventTypesRead = false;
         private bool dataTypesRead = false;
-        private bool typesBuilt = false;
         public TypeManager(FullConfig config, UAClient client, ILogger log)
         {
             this.log = log;
@@ -98,8 +97,6 @@ namespace Cognite.OpcUa.TypeCollectors
 
         public void BuildTypeInfo()
         {
-            if (typesBuilt) return;
-            typesBuilt = true;
             log.LogInformation("Building type information from nodes in memory");
             BuildNodeChildren();
             if (config.Events.Enabled) CollectEventTypes();

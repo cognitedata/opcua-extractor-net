@@ -2,6 +2,7 @@
 using Cognite.OpcUa;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
+using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.Types;
 using Opc.Ua;
@@ -52,8 +53,8 @@ namespace Test.Utils
 
         public DeletedNodes LastDeleteReq { get; set; }
 
-        public Dictionary<NodeId, UANode> PushedNodes { get; }
-            = new Dictionary<NodeId, UANode>();
+        public Dictionary<NodeId, BaseUANode> PushedNodes { get; }
+            = new Dictionary<NodeId, BaseUANode>();
         public Dictionary<(NodeId, int), UAVariable> PushedVariables { get; }
             = new Dictionary<(NodeId, int), UAVariable>();
         public HashSet<UAReference> PushedReferences { get; }
@@ -76,7 +77,7 @@ namespace Test.Utils
         }
 
         public Task<PushResult> PushNodes(
-            IEnumerable<UANode> objects,
+            IEnumerable<BaseUANode> objects,
             IEnumerable<UAVariable> variables,
             IEnumerable<UAReference> references,
             UpdateConfig update,
@@ -111,12 +112,12 @@ namespace Test.Utils
                 {
                     foreach (var variable in variables)
                     {
-                        if (!DataPoints.ContainsKey((variable.Id, variable.Index)))
+                        if (!DataPoints.ContainsKey(variable.DestinationId()))
                         {
-                            DataPoints[(variable.Id, variable.Index)] = new List<UADataPoint>();
+                            DataPoints[variable.DestinationId()] = new List<UADataPoint>();
                         }
-                        UniqueToNodeId[Extractor.GetUniqueId(variable.Id, variable.Index)] = (variable.Id, variable.Index);
-                        PushedVariables[(variable.Id, variable.Index)] = variable;
+                        UniqueToNodeId[variable.GetUniqueId(Extractor)] = variable.DestinationId();
+                        PushedVariables[variable.DestinationId()] = variable;
                     }
                 }
             }
