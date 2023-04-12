@@ -10,7 +10,7 @@ namespace Cognite.OpcUa.Nodes
 {
     public class ReferenceTypeAttributes : BaseNodeAttributes
     {
-        public string? InverseName { get; private set; }
+        public string? InverseName { get; set; }
         public ReferenceTypeAttributes() : base(NodeClass.ReferenceType)
         {
         }

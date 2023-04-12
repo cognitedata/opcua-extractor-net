@@ -4,6 +4,8 @@ using Cognite.Extractor.Utils;
 using Cognite.OpcUa;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
+using Cognite.OpcUa.Nodes;
+using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -34,6 +36,7 @@ namespace Test.Unit
         public ServiceProvider Provider { get; }
         public ILogger Logger { get; }
         public DummyClientCallbacks Callbacks { get; private set; }
+        public TypeManager TypeManager { get; private set; }
         public UAClientTestFixture()
         {
             var services = new ServiceCollection();
@@ -76,8 +79,9 @@ namespace Test.Unit
             Client = new UAClient(Provider, Config);
             Source = new CancellationTokenSource();
             Callbacks = new DummyClientCallbacks(Source.Token);
+            TypeManager = new TypeManager(Config, Client, Logger);
             Client.Callbacks = Callbacks;
-            await Client.Run(Source.Token, 0);
+            await Client.Run(TypeManager, Source.Token, 0);
         }
 
         public async Task DisposeAsync()
@@ -96,6 +100,7 @@ namespace Test.Unit
         {
             this.tester = tester ?? throw new ArgumentNullException(nameof(tester));
             tester.Init(output);
+            tester.TypeManager.Reset();
         }
         #region session
         [Fact]
@@ -114,14 +119,14 @@ namespace Test.Unit
             tester.Config.Source.EndpointUrl = "opc.tcp://localhost:62009";
             try
             {
-                var exc = await Assert.ThrowsAsync<SilentServiceException>(() => tester.Client.Run(tester.Source.Token, 0));
+                var exc = await Assert.ThrowsAsync<SilentServiceException>(() => tester.Client.Run(tester.TypeManager, tester.Source.Token, 0));
                 Assert.Equal(StatusCodes.BadNotConnected, exc.StatusCode);
                 Assert.Equal(ExtractorUtils.SourceOp.SelectEndpoint, exc.Operation);
             }
             finally
             {
                 tester.Config.Source.EndpointUrl = "opc.tcp://localhost:62000";
-                await tester.Client.Run(tester.Source.Token, 0);
+                await tester.Client.Run(tester.TypeManager, tester.Source.Token, 0);
             }
         }
         [Fact]
@@ -131,12 +136,12 @@ namespace Test.Unit
             tester.Config.Source.ConfigRoot = "wrong";
             try
             {
-                var exc = await Assert.ThrowsAsync<ExtractorFailureException>(() => tester.Client.Run(tester.Source.Token, 0));
+                var exc = await Assert.ThrowsAsync<ExtractorFailureException>(() => tester.Client.Run(tester.TypeManager, tester.Source.Token, 0));
             }
             finally
             {
                 tester.Config.Source.ConfigRoot = "config";
-                await tester.Client.Run(tester.Source.Token, 0);
+                await tester.Client.Run(tester.TypeManager, tester.Source.Token, 0);
             }
         }
         [Theory]
@@ -150,7 +155,7 @@ namespace Test.Unit
 
             try
             {
-                await tester.Client.Run(tester.Source.Token, 10);
+                await tester.Client.Run(tester.TypeManager, tester.Source.Token, 10);
 
                 Assert.True(CommonTestUtils.TestMetricValue("opcua_connected", 1));
                 tester.Server.Stop();
@@ -169,7 +174,7 @@ namespace Test.Unit
                 await tester.Client.Close(tester.Source.Token);
                 tester.Config.Source.KeepAliveInterval = 10000;
                 tester.Config.Logger.UaSessionTracing = false;
-                await tester.Client.Run(tester.Source.Token, 0);
+                await tester.Client.Run(tester.TypeManager, tester.Source.Token, 0);
             }
         }
         [Fact]
@@ -183,7 +188,7 @@ namespace Test.Unit
             try
             {
                 Environment.SetEnvironmentVariable("OPCUA_CERTIFICATE_DIR", "certificates-test");
-                await tester.Client.Run(tester.Source.Token, 0);
+                await tester.Client.Run(tester.TypeManager, tester.Source.Token, 0);
                 var dir = new DirectoryInfo("./certificates-test/pki/trusted/certs/");
                 Assert.Single(dir.GetFiles());
             }
@@ -192,7 +197,7 @@ namespace Test.Unit
                 await tester.Client.Close(tester.Source.Token);
                 Environment.SetEnvironmentVariable("OPCUA_CERTIFICATE_DIR", null);
                 Directory.Delete("./certificates-test/", true);
-                await tester.Client.Run(tester.Source.Token, 0);
+                await tester.Client.Run(tester.TypeManager, tester.Source.Token, 0);
             }
         }
         [Fact]
@@ -213,18 +218,18 @@ namespace Test.Unit
 
                 tester.Server.Server.SetValidator(true);
 
-                await Assert.ThrowsAsync<SilentServiceException>(async () => await tester.Client.Run(tester.Source.Token, 0));
+                await Assert.ThrowsAsync<SilentServiceException>(async () => await tester.Client.Run(tester.TypeManager, tester.Source.Token, 0));
 
                 tester.Server.Server.SetValidator(false);
 
-                await tester.Client.Run(tester.Source.Token, 0);
+                await tester.Client.Run(tester.TypeManager, tester.Source.Token, 0);
             }
             finally
             {
                 tester.Server.Server.AllowAnonymous = true;
                 tester.Config.Source.X509Certificate = null;
                 tester.Server.Server.SetValidator(false);
-                await tester.Client.Run(tester.Source.Token, 0);
+                await tester.Client.Run(tester.TypeManager, tester.Source.Token, 0);
             }
         }
 
@@ -239,18 +244,18 @@ namespace Test.Unit
                 tester.Config.Source.Username = "testuser";
                 tester.Config.Source.Password = "wrongpassword";
 
-                await Assert.ThrowsAsync<SilentServiceException>(async () => await tester.Client.Run(tester.Source.Token, 0));
+                await Assert.ThrowsAsync<SilentServiceException>(async () => await tester.Client.Run(tester.TypeManager, tester.Source.Token, 0));
 
                 tester.Config.Source.Password = "testpassword";
 
-                await tester.Client.Run(tester.Source.Token, 0);
+                await tester.Client.Run(tester.TypeManager, tester.Source.Token, 0);
             }
             finally
             {
                 tester.Server.Server.AllowAnonymous = true;
                 tester.Config.Source.Username = null;
                 tester.Config.Source.Password = null;
-                await tester.Client.Run(tester.Source.Token, 0);
+                await tester.Client.Run(tester.TypeManager, tester.Source.Token, 0);
             }
         }
         [Fact]
@@ -261,7 +266,7 @@ namespace Test.Unit
             tester.Config.Source.ReverseConnectUrl = "opc.tcp://localhost:61000";
             try
             {
-                await tester.Client.Run(tester.Source.Token, 0);
+                await tester.Client.Run(tester.TypeManager, tester.Source.Token, 0);
                 Assert.True(tester.Client.Started);
                 // Just check that we are able to read, indicating an established connection
                 await tester.Client.ReadRawValues(new[] { VariableIds.Server_ServerStatus }, tester.Source.Token);
@@ -270,7 +275,7 @@ namespace Test.Unit
             {
                 tester.Server.Server.RemoveReverseConnection(new Uri("opc.tcp://localhost:61000"));
                 tester.Config.Source.ReverseConnectUrl = null;
-                await tester.Client.Run(tester.Source.Token, 0);
+                await tester.Client.Run(tester.TypeManager, tester.Source.Token, 0);
             }
         }
 
@@ -296,7 +301,7 @@ namespace Test.Unit
 
             try
             {
-                await tester.Client.Run(tester.Source.Token, 0);
+                await tester.Client.Run(tester.TypeManager, tester.Source.Token, 0);
                 var sm = tester.Client.SessionManager;
                 Assert.Equal("opc.tcp://localhost:62300", sm.EndpointUrl);
 
@@ -310,7 +315,7 @@ namespace Test.Unit
                 tester.Config.Source.ForceRestart = false;
                 tester.Config.Source.KeepAliveInterval = 10000;
                 tester.Server.SetServerRedundancyStatus(255, RedundancySupport.Hot);
-                await tester.Client.Run(tester.Source.Token, 0);
+                await tester.Client.Run(tester.TypeManager, tester.Source.Token, 0);
             }
         }
 
@@ -338,7 +343,7 @@ namespace Test.Unit
             try
             {
                 // Should connect to altServer
-                await tester.Client.Run(tester.Source.Token, 0);
+                await tester.Client.Run(tester.TypeManager, tester.Source.Token, 0);
                 var sm = tester.Client.SessionManager;
                 Assert.Equal("opc.tcp://localhost:62300", sm.EndpointUrl);
 
@@ -376,7 +381,7 @@ namespace Test.Unit
                 altServer.Stop();
                 altServer.Dispose();
                 tester.Server.SetServerRedundancyStatus(255, RedundancySupport.Hot);
-                await tester.Client.Run(tester.Source.Token, 0);
+                await tester.Client.Run(tester.TypeManager, tester.Source.Token, 0);
             }
         }
 
@@ -386,10 +391,10 @@ namespace Test.Unit
         [Fact]
         public async Task TestGetServerNode()
         {
-            var server = await tester.Client.GetServerNode(tester.Source.Token);
+            var server = await tester.Client.GetServerNode(tester.TypeManager, tester.Source.Token);
             Assert.Equal(ObjectIds.Server, server.Id);
             Assert.Equal(NodeId.Null, server.ParentId);
-            Assert.Equal("Server", server.DisplayName);
+            Assert.Equal("Server", server.Attributes.DisplayName);
         }
         [Fact]
         public async Task TestGetRoots()
@@ -642,23 +647,23 @@ namespace Test.Unit
         public async Task TestReadNodeData()
         {
             CommonTestUtils.ResetMetricValues("opcua_attribute_requests");
-            var nodes = new UANode[]
+            var nodes = new BaseUANode[]
             {
-                new UANode(tester.Server.Ids.Full.Root, "FullRoot", ObjectIds.ObjectsFolder, NodeClass.Object),
-                new UANode(tester.Server.Ids.Event.Obj1, "Object 1", tester.Server.Ids.Event.Root, NodeClass.Object),
-                new UANode(tester.Server.Ids.Custom.Root, "CustomRoot", ObjectIds.ObjectsFolder, NodeClass.Object),
-                new UAVariable(tester.Server.Ids.Custom.StringyVar, "StringyVar", tester.Server.Ids.Custom.Root),
-                new UAVariable(tester.Server.Ids.Custom.Array, "Array", tester.Server.Ids.Custom.Root),
-                new UAVariable(tester.Server.Ids.Custom.ObjProp, "ObjProp", tester.Server.Ids.Custom.Obj2)
+                new UAObject(tester.Server.Ids.Full.Root, "FullRoot", null, null, ObjectIds.ObjectsFolder, null),
+                new UAObject(tester.Server.Ids.Event.Obj1, "Object 1", null, null, tester.Server.Ids.Event.Root, null),
+                new UAObject(tester.Server.Ids.Custom.Root, "CustomRoot", null, null, ObjectIds.ObjectsFolder, null),
+                new UAVariable(tester.Server.Ids.Custom.StringyVar, "StringyVar", null, null, tester.Server.Ids.Custom.Root, null),
+                new UAVariable(tester.Server.Ids.Custom.Array, "Array", null, null, tester.Server.Ids.Custom.Root, null),
+                new UAVariable(tester.Server.Ids.Custom.ObjProp, "ObjProp", null, null, tester.Server.Ids.Custom.Obj2, null)
             };
-            nodes[5].Attributes.IsProperty = true;
+            nodes[5].IsRawProperty = true;
             tester.Config.History.Enabled = true;
             tester.Config.History.Data = true;
             tester.Config.Extraction.DataTypes.MaxArraySize = -1;
             tester.Config.Events.Enabled = true;
             try
             {
-                await tester.Client.ReadNodeData(nodes, tester.Source.Token);
+                await tester.Client.ReadNodeData(nodes, tester.TypeManager, tester.Source.Token);
             }
             finally
             {
@@ -668,12 +673,12 @@ namespace Test.Unit
                 tester.Config.Events.Enabled = false;
             }
 
-            Assert.Equal("FullRoot Description", nodes[0].Description);
-            Assert.Equal(EventNotifiers.SubscribeToEvents | EventNotifiers.HistoryRead, nodes[1].EventNotifier);
-            Assert.Equal(tester.Server.Ids.Custom.StringyType, (nodes[3] as UAVariable).DataType.Raw);
+            Assert.Equal("FullRoot Description", nodes[0].Attributes.Description);
+            Assert.Equal(EventNotifiers.SubscribeToEvents | EventNotifiers.HistoryRead, (nodes[1] as UAObject).FullAttributes.EventNotifier);
+            Assert.Equal(tester.Server.Ids.Custom.StringyType, (nodes[3] as UAVariable).FullAttributes.DataType.Id);
             Assert.Equal(4, (nodes[4] as UAVariable).ArrayDimensions[0]);
             Assert.Single((nodes[4] as UAVariable).ArrayDimensions);
-            Assert.True((nodes[4] as UAVariable).ReadHistory);
+            Assert.True((nodes[4] as UAVariable).FullAttributes.ShouldReadHistory(tester.Config));
             Assert.Null((nodes[5] as UAVariable).ArrayDimensions);
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_attribute_requests", 1));
@@ -681,19 +686,19 @@ namespace Test.Unit
         [Fact]
         public async Task TestReadNodeDataConfig()
         {
-            UANode[] GetNodes()
+            BaseUANode[] GetNodes()
             {
-                var nds = new UANode[]
+                var nds = new BaseUANode[]
                 {
-                    new UANode(tester.Server.Ids.Full.Root, "FullRoot", ObjectIds.ObjectsFolder, NodeClass.Object),
-                    new UANode(tester.Server.Ids.Event.Obj1, "Object 1", tester.Server.Ids.Event.Root, NodeClass.Object),
-                    new UAVariable(tester.Server.Ids.Custom.StringyVar, "StringyVar", tester.Server.Ids.Custom.Root),
-                    new UAVariable(tester.Server.Ids.Custom.Array, "Array", tester.Server.Ids.Custom.Root),
-                    new UAVariable(tester.Server.Ids.Wrong.TooLargeProp, "TooLargeProp", tester.Server.Ids.Custom.Obj2),
-                    new UAVariable(VariableTypeIds.BaseDataVariableType, "BaseDataVariableType", NodeId.Null, NodeClass.VariableType),
-                    new UANode(ObjectTypeIds.BaseObjectType, "BaseObjectType", NodeId.Null, NodeClass.ObjectType)
+                    new UAObject(tester.Server.Ids.Full.Root, "FullRoot", null, null, ObjectIds.ObjectsFolder, null),
+                    new UAObject(tester.Server.Ids.Event.Obj1, "Object 1", null, null, tester.Server.Ids.Event.Root, null),
+                    new UAVariable(tester.Server.Ids.Custom.StringyVar, "StringyVar", null, null, tester.Server.Ids.Custom.Root, null),
+                    new UAVariable(tester.Server.Ids.Custom.Array, "Array", null, null, tester.Server.Ids.Custom.Root, null),
+                    new UAVariable(tester.Server.Ids.Wrong.TooLargeProp, "TooLargeProp", null, null, tester.Server.Ids.Custom.Obj2, null),
+                    new UAVariableType(VariableTypeIds.BaseDataVariableType, "BaseDataVariableType", null, null, NodeId.Null),
+                    new UAObjectType(ObjectTypeIds.BaseObjectType, "BaseObjectType", null, null, NodeId.Null)
                 };
-                nds[4].Attributes.IsProperty = true;
+                nds[4].IsRawProperty = true;
                 return nds;
             }
             var nodes = GetNodes();
@@ -704,59 +709,59 @@ namespace Test.Unit
             tester.Config.Events.Enabled = true;
 
             // Read everything
-            await tester.Client.ReadNodeData(nodes, tester.Source.Token);
+            await tester.Client.ReadNodeData(nodes, tester.TypeManager, tester.Source.Token);
 
-            Assert.Equal("FullRoot Description", nodes[0].Description);
-            Assert.Equal(EventNotifiers.SubscribeToEvents | EventNotifiers.HistoryRead, nodes[1].EventNotifier);
-            Assert.True(nodes[1].ShouldSubscribeEvents);
-            Assert.Equal(tester.Server.Ids.Custom.StringyType, (nodes[2] as UAVariable).DataType.Raw);
+            Assert.Equal("FullRoot Description", nodes[0].Attributes.Description);
+            Assert.Equal(EventNotifiers.SubscribeToEvents | EventNotifiers.HistoryRead, (nodes[1] as UAObject).FullAttributes.EventNotifier);
+            Assert.True((nodes[1] as UAObject).FullAttributes.ShouldSubscribeToEvents(tester.Config));
+            Assert.Equal(tester.Server.Ids.Custom.StringyType, (nodes[2] as UAVariable).FullAttributes.DataType.Id);
             Assert.Equal(4, (nodes[3] as UAVariable).ArrayDimensions[0]);
             Assert.Single((nodes[3] as UAVariable).ArrayDimensions);
-            Assert.True((nodes[3] as UAVariable).ReadHistory);
-            Assert.Equal(AccessLevels.CurrentRead | AccessLevels.HistoryRead, (nodes[3] as UAVariable).AccessLevel);
-            Assert.True((nodes[3] as UAVariable).VariableAttributes.Historizing);
+            Assert.True((nodes[3] as UAVariable).FullAttributes.ShouldReadHistory(tester.Config));
+            Assert.Equal(AccessLevels.CurrentRead | AccessLevels.HistoryRead, (nodes[3] as UAVariable).FullAttributes.AccessLevel);
+            Assert.True((nodes[3] as UAVariable).FullAttributes.Historizing);
             Assert.NotNull((nodes[4] as UAVariable).ArrayDimensions);
             Assert.NotNull((nodes[3] as UAVariable).ArrayDimensions);
-            Assert.Equal(DataTypeIds.BaseDataType, (nodes[5] as UAVariable).DataType.Raw);
-            Assert.Equal(0, (nodes[5] as UAVariable).AccessLevel);
+            Assert.Equal(DataTypeIds.BaseDataType, (nodes[5] as UAVariable).FullAttributes.DataType.Id);
+            Assert.Equal(0, (nodes[5] as UAVariable).FullAttributes.AccessLevel);
 
             // Disable history
             tester.Config.History.Enabled = false;
 
             nodes = GetNodes();
-            await tester.Client.ReadNodeData(nodes, tester.Source.Token);
+            await tester.Client.ReadNodeData(nodes, tester.TypeManager, tester.Source.Token);
 
-            Assert.Equal(EventNotifiers.SubscribeToEvents | EventNotifiers.HistoryRead, nodes[1].EventNotifier);
-            Assert.True(nodes[1].ShouldSubscribeEvents);
-            Assert.False((nodes[3] as UAVariable).ReadHistory);
-            Assert.False((nodes[3] as UAVariable).VariableAttributes.Historizing);
-            Assert.True((nodes[3] as UAVariable).ShouldSubscribeData);
+            Assert.Equal(EventNotifiers.SubscribeToEvents | EventNotifiers.HistoryRead, (nodes[1] as UAObject).FullAttributes.EventNotifier);
+            Assert.True((nodes[1] as UAObject).FullAttributes.ShouldSubscribeToEvents(tester.Config));
+            Assert.False((nodes[3] as UAVariable).FullAttributes.ShouldReadHistory(tester.Config));
+            Assert.False((nodes[3] as UAVariable).FullAttributes.Historizing);
+            Assert.True((nodes[3] as UAVariable).FullAttributes.ShouldSubscribe(tester.Config));
 
             // Disable event discovery
             tester.Config.History.Enabled = true;
             tester.Config.Events.DiscoverEmitters = false;
 
             nodes = GetNodes();
-            await tester.Client.ReadNodeData(nodes, tester.Source.Token);
+            await tester.Client.ReadNodeData(nodes, tester.TypeManager, tester.Source.Token);
 
-            Assert.Equal(0, nodes[1].EventNotifier);
-            Assert.False(nodes[1].ShouldSubscribeEvents);
-            Assert.True((nodes[3] as UAVariable).ReadHistory);
-            Assert.True((nodes[3] as UAVariable).VariableAttributes.Historizing);
-            Assert.True((nodes[3] as UAVariable).ShouldSubscribeData);
+            Assert.Equal(0, (nodes[1] as UAObject).FullAttributes.EventNotifier);
+            Assert.False((nodes[1] as UAObject).FullAttributes.ShouldSubscribeToEvents(tester.Config));
+            Assert.True((nodes[3] as UAVariable).FullAttributes.ShouldReadHistory(tester.Config));
+            Assert.True((nodes[3] as UAVariable).FullAttributes.Historizing);
+            Assert.True((nodes[3] as UAVariable).FullAttributes.ShouldSubscribe(tester.Config));
 
             // Disable just data history
             tester.Config.Events.DiscoverEmitters = true;
             tester.Config.History.Data = false;
 
             nodes = GetNodes();
-            await tester.Client.ReadNodeData(nodes, tester.Source.Token);
+            await tester.Client.ReadNodeData(nodes, tester.TypeManager, tester.Source.Token);
 
-            Assert.Equal(EventNotifiers.SubscribeToEvents | EventNotifiers.HistoryRead, nodes[1].EventNotifier);
-            Assert.True(nodes[1].ShouldSubscribeEvents);
-            Assert.False((nodes[3] as UAVariable).ReadHistory);
-            Assert.True((nodes[3] as UAVariable).VariableAttributes.Historizing);
-            Assert.True((nodes[3] as UAVariable).ShouldSubscribeData);
+            Assert.Equal(EventNotifiers.SubscribeToEvents | EventNotifiers.HistoryRead, (nodes[1] as UAObject).FullAttributes.EventNotifier);
+            Assert.True((nodes[1] as UAObject).FullAttributes.ShouldSubscribeToEvents(tester.Config));
+            Assert.False((nodes[3] as UAVariable).FullAttributes.ShouldSubscribe(tester.Config));
+            Assert.True((nodes[3] as UAVariable).FullAttributes.Historizing);
+            Assert.True((nodes[3] as UAVariable).FullAttributes.ShouldSubscribe(tester.Config));
 
 
             // Enable require historizing
@@ -764,33 +769,33 @@ namespace Test.Unit
             tester.Config.History.RequireHistorizing = true;
 
             nodes = GetNodes();
-            await tester.Client.ReadNodeData(nodes, tester.Source.Token);
+            await tester.Client.ReadNodeData(nodes, tester.TypeManager, tester.Source.Token);
 
-            Assert.Equal(EventNotifiers.SubscribeToEvents | EventNotifiers.HistoryRead, nodes[1].EventNotifier);
-            Assert.True(nodes[1].ShouldSubscribeEvents);
-            Assert.True((nodes[3] as UAVariable).ReadHistory);
-            Assert.True((nodes[3] as UAVariable).VariableAttributes.Historizing);
-            Assert.True((nodes[3] as UAVariable).ShouldSubscribeData);
+            Assert.Equal(EventNotifiers.SubscribeToEvents | EventNotifiers.HistoryRead, (nodes[1] as UAObject).FullAttributes.EventNotifier);
+            Assert.True((nodes[1] as UAObject).FullAttributes.ShouldSubscribeToEvents(tester.Config));
+            Assert.True((nodes[3] as UAVariable).FullAttributes.ShouldReadHistory(tester.Config));
+            Assert.True((nodes[3] as UAVariable).FullAttributes.Historizing);
+            Assert.True((nodes[3] as UAVariable).FullAttributes.ShouldSubscribe(tester.Config));
 
             // Enable ignore access level
             tester.Config.History.RequireHistorizing = false;
             tester.Config.Subscriptions.IgnoreAccessLevel = true;
 
             nodes = GetNodes();
-            await tester.Client.ReadNodeData(nodes, tester.Source.Token);
+            await tester.Client.ReadNodeData(nodes, tester.TypeManager, tester.Source.Token);
 
-            Assert.Equal(EventNotifiers.SubscribeToEvents | EventNotifiers.HistoryRead, nodes[1].EventNotifier);
-            Assert.True(nodes[1].ShouldSubscribeEvents);
-            Assert.True((nodes[3] as UAVariable).ReadHistory);
-            Assert.True((nodes[3] as UAVariable).VariableAttributes.Historizing);
-            Assert.True((nodes[3] as UAVariable).ShouldSubscribeData);
-            Assert.Equal(0, (nodes[3] as UAVariable).AccessLevel);
+            Assert.Equal(EventNotifiers.SubscribeToEvents | EventNotifiers.HistoryRead, (nodes[1] as UAObject).FullAttributes.EventNotifier);
+            Assert.True((nodes[1] as UAObject).FullAttributes.ShouldSubscribeToEvents(tester.Config));
+            Assert.True((nodes[3] as UAVariable).FullAttributes.ShouldReadHistory(tester.Config));
+            Assert.True((nodes[3] as UAVariable).FullAttributes.Historizing);
+            Assert.True((nodes[3] as UAVariable).FullAttributes.ShouldSubscribe(tester.Config));
+            Assert.Equal(0, (nodes[3] as UAVariable).FullAttributes.AccessLevel);
 
             // Disable reading array dimensions
             tester.Config.Extraction.DataTypes.MaxArraySize = 0;
 
             nodes = GetNodes();
-            await tester.Client.ReadNodeData(nodes, tester.Source.Token);
+            await tester.Client.ReadNodeData(nodes, tester.TypeManager, tester.Source.Token);
 
             Assert.Null((nodes[3] as UAVariable).ArrayDimensions);
             Assert.NotNull((nodes[4] as UAVariable).ArrayDimensions);
@@ -804,20 +809,20 @@ namespace Test.Unit
             int start = (int)(uint)tester.Server.Ids.Full.WideRoot.Identifier;
             var nodes = Enumerable.Range(start + 1, 2000)
                 .Select(idf => new NodeId((uint)idf, 2))
-                .Select(id => new UAVariable(id, "subnode", tester.Server.Ids.Full.WideRoot))
+                .Select(id => new UAVariable(id, "subnode", null, null, tester.Server.Ids.Full.WideRoot, null))
                 .ToList();
             tester.Config.Source.AttributesChunk = 100;
             tester.Config.History.Enabled = true;
             try
             {
-                await tester.Client.ReadNodeData(nodes, tester.Source.Token);
+                await tester.Client.ReadNodeData(nodes, tester.TypeManager, tester.Source.Token);
             }
             finally
             {
                 tester.Config.Source.AttributesChunk = 1000;
                 tester.Config.History.Enabled = false;
             }
-            Assert.All(nodes, node => Assert.Equal(DataTypeIds.Double, node.DataType.Raw));
+            Assert.All(nodes, node => Assert.Equal(DataTypeIds.Double, node.FullAttributes.DataType.Id));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_attribute_requests", 100));
         }
         [Fact]
@@ -876,20 +881,20 @@ namespace Test.Unit
         {
             var nodes = new[]
             {
-                new UAVariable(tester.Server.Ids.Base.DoubleVar1, "DoubleVar", tester.Server.Ids.Base.Root),
-                new UAVariable(tester.Server.Ids.Custom.Array, "Array", tester.Server.Ids.Custom.Root),
-                new UAVariable(tester.Server.Ids.Custom.StringArray, "StringArray", tester.Server.Ids.Custom.Root),
-                new UAVariable(tester.Server.Ids.Custom.EUProp, "EUProp", tester.Server.Ids.Custom.Root),
-                new UAVariable(tester.Server.Ids.Custom.RangeProp, "RangeProp", tester.Server.Ids.Custom.Root)
+                new UAVariable(tester.Server.Ids.Base.DoubleVar1, "DoubleVar", null, null, tester.Server.Ids.Base.Root, null),
+                new UAVariable(tester.Server.Ids.Custom.Array, "Array", null, null, tester.Server.Ids.Custom.Root, null),
+                new UAVariable(tester.Server.Ids.Custom.StringArray, "StringArray", null, null, tester.Server.Ids.Custom.Root, null),
+                new UAVariable(tester.Server.Ids.Custom.EUProp, "EUProp", null, null, tester.Server.Ids.Custom.Root, null),
+                new UAVariable(tester.Server.Ids.Custom.RangeProp, "RangeProp", null, null, tester.Server.Ids.Custom.Root, null)
             };
-            nodes[1].Attributes.IsProperty = true;
-            nodes[2].Attributes.IsProperty = true;
-            nodes[3].Attributes.IsProperty = true;
-            nodes[4].Attributes.IsProperty = true;
+            nodes[1].IsRawProperty = true;
+            nodes[2].IsRawProperty = true;
+            nodes[3].IsRawProperty = true;
+            nodes[4].IsRawProperty = true;
 
             // Need to read attributes first for this, to get proper conversion we need the datatype.
-            await tester.Client.ReadNodeData(nodes, tester.Source.Token);
-            await tester.Client.ReadNodeValues(nodes, tester.Source.Token);
+            await tester.Client.ReadNodeData(nodes, tester.TypeManager, tester.Source.Token);
+            await tester.Client.ReadNodeValues(nodes, tester.TypeManager, tester.Source.Token);
 
             Assert.Equal(new Variant(0.0), nodes[0].Value);
             Assert.Equal(new Variant(new double[] { 0, 0, 0, 0 }), nodes[1].Value);
@@ -903,17 +908,17 @@ namespace Test.Unit
         {
             var nodes = new[]
             {
-                new UAVariable(tester.Server.Ids.Base.DoubleVar1, "DoubleVar1", tester.Server.Ids.Base.Root),
-                new UAVariable(new NodeId("missing-node"), "MissingNode", tester.Server.Ids.Base.Root),
-                new UAVariable(new NodeId("missing-node2"), "MissingNode2", tester.Server.Ids.Base.Root),
+                new UAVariable(tester.Server.Ids.Base.DoubleVar1, "DoubleVar1", null, null, tester.Server.Ids.Base.Root, null),
+                new UAVariable(new NodeId("missing-node"), "MissingNode", null, null, tester.Server.Ids.Base.Root, null),
+                new UAVariable(new NodeId("missing-node2"), "MissingNode2", null, null, tester.Server.Ids.Base.Root, null),
             };
 
-            await tester.Client.ReadNodeData(nodes, tester.Source.Token);
+            await tester.Client.ReadNodeData(nodes, tester.TypeManager, tester.Source.Token);
 
-            Assert.NotNull(nodes[0].DataType);
+            Assert.NotNull(nodes[0].FullAttributes.DataType);
             Assert.False(nodes[0].Ignore);
-            Assert.True(nodes[1].DataType.Raw.IsNullNodeId);
-            Assert.True(nodes[2].DataType.Raw.IsNullNodeId);
+            Assert.True(nodes[1].FullAttributes.DataType.Id.IsNullNodeId);
+            Assert.True(nodes[2].FullAttributes.DataType.Id.IsNullNodeId);
             Assert.True(nodes[1].Ignore);
             Assert.True(nodes[2].Ignore);
         }
@@ -982,7 +987,7 @@ namespace Test.Unit
             int start = (int)(uint)tester.Server.Ids.Full.WideRoot.Identifier;
             var nodes = Enumerable.Range(start + 1, 2000)
                 .Select(idf => new NodeId((uint)idf, 2))
-                .Select(id => new VariableExtractionState(tester.Client, new UAVariable(id, "somvar", tester.Server.Ids.Full.WideRoot), true, true))
+                .Select(id => new VariableExtractionState(tester.Client, new UAVariable(id, "somvar", null, null, tester.Server.Ids.Full.WideRoot, null), true, true, true))
                 .ToList();
 
             var lck = new object();
@@ -1071,7 +1076,7 @@ namespace Test.Unit
             var nodes = new[] { tester.Server.Ids.Custom.Array, tester.Server.Ids.Custom.MysteryVar, tester.Server.Ids.Base.StringVar }
                 .Select(id =>
                     new VariableExtractionState(tester.Client,
-                        new UAVariable(id, "somevar", NodeId.Null), false, false))
+                        new UAVariable(id, "somevar", null, null, NodeId.Null, null), false, false, true))
                 .ToList();
 
             void update(int idx)
@@ -1132,25 +1137,6 @@ namespace Test.Unit
 
         #endregion
         #region events
-        // Just basic testing here, separate tests should be written for the event field collector itself.
-        [Fact]
-        public async Task TestGetEventFields()
-        {
-            tester.Config.Events.Enabled = true;
-
-            try
-            {
-                var fields = await tester.Client.GetEventFields(null, tester.Source.Token);
-                Assert.True(fields.ContainsKey(tester.Server.Ids.Event.CustomType));
-                Assert.True(fields.ContainsKey(ObjectTypeIds.AuditActivateSessionEventType));
-            }
-            finally
-            {
-                tester.Config.Events.Enabled = false;
-                tester.Client.ClearEventFields();
-            }
-        }
-
         [Fact]
         public async Task TestEventSubscriptions()
         {
@@ -1174,10 +1160,11 @@ namespace Test.Unit
 
             try
             {
-                await tester.Client.GetEventFields(null, tester.Source.Token);
+                await tester.TypeManager.LoadTypeData(tester.Source.Token);
+                tester.TypeManager.BuildTypeInfo();
 
-                await tester.Client.SubscribeToEvents(emitters.Take(2), handler, tester.Source.Token);
-                await tester.Client.SubscribeToEvents(emitters.Skip(2), handler, tester.Source.Token);
+                await tester.Client.SubscribeToEvents(emitters.Take(2), handler, tester.TypeManager.EventFields, tester.Source.Token);
+                await tester.Client.SubscribeToEvents(emitters.Skip(2), handler, tester.TypeManager.EventFields, tester.Source.Token);
 
                 tester.Server.TriggerEvents(0);
 
@@ -1193,7 +1180,6 @@ namespace Test.Unit
             {
                 tester.Config.Source.SubscriptionChunk = 1000;
                 tester.Config.Events.Enabled = false;
-                tester.Client.ClearEventFields();
                 await tester.Client.RemoveSubscription("EventListener");
                 tester.Server.WipeEventHistory();
             }
@@ -1221,8 +1207,9 @@ namespace Test.Unit
             }
             try
             {
-                await tester.Client.GetEventFields(null, tester.Source.Token);
-                await tester.Client.SubscribeToEvents(emitters, handler, tester.Source.Token);
+                await tester.TypeManager.LoadTypeData(tester.Source.Token);
+                tester.TypeManager.BuildTypeInfo();
+                await tester.Client.SubscribeToEvents(emitters, handler, tester.TypeManager.EventFields, tester.Source.Token);
 
                 tester.Server.TriggerEvents(0);
 
@@ -1234,7 +1221,6 @@ namespace Test.Unit
                 tester.Config.Source.SubscriptionChunk = 1000;
                 tester.Config.Events.Enabled = false;
                 tester.Config.Events.EventIds = null;
-                tester.Client.ClearEventFields();
                 await tester.Client.RemoveSubscription("EventListener");
                 tester.Server.WipeEventHistory();
             }
@@ -1346,7 +1332,7 @@ namespace Test.Unit
                 ServerMetrics = true
             };
             var mgr = new NodeMetricsManager(tester.Client, tester.Config.Subscriptions, tester.Config.Metrics.Nodes);
-            await mgr.StartNodeMetrics(tester.Source.Token);
+            await mgr.StartNodeMetrics(tester.TypeManager, tester.Source.Token);
 
             tester.Server.SetDiagnosticsEnabled(true);
 
@@ -1372,7 +1358,7 @@ namespace Test.Unit
             tester.Server.UpdateNode(ids.DoubleVar1, 0);
             tester.Server.UpdateNode(ids.DoubleVar2, 0);
             var mgr = new NodeMetricsManager(tester.Client, tester.Config.Subscriptions, tester.Config.Metrics.Nodes);
-            await mgr.StartNodeMetrics(tester.Source.Token);
+            await mgr.StartNodeMetrics(tester.TypeManager, tester.Source.Token);
 
             tester.Server.UpdateNode(ids.DoubleVar1, 15);
             await TestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_node_Variable_1", 15), 5);

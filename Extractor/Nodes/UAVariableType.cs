@@ -13,11 +13,11 @@ namespace Cognite.OpcUa.Nodes
 {
     public class VariableTypeAttributes : BaseNodeAttributes
     {
-        public bool IsAbstract { get; private set; }
-        public int ValueRank { get; private set; }
-        public UADataType DataType { get; private set; } = null!;
-        public int[]? ArrayDimensions { get; private set; }
-        public Variant? Value { get; private set; }
+        public bool IsAbstract { get; set; }
+        public int ValueRank { get; set; }
+        public UADataType DataType { get; set; } = null!;
+        public int[]? ArrayDimensions { get; set; }
+        public Variant? Value { get; set; }
         public VariableTypeAttributes() : base(NodeClass.VariableType)
         {
         }

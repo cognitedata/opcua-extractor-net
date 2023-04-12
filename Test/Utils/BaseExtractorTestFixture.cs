@@ -6,6 +6,7 @@ using Cognite.Extractor.Utils;
 using Cognite.OpcUa;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Pushers;
+using Cognite.OpcUa.TypeCollectors;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
@@ -63,7 +64,7 @@ namespace Test.Utils
             Source = new CancellationTokenSource();
             Callbacks = new DummyClientCallbacks(Source.Token);
             Client.Callbacks = Callbacks;
-            await Client.Run(Source.Token, 0);
+            await Client.Run(new TypeManager(Config, Client, Log), Source.Token, 0);
         }
 
         private void ResetType(object obj, object reference)
@@ -116,14 +117,11 @@ namespace Test.Utils
             if (clear)
             {
                 Client.ClearNodeOverrides();
-                Client.ClearEventFields();
-                Client.DataTypeManager.Reset();
                 Client.RemoveSubscription("EventListener").Wait();
                 Client.RemoveSubscription("DataChangeListener").Wait();
                 Client.RemoveSubscription("AuditListener").Wait();
                 Client.RemoveSubscription(RebrowseTriggerManager.SubscriptionName).Wait();
                 Client.Browser.IgnoreFilters = null;
-                Client.ObjectTypeManager.Reset();
             }
             var ext = new UAExtractor(Config, Provider, pushers, Client, stateStore);
             ext.InitExternal(Source.Token);
@@ -170,7 +168,7 @@ namespace Test.Utils
             var provider = Services.BuildServiceProvider();
             var destination = provider.GetRequiredService<CogniteDestination>();
             var pusher = new CDFPusher(Provider.GetRequiredService<ILogger<CDFPusher>>(),
-                Config.Extraction, Config.Cognite, destination);
+                Config, Config.Cognite, destination);
             var handler = provider.GetRequiredService<CDFMockHandler>();
             return (handler, pusher);
         }

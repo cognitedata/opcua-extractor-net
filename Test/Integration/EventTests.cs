@@ -622,12 +622,12 @@ namespace Test.Integration
 
             var directRoot = pusher.PushedNodes[ids.DirectAdd];
 
-            var directObj = pusher.PushedNodes.Values.First(obj => obj.DisplayName == "AddObj 0");
-            var directVar = pusher.PushedVariables.Values.First(variable => variable.DisplayName == "AddVar 0");
+            var directObj = pusher.PushedNodes.Values.First(obj => obj.Attributes.DisplayName == "AddObj 0");
+            var directVar = pusher.PushedVariables.Values.First(variable => variable.Attributes.DisplayName == "AddVar 0");
 
             Assert.Equal(directRoot.Id, directObj.ParentId);
             Assert.Equal(directRoot.Id, directVar.ParentId);
-            Assert.NotNull(directVar.DataType);
+            Assert.NotNull(directVar.FullAttributes.DataType);
             Assert.True(extractor.Streamer.AllowData);
 
             tester.Server.ReferenceGrowth(1);
@@ -636,12 +636,12 @@ namespace Test.Integration
 
             var refRoot = pusher.PushedNodes[ids.RefAdd];
 
-            var refObj = pusher.PushedNodes.Values.First(obj => obj.DisplayName == "AddObj 1");
-            var refVar = pusher.PushedVariables.Values.First(variable => variable.DisplayName == "AddVar 1");
+            var refObj = pusher.PushedNodes.Values.First(obj => obj.Attributes.DisplayName == "AddObj 1");
+            var refVar = pusher.PushedVariables.Values.First(variable => variable.Attributes.DisplayName == "AddVar 1");
 
             Assert.Equal(refRoot.Id, refObj.ParentId);
             Assert.Equal(refRoot.Id, refVar.ParentId);
-            Assert.NotNull(refVar.DataType);
+            Assert.NotNull(refVar.FullAttributes.DataType);
 
             await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
         }
