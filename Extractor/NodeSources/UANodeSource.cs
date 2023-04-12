@@ -225,7 +225,7 @@ namespace Cognite.OpcUa.NodeSources
                     return;
                 }
 
-                Log.LogTrace("Handle node {Name}, {Id}: {Class}", result.Attributes.DisplayName, result.Id, result.NodeClass);
+                Log.LogTrace("Handle node {Name}, {Id}: {Class}", result.Name, result.Id, result.NodeClass);
                 Extractor.State.RegisterNode(result.Id, result.GetUniqueId(Extractor));
                 mapped = TryAdd(result);
             }

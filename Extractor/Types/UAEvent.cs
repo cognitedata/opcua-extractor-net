@@ -76,7 +76,7 @@ namespace Cognite.OpcUa.Types
             builder.AppendLine();
             builder.AppendFormat(CultureInfo.InvariantCulture, "Time: {0}", Time);
             builder.AppendLine();
-            builder.AppendFormat(CultureInfo.InvariantCulture, "Type: {0}", EventType?.Attributes.DisplayName);
+            builder.AppendFormat(CultureInfo.InvariantCulture, "Type: {0}", EventType?.Name);
             builder.AppendLine();
             builder.AppendFormat(CultureInfo.InvariantCulture, "Emitter: {0}", EmittingNode);
             builder.AppendLine();
@@ -240,7 +240,7 @@ namespace Cognite.OpcUa.Types
 
             var finalMetaData = new Dictionary<string, string>();
             finalMetaData["Emitter"] = client.GetUniqueId(EmittingNode) ?? "null";
-            finalMetaData["TypeName"] = EventType?.Attributes.DisplayName ?? "null";
+            finalMetaData["TypeName"] = EventType?.Name ?? "null";
             if (MetaData == null)
             {
                 evt.Metadata = finalMetaData;

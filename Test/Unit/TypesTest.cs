@@ -538,7 +538,7 @@ namespace Test.Unit
             {
                 var child = children[i];
                 Assert.True(child.FullAttributes.ShouldReadHistory(tester.Config));
-                Assert.Equal($"name[{i}]", child.Attributes.DisplayName);
+                Assert.Equal($"name[{i}]", child.Name);
                 Assert.Equal(node.Id, child.ParentId);
                 Assert.Equal(node.FullAttributes.AccessLevel, child.FullAttributes.AccessLevel);
                 Assert.Equal(node, (child as UAVariableMember).TSParent);
@@ -566,7 +566,7 @@ namespace Test.Unit
 
             var child = children.Single();
             Assert.True(child.FullAttributes.ShouldReadHistory(tester.Config));
-            Assert.Equal(node.FullAttributes.DisplayName, child.FullAttributes.DisplayName);
+            Assert.Equal(node.Name, child.Name);
             Assert.Equal(node.Id, child.ParentId);
             Assert.Equal(node.FullAttributes.AccessLevel, child.FullAttributes.AccessLevel);
             Assert.Equal(node.TimeSeries, child);

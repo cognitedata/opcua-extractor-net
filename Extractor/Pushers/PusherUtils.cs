@@ -121,7 +121,7 @@ namespace Cognite.OpcUa.Pushers
             if (update.Description && !string.IsNullOrEmpty(newDesc) && newDesc != old.Description)
                 tsUpdate.Description = new UpdateNullable<string>(newDesc);
 
-            var newName = Sanitation.Truncate(newTs.FullAttributes.DisplayName, Sanitation.TimeSeriesNameMax);
+            var newName = Sanitation.Truncate(newTs.Name, Sanitation.TimeSeriesNameMax);
             if (update.Name && !string.IsNullOrEmpty(newName) && newName != old.Name)
                 tsUpdate.Name = new UpdateNullable<string>(newName);
 
@@ -177,8 +177,8 @@ namespace Cognite.OpcUa.Pushers
             if (update.Description && !string.IsNullOrEmpty(newAsset.Attributes.Description) && newAsset.Attributes.Description != old.Description)
                 assetUpdate.Description = new UpdateNullable<string>(newAsset.Attributes.Description.Truncate(Sanitation.AssetDescriptionMax)!);
 
-            if (update.Name && !string.IsNullOrEmpty(newAsset.Attributes.DisplayName) && newAsset.Attributes.DisplayName != old.Name)
-                assetUpdate.Name = new UpdateNullable<string>(newAsset.Attributes.DisplayName.Truncate(Sanitation.AssetNameMax)!);
+            if (update.Name && !string.IsNullOrEmpty(newAsset.Name) && newAsset.Name != old.Name)
+                assetUpdate.Name = new UpdateNullable<string>(newAsset.Name.Truncate(Sanitation.AssetNameMax)!);
 
             if (update.Metadata)
             {

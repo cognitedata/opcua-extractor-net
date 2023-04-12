@@ -50,6 +50,7 @@ namespace Test.Unit
             tester.Config.Extraction.Relationships.Enabled = true;
             using var extractor = tester.BuildExtractor();
             tester.Config.Extraction.Relationships.Enabled = false;
+            tester.Config.Extraction.DataTypes.AutoIdentifyTypes = true;
 
             var log = tester.Provider.GetRequiredService<ILogger<NodeSetSource>>();
             var source = new NodeSetSource(log, tester.Config, extractor, tester.Client, extractor.TypeManager);
@@ -198,12 +199,12 @@ namespace Test.Unit
 
             source.BuildNodes(new[] { tester.Ids.Custom.Root, ObjectIds.TypesFolder }, true);
             var result = await source.ParseResults(tester.Source.Token);
-            Assert.Equal(892, result.SourceVariables.Count());
-            Assert.Equal(899, result.DestinationVariables.Count());
-            Assert.Equal(497, result.DestinationObjects.Count());
-            Assert.Equal(475, result.SourceObjects.Count());
-            Assert.Equal(5070, result.DestinationReferences.Count());
-            Assert.Equal(2535, result.DestinationReferences.Count(rel => rel.IsForward));
+            Assert.Equal(275, result.SourceVariables.Count());
+            Assert.Equal(282, result.DestinationVariables.Count());
+            Assert.Equal(447, result.DestinationObjects.Count());
+            Assert.Equal(441, result.SourceObjects.Count());
+            Assert.Equal(2108, result.DestinationReferences.Count());
+            Assert.Equal(1054, result.DestinationReferences.Count(rel => rel.IsForward));
             Assert.All(result.DestinationReferences, rel =>
             {
                 Assert.NotNull(rel.Source);

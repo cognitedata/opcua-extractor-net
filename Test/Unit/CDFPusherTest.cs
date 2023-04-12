@@ -866,6 +866,8 @@ namespace Test.Unit
             using var extractor = tester.BuildExtractor(true, null, pusher);
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_cdf");
 
+            tester.Config.Extraction.Relationships.Enabled = true;
+
             var assets = Enumerable.Empty<BaseUANode>();
             var tss = Enumerable.Empty<UAVariable>();
             var update = new UpdateConfig();
@@ -906,7 +908,11 @@ namespace Test.Unit
                 "gp.Organizes;base:s=source;base:s=target2",
                 "gp.OrganizedBy;base:s=source2;base:s=target",
             };
-            Assert.All(ids, id => Assert.Contains(handler.Relationships, rel => rel.Key == id));
+            foreach (var rl in handler.Relationships)
+            {
+                tester.Log.LogInformation("{Key}", rl.Key);
+            }
+            Assert.All(ids, id => Assert.True(handler.Relationships.ContainsKey(id)));
 
             // Test pushing all duplicates
             Assert.True((await pusher.PushNodes(assets, tss, references, update, tester.Source.Token)).References);
@@ -924,6 +930,7 @@ namespace Test.Unit
                 RelationshipsTable = "relationships",
                 Database = "metadata"
             };
+            tester.Config.Extraction.Relationships.Enabled = true;
 
             var assets = Enumerable.Empty<BaseUANode>();
             var tss = Enumerable.Empty<UAVariable>();
@@ -965,7 +972,7 @@ namespace Test.Unit
                 "gp.Organizes;base:s=source;base:s=target2",
                 "gp.OrganizedBy;base:s=source2;base:s=target",
             };
-            Assert.All(ids, id => Assert.Contains(handler.RelationshipsRaw, rel => rel.Key == id));
+            Assert.All(ids, id => Assert.True(handler.RelationshipsRaw.ContainsKey(id)));
 
             // Test pushing all duplicates
             Assert.True((await pusher.PushNodes(assets, tss, references, update, tester.Source.Token)).References);
@@ -987,6 +994,7 @@ namespace Test.Unit
             var json = JsonSerializer.Serialize(node, options);
 
             var val = JsonSerializer.Deserialize<JsonElement>(json, options);
+            tester.Log.LogInformation("{Node}", val);
             if (ts)
             {
                 handler.TimeseriesRaw[id] = val;
@@ -1013,6 +1021,7 @@ namespace Test.Unit
             tester.Config.Extraction.DataTypes.AppendInternalValues = true;
             tester.Config.Extraction.DataTypes.AllowStringVariables = true;
             tester.Config.Extraction.DataTypes.MaxArraySize = 10;
+            tester.Config.Subscriptions.IgnoreAccessLevel = true;
 
             var log = tester.Provider.GetRequiredService<ILogger<CDFNodeSource>>();
             var source = new CDFNodeSource(log, tester.Config, extractor, tester.Client, pusher, extractor.TypeManager);
@@ -1051,7 +1060,7 @@ namespace Test.Unit
             await source.ReadRawNodes(tester.Source.Token);
             result = await source.ParseResults(tester.Source.Token);
             Assert.Single(result.DestinationObjects);
-            Assert.Equal("test4", result.DestinationObjects.First().Attributes.DisplayName);
+            Assert.Equal("test4", result.DestinationObjects.First().Name);
             Assert.Equal(6, result.DestinationVariables.Count());
             Assert.Empty(result.SourceObjects);
             Assert.Equal(3, result.SourceVariables.Count());
@@ -1099,7 +1108,7 @@ namespace Test.Unit
             Assert.Equal(7, result.DestinationVariables.Count());
             Assert.Equal(4, result.SourceVariables.Count());
             Assert.Empty(extractor.State.NodeStates);
-            Assert.Equal(2, extractor.State.EmitterStates.Count());
+            Assert.Single(extractor.State.EmitterStates);
         }
 
         [Fact]
@@ -1197,7 +1206,7 @@ namespace Test.Unit
             tester.Config.Extraction.DataTypes.AppendInternalValues = true;
             tester.Config.Events.Enabled = true;
             tester.Config.Events.ReadServer = false;
-            tester.Config.Subscriptions.DataPoints = false;
+            tester.Config.Subscriptions.DataPoints = true;
             tester.Config.Extraction.RootNode = tester.Ids.Event.Root.ToProtoNodeId(tester.Client);
 
             using var extractor = tester.BuildExtractor(true, null, pusher);
@@ -1269,7 +1278,7 @@ namespace Test.Unit
             tester.Config.Extraction.DataTypes.AppendInternalValues = true;
             tester.Config.Events.Enabled = true;
             tester.Config.Events.ReadServer = false;
-            tester.Config.Subscriptions.DataPoints = false;
+            tester.Config.Subscriptions.DataPoints = true;
             tester.Config.Extraction.RootNode = tester.Ids.Event.Root.ToProtoNodeId(tester.Client);
             tester.Config.Source.AltSourceBackgroundBrowse = true;
 

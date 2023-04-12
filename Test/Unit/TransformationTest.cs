@@ -46,7 +46,7 @@ namespace Test.Unit
             var filter = new NodeFilter(raw);
             var matched = nodes.Where(node => filter.IsMatch(node, nss)).ToList();
             var matchedBasic = nodes.Where(node =>
-                filter.IsBasicMatch(node.Attributes.DisplayName, node.Id, node.FullAttributes.TypeDefinition?.Id, nss, node.NodeClass)).ToList();
+                filter.IsBasicMatch(node.Name, node.Id, node.FullAttributes.TypeDefinition?.Id, nss, node.NodeClass)).ToList();
 
             Assert.Equal(2, matched.Count);
             Assert.Equal(2, matchedBasic.Count);
@@ -75,7 +75,7 @@ namespace Test.Unit
             var filter = new NodeFilter(raw);
             var matched = nodes.Where(node => filter.IsMatch(node, nss)).ToList();
             var matchedBasic = nodes.Where(node =>
-                filter.IsBasicMatch(node.Attributes.DisplayName, node.Id, node.FullAttributes.TypeDefinition?.Id, nss, node.NodeClass)).ToList();
+                filter.IsBasicMatch(node.Name, node.Id, node.FullAttributes.TypeDefinition?.Id, nss, node.NodeClass)).ToList();
 
             Assert.Single(matched);
             Assert.Empty(matchedBasic);
@@ -100,7 +100,7 @@ namespace Test.Unit
             var filter = new NodeFilter(raw);
             var matched = nodes.Where(node => filter.IsMatch(node, nss)).ToList();
             var matchedBasic = nodes.Where(node =>
-                            filter.IsBasicMatch(node.Attributes.DisplayName, node.Id, node.FullAttributes.TypeDefinition?.Id, nss, node.NodeClass)).ToList();
+                            filter.IsBasicMatch(node.Name, node.Id, node.FullAttributes.TypeDefinition?.Id, nss, node.NodeClass)).ToList();
 
             Assert.Equal(3, matched.Count);
             Assert.Equal(3, matchedBasic.Count);
@@ -124,7 +124,7 @@ namespace Test.Unit
             var filter = new NodeFilter(raw);
             var matched = nodes.Where(node => filter.IsMatch(node, nss)).ToList();
             var matchedBasic = nodes.Where(node =>
-                filter.IsBasicMatch(node.Attributes.DisplayName, node.Id, node.FullAttributes.TypeDefinition?.Id, nss, node.NodeClass)).ToList();
+                filter.IsBasicMatch(node.Name, node.Id, node.FullAttributes.TypeDefinition?.Id, nss, node.NodeClass)).ToList();
 
             Assert.Equal(2, matched.Count);
             Assert.Equal(2, matchedBasic.Count);
@@ -143,14 +143,14 @@ namespace Test.Unit
             var nodes = new[]
             {
                 new UAObject(new NodeId(1), "TestTest", null, null, new NodeId("parent"), new UAObjectType(new NodeId(1))),
-                new UAObject(new NodeId(2), "OtherTest", null, null, new NodeId("parent"), new UAObjectType(new NodeId(1))),
+                new UAObject(new NodeId(2), "OtherTest", null, null, new NodeId("parent"), new UAObjectType(new NodeId(2))),
                 new UAObject(new NodeId(3), "Test", null, null, new NodeId("parent"), null),
                 new UAObject(new NodeId(4), "Other", null, null, new NodeId("parent"), new UAObjectType(new NodeId("test"))),
             };
             var filter = new NodeFilter(raw);
             var matched = nodes.Where(node => filter.IsMatch(node, nss)).ToList();
             var matchedBasic = nodes.Where(node =>
-                filter.IsBasicMatch(node.Attributes.DisplayName, node.Id, node.FullAttributes.TypeDefinition?.Id, nss, node.NodeClass)).ToList();
+                filter.IsBasicMatch(node.Name, node.Id, node.FullAttributes.TypeDefinition?.Id, nss, node.NodeClass)).ToList();
 
             Assert.Equal(2, matched.Count);
             Assert.Equal(2, matchedBasic.Count);
@@ -190,7 +190,7 @@ namespace Test.Unit
             var filter = new NodeFilter(raw);
             var matched = nodes.Where(node => filter.IsMatch(node, nss)).ToList();
             var matchedBasic = nodes.Where(node =>
-                filter.IsBasicMatch(node.Attributes.DisplayName, node.Id, GetTypeDefinition(node), nss, node.NodeClass)).ToList();
+                filter.IsBasicMatch(node.Name, node.Id, GetTypeDefinition(node), nss, node.NodeClass)).ToList();
 
             Assert.Equal(2, matched.Count);
             Assert.Empty(matchedBasic);
@@ -230,7 +230,7 @@ namespace Test.Unit
             var filter = new NodeFilter(raw);
             var matched = nodes.Where(node => filter.IsMatch(node, nss)).ToList();
             var matchedBasic = nodes.Where(node =>
-                filter.IsBasicMatch(node.Attributes.DisplayName, node.Id, node.FullAttributes.TypeDefinition?.Id, nss, node.NodeClass)).ToList();
+                filter.IsBasicMatch(node.Name, node.Id, node.FullAttributes.TypeDefinition?.Id, nss, node.NodeClass)).ToList();
 
             Assert.Equal(2, matched.Count);
             Assert.Empty(matchedBasic);
@@ -256,7 +256,7 @@ namespace Test.Unit
             var filter = new NodeFilter(raw);
             var matched = nodes.Where(node => filter.IsMatch(node, nss)).ToList();
             var matchedBasic = nodes.Where(node =>
-                filter.IsBasicMatch(node.Attributes.DisplayName, node.Id, GetTypeDefinition(node), nss, node.NodeClass)).ToList();
+                filter.IsBasicMatch(node.Name, node.Id, GetTypeDefinition(node), nss, node.NodeClass)).ToList();
 
             Assert.Equal(2, matched.Count);
             Assert.Equal(2, matchedBasic.Count);
@@ -288,7 +288,7 @@ namespace Test.Unit
             var filter = new NodeFilter(raw);
             var matched = nodes.Where(node => filter.IsMatch(node, nss)).ToList();
             var matchedBasic = nodes.Where(node =>
-                filter.IsBasicMatch(node.Attributes.DisplayName, node.Id, GetTypeDefinition(node), nss, node.NodeClass)).ToList();
+                filter.IsBasicMatch(node.Name, node.Id, GetTypeDefinition(node), nss, node.NodeClass)).ToList();
 
             Assert.Equal(2, matched.Count);
             Assert.Empty(matchedBasic);
@@ -363,7 +363,7 @@ namespace Test.Unit
             var filter = new NodeFilter(raw);
             var matched = nodes.Where(node => filter.IsMatch(node, nss)).ToList();
             var matchedBasic = nodes.Where(node =>
-                filter.IsBasicMatch(node.Attributes.DisplayName, node.Id, GetTypeDefinition(node), nss, node.NodeClass)).ToList();
+                filter.IsBasicMatch(node.Name, node.Id, GetTypeDefinition(node), nss, node.NodeClass)).ToList();
 
             Assert.Single(matched);
             Assert.Empty(matchedBasic);
@@ -465,7 +465,7 @@ namespace Test.Unit
                 trans2.ApplyTransformation(log, node, nss, cfg);
             }
             Assert.False(nodes[0].IsProperty);
-            Assert.False(nodes[1].IsProperty);
+            Assert.True(nodes[1].IsProperty);
             Assert.True(nodes[2].IsProperty);
             Assert.False(nodes[3].IsProperty);
         }

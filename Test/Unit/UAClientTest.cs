@@ -394,7 +394,7 @@ namespace Test.Unit
             var server = await tester.Client.GetServerNode(tester.TypeManager, tester.Source.Token);
             Assert.Equal(ObjectIds.Server, server.Id);
             Assert.Equal(NodeId.Null, server.ParentId);
-            Assert.Equal("Server", server.Attributes.DisplayName);
+            Assert.Equal("Server", server.Name);
         }
         [Fact]
         public async Task TestGetRoots()

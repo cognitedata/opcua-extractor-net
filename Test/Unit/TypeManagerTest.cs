@@ -436,11 +436,11 @@ namespace Test.Unit
 
             await mgr.LoadTypeData(tester.Source.Token);
 
-            Assert.Equal("BaseObjectType", type1.Attributes.DisplayName);
-            Assert.Equal("FolderType", type2.Attributes.DisplayName);
-            Assert.Equal("AudioVariableType", type3.Attributes.DisplayName);
-            Assert.Equal("CustomObjectType", type4.Attributes.DisplayName);
-            Assert.Equal("CustomVariableType", type5.Attributes.DisplayName);
+            Assert.Equal("BaseObjectType", type1.Name);
+            Assert.Equal("FolderType", type2.Name);
+            Assert.Equal("AudioVariableType", type3.Name);
+            Assert.Equal("CustomObjectType", type4.Name);
+            Assert.Equal("CustomVariableType", type5.Name);
         }
         #endregion
         #region referencetypemanager

@@ -490,6 +490,8 @@ namespace Test.Unit
             var tss = Enumerable.Empty<UAVariable>();
             var update = new UpdateConfig();
 
+            tester.Config.Extraction.Relationships.Enabled = true;
+
             // Push none
             var waitTask = bridge.WaitForNextMessage(1);
             Assert.True((await pusher.PushNodes(assets, tss, Enumerable.Empty<UAReference>(), update, tester.Source.Token)).References);
@@ -527,7 +529,7 @@ namespace Test.Unit
                 "gp.Organizes;base:s=source;base:s=target2",
                 "gp.OrganizedBy;base:s=source2;base:s=target",
             };
-            Assert.All(ids, id => Assert.Contains(handler.Relationships, rel => rel.Key == id));
+            Assert.All(ids, id => Assert.True(handler.Relationships.ContainsKey(id)));
 
             // Test pushing all duplicates
             waitTask = bridge.WaitForNextMessage(1);
@@ -547,6 +549,8 @@ namespace Test.Unit
                 RelationshipsTable = "relationships",
                 Database = "metadata"
             };
+
+            tester.Config.Extraction.Relationships.Enabled = true;
 
             var assets = Enumerable.Empty<BaseUANode>();
             var tss = Enumerable.Empty<UAVariable>();
@@ -589,7 +593,7 @@ namespace Test.Unit
                 "gp.Organizes;base:s=source;base:s=target2",
                 "gp.OrganizedBy;base:s=source2;base:s=target",
             };
-            Assert.All(ids, id => Assert.Contains(handler.RelationshipsRaw, rel => rel.Key == id));
+            Assert.All(ids, id => Assert.True(handler.RelationshipsRaw.ContainsKey(id)));
 
             // Test pushing all duplicates
             waitTask = bridge.WaitForNextMessage(1);

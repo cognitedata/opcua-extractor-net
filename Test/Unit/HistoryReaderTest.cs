@@ -525,6 +525,9 @@ namespace Test.Unit
                 Data = true
             };
 
+            tester.Config.Events.Enabled = true;
+            tester.Config.Events.History = true;
+
             var log = tester.Provider.GetRequiredService<ILogger<HistoryReader>>();
 
             using var reader = new HistoryReader(log, tester.Client, extractor, extractor.TypeManager, cfg, tester.Source.Token);
@@ -627,6 +630,9 @@ namespace Test.Unit
             {
                 Backfill = true,
             };
+
+            tester.Config.Events.Enabled = true;
+            tester.Config.Events.History = true;
 
             var log = tester.Provider.GetRequiredService<ILogger<HistoryReader>>();
 

@@ -26,7 +26,7 @@ namespace Cognite.OpcUa.Nodes
             switch (attributeId)
             {
                 case Attributes.InverseName:
-                    InverseName = value.GetValue<string?>(null);
+                    InverseName = value.GetValue<LocalizedText?>(null)?.Text;
                     break;
                 default:
                     base.LoadAttribute(value, attributeId, typeManager);
@@ -68,12 +68,12 @@ namespace Cognite.OpcUa.Nodes
         public string? GetName(bool isInverse)
         {
             if (isInverse && !string.IsNullOrEmpty(FullAttributes.InverseName)) return FullAttributes.InverseName;
-            return Attributes.DisplayName;
+            return Name;
         }
 
         public override void Format(StringBuilder builder, int indent, bool writeParent = true, bool writeProperties = true)
         {
-            builder.AppendFormat(CultureInfo.InvariantCulture, "{0}ReferenceType: {1}", new string(' ', indent), Attributes.DisplayName);
+            builder.AppendFormat(CultureInfo.InvariantCulture, "{0}ReferenceType: {1}", new string(' ', indent), Name);
             builder.AppendLine();
             base.Format(builder, indent + 4, writeParent);
 

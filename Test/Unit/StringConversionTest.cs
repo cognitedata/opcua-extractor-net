@@ -272,12 +272,6 @@ namespace Test.Unit
             converter.AddConverters(options, ConverterType.Variable);
 
             var variable = new UAVariable(new NodeId("test"), "test", null, null, NodeId.Null, null);
-            TestConvert(variable,
-                @"{""externalId"":""gp.base:s=test"",""name"":""test"","
-                + @"""description"":null,""metadata"":null,""assetExternalId"":null,"
-                + @"""isString"":false,""isStep"":false,"
-                + @"""NodeId"":{""idType"":1,""identifier"":""test""}}");
-
             variable.FullAttributes.DataType = new UADataType(DataTypeIds.Boolean);
 
             TestConvert(variable,
@@ -302,17 +296,21 @@ namespace Test.Unit
             }
 
             tester.Config.Extraction.DataTypes.AppendInternalValues = true;
+            tester.Config.Events.Enabled = true;
+            tester.Config.Events.History = true;
             var node = new UAObject(new NodeId("test"), "test", null, null, NodeId.Null, null);
             TestConvert(node,
                 @"{""externalId"":""gp.base:s=test"",""name"":""test"","
                 + @"""description"":null,""metadata"":null,""parentExternalId"":null,"
-                + @"""InternalInfo"":{""EventNotifier"":0,""ShouldSubscribeEvents"":false,""NodeClass"":1}}");
+                + @"""InternalInfo"":{""EventNotifier"":0,""ShouldSubscribeEvents"":false,"
+                + @"""ShouldReadHistoryEvents"":false,""NodeClass"":1}}");
 
             node.FullAttributes.EventNotifier |= EventNotifiers.HistoryRead | EventNotifiers.SubscribeToEvents;
             TestConvert(node,
                 @"{""externalId"":""gp.base:s=test"",""name"":""test"","
                 + @"""description"":null,""metadata"":null,""parentExternalId"":null,"
-                + @"""InternalInfo"":{""EventNotifier"":5,""ShouldSubscribeEvents"":true,""NodeClass"":1}}");
+                + @"""InternalInfo"":{""EventNotifier"":5,""ShouldSubscribeEvents"":true,"
+                + @"""ShouldReadHistoryEvents"":true,""NodeClass"":1}}");
 
             var variable = new UAVariable(new NodeId("test"), "test", null, null, NodeId.Null, null);
             options = new JsonSerializerOptions();
@@ -320,12 +318,13 @@ namespace Test.Unit
             variable.FullAttributes.AccessLevel |= AccessLevels.CurrentRead | AccessLevels.HistoryRead;
             variable.FullAttributes.Historizing = true;
             variable.FullAttributes.ValueRank = -1;
+            variable.FullAttributes.DataType = new UADataType(DataTypeIds.Double);
             TestConvert(variable,
                 @"{""externalId"":""gp.base:s=test"",""name"":""test"","
                 + @"""description"":null,""metadata"":null,""assetExternalId"":null,"
                 + @"""isString"":false,""isStep"":false,"
-                + @"""InternalInfo"":{""EventNotifier"":0,""ShouldSubscribeEvents"":false,""NodeClass"":2,""AccessLevel"":5,"
-                + @"""Historizing"":true,""ValueRank"":-1,""ShouldSubscribeData"":true}}");
+                + @"""InternalInfo"":{""NodeClass"":2,""AccessLevel"":5,"
+                + @"""Historizing"":true,""ValueRank"":-1,""ShouldSubscribeData"":true,""ShouldReadHistoryData"":true}}");
 
             variable.FullAttributes.ValueRank = ValueRanks.OneDimension;
             variable.FullAttributes.ArrayDimensions = new[] { 5 };
@@ -334,9 +333,9 @@ namespace Test.Unit
                 @"{""externalId"":""gp.base:s=test"",""name"":""test"","
                 + @"""description"":null,""metadata"":null,""assetExternalId"":null,"
                 + @"""isString"":false,""isStep"":false,"
-                + @"""InternalInfo"":{""EventNotifier"":0,""ShouldSubscribeEvents"":false,""NodeClass"":2,""AccessLevel"":5,"
-                + @"""Historizing"":true,""ValueRank"":1,""ShouldSubscribeData"":true,""ArrayDimensions"":[5],""Index"":-1,"
-                + @"""AsEvents"":true}}"
+                + @"""InternalInfo"":{""NodeClass"":2,""AccessLevel"":5,"
+                + @"""Historizing"":true,""ValueRank"":1,""ShouldSubscribeData"":true,""ShouldReadHistoryData"":true,"
+                + @"""ArrayDimensions"":[5],""Index"":-1,""AsEvents"":true}}"
                 );
         }
         [Fact]
@@ -383,7 +382,7 @@ namespace Test.Unit
             Assert.Equal(variable.NodeClass, saved.InternalInfo.NodeClass);
             Assert.Equal(variable.ParentId, saved.ParentNodeId);
             Assert.Equal(variable.FullAttributes.ShouldSubscribe(tester.Config), saved.InternalInfo.ShouldSubscribeData);
-            Assert.Equal(variable.Attributes.DisplayName, saved.Name);
+            Assert.Equal(variable.Name, saved.Name);
             Assert.Equal(variable.FullAttributes.DataType.Id, saved.DataTypeId);
             Assert.Equal(variable.FullAttributes.AccessLevel, saved.InternalInfo.AccessLevel);
             Assert.Equal(variable.FullAttributes.Historizing, saved.InternalInfo.Historizing);

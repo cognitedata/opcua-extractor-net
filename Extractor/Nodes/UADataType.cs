@@ -200,20 +200,20 @@ namespace Cognite.OpcUa.Nodes
             if (node.NodeClass == NodeClass.VariableType) return true;
             if (node.FullAttributes.DataType == null)
             {
-                log.LogWarning("Skipping variable {Name} {Id} due to missing datatype", node.Attributes.DisplayName, node.Id);
+                log.LogWarning("Skipping variable {Name} {Id} due to missing datatype", node.Name, node.Id);
                 return false;
             }
 
             if (IsString && !config.AllowStringVariables && !overrideString)
             {
                 log.LogDebug("Skipping variable {Name} {Id} due to string datatype and allow-string-variables being set to false",
-                    node.Attributes.DisplayName, node.Id);
+                    node.Name, node.Id);
                 return false;
             }
             if (ShouldIgnore)
             {
                 log.LogDebug("Skipping variable {Name} {Id} due to raw datatype {Raw} being in list of ignored data types",
-                    node.Attributes.DisplayName, node.Id, Id);
+                    node.Name, node.Id, Id);
                 return false;
             }
             if (node.ValueRank == ValueRanks.Scalar) return true;
@@ -229,7 +229,7 @@ namespace Cognite.OpcUa.Nodes
                 else
                 {
                     log.LogDebug("Skipping variable {Name} {Id} due to non-scalar ValueRank {Rank} and too large dimension {Dim}",
-                        node.Attributes.DisplayName, node.Id, ExtractorUtils.GetValueRankString(node.ValueRank), length);
+                        node.Name, node.Id, ExtractorUtils.GetValueRankString(node.ValueRank), length);
                     return false;
                 }
             }
@@ -238,13 +238,13 @@ namespace Cognite.OpcUa.Nodes
                 if (config.UnknownAsScalar && (node.ValueRank == ValueRanks.ScalarOrOneDimension
                     || node.ValueRank == ValueRanks.Any)) return true;
                 log.LogDebug("Skipping variable {Name} {Id} due to non-scalar ValueRank {Rank} and null ArrayDimensions",
-                    node.Attributes.DisplayName, node.Id, ExtractorUtils.GetValueRankString(node.ValueRank));
+                    node.Name, node.Id, ExtractorUtils.GetValueRankString(node.ValueRank));
                 return false;
             }
             else
             {
                 log.LogDebug("Skipping variable {Name} {Id} due to non-scalar ValueRank {Rank} and too high dimensionality {Dim}",
-                    node.Attributes.DisplayName, node.Id, ExtractorUtils.GetValueRankString(node.ValueRank), node.ArrayDimensions.Length);
+                    node.Name, node.Id, ExtractorUtils.GetValueRankString(node.ValueRank), node.ArrayDimensions.Length);
                 return false;
             }
         }
@@ -281,7 +281,7 @@ namespace Cognite.OpcUa.Nodes
 
         public override void Format(StringBuilder builder, int indent, bool writeParent = true, bool writeProperties = true)
         {
-            builder.AppendFormat(CultureInfo.InvariantCulture, "{0}DataType: {1}", new string(' ', indent), Attributes.DisplayName);
+            builder.AppendFormat(CultureInfo.InvariantCulture, "{0}DataType: {1}", new string(' ', indent), Name);
             builder.AppendLine();
             base.Format(builder, indent + 4, writeParent);
 

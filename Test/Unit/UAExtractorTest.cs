@@ -59,8 +59,8 @@ namespace Test.Unit
             Assert.Equal(153, pusher.PushedNodes.Count);
             Assert.Equal(2000, pusher.PushedVariables.Count);
 
-            Assert.Contains(pusher.PushedNodes.Values, node => node.Attributes.DisplayName == "DeepObject 4, 25");
-            Assert.Contains(pusher.PushedVariables.Values, node => node.Attributes.DisplayName == "SubVariable 1234");
+            Assert.Contains(pusher.PushedNodes.Values, node => node.Name == "DeepObject 4, 25");
+            Assert.Contains(pusher.PushedVariables.Values, node => node.Name == "SubVariable 1234");
         }
 
         [Fact]

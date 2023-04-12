@@ -15,8 +15,6 @@ namespace Cognite.OpcUa.TypeCollectors
         public Dictionary<NodeId, BaseUANode> NodeMap { get; } = new();
         public Dictionary<NodeId, HashSet<NodeId>> NodeChildren { get; } = new();
 
-
-
         private readonly ILogger log;
         private readonly FullConfig config;
         private readonly UAClient client;
@@ -107,7 +105,7 @@ namespace Cognite.OpcUa.TypeCollectors
         {
             foreach (var node in NodeMap.Values)
             {
-                if (node.ParentId == null) continue;
+                if (node.ParentId == null || node.ParentId.IsNullNodeId) continue;
 
                 if (NodeChildren.TryGetValue(node.ParentId, out var children))
                 {
@@ -116,6 +114,11 @@ namespace Cognite.OpcUa.TypeCollectors
                 else
                 {
                     NodeChildren[node.ParentId] = new HashSet<NodeId> { node.Id };
+                }
+
+                if (node.Parent == null && NodeMap.TryGetValue(node.ParentId, out var parent))
+                {
+                    node.Parent = parent;
                 }
             }
         }
@@ -135,7 +138,7 @@ namespace Cognite.OpcUa.TypeCollectors
             }
 
             NodeMap[result.Id] = result;
-            log.LogTrace("Handle node {Name}, {Id}: {Class}", result.Attributes.DisplayName, result.Id, result.NodeClass);
+            log.LogTrace("Handle node {Name}, {Id}: {Class}", result.Name, result.Id, result.NodeClass);
         }
 
         #region dataTypes
@@ -179,6 +182,11 @@ namespace Cognite.OpcUa.TypeCollectors
                 {
                     type.Initialize(protoType, config.Extraction.DataTypes);
                 }
+                if (type.Id.IsNullNodeId)
+                {
+                    type.IsString = !config.Extraction.DataTypes.NullAsNumeric;
+                    continue;
+                }
                 if (!config.Extraction.DataTypes.AutoIdentifyTypes) continue;
                 type.UpdateFromParent(config.Extraction.DataTypes);
                 if (NodeChildren.TryGetValue(type.Id, out var children))
@@ -215,14 +223,13 @@ namespace Cognite.OpcUa.TypeCollectors
             foreach (var type in NodeMap.Values.OfType<UAObjectType>())
             {
                 if (!type.IsEventType()) continue;
-                if (ignoreFilter != null && ignoreFilter.IsMatch(type.Attributes.DisplayName)) continue;
+                if (ignoreFilter != null && ignoreFilter.IsMatch(type.Name)) continue;
                 if (whitelist != null && whitelist.Any())
                 {
                     if (!whitelist.Contains(type.Id)) continue;
                 }
                 else if (!config.Events.AllEvents && type.Id.NamespaceIndex == 0) continue;
                 EventFields[type.Id] = type;
-                log.LogInformation("Collect type {id}", type.Id);
                 CollectType(type, baseExcludeProperties, excludeProperties);
             }
         }
@@ -288,7 +295,7 @@ namespace Cognite.OpcUa.TypeCollectors
                 if (node is not UADataType dt)
                 {
                     log.LogWarning("Requested data type {Type}, but it was not a data type: {Class} {Name}",
-                        nodeId, node.NodeClass, node.Attributes.DisplayName);
+                        nodeId, node.NodeClass, node.Name);
                     // This is a bug in the server, but instead of crashing we return a fresh node. The extracted data may be incomplete,
                     // but not incorrect.
                     return new UADataType(nodeId);
@@ -305,12 +312,17 @@ namespace Cognite.OpcUa.TypeCollectors
 
         public UAReferenceType GetReferenceType(NodeId nodeId)
         {
+            if (nodeId.IsNullNodeId)
+            {
+                return new UAReferenceType(nodeId);
+            }
+
             if (NodeMap.TryGetValue(nodeId, out var node))
             {
                 if (node is not UAReferenceType dt)
                 {
                     log.LogWarning("Requested reference type {Type}, but it was not a reference type: {Class} {Name}",
-                        nodeId, node.NodeClass, node.Attributes.DisplayName);
+                        nodeId, node.NodeClass, node.Name);
                     return new UAReferenceType(nodeId);
                 }
                 return dt;
@@ -325,12 +337,17 @@ namespace Cognite.OpcUa.TypeCollectors
 
         public UAObjectType GetObjectType(NodeId nodeId)
         {
+            if (nodeId.IsNullNodeId)
+            {
+                return new UAObjectType(nodeId);
+            }
+
             if (NodeMap.TryGetValue(nodeId, out var node))
             {
                 if (node is not UAObjectType dt)
                 {
                     log.LogWarning("Requested object type {Type}, but it was not an object type: {Class} {Name}",
-                        nodeId, node.NodeClass, node.Attributes.DisplayName);
+                        nodeId, node.NodeClass, node.Name);
                     return new UAObjectType(nodeId);
                 }
                 return dt;
@@ -345,12 +362,17 @@ namespace Cognite.OpcUa.TypeCollectors
 
         public UAVariableType GetVariableType(NodeId nodeId)
         {
+            if (nodeId.IsNullNodeId)
+            {
+                return new UAVariableType(nodeId);
+            }
+
             if (NodeMap.TryGetValue(nodeId, out var node))
             {
                 if (node is not UAVariableType dt)
                 {
                     log.LogWarning("Requested variable type {Type}, but it was not a variable type: {Class} {Name}",
-                        nodeId, node.NodeClass, node.Attributes.DisplayName);
+                        nodeId, node.NodeClass, node.Name);
                     return new UAVariableType(nodeId);
                 }
                 return dt;

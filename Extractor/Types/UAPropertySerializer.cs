@@ -308,7 +308,7 @@ namespace Cognite.OpcUa.Types
             catch (Exception ex)
             {
                 log.LogWarning("Serialization of value on variable: {Variable} resulted in invalid JSON: {Message}, {Json}",
-                    variable.Attributes.DisplayName, ex.Message, value);
+                    variable.Name, ex.Message, value);
                 writer.WriteNullValue();
             }
         }
@@ -358,7 +358,7 @@ namespace Cognite.OpcUa.Types
             {
                 foreach (var child in node.Properties)
                 {
-                    var name = child.Attributes.DisplayName;
+                    var name = child.Name;
                     if (name == null) continue;
                     string safeName = name;
                     int idx = 0;
@@ -378,7 +378,7 @@ namespace Cognite.OpcUa.Types
         {
             var id = uaClient.GetUniqueId(node.Id);
             writer.WriteString("externalId", id);
-            writer.WriteString("name", string.IsNullOrEmpty(node.Attributes.DisplayName) ? id : node.Attributes.DisplayName);
+            writer.WriteString("name", string.IsNullOrEmpty(node.Name) ? id : node.Name);
             writer.WriteString("description", node.Attributes.Description);
             writer.WritePropertyName("metadata");
             WriteProperties(writer, node, true, node.NodeClass == NodeClass.VariableType);
@@ -438,6 +438,7 @@ namespace Cognite.OpcUa.Types
             {
                 writer.WriteNumber("EventNotifier", obj.FullAttributes.EventNotifier);
                 writer.WriteBoolean("ShouldSubscribeEvents", obj.FullAttributes.ShouldSubscribeToEvents(config));
+                writer.WriteBoolean("ShouldReadHistoryEvents", obj.FullAttributes.ShouldReadEventHistory(config));
             }
             writer.WriteNumber("NodeClass", (int)node.NodeClass);
             if (Type == ConverterType.Variable && node is UAVariable variable)
@@ -446,6 +447,7 @@ namespace Cognite.OpcUa.Types
                 writer.WriteBoolean("Historizing", variable.FullAttributes.Historizing);
                 writer.WriteNumber("ValueRank", variable.ValueRank);
                 writer.WriteBoolean("ShouldSubscribeData", variable.FullAttributes.ShouldSubscribe(config));
+                writer.WriteBoolean("ShouldReadHistoryData", variable.FullAttributes.ShouldReadHistory(config));
                 if (variable.ArrayDimensions != null)
                 {
                     writer.WritePropertyName("ArrayDimensions");

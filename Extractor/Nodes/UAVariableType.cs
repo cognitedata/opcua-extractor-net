@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text;
@@ -28,6 +29,7 @@ namespace Cognite.OpcUa.Nodes
             yield return Attributes.DataType;
             yield return Attributes.ArrayDimensions;
             yield return Attributes.ValueRank;
+            if (config.Extraction.NodeTypes.AsNodes) yield return Attributes.Value;
             foreach (var attr in base.GetAttributeSet(config)) yield return attr;
         }
 
@@ -74,7 +76,11 @@ namespace Cognite.OpcUa.Nodes
             IsAbstract = state.IsAbstract;
             ValueRank = state.ValueRank;
             DataType = typeManager.GetDataType(state.DataType);
-            ArrayDimensions = state.ArrayDimensions.Cast<int>().ToArray();
+            ArrayDimensions = state.ArrayDimensions.Select(Convert.ToInt32).ToArray();
+            if (!ArrayDimensions.Any())
+            {
+                ArrayDimensions = null;
+            }
             Value = state.WrappedValue;
             LoadFromBaseNodeState(state);
         }
@@ -118,7 +124,7 @@ namespace Cognite.OpcUa.Nodes
                 }
                 else
                 {
-                    fields["dataType"] = dt.Attributes.DisplayName ?? dt.GetUniqueId(client) ?? "null";
+                    fields["dataType"] = dt.Name ?? dt.GetUniqueId(client) ?? "null";
                 }
             }
             fields["Value"] = client.StringConverter.ConvertToString(FullAttributes.Value, dt.EnumValues);
@@ -142,7 +148,7 @@ namespace Cognite.OpcUa.Nodes
 
         public override void Format(StringBuilder builder, int indent, bool writeParent = true, bool writeProperties = true)
         {
-            builder.AppendFormat(CultureInfo.InvariantCulture, "{0}VariableType: {1}", new string(' ', indent), Attributes.DisplayName);
+            builder.AppendFormat(CultureInfo.InvariantCulture, "{0}VariableType: {1}", new string(' ', indent), Name);
             builder.AppendLine();
             base.Format(builder, indent + 4, writeParent);
 

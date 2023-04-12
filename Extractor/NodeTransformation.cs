@@ -141,7 +141,7 @@ namespace Cognite.OpcUa
         /// <returns>True if match</returns>
         public bool IsMatch(BaseUANode node, NamespaceTable ns)
         {
-            if (node == null || !MatchBasic(node.Attributes.DisplayName, node.Id, node.TypeDefinition, ns, node.NodeClass)) return false;
+            if (node == null || !MatchBasic(node.Name, node.Id, node.TypeDefinition, ns, node.NodeClass)) return false;
             if (Description != null && (string.IsNullOrEmpty(node.Attributes.Description) || !Description.IsMatch(node.Attributes.Description))) return false;
             if (node is UAVariable variable)
             {
@@ -279,11 +279,11 @@ namespace Cognite.OpcUa
                 {
                     case TransformationType.Ignore:
                         node.Ignore = true;
-                        log.LogTrace("Ignoring node {Name} {Id} due to matching ignore filter {Idx}", node.Attributes.DisplayName, node.Id, index);
+                        log.LogTrace("Ignoring node {Name} {Id} due to matching ignore filter {Idx}", node.Name, node.Id, index);
                         break;
                     case TransformationType.Property:
                         node.IsRawProperty = true;
-                        log.LogTrace("Treating node {Name} {Id} as property due to matching filter {Idx}", node.Attributes.DisplayName, node.Id, index);
+                        log.LogTrace("Treating node {Name} {Id} as property due to matching filter {Idx}", node.Name, node.Id, index);
                         break;
                     case TransformationType.DropSubscriptions:
                         if (node is UAVariable variable)
@@ -294,11 +294,11 @@ namespace Cognite.OpcUa
                         {
                             obj.FullAttributes.SubscribeToEventsOverride = false;
                         }
-                        log.LogDebug("Dropping subscriptions on node {Name} {Id} due to matching filter {Idx}", node.Attributes.DisplayName, node.Id, index);
+                        log.LogDebug("Dropping subscriptions on node {Name} {Id} due to matching filter {Idx}", node.Name, node.Id, index);
                         break;
                     case TransformationType.TimeSeries:
                         node.IsRawProperty = false;
-                        log.LogTrace("Treating node {Name} {Id} as timeseries due to matching filter {Idx}", node.Attributes.DisplayName, node.Id, index);
+                        log.LogTrace("Treating node {Name} {Id} as timeseries due to matching filter {Idx}", node.Name, node.Id, index);
                         break;
                     case TransformationType.AsEvents:
                         if (node is UAVariable evtvariable)

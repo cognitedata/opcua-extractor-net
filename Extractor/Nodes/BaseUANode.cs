@@ -109,6 +109,7 @@ namespace Cognite.OpcUa.Nodes
         public NodeId ParentId => Parent?.Id ?? FallbackParentId ?? NodeId.Null;
         public BaseUANode? Parent { get; set; }
         public NodeSource Source { get; set; } = NodeSource.OPCUA;
+        public virtual string? Name => Attributes.DisplayName;
 
         public bool Ignore { get; set; }
         public bool IsRawProperty { get; set; }
@@ -168,13 +169,13 @@ namespace Cognite.OpcUa.Nodes
         public virtual void Format(StringBuilder builder, int indent, bool writeParent = true, bool writeProperties = true)
         {
             var indt = new string(' ', indent);
-            //builder.AppendFormat(CultureInfo.InvariantCulture, "{0}Variable: {1}", indt, Attributes.DisplayName);
+            //builder.AppendFormat(CultureInfo.InvariantCulture, "{0}Variable: {1}", indt, Name);
             //builder.AppendLine();
             builder.AppendFormat(CultureInfo.InvariantCulture, "{0}Id: {1}", indt, Id);
             builder.AppendLine();
             if (Parent != null && writeParent)
             {
-                builder.AppendFormat(CultureInfo.InvariantCulture, "{0}Parent: {1} {2}", indt, Parent.Attributes.DisplayName, Parent.Id);
+                builder.AppendFormat(CultureInfo.InvariantCulture, "{0}Parent: {1} {2}", indt, Parent.Name, Parent.Id);
                 builder.AppendLine();
             }
             else if (ParentId != null && writeParent)
@@ -310,28 +311,28 @@ namespace Cognite.OpcUa.Nodes
             if (node is BaseObjectTypeState objTState)
             {
                 var objType = typeManager.GetObjectType(id);
-                objType.Initialize(node.DisplayName?.Text, node.BrowseName?.Name, null, parentId);
+                objType.Initialize(node.DisplayName?.Text, node.BrowseName?.Name, null, parentId ?? objTState.SuperTypeId);
                 objType.FullAttributes.LoadFromNodeState(objTState);
                 return objType;
             }
             if (node is BaseVariableTypeState varTState)
             {
                 var varType = typeManager.GetVariableType(id);
-                varType.Initialize(node.DisplayName?.Text, node.BrowseName?.Name, null, parentId);
+                varType.Initialize(node.DisplayName?.Text, node.BrowseName?.Name, null, parentId ?? varTState.SuperTypeId);
                 varType.FullAttributes.LoadFromNodeState(varTState, typeManager);
                 return varType;
             }
             if (node is DataTypeState dataTState)
             {
                 var dataType = typeManager.GetDataType(id);
-                dataType.Initialize(node.DisplayName?.Text, node.BrowseName?.Name, null, parentId);
+                dataType.Initialize(node.DisplayName?.Text, node.BrowseName?.Name, null, parentId ?? dataTState.SuperTypeId);
                 dataType.FullAttributes.LoadFromNodeState(dataTState);
                 return dataType;
             }
             if (node is ReferenceTypeState refTState)
             {
                 var refType = typeManager.GetReferenceType(id);
-                refType.Initialize(node.DisplayName?.Text, node.BrowseName?.Name, null, parentId);
+                refType.Initialize(node.DisplayName?.Text, node.BrowseName?.Name, null, parentId ?? refTState.SuperTypeId);
                 refType.FullAttributes.LoadFromNodeState(refTState);
                 return refType;
             }
@@ -360,20 +361,20 @@ namespace Cognite.OpcUa.Nodes
                 }
                 if (update.Name)
                 {
-                    checksum = checksum * 31 + (Attributes.DisplayName?.GetHashCode(StringComparison.InvariantCulture) ?? 0);
+                    checksum = checksum * 31 + (Name?.GetHashCode(StringComparison.InvariantCulture) ?? 0);
                 }
                 if (update.Metadata)
                 {
                     int metaHash = 0;
                     if (Properties != null)
                     {
-                        foreach (var prop in Properties.OrderBy(prop => prop.Attributes.DisplayName))
+                        foreach (var prop in Properties.OrderBy(prop => prop.Name))
                         {
                             metaHash *= 31;
-                            if (prop.Attributes.DisplayName == null) continue;
+                            if (prop.Name == null) continue;
                             if (prop is UAVariable propVariable)
                             {
-                                metaHash += (prop.Attributes.DisplayName, propVariable.Value?.Value).GetHashCode();
+                                metaHash += (prop.Name, propVariable.Value?.Value).GetHashCode();
                             }
                             if (prop.Properties?.Any() ?? false)
                             {
@@ -418,7 +419,7 @@ namespace Cognite.OpcUa.Nodes
             var id = GetUniqueId(client);
             asset.Description = Attributes.Description;
             asset.ExternalId = id;
-            asset.Name = string.IsNullOrEmpty(Attributes.DisplayName) ? id : Attributes.DisplayName;
+            asset.Name = string.IsNullOrEmpty(Name) ? id : Name;
             asset.DataSetId = dataSetId;
             if (ParentId != null && !ParentId.IsNullNodeId)
             {
@@ -429,7 +430,7 @@ namespace Cognite.OpcUa.Nodes
                 foreach (var prop in Properties)
                 {
                     if (prop is not UAVariable propVar) continue;
-                    if (metaMap.TryGetValue(prop.Attributes.DisplayName ?? "", out var mapped))
+                    if (metaMap.TryGetValue(prop.Name ?? "", out var mapped))
                     {
                         var value = client.StringConverter.ConvertToString(propVar.Value, propVar.FullAttributes.DataType.EnumValues);
                         if (string.IsNullOrWhiteSpace(value)) continue;
@@ -473,11 +474,11 @@ namespace Cognite.OpcUa.Nodes
 
             foreach (var prop in Properties)
             {
-                if (prop != null && !string.IsNullOrEmpty(prop.Attributes.DisplayName))
+                if (prop != null && !string.IsNullOrEmpty(prop.Name))
                 {
                     if (prop is UAVariable variable)
                     {
-                        result[prop.Attributes.DisplayName] = client.StringConverter.ConvertToString(variable.Value, variable.FullAttributes.DataType?.EnumValues)
+                        result[prop.Name] = client.StringConverter.ConvertToString(variable.Value, variable.FullAttributes.DataType?.EnumValues)
                             ?? variable.Value.ToString();
                     }
 
@@ -486,7 +487,7 @@ namespace Cognite.OpcUa.Nodes
                         var nestedProperties = prop.BuildMetadataBase(null, client);
                         foreach (var sprop in nestedProperties)
                         {
-                            result[$"{prop.Attributes.DisplayName}_{sprop.Key}"] = sprop.Value;
+                            result[$"{prop.Name}_{sprop.Key}"] = sprop.Value;
                         }
                     }
                 }

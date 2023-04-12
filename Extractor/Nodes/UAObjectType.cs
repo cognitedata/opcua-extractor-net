@@ -69,7 +69,7 @@ namespace Cognite.OpcUa.Nodes
 
         public override void Format(StringBuilder builder, int indent, bool writeParent = true, bool writeProperties = true)
         {
-            builder.AppendFormat(CultureInfo.InvariantCulture, "{0}ObjectType: {1}", new string(' ', indent), Attributes.DisplayName);
+            builder.AppendFormat(CultureInfo.InvariantCulture, "{0}ObjectType: {1}", new string(' ', indent), Name);
             builder.AppendLine();
             base.Format(builder, indent + 4, writeParent);
 

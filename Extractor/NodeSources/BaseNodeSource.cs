@@ -111,16 +111,17 @@ namespace Cognite.OpcUa.NodeSources
             var toReadValues = new List<UAVariable>();
 
             var maxLengthProperties = nodes
-                .SelectNonNull(node => node.Properties?.FirstOrDefault(prop => prop.Attributes.DisplayName == "MaxArrayLength") as UAVariable);
+                .SelectNonNull(node => node.Properties?.FirstOrDefault(prop => prop.Name == "MaxArrayLength") as UAVariable);
 
             foreach (var node in nodes)
             {
-                var maxLengthProp = node.Properties?.FirstOrDefault(prop => prop.Attributes.DisplayName == "MaxArrayLength");
+                var maxLengthProp = node.Properties?.FirstOrDefault(prop => prop.Name == "MaxArrayLength");
+                Log.LogInformation("Look for max length property: {Name}, {Prop}", node.Name, maxLengthProp);
                 if (maxLengthProp != null && maxLengthProp is UAVariable varProp)
                 {
                     try
                     {
-                        int size = Convert.ToInt32(varProp.Value!.Value);
+                        int size = Convert.ToInt32(varProp.Value!.Value.Value);
                         if (size > 1)
                         {
                             node.FullAttributes.ArrayDimensions = new[] { size };
@@ -184,6 +185,7 @@ namespace Cognite.OpcUa.NodeSources
             {
                 bool subscribe = objNode.FullAttributes.ShouldSubscribeToEvents(Config);
                 bool history = objNode.FullAttributes.ShouldReadEventHistory(Config);
+
                 if (subscribe || history)
                 {
                     var eventState = new EventExtractionState(Extractor, node.Id, history, history && Config.History.Backfill, subscribe);
@@ -197,7 +199,7 @@ namespace Cognite.OpcUa.NodeSources
                 bool history = variable.FullAttributes.ShouldReadHistory(Config);
 
                 VariableExtractionState? state = null;
-                if (subscribe || history)
+                if ((subscribe || history) && Extractor.State.GetNodeState(node.Id) == null)
                 {
                     state = new VariableExtractionState(
                         Extractor,

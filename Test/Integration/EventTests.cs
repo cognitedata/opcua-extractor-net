@@ -622,8 +622,8 @@ namespace Test.Integration
 
             var directRoot = pusher.PushedNodes[ids.DirectAdd];
 
-            var directObj = pusher.PushedNodes.Values.First(obj => obj.Attributes.DisplayName == "AddObj 0");
-            var directVar = pusher.PushedVariables.Values.First(variable => variable.Attributes.DisplayName == "AddVar 0");
+            var directObj = pusher.PushedNodes.Values.First(obj => obj.Name == "AddObj 0");
+            var directVar = pusher.PushedVariables.Values.First(variable => variable.Name == "AddVar 0");
 
             Assert.Equal(directRoot.Id, directObj.ParentId);
             Assert.Equal(directRoot.Id, directVar.ParentId);
@@ -636,8 +636,8 @@ namespace Test.Integration
 
             var refRoot = pusher.PushedNodes[ids.RefAdd];
 
-            var refObj = pusher.PushedNodes.Values.First(obj => obj.Attributes.DisplayName == "AddObj 1");
-            var refVar = pusher.PushedVariables.Values.First(variable => variable.Attributes.DisplayName == "AddVar 1");
+            var refObj = pusher.PushedNodes.Values.First(obj => obj.Name == "AddObj 1");
+            var refVar = pusher.PushedVariables.Values.First(variable => variable.Name == "AddVar 1");
 
             Assert.Equal(refRoot.Id, refObj.ParentId);
             Assert.Equal(refRoot.Id, refVar.ParentId);

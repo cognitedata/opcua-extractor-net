@@ -59,7 +59,7 @@ namespace Cognite.OpcUa.History
         {
             DataType = variable.FullAttributes.DataType;
             ArrayDimensions = variable.ArrayDimensions;
-            DisplayName = variable.Attributes.DisplayName ?? "";
+            DisplayName = variable.Name ?? "";
             ShouldSubscribe = subscription;
             AsEvents = variable.AsEvents;
             if (frontfill)

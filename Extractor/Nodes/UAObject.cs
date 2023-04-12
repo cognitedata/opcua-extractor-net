@@ -62,6 +62,7 @@ namespace Cognite.OpcUa.Nodes
         {
             EventNotifier = node.InternalInfo!.EventNotifier;
             SubscribeToEventsOverride = node.InternalInfo.ShouldSubscribeEvents;
+            ReadEventHistoryOverride = node.InternalInfo.ShouldReadHistoryEvents;
 
             base.LoadFromSavedNode(node, typeManager);
         }
@@ -90,9 +91,9 @@ namespace Cognite.OpcUa.Nodes
 
         public override Dictionary<string, string>? GetExtraMetadata(FullConfig config, IUAClientAccess client)
         {
-            if (config.Extraction.NodeTypes.Metadata && FullAttributes.TypeDefinition?.Attributes?.DisplayName != null)
+            if (config.Extraction.NodeTypes.Metadata && FullAttributes.TypeDefinition?.Name != null)
             {
-                return new Dictionary<string, string> { { "TypeDefinition", FullAttributes.TypeDefinition.Attributes.DisplayName } };
+                return new Dictionary<string, string> { { "TypeDefinition", FullAttributes.TypeDefinition.Name } };
             }
             return null;
         }
@@ -112,7 +113,7 @@ namespace Cognite.OpcUa.Nodes
 
         public override void Format(StringBuilder builder, int indent, bool writeParent = true, bool writeProperties = true)
         {
-            builder.AppendFormat(CultureInfo.InvariantCulture, "{0}Object: {1}", new string(' ', indent), Attributes.DisplayName);
+            builder.AppendFormat(CultureInfo.InvariantCulture, "{0}Object: {1}", new string(' ', indent), Name);
             builder.AppendLine();
             base.Format(builder, indent + 4, writeParent);
 

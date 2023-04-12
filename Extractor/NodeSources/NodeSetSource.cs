@@ -21,11 +21,11 @@ using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -185,6 +185,13 @@ namespace Cognite.OpcUa.NodeSources
             return false;
         }
 
+        private bool BuildType(NodeId id, NodeId parent)
+        {
+            var node = nodeDict[id];
+            BaseUANode.FromNodeState(node, parent, TypeManager);
+            return true;
+        }
+
         public void Build()
         {
             lock (buildLock)
@@ -205,39 +212,19 @@ namespace Cognite.OpcUa.NodeSources
             }
         }
 
-
-        /// <summary>
-        /// Construct 
-        /// </summary>
-        public void BuildNodes(IEnumerable<NodeId> rootNodes, bool isFullBrowse)
+        private void BrowseHierarchy(IEnumerable<NodeId> rootIds, Func<NodeId, NodeId, bool> callback)
         {
-            Build();
-            this.isFullBrowse = isFullBrowse;
-
-            ClearRaw();
             var visitedNodes = new HashSet<NodeId>();
 
-            // Simulate browsing the node hierarchy. We do it this way to ensure that we visit the correct nodes.
             var nextIds = new HashSet<NodeId>();
-
-            foreach (var id in rootNodes)
+            foreach (var id in rootIds)
             {
                 visitedNodes.Add(id);
-                if (BuildNode(id, NodeId.Null))
+                if (callback(id, NodeId.Null))
                 {
                     nextIds.Add(id);
                 }
             }
-            // Build node parents, important for later type checking
-            foreach (var node in NodeList)
-            {
-                if (node.Parent == null && node.ParentId != null)
-                {
-                    node.Parent = NodeMap[node.ParentId];
-                }
-            }
-
-            TypeManager.BuildTypeInfo();
 
             while (nextIds.Any())
             {
@@ -253,12 +240,41 @@ namespace Cognite.OpcUa.NodeSources
                 foreach (var (child, parent) in refs)
                 {
                     var childId = Client.ToNodeId(child.TargetId);
-                    if (visitedNodes.Add(childId) && BuildNode(childId, parent))
+                    if (visitedNodes.Add(childId) && callback(childId, parent))
                     {
                         nextIds.Add(childId);
                     }
                 }
             }
+        }
+
+        private void LoadReferenceTypes()
+        {
+            foreach (var node in nodeDict.Values.OfType<ReferenceTypeState>())
+            {
+                BuildType(node.NodeId, node.SuperTypeId);
+            }
+        }
+
+        /// <summary>
+        /// Construct 
+        /// </summary>
+        public void BuildNodes(IEnumerable<NodeId> rootNodes, bool isFullBrowse)
+        {
+            Build();
+            this.isFullBrowse = isFullBrowse;
+
+            ClearRaw();
+            // Build full type hierarchy
+            LoadReferenceTypes();
+            // First pass builds reference types, second builds the remaining types.
+            // We can't properly browse the type hierarchy without loading the reference types first.
+            TypeManager.BuildTypeInfo();
+
+            BrowseHierarchy(new[] { ObjectIds.TypesFolder }, BuildType);
+            TypeManager.BuildTypeInfo();
+
+            BrowseHierarchy(rootNodes, BuildNode);
         }
         #endregion
 

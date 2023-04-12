@@ -194,6 +194,9 @@ namespace Test.Unit
 
             var logger = tester.Provider.GetRequiredService<ILogger<HistoryReader>>();
 
+            tester.Config.Events.Enabled = true;
+            tester.Config.Events.History = true;
+
             cfg.Throttling.MaxNodeParallelism = nodeParallelism;
             cfg.StartTime = tester.HistoryStart.AddSeconds(-10).ToUnixTimeMilliseconds().ToString();
 
@@ -221,10 +224,7 @@ namespace Test.Unit
             await extractor.TypeManager.LoadTypeData(tester.Source.Token);
             extractor.TypeManager.BuildTypeInfo();
             var fields = extractor.TypeManager.EventFields;
-            foreach (var pair in fields)
-            {
-                extractor.State.ActiveEvents[pair.Key] = pair.Value;
-            }
+            extractor.State.PopulateActiveEventTypes(fields);
 
             await reader.FrontfillEvents(states);
 

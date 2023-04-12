@@ -122,6 +122,8 @@ namespace Cognite.OpcUa.Nodes
             DataType = typeManager.GetDataType(node.DataTypeId!);
             ArrayDimensions = node.InternalInfo.ArrayDimensions;
             AccessLevel = node.InternalInfo.AccessLevel;
+            ShouldSubscribeOverride = node.InternalInfo.ShouldSubscribeData;
+            ShouldReadHistoryOverride = node.InternalInfo.ShouldReadHistoryData;
 
             base.LoadFromSavedNode(node, typeManager);
         }
@@ -131,7 +133,11 @@ namespace Cognite.OpcUa.Nodes
             Historizing = state.Historizing;
             ValueRank = state.ValueRank;
             DataType = typeManager.GetDataType(state.DataType);
-            ArrayDimensions = state.ArrayDimensions.Cast<int>().ToArray();
+            ArrayDimensions = state.ArrayDimensions.Select(Convert.ToInt32).ToArray();
+            if (!ArrayDimensions.Any())
+            {
+                ArrayDimensions = null;
+            }
             AccessLevel = state.AccessLevel;
             Value = state.WrappedValue;
             LoadFromBaseNodeState(state);
@@ -257,10 +263,10 @@ namespace Cognite.OpcUa.Nodes
         public override Dictionary<string, string>? GetExtraMetadata(FullConfig config, IUAClientAccess client)
         {
             Dictionary<string, string>? fields = null;
-            if (config.Extraction.NodeTypes.Metadata && FullAttributes.TypeDefinition?.Attributes?.DisplayName != null)
+            if (config.Extraction.NodeTypes.Metadata && FullAttributes.TypeDefinition?.Name != null)
             {
                 fields ??= new Dictionary<string, string>();
-                fields["TypeDefinition"] = FullAttributes.TypeDefinition.Attributes.DisplayName;
+                fields["TypeDefinition"] = FullAttributes.TypeDefinition.Name;
             }
 
             var dt = FullAttributes.DataType;
@@ -281,7 +287,7 @@ namespace Cognite.OpcUa.Nodes
                 }
                 else
                 {
-                    fields["dataType"] = dt.Attributes.DisplayName ?? dt.GetUniqueId(client) ?? "null";
+                    fields["dataType"] = dt.Name ?? dt.GetUniqueId(client) ?? "null";
                 }
             }
             return fields;
@@ -311,7 +317,7 @@ namespace Cognite.OpcUa.Nodes
 
         public override void Format(StringBuilder builder, int indent, bool writeParent = true, bool writeProperties = true)
         {
-            builder.AppendFormat(CultureInfo.InvariantCulture, "{0}Variable: {1}", new string(' ', indent), Attributes.DisplayName);
+            builder.AppendFormat(CultureInfo.InvariantCulture, "{0}Variable: {1}", new string(' ', indent), Name);
             builder.AppendLine();
             base.Format(builder, indent + 4, writeParent);
 
@@ -372,7 +378,7 @@ namespace Cognite.OpcUa.Nodes
             foreach (var prop in Properties)
             {
                 if (prop is not UAVariable propVar) continue;
-                if (metaMap.TryGetValue(prop.Attributes.DisplayName ?? "", out var mapped))
+                if (metaMap.TryGetValue(prop.Name ?? "", out var mapped))
                 {
                     var value = converter.ConvertToString(propVar.Value, propVar.FullAttributes.DataType.EnumValues);
                     if (string.IsNullOrWhiteSpace(value)) continue;
@@ -406,7 +412,7 @@ namespace Cognite.OpcUa.Nodes
                 Description = FullAttributes.Description,
                 ExternalId = externalId,
                 AssetExternalId = client.GetUniqueId(ParentId),
-                Name = FullAttributes.DisplayName,
+                Name = Name,
                 LegacyName = externalId,
                 IsString = FullAttributes.DataType.IsString,
                 IsStep = FullAttributes.DataType.IsStep,
@@ -453,7 +459,7 @@ namespace Cognite.OpcUa.Nodes
             {
                 Description = FullAttributes.Description,
                 ExternalId = externalId,
-                Name = FullAttributes.DisplayName,
+                Name = Name,
                 LegacyName = externalId,
                 IsString = FullAttributes.DataType.IsString,
                 IsStep = FullAttributes.DataType.IsStep,
@@ -485,6 +491,7 @@ namespace Cognite.OpcUa.Nodes
     {
         public UAVariable TSParent { get; }
         public int Index { get; } = -1;
+        public override string? Name => Index >= 0 ? $"{base.Name}[{Index}]" : base.Name;
         public UAVariableMember(UAVariable parent, int index)
             : base(parent)
         {

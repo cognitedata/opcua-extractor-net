@@ -121,7 +121,8 @@ namespace Cognite.OpcUa.Config
                 if (visited) return;
                 var res = BaseUANode.Create(node, parentId, null, client, typeManager);
                 if (res == null) return;
-                log.LogTrace("HandleNode {NodeClass} {Name}", res.NodeClass, res.Attributes.DisplayName);
+                log.LogTrace("HandleNode {NodeClass} {Name}", res.NodeClass, res.Name);
+                target.Add(res);
             };
         }
         /// <summary>
@@ -298,7 +299,7 @@ namespace Cognite.OpcUa.Config
             if (node == null) return false;
             string? identifier = node.Id.IdType == IdType.String ? (string)node.Id.Identifier : null;
             return identifier != null && identifier.StartsWith(str, StringComparison.InvariantCultureIgnoreCase)
-                || node.Attributes.DisplayName != null && node.Attributes.DisplayName.StartsWith(str, StringComparison.InvariantCultureIgnoreCase);
+                || node.Name != null && node.Name.StartsWith(str, StringComparison.InvariantCultureIgnoreCase);
         }
         /// <summary>
         /// Method to check if a given UANode contains the given string,
@@ -312,7 +313,7 @@ namespace Cognite.OpcUa.Config
             if (node == null) return false;
             string? identifier = node.Id.IdType == IdType.String ? (string)node.Id.Identifier : null;
             return identifier != null && identifier.Contains(str, StringComparison.InvariantCultureIgnoreCase)
-                        || node.Attributes.DisplayName != null && node.Attributes.DisplayName.Contains(str, StringComparison.InvariantCultureIgnoreCase);
+                        || node.Name != null && node.Name.Contains(str, StringComparison.InvariantCultureIgnoreCase);
         }
     }
 }
