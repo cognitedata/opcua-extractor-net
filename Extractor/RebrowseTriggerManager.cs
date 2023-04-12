@@ -51,7 +51,7 @@ namespace Cognite.OpcUa
 
             await _uaClient.Browser.BrowseDirectory(
                 new[] { serverNamespaces },
-                (refDef, parent) =>
+                (refDef, parent, visited) =>
                 {
                     var nodeId = (NodeId)refDef.NodeId;
 
@@ -77,8 +77,7 @@ namespace Cognite.OpcUa
                 },
                 token,
                 maxDepth: 1,
-                doFilter: false,
-                ignoreVisited: false
+                doFilter: false
             );
 
             // To be used in filtering namespaces

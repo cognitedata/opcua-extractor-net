@@ -259,7 +259,6 @@ namespace Cognite.OpcUa
                 source.DataTypeManager.Configure();
                 source.ClearNodeOverrides();
                 source.ClearEventFields();
-                source.Browser.ResetVisitedNodes();
                 await RestartExtractor();
             }
             else
@@ -371,7 +370,7 @@ namespace Cognite.OpcUa
                 pusher.Reset();
             }
 
-            var synchTasks = await RunMapping(RootNodes, true, true, true);
+            var synchTasks = await RunMapping(RootNodes, initial: true, isFull: true);
 
             if (Config.FailureBuffer.Enabled && FailureBuffer != null)
             {
@@ -463,9 +462,7 @@ namespace Cognite.OpcUa
             await uaClient.WaitForOperations(Source.Token);
             await ConfigureExtractor();
 
-            uaClient.Browser.ResetVisitedNodes();
-
-            var synchTasks = await RunMapping(RootNodes, true, false, true);
+            var synchTasks = await RunMapping(RootNodes, initial: false, isFull: true);
 
             foreach (var task in synchTasks)
             {
@@ -487,7 +484,7 @@ namespace Cognite.OpcUa
                 {
                     nodesToBrowse.Add(id);
                 }
-                var historyTasks = await RunMapping(nodesToBrowse.Distinct(), true, false, false);
+                var historyTasks = await RunMapping(nodesToBrowse.Distinct(), initial: false, isFull: false);
 
                 foreach (var task in historyTasks)
                 {
@@ -572,29 +569,15 @@ namespace Cognite.OpcUa
             }));
         }
 
-        private bool ShouldFullyRebrowse()
-        {
-            // If there are any updates, we need to do a full mapping
-            if (Config.Extraction.Update.AnyUpdate) return true;
-            // If relationships are enabled we need to fully map, other wise we won't be able to consistently discover new relationships.
-            if (Config.Extraction.Relationships.Enabled) return true;
-            // If deletes are enabled we want a full map as well, to discover deleted nodes.
-            if (deletesManager != null) return true;
-
-            return false;
-        }
-
         /// <summary>
         /// Redo browse, then schedule history on the looper.
         /// </summary>
         public async Task Rebrowse()
         {
-            var isFull = ShouldFullyRebrowse();
             // If we are updating we want to re-discover nodes in order to run them through mapping again.
             var historyTasks = await RunMapping(RootNodes,
-                ignoreVisited: !isFull,
                 initial: false,
-                isFull: isFull);
+                isFull: true);
 
             foreach (var task in historyTasks)
             {
@@ -620,7 +603,7 @@ namespace Cognite.OpcUa
 
         #region Mapping
 
-        private async Task<IEnumerable<Func<CancellationToken, Task>>> RunMapping(IEnumerable<NodeId> nodesToBrowse, bool ignoreVisited, bool initial, bool isFull)
+        private async Task<IEnumerable<Func<CancellationToken, Task>>> RunMapping(IEnumerable<NodeId> nodesToBrowse, bool initial, bool isFull)
         {
             bool readFromOpc = true;
 
@@ -689,7 +672,7 @@ namespace Cognite.OpcUa
                 var handler = new UANodeSource(Provider.GetRequiredService<ILogger<UANodeSource>>(), Config, this, uaClient, isFull);
                 try
                 {
-                    await uaClient.Browser.BrowseNodeHierarchy(nodesToBrowse, handler.Callback, Source.Token, ignoreVisited,
+                    await uaClient.Browser.BrowseNodeHierarchy(nodesToBrowse, handler.Callback, Source.Token,
                         "the main instance hierarchy");
                 }
                 catch (Exception ex)
@@ -709,7 +692,7 @@ namespace Cognite.OpcUa
                 {
                     tasks = tasks.Append(async token =>
                     {
-                        var tasks = await RunMapping(RootNodes, false, false, true);
+                        var tasks = await RunMapping(RootNodes, initial: false, isFull: true);
                         foreach (var task in tasks)
                         {
                             Looper.Scheduler.ScheduleTask(null, task);
@@ -853,7 +836,7 @@ namespace Cognite.OpcUa
         /// </summary>
         private async Task ConfigureExtractor()
         {
-            RootNodes = Config.Extraction.GetRootNodes(uaClient);
+            RootNodes = Config.Extraction.GetRootNodes(uaClient, log);
 
             DataTypeManager.Configure();
 
@@ -885,10 +868,8 @@ namespace Cognite.OpcUa
                 if (Config.Events.EmitterIds != null && Config.Events.EmitterIds.Any()
                     || Config.Events.HistorizingEmitterIds != null && Config.Events.HistorizingEmitterIds.Any())
                 {
-                    var histEmitterIds = new HashSet<NodeId>((Config.Events.HistorizingEmitterIds ?? Enumerable.Empty<ProtoNodeId>())
-                        .Select(proto => proto.ToNodeId(uaClient, ObjectIds.Server)));
-                    var emitterIds = new HashSet<NodeId>((Config.Events.EmitterIds ?? Enumerable.Empty<ProtoNodeId>())
-                        .Select(proto => proto.ToNodeId(uaClient, ObjectIds.Server)));
+                    var histEmitterIds = Config.Events.GetHistorizingEmitterIds(uaClient, log);
+                    var emitterIds = Config.Events.GetEmitterIds(uaClient, log);
                     var eventEmitterIds = new HashSet<NodeId>(histEmitterIds.Concat(emitterIds));
 
                     foreach (var id in eventEmitterIds)

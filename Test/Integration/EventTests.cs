@@ -193,7 +193,6 @@ namespace Test.Integration
                 extractor.State.Clear();
                 extractor.GetType().GetField("subscribed", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(extractor, 0);
                 extractor.GetType().GetField("subscribeFlag", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(extractor, false);
-                tester.Client.Browser.ResetVisitedNodes();
                 tester.Client.RemoveSubscription("EventListener").Wait();
             }
 

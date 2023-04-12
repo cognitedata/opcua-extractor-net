@@ -372,9 +372,8 @@ namespace Cognite.OpcUa.PubSub
             log.LogInformation("Browse server PubSub hierarchy to identify settings");
             await client.Browser.BrowseDirectory(
                 new[] { ObjectIds.PublishSubscribe },
-                (desc, id) => HandleNode(desc, id),
+                (desc, id, visited) => HandleNode(desc, id),
                 token,
-                ignoreVisited: false,
                 doFilter: false,
                 purpose: "identifying PubSub settings");
 

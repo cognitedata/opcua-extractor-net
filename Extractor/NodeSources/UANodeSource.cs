@@ -37,7 +37,7 @@ namespace Cognite.OpcUa.NodeSources
         private bool parsed;
 
         private readonly List<(ReferenceDescription Node, NodeId ParentId)> references = new List<(ReferenceDescription, NodeId)>();
-        public Action<ReferenceDescription, NodeId> Callback => HandleNode;
+        public Action<ReferenceDescription, NodeId, bool> Callback => HandleNode;
         private readonly bool isFullBrowse;
 
         public UANodeSource(ILogger<UANodeSource> log, FullConfig config, UAExtractor extractor, UAClient client, bool isFullBrowse)
@@ -236,36 +236,43 @@ namespace Cognite.OpcUa.NodeSources
         /// </summary>
         /// <param name="node">Description of the node to be handled</param>
         /// <param name="parentId">Id of the parent node</param>
-        private void HandleNode(ReferenceDescription node, NodeId parentId)
+        private void HandleNode(ReferenceDescription node, NodeId parentId, bool visited)
         {
             bool mapped = true;
 
-            if (node.NodeClass == NodeClass.Object || Config.Extraction.NodeTypes.AsNodes && node.NodeClass == NodeClass.ObjectType)
+            if (!visited)
             {
-                var uaNode = new UANode(Client.ToNodeId(node.NodeId), node.DisplayName.Text, parentId, node.NodeClass);
-                uaNode.SetNodeType(Client, node.TypeDefinition);
+                if (node.NodeClass == NodeClass.Object || Config.Extraction.NodeTypes.AsNodes && node.NodeClass == NodeClass.ObjectType)
+                {
+                    var uaNode = new UANode(Client.ToNodeId(node.NodeId), node.DisplayName.Text, parentId, node.NodeClass);
+                    uaNode.SetNodeType(Client, node.TypeDefinition);
 
-                Extractor.State.RegisterNode(uaNode.Id, Extractor.GetUniqueId(uaNode.Id));
-                Log.LogTrace("HandleNode {Class} {Name}", uaNode.NodeClass, uaNode.DisplayName);
+                    Extractor.State.RegisterNode(uaNode.Id, Extractor.GetUniqueId(uaNode.Id));
+                    Log.LogTrace("HandleNode {Class} {Name}", uaNode.NodeClass, uaNode.DisplayName);
 
-                NodeMap[uaNode.Id] = uaNode;
-            }
-            else if (node.NodeClass == NodeClass.Variable || Config.Extraction.NodeTypes.AsNodes && node.NodeClass == NodeClass.VariableType)
-            {
-                var variable = new UAVariable(Client.ToNodeId(node.NodeId), node.DisplayName.Text, parentId, node.NodeClass);
-                variable.SetNodeType(Client, node.TypeDefinition);
+                    NodeMap[uaNode.Id] = uaNode;
+                }
+                else if (node.NodeClass == NodeClass.Variable || Config.Extraction.NodeTypes.AsNodes && node.NodeClass == NodeClass.VariableType)
+                {
+                    var variable = new UAVariable(Client.ToNodeId(node.NodeId), node.DisplayName.Text, parentId, node.NodeClass);
+                    variable.SetNodeType(Client, node.TypeDefinition);
 
-                Extractor.State.RegisterNode(variable.Id, Extractor.GetUniqueId(variable.Id));
-                Log.LogTrace("HandleNode Variable {Name}", variable.DisplayName);
+                    Extractor.State.RegisterNode(variable.Id, Extractor.GetUniqueId(variable.Id));
+                    Log.LogTrace("HandleNode Variable {Name}", variable.DisplayName);
 
-                NodeMap[variable.Id] = variable;
+                    NodeMap[variable.Id] = variable;
+                }
+                else
+                {
+                    mapped = false;
+                    Log.LogWarning("Node of unexpected type received: {Type}, {Id}", node.NodeClass, node.NodeId);
+                }
             }
             else
             {
-                mapped = false;
-                Log.LogWarning("Node of unknown type received: {Type}, {Id}", node.NodeClass, node.NodeId);
+                mapped = NodeMap.ContainsKey(Client.ToNodeId(node.NodeId));
             }
-
+            
             if (mapped && Config.Extraction.Relationships.Enabled && Config.Extraction.Relationships.Hierarchical)
             {
                 if (parentId == null || parentId.IsNullNodeId) return;

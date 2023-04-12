@@ -48,13 +48,9 @@ namespace Cognite.OpcUa.Config
         /// Identifier of the NodeId, on the form i=123 or s=string, etc.
         /// </summary>
         public string? NodeId { get; set; }
-        public NodeId ToNodeId(UAClient client, NodeId? defaultValue = null)
+        public NodeId ToNodeId(UAClient client)
         {
             var node = client.ToNodeId(NodeId, NamespaceUri);
-            if (node.IsNullNodeId)
-            {
-                return defaultValue ?? node;
-            }
             return node;
         }
     }

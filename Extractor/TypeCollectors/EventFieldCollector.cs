@@ -123,17 +123,12 @@ namespace Cognite.OpcUa.TypeCollectors
                 token,
                 ReferenceTypeIds.HierarchicalReferences,
                 (uint)NodeClass.ObjectType | (uint)NodeClass.Variable | (uint)NodeClass.Object,
-                false,
-                false,
+                doFilter: false,
                 purpose: "the event type hierarchy");
 
             var result = new Dictionary<NodeId, UAEventType>();
 
-            HashSet<NodeId>? whitelist = null;
-            if (config.EventIds != null && config.EventIds.Any())
-            {
-                whitelist = new HashSet<NodeId>(config.EventIds.Select(proto => proto.ToNodeId(uaClient, ObjectTypeIds.BaseEventType)));
-            }
+            HashSet<NodeId>? whitelist = config.GetWhitelist(uaClient, log);
 
             foreach (var type in types.Values)
             {
@@ -155,7 +150,7 @@ namespace Cognite.OpcUa.TypeCollectors
         /// </summary>
         /// <param name="child">Type or property to be handled</param>
         /// <param name="parent">Parent type id</param>
-        private void EventTypeCallback(ReferenceDescription child, NodeId parent)
+        private void EventTypeCallback(ReferenceDescription child, NodeId parent, bool visited)
         {
             var id = uaClient.ToNodeId(child.NodeId);
 

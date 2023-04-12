@@ -296,7 +296,7 @@ namespace Cognite.OpcUa.TypeCollectors
 
             log.LogInformation("Browse datatype hierarchy to map out variable datatypes");
 
-            void Callback(ReferenceDescription child, NodeId parent)
+            void Callback(ReferenceDescription child, NodeId parent, bool visited)
             {
                 var id = uaClient.ToNodeId(child.NodeId);
                 parentIds[id] = parent;
@@ -311,8 +311,7 @@ namespace Cognite.OpcUa.TypeCollectors
                 token,
                 ReferenceTypeIds.HasSubtype,
                 (uint)NodeClass.DataType,
-                false,
-                false,
+                doFilter: false,
                 purpose: "the data type hierarchy");
         }
         /// <summary>
