@@ -119,7 +119,7 @@ namespace Cognite.OpcUa.Nodes
 
         public bool ShouldSubscribe(FullConfig config)
         {
-            if (!config.Subscriptions.DataPoints) return false;
+            if (!config.Subscriptions.DataPoints && !config.PubSub.Enabled) return false;
 
             if (ShouldSubscribeOverride != null) return ShouldSubscribeOverride.Value;
 
