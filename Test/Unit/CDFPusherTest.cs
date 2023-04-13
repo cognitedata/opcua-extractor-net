@@ -41,6 +41,7 @@ namespace Test.Unit
             tester.Init(output);
             tester.ResetConfig();
             (handler, pusher) = tester.GetCDFPusher();
+            tester.Client.TypeManager.Reset();
         }
 
         public void Dispose()

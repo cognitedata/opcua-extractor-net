@@ -31,6 +31,7 @@ namespace Test.Unit
             var ifSetup = tester.GetInfluxPusher($"testdb-pusher{ifIndex++}");
             client = ifSetup.client;
             pusher = ifSetup.pusher;
+            tester.Client.TypeManager.Reset();
         }
         public void Dispose()
         {

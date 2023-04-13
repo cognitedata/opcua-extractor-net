@@ -34,6 +34,7 @@ namespace Test.Integration
             tester.Init(output);
             tester.ResetConfig();
             tester.Config.History.Enabled = false;
+            tester.Client.TypeManager.Reset();
         }
         #region datatypeconfig
         [Fact]

@@ -43,6 +43,7 @@ namespace Test.Integration
             tester.ResetCustomServerValues();
             tester.WipeBaseHistory();
             tester.WipeCustomHistory();
+            tester.Client.TypeManager.Reset();
         }
 
         #region subscriptions

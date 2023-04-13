@@ -39,6 +39,7 @@ namespace Test.Unit
                     }
                 }
             };
+            tester.Client.TypeManager.Reset();
         }
 
         [Fact]

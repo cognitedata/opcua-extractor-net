@@ -38,6 +38,7 @@ namespace Test.Integration
             tester.ResetConfig();
             tester.WipeBaseHistory();
             tester.WipeEventHistory();
+            tester.Client.TypeManager.Reset();
         }
 
         [Fact]

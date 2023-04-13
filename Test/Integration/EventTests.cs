@@ -49,6 +49,7 @@ namespace Test.Integration
             tester.Config.Events.Enabled = true;
             tester.Config.Extraction.RootNode = tester.Ids.Event.Root.ToProtoNodeId(tester.Client);
             tester.WipeEventHistory();
+            tester.Client.TypeManager.Reset();
         }
         #region subscriptions
         [Fact]

@@ -84,6 +84,7 @@ namespace Test.Unit
             this.tester = tester;
             tester.ResetConfig();
             tester.Init(output);
+            tester.Client.TypeManager.Reset();
         }
 
         [Theory(Timeout = 20000)]

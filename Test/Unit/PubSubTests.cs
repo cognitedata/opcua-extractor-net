@@ -46,6 +46,7 @@ namespace Test.Unit
             tester.Server.UpdateNode(tester.Ids.Custom.EnumVar2, 123);
             tester.Server.UpdateNode(tester.Ids.Custom.EnumVar3, new[] { 123, 123, 123, 321 });
             tester.ResetConfig();
+            tester.Client.TypeManager.Reset();
         }
 
         [Theory(Timeout = 20000)]

@@ -28,6 +28,7 @@ namespace Test.Unit
             tester.Init(output);
             tester.Config.Extraction.DataPushDelay = "-1";
             tester.Config.Extraction.AutoRebrowsePeriod = "1000";
+            tester.Client.TypeManager.Reset();
         }
         [Fact]
         public async Task TestScheduleTasks()

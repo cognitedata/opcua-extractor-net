@@ -68,6 +68,7 @@ namespace Test.Unit
             tester.Init(output);
             (handler, bridge, pusher) = tester.GetPusher();
             bridge.StartBridge(tester.Source.Token).Wait();
+            tester.Client.TypeManager.Reset();
         }
 
         [Fact]
