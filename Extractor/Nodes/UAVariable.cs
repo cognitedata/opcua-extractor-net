@@ -296,22 +296,26 @@ namespace Cognite.OpcUa.Nodes
         public override int GetUpdateChecksum(TypeUpdateConfig update, bool dataTypeMetadata, bool nodeTypeMetadata)
         {
             int checksum = base.GetUpdateChecksum(update, dataTypeMetadata, nodeTypeMetadata);
-            unchecked
+            if (update.Metadata)
             {
-                if (dataTypeMetadata)
+                unchecked
                 {
-                    checksum = checksum * 31 + FullAttributes.DataType.Id.GetHashCode();
-                }
-                if (NodeClass == NodeClass.VariableType)
-                {
-                    checksum = checksum * 31 + FullAttributes.Value.GetHashCode();
-                }
+                    if (dataTypeMetadata)
+                    {
+                        checksum = checksum * 31 + FullAttributes.DataType.Id.GetHashCode();
+                    }
+                    if (NodeClass == NodeClass.VariableType)
+                    {
+                        checksum = checksum * 31 + FullAttributes.Value.GetHashCode();
+                    }
 
-                if (nodeTypeMetadata)
-                {
-                    checksum = checksum * 31 + (FullAttributes.TypeDefinition?.Id?.GetHashCode() ?? 0);
+                    if (nodeTypeMetadata)
+                    {
+                        checksum = checksum * 31 + (FullAttributes.TypeDefinition?.Id?.GetHashCode() ?? 0);
+                    }
                 }
             }
+            
             return checksum;
         }
 
@@ -322,9 +326,10 @@ namespace Cognite.OpcUa.Nodes
             base.Format(builder, indent + 4, writeParent);
 
             var indt = new string(' ', indent + 4);
-            builder.AppendFormat(CultureInfo.InvariantCulture, "{0}DataType: ", indt);
-            builder.AppendLine();
-            FullAttributes.DataType.Format(builder, indent + 8, false);
+            if (FullAttributes.DataType != null)
+            {
+                FullAttributes.DataType.Format(builder, indent + 4, false);
+            }
             if (FullAttributes.ValueRank != ValueRanks.Scalar)
             {
                 builder.AppendFormat(CultureInfo.InvariantCulture, "{0}ValueRank: {1}", indt, FullAttributes.ValueRank);
@@ -338,9 +343,7 @@ namespace Cognite.OpcUa.Nodes
             }
             if (FullAttributes.TypeDefinition != null)
             {
-                builder.AppendFormat(CultureInfo.InvariantCulture, "{0}TypeDefinition: ", indt);
-                builder.AppendLine();
-                FullAttributes.TypeDefinition.Format(builder, indent + 8, false, false);
+                FullAttributes.TypeDefinition.Format(builder, indent + 4, false, false);
             }
             if (AsEvents)
             {

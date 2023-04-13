@@ -135,13 +135,16 @@ namespace Cognite.OpcUa.Nodes
         public override int GetUpdateChecksum(TypeUpdateConfig update, bool dataTypeMetadata, bool nodeTypeMetadata)
         {
             int checksum = base.GetUpdateChecksum(update, dataTypeMetadata, nodeTypeMetadata);
-            unchecked
+            if (update.Metadata)
             {
-                if (dataTypeMetadata)
+                unchecked
                 {
-                    checksum = checksum * 31 + FullAttributes.DataType.Id.GetHashCode();
+                    if (dataTypeMetadata)
+                    {
+                        checksum = checksum * 31 + FullAttributes.DataType.Id.GetHashCode();
+                    }
+                    checksum = checksum * 31 + FullAttributes.Value.GetHashCode();
                 }
-                checksum = checksum * 31 + FullAttributes.Value.GetHashCode();
             }
             return checksum;
         }
@@ -155,9 +158,7 @@ namespace Cognite.OpcUa.Nodes
             var indt = new string(' ', indent + 4);
             if (FullAttributes.DataType != null)
             {
-                builder.AppendFormat(CultureInfo.InvariantCulture, "{0}DataType: ", indt);
-                builder.AppendLine();
-                FullAttributes.DataType.Format(builder, indent + 8, false);
+                FullAttributes.DataType.Format(builder, indent + 4, false);
             }
             if (FullAttributes.ValueRank != ValueRanks.Scalar && FullAttributes.ValueRank > 0)
             {

@@ -1,15 +1,11 @@
-﻿using Cognite.OpcUa;
-using Cognite.OpcUa.Config;
+﻿using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.TypeCollectors;
-using Cognite.OpcUa.Types;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
 using System.Threading.Tasks;
 using Test.Utils;
 using Xunit;
@@ -43,9 +39,17 @@ namespace Test.Unit
                 new ProtoDataType { NodeId = new NodeId("test").ToProtoNodeId(tester.Client) },
                 new ProtoDataType { NodeId = new ProtoNodeId { NamespaceUri = "some.missing.uri", NodeId = "i=123" } }
             };
+            mgr.GetDataType(new NodeId("enum"));
+            mgr.GetDataType(new NodeId("test"));
             // with custom numeric types
             mgr.BuildTypeInfo();
             Assert.Equal(2, mgr.NodeMap.Values.OfType<UADataType>().Count());
+
+            var dt1 = mgr.NodeMap[new NodeId("enum")] as UADataType;
+            Assert.NotNull(dt1.EnumValues);
+            Assert.False(dt1.IsString);
+            var dt2 = mgr.NodeMap[new NodeId("test")] as UADataType;
+            Assert.False(dt2.IsString);
 
             config.IgnoreDataTypes = new List<ProtoNodeId>
             {
@@ -53,15 +57,27 @@ namespace Test.Unit
                 new NodeId("test").ToProtoNodeId(tester.Client),
                 new ProtoNodeId { NamespaceUri = "some.missing.uri", NodeId = "i=123" }
             };
+            mgr.Reset();
+            mgr.GetDataType(new NodeId("enum"));
+            mgr.GetDataType(new NodeId("test"));
             // with ignore data types
             mgr.BuildTypeInfo();
             Assert.Equal(2, mgr.NodeMap.Values.OfType<UADataType>().Count());
+
+            dt1 = mgr.NodeMap[new NodeId("enum")] as UADataType;
+            Assert.NotNull(dt1.EnumValues);
+            Assert.False(dt1.IsString);
+            Assert.True(dt1.ShouldIgnore);
+            dt2 = mgr.NodeMap[new NodeId("test")] as UADataType;
+            Assert.False(dt2.IsString);
+            Assert.True(dt1.ShouldIgnore);
         }
         [Fact]
         public void TestGetDataType()
         {
             var config = tester.Config.Extraction.DataTypes;
             var mgr = new TypeManager(tester.Config, tester.Client, tester.Log);
+            config.AutoIdentifyTypes = true;
 
             // child of number
             var dt1 = mgr.GetDataType(new NodeId("dt1"));
@@ -69,7 +85,7 @@ namespace Test.Unit
             mgr.BuildTypeInfo();
             Assert.False(dt1.IsString);
             Assert.False(dt1.IsStep);
-            Assert.Equal(2, mgr.NodeMap.OfType<UADataType>().Count());
+            Assert.Equal(2, mgr.NodeMap.Values.OfType<UADataType>().Count());
 
             // Grandchild of number
             var dt2 = mgr.GetDataType(new NodeId("dt2"));
@@ -77,7 +93,7 @@ namespace Test.Unit
             mgr.BuildTypeInfo();
             Assert.False(dt2.IsString);
             Assert.False(dt2.IsStep);
-            Assert.Equal(3, mgr.NodeMap.OfType<UADataType>().Count());
+            Assert.Equal(3, mgr.NodeMap.Values.OfType<UADataType>().Count());
 
             // Child of unknown
             var dt3 = mgr.GetDataType(new NodeId("dt3"));
@@ -85,7 +101,7 @@ namespace Test.Unit
             mgr.BuildTypeInfo();
             Assert.True(dt3.IsString);
             Assert.False(dt3.IsStep);
-            Assert.Equal(5, mgr.NodeMap.OfType<UADataType>().Count());
+            Assert.Equal(5, mgr.NodeMap.Values.OfType<UADataType>().Count());
 
             // Child of known
             var dt4 = mgr.GetDataType(new NodeId("dt4"));
@@ -93,7 +109,7 @@ namespace Test.Unit
             mgr.BuildTypeInfo();
             Assert.False(dt4.IsString);
             Assert.False(dt4.IsStep);
-            Assert.Equal(6, mgr.NodeMap.OfType<UADataType>().Count());
+            Assert.Equal(6, mgr.NodeMap.Values.OfType<UADataType>().Count());
 
             // Child of bool
             var dt5 = mgr.GetDataType(new NodeId("dt5"));
@@ -101,7 +117,7 @@ namespace Test.Unit
             mgr.BuildTypeInfo();
             Assert.False(dt5.IsString);
             Assert.True(dt5.IsStep);
-            Assert.Equal(8, mgr.NodeMap.OfType<UADataType>().Count());
+            Assert.Equal(8, mgr.NodeMap.Values.OfType<UADataType>().Count());
 
             // Child of enum
             var dt6 = mgr.GetDataType(new NodeId("dt6"));
@@ -110,7 +126,7 @@ namespace Test.Unit
             Assert.False(dt6.IsString);
             Assert.True(dt6.IsStep);
             Assert.NotNull(dt6.EnumValues);
-            Assert.Equal(10, mgr.NodeMap.OfType<UADataType>().Count());
+            Assert.Equal(10, mgr.NodeMap.Values.OfType<UADataType>().Count());
 
             // Null nodeId
             config.NullAsNumeric = true;
@@ -118,14 +134,14 @@ namespace Test.Unit
             mgr.BuildTypeInfo();
             Assert.False(dt7.IsString);
             Assert.False(dt7.IsStep);
-            Assert.Equal(11, mgr.NodeMap.OfType<UADataType>().Count());
+            Assert.Equal(11, mgr.NodeMap.Values.OfType<UADataType>().Count());
 
             // Recognized NodeId
             var dt8 = mgr.GetDataType(new NodeId("dt6"));
             mgr.BuildTypeInfo();
             Assert.False(dt8.IsString);
             Assert.True(dt8.IsStep);
-            Assert.Equal(11, mgr.NodeMap.OfType<UADataType>().Count());
+            Assert.Equal(11, mgr.NodeMap.Values.OfType<UADataType>().Count());
         }
         [Fact]
         public void TestAllowTsMap()
@@ -150,7 +166,7 @@ namespace Test.Unit
             Assert.False(node.AllowTSMap(tester.Log, config));
 
             // Override string
-            Assert.True(node.AllowTSMap(tester.Log, config));
+            Assert.True(node.AllowTSMap(tester.Log, config, null, true));
 
             // Allow strings
             config.AllowStringVariables = true;
@@ -158,6 +174,7 @@ namespace Test.Unit
 
             // Ignored datatype
             node.FullAttributes.DataType = new UADataType(new NodeId("ignore"));
+            node.FullAttributes.DataType.ShouldIgnore = true;
             Assert.False(node.AllowTSMap(tester.Log, config));
 
             // Non-scalar value rank
@@ -182,7 +199,7 @@ namespace Test.Unit
             Assert.False(node.AllowTSMap(tester.Log, config));
 
             // Override size
-            Assert.True(node.AllowTSMap(tester.Log, config));
+            Assert.True(node.AllowTSMap(tester.Log, config, 10));
 
             // Set max size to infinite
             config.MaxArraySize = -1;
@@ -206,57 +223,53 @@ namespace Test.Unit
             };
             var mgr = new TypeManager(tester.Config, tester.Client, tester.Log);
 
-
             config.AutoIdentifyTypes = true;
             await mgr.LoadTypeData(tester.Source.Token);
 
-
             var type = mgr.GetDataType(tester.Server.Ids.Custom.IgnoreType);
+            mgr.BuildTypeInfo();
             Assert.True(type.IsString);
             Assert.False(type.IsStep);
             Assert.Equal(tester.Server.Ids.Custom.IgnoreType, type.Id);
             Assert.Null(type.EnumValues);
 
             type = mgr.GetDataType(tester.Server.Ids.Custom.StringyType);
+            mgr.BuildTypeInfo();
             Assert.True(type.IsString);
             Assert.False(type.IsStep);
             Assert.Equal(tester.Server.Ids.Custom.StringyType, type.Id);
             Assert.Null(type.EnumValues);
 
             type = mgr.GetDataType(tester.Server.Ids.Custom.MysteryType);
+            mgr.BuildTypeInfo();
             Assert.False(type.IsString);
             Assert.False(type.IsStep);
             Assert.Equal(tester.Server.Ids.Custom.MysteryType, type.Id);
             Assert.Null(type.EnumValues);
 
             type = mgr.GetDataType(tester.Server.Ids.Custom.NumberType);
+            mgr.BuildTypeInfo();
             Assert.False(type.IsString);
             Assert.False(type.IsStep);
             Assert.Equal(tester.Server.Ids.Custom.NumberType, type.Id);
             Assert.Null(type.EnumValues);
 
             type = mgr.GetDataType(tester.Server.Ids.Custom.EnumType1);
+            mgr.BuildTypeInfo();
             Assert.False(type.IsString);
             Assert.True(type.IsStep);
-            Assert.Equal(tester.Server.Ids.Custom.EnumType1, type.Id);
-            Assert.Empty(type.EnumValues);
+            Assert.Equal(3, type.EnumValues.Count);
+            Assert.Equal("Enum1", type.EnumValues[0]);
+            Assert.Equal("Enum2", type.EnumValues[1]);
+            Assert.Equal("Enum3", type.EnumValues[2]);
 
             type = mgr.GetDataType(tester.Server.Ids.Custom.EnumType2);
+            mgr.BuildTypeInfo();
             Assert.False(type.IsString);
             Assert.True(type.IsStep);
-            Assert.Equal(tester.Server.Ids.Custom.EnumType2, type.Id);
-            Assert.Empty(type.EnumValues);
-
-            var et1 = mgr.GetDataType(tester.Server.Ids.Custom.EnumType1);
-            Assert.Equal(3, et1.EnumValues.Count);
-            Assert.Equal("Enum1", et1.EnumValues[0]);
-            Assert.Equal("Enum2", et1.EnumValues[1]);
-            Assert.Equal("Enum3", et1.EnumValues[2]);
-
-            var et2 = mgr.GetDataType(tester.Server.Ids.Custom.EnumType2);
-            Assert.Equal(2, et2.EnumValues.Count);
-            Assert.Equal("VEnum1", et2.EnumValues[321]);
-            Assert.Equal("VEnum2", et2.EnumValues[123]);
+            Assert.Equal(2, type.EnumValues.Count);
+            Assert.Equal("VEnum1", type.EnumValues[321]);
+            Assert.Equal("VEnum2", type.EnumValues[123]);
         }
         #endregion
         #region EventFieldCollector
@@ -321,6 +334,10 @@ namespace Test.Unit
             Assert.Contains(new RawTypeField(new QualifiedName("SubType")), fields[eventIds.PropType].CollectedFields);
 
             Assert.Equal(11, fields[eventIds.DeepType].CollectedFields.Count());
+            foreach (var f in fields[eventIds.DeepType].CollectedFields)
+            {
+                tester.Log.LogInformation("{Path}", string.Join(", ", f.BrowsePath.Select(b => $"{b.Name}:{b.NamespaceIndex}")));
+            }
             Assert.Contains(new RawTypeField(new QualifiedNameCollection { new QualifiedName("DeepObj", 2), new QualifiedName("DeepProp") }),
                 fields[eventIds.DeepType].CollectedFields);
         }

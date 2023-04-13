@@ -628,8 +628,18 @@ namespace Cognite.OpcUa
             foreach (var node in nodes)
             {
                 var attributes = node.Attributes.GetAttributeSet(Config);
+                bool unknown = false;
                 foreach (var attr in attributes)
                 {
+                    var val = values[idx];
+
+                    if (val.StatusCode == StatusCodes.BadNodeIdUnknown && !unknown)
+                    {
+                        unknown = true;
+                        log.LogWarning("Node {Id} {Name} does not exist on the server", node.Id, node.Name);
+                        node.Ignore = true;
+                    }
+
                     node.Attributes.LoadAttribute(values[idx], attr, typeManager);
                     idx++;
                 }

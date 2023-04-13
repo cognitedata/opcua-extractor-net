@@ -189,6 +189,7 @@ namespace Test.Unit
 
             tester.Config.Extraction.NodeTypes.Metadata = true;
             var node = new UAObject(new NodeId("test"), "test", null, null, NodeId.Null, new UAObjectType(new NodeId("type")));
+            node.FullAttributes.TypeDefinition.Attributes.DisplayName = "SomeType";
             fields = node.GetExtraMetadata(tester.Config, extractor);
             Assert.Single(fields);
             Assert.Equal("SomeType", fields["TypeDefinition"]);

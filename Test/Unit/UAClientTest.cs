@@ -592,7 +592,7 @@ namespace Test.Unit
             var distinctNodes = nodes.SelectMany(kvp => kvp.Value).GroupBy(rd => rd.NodeId);
 
             Assert.Equal(distinctNodes.Count(), nodes.Sum(kvp => kvp.Value.Count));
-            Assert.Equal(2377, nodes.Sum(kvp => kvp.Value.Count));
+            Assert.Equal(2710, nodes.Sum(kvp => kvp.Value.Count));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_browse_operations", 10));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_tree_depth", 11));
         }
@@ -661,17 +661,7 @@ namespace Test.Unit
             tester.Config.History.Data = true;
             tester.Config.Extraction.DataTypes.MaxArraySize = -1;
             tester.Config.Events.Enabled = true;
-            try
-            {
-                await tester.Client.ReadNodeData(nodes, tester.TypeManager, tester.Source.Token);
-            }
-            finally
-            {
-                tester.Config.History.Enabled = false;
-                tester.Config.History.Data = false;
-                tester.Config.Extraction.DataTypes.MaxArraySize = 0;
-                tester.Config.Events.Enabled = false;
-            }
+            await tester.Client.ReadNodeData(nodes, tester.TypeManager, tester.Source.Token);
 
             Assert.Equal("FullRoot Description", nodes[0].Attributes.Description);
             Assert.Equal(EventNotifiers.SubscribeToEvents | EventNotifiers.HistoryRead, (nodes[1] as UAObject).FullAttributes.EventNotifier);
@@ -722,8 +712,7 @@ namespace Test.Unit
             Assert.True((nodes[3] as UAVariable).FullAttributes.Historizing);
             Assert.NotNull((nodes[4] as UAVariable).ArrayDimensions);
             Assert.NotNull((nodes[3] as UAVariable).ArrayDimensions);
-            Assert.Equal(DataTypeIds.BaseDataType, (nodes[5] as UAVariable).FullAttributes.DataType.Id);
-            Assert.Equal(0, (nodes[5] as UAVariable).FullAttributes.AccessLevel);
+            Assert.Equal(DataTypeIds.BaseDataType, (nodes[5] as UAVariableType).FullAttributes.DataType.Id);
 
             // Disable history
             tester.Config.History.Enabled = false;
@@ -759,7 +748,7 @@ namespace Test.Unit
 
             Assert.Equal(EventNotifiers.SubscribeToEvents | EventNotifiers.HistoryRead, (nodes[1] as UAObject).FullAttributes.EventNotifier);
             Assert.True((nodes[1] as UAObject).FullAttributes.ShouldSubscribeToEvents(tester.Config));
-            Assert.False((nodes[3] as UAVariable).FullAttributes.ShouldSubscribe(tester.Config));
+            Assert.False((nodes[3] as UAVariable).FullAttributes.ShouldReadHistory(tester.Config));
             Assert.True((nodes[3] as UAVariable).FullAttributes.Historizing);
             Assert.True((nodes[3] as UAVariable).FullAttributes.ShouldSubscribe(tester.Config));
 
@@ -790,15 +779,6 @@ namespace Test.Unit
             Assert.True((nodes[3] as UAVariable).FullAttributes.Historizing);
             Assert.True((nodes[3] as UAVariable).FullAttributes.ShouldSubscribe(tester.Config));
             Assert.Equal(0, (nodes[3] as UAVariable).FullAttributes.AccessLevel);
-
-            // Disable reading array dimensions
-            tester.Config.Extraction.DataTypes.MaxArraySize = 0;
-
-            nodes = GetNodes();
-            await tester.Client.ReadNodeData(nodes, tester.TypeManager, tester.Source.Token);
-
-            Assert.Null((nodes[3] as UAVariable).ArrayDimensions);
-            Assert.NotNull((nodes[4] as UAVariable).ArrayDimensions);
         }
 
 
@@ -823,7 +803,7 @@ namespace Test.Unit
                 tester.Config.History.Enabled = false;
             }
             Assert.All(nodes, node => Assert.Equal(DataTypeIds.Double, node.FullAttributes.DataType.Id));
-            Assert.True(CommonTestUtils.TestMetricValue("opcua_attribute_requests", 100));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_attribute_requests", 140));
         }
         [Fact]
         public async Task TestReadRawValues()

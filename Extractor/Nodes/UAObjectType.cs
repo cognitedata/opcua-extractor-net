@@ -72,10 +72,6 @@ namespace Cognite.OpcUa.Nodes
             builder.AppendFormat(CultureInfo.InvariantCulture, "{0}ObjectType: {1}", new string(' ', indent), Name);
             builder.AppendLine();
             base.Format(builder, indent + 4, writeParent);
-
-            var indt = new string(' ', indent + 4);
-            builder.AppendFormat(CultureInfo.InvariantCulture, "{0}IsAbstract: {1}", indt, FullAttributes.IsAbstract);
-            builder.AppendLine();
         }
     }
 }

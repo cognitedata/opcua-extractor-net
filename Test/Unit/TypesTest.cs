@@ -174,11 +174,12 @@ namespace Test.Unit
             var node = new UAObject(new NodeId("test"), "name", null, null, NodeId.Null, null);
             var str = node.ToString();
             var refStr = "Object: name\n"
-                       + "Id: s=test\n";
+                       + "    Id: s=test\n";
             Assert.Equal(refStr.ReplaceLineEndings(), str.ReplaceLineEndings());
 
             // Full
             var pdt = new UADataType(DataTypeIds.String);
+            pdt.Attributes.DisplayName = "String";
 
             node = new UAObject(new NodeId("test"), "name", null, null, new NodeId("parent"), null);
             node.Attributes.Description = "description";
@@ -198,17 +199,37 @@ namespace Test.Unit
 
             str = node.ToString();
             refStr = "Object: name\n"
-                   + "Id: s=test\n"
-                   + "ParentId: s=parent\n"
-                   + "Description: description\n"
-                   + "EventNotifier: 5\n"
-                   + "NodeType: s=type\n"
-                   + "Properties: {\n"
-                   + "    propA: valueA\n"
-                   + "    propN: nProp\n"
-                   + "    propN_propA: valueA\n"
-                   + "    propB: \n"
-                   + "}";
+                   + "    Id: s=test\n"
+                   + "    Parent: s=parent\n"
+                   + "    Description: description\n"
+                   + "    Properties:\n"
+                   + "        Variable: propA\n"
+                   + "            Id: s=propA\n"
+                   + "            DataType: String\n"
+                   + "                Id: i=12\n"
+                   + "                IsString: True\n"
+                   + "            Value: valueA\n"
+                   + "        Variable: propN\n"
+                   + "            Id: s=propN\n"
+                   + "            Properties:\n"
+                   + "                Variable: propA\n"
+                   + "                    Id: s=propA\n"
+                   + "                    DataType: String\n"
+                   + "                        Id: i=12\n"
+                   + "                        IsString: True\n"
+                   + "                    Value: valueA\n"
+                   + "            DataType: String\n"
+                   + "                Id: i=12\n"
+                   + "                IsString: True\n"
+                   + "            Value: nProp\n"
+                   + "        Variable: propB\n"
+                   + "            Id: s=propB\n"
+                   + "            DataType: String\n"
+                   + "                Id: i=12\n"
+                   + "                IsString: True\n"
+                   + "    EventNotifier: 5\n"
+                   + "    ObjectType: \n"
+                   + "        Id: s=type\n";
             Assert.Equal(refStr.ReplaceLineEndings(), str.ReplaceLineEndings());
         }
 
@@ -217,7 +238,6 @@ namespace Test.Unit
         {
             using var extractor = tester.BuildExtractor();
             var node = new UAObject(new NodeId("test"), "test", null, null, NodeId.Null, null);
-            node.FullAttributes.TypeDefinition.Attributes.DisplayName = "SomeType";
             Assert.Empty(node.BuildMetadata(tester.Config, extractor, false));
             Assert.Empty(node.BuildMetadata(tester.Config, extractor, true));
             tester.Config.Extraction.NodeTypes.Metadata = true;
@@ -461,20 +481,21 @@ namespace Test.Unit
         public void TestVariableDebugDescription()
         {
             var pdt = new UADataType(DataTypeIds.String);
+            pdt.Attributes.DisplayName = "String";
 
             // basic
             var node = new UAVariable(new NodeId("test"), "name", null, null, NodeId.Null, null);
             node.FullAttributes.ValueRank = ValueRanks.Scalar;
             var str = node.ToString();
             var refStr = "Variable: name\n"
-                       + "Id: s=test\n"
-                       + "AccessLevel: 0\n";
+                       + "    Id: s=test\n";
             Assert.Equal(refStr.ReplaceLineEndings(), str.ReplaceLineEndings());
 
             // full
             node = new UAVariable(new NodeId("test"), "name", null, null, new NodeId("parent"), null);
             node.Attributes.Description = "description";
             node.FullAttributes.DataType = new UADataType(DataTypeIds.Double);
+            node.FullAttributes.DataType.Attributes.DisplayName = "Double";
             node.FullAttributes.AccessLevel = AccessLevels.CurrentRead | AccessLevels.HistoryRead;
             node.FullAttributes.ValueRank = ValueRanks.Any;
             node.FullAttributes.ArrayDimensions = new int[] { 4 };
@@ -497,24 +518,41 @@ namespace Test.Unit
             str = node.ToString();
             refStr = "Variable: name\n"
                    + "    Id: s=test\n"
-                   + "    ParentId: s=parent\n"
+                   + "    Parent: s=parent\n"
                    + "    Description: description\n"
-                   + "    DataType: {\n"
+                   + "    Properties:\n"
+                   + "        Variable: propA\n"
+                   + "            Id: s=propA\n"
+                   + "            DataType: String\n"
+                   + "                Id: i=12\n"
+                   + "                IsString: True\n"
+                   + "            Value: valueA\n"
+                   + "        Variable: propN\n"
+                   + "            Id: s=propN\n"
+                   + "            Properties:\n"
+                   + "                Variable: propA\n"
+                   + "                    Id: s=propA\n"
+                   + "                    DataType: String\n"
+                   + "                        Id: i=12\n"
+                   + "                        IsString: True\n"
+                   + "                    Value: valueA\n"
+                   + "            DataType: String\n"
+                   + "                Id: i=12\n"
+                   + "                IsString: True\n"
+                   + "            Value: nProp\n"
+                   + "        Variable: propB\n"
+                   + "            Id: s=propB\n"
+                   + "            DataType: String\n"
+                   + "                Id: i=12\n"
+                   + "                IsString: True\n"
+                   + "    DataType: Double\n"
                    + $"        Id: i={DataTypes.Double}\n"
                    + "        IsString: False\n"
-                   + "}\n"
-                   + "    History: True\n"
-                   + "    AccessLevel: 5\n"
-                   + "    ValueRank: Any\n"
-                   + "    Dimension: 4\n"
-                   + "    NodeType: s=type\n"
-                   + "    Written as events to destinations\n"
-                   + "    Properties: {\n"
-                   + "        propA: valueA\n"
-                   + "        propN: nProp\n"
-                   + "        propN_propA: valueA\n"
-                   + "        propB: \n"
-                   + "}";
+                   + "    ValueRank: -2\n"
+                   + "    ArrayDimensions: 4\n"
+                   + "    VariableType: \n"
+                   + "        Id: s=type\n"
+                   + "    Written as events to destinations\n";
             Assert.Equal(refStr.ReplaceLineEndings(), str.ReplaceLineEndings());
         }
         [Fact]
@@ -948,6 +986,8 @@ namespace Test.Unit
                 EmittingNode = new NodeId("emitter"),
                 EventType = new UAObjectType(new NodeId("type"))
             };
+            evt.EventType.Attributes.DisplayName = "EventType";
+
             var str = evt.ToString();
             var refStr = "Event: test.test\n"
                        + $"Time: {now.ToString(CultureInfo.InvariantCulture)}\n"
@@ -1062,6 +1102,7 @@ namespace Test.Unit
                 SourceNode = new NodeId("source"),
                 Time = ts
             };
+            evt.EventType.Attributes.DisplayName = "EventType";
             evt.MetaData["field"] = "value";
 
             // Plain
@@ -1125,6 +1166,7 @@ namespace Test.Unit
                 Time = ts
             };
             evt.MetaData["field"] = "value";
+            evt.EventType.Attributes.DisplayName = "EventType";
 
             // Plain
             var nodeToAsset = new Dictionary<NodeId, long>
@@ -1216,18 +1258,18 @@ namespace Test.Unit
             // asset - asset
             var reference = new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target"), false, false, true, extractor.TypeManager);
             reference.Type.Attributes.DisplayName = "Organizes";
-            reference.Type.FullAttributes.InverseName = "IsOrganizedBy";
+            reference.Type.FullAttributes.InverseName = "OrganizedBy";
             Assert.Equal("Reference: Asset s=source Organizes Asset s=target", reference.ToString());
             // inverse
             reference = new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source"), new NodeId("target"), false, false, true, extractor.TypeManager);
-            Assert.Equal("Reference: Asset s=source IsOrganizedBy Asset s=target", reference.ToString());
+            Assert.Equal("Reference: Asset s=source OrganizedBy Asset s=target", reference.ToString());
 
             // ts - asset
             reference = new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target"), true, false, true, extractor.TypeManager);
             Assert.Equal("Reference: TimeSeries s=source Organizes Asset s=target", reference.ToString());
 
             reference = new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source"), new NodeId("target"), false, true, true, extractor.TypeManager);
-            Assert.Equal("Reference: Asset s=source IsOrganizedBy TimeSeries s=target", reference.ToString());
+            Assert.Equal("Reference: Asset s=source OrganizedBy TimeSeries s=target", reference.ToString());
 
             reference = new UAReference(ReferenceTypeIds.HasComponent, true, new NodeId("source"), new NodeId("target"), false, false, true, extractor.TypeManager);
             Assert.Equal("Reference: Asset s=source i=47 Forward Asset s=target", reference.ToString());
@@ -1264,7 +1306,7 @@ namespace Test.Unit
             using var extractor = tester.BuildExtractor();
             var reference = new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target"), false, true, true, extractor.TypeManager);
             reference.Type.Attributes.DisplayName = "Organizes";
-            reference.Type.FullAttributes.InverseName = "IsOrganizedBy";
+            reference.Type.FullAttributes.InverseName = "OrganizedBy";
             var rel = reference.ToRelationship(123, extractor);
             Assert.Equal(123, rel.DataSetId);
             Assert.Equal(RelationshipVertexType.Asset, rel.SourceType);

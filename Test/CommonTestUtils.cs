@@ -376,9 +376,11 @@ namespace Test
         {
             var variable = new UAVariable(id ?? new NodeId(name), name, null, null, NodeId.Null, null);
             variable.FullAttributes.DataType = dt;
+            variable.FullAttributes.ValueRank = ValueRanks.Scalar;
             if (dim > 0)
             {
                 variable.FullAttributes.ArrayDimensions = new[] { dim };
+                variable.FullAttributes.ValueRank = ValueRanks.OneDimension;
             }
             return variable;
         }
