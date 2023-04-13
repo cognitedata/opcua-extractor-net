@@ -244,5 +244,42 @@ namespace Test.Unit
             Assert.Equal(1000, tester.Config.Source.BrowseThrottling.MaxNodeParallelism);
             Assert.Equal(100, tester.Config.Source.BrowseNodesChunk);
         }
+
+        [Fact]
+        public async Task TestNoServerExtractor()
+        {
+            tester.Config.Source.EndpointUrl = null;
+            tester.Config.Source.NodeSetSource = new NodeSetSourceConfig
+            {
+                NodeSets = new[]
+                {
+                    new NodeSetConfig
+                    {
+                        Url = new Uri("https://files.opcfoundation.org/schemas/UA/1.04/Opc.Ua.NodeSet2.xml")
+                    },
+                    new NodeSetConfig
+                    {
+                        FileName = "TestServer.NodeSet2.xml"
+                    }
+                },
+                Instance = true,
+                Types = true
+            };
+            tester.Config.Extraction.DataTypes.AllowStringVariables = true;
+            tester.Config.Extraction.DataTypes.MaxArraySize = 10;
+            tester.Config.Extraction.DataTypes.AutoIdentifyTypes = true;
+            tester.Config.Extraction.Relationships.Enabled = true;
+            tester.Config.Extraction.DataTypes.EstimateArraySizes = true;
+            using var pusher = new DummyPusher(new DummyPusherConfig());
+            using var client = new UAClient(tester.Provider, tester.Config);
+            using var extractor = new UAExtractor(tester.Config, tester.Provider, new[] { pusher }, client, null);
+
+            extractor.InitExternal(tester.Source.Token);
+            await extractor.RunExtractor(true);
+
+            Assert.Equal(65, pusher.PushedNodes.Count);
+            Assert.Equal(55, pusher.PushedVariables.Count);
+            Assert.Equal(10, pusher.PushedReferences.Count);
+        }
     }
 }

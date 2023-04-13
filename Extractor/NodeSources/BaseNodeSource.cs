@@ -25,9 +25,11 @@ using Opc.Ua;
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Drawing;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Xml.Linq;
 
 namespace Cognite.OpcUa.NodeSources
 {
@@ -94,9 +96,30 @@ namespace Cognite.OpcUa.NodeSources
             if (map.IsSourceVariable) FinalSourceVariables.Add(node);
             if (map.IsSourceObject) FinalSourceObjects.Add(node);
         }
+
+        private (int Length, bool IsCollection) GetLengthOfCollection(object value)
+        {
+            int size = 0;
+            if (value is ICollection coll)
+            {
+                size = coll.Count;
+            }
+            else if (value is IEnumerable enumVal)
+            {
+                var e = enumVal.GetEnumerator();
+                while (e.MoveNext()) size++;
+            }
+            else
+            {
+                return (1, false);
+            }
+            return (size, true);
+        }
+
+
         protected async Task EstimateArraySizes(IEnumerable<UAVariable> nodes, CancellationToken token)
         {
-            if (!Config.Extraction.DataTypes.EstimateArraySizes || Config.Source.EndpointUrl == null) return;
+            if (!Config.Extraction.DataTypes.EstimateArraySizes) return;
             nodes = nodes.Where(node =>
                 (node.ArrayDimensions == null || !node.ArrayDimensions.Any() || node.ArrayDimensions[0] == 0)
                 && (node.ValueRank == ValueRanks.OneDimension
@@ -116,42 +139,50 @@ namespace Cognite.OpcUa.NodeSources
             foreach (var node in nodes)
             {
                 var maxLengthProp = node.Properties?.FirstOrDefault(prop => prop.Name == "MaxArrayLength");
-                if (maxLengthProp != null && maxLengthProp is UAVariable varProp)
+                if (maxLengthProp != null && maxLengthProp is UAVariable varProp && varProp.Value != null)
                 {
                     try
                     {
-                        int size = Convert.ToInt32(varProp.Value!.Value.Value);
-                        if (size > 1)
+                        int size = Convert.ToInt32(varProp.Value.Value.Value);
+                        if (size > 0)
                         {
                             node.FullAttributes.ArrayDimensions = new[] { size };
                         }
                         continue;
                     }
-                    catch { }
+                    catch (Exception ex)
+                    {
+                        Log.LogDebug("Failed to convert value of MaxArrayLength property: {Message}", ex.Message);
+                    }
+                }
+                if (node.Value != null)
+                {
+                    var (length, isCollection) = GetLengthOfCollection(node.Value.Value.Value);
+                    if (length > 0 && isCollection)
+                    {
+                        node.FullAttributes.ArrayDimensions = new[] { length };
+                    }
+                    continue;
                 }
                 toReadValues.Add(node);
             }
             if (!toReadValues.Any()) return;
+
+            if (Config.Source.EndpointUrl == null)
+            {
+                Log.LogTrace("Unable to estimate array length for {Count} nodes, since the server no server is configured", toReadValues.Count);
+                return;
+            }
 
             await Client.ReadNodeValues(toReadValues, token);
 
             foreach (var node in toReadValues)
             {
                 if (node.Value == null) continue;
-                object val = node.Value.Value.Value;
-                int size = 0;
-                if (val is ICollection coll)
+                var (length, isCollection) = GetLengthOfCollection(node.Value.Value.Value);
+                if (length > 0 && isCollection)
                 {
-                    size = coll.Count;
-                }
-                else if (val is IEnumerable enumVal)
-                {
-                    var e = enumVal.GetEnumerator();
-                    while (e.MoveNext()) size++;
-                }
-                if (size > 1)
-                {
-                    node.FullAttributes.ArrayDimensions = new[] { size };
+                    node.FullAttributes.ArrayDimensions = new[] { length };
                 }
             }
         }

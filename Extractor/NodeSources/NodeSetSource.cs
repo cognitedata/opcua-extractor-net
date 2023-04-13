@@ -311,7 +311,7 @@ namespace Cognite.OpcUa.NodeSources
             }
             if (Config.Source.EndpointUrl != null) await Client.ReadNodeValues(properties, token);
 
-            if (Config.Extraction.DataTypes.MaxArraySize != 0 && Config.Extraction.DataTypes.EstimateArraySizes == true)
+            if (Config.Extraction.DataTypes.MaxArraySize != 0 && Config.Extraction.DataTypes.EstimateArraySizes)
             {
                 await EstimateArraySizes(RawVariables, token);
             }
