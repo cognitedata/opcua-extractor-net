@@ -3,8 +3,6 @@ FROM mcr.microsoft.com/dotnet/sdk:7.0
 WORKDIR /build
 COPY . .
 
-RUN dotnet tool restore
-RUN dotnet paket restore
 RUN dotnet build MQTTCDFBridge/
 
 RUN dotnet publish -c Release -o /build/deploy /p:PublishTrimmed="false" MQTTCDFBridge/
