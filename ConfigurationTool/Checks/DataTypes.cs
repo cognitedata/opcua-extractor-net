@@ -136,7 +136,7 @@ namespace Cognite.OpcUa.Config
         {
             if (Session == null || !Session.Connected)
             {
-                await Run(typeManager, token, 0);
+                await Run(token, 0);
                 await LimitConfigValues(token);
             }
             await PopulateDataTypes(token);

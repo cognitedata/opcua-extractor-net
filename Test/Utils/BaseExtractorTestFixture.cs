@@ -64,7 +64,7 @@ namespace Test.Utils
             Source = new CancellationTokenSource();
             Callbacks = new DummyClientCallbacks(Source.Token);
             Client.Callbacks = Callbacks;
-            await Client.Run(new TypeManager(Config, Client, Log), Source.Token, 0);
+            await Client.Run(Source.Token, 0);
         }
 
         private void ResetType(object obj, object reference)

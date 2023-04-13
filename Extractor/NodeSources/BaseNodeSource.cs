@@ -94,7 +94,7 @@ namespace Cognite.OpcUa.NodeSources
             if (map.IsSourceVariable) FinalSourceVariables.Add(node);
             if (map.IsSourceObject) FinalSourceObjects.Add(node);
         }
-        protected async Task EstimateArraySizes(IEnumerable<UAVariable> nodes, CancellationToken token)
+        protected void EstimateArraySizes(IEnumerable<UAVariable> nodes)
         {
             if (!Config.Extraction.DataTypes.EstimateArraySizes || Config.Source.EndpointUrl == null) return;
             nodes = nodes.Where(node =>
@@ -129,29 +129,6 @@ namespace Cognite.OpcUa.NodeSources
                         continue;
                     }
                     catch { }
-                }
-                toReadValues.Add(node);
-            }
-            if (!toReadValues.Any()) return;
-
-            await Client.ReadNodeValues(toReadValues, TypeManager, token);
-
-            foreach (var node in toReadValues)
-            {
-                object? val = node.Value?.Value;
-                int size = 0;
-                if (val is ICollection coll)
-                {
-                    size = coll.Count;
-                }
-                else if (val is IEnumerable enumVal)
-                {
-                    var e = enumVal.GetEnumerator();
-                    while (e.MoveNext()) size++;
-                }
-                if (size > 1)
-                {
-                    node.FullAttributes.ArrayDimensions = new[] { size };
                 }
             }
         }

@@ -839,7 +839,7 @@ namespace Test.Integration
             // Need to reset connection to server in order to begin measuring service level
             tester.Server.SetServerRedundancyStatus(190, RedundancySupport.Hot);
 
-            await tester.Client.Run(extractor.TypeManager, tester.Source.Token);
+            await tester.Client.Run(tester.Source.Token);
             var start = DateTime.UtcNow.AddSeconds(-5);
             tester.WipeBaseHistory();
             tester.Server.PopulateBaseHistory(start);
@@ -874,7 +874,7 @@ namespace Test.Integration
             finally
             {
                 tester.Config.Source.Redundancy.MonitorServiceLevel = false;
-                await tester.Client.Run(extractor.TypeManager, tester.Source.Token);
+                await tester.Client.Run(tester.Source.Token);
             }
         }
         #endregion

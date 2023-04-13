@@ -61,7 +61,7 @@ namespace Cognite.OpcUa.NodeSources
         {
             if (parsed) throw new InvalidOperationException("Browse result has already been parsed");
             if (!NodeMap.Any()) return null;
-            await Client.ReadNodeData(NodeList, TypeManager, token);
+            await Client.ReadNodeData(NodeList, token);
 
             var properties = new HashSet<UAVariable>();
             foreach (var node in NodeList)
@@ -79,13 +79,13 @@ namespace Cognite.OpcUa.NodeSources
             await TypeManager.LoadTypeData(token);
             TypeManager.BuildTypeInfo();
 
-            await Client.ReadNodeData(properties, TypeManager, token);
+            await Client.ReadNodeData(properties, token);
             var propsToReadValues = properties.Where(prop => prop.AllowTSMap(Log, Config.Extraction.DataTypes, 10, true)).ToList();
-            await Client.ReadNodeValues(propsToReadValues, TypeManager, token);
+            await Client.ReadNodeValues(propsToReadValues, token);
 
             if (Config.Extraction.DataTypes.MaxArraySize != 0 && Config.Extraction.DataTypes.EstimateArraySizes == true)
             {
-                await EstimateArraySizes(RawVariables, token);
+                EstimateArraySizes(RawVariables);
             }
 
             var update = Config.Extraction.Update;

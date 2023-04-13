@@ -49,6 +49,7 @@ namespace Cognite.OpcUa
         protected FullConfig Config { get; set; }
         protected ISession? Session => SessionManager?.Session;
         protected ApplicationConfiguration? AppConfig { get; set; }
+        public TypeManager TypeManager { get; }
 
         public IClientCallbacks Callbacks { get; set; } = null!;
 
@@ -100,16 +101,17 @@ namespace Cognite.OpcUa
             }
             StringConverter = new StringConverter(provider.GetRequiredService<ILogger<StringConverter>>(), this, config);
             Browser = new Browser(provider.GetRequiredService<ILogger<Browser>>(), this, config);
+            TypeManager = new TypeManager(config, this, provider.GetRequiredService<ILogger<TypeManager>>());
         }
         #region Session management
         /// <summary>
         /// Entrypoint for starting the opcua Session. Must be called before any further requests can be made.
         /// </summary>
-        public async Task Run(TypeManager typeManager, CancellationToken token, int timeout = -1)
+        public async Task Run(CancellationToken token, int timeout = -1)
         {
             liveToken = token;
             await StartSession(timeout);
-            await StartNodeMetrics(typeManager);
+            await StartNodeMetrics();
         }
 
         /// <summary>
@@ -321,10 +323,10 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Start collecting metrics from configured nodes, if enabled.
         /// </summary>
-        private async Task StartNodeMetrics(TypeManager typeManager)
+        private async Task StartNodeMetrics()
         {
             if (metricsManager == null) return;
-            await metricsManager.StartNodeMetrics(typeManager, liveToken);
+            await metricsManager.StartNodeMetrics(TypeManager, liveToken);
         }
         #endregion
 
@@ -333,14 +335,14 @@ namespace Cognite.OpcUa
         /// Retrieve a representation of the server node
         /// </summary>
         /// <returns></returns>
-        public async Task<BaseUANode> GetServerNode(TypeManager typeManager, CancellationToken token)
+        public async Task<BaseUANode> GetServerNode(CancellationToken token)
         {
             var desc = (await Browser.GetRootNodes(new[] { ObjectIds.Server }, token)).FirstOrDefault();
             if (desc == null) throw new ExtractorFailureException("Server node is null. Invalid server configuration");
 
-            var node = BaseUANode.Create(desc, NodeId.Null, null, this, typeManager);
+            var node = BaseUANode.Create(desc, NodeId.Null, null, this, TypeManager);
             if (node == null) throw new ExtractorFailureException($"Root node {desc.NodeId} is unexpected node class: {desc.NodeClass}");
-            await ReadNodeData(new[] { node }, typeManager, token);
+            await ReadNodeData(new[] { node }, token);
             return node;
         }
         /// <summary>
@@ -597,7 +599,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="nodes">Nodes to be updated with data from the opcua server</param>
         /// <param name="purpose">Purpose, for logging</param>
-        public async Task ReadNodeData(IEnumerable<BaseUANode> nodes, TypeManager typeManager, CancellationToken token)
+        public async Task ReadNodeData(IEnumerable<BaseUANode> nodes, CancellationToken token)
         {
             nodes = nodes.DistinctBy(node => node.Attributes).Where(node => !node.Attributes.IsDataRead).ToList();
             if (!nodes.Any()) return;
@@ -640,7 +642,7 @@ namespace Cognite.OpcUa
                         node.Ignore = true;
                     }
 
-                    node.Attributes.LoadAttribute(values[idx], attr, typeManager);
+                    node.Attributes.LoadAttribute(values[idx], attr, TypeManager);
                     idx++;
                 }
             }
@@ -668,7 +670,7 @@ namespace Cognite.OpcUa
         /// To avoid complications, avoid fetching data of unknown large size here.
         /// </remarks>
         /// <param name="nodes">List of variables to be updated</param>
-        public async Task ReadNodeValues(IEnumerable<BaseUANode> nodes, TypeManager typeManager, CancellationToken token)
+        public async Task ReadNodeValues(IEnumerable<BaseUANode> nodes, CancellationToken token)
         {
             nodes = nodes.DistinctBy(node => node.Attributes).ToList();
             if (!nodes.Any()) return;
@@ -682,7 +684,7 @@ namespace Cognite.OpcUa
             var idx = 0;
             foreach (var node in nodes)
             {
-                node.Attributes.LoadAttribute(values[idx], Attributes.Value, typeManager);
+                node.Attributes.LoadAttribute(values[idx], Attributes.Value, TypeManager);
                 idx++;
             }
         }

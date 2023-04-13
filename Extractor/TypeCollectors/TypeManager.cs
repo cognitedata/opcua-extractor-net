@@ -61,8 +61,8 @@ namespace Cognite.OpcUa.TypeCollectors
                 toRead.Add(tp);
                 if (tp.NodeClass == NodeClass.Variable && tp is UAVariable variable) toReadValues.Add(variable);
             }
-            await client.ReadNodeData(toRead, this, token);
-            await client.ReadNodeValues(toReadValues, this, token);
+            await client.ReadNodeData(toRead, token);
+            await client.ReadNodeValues(toReadValues, token);
         }
 
         private async Task ReadTypeHiearchies(CancellationToken token)
@@ -121,6 +121,17 @@ namespace Cognite.OpcUa.TypeCollectors
                     node.Parent = parent;
                 }
             }
+        }
+
+        public void AddTypeHierarchyNode(BaseUANode node)
+        {
+            NodeMap[node.Id] = node;
+        }
+
+        public void SetTypesRead()
+        {
+            eventTypesRead = true;
+            dataTypesRead = true;
         }
 
         private void HandleNode(ReferenceDescription node, NodeId parentId, bool visited)

@@ -31,8 +31,8 @@ namespace Cognite.OpcUa.Config
             {
                 Config.Events.AllEvents = true;
                 Config.Events.Enabled = true;
-                await typeManager.LoadTypeData(token);
-                typeManager.BuildTypeInfo();
+                await TypeManager.LoadTypeData(token);
+                TypeManager.BuildTypeInfo();
             }
             catch (Exception ex)
             {
@@ -40,7 +40,7 @@ namespace Cognite.OpcUa.Config
                 return;
             }
 
-            var server = await GetServerNode(typeManager, token);
+            var server = await GetServerNode(token);
 
             var emitters = nodeList.Append(server).OfType<UAObject>().Where(node => (node.FullAttributes.EventNotifier & EventNotifiers.SubscribeToEvents) != 0);
             var historizingEmitters = emitters.Where(node => (node.FullAttributes.EventNotifier & EventNotifiers.HistoryRead) != 0);
@@ -66,7 +66,7 @@ namespace Cognite.OpcUa.Config
             try
             {
                 await Browser.BrowseDirectory(nodeList.Select(node => node.Id).Append(ObjectIds.Server).ToList(),
-                    ToolUtil.GetSimpleListWriterCallback(emitterReferences, this, typeManager, log),
+                    ToolUtil.GetSimpleListWriterCallback(emitterReferences, this, TypeManager, log),
                     token,
                     ReferenceTypeIds.GeneratesEvent, (uint)NodeClass.ObjectType, false, purpose: "identifying GeneratesEvent references");
             }
@@ -133,7 +133,7 @@ namespace Cognite.OpcUa.Config
 
             try
             {
-                await ToolUtil.RunWithTimeout(SubscribeToEvents(states.Take(baseConfig.Source.SubscriptionChunk), (item, args) => { }, typeManager.EventFields, token), 120);
+                await ToolUtil.RunWithTimeout(SubscribeToEvents(states.Take(baseConfig.Source.SubscriptionChunk), (item, args) => { }, TypeManager.EventFields, token), 120);
             }
             catch (Exception ex)
             {

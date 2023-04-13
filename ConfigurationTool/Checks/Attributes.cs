@@ -47,7 +47,7 @@ namespace Cognite.OpcUa.Config
 
             if (Session == null || !Session.Connected)
             {
-                await Run(typeManager, token, 0);
+                await Run(token, 0);
                 await LimitConfigValues(token);
             }
 
@@ -84,7 +84,7 @@ namespace Cognite.OpcUa.Config
                 Config.Source.AttributesChunk = chunkSize;
                 try
                 {
-                    await ToolUtil.RunWithTimeout(ReadNodeData(toCheck, typeManager, token), 120);
+                    await ToolUtil.RunWithTimeout(ReadNodeData(toCheck, token), 120);
                 }
                 catch (Exception e)
                 {

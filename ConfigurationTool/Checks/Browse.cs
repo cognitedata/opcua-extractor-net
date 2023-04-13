@@ -58,7 +58,7 @@ namespace Cognite.OpcUa.Config
 
             // Try to find at least 10000 nodes
             var nodes = new List<BaseUANode>();
-            var callback = ToolUtil.GetSimpleListWriterCallback(nodes, this, typeManager, log);
+            var callback = ToolUtil.GetSimpleListWriterCallback(nodes, this, TypeManager, log);
 
             var nextIds = new List<NodeId> { root };
 
@@ -133,7 +133,7 @@ namespace Cognite.OpcUa.Config
         {
             if (Session == null || !Session.Connected)
             {
-                await Run(typeManager, token, 0);
+                await Run(token, 0);
                 await LimitConfigValues(token);
             }
 

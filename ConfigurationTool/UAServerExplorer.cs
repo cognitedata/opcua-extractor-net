@@ -42,7 +42,6 @@ namespace Cognite.OpcUa.Config
 
         private readonly ILogger<UAServerExplorer> log;
         private readonly IServiceProvider provider;
-        private readonly TypeManager typeManager;
 
         private bool nodesRead;
         private bool dataTypesRead;
@@ -61,7 +60,6 @@ namespace Cognite.OpcUa.Config
             this.baseConfig.Source.Username = config.Source.Username;
             this.baseConfig.Source.Secure = config.Source.Secure;
             scheduler = new PeriodicScheduler(token);
-            typeManager = new TypeManager(config, this, provider.GetRequiredService<ILogger<TypeManager>>());
         }
         public Summary Summary { get; private set; } = new Summary();
         public void ResetSummary()
@@ -75,10 +73,6 @@ namespace Cognite.OpcUa.Config
             dataTypesRead = false;
             dataTypes.Clear();
             nodeDataRead = false;
-        }
-        public async Task Run(CancellationToken token, int timeout = 0)
-        {
-            await Run(typeManager, token, timeout);
         }
 
         private async Task LimitConfigValues(CancellationToken token)
@@ -107,7 +101,7 @@ namespace Cognite.OpcUa.Config
             var roots = Config.Extraction.GetRootNodes(this, log);
             try
             {
-                await Browser.BrowseNodeHierarchy(roots, ToolUtil.GetSimpleListWriterCallback(nodeList, this, typeManager, log), token,
+                await Browser.BrowseNodeHierarchy(roots, ToolUtil.GetSimpleListWriterCallback(nodeList, this, TypeManager, log), token,
                     "populating the main node hierarchy");
                 nodesRead = true;
             }
@@ -130,7 +124,7 @@ namespace Cognite.OpcUa.Config
             {
                 await Browser.BrowseDirectory(
                     new List<NodeId> { DataTypes.BaseDataType },
-                    ToolUtil.GetSimpleListWriterCallback(dataTypes, this, typeManager, log),
+                    ToolUtil.GetSimpleListWriterCallback(dataTypes, this, TypeManager, log),
                     token,
                     ReferenceTypeIds.HasSubtype,
                     (uint)NodeClass.DataType | (uint)NodeClass.ObjectType,
@@ -160,7 +154,7 @@ namespace Cognite.OpcUa.Config
             Config.Events.Enabled = true;
             Config.History.Enabled = true;
             Config.History.Data = true;
-            await ReadNodeData(nodeList, typeManager, token);
+            await ReadNodeData(nodeList, token);
             Config.Extraction.DataTypes.MaxArraySize = oldArraySize;
             Config.Events.Enabled = oldEvents;
             Config.History.Enabled = oldHistory;

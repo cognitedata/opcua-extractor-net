@@ -64,7 +64,7 @@ namespace Cognite.OpcUa
         public StringConverter StringConverter => uaClient.StringConverter;
         private readonly PubSubManager? pubSubManager;
 
-        public TypeManager TypeManager { get; }
+        public TypeManager TypeManager => uaClient.TypeManager;
 
         private NodeSetSource? nodeSetSource;
 
@@ -131,7 +131,6 @@ namespace Cognite.OpcUa
             State = new State();
             Streamer = new Streamer(provider.GetRequiredService<ILogger<Streamer>>(), this, config);
             StateStorage = stateStore;
-            TypeManager = new TypeManager(Config, uaClient, provider.GetRequiredService<ILogger<TypeManager>>());
 
             if (config.FailureBuffer.Enabled)
             {
@@ -307,7 +306,7 @@ namespace Cognite.OpcUa
                 log.LogInformation("Start UAClient");
                 try
                 {
-                    await uaClient.Run(TypeManager, Source.Token, startTimeout);
+                    await uaClient.Run(Source.Token, startTimeout);
                 }
                 catch (OperationCanceledException)
                 {
@@ -449,6 +448,7 @@ namespace Cognite.OpcUa
             await historyReader.Terminate(Source.Token, 30);
             await uaClient.WaitForOperations(Source.Token);
             await ConfigureExtractor();
+            TypeManager.Reset();
 
             var synchTasks = await RunMapping(RootNodes, initial: false, isFull: true);
 
@@ -860,7 +860,7 @@ namespace Cognite.OpcUa
                 }
                 if (Config.Events.ReadServer)
                 {
-                    var serverNode = await uaClient.GetServerNode(TypeManager, Source.Token) as UAObject;
+                    var serverNode = await uaClient.GetServerNode(Source.Token) as UAObject;
                     if (serverNode == null) throw new ExtractorFailureException("Server node is not an object, or does not exist");
                     if (serverNode.FullAttributes.EventNotifier != 0)
                     {

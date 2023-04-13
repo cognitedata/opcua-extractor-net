@@ -36,7 +36,6 @@ namespace Test.Unit
         public ServiceProvider Provider { get; }
         public ILogger Logger { get; }
         public DummyClientCallbacks Callbacks { get; private set; }
-        public TypeManager TypeManager { get; private set; }
         public UAClientTestFixture()
         {
             var services = new ServiceCollection();
@@ -79,9 +78,8 @@ namespace Test.Unit
             Client = new UAClient(Provider, Config);
             Source = new CancellationTokenSource();
             Callbacks = new DummyClientCallbacks(Source.Token);
-            TypeManager = new TypeManager(Config, Client, Logger);
             Client.Callbacks = Callbacks;
-            await Client.Run(TypeManager, Source.Token, 0);
+            await Client.Run(Source.Token, 0);
         }
 
         public async Task DisposeAsync()
@@ -100,7 +98,7 @@ namespace Test.Unit
         {
             this.tester = tester ?? throw new ArgumentNullException(nameof(tester));
             tester.Init(output);
-            tester.TypeManager.Reset();
+            tester.Client.TypeManager.Reset();
         }
         #region session
         [Fact]
@@ -119,14 +117,14 @@ namespace Test.Unit
             tester.Config.Source.EndpointUrl = "opc.tcp://localhost:62009";
             try
             {
-                var exc = await Assert.ThrowsAsync<SilentServiceException>(() => tester.Client.Run(tester.TypeManager, tester.Source.Token, 0));
+                var exc = await Assert.ThrowsAsync<SilentServiceException>(() => tester.Client.Run(tester.Source.Token, 0));
                 Assert.Equal(StatusCodes.BadNotConnected, exc.StatusCode);
                 Assert.Equal(ExtractorUtils.SourceOp.SelectEndpoint, exc.Operation);
             }
             finally
             {
                 tester.Config.Source.EndpointUrl = "opc.tcp://localhost:62000";
-                await tester.Client.Run(tester.TypeManager, tester.Source.Token, 0);
+                await tester.Client.Run(tester.Source.Token, 0);
             }
         }
         [Fact]
@@ -136,12 +134,12 @@ namespace Test.Unit
             tester.Config.Source.ConfigRoot = "wrong";
             try
             {
-                var exc = await Assert.ThrowsAsync<ExtractorFailureException>(() => tester.Client.Run(tester.TypeManager, tester.Source.Token, 0));
+                var exc = await Assert.ThrowsAsync<ExtractorFailureException>(() => tester.Client.Run(tester.Source.Token, 0));
             }
             finally
             {
                 tester.Config.Source.ConfigRoot = "config";
-                await tester.Client.Run(tester.TypeManager, tester.Source.Token, 0);
+                await tester.Client.Run(tester.Source.Token, 0);
             }
         }
         [Theory]
@@ -155,7 +153,7 @@ namespace Test.Unit
 
             try
             {
-                await tester.Client.Run(tester.TypeManager, tester.Source.Token, 10);
+                await tester.Client.Run(tester.Source.Token, 10);
 
                 Assert.True(CommonTestUtils.TestMetricValue("opcua_connected", 1));
                 tester.Server.Stop();
@@ -174,7 +172,7 @@ namespace Test.Unit
                 await tester.Client.Close(tester.Source.Token);
                 tester.Config.Source.KeepAliveInterval = 10000;
                 tester.Config.Logger.UaSessionTracing = false;
-                await tester.Client.Run(tester.TypeManager, tester.Source.Token, 0);
+                await tester.Client.Run(tester.Source.Token, 0);
             }
         }
         [Fact]
@@ -188,7 +186,7 @@ namespace Test.Unit
             try
             {
                 Environment.SetEnvironmentVariable("OPCUA_CERTIFICATE_DIR", "certificates-test");
-                await tester.Client.Run(tester.TypeManager, tester.Source.Token, 0);
+                await tester.Client.Run(tester.Source.Token, 0);
                 var dir = new DirectoryInfo("./certificates-test/pki/trusted/certs/");
                 Assert.Single(dir.GetFiles());
             }
@@ -197,7 +195,7 @@ namespace Test.Unit
                 await tester.Client.Close(tester.Source.Token);
                 Environment.SetEnvironmentVariable("OPCUA_CERTIFICATE_DIR", null);
                 Directory.Delete("./certificates-test/", true);
-                await tester.Client.Run(tester.TypeManager, tester.Source.Token, 0);
+                await tester.Client.Run(tester.Source.Token, 0);
             }
         }
         [Fact]
@@ -218,18 +216,18 @@ namespace Test.Unit
 
                 tester.Server.Server.SetValidator(true);
 
-                await Assert.ThrowsAsync<SilentServiceException>(async () => await tester.Client.Run(tester.TypeManager, tester.Source.Token, 0));
+                await Assert.ThrowsAsync<SilentServiceException>(() => tester.Client.Run(tester.Source.Token, 0));
 
                 tester.Server.Server.SetValidator(false);
 
-                await tester.Client.Run(tester.TypeManager, tester.Source.Token, 0);
+                await tester.Client.Run(tester.Source.Token, 0);
             }
             finally
             {
                 tester.Server.Server.AllowAnonymous = true;
                 tester.Config.Source.X509Certificate = null;
                 tester.Server.Server.SetValidator(false);
-                await tester.Client.Run(tester.TypeManager, tester.Source.Token, 0);
+                await tester.Client.Run(tester.Source.Token, 0);
             }
         }
 
@@ -244,18 +242,18 @@ namespace Test.Unit
                 tester.Config.Source.Username = "testuser";
                 tester.Config.Source.Password = "wrongpassword";
 
-                await Assert.ThrowsAsync<SilentServiceException>(async () => await tester.Client.Run(tester.TypeManager, tester.Source.Token, 0));
+                await Assert.ThrowsAsync<SilentServiceException>(async () => await tester.Client.Run(tester.Source.Token, 0));
 
                 tester.Config.Source.Password = "testpassword";
 
-                await tester.Client.Run(tester.TypeManager, tester.Source.Token, 0);
+                await tester.Client.Run(tester.Source.Token, 0);
             }
             finally
             {
                 tester.Server.Server.AllowAnonymous = true;
                 tester.Config.Source.Username = null;
                 tester.Config.Source.Password = null;
-                await tester.Client.Run(tester.TypeManager, tester.Source.Token, 0);
+                await tester.Client.Run(tester.Source.Token, 0);
             }
         }
         [Fact]
@@ -266,7 +264,7 @@ namespace Test.Unit
             tester.Config.Source.ReverseConnectUrl = "opc.tcp://localhost:61000";
             try
             {
-                await tester.Client.Run(tester.TypeManager, tester.Source.Token, 0);
+                await tester.Client.Run(tester.Source.Token, 0);
                 Assert.True(tester.Client.Started);
                 // Just check that we are able to read, indicating an established connection
                 await tester.Client.ReadRawValues(new[] { VariableIds.Server_ServerStatus }, tester.Source.Token);
@@ -275,7 +273,7 @@ namespace Test.Unit
             {
                 tester.Server.Server.RemoveReverseConnection(new Uri("opc.tcp://localhost:61000"));
                 tester.Config.Source.ReverseConnectUrl = null;
-                await tester.Client.Run(tester.TypeManager, tester.Source.Token, 0);
+                await tester.Client.Run(tester.Source.Token, 0);
             }
         }
 
@@ -301,7 +299,7 @@ namespace Test.Unit
 
             try
             {
-                await tester.Client.Run(tester.TypeManager, tester.Source.Token, 0);
+                await tester.Client.Run(tester.Source.Token, 0);
                 var sm = tester.Client.SessionManager;
                 Assert.Equal("opc.tcp://localhost:62300", sm.EndpointUrl);
 
@@ -315,7 +313,7 @@ namespace Test.Unit
                 tester.Config.Source.ForceRestart = false;
                 tester.Config.Source.KeepAliveInterval = 10000;
                 tester.Server.SetServerRedundancyStatus(255, RedundancySupport.Hot);
-                await tester.Client.Run(tester.TypeManager, tester.Source.Token, 0);
+                await tester.Client.Run(tester.Source.Token, 0);
             }
         }
 
@@ -343,7 +341,7 @@ namespace Test.Unit
             try
             {
                 // Should connect to altServer
-                await tester.Client.Run(tester.TypeManager, tester.Source.Token, 0);
+                await tester.Client.Run(tester.Source.Token, 0);
                 var sm = tester.Client.SessionManager;
                 Assert.Equal("opc.tcp://localhost:62300", sm.EndpointUrl);
 
@@ -381,7 +379,7 @@ namespace Test.Unit
                 altServer.Stop();
                 altServer.Dispose();
                 tester.Server.SetServerRedundancyStatus(255, RedundancySupport.Hot);
-                await tester.Client.Run(tester.TypeManager, tester.Source.Token, 0);
+                await tester.Client.Run(tester.Source.Token, 0);
             }
         }
 
@@ -391,7 +389,7 @@ namespace Test.Unit
         [Fact]
         public async Task TestGetServerNode()
         {
-            var server = await tester.Client.GetServerNode(tester.TypeManager, tester.Source.Token);
+            var server = await tester.Client.GetServerNode(tester.Source.Token);
             Assert.Equal(ObjectIds.Server, server.Id);
             Assert.Equal(NodeId.Null, server.ParentId);
             Assert.Equal("Server", server.Name);
@@ -661,7 +659,7 @@ namespace Test.Unit
             tester.Config.History.Data = true;
             tester.Config.Extraction.DataTypes.MaxArraySize = -1;
             tester.Config.Events.Enabled = true;
-            await tester.Client.ReadNodeData(nodes, tester.TypeManager, tester.Source.Token);
+            await tester.Client.ReadNodeData(nodes, tester.Source.Token);
 
             Assert.Equal("FullRoot Description", nodes[0].Attributes.Description);
             Assert.Equal(EventNotifiers.SubscribeToEvents | EventNotifiers.HistoryRead, (nodes[1] as UAObject).FullAttributes.EventNotifier);
@@ -699,7 +697,7 @@ namespace Test.Unit
             tester.Config.Events.Enabled = true;
 
             // Read everything
-            await tester.Client.ReadNodeData(nodes, tester.TypeManager, tester.Source.Token);
+            await tester.Client.ReadNodeData(nodes, tester.Source.Token);
 
             Assert.Equal("FullRoot Description", nodes[0].Attributes.Description);
             Assert.Equal(EventNotifiers.SubscribeToEvents | EventNotifiers.HistoryRead, (nodes[1] as UAObject).FullAttributes.EventNotifier);
@@ -718,7 +716,7 @@ namespace Test.Unit
             tester.Config.History.Enabled = false;
 
             nodes = GetNodes();
-            await tester.Client.ReadNodeData(nodes, tester.TypeManager, tester.Source.Token);
+            await tester.Client.ReadNodeData(nodes, tester.Source.Token);
 
             Assert.Equal(EventNotifiers.SubscribeToEvents | EventNotifiers.HistoryRead, (nodes[1] as UAObject).FullAttributes.EventNotifier);
             Assert.True((nodes[1] as UAObject).FullAttributes.ShouldSubscribeToEvents(tester.Config));
@@ -731,7 +729,7 @@ namespace Test.Unit
             tester.Config.Events.DiscoverEmitters = false;
 
             nodes = GetNodes();
-            await tester.Client.ReadNodeData(nodes, tester.TypeManager, tester.Source.Token);
+            await tester.Client.ReadNodeData(nodes, tester.Source.Token);
 
             Assert.Equal(0, (nodes[1] as UAObject).FullAttributes.EventNotifier);
             Assert.False((nodes[1] as UAObject).FullAttributes.ShouldSubscribeToEvents(tester.Config));
@@ -744,7 +742,7 @@ namespace Test.Unit
             tester.Config.History.Data = false;
 
             nodes = GetNodes();
-            await tester.Client.ReadNodeData(nodes, tester.TypeManager, tester.Source.Token);
+            await tester.Client.ReadNodeData(nodes, tester.Source.Token);
 
             Assert.Equal(EventNotifiers.SubscribeToEvents | EventNotifiers.HistoryRead, (nodes[1] as UAObject).FullAttributes.EventNotifier);
             Assert.True((nodes[1] as UAObject).FullAttributes.ShouldSubscribeToEvents(tester.Config));
@@ -758,7 +756,7 @@ namespace Test.Unit
             tester.Config.History.RequireHistorizing = true;
 
             nodes = GetNodes();
-            await tester.Client.ReadNodeData(nodes, tester.TypeManager, tester.Source.Token);
+            await tester.Client.ReadNodeData(nodes, tester.Source.Token);
 
             Assert.Equal(EventNotifiers.SubscribeToEvents | EventNotifiers.HistoryRead, (nodes[1] as UAObject).FullAttributes.EventNotifier);
             Assert.True((nodes[1] as UAObject).FullAttributes.ShouldSubscribeToEvents(tester.Config));
@@ -771,7 +769,7 @@ namespace Test.Unit
             tester.Config.Subscriptions.IgnoreAccessLevel = true;
 
             nodes = GetNodes();
-            await tester.Client.ReadNodeData(nodes, tester.TypeManager, tester.Source.Token);
+            await tester.Client.ReadNodeData(nodes, tester.Source.Token);
 
             Assert.Equal(EventNotifiers.SubscribeToEvents | EventNotifiers.HistoryRead, (nodes[1] as UAObject).FullAttributes.EventNotifier);
             Assert.True((nodes[1] as UAObject).FullAttributes.ShouldSubscribeToEvents(tester.Config));
@@ -795,7 +793,7 @@ namespace Test.Unit
             tester.Config.History.Enabled = true;
             try
             {
-                await tester.Client.ReadNodeData(nodes, tester.TypeManager, tester.Source.Token);
+                await tester.Client.ReadNodeData(nodes, tester.Source.Token);
             }
             finally
             {
@@ -873,8 +871,8 @@ namespace Test.Unit
             nodes[4].IsRawProperty = true;
 
             // Need to read attributes first for this, to get proper conversion we need the datatype.
-            await tester.Client.ReadNodeData(nodes, tester.TypeManager, tester.Source.Token);
-            await tester.Client.ReadNodeValues(nodes, tester.TypeManager, tester.Source.Token);
+            await tester.Client.ReadNodeData(nodes, tester.Source.Token);
+            await tester.Client.ReadNodeValues(nodes, tester.Source.Token);
 
             Assert.Equal(new Variant(0.0), nodes[0].Value);
             Assert.Equal(new Variant(new double[] { 0, 0, 0, 0 }), nodes[1].Value);
@@ -893,7 +891,7 @@ namespace Test.Unit
                 new UAVariable(new NodeId("missing-node2"), "MissingNode2", null, null, tester.Server.Ids.Base.Root, null),
             };
 
-            await tester.Client.ReadNodeData(nodes, tester.TypeManager, tester.Source.Token);
+            await tester.Client.ReadNodeData(nodes, tester.Source.Token);
 
             Assert.NotNull(nodes[0].FullAttributes.DataType);
             Assert.False(nodes[0].Ignore);
@@ -1140,11 +1138,11 @@ namespace Test.Unit
 
             try
             {
-                await tester.TypeManager.LoadTypeData(tester.Source.Token);
-                tester.TypeManager.BuildTypeInfo();
+                await tester.Client.TypeManager.LoadTypeData(tester.Source.Token);
+                tester.Client.TypeManager.BuildTypeInfo();
 
-                await tester.Client.SubscribeToEvents(emitters.Take(2), handler, tester.TypeManager.EventFields, tester.Source.Token);
-                await tester.Client.SubscribeToEvents(emitters.Skip(2), handler, tester.TypeManager.EventFields, tester.Source.Token);
+                await tester.Client.SubscribeToEvents(emitters.Take(2), handler, tester.Client.TypeManager.EventFields, tester.Source.Token);
+                await tester.Client.SubscribeToEvents(emitters.Skip(2), handler, tester.Client.TypeManager.EventFields, tester.Source.Token);
 
                 tester.Server.TriggerEvents(0);
 
@@ -1187,9 +1185,9 @@ namespace Test.Unit
             }
             try
             {
-                await tester.TypeManager.LoadTypeData(tester.Source.Token);
-                tester.TypeManager.BuildTypeInfo();
-                await tester.Client.SubscribeToEvents(emitters, handler, tester.TypeManager.EventFields, tester.Source.Token);
+                await tester.Client.TypeManager.LoadTypeData(tester.Source.Token);
+                tester.Client.TypeManager.BuildTypeInfo();
+                await tester.Client.SubscribeToEvents(emitters, handler, tester.Client.TypeManager.EventFields, tester.Source.Token);
 
                 tester.Server.TriggerEvents(0);
 
@@ -1312,7 +1310,7 @@ namespace Test.Unit
                 ServerMetrics = true
             };
             var mgr = new NodeMetricsManager(tester.Client, tester.Config.Subscriptions, tester.Config.Metrics.Nodes);
-            await mgr.StartNodeMetrics(tester.TypeManager, tester.Source.Token);
+            await mgr.StartNodeMetrics(tester.Client.TypeManager, tester.Source.Token);
 
             tester.Server.SetDiagnosticsEnabled(true);
 
@@ -1338,7 +1336,7 @@ namespace Test.Unit
             tester.Server.UpdateNode(ids.DoubleVar1, 0);
             tester.Server.UpdateNode(ids.DoubleVar2, 0);
             var mgr = new NodeMetricsManager(tester.Client, tester.Config.Subscriptions, tester.Config.Metrics.Nodes);
-            await mgr.StartNodeMetrics(tester.TypeManager, tester.Source.Token);
+            await mgr.StartNodeMetrics(tester.Client.TypeManager, tester.Source.Token);
 
             tester.Server.UpdateNode(ids.DoubleVar1, 15);
             await TestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_node_Variable_1", 15), 5);

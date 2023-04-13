@@ -188,7 +188,8 @@ namespace Cognite.OpcUa.NodeSources
         private bool BuildType(NodeId id, NodeId parent)
         {
             var node = nodeDict[id];
-            BaseUANode.FromNodeState(node, parent, TypeManager);
+            var res = BaseUANode.FromNodeState(node, parent, TypeManager);
+            if (res != null) TypeManager.AddTypeHierarchyNode(res);
             return true;
         }
 
@@ -275,6 +276,11 @@ namespace Cognite.OpcUa.NodeSources
             TypeManager.BuildTypeInfo();
 
             BrowseHierarchy(rootNodes, BuildNode);
+
+            if (Config.Source.NodeSetSource!.Types)
+            {
+                TypeManager.SetTypesRead();
+            }
         }
         #endregion
 
@@ -303,11 +309,11 @@ namespace Cognite.OpcUa.NodeSources
                     properties.Add(variable);
                 }
             }
-            if (Config.Source.EndpointUrl != null) await Client.ReadNodeValues(properties, TypeManager, token);
+            if (Config.Source.EndpointUrl != null) await Client.ReadNodeValues(properties, token);
 
             if (Config.Extraction.DataTypes.MaxArraySize != 0 && Config.Extraction.DataTypes.EstimateArraySizes == true)
             {
-                await EstimateArraySizes(RawVariables, token);
+                EstimateArraySizes(RawVariables);
             }
 
             var update = Config.Extraction.Update;
