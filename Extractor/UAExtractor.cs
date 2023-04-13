@@ -72,7 +72,6 @@ namespace Cognite.OpcUa
         public bool ShouldStartLooping { get; set; } = true;
 
         public bool Started { get; private set; }
-        public bool Pushing { get; private set; }
 
         private int subscribed;
         private bool subscribeFlag;
@@ -268,7 +267,7 @@ namespace Cognite.OpcUa
                         state.RestartHistory();
                     }
 
-                    Scheduler.ScheduleTask(null, async (_) => await RestartHistory());
+                    Scheduler.ScheduleTask(null, (_) => RestartHistory());
                 }
             }
         }

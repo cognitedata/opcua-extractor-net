@@ -244,6 +244,5 @@ namespace Test.Unit
             Assert.Equal(1000, tester.Config.Source.BrowseThrottling.MaxNodeParallelism);
             Assert.Equal(100, tester.Config.Source.BrowseNodesChunk);
         }
-
     }
 }

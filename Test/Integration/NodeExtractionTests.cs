@@ -1180,6 +1180,25 @@ namespace Test.Integration
             Assert.Equal("CustomObjectType", customObjType.Name);
             Assert.Equal(NodeClass.ObjectType, customObjType.NodeClass);
         }
+        [Fact]
+        public async Task TestReadTypesWithReferences()
+        {
+            using var pusher = new DummyPusher(new DummyPusherConfig());
+            var extraction = tester.Config.Extraction;
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+            extraction.RootNode = CommonTestUtils.ToProtoNodeId(ObjectIds.TypesFolder, tester.Client);
+            extraction.NodeTypes.AsNodes = true;
+            extraction.DataTypes.AllowStringVariables = true;
+            extraction.DataTypes.MaxArraySize = -1;
+            extraction.DataTypes.AutoIdentifyTypes = true;
+            extraction.Relationships.Enabled = true;
+            extraction.Relationships.Hierarchical = false;
+            await extractor.RunExtractor(true);
+
+            Assert.Equal(758, pusher.PushedNodes.Count);
+            Assert.Equal(2, pusher.PushedVariables.Count);
+            Assert.Equal(339, pusher.PushedReferences.Count);
+        }
         #endregion
 
         #region nodeset
