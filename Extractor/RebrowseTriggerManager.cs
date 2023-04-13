@@ -1,15 +1,13 @@
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using System.Collections.Generic;
-
+using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
 using Microsoft.Extensions.Logging;
-
 using Opc.Ua;
 using Opc.Ua.Client;
 using System;
-using Cognite.OpcUa.Config;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Cognite.OpcUa
 {

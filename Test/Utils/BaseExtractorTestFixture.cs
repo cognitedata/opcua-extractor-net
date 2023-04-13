@@ -6,7 +6,6 @@ using Cognite.Extractor.Utils;
 using Cognite.OpcUa;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Pushers;
-using Cognite.OpcUa.TypeCollectors;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;

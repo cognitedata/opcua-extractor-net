@@ -1,5 +1,4 @@
 ﻿using Cognite.Extractor.Common;
-using Cognite.OpcUa;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.Pushers;
@@ -11,7 +10,6 @@ using Opc.Ua;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.IO;
 using System.Linq;
 using System.Text.Json;
 using Test.Utils;

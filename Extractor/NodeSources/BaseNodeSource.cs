@@ -23,7 +23,6 @@ using Cognite.OpcUa.Types;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -167,7 +166,7 @@ namespace Cognite.OpcUa.NodeSources
                 {
                     var eventState = new EventExtractionState(Extractor, node.Id, history, history && Config.History.Backfill, subscribe);
                     Extractor.State.SetEmitterState(eventState);
-                } 
+                }
             }
 
             if (node is UAVariable variable)

@@ -22,7 +22,6 @@ using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
-using Serilog;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -233,7 +232,7 @@ namespace Cognite.OpcUa.NodeSources
             {
                 mapped = NodeMap.ContainsKey(Client.ToNodeId(node.NodeId));
             }
-            
+
             if (mapped && Config.Extraction.Relationships.Enabled && Config.Extraction.Relationships.Hierarchical)
             {
                 if (parentId == null || parentId.IsNullNodeId) return;

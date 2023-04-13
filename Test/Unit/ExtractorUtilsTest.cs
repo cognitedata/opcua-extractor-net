@@ -1,7 +1,6 @@
 ﻿using Cognite.Extractor.Common;
 using Cognite.OpcUa;
 using Cognite.OpcUa.Nodes;
-using Cognite.OpcUa.Types;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using System;

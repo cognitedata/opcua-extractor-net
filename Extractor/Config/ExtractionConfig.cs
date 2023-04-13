@@ -20,7 +20,6 @@ using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net;
 
 namespace Cognite.OpcUa.Config
 {

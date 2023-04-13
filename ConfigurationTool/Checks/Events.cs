@@ -1,12 +1,10 @@
 ﻿using Cognite.OpcUa.History;
 using Cognite.OpcUa.Nodes;
-using Cognite.OpcUa.Types;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 

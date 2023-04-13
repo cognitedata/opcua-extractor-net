@@ -19,7 +19,6 @@ using Cognite.Extensions;
 using Cognite.Extractor.Common;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Nodes;
-using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
 using CogniteSdk;
 using Microsoft.Extensions.Logging;

@@ -1,9 +1,4 @@
-﻿using Cognite.OpcUa.Types;
-using Microsoft.Extensions.Logging;
-using Opc.Ua;
-using System;
-using System.Collections.Generic;
-using System.Text;
+﻿using Microsoft.Extensions.Logging;
 using System.Text.Json;
 
 namespace Cognite.OpcUa

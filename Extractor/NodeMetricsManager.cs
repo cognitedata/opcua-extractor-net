@@ -19,7 +19,6 @@ using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.TypeCollectors;
-using Cognite.OpcUa.Types;
 using Opc.Ua;
 using Opc.Ua.Client;
 using Prometheus;

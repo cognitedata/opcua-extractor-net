@@ -1,5 +1,4 @@
 ﻿using Cognite.Extractor.Common;
-using Cognite.OpcUa;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.Nodes;

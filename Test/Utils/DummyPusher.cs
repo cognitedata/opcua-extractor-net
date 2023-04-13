@@ -6,7 +6,6 @@ using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.Types;
 using Opc.Ua;
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;

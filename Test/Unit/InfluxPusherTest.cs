@@ -3,7 +3,6 @@ using Cognite.Extractor.Common;
 using Cognite.OpcUa;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.Nodes;
-using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
 using Opc.Ua;
 using System;

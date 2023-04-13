@@ -1064,7 +1064,8 @@ namespace Cognite.OpcUa
                 nodeList,
                 "DataChangeListener",
                 subscriptionHandler,
-                node => {
+                node =>
+                {
                     var config = Config.Subscriptions.GetMatchingConfig(node);
                     return new MonitoredItem
                     {
@@ -1102,7 +1103,8 @@ namespace Cognite.OpcUa
                 emitters,
                 "EventListener",
                 subscriptionHandler,
-                node => {
+                node =>
+                {
                     var config = Config.Subscriptions.GetMatchingConfig(node);
                     return new MonitoredItem
                     {
