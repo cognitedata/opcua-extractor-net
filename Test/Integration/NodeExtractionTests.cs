@@ -52,7 +52,7 @@ namespace Test.Integration
             Assert.Equal(3, pusher.PushedNodes.Count);
             var node = pusher.PushedNodes[ids.Root];
             Assert.Equal("CustomRoot", node.Name);
-            Assert.True(node.ParentId == null || node.ParentId.IsNullNodeId);
+            Assert.True(node.ParentId.IsNullNodeId);
             Assert.True(node.Properties == null || !node.Properties.Any());
             Assert.True(node is UAObject);
 

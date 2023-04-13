@@ -105,7 +105,7 @@ namespace Cognite.OpcUa.TypeCollectors
         {
             foreach (var node in NodeMap.Values)
             {
-                if (node.ParentId == null || node.ParentId.IsNullNodeId) continue;
+                if (node.ParentId.IsNullNodeId) continue;
 
                 if (NodeChildren.TryGetValue(node.ParentId, out var children))
                 {

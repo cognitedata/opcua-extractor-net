@@ -232,7 +232,7 @@ namespace Cognite.OpcUa.NodeSources
         /// <param name="node"></param>
         protected void SortNode(BaseUANode node)
         {
-            if (node.Parent == null && node.ParentId != null && !node.ParentId.IsNullNodeId)
+            if (node.Parent == null && !node.ParentId.IsNullNodeId)
             {
                 node.Parent = NodeMap.GetValueOrDefault(node.ParentId);
             }

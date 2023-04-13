@@ -98,7 +98,7 @@ namespace Cognite.OpcUa.Config
                 {
                     return true;
                 }
-                if (next.ParentId == null)
+                if (next.ParentId.IsNullNodeId)
                 {
                     break;
                 }

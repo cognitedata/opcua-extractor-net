@@ -178,7 +178,7 @@ namespace Cognite.OpcUa.Nodes
                 builder.AppendFormat(CultureInfo.InvariantCulture, "{0}Parent: {1} {2}", indt, Parent.Name, Parent.Id);
                 builder.AppendLine();
             }
-            else if (ParentId != null && writeParent && !ParentId.IsNullNodeId)
+            else if (writeParent && !ParentId.IsNullNodeId)
             {
                 builder.AppendFormat(CultureInfo.InvariantCulture, "{0}Parent: {1}", indt, ParentId);
                 builder.AppendLine();
@@ -421,7 +421,7 @@ namespace Cognite.OpcUa.Nodes
             asset.ExternalId = id;
             asset.Name = string.IsNullOrEmpty(Name) ? id : Name;
             asset.DataSetId = dataSetId;
-            if (ParentId != null && !ParentId.IsNullNodeId)
+            if (!ParentId.IsNullNodeId)
             {
                 asset.ParentExternalId = client.GetUniqueId(ParentId);
             }

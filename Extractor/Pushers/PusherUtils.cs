@@ -107,8 +107,7 @@ namespace Cognite.OpcUa.Pushers
             var tsUpdate = new TimeSeriesUpdate();
             if (update.Context)
             {
-                if (newTs.ParentId != null && !newTs.ParentId.IsNullNodeId
-                    && nodeToAssetIds.TryGetValue(newTs.ParentId, out long assetId))
+                if (!newTs.ParentId.IsNullNodeId && nodeToAssetIds.TryGetValue(newTs.ParentId, out long assetId))
                 {
                     if (assetId != old.AssetId && assetId > 0)
                     {
@@ -163,7 +162,7 @@ namespace Cognite.OpcUa.Pushers
         {
             if (old == null || newAsset == null || extractor == null || update == null) return null;
             var assetUpdate = new AssetUpdate();
-            if (update.Context && newAsset.ParentId != null && !newAsset.ParentId.IsNullNodeId)
+            if (update.Context && !newAsset.ParentId.IsNullNodeId)
             {
                 var parentId = extractor.GetUniqueId(newAsset.ParentId);
                 if (parentId != old.ParentExternalId)

@@ -398,7 +398,7 @@ namespace Cognite.OpcUa.Types
             writer.WritePropertyName("NodeId");
             JsonSerializer.Serialize(writer, node.Id, options);
 
-            if (node.ParentId != null && !node.ParentId.IsNullNodeId)
+            if (!node.ParentId.IsNullNodeId)
             {
                 writer.WritePropertyName("ParentNodeId");
                 JsonSerializer.Serialize(writer, node.ParentId, options);
