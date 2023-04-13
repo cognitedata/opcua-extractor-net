@@ -23,6 +23,7 @@ using Cognite.OpcUa.Types;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -93,7 +94,7 @@ namespace Cognite.OpcUa.NodeSources
             if (map.IsSourceVariable) FinalSourceVariables.Add(node);
             if (map.IsSourceObject) FinalSourceObjects.Add(node);
         }
-        protected void EstimateArraySizes(IEnumerable<UAVariable> nodes)
+        protected async Task EstimateArraySizes(IEnumerable<UAVariable> nodes, CancellationToken token)
         {
             if (!Config.Extraction.DataTypes.EstimateArraySizes || Config.Source.EndpointUrl == null) return;
             nodes = nodes.Where(node =>
@@ -115,7 +116,6 @@ namespace Cognite.OpcUa.NodeSources
             foreach (var node in nodes)
             {
                 var maxLengthProp = node.Properties?.FirstOrDefault(prop => prop.Name == "MaxArrayLength");
-                Log.LogInformation("Look for max length property: {Name}, {Prop}", node.Name, maxLengthProp);
                 if (maxLengthProp != null && maxLengthProp is UAVariable varProp)
                 {
                     try
@@ -128,6 +128,30 @@ namespace Cognite.OpcUa.NodeSources
                         continue;
                     }
                     catch { }
+                }
+                toReadValues.Add(node);
+            }
+            if (!toReadValues.Any()) return;
+
+            await Client.ReadNodeValues(toReadValues, token);
+
+            foreach (var node in toReadValues)
+            {
+                if (node.Value == null) continue;
+                object val = node.Value.Value.Value;
+                int size = 0;
+                if (val is ICollection coll)
+                {
+                    size = coll.Count;
+                }
+                else if (val is IEnumerable enumVal)
+                {
+                    var e = enumVal.GetEnumerator();
+                    while (e.MoveNext()) size++;
+                }
+                if (size > 1)
+                {
+                    node.FullAttributes.ArrayDimensions = new[] { size };
                 }
             }
         }

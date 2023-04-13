@@ -88,8 +88,7 @@ namespace Test.Integration
 
 source:
     endpoint-url: " + tester.EndpointUrl + Environment.NewLine
- + @"    attributes-chunk: 1000
-    browse-throttling:
+ + @"    browse-throttling:
         max-node-parallelism: 1000
 extraction:
     id-prefix: 

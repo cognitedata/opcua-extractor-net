@@ -1043,7 +1043,7 @@ namespace Cognite.OpcUa
         {
             if (sender is not Subscription sub || !sub.PublishingStopped) return;
 
-            _ = RecreateSubscription(sub, liveToken);
+            Callbacks.TaskScheduler.ScheduleTask(null, t => RecreateSubscription(sub, t));
         }
 
         /// <summary>

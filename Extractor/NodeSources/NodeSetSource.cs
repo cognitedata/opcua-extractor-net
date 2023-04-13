@@ -313,7 +313,7 @@ namespace Cognite.OpcUa.NodeSources
 
             if (Config.Extraction.DataTypes.MaxArraySize != 0 && Config.Extraction.DataTypes.EstimateArraySizes == true)
             {
-                EstimateArraySizes(RawVariables);
+                await EstimateArraySizes(RawVariables, token);
             }
 
             var update = Config.Extraction.Update;
