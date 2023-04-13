@@ -306,7 +306,7 @@ namespace Test.Unit
             var result = await source.ParseResults(tester.Source.Token);
             Assert.Equal(6, result.DestinationObjects.Count());
             Assert.Equal(5, result.DestinationObjects.Count(node => node is UAVariable variable && variable.IsArray));
-            Assert.Equal(19, result.DestinationVariables.Count());
+            Assert.Equal(21, result.DestinationVariables.Count());
             Assert.Single(result.SourceObjects);
             Assert.Equal(5, result.SourceVariables.Count());
         }

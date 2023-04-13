@@ -21,6 +21,7 @@ using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.Logging;
+using MQTTnet.Formatter.V5;
 using Opc.Ua;
 using System;
 using System.Collections;
@@ -152,15 +153,19 @@ namespace Cognite.OpcUa.NodeSources
                     }
                     catch (Exception ex)
                     {
-                        Log.LogDebug("Failed to convert value of MaxArrayLength property: {Message}", ex.Message);
+                        Log.LogDebug("Failed to convert value of MaxArrayLength property for {Id}: {Message}", node.Id, ex.Message);
                     }
                 }
-                if (node.Value != null)
+                if (node.Value?.Value != null)
                 {
                     var (length, isCollection) = GetLengthOfCollection(node.Value.Value.Value);
                     if (length > 0 && isCollection)
                     {
                         node.FullAttributes.ArrayDimensions = new[] { length };
+                    }
+                    else
+                    {
+                        Log.LogDebug("Unable to estimate length of node {Id}, value is scalar", node.Id);
                     }
                     continue;
                 }
@@ -170,10 +175,11 @@ namespace Cognite.OpcUa.NodeSources
 
             if (Config.Source.EndpointUrl == null)
             {
-                Log.LogTrace("Unable to estimate array length for {Count} nodes, since the server no server is configured", toReadValues.Count);
+                Log.LogDebug("Unable to estimate array length for {Count} nodes, since the server no server is configured", toReadValues.Count);
                 return;
             }
 
+            Log.LogDebug("Fetch values for {Count} nodes to estimate array lengths", toReadValues.Count);
             await Client.ReadNodeValues(toReadValues, token);
 
             foreach (var node in toReadValues)
