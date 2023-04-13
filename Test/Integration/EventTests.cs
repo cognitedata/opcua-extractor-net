@@ -225,8 +225,6 @@ namespace Test.Integration
             Assert.DoesNotContain(session.Subscriptions, sub => sub.DisplayName.StartsWith("EventListener", StringComparison.InvariantCulture));
             await TestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 2), 5);
 
-
-
             // Test disable specific subscriptions
             Reset();
             var oldTransforms = tester.Config.Extraction.Transformations;

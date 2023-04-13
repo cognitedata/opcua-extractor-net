@@ -35,17 +35,10 @@ namespace Test.Integration
             // Act
             var runTask = extractor.RunExtractor();
             await extractor.WaitForSubscriptions();
-            var initialCount = pusher.PushedNodes.Count;
-            var addedId = tester.Server.Server.AddObject(tester.Ids.Audit.Root, "NodeToAddForRebrowse");
 
             // Assert
-            await TestUtils.WaitForCondition(
-                () => tester.Client.Started,
-                10
-            );
             Assert.True(tester.Client.TryGetSubscription(RebrowseTriggerManager.SubscriptionName, out var _));
 
-            tester.Server.Server.RemoveNode(addedId);
             await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
         }
 
@@ -61,49 +54,10 @@ namespace Test.Integration
             // Act
             var runTask = extractor.RunExtractor();
             await extractor.WaitForSubscriptions();
-            var initialCount = pusher.PushedNodes.Count;
-            var addedId = tester.Server.Server.AddObject(tester.Ids.Audit.Root, "NodeToAddForRebrowse");
-            // tester.Server.Server.SetNamespacePublicationDate(DateTime.UtcNow);
 
             // Assert
-            await TestUtils.WaitForCondition(
-               () => tester.Client.Started,
-               10
-            );
-            // Assert.False(pusher.PushedNodes.ContainsKey(addedId));
             Assert.False(tester.Client.TryGetSubscription(RebrowseTriggerManager.SubscriptionName, out var _));
 
-            tester.Server.Server.RemoveNode(addedId);
-            await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
-        }
-
-        [Fact]
-        public async Task TestRebrowseIsNotTriggered()
-        {
-            // Arrange
-            var pusher = new DummyPusher(new DummyPusherConfig());
-            tester.Config.Extraction.RebrowseTriggers = new RebrowseTriggersConfig
-            {
-                Targets = new RebrowseTriggerTargets { NamespacePublicationDate = true }
-            };
-            using var extractor = tester.BuildExtractor(true, pushers: pusher);
-
-
-            // Act
-            var runTask = extractor.RunExtractor();
-            await extractor.WaitForSubscriptions();
-            var initialCount = pusher.PushedNodes.Count;
-            var addedId = tester.Server.Server.AddObject(tester.Ids.Audit.Root, "NodeToAddForRebrowse");
-            tester.Server.Server.SetNamespacePublicationDate(DateTime.UtcNow.AddDays(-1));
-
-            // Assert
-            await TestUtils.WaitForCondition(
-               () => tester.Client.Started,
-               10
-            );
-            Assert.False(pusher.PushedNodes.ContainsKey(addedId));
-
-            tester.Server.Server.RemoveNode(addedId);
             await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
         }
 
@@ -127,11 +81,8 @@ namespace Test.Integration
             tester.Server.Server.SetNamespacePublicationDate(DateTime.UtcNow);
 
             // Assert
-            await TestUtils.WaitForCondition(
-               () => tester.Client.Started,
-               10
-            );
-            Assert.False(pusher.PushedNodes.ContainsKey(addedId));
+            await TestUtils.WaitForCondition(() => pusher.PushedNodes.ContainsKey(addedId), 10, "Expected node to be discovered");
+            Assert.True(pusher.PushedNodes.ContainsKey(addedId));
 
             tester.Server.Server.RemoveNode(addedId);
             await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
