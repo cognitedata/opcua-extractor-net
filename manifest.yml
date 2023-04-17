@@ -60,6 +60,11 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.16.1":
+    description: "Correctly restart history after reconnect due to service level threshold"
+    changelog:
+      fixed:
+        - "Fixed a bug causing the extractor to not properly detect that the server had changed when reconnecting due to service level change"
   "2.16.0":
     description: "Support for certificate authentication to CDF"
     changelog:

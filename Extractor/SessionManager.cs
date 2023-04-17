@@ -50,7 +50,6 @@ namespace Cognite.OpcUa
             this.log = log;
             liveToken = token;
             Timeout = timeout;
-            EndpointUrl = config.EndpointUrl;
         }
 
         private async Task TryWithBackoff(Func<Task> method, int maxBackoff, CancellationToken token)
@@ -113,6 +112,7 @@ namespace Cognite.OpcUa
                 if (!string.IsNullOrEmpty(config.ReverseConnectUrl))
                 {
                     newSession = await WaitForReverseConnect();
+                    EndpointUrl = config.EndpointUrl;
                 }
                 else if (config.IsRedundancyEnabled)
                 {
@@ -124,6 +124,7 @@ namespace Cognite.OpcUa
                 else
                 {
                     newSession = await CreateSessionDirect(config.EndpointUrl!);
+                    EndpointUrl = config.EndpointUrl;
                 }
                 SetNewSession(newSession);
             };
@@ -232,7 +233,6 @@ namespace Cognite.OpcUa
                     0,
                     identity,
                     null);
-                EndpointUrl = config.EndpointUrl;
                 return session;
             }
             catch (Exception ex)
@@ -282,7 +282,6 @@ namespace Cognite.OpcUa
                     identity,
                     null
                 );
-                EndpointUrl = endpointUrl;
                 return session;
             }
             catch (Exception ex)
