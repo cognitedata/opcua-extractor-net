@@ -43,6 +43,7 @@ namespace Test.Integration
             tester.ResetCustomServerValues();
             tester.WipeBaseHistory();
             tester.WipeCustomHistory();
+            tester.Client.TypeManager.Reset();
         }
 
         #region subscriptions
@@ -192,8 +193,6 @@ namespace Test.Integration
         [Fact]
         public async Task TestWrongData()
         {
-
-
             using var pusher = new DummyPusher(new DummyPusherConfig());
             using var extractor = tester.BuildExtractor(true, null, pusher);
 
@@ -878,6 +877,51 @@ namespace Test.Integration
                 tester.Config.Source.Redundancy.MonitorServiceLevel = false;
                 await tester.Client.Run(tester.Source.Token);
             }
+        }
+
+
+        [Fact]
+        public async Task TestRestartHistoryOnReconnect()
+        {
+            using var pusher = new DummyPusher(new DummyPusherConfig());
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+
+            var ids = tester.Ids.Base;
+
+            var startTime = DateTime.UtcNow.AddSeconds(-10);
+            tester.WipeBaseHistory();
+            tester.Server.PopulateBaseHistory(startTime);
+
+            tester.Config.Source.RestartOnReconnect = false;
+            tester.Config.History.Backfill = false;
+            tester.Config.History.Data = true;
+            tester.Config.History.Enabled = true;
+            tester.Config.History.EndTime = startTime.AddSeconds(5).ToUnixTimeMilliseconds().ToString();
+            tester.Config.Subscriptions.DataPoints = false;
+            tester.Config.Extraction.RootNode = tester.Ids.Base.Root.ToProtoNodeId(tester.Client);
+
+            // First start the extractor and read the first half of history.
+            var runTask = extractor.RunExtractor();
+            await extractor.WaitForSubscriptions();
+
+            await TestUtils.WaitForCondition(() => extractor.State.NodeStates.All(node =>
+                !node.IsFrontfilling && !node.IsBackfilling) && pusher.DataPoints[(ids.DoubleVar1, -1)].Count == 500, 10);
+            var state = extractor.State.GetNodeState(ids.DoubleVar1);
+
+            Assert.Equal(startTime.AddSeconds(5).ToUnixTimeMilliseconds() - 10, state.SourceExtractedRange.Last.ToUnixTimeMilliseconds());
+            Assert.Equal(CogniteTime.DateTimeEpoch, state.SourceExtractedRange.First);
+
+            // Change the configured endtime. We do this to simulate more data arriving in the server
+            tester.Config.History.EndTime = null;
+
+            // Call the restart callback. Making the client call this is painful, and tested elsewhere
+            await extractor.OnServerReconnect(tester.Client);
+            await TestUtils.WaitForCondition(() => extractor.State.NodeStates.All(node =>
+                !node.IsFrontfilling && !node.IsBackfilling) && pusher.DataPoints[(ids.DoubleVar1, -1)].Count >= 1000, 10);
+            Assert.Equal(startTime.AddSeconds(10).ToUnixTimeMilliseconds() - 10, state.SourceExtractedRange.Last.ToUnixTimeMilliseconds());
+            Assert.Equal(CogniteTime.DateTimeEpoch, state.SourceExtractedRange.First);
+
+            Assert.Equal(1000, pusher.DataPoints[(ids.DoubleVar1, -1)].DistinctBy(dp => dp.Timestamp).Count());
         }
         #endregion
 

@@ -1,18 +1,15 @@
-﻿using Microsoft.Identity.Client;
-using Opc.Ua.Client;
+﻿using Cognite.OpcUa.Config;
+using Cognite.OpcUa.History;
+using Microsoft.Extensions.Logging;
 using Opc.Ua;
+using Opc.Ua.Client;
+using Prometheus;
 using System;
 using System.Collections.Generic;
-using System.Text;
-using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
-using System.Threading;
-using Prometheus;
-using Metrics = Prometheus.Metrics;
 using System.Linq;
-using Cognite.OpcUa.Config;
-using Cognite.OpcUa.History;
-using System.Net;
+using System.Threading;
+using System.Threading.Tasks;
+using Metrics = Prometheus.Metrics;
 
 namespace Cognite.OpcUa
 {

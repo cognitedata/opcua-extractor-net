@@ -1,8 +1,6 @@
-﻿using Cognite.OpcUa;
-using Cognite.OpcUa.Config;
+﻿using Cognite.OpcUa.Config;
+using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.NodeSources;
-using Cognite.OpcUa.TypeCollectors;
-using Cognite.OpcUa.Types;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
@@ -41,6 +39,7 @@ namespace Test.Unit
                     }
                 }
             };
+            tester.Client.TypeManager.Reset();
         }
 
         [Fact]
@@ -49,9 +48,10 @@ namespace Test.Unit
             tester.Config.Extraction.Relationships.Enabled = true;
             using var extractor = tester.BuildExtractor();
             tester.Config.Extraction.Relationships.Enabled = false;
+            tester.Config.Extraction.DataTypes.AutoIdentifyTypes = true;
 
             var log = tester.Provider.GetRequiredService<ILogger<NodeSetSource>>();
-            var source = new NodeSetSource(log, tester.Config, extractor, tester.Client);
+            var source = new NodeSetSource(log, tester.Config, extractor, tester.Client, extractor.TypeManager);
 
             // Base, nothing enabled
             source.BuildNodes(new[] { tester.Ids.Custom.Root }, true);
@@ -92,7 +92,7 @@ namespace Test.Unit
             {
                 CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Custom.IgnoreType, tester.Client)
             };
-            extractor.DataTypeManager.Configure();
+            extractor.TypeManager.BuildTypeInfo();
             source.BuildNodes(new[] { tester.Ids.Custom.Root }, true);
             result = await source.ParseResults(tester.Source.Token);
             Assert.Equal(8, result.SourceVariables.Count());
@@ -133,7 +133,6 @@ namespace Test.Unit
                 Assert.False(rel.Target.Id.IsNullNodeId);
                 Assert.NotNull(rel.Type);
                 Assert.NotNull(rel.Type.Id);
-                Assert.True(rel.Type.HasName);
                 Assert.Contains(result.DestinationReferences, orel => orel.Source.Id == rel.Target.Id
                     && orel.Target.Id == rel.Source.Id && orel.IsForward == !rel.IsForward);
             });
@@ -154,7 +153,6 @@ namespace Test.Unit
                 Assert.False(rel.Target.Id.IsNullNodeId);
                 Assert.NotNull(rel.Type);
                 Assert.NotNull(rel.Type.Id);
-                Assert.True(rel.Type.HasName);
             });
 
             // Enable inverse hierarchical relations
@@ -172,7 +170,6 @@ namespace Test.Unit
                 Assert.False(rel.Target.Id.IsNullNodeId);
                 Assert.NotNull(rel.Type);
                 Assert.NotNull(rel.Type.Id);
-                Assert.True(rel.Type.HasName);
                 Assert.Contains(result.DestinationReferences, orel => orel.Source.Id == rel.Target.Id
                     && orel.Target.Id == rel.Source.Id && orel.IsForward == !rel.IsForward);
             });
@@ -188,7 +185,7 @@ namespace Test.Unit
             tester.Config.Source.EndpointUrl = null;
 
             var log = tester.Provider.GetRequiredService<ILogger<NodeSetSource>>();
-            var source = new NodeSetSource(log, tester.Config, extractor, tester.Client);
+            var source = new NodeSetSource(log, tester.Config, extractor, tester.Client, extractor.TypeManager);
 
             tester.Config.Extraction.DataTypes.MaxArraySize = 4;
             tester.Config.Extraction.NodeTypes.AsNodes = true;
@@ -200,12 +197,12 @@ namespace Test.Unit
 
             source.BuildNodes(new[] { tester.Ids.Custom.Root, ObjectIds.TypesFolder }, true);
             var result = await source.ParseResults(tester.Source.Token);
-            Assert.Equal(892, result.SourceVariables.Count());
-            Assert.Equal(899, result.DestinationVariables.Count());
-            Assert.Equal(497, result.DestinationObjects.Count());
-            Assert.Equal(475, result.SourceObjects.Count());
-            Assert.Equal(5070, result.DestinationReferences.Count());
-            Assert.Equal(2535, result.DestinationReferences.Count(rel => rel.IsForward));
+            Assert.Equal(275, result.SourceVariables.Count());
+            Assert.Equal(282, result.DestinationVariables.Count());
+            Assert.Equal(447, result.DestinationObjects.Count());
+            Assert.Equal(441, result.SourceObjects.Count());
+            Assert.Equal(2108, result.DestinationReferences.Count());
+            Assert.Equal(1054, result.DestinationReferences.Count(rel => rel.IsForward));
             Assert.All(result.DestinationReferences, rel =>
             {
                 Assert.NotNull(rel.Source);
@@ -214,7 +211,6 @@ namespace Test.Unit
                 Assert.False(rel.Target.Id.IsNullNodeId);
                 Assert.NotNull(rel.Type);
                 Assert.NotNull(rel.Type.Id);
-                Assert.True(rel.Type.HasName);
                 Assert.Contains(result.DestinationReferences, orel => orel.Source.Id == rel.Target.Id
                     && orel.Target.Id == rel.Source.Id && orel.IsForward == !rel.IsForward);
             });
@@ -227,45 +223,47 @@ namespace Test.Unit
         {
             using var extractor = tester.BuildExtractor();
             var log = tester.Provider.GetRequiredService<ILogger<NodeSetSource>>();
-            var source = new NodeSetSource(log, tester.Config, extractor, tester.Client);
+            var source = new NodeSetSource(log, tester.Config, extractor, tester.Client, extractor.TypeManager);
 
             source.BuildNodes(new[] { ObjectIds.ObjectsFolder }, true);
 
             tester.Config.Events.AllEvents = true;
             tester.Config.Events.Enabled = true;
-            var fields = await source.GetEventIdFields(tester.Source.Token);
+            await extractor.TypeManager.LoadTypeData(tester.Source.Token);
+            extractor.TypeManager.BuildTypeInfo();
+            var fields = extractor.TypeManager.EventFields;
 
             Assert.Equal(96, fields.Count);
 
             // Check that all parent properties are present in a deep event
-            Assert.Equal(16, fields[ObjectTypeIds.AuditHistoryAtTimeDeleteEventType].CollectedFields.Count);
-            Assert.Contains(new EventField(new QualifiedName("EventType")),
+            Assert.Equal(16, fields[ObjectTypeIds.AuditHistoryAtTimeDeleteEventType].CollectedFields.Count());
+            Assert.Contains(new RawTypeField(new QualifiedName("EventType")),
                 fields[ObjectTypeIds.AuditHistoryAtTimeDeleteEventType].CollectedFields);
-            Assert.Contains(new EventField(new QualifiedName("ActionTimeStamp")),
+            Assert.Contains(new RawTypeField(new QualifiedName("ActionTimeStamp")),
                 fields[ObjectTypeIds.AuditHistoryAtTimeDeleteEventType].CollectedFields);
-            Assert.Contains(new EventField(new QualifiedName("ParameterDataTypeId")),
+            Assert.Contains(new RawTypeField(new QualifiedName("ParameterDataTypeId")),
                 fields[ObjectTypeIds.AuditHistoryAtTimeDeleteEventType].CollectedFields);
-            Assert.Contains(new EventField(new QualifiedName("UpdatedNode")),
+            Assert.Contains(new RawTypeField(new QualifiedName("UpdatedNode")),
                 fields[ObjectTypeIds.AuditHistoryAtTimeDeleteEventType].CollectedFields);
-            Assert.Contains(new EventField(new QualifiedName("OldValues")),
+            Assert.Contains(new RawTypeField(new QualifiedName("OldValues")),
                 fields[ObjectTypeIds.AuditHistoryAtTimeDeleteEventType].CollectedFields);
 
             // Check that nodes in the middle only have higher level properties
-            Assert.Equal(13, fields[ObjectTypeIds.AuditHistoryUpdateEventType].CollectedFields.Count);
-            Assert.DoesNotContain(new EventField(new QualifiedName("OldValues")),
+            Assert.Equal(13, fields[ObjectTypeIds.AuditHistoryUpdateEventType].CollectedFields.Count());
+            Assert.DoesNotContain(new RawTypeField(new QualifiedName("OldValues")),
                 fields[ObjectTypeIds.AuditHistoryUpdateEventType].CollectedFields);
 
             var result = await source.ParseResults(tester.Source.Token);
             var nodeDict = result.DestinationObjects.ToDictionary(obj => obj.Id);
 
             Assert.True(nodeDict.TryGetValue(tester.Ids.Event.Root, out var root));
-            Assert.Equal(0, root.EventNotifier);
+            Assert.Equal(0, (root as UAObject).FullAttributes.EventNotifier);
 
             Assert.True(nodeDict.TryGetValue(tester.Ids.Event.Obj1, out var obj));
-            Assert.Equal(5, obj.EventNotifier);
+            Assert.Equal(5, (obj as UAObject).FullAttributes.EventNotifier);
 
             Assert.True(nodeDict.TryGetValue(tester.Ids.Event.Obj2, out obj));
-            Assert.Equal(1, obj.EventNotifier);
+            Assert.Equal(1, (obj as UAObject).FullAttributes.EventNotifier);
 
             Assert.NotNull(extractor.State.GetEmitterState(tester.Ids.Event.Obj1));
             Assert.NotNull(extractor.State.GetEmitterState(tester.Ids.Event.Obj2));
@@ -296,7 +294,7 @@ namespace Test.Unit
         {
             using var extractor = tester.BuildExtractor();
             var log = tester.Provider.GetRequiredService<ILogger<NodeSetSource>>();
-            var source = new NodeSetSource(log, tester.Config, extractor, tester.Client);
+            var source = new NodeSetSource(log, tester.Config, extractor, tester.Client, extractor.TypeManager);
 
             source.BuildNodes(new[] { tester.Ids.Wrong.Root }, true);
             var extConfig = tester.Config.Extraction;
@@ -308,7 +306,7 @@ namespace Test.Unit
             var result = await source.ParseResults(tester.Source.Token);
             Assert.Equal(6, result.DestinationObjects.Count());
             Assert.Equal(5, result.DestinationObjects.Count(node => node is UAVariable variable && variable.IsArray));
-            Assert.Equal(19, result.DestinationVariables.Count());
+            Assert.Equal(21, result.DestinationVariables.Count());
             Assert.Single(result.SourceObjects);
             Assert.Equal(5, result.SourceVariables.Count());
         }

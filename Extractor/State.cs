@@ -17,10 +17,9 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
-using Cognite.OpcUa.TypeCollectors;
+using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.Types;
 using Opc.Ua;
-using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
@@ -47,8 +46,8 @@ namespace Cognite.OpcUa
         private readonly ConcurrentDictionary<string, EventExtractionState> emitterStatesByExtId =
             new ConcurrentDictionary<string, EventExtractionState>();
 
-        public ConcurrentDictionary<NodeId, UAEventType> ActiveEvents { get; }
-            = new ConcurrentDictionary<NodeId, UAEventType>();
+        public ConcurrentDictionary<NodeId, UAObjectType> ActiveEvents { get; }
+            = new ConcurrentDictionary<NodeId, UAObjectType>();
 
         private readonly ConcurrentDictionary<NodeId, MappedNode> mappedNodes =
             new ConcurrentDictionary<NodeId, MappedNode>();
@@ -152,9 +151,8 @@ namespace Cognite.OpcUa
         /// Add node to overview of known mapped nodes
         /// </summary>
         /// <param name="node">Node to add</param>
-        public void AddActiveNode(UANode node, TypeUpdateConfig update, bool dataTypeMetadata, bool nodeTypeMetadata)
+        public void AddActiveNode(BaseUANode node, TypeUpdateConfig update, bool dataTypeMetadata, bool nodeTypeMetadata)
         {
-            if (node is UAVariable variable && variable.Index != -1) throw new InvalidOperationException();
             mappedNodes[node.Id] = new MappedNode(node, update, dataTypeMetadata, nodeTypeMetadata);
         }
         /// <summary>
@@ -167,6 +165,14 @@ namespace Cognite.OpcUa
             if (id == null || id.IsNullNodeId) return null;
             if (mappedNodes.TryGetValue(id, out var checksum)) return checksum;
             return null;
+        }
+
+        public void PopulateActiveEventTypes(Dictionary<NodeId, UAObjectType> types)
+        {
+            foreach (var tp in types.Values)
+            {
+                ActiveEvents[tp.Id] = tp;
+            }
         }
 
         /// <summary>

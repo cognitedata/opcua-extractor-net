@@ -18,7 +18,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using Cognite.Extractor.Common;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
-using Cognite.OpcUa.TypeCollectors;
+using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
@@ -518,13 +518,13 @@ namespace Cognite.OpcUa
             for (int i = 0; i < filter.SelectClauses.Count; i++)
             {
                 var clause = filter.SelectClauses[i];
-                var field = new EventField(clause.BrowsePath);
+                var field = new RawTypeField(clause.BrowsePath);
                 if (!eventType.CollectedFields.Contains(field)) continue;
 
                 string name = string.Join('_', clause.BrowsePath.Select(name => name.Name));
                 if (name != "EventId" && name != "SourceNode" && name != "EventType" && config.Events.DestinationNameMap.TryGetValue(name, out var mapped))
                 {
-                    field = new EventField(new QualifiedNameCollection(clause.BrowsePath.Take(clause.BrowsePath.Count - 1).Append(mapped)));
+                    field = new RawTypeField(new QualifiedNameCollection(clause.BrowsePath.Take(clause.BrowsePath.Count - 1).Append(mapped)));
                     name = mapped;
                 }
                 if (!extractedProperties.TryGetValue(name, out var extracted) || extracted.Value == Variant.Null)

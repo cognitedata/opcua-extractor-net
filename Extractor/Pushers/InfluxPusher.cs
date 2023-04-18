@@ -483,7 +483,8 @@ namespace Cognite.OpcUa
                 idp.Fields.Add("value", dp.StringValue ?? "");
                 return idp;
             }
-            if (state.DataType.Identifier == DataTypes.Boolean)
+            var uintIdentifier = state.DataType.Id.Identifier as uint? ?? 0;
+            if (uintIdentifier == DataTypes.Boolean)
             {
                 var idp = new InfluxDatapoint<bool>
                 {
@@ -493,7 +494,7 @@ namespace Cognite.OpcUa
                 idp.Fields.Add("value", Math.Abs(dp.DoubleValue ?? 0.0) < 0.1);
                 return idp;
             }
-            if (state.DataType.IsStep || IsInteger(state.DataType.Identifier))
+            if (state.DataType.IsStep || IsInteger(uintIdentifier))
             {
                 var idp = new InfluxDatapoint<long>
                 {

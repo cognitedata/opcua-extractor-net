@@ -17,7 +17,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using Cognite.OpcUa;
 using Cognite.OpcUa.Config;
-using Cognite.OpcUa.Types;
+using Cognite.OpcUa.Nodes;
 using CogniteSdk;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -26,10 +26,7 @@ using Prometheus;
 using Server;
 using System;
 using System.Collections;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
@@ -373,11 +370,13 @@ namespace Test
         }
         public static UAVariable GetSimpleVariable(string name, UADataType dt, int dim = 0, NodeId id = null)
         {
-            var variable = new UAVariable(id ?? new NodeId(name), name, NodeId.Null);
-            variable.VariableAttributes.DataType = dt;
+            var variable = new UAVariable(id ?? new NodeId(name), name, null, null, NodeId.Null, null);
+            variable.FullAttributes.DataType = dt;
+            variable.FullAttributes.ValueRank = ValueRanks.Scalar;
             if (dim > 0)
             {
-                variable.VariableAttributes.ArrayDimensions = new[] { dim };
+                variable.FullAttributes.ArrayDimensions = new[] { dim };
+                variable.FullAttributes.ValueRank = ValueRanks.OneDimension;
             }
             return variable;
         }

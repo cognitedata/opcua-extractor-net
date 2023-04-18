@@ -39,7 +39,6 @@ namespace Test.Unit
             Server = new ServerController(new[] {
                 PredefinedSetup.Base, PredefinedSetup.Full, PredefinedSetup.Auditing,
                 PredefinedSetup.Custom, PredefinedSetup.Events, PredefinedSetup.Wrong }, Provider, port);
-
         }
 
         public async Task InitializeAsync()
@@ -70,6 +69,7 @@ namespace Test.Unit
         {
             this.tester = tester;
             tester.Init(output);
+            tester.Explorer.TypeManager.Reset();
         }
         [Fact(Timeout = 10000)]
         public async Task TestEndpointDiscovery()

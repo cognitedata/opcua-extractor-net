@@ -4,10 +4,9 @@ using Cognite.Extractor.Configuration;
 using Cognite.Extractor.StateStorage;
 using Cognite.Extractor.Testing;
 using Cognite.Extractor.Utils;
-using Cognite.OpcUa;
 using Cognite.OpcUa.Config;
+using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.Pushers;
-using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -69,6 +68,7 @@ namespace Test.Unit
             tester.Init(output);
             (handler, bridge, pusher) = tester.GetPusher();
             bridge.StartBridge(tester.Source.Token).Wait();
+            tester.Client.TypeManager.Reset();
         }
 
         [Fact]
@@ -194,7 +194,7 @@ namespace Test.Unit
                     Time = time,
                     EmittingNode = new NodeId("emitter"),
                     SourceNode = new NodeId("source"),
-                    EventType = new UAEventType(new NodeId("type"), "EventType"),
+                    EventType = new UAObjectType(new NodeId("type")),
                     EventId = "someid"
                 },
                 new UAEvent
@@ -202,7 +202,7 @@ namespace Test.Unit
                     Time = time,
                     EmittingNode = new NodeId("emitter"),
                     SourceNode = new NodeId("missingsource"),
-                    EventType = new UAEventType(new NodeId("type"), "EventType"),
+                    EventType = new UAObjectType(new NodeId("type")),
                     EventId = "someid2"
                 }
             };
@@ -223,7 +223,7 @@ namespace Test.Unit
                 Time = time,
                 EmittingNode = new NodeId("emitter"),
                 SourceNode = new NodeId("source"),
-                EventType = new UAEventType(new NodeId("type"), "EventType"),
+                EventType = new UAObjectType(new NodeId("type")),
                 EventId = "someid3"
             }).ToArray();
 
@@ -246,17 +246,17 @@ namespace Test.Unit
             var tss = Enumerable.Empty<UAVariable>();
             var rels = Enumerable.Empty<UAReference>();
             var update = new UpdateConfig();
-            Assert.True((await pusher.PushNodes(Enumerable.Empty<UANode>(), tss, rels, update, tester.Source.Token)).Objects);
+            Assert.True((await pusher.PushNodes(Enumerable.Empty<BaseUANode>(), tss, rels, update, tester.Source.Token)).Objects);
 
             // Test debug mode
-            var node = new UANode(tester.Server.Ids.Base.Root, "BaseRoot", NodeId.Null, NodeClass.Object);
+            var node = new UAObject(tester.Server.Ids.Base.Root, "BaseRoot", null, null, NodeId.Null, null);
             tester.Config.Mqtt.Debug = true;
             Assert.True((await pusher.PushNodes(new[] { node }, tss, rels, update, tester.Source.Token)).Objects);
             tester.Config.Mqtt.Debug = false;
             Assert.Empty(handler.Assets);
 
             // Create the asset
-            node = new UANode(tester.Server.Ids.Base.Root, "BaseRoot", NodeId.Null, NodeClass.Object);
+            node = new UAObject(tester.Server.Ids.Base.Root, "BaseRoot", null, null, NodeId.Null, null);
             var waitTask = bridge.WaitForNextMessage();
             Assert.True((await pusher.PushNodes(new[] { node }, tss, rels, update, tester.Source.Token)).Objects);
             await waitTask;
@@ -279,7 +279,7 @@ namespace Test.Unit
             await waitTask;
 
             // Create new node
-            var node2 = new UANode(tester.Server.Ids.Custom.Root, "CustomRoot", NodeId.Null, NodeClass.Object);
+            var node2 = new UAObject(tester.Server.Ids.Custom.Root, "CustomRoot", null, null, NodeId.Null, null);
             waitTask = bridge.WaitForNextMessage();
             Assert.True((await pusher.PushNodes(new[] { node, node2 }, tss, rels, update, tester.Source.Token)).Objects);
             await waitTask;
@@ -309,7 +309,7 @@ namespace Test.Unit
                 AssetsTable = "assets",
                 Database = "metadata"
             };
-            var node = new UANode(tester.Server.Ids.Base.Root, "BaseRoot", NodeId.Null, NodeClass.Object);
+            var node = new UAObject(tester.Server.Ids.Base.Root, "BaseRoot", null, null, NodeId.Null, null);
             var tss = Enumerable.Empty<UAVariable>();
             var update = new UpdateConfig();
             var rels = Enumerable.Empty<UAReference>();
@@ -322,7 +322,7 @@ namespace Test.Unit
             Assert.Equal("BaseRoot", handler.AssetRaw.First().Value.GetProperty("name").GetString());
 
             // Create another, do not overwrite the existing one, due to no update settings
-            var node2 = new UANode(tester.Server.Ids.Custom.Root, "CustomRoot", NodeId.Null, NodeClass.Object);
+            var node2 = new UAObject(tester.Server.Ids.Custom.Root, "CustomRoot", null, null, NodeId.Null, null);
             node.Attributes.Description = "description";
             waitTask = bridge.WaitForNextMessage();
             Assert.True((await pusher.PushNodes(new[] { node, node2 }, tss, rels, update, tester.Source.Token)).Objects);
@@ -360,15 +360,15 @@ namespace Test.Unit
 
             var dt = new UADataType(DataTypeIds.Double);
 
-            var assets = Enumerable.Empty<UANode>();
+            var assets = Enumerable.Empty<BaseUANode>();
             var update = new UpdateConfig();
             var rels = Enumerable.Empty<UAReference>();
 
             handler.MockAsset(tester.Client.GetUniqueId(new NodeId("parent")));
 
             // Test debug mode
-            var node = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", new NodeId("parent"));
-            node.VariableAttributes.DataType = dt;
+            var node = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", null, null, new NodeId("parent"), null);
+            node.FullAttributes.DataType = dt;
             tester.Config.Mqtt.Debug = true;
             var waitTask = bridge.WaitForNextMessage(1);
             Assert.True((await pusher.PushNodes(assets, new[] { node }, rels, update, tester.Source.Token)).Variables);
@@ -400,8 +400,8 @@ namespace Test.Unit
             await waitTask;
 
             // Create new node
-            var node2 = new UAVariable(tester.Server.Ids.Custom.MysteryVar, "MysteryVar", new NodeId("parent"));
-            node2.VariableAttributes.DataType = dt;
+            var node2 = new UAVariable(tester.Server.Ids.Custom.MysteryVar, "MysteryVar", null, null, new NodeId("parent"), null);
+            node2.FullAttributes.DataType = dt;
             waitTask = bridge.WaitForNextMessage();
             Assert.True((await pusher.PushNodes(assets, new[] { node, node2 }, rels, update, tester.Source.Token)).Variables);
             await waitTask;
@@ -435,11 +435,11 @@ namespace Test.Unit
 
             var dt = new UADataType(DataTypeIds.Double);
 
-            var assets = Enumerable.Empty<UANode>();
+            var assets = Enumerable.Empty<BaseUANode>();
             var rels = Enumerable.Empty<UAReference>();
             var update = new UpdateConfig();
-            var node = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", new NodeId("parent"));
-            node.VariableAttributes.DataType = dt;
+            var node = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", null, null, new NodeId("parent"), null);
+            node.FullAttributes.DataType = dt;
 
             // Create one
             var waitTask = bridge.WaitForNextMessage(topic: tester.Config.Mqtt.RawTopic);
@@ -449,8 +449,8 @@ namespace Test.Unit
             Assert.Equal("Variable 1", handler.TimeseriesRaw.First().Value.GetProperty("name").GetString());
 
             // Create another, do not overwrite the existing one, due to no update settings
-            var node2 = new UAVariable(tester.Server.Ids.Custom.MysteryVar, "MysteryVar", new NodeId("parent"));
-            node2.VariableAttributes.DataType = dt;
+            var node2 = new UAVariable(tester.Server.Ids.Custom.MysteryVar, "MysteryVar", null, null, new NodeId("parent"), null);
+            node2.FullAttributes.DataType = dt;
             node.Attributes.Description = "description";
             waitTask = bridge.WaitForNextMessage(topic: tester.Config.Mqtt.RawTopic);
             Assert.True((await pusher.PushNodes(assets, new[] { node, node2 }, rels, update, tester.Source.Token)).Variables);
@@ -483,13 +483,13 @@ namespace Test.Unit
         public async Task TestCreateRelationships()
         {
             using var extractor = tester.BuildExtractor(true, null, pusher);
-            var log = tester.Provider.GetRequiredService<ILogger<ReferenceTypeManager>>();
-            var mgr = new ReferenceTypeManager(tester.Config, log, tester.Client, extractor);
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_mqtt");
 
-            var assets = Enumerable.Empty<UANode>();
+            var assets = Enumerable.Empty<BaseUANode>();
             var tss = Enumerable.Empty<UAVariable>();
             var update = new UpdateConfig();
+
+            tester.Config.Extraction.Relationships.Enabled = true;
 
             // Push none
             var waitTask = bridge.WaitForNextMessage(1);
@@ -498,10 +498,10 @@ namespace Test.Unit
 
             var references = new List<UAReference>
             {
-                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target2"), true, false, true, mgr),
-                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target"), false, true, true, mgr),
+                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target2"), true, false, true, extractor.TypeManager),
+                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target"), false, true, true, extractor.TypeManager),
             };
-            await mgr.GetReferenceTypeDataAsync(tester.Source.Token);
+            await extractor.TypeManager.LoadTypeData(tester.Source.Token);
 
             // Push successful
             waitTask = bridge.WaitForNextMessage();
@@ -512,10 +512,10 @@ namespace Test.Unit
             // Push again, with duplicates
             var references2 = new List<UAReference>
             {
-                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target"), true, true, true, mgr),
-                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target2"), false, false, true, mgr),
-                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target2"), true, false, true, mgr),
-                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target"), false, true, true, mgr)
+                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target"), true, true, true, extractor.TypeManager),
+                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target2"), false, false, true, extractor.TypeManager),
+                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target2"), true, false, true, extractor.TypeManager),
+                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target"), false, true, true, extractor.TypeManager)
             };
             waitTask = bridge.WaitForNextMessage();
             Assert.True((await pusher.PushNodes(assets, tss, references2, update, tester.Source.Token)).References);
@@ -528,7 +528,7 @@ namespace Test.Unit
                 "gp.Organizes;base:s=source;base:s=target2",
                 "gp.OrganizedBy;base:s=source2;base:s=target",
             };
-            Assert.All(ids, id => Assert.Contains(handler.Relationships, rel => rel.Key == id));
+            Assert.All(ids, id => Assert.True(handler.Relationships.ContainsKey(id)));
 
             // Test pushing all duplicates
             waitTask = bridge.WaitForNextMessage(1);
@@ -541,8 +541,6 @@ namespace Test.Unit
         public async Task TestCreateRawRelationships()
         {
             using var extractor = tester.BuildExtractor(true, null, pusher);
-            var log = tester.Provider.GetRequiredService<ILogger<ReferenceTypeManager>>();
-            var mgr = new ReferenceTypeManager(tester.Config, log, tester.Client, extractor);
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_mqtt");
 
             tester.Config.Mqtt.RawMetadata = new RawMetadataConfig
@@ -551,7 +549,9 @@ namespace Test.Unit
                 Database = "metadata"
             };
 
-            var assets = Enumerable.Empty<UANode>();
+            tester.Config.Extraction.Relationships.Enabled = true;
+
+            var assets = Enumerable.Empty<BaseUANode>();
             var tss = Enumerable.Empty<UAVariable>();
             var update = new UpdateConfig();
 
@@ -562,10 +562,10 @@ namespace Test.Unit
 
             var references = new List<UAReference>
             {
-                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target2"), true, false, true, mgr),
-                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target"), false, true, true, mgr),
+                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target2"), true, false, true, extractor.TypeManager),
+                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target"), false, true, true, extractor.TypeManager),
             };
-            await mgr.GetReferenceTypeDataAsync(tester.Source.Token);
+            await extractor.TypeManager.LoadTypeData(tester.Source.Token);
 
             // Push successful
             waitTask = bridge.WaitForNextMessage();
@@ -576,10 +576,10 @@ namespace Test.Unit
             // Push again, with duplicates
             var references2 = new List<UAReference>
             {
-                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target"), true, true, true, mgr),
-                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target2"), false, false, true, mgr),
-                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target2"), true, false, true, mgr),
-                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target"), false, true, true, mgr)
+                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target"), true, true, true, extractor.TypeManager),
+                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target2"), false, false, true, extractor.TypeManager),
+                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target2"), true, false, true, extractor.TypeManager),
+                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target"), false, true, true, extractor.TypeManager)
             };
             waitTask = bridge.WaitForNextMessage();
             Assert.True((await pusher.PushNodes(assets, tss, references2, update, tester.Source.Token)).References);
@@ -592,7 +592,7 @@ namespace Test.Unit
                 "gp.Organizes;base:s=source;base:s=target2",
                 "gp.OrganizedBy;base:s=source2;base:s=target",
             };
-            Assert.All(ids, id => Assert.Contains(handler.RelationshipsRaw, rel => rel.Key == id));
+            Assert.All(ids, id => Assert.True(handler.RelationshipsRaw.ContainsKey(id)));
 
             // Test pushing all duplicates
             waitTask = bridge.WaitForNextMessage(1);
@@ -627,12 +627,12 @@ namespace Test.Unit
 
             var rels = Enumerable.Empty<UAReference>();
 
-            var ts = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", new NodeId("parent"));
-            ts.VariableAttributes.DataType = dt;
-            var ts2 = new UAVariable(tester.Server.Ids.Base.DoubleVar2, "Variable 2", new NodeId("parent"));
-            ts2.VariableAttributes.DataType = dt;
-            var node = new UANode(tester.Server.Ids.Base.Root, "BaseRoot", NodeId.Null, NodeClass.Object);
-            var node2 = new UANode(tester.Server.Ids.Custom.Root, "BaseRoot", NodeId.Null, NodeClass.Object);
+            var ts = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", null, null, new NodeId("parent"), null);
+            ts.FullAttributes.DataType = dt;
+            var ts2 = new UAVariable(tester.Server.Ids.Base.DoubleVar2, "Variable 2", null, null, new NodeId("parent"), null);
+            ts2.FullAttributes.DataType = dt;
+            var node = new UAObject(tester.Server.Ids.Base.Root, "BaseRoot", null, null, NodeId.Null, null);
+            var node2 = new UAObject(tester.Server.Ids.Custom.Root, "BaseRoot", null, null, NodeId.Null, null);
 
             await pusher.PushNodes(new[] { node, node2 }, new[] { ts, ts2 }, rels, new UpdateConfig(), tester.Source.Token);
 
@@ -674,24 +674,22 @@ namespace Test.Unit
                 Location = "mqtt-state-store-2.db"
             };
 
-            var assets = Enumerable.Empty<UANode>();
+            var assets = Enumerable.Empty<BaseUANode>();
             var tss = Enumerable.Empty<UAVariable>();
             var update = new UpdateConfig();
 
             using var stateStore = new LiteDBStateStore(stateStoreConfig, tester.Provider.GetRequiredService<ILogger<LiteDBStateStore>>());
 
             using var extractor = tester.BuildExtractor(true, stateStore, pusher);
-            var log = tester.Provider.GetRequiredService<ILogger<ReferenceTypeManager>>();
-            var mgr = new ReferenceTypeManager(tester.Config, log, tester.Client, extractor);
             CommonTestUtils.ResetMetricValues("opcua_node_ensure_failures_mqtt", "opcua_created_relationships_mqtt");
             tester.Config.Mqtt.LocalState = "mqtt_state";
 
             var references = new List<UAReference>
             {
-                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target2"), true, false, true, mgr),
-                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target"), false, true, true, mgr),
+                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target2"), true, false, true, extractor.TypeManager),
+                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target"), false, true, true, extractor.TypeManager),
             };
-            await mgr.GetReferenceTypeDataAsync(tester.Source.Token);
+            await extractor.TypeManager.LoadTypeData(tester.Source.Token);
 
             await pusher.PushNodes(assets, tss, references, update, tester.Source.Token);
             Assert.True(CommonTestUtils.TestMetricValue("opcua_created_relationships_mqtt", 2));

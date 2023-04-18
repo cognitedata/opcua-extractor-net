@@ -33,7 +33,9 @@ namespace Cognite.OpcUa.NodeSources
     {
         public byte EventNotifier { get; set; }
         public bool ShouldSubscribeData { get; set; }
+        public bool ShouldReadHistoryData { get; set; }
         public bool ShouldSubscribeEvents { get; set; }
+        public bool ShouldReadHistoryEvents { get; set; }
         public bool AsEvents { get; set; }
         public byte AccessLevel { get; set; }
         public bool Historizing { get; set; }
@@ -41,5 +43,6 @@ namespace Cognite.OpcUa.NodeSources
         public int[]? ArrayDimensions { get; set; }
         public int Index { get; set; }
         public NodeClass NodeClass { get; set; }
+        public NodeId? TypeDefinition { get; set; }
     }
 }

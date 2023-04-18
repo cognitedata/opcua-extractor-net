@@ -2,7 +2,6 @@
 using Cognite.Extractor.Common;
 using Cognite.Extractor.StateStorage;
 using Cognite.Extractor.Testing;
-using Cognite.OpcUa;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
 using Microsoft.Extensions.DependencyInjection;
@@ -39,6 +38,7 @@ namespace Test.Integration
             tester.ResetConfig();
             tester.WipeBaseHistory();
             tester.WipeEventHistory();
+            tester.Client.TypeManager.Reset();
         }
 
         [Fact]

@@ -17,15 +17,20 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
+using Cognite.OpcUa.Nodes;
+using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.Logging;
+using MQTTnet.Formatter.V5;
 using Opc.Ua;
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Drawing;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Xml.Linq;
 
 namespace Cognite.OpcUa.NodeSources
 {
@@ -41,9 +46,13 @@ namespace Cognite.OpcUa.NodeSources
     public abstract class BaseNodeSource
     {
         protected virtual ILogger Log { get; }
-        // Initial collection of nodes, in a map.
-        protected Dictionary<NodeId, UANode> NodeMap { get; } = new Dictionary<NodeId, UANode>();
-        protected List<UANode> RawObjects { get; } = new List<UANode>();
+        // Initial collection of nodes, in a map and list. List is ordered, unlike the map.
+
+        private readonly List<BaseUANode> nodeList = new();
+        private readonly Dictionary<NodeId, BaseUANode> nodeMap = new();
+        protected IEnumerable<BaseUANode> NodeList => nodeList;
+        protected IReadOnlyDictionary<NodeId, BaseUANode> NodeMap => nodeMap;
+        protected List<BaseUANode> RawObjects { get; } = new List<BaseUANode>();
         protected List<UAVariable> RawVariables { get; } = new List<UAVariable>();
 
         // Nodes that are treated as variables (and synchronized) in the source system
@@ -51,10 +60,10 @@ namespace Cognite.OpcUa.NodeSources
         // Nodes that are treated as objects (so not synchronized) in the source system.
         // finalSourceVariables and finalSourceObjects should together contain all mapped nodes
         // in the source system.
-        protected List<UANode> FinalSourceObjects { get; } = new List<UANode>();
+        protected List<BaseUANode> FinalSourceObjects { get; } = new List<BaseUANode>();
 
         // Nodes that are treated as objects in the destination systems (i.e. mapped to assets)
-        protected List<UANode> FinalDestinationObjects { get; } = new List<UANode>();
+        protected List<BaseUANode> FinalDestinationObjects { get; } = new List<BaseUANode>();
         // Nodes that are treated as variables in the destination systems (i.e. mapped to timeseries)
         // May contain duplicate NodeIds, but all should produce distinct UniqueIds.
         protected List<UAVariable> FinalDestinationVariables { get; } = new List<UAVariable>();
@@ -63,13 +72,15 @@ namespace Cognite.OpcUa.NodeSources
         protected FullConfig Config { get; }
         protected UAExtractor Extractor { get; }
         protected UAClient Client { get; }
+        protected TypeManager TypeManager { get; }
 
-        protected BaseNodeSource(ILogger log, FullConfig config, UAExtractor extractor, UAClient client)
+        protected BaseNodeSource(ILogger log, FullConfig config, UAExtractor extractor, UAClient client, TypeManager typeManager)
         {
             Log = log;
             Config = config;
             Extractor = extractor;
             Client = client;
+            TypeManager = typeManager;
         }
 
         public abstract Task<NodeSourceResult?> ParseResults(CancellationToken token);
@@ -80,15 +91,36 @@ namespace Cognite.OpcUa.NodeSources
         /// <param name="node">Variable to write</param>
         protected virtual void AddVariableToLists(UAVariable node)
         {
-            var map = node.GetVariableGroups(Extractor.DataTypeManager);
+            var map = node.GetVariableGroups(Log, Config.Extraction.DataTypes);
             if (map.IsDestinationVariable) FinalDestinationVariables.AddRange(node.CreateTimeseries());
             if (map.IsDestinationObject) FinalDestinationObjects.Add(node);
             if (map.IsSourceVariable) FinalSourceVariables.Add(node);
             if (map.IsSourceObject) FinalSourceObjects.Add(node);
         }
+
+        private (int Length, bool IsCollection) GetLengthOfCollection(object value)
+        {
+            int size = 0;
+            if (value is ICollection coll)
+            {
+                size = coll.Count;
+            }
+            else if (value is IEnumerable enumVal)
+            {
+                var e = enumVal.GetEnumerator();
+                while (e.MoveNext()) size++;
+            }
+            else
+            {
+                return (1, false);
+            }
+            return (size, true);
+        }
+
+
         protected async Task EstimateArraySizes(IEnumerable<UAVariable> nodes, CancellationToken token)
         {
-            if (!Config.Extraction.DataTypes.EstimateArraySizes || Config.Source.EndpointUrl == null) return;
+            if (!Config.Extraction.DataTypes.EstimateArraySizes) return;
             nodes = nodes.Where(node =>
                 (node.ArrayDimensions == null || !node.ArrayDimensions.Any() || node.ArrayDimensions[0] == 0)
                 && (node.ValueRank == ValueRanks.OneDimension
@@ -103,46 +135,60 @@ namespace Cognite.OpcUa.NodeSources
             var toReadValues = new List<UAVariable>();
 
             var maxLengthProperties = nodes
-                .SelectNonNull(node => node.Properties?.FirstOrDefault(prop => prop.DisplayName == "MaxArrayLength") as UAVariable);
+                .SelectNonNull(node => node.Properties?.FirstOrDefault(prop => prop.Name == "MaxArrayLength") as UAVariable);
 
             foreach (var node in nodes)
             {
-                var maxLengthProp = node.Properties?.FirstOrDefault(prop => prop.DisplayName == "MaxArrayLength");
-                if (maxLengthProp != null && maxLengthProp is UAVariable varProp)
+                var maxLengthProp = node.Properties?.FirstOrDefault(prop => prop.Name == "MaxArrayLength");
+                if (maxLengthProp != null && maxLengthProp is UAVariable varProp && varProp.Value != null)
                 {
                     try
                     {
-                        int size = Convert.ToInt32(varProp.Value.Value);
-                        if (size > 1)
+                        int size = Convert.ToInt32(varProp.Value.Value.Value);
+                        if (size > 0)
                         {
-                            node.VariableAttributes.ArrayDimensions = new[] { size };
+                            node.FullAttributes.ArrayDimensions = new[] { size };
                         }
                         continue;
                     }
-                    catch { }
+                    catch (Exception ex)
+                    {
+                        Log.LogDebug("Failed to convert value of MaxArrayLength property for {Id}: {Message}", node.Id, ex.Message);
+                    }
+                }
+                if (node.Value?.Value != null)
+                {
+                    var (length, isCollection) = GetLengthOfCollection(node.Value.Value.Value);
+                    if (length > 0 && isCollection)
+                    {
+                        node.FullAttributes.ArrayDimensions = new[] { length };
+                    }
+                    else
+                    {
+                        Log.LogDebug("Unable to estimate length of node {Id}, value is scalar", node.Id);
+                    }
+                    continue;
                 }
                 toReadValues.Add(node);
             }
             if (!toReadValues.Any()) return;
 
+            if (Config.Source.EndpointUrl == null)
+            {
+                Log.LogDebug("Unable to estimate array length for {Count} nodes, since the server no server is configured", toReadValues.Count);
+                return;
+            }
+
+            Log.LogDebug("Fetch values for {Count} nodes to estimate array lengths", toReadValues.Count);
             await Client.ReadNodeValues(toReadValues, token);
 
             foreach (var node in toReadValues)
             {
-                object val = node.Value.Value;
-                int size = 0;
-                if (val is ICollection coll)
+                if (node.Value == null) continue;
+                var (length, isCollection) = GetLengthOfCollection(node.Value.Value.Value);
+                if (length > 0 && isCollection)
                 {
-                    size = coll.Count;
-                }
-                else if (val is IEnumerable enumVal)
-                {
-                    var e = enumVal.GetEnumerator();
-                    while (e.MoveNext()) size++;
-                }
-                if (size > 1)
-                {
-                    node.VariableAttributes.ArrayDimensions = new[] { size };
+                    node.FullAttributes.ArrayDimensions = new[] { length };
                 }
             }
         }
@@ -151,7 +197,7 @@ namespace Cognite.OpcUa.NodeSources
         /// </summary>
         /// <param name="update">Update configuration</param>
         /// <param name="node">Node to store</param>
-        protected virtual void InitNodeState(UpdateConfig update, UANode node)
+        protected virtual void InitNodeState(UpdateConfig update, BaseUANode node)
         {
             var updateConfig = node is UAVariable ? update.Variables : update.Objects;
 
@@ -171,34 +217,34 @@ namespace Cognite.OpcUa.NodeSources
             }
 
             if (Config.Events.Enabled
-                && node.EventNotifier != 0
-                && (node.NodeClass == NodeClass.Variable || node.NodeClass == NodeClass.Object)
+                && node is UAObject objNode
                 && Extractor.State.GetEmitterState(node.Id) == null)
             {
-                bool history = (node.EventNotifier & EventNotifiers.HistoryRead) != 0 && Config.Events.History;
-                bool subscription = (node.EventNotifier & EventNotifiers.SubscribeToEvents) != 0 && Config.Subscriptions.Events
-                    && node.ShouldSubscribeEvents;
-                var eventState = new EventExtractionState(Extractor, node.Id, history, history && Config.History.Backfill, subscription);
-                Extractor.State.SetEmitterState(eventState);
+                bool subscribe = objNode.FullAttributes.ShouldSubscribeToEvents(Config);
+                bool history = objNode.FullAttributes.ShouldReadEventHistory(Config);
+
+                if (subscribe || history)
+                {
+                    var eventState = new EventExtractionState(Extractor, node.Id, history, history && Config.History.Backfill, subscribe);
+                    Extractor.State.SetEmitterState(eventState);
+                }
             }
 
-            if (node is UAVariable variable && variable.NodeClass == NodeClass.Variable)
+            if (node is UAVariable variable)
             {
-                var state = Extractor.State.GetNodeState(node.Id);
-                if (state != null) return;
+                bool subscribe = variable.FullAttributes.ShouldSubscribe(Config);
+                bool history = variable.FullAttributes.ShouldReadHistory(Config);
 
-                bool setState = Config.Subscriptions.DataPoints
-                    || Config.History.Enabled && Config.History.Data
-                    || Config.PubSub.Enabled;
-
-
-                if (setState)
+                VariableExtractionState? state = null;
+                if ((subscribe || history) && Extractor.State.GetNodeState(node.Id) == null)
                 {
                     state = new VariableExtractionState(
                         Extractor,
                         variable,
-                        variable.ReadHistory,
-                        variable.ReadHistory && Config.History.Backfill);
+                        history,
+                        history && Config.History.Backfill,
+                        subscribe);
+                    Extractor.State.SetNodeState(state);
                 }
 
 
@@ -206,37 +252,52 @@ namespace Cognite.OpcUa.NodeSources
                 {
                     foreach (var child in variable.CreateTimeseries())
                     {
-                        var uniqueId = Extractor.GetUniqueId(child.Id, child.Index);
-                        if (setState && state != null) Extractor.State.SetNodeState(state, uniqueId);
+                        var uniqueId = child.GetUniqueId(Extractor);
+                        if (state != null) Extractor.State.SetNodeState(state, uniqueId);
                         Extractor.State.RegisterNode(node.Id, uniqueId);
                     }
                 }
-                if (setState && state != null)
-                {
-                    Extractor.State.SetNodeState(state);
-                }
             }
+        }
+        protected bool IsDescendantOfType(BaseUANode node)
+        {
+            return node.Parent != null && (node.Parent.IsType || node.Parent.IsChildOfType);
         }
         /// <summary>
         /// Apply transformations and sort the given node as variable, object or property.
         /// </summary>
         /// <param name="node"></param>
-        protected void SortNode(UANode node)
+        protected void SortNode(BaseUANode node)
         {
-            bool initialProperty = node.IsProperty;
-            if (node.ParentId != null && !node.ParentId.IsNullNodeId && NodeMap.TryGetValue(node.ParentId, out var parent))
+            if (node.Parent == null && !node.ParentId.IsNullNodeId)
             {
-                node.Parent = parent;
-                node.Attributes.Ignore |= node.Parent.Ignore;
-                node.Attributes.IsProperty |= node.Parent.IsProperty
-                    || !Config.Extraction.MapVariableChildren && node.Parent.NodeClass == NodeClass.Variable;
+                node.Parent = NodeMap.GetValueOrDefault(node.ParentId);
+            }
+
+            if (node.Parent != null)
+            {
+                node.Ignore = node.Parent.Ignore;
+                node.IsRawProperty |= node.Parent.IsRawProperty;
+                if (node.Parent.NodeClass == NodeClass.Variable && !Config.Extraction.MapVariableChildren)
+                {
+                    node.IsRawProperty = true;
+                }
+                node.IsChildOfType = IsDescendantOfType(node);
+            }
+
+            if (node is UAVariable vb)
+            {
+                if (vb.FullAttributes.TypeDefinition?.Id == VariableTypeIds.PropertyType)
+                {
+                    vb.IsRawProperty = true;
+                }
             }
 
             if (Extractor.Transformations != null)
             {
                 foreach (var trns in Extractor.Transformations)
                 {
-                    trns.ApplyTransformation(Log, node, Client.NamespaceTable!);
+                    trns.ApplyTransformation(Log, node, Client.NamespaceTable!, Config);
                     if (node.Ignore) return;
                 }
             }
@@ -252,13 +313,7 @@ namespace Cognite.OpcUa.NodeSources
             if (node.IsProperty)
             {
                 if (node.Parent == null) return;
-                node.Parent.AddProperty(node);
-                // Edge-case, since attributes are read before transformations, if transformations cause a node to become a property,
-                // ArrayDimensions won't be read. We can just read them later at minimal cost.
-                if (!initialProperty && Config.Extraction.DataTypes.MaxArraySize == 0 && (node is UAVariable variable) && variable.ValueRank >= 0)
-                {
-                    node.Attributes.DataRead = false;
-                }
+                node.Parent.Attributes.AddProperty(node);
             }
             else if (node is UAVariable variable)
             {
@@ -286,7 +341,7 @@ namespace Cognite.OpcUa.NodeSources
         /// <param name="update">Update configuration used to determine what nodes are changed.</param>
         /// <param name="node">Node to be filtered.</param>
         /// <returns>True if node should be considered for mapping, false otherwise.</returns>
-        protected bool FilterObject(TypeUpdateConfig update, UANode node)
+        protected bool FilterObject(TypeUpdateConfig update, BaseUANode node)
         {
             // If deletes are enabled, we are not able to filter any nodes, even if that has a real cost in terms of memory usage.
             if (update.AnyUpdate && !Config.Extraction.Deletes.Enabled)
@@ -325,6 +380,21 @@ namespace Cognite.OpcUa.NodeSources
             if (reference.IsHierarchical && !reference.IsForward && !Config.Extraction.Relationships.InverseHierarchical) return false;
 
             return true;
+        }
+
+        protected bool TryAdd(BaseUANode node)
+        {
+            if (!Config.Extraction.NodeTypes.AsNodes && node.IsType) return false;
+
+            nodeMap[node.Id] = node;
+            nodeList.Add(node);
+            return true;
+        }
+
+        protected void ClearRaw()
+        {
+            nodeMap.Clear();
+            nodeList.Clear();
         }
     }
 }

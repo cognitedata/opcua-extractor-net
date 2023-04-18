@@ -16,6 +16,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using Cognite.OpcUa.Config;
+using Cognite.OpcUa.Nodes;
 using Opc.Ua;
 
 namespace Cognite.OpcUa.Types
@@ -28,7 +29,7 @@ namespace Cognite.OpcUa.Types
         public bool IsObject { get; }
         public NodeClass NodeClass { get; }
 
-        public MappedNode(UANode node, TypeUpdateConfig update, bool dataTypeMetadata, bool nodeTypeMetadata)
+        public MappedNode(BaseUANode node, TypeUpdateConfig update, bool dataTypeMetadata, bool nodeTypeMetadata)
         {
             Id = node.Id;
             Checksum = node.GetUpdateChecksum(update, dataTypeMetadata, nodeTypeMetadata);

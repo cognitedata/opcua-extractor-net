@@ -116,14 +116,11 @@ namespace Test.Utils
             if (clear)
             {
                 Client.ClearNodeOverrides();
-                Client.ClearEventFields();
-                Client.DataTypeManager.Reset();
                 Client.RemoveSubscription("EventListener").Wait();
                 Client.RemoveSubscription("DataChangeListener").Wait();
                 Client.RemoveSubscription("AuditListener").Wait();
                 Client.RemoveSubscription(RebrowseTriggerManager.SubscriptionName).Wait();
                 Client.Browser.IgnoreFilters = null;
-                Client.ObjectTypeManager.Reset();
             }
             var ext = new UAExtractor(Config, Provider, pushers, Client, stateStore);
             ext.InitExternal(Source.Token);
@@ -170,7 +167,7 @@ namespace Test.Utils
             var provider = Services.BuildServiceProvider();
             var destination = provider.GetRequiredService<CogniteDestination>();
             var pusher = new CDFPusher(Provider.GetRequiredService<ILogger<CDFPusher>>(),
-                Config.Extraction, Config.Cognite, destination);
+                Config, Config.Cognite, destination);
             var handler = provider.GetRequiredService<CDFMockHandler>();
             return (handler, pusher);
         }
