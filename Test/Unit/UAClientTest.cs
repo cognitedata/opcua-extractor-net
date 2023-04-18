@@ -319,7 +319,7 @@ namespace Test.Unit
             await tester.Client.Close(tester.Source.Token);
             tester.Server.SetServerRedundancyStatus(230, RedundancySupport.Hot);
             tester.Config.Source.Redundancy.MonitorServiceLevel = true;
-            tester.Callbacks.ServiceLevelCbCount = 0;
+            tester.Callbacks.Reset();
             var altServer = new ServerController(new[] {
                 PredefinedSetup.Base
             }, tester.Provider, 62300)
@@ -347,6 +347,8 @@ namespace Test.Unit
 
                 Assert.Equal(230, sm.CurrentServiceLevel);
                 Assert.Equal(0, tester.Callbacks.ServiceLevelCbCount);
+                Assert.Equal(1, tester.Callbacks.LowServiceLevelCbCount);
+                Assert.Equal(1, tester.Callbacks.ReconnectCbCount);
                 Assert.Equal(sm.EndpointUrl, tester.Config.Source.EndpointUrl);
 
 
@@ -360,6 +362,7 @@ namespace Test.Unit
                 await TestUtils.WaitForCondition(() => sm.CurrentServiceLevel == 190, 10, "Expected service level to drop");
 
                 Assert.Equal(sm.EndpointUrl, tester.Config.Source.EndpointUrl);
+                Assert.Equal(2, tester.Callbacks.LowServiceLevelCbCount);
 
                 // Set the servicelevel back up, should trigger a callback, but no switch
                 tester.Server.SetServerRedundancyStatus(255, RedundancySupport.Hot);
