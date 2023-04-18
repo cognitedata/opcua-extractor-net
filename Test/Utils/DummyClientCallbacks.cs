@@ -11,6 +11,8 @@ namespace Test.Utils
         public bool Connected { get; set; }
         public int ServiceLevelCbCount { get; set; }
         public int LowServiceLevelCbCount { get; set; }
+        public int ReconnectCbCount { get; set; }
+        public int DisconnectCbCount { get; set; }
 
         public DummyClientCallbacks(CancellationToken token)
         {
@@ -20,12 +22,14 @@ namespace Test.Utils
         public Task OnServerDisconnect(UAClient source)
         {
             Connected = false;
+            DisconnectCbCount++;
             return Task.CompletedTask;
         }
 
         public Task OnServerReconnect(UAClient source)
         {
             Connected = true;
+            ReconnectCbCount++;
             return Task.CompletedTask;
         }
 
@@ -39,6 +43,14 @@ namespace Test.Utils
         {
             LowServiceLevelCbCount++;
             return Task.CompletedTask;
+        }
+
+        public void Reset()
+        {
+            DisconnectCbCount = 0;
+            ReconnectCbCount = 0;
+            ServiceLevelCbCount = 0;
+            LowServiceLevelCbCount = 0;
         }
     }
 }
