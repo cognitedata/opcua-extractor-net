@@ -152,7 +152,7 @@ namespace Cognite.OpcUa.Config
             Config.Events.Enabled = true;
             Config.History.Enabled = true;
             Config.History.Data = true;
-            await ReadNodeData(nodeList, token);
+            await ReadNodeData(nodeList, token, "node hierarchy information");
             Config.Extraction.DataTypes.MaxArraySize = oldArraySize;
             Config.Events.Enabled = oldEvents;
             Config.History.Enabled = oldHistory;

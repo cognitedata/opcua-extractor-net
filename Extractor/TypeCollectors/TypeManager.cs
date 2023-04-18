@@ -69,6 +69,7 @@ namespace Cognite.OpcUa.TypeCollectors
             foreach (var tp in NodeMap.Values)
             {
                 if (tp.Attributes.IsDataRead) continue;
+                if (tp.Id.IsNullNodeId) continue;
                 if (tp.NodeClass == NodeClass.ObjectType && !config.Extraction.NodeTypes.Metadata
                     && (tp is not UAObjectType otp || !otp.IsEventType())) continue;
                 if (tp.NodeClass == NodeClass.VariableType && !config.Extraction.NodeTypes.Metadata) continue;
@@ -78,7 +79,7 @@ namespace Cognite.OpcUa.TypeCollectors
                 toRead.Add(tp);
                 if (tp.NodeClass == NodeClass.Variable && tp is UAVariable variable) toReadValues.Add(variable);
             }
-            await client.ReadNodeData(toRead, token);
+            await client.ReadNodeData(toRead, token, "the type hierarchy");
             await client.ReadNodeValues(toReadValues, token);
         }
 

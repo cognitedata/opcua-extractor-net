@@ -84,7 +84,7 @@ namespace Cognite.OpcUa.Config
                 Config.Source.AttributesChunk = chunkSize;
                 try
                 {
-                    await ToolUtil.RunWithTimeout(ReadNodeData(toCheck, token), 120);
+                    await ToolUtil.RunWithTimeout(ReadNodeData(toCheck, token, "testing read tolerance"), 120);
                 }
                 catch (Exception e)
                 {

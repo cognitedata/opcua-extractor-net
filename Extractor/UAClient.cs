@@ -342,7 +342,7 @@ namespace Cognite.OpcUa
 
             var node = BaseUANode.Create(desc, NodeId.Null, null, this, TypeManager);
             if (node == null) throw new ExtractorFailureException($"Root node {desc.NodeId} is unexpected node class: {desc.NodeClass}");
-            await ReadNodeData(new[] { node }, token);
+            await ReadNodeData(new[] { node }, token, "the server node");
             return node;
         }
         /// <summary>
@@ -599,7 +599,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="nodes">Nodes to be updated with data from the opcua server</param>
         /// <param name="purpose">Purpose, for logging</param>
-        public async Task ReadNodeData(IEnumerable<BaseUANode> nodes, CancellationToken token)
+        public async Task ReadNodeData(IEnumerable<BaseUANode> nodes, CancellationToken token, string purpose = "")
         {
             nodes = nodes.DistinctBy(node => node.Attributes).Where(node => !node.Attributes.IsDataRead).ToList();
             if (!nodes.Any()) return;
@@ -614,7 +614,7 @@ namespace Cognite.OpcUa
             }
 
             IList<DataValue> values;
-            values = await ReadAttributes(readValueIds, nodes.Count(), token, "node hierarchy information");
+            values = await ReadAttributes(readValueIds, nodes.Count(), token, purpose);
 
             int total = values.Count;
 
@@ -645,6 +645,7 @@ namespace Cognite.OpcUa
                     node.Attributes.LoadAttribute(values[idx], attr, TypeManager);
                     idx++;
                 }
+                node.Attributes.IsDataRead = true;
             }
         }
 
