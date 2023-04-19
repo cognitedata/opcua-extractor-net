@@ -269,7 +269,7 @@ namespace Cognite.OpcUa
                 var dest = provider.GetService<CogniteDestination>();
                 var log = provider.GetRequiredService<ILogger<CDFPusher>>();
                 if (conf.Cognite == null || dest == null || dest.CogniteClient == null) return null!;
-                return new CDFPusher(log, conf.Extraction, conf.Cognite, dest, provider);
+                return new CDFPusher(log, conf, conf.Cognite, dest, provider);
             });
             services.AddSingleton<IPusher, InfluxPusher>(provider =>
             {

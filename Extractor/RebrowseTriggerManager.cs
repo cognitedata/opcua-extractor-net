@@ -1,15 +1,13 @@
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using System.Collections.Generic;
-
+using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
 using Microsoft.Extensions.Logging;
-
 using Opc.Ua;
 using Opc.Ua.Client;
 using System;
-using Cognite.OpcUa.Config;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Cognite.OpcUa
 {
@@ -78,8 +76,7 @@ namespace Cognite.OpcUa
                 },
                 token,
                 maxDepth: 1,
-                doFilter: false,
-                ignoreVisited: false
+                doFilter: false
             );
 
             // To be used in filtering namespaces

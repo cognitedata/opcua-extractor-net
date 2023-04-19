@@ -17,6 +17,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
+using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.Types;
 using System;
@@ -53,9 +54,9 @@ namespace Cognite.OpcUa
         PusherInput? PendingNodes { get; set; }
 
 
-        void AddPendingNodes(PusherInput pending, FullPushResult result)
+        void AddPendingNodes(PusherInput pending, FullPushResult result, FullConfig config)
         {
-            var filtered = pending.Filter(result);
+            var filtered = pending.Filter(result, config);
             if (PendingNodes is null)
             {
                 PendingNodes = filtered;
@@ -70,7 +71,7 @@ namespace Cognite.OpcUa
         /// Push nodes, emptying the queue
         /// </summary>
         Task<PushResult> PushNodes(
-            IEnumerable<UANode> objects,
+            IEnumerable<BaseUANode> objects,
             IEnumerable<UAVariable> variables,
             IEnumerable<UAReference> references,
             UpdateConfig update,

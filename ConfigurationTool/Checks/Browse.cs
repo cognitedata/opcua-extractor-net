@@ -16,7 +16,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using Cognite.Extractor.Common;
-using Cognite.OpcUa.Types;
+using Cognite.OpcUa.Nodes;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using System;
@@ -51,13 +51,13 @@ namespace Cognite.OpcUa.Config
         /// </summary>
         /// <param name="nodesChunk">Chunk size to use when browsing</param>
         /// <returns>A list of discovered UANodes</returns>
-        private async Task<IEnumerable<UANode>> GetTestNodeChunk(int nodesChunk, CancellationToken token)
+        private async Task<IEnumerable<BaseUANode>> GetTestNodeChunk(int nodesChunk, CancellationToken token)
         {
             var root = ObjectIds.ObjectsFolder;
 
             // Try to find at least 10000 nodes
-            var nodes = new List<UANode>();
-            var callback = ToolUtil.GetSimpleListWriterCallback(nodes, this, log);
+            var nodes = new List<BaseUANode>();
+            var callback = ToolUtil.GetSimpleListWriterCallback(nodes, this, TypeManager, log);
 
             var nextIds = new List<NodeId> { root };
 
@@ -105,14 +105,13 @@ namespace Cognite.OpcUa.Config
                     foreach (var rd in children)
                     {
                         var nodeId = ToNodeId(rd.NodeId);
-                        bool docb = true;
-                        if (docb)
-                        {
-                            log.LogTrace("Discovered new node {NodeId}", nodeId);
-                            callback?.Invoke(rd, parentId, false);
-                        }
+                        bool visited = !localVisitedNodes.Add(nodeId);
+
+                        log.LogTrace("Discovered new node {NodeId}", nodeId);
+                        callback?.Invoke(rd, parentId, visited);
+
                         if (rd.NodeClass == NodeClass.Variable) continue;
-                        if (localVisitedNodes.Add(nodeId))
+                        if (!visited)
                         {
                             nextIds.Add(nodeId);
                         }
@@ -137,7 +136,7 @@ namespace Cognite.OpcUa.Config
                 await LimitConfigValues(token);
             }
 
-            IEnumerable<UANode>? testNodes = null;
+            IEnumerable<BaseUANode>? testNodes = null;
 
             int browseChunkSize = 0;
 

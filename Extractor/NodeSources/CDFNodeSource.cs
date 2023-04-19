@@ -17,7 +17,9 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using Cognite.Extractor.Common;
 using Cognite.OpcUa.Config;
+using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.Pushers;
+using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
 using CogniteSdk;
 using Microsoft.Extensions.Logging;
@@ -37,9 +39,11 @@ namespace Cognite.OpcUa.NodeSources
         private readonly CDFPusher pusher;
         private readonly CDFNodeSourceConfig sourceConfig;
         private readonly string database;
+        private readonly List<UAVariable> readVariables = new();
+        private readonly List<UAObject> readObjects = new();
 
-        public CDFNodeSource(ILogger<CDFNodeSource> log, FullConfig config, UAExtractor extractor, UAClient client, CDFPusher pusher)
-            : base(log, config, extractor, client)
+        public CDFNodeSource(ILogger<CDFNodeSource> log, FullConfig config, UAExtractor extractor, UAClient client, CDFPusher pusher, TypeManager typeManager)
+            : base(log, config, extractor, client, typeManager)
         {
             if (config.Cognite?.RawNodeBuffer == null) throw new InvalidOperationException("RawNodeBuffer config required");
             if (config.Cognite.RawNodeBuffer.Database == null) throw new ConfigurationException("Database must be set");
@@ -47,8 +51,6 @@ namespace Cognite.OpcUa.NodeSources
             this.pusher = pusher;
             sourceConfig = config.Cognite.RawNodeBuffer;
         }
-        private readonly List<UAVariable> readVariables = new List<UAVariable>();
-        private readonly List<UANode> readNodes = new List<UANode>();
 
         private static async Task<IEnumerable<SavedNode>?> DeserializeRawData(IEnumerable<RawRow<Dictionary<string, JsonElement>>> rows, JsonSerializerOptions options, CancellationToken token)
         {
@@ -88,32 +90,10 @@ namespace Cognite.OpcUa.NodeSources
                 foreach (var node in nodes)
                 {
                     if (node.NodeId == null || node.NodeId.IsNullNodeId || !nodeSet.Add(node.NodeId)) continue;
-                    string? name = node.Name;
-                    if (name == null || node.InternalInfo == null) continue;
-                    // If this is an array element, we need to strip the postfix from the name, since we are treating it
-                    // as its parent.
-                    if (node.InternalInfo.ArrayDimensions != null && node.InternalInfo.Index >= 0)
-                    {
-                        var postfix = $"[{node.InternalInfo.Index}]";
-                        name = name.Substring(0, name.Length - postfix.Length);
-                    }
-                    var variable = new UAVariable(node.NodeId, name, node.ParentNodeId ?? NodeId.Null, node.InternalInfo.NodeClass)
-                    {
-                        VariableAttributes =
-                        {
-                            AccessLevel = node.InternalInfo.AccessLevel,
-                            ArrayDimensions = node.InternalInfo.ArrayDimensions,
-                            DataType = Extractor.DataTypeManager.GetDataType(node.DataTypeId),
-                            EventNotifier = node.InternalInfo.EventNotifier,
-                            ShouldSubscribeData = node.InternalInfo.ShouldSubscribeData,
-                            ShouldSubscribeEvents = node.InternalInfo.ShouldSubscribeEvents,
-                            ValueRank = node.InternalInfo.ValueRank,
-                            Historizing = node.InternalInfo.Historizing
-                        },
-                        Source = NodeSource.CDF,
-                        AsEvents = node.InternalInfo.AsEvents
-                    };
-                    variable.VariableAttributes.InitializeAfterRead(Config);
+
+                    var res = BaseUANode.FromSavedNode(node, TypeManager);
+                    if (res == null || !(res is UAVariable variable)) continue;
+
                     readVariables.Add(variable);
                 }
             }
@@ -138,38 +118,32 @@ namespace Cognite.OpcUa.NodeSources
                 foreach (var node in nodes)
                 {
                     if (node.NodeId == null || node.NodeId.IsNullNodeId || !nodeSet.Add(node.NodeId)) continue;
-                    if (node.Name == null || node.InternalInfo == null) continue;
 
-                    var obj = new UANode(node.NodeId, node.Name, node.ParentNodeId ?? NodeId.Null, node.InternalInfo.NodeClass)
-                    {
-                        Attributes =
-                        {
-                            EventNotifier = node.InternalInfo.EventNotifier,
-                            ShouldSubscribeEvents = node.InternalInfo.ShouldSubscribeEvents
-                        },
-                        Source = NodeSource.CDF
-                    };
-                    readNodes.Add(obj);
+                    var res = BaseUANode.FromSavedNode(node, TypeManager);
+                    if (res == null || !(res is UAObject obj)) continue;
+
+                    readObjects.Add(obj);
                 }
             }
-            Log.LogInformation("Retrieved {Obj} objects and {Var} variables from CDF Raw", readNodes.Count, readVariables.Count);
+            Log.LogInformation("Retrieved {Obj} objects and {Var} variables from CDF Raw", readObjects.Count, readVariables.Count);
         }
 
         public override async Task<NodeSourceResult?> ParseResults(CancellationToken token)
         {
-            if (!readVariables.Any() && !readNodes.Any()) return null;
+            if (!readVariables.Any() && !readObjects.Any()) return null;
 
-            await GetExtraNodeData(token);
+            await TypeManager.LoadTypeData(token);
+            TypeManager.BuildTypeInfo();
 
-            FinalDestinationObjects.AddRange(readNodes);
-            FinalSourceObjects.AddRange(readNodes);
+            FinalDestinationObjects.AddRange(readObjects);
+            FinalSourceObjects.AddRange(readObjects);
             foreach (var variable in readVariables)
             {
                 variable.AllowTSMap = Extractor.DataTypeManager.AllowTSMap(variable);
                 AddVariableToLists(variable);
             }
 
-            readNodes.Clear();
+            readObjects.Clear();
             readVariables.Clear();
 
             if (!FinalDestinationObjects.Any() && !FinalDestinationVariables.Any() && !FinalSourceVariables.Any() && !FinalReferences.Any())
@@ -195,13 +169,6 @@ namespace Cognite.OpcUa.NodeSources
                 FinalDestinationVariables,
                 FinalReferences,
                 false);
-        }
-
-        private async Task GetExtraNodeData(CancellationToken token)
-        {
-            // Datatype metadata might make sense if we have enum variables, either way this is cheap.
-            var distinctDataTypes = readVariables.Select(variable => variable.DataType.Raw).ToHashSet();
-            await Extractor.DataTypeManager.GetDataTypeMetadataAsync(distinctDataTypes, token);
         }
     }
 }

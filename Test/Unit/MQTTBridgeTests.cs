@@ -1,7 +1,6 @@
 ﻿using Cognite.Bridge;
 using Cognite.Extractor.Common;
 using Cognite.Extractor.Configuration;
-using Cognite.Extractor.Logging;
 using Cognite.Extractor.Testing;
 using Cognite.Extractor.Utils;
 using CogniteSdk;

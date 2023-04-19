@@ -16,7 +16,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using Cognite.Extractor.Common;
-using Cognite.OpcUa.Types;
+using Cognite.OpcUa.Nodes;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
@@ -33,9 +33,9 @@ namespace Cognite.OpcUa.Config
     public partial class UAServerExplorer : UAClient, IClientCallbacks
     {
         private readonly FullConfig baseConfig;
-        private readonly HashSet<UANode> dataTypes = new HashSet<UANode>();
-        private readonly List<UANode> nodeList = new List<UANode>();
-        private readonly List<UANode> eventTypes = new List<UANode>();
+        private readonly HashSet<BaseUANode> dataTypes = new HashSet<BaseUANode>();
+        private readonly List<BaseUANode> nodeList = new List<BaseUANode>();
+        private readonly List<BaseUANode> eventTypes = new List<BaseUANode>();
         private Dictionary<string, string>? namespaceMap;
 
         private readonly ILogger<UAServerExplorer> log;
@@ -71,7 +71,6 @@ namespace Cognite.OpcUa.Config
             dataTypesRead = false;
             dataTypes.Clear();
             nodeDataRead = false;
-            ClearEventFields();
         }
 
         private async Task LimitConfigValues(CancellationToken token)
@@ -97,10 +96,10 @@ namespace Cognite.OpcUa.Config
             if (nodesRead) return;
             nodeList.Clear();
             log.LogInformation("Mapping out node hierarchy");
-            var roots = Config.Extraction.GetRootNodes(this);
+            var roots = Config.Extraction.GetRootNodes(this, log);
             try
             {
-                await Browser.BrowseNodeHierarchy(roots, ToolUtil.GetSimpleListWriterCallback(nodeList, this, log), token, false,
+                await Browser.BrowseNodeHierarchy(roots, ToolUtil.GetSimpleListWriterCallback(nodeList, this, TypeManager, log), token,
                     "populating the main node hierarchy");
                 nodesRead = true;
             }
@@ -123,7 +122,7 @@ namespace Cognite.OpcUa.Config
             {
                 await Browser.BrowseDirectory(
                     new List<NodeId> { DataTypes.BaseDataType },
-                    ToolUtil.GetSimpleListWriterCallback(dataTypes, this, log),
+                    ToolUtil.GetSimpleListWriterCallback(dataTypes, this, TypeManager, log),
                     token,
                     ReferenceTypeIds.HasSubtype,
                     (uint)NodeClass.DataType | (uint)NodeClass.ObjectType,
@@ -153,7 +152,7 @@ namespace Cognite.OpcUa.Config
             Config.Events.Enabled = true;
             Config.History.Enabled = true;
             Config.History.Data = true;
-            await ReadNodeData(nodeList, token);
+            await ReadNodeData(nodeList, token, "node hierarchy information");
             Config.Extraction.DataTypes.MaxArraySize = oldArraySize;
             Config.Events.Enabled = oldEvents;
             Config.History.Enabled = oldHistory;

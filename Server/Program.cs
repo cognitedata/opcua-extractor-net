@@ -18,13 +18,10 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using Cognite.Extractor.Logging;
 using Cognite.Extractor.Utils.CommandLine;
 using Microsoft.Extensions.DependencyInjection;
-using Serilog;
-using Serilog.Events;
 using System;
 using System.Collections.Generic;
 using System.CommandLine;
 using System.CommandLine.Builder;
-using System.CommandLine.Invocation;
 using System.CommandLine.Parsing;
 using System.Threading;
 using System.Threading.Tasks;

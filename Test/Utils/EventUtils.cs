@@ -1,6 +1,6 @@
 ﻿using Cognite.OpcUa;
 using Cognite.OpcUa.History;
-using Cognite.OpcUa.TypeCollectors;
+using Cognite.OpcUa.Nodes;
 using Opc.Ua;
 using System;
 using System.Linq;
@@ -27,9 +27,11 @@ namespace Test.Utils
             }
             extractor.State.SetEmitterState(state);
 
-            var fields = baseFields.Select(field => new EventField(new QualifiedName(field)));
-            fields = fields.Append(new EventField(new QualifiedName("EUProp")));
-            extractor.State.ActiveEvents[new NodeId("test")] = new UAEventType(new NodeId("test"), "TestEvent", fields.ToHashSet());
+            var fields = baseFields.Select(field => new TypeField(new UAVariable(new NodeId(field), field, new QualifiedName(field), null, null, null)));
+            fields = fields.Append(new TypeField(new UAVariable(new NodeId("EUProp"), "EUProp", new QualifiedName("EUProp"), null, null, null)));
+            var type = new UAObjectType(new NodeId("test"), "TestEvent", null, null, null);
+            type.AllCollectedFields = fields.ToHashSet();
+            extractor.State.ActiveEvents[new NodeId("test")] = type;
 
             return state;
         }

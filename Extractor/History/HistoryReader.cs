@@ -17,6 +17,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using Cognite.Extractor.Common;
 using Cognite.OpcUa.Config;
+using Cognite.OpcUa.TypeCollectors;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
@@ -30,6 +31,7 @@ namespace Cognite.OpcUa.History
         private readonly UAClient uaClient;
         private readonly UAExtractor extractor;
         private readonly HistoryConfig config;
+        private readonly TypeManager typeManager;
         private CancellationTokenSource source;
         // private ILogger log = Log.Logger.ForContext<HistoryReader>();
         private readonly TaskThrottler throttler;
@@ -40,12 +42,13 @@ namespace Cognite.OpcUa.History
         private readonly ILogger<HistoryReader> log;
 
         public HistoryReader(ILogger<HistoryReader> log,
-            UAClient uaClient, UAExtractor extractor, HistoryConfig config, CancellationToken token)
+            UAClient uaClient, UAExtractor extractor, TypeManager typeManager, HistoryConfig config, CancellationToken token)
         {
             this.log = log;
             this.config = config;
             this.uaClient = uaClient;
             this.extractor = extractor;
+            this.typeManager = typeManager;
             var throttling = config.Throttling;
             throttler = new TaskThrottler(throttling.MaxParallelism, false, throttling.MaxPerMinute, TimeSpan.FromMinutes(1));
             source = CancellationTokenSource.CreateLinkedTokenSource(token);
@@ -56,7 +59,7 @@ namespace Cognite.OpcUa.History
 
         private async Task Run(IEnumerable<UAHistoryExtractionState> states, HistoryReadType type)
         {
-            using var scheduler = new HistoryScheduler(log, uaClient, extractor, config, type,
+            using var scheduler = new HistoryScheduler(log, uaClient, extractor, typeManager, config, type,
                 throttler, continuationPoints, states, source.Token);
 
             using var op = waiter.GetInstance();

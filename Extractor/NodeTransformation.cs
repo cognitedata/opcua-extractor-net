@@ -16,7 +16,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using Cognite.OpcUa.Config;
-using Cognite.OpcUa.Types;
+using Cognite.OpcUa.Nodes;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using System.Text;
@@ -138,14 +138,14 @@ namespace Cognite.OpcUa
         /// <param name="node">Node to test</param>
         /// <param name="ns">Currently active namespace table</param>
         /// <returns>True if match</returns>
-        public bool IsMatch(UANode node, NamespaceTable ns)
+        public bool IsMatch(BaseUANode node, NamespaceTable ns)
         {
-            if (node == null || !MatchBasic(node.DisplayName, node.Id, node.NodeType?.Id, ns, node.NodeClass)) return false;
-            if (Description != null && (string.IsNullOrEmpty(node.Description) || !Description.IsMatch(node.Description))) return false;
+            if (node == null || !MatchBasic(node.Name, node.Id, node.TypeDefinition, ns, node.NodeClass)) return false;
+            if (Description != null && (string.IsNullOrEmpty(node.Attributes.Description) || !Description.IsMatch(node.Attributes.Description))) return false;
             if (node is UAVariable variable)
             {
                 if (IsArray != null && variable.IsArray != IsArray) return false;
-                if (Historizing != null && variable.VariableAttributes.Historizing != Historizing) return false;
+                if (Historizing != null && variable.FullAttributes.Historizing != Historizing) return false;
             }
             else if (IsArray != null || Historizing != null) return false;
             if (Parent != null && (node.Parent == null || !Parent.IsMatch(node.Parent, ns))) return false;
@@ -238,7 +238,7 @@ namespace Cognite.OpcUa
             this.index = index;
         }
 
-        private bool ShouldSkip(UANode node)
+        private bool ShouldSkip(BaseUANode node, FullConfig config)
         {
             // No reason to transform ignored nodes.
             if (node == null || node.Ignore) return true;
@@ -247,14 +247,14 @@ namespace Cognite.OpcUa
             {
                 case TransformationType.Property:
                     // Already a property
-                    return node.IsProperty;
+                    return node.IsRawProperty;
                 case TransformationType.TimeSeries:
                     // No need to transform to timeseries if node is not property, or node cannot be a timeseries.
-                    return !node.IsProperty || node.NodeClass != NodeClass.Variable;
+                    return !node.IsRawProperty || node.NodeClass != NodeClass.Variable;
                 case TransformationType.DropSubscriptions:
                     // No need to drop subscriptions if we are not subscribing to this node.
-                    return !(node is UAVariable variable && variable.ShouldSubscribeData)
-                        && !node.ShouldSubscribeEvents;
+                    return !(node is UAVariable variable && variable.FullAttributes.ShouldSubscribe(config))
+                        && !(node is UAObject obj && obj.FullAttributes.ShouldSubscribeToEvents(config));
                 case TransformationType.AsEvents:
                     // If not a variable or already publishing values as events we skip here.
                     return node is not UAVariable evtvariable || evtvariable.AsEvents;
@@ -268,33 +268,36 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="node">Node to test</param>
         /// <param name="ns">Active NamespaceTable</param>
-        public void ApplyTransformation(ILogger log, UANode node, NamespaceTable ns)
+        public void ApplyTransformation(ILogger log, BaseUANode node, NamespaceTable ns, FullConfig config)
         {
-            if (ShouldSkip(node)) return;
+            if (ShouldSkip(node, config)) return;
 
             if (Filter.IsMatch(node, ns))
             {
                 switch (Type)
                 {
                     case TransformationType.Ignore:
-                        node.Attributes.Ignore = true;
-                        log.LogTrace("Ignoring node {Name} {Id} due to matching ignore filter {Idx}", node.DisplayName, node.Id, index);
+                        node.Ignore = true;
+                        log.LogTrace("Ignoring node {Name} {Id} due to matching ignore filter {Idx}", node.Name, node.Id, index);
                         break;
                     case TransformationType.Property:
-                        node.Attributes.IsRawProperty = true;
-                        log.LogTrace("Treating node {Name} {Id} as property due to matching filter {Idx}", node.DisplayName, node.Id, index);
+                        node.IsRawProperty = true;
+                        log.LogTrace("Treating node {Name} {Id} as property due to matching filter {Idx}", node.Name, node.Id, index);
                         break;
                     case TransformationType.DropSubscriptions:
                         if (node is UAVariable variable)
                         {
-                            variable.VariableAttributes.ShouldSubscribeData = false;
+                            variable.FullAttributes.ShouldSubscribeOverride = false;
                         }
-                        node.Attributes.ShouldSubscribeEvents = false;
-                        log.LogDebug("Dropping subscriptions on node {Name} {Id} due to matching filter {Idx}", node.DisplayName, node.Id, index);
+                        else if (node is UAObject obj)
+                        {
+                            obj.FullAttributes.SubscribeToEventsOverride = false;
+                        }
+                        log.LogDebug("Dropping subscriptions on node {Name} {Id} due to matching filter {Idx}", node.Name, node.Id, index);
                         break;
                     case TransformationType.TimeSeries:
-                        node.Attributes.IsRawProperty = false;
-                        log.LogTrace("Treating node {Name} {Id} as timeseries due to matching filter {Idx}", node.DisplayName, node.Id, index);
+                        node.IsRawProperty = false;
+                        log.LogTrace("Treating node {Name} {Id} as timeseries due to matching filter {Idx}", node.Name, node.Id, index);
                         break;
                     case TransformationType.AsEvents:
                         if (node is UAVariable evtvariable)

@@ -49,6 +49,7 @@ namespace Test.Integration
             tester.Config.Events.Enabled = true;
             tester.Config.Extraction.RootNode = tester.Ids.Event.Root.ToProtoNodeId(tester.Client);
             tester.WipeEventHistory();
+            tester.Client.TypeManager.Reset();
         }
         #region subscriptions
         [Fact]
@@ -193,7 +194,6 @@ namespace Test.Integration
                 extractor.State.Clear();
                 extractor.GetType().GetField("subscribed", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(extractor, 0);
                 extractor.GetType().GetField("subscribeFlag", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(extractor, false);
-                tester.Client.Browser.ResetVisitedNodes();
                 tester.Client.RemoveSubscription("EventListener").Wait();
             }
 
@@ -224,8 +224,6 @@ namespace Test.Integration
             await extractor.WaitForSubscriptions();
             Assert.DoesNotContain(session.Subscriptions, sub => sub.DisplayName.StartsWith("EventListener", StringComparison.InvariantCulture));
             await TestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 2), 5);
-
-
 
             // Test disable specific subscriptions
             Reset();
@@ -623,12 +621,12 @@ namespace Test.Integration
 
             var directRoot = pusher.PushedNodes[ids.DirectAdd];
 
-            var directObj = pusher.PushedNodes.Values.First(obj => obj.DisplayName == "AddObj 0");
-            var directVar = pusher.PushedVariables.Values.First(variable => variable.DisplayName == "AddVar 0");
+            var directObj = pusher.PushedNodes.Values.First(obj => obj.Name == "AddObj 0");
+            var directVar = pusher.PushedVariables.Values.First(variable => variable.Name == "AddVar 0");
 
             Assert.Equal(directRoot.Id, directObj.ParentId);
             Assert.Equal(directRoot.Id, directVar.ParentId);
-            Assert.NotNull(directVar.DataType);
+            Assert.NotNull(directVar.FullAttributes.DataType);
             Assert.True(extractor.Streamer.AllowData);
 
             tester.Server.ReferenceGrowth(1);
@@ -637,12 +635,12 @@ namespace Test.Integration
 
             var refRoot = pusher.PushedNodes[ids.RefAdd];
 
-            var refObj = pusher.PushedNodes.Values.First(obj => obj.DisplayName == "AddObj 1");
-            var refVar = pusher.PushedVariables.Values.First(variable => variable.DisplayName == "AddVar 1");
+            var refObj = pusher.PushedNodes.Values.First(obj => obj.Name == "AddObj 1");
+            var refVar = pusher.PushedVariables.Values.First(variable => variable.Name == "AddVar 1");
 
             Assert.Equal(refRoot.Id, refObj.ParentId);
             Assert.Equal(refRoot.Id, refVar.ParentId);
-            Assert.NotNull(refVar.DataType);
+            Assert.NotNull(refVar.FullAttributes.DataType);
 
             await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
         }

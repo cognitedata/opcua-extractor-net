@@ -24,7 +24,6 @@ using Microsoft.Extensions.Logging;
 using System;
 using System.CommandLine;
 using System.CommandLine.Builder;
-using System.CommandLine.Invocation;
 using System.CommandLine.Parsing;
 using System.Threading;
 using System.Threading.Tasks;

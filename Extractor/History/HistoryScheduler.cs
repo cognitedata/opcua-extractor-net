@@ -17,6 +17,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using Cognite.Extractor.Common;
 using Cognite.OpcUa.Config;
+using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
@@ -66,6 +67,7 @@ namespace Cognite.OpcUa.History
         private readonly UAClient uaClient;
         private readonly UAExtractor extractor;
         private readonly HistoryConfig config;
+        private readonly TypeManager typeManager;
 
         private readonly HistoryReadType type;
         private readonly DateTime historyStartTime;
@@ -90,6 +92,7 @@ namespace Cognite.OpcUa.History
             ILogger log,
             UAClient uaClient,
             UAExtractor extractor,
+            TypeManager typeManager,
             HistoryConfig config,
             HistoryReadType type,
             TaskThrottler throttler,
@@ -110,6 +113,7 @@ namespace Cognite.OpcUa.History
             this.extractor = extractor;
             this.config = config;
             this.type = type;
+            this.typeManager = typeManager;
             chunkSize = Data ? config.DataNodesChunk : config.EventNodesChunk;
 
             maxReadLength = config.MaxReadLengthValue.Value;
@@ -234,7 +238,7 @@ namespace Cognite.OpcUa.History
                         StartTime = min,
                         EndTime = max,
                         NumValuesPerNode = (uint)config.EventChunk,
-                        Filter = uaClient.BuildEventFilter()
+                        Filter = uaClient.BuildEventFilter(typeManager.EventFields)
                     };
                     break;
                 case HistoryReadType.BackfillEvents:
@@ -243,7 +247,7 @@ namespace Cognite.OpcUa.History
                         StartTime = min,
                         EndTime = max,
                         NumValuesPerNode = (uint)config.EventChunk,
-                        Filter = uaClient.BuildEventFilter()
+                        Filter = uaClient.BuildEventFilter(typeManager.EventFields)
                     };
                     break;
                 default:

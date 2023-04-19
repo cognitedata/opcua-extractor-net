@@ -15,6 +15,7 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.TypeCollectors;
 using CogniteSdk;
 using Opc.Ua;
@@ -48,7 +49,7 @@ namespace Cognite.OpcUa.Types
         /// </summary>
         public ReferenceVertex Target { get; }
         public UAReference(NodeId type, bool isForward, NodeId source, NodeId target,
-            bool sourceTs, bool targetTs, bool isHierarchical, ReferenceTypeManager manager)
+            bool sourceTs, bool targetTs, bool isHierarchical, TypeManager manager)
         {
             Type = manager.GetReferenceType(type);
             IsForward = isForward;

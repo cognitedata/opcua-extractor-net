@@ -17,7 +17,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using Cognite.Extractor.Common;
 using Cognite.OpcUa.History;
-using Cognite.OpcUa.Types;
+using Cognite.OpcUa.Nodes;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using System;
@@ -47,8 +47,8 @@ namespace Cognite.OpcUa.Config
             await ReadNodeData(token);
 
             var historizingStates = nodeList.Where(node =>
-                    (node is UAVariable variable) && !variable.IsProperty && variable.ReadHistory)
-                .Select(node => new VariableExtractionState(this, (UAVariable)node, true, true)).ToList();
+                    (node is UAVariable variable) && !variable.IsProperty && variable.FullAttributes.ShouldReadHistory(Config))
+                .Select(node => new VariableExtractionState(this, (UAVariable)node, true, true, true)).ToList();
 
             var stateMap = historizingStates.ToDictionary(state => state.SourceId);
 

@@ -3,8 +3,6 @@ FROM mcr.microsoft.com/dotnet/sdk:7.0
 WORKDIR /build
 COPY . .
 
-RUN dotnet tool restore
-RUN dotnet paket restore
 RUN dotnet build ExtractorLauncher/
 
 ARG VERSION

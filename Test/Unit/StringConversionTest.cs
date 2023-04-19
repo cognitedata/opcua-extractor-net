@@ -1,4 +1,5 @@
-﻿using Cognite.OpcUa.NodeSources;
+﻿using Cognite.OpcUa.Nodes;
+using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -23,6 +24,7 @@ namespace Test.Unit
             this.tester = tester ?? throw new ArgumentNullException(nameof(tester));
             tester.ResetConfig();
             tester.Init(output);
+            tester.Client.TypeManager.Reset();
         }
         [Fact]
         public void TestConvertToString()
@@ -239,7 +241,7 @@ namespace Test.Unit
             var converter = tester.Client.StringConverter;
             converter.AddConverters(options, ConverterType.Node);
 
-            void TestConvert(UANode node, string expected)
+            void TestConvert(BaseUANode node, string expected)
             {
                 var result = JsonSerializer.Serialize(node, options);
 
@@ -247,20 +249,20 @@ namespace Test.Unit
             }
 
             tester.Config.Extraction.DataTypes.ExpandNodeIds = true;
-            var node = new UANode(new NodeId("test"), "test", NodeId.Null, NodeClass.Object);
+            var node = new UAObject(new NodeId("test"), "test", null, null, NodeId.Null, null);
             TestConvert(node,
                 @"{""externalId"":""gp.base:s=test"",""name"":""test"","
                 + @"""description"":null,""metadata"":null,""parentExternalId"":null,"
                 + @"""NodeId"":{""idType"":1,""identifier"":""test""}}");
 
-            node.SetNodeType(tester.Client, new NodeId("test-type"));
+            node.FullAttributes.TypeDefinition = new UAObjectType(new NodeId("test-type"));
             TestConvert(node,
                 @"{""externalId"":""gp.base:s=test"",""name"":""test"","
                 + @"""description"":null,""metadata"":null,""parentExternalId"":null,"
                 + @"""NodeId"":{""idType"":1,""identifier"":""test""},"
                 + @"""TypeDefinitionId"":{""idType"":1,""identifier"":""test-type""}}");
 
-            node = new UANode(new NodeId("test"), "test", new NodeId("parent"), NodeClass.Object);
+            node = new UAObject(new NodeId("test"), "test", null, null, new NodeId("parent"), null);
             TestConvert(node,
                 @"{""externalId"":""gp.base:s=test"",""name"":""test"","
                 + @"""description"":null,""metadata"":null,""parentExternalId"":""gp.base:s=parent"","
@@ -270,14 +272,8 @@ namespace Test.Unit
             options = new JsonSerializerOptions();
             converter.AddConverters(options, ConverterType.Variable);
 
-            var variable = new UAVariable(new NodeId("test"), "test", NodeId.Null, NodeClass.Variable);
-            TestConvert(variable,
-                @"{""externalId"":""gp.base:s=test"",""name"":""test"","
-                + @"""description"":null,""metadata"":null,""assetExternalId"":null,"
-                + @"""isString"":false,""isStep"":false,"
-                + @"""NodeId"":{""idType"":1,""identifier"":""test""}}");
-
-            variable.VariableAttributes.DataType = new UADataType(DataTypeIds.Boolean);
+            var variable = new UAVariable(new NodeId("test"), "test", null, null, NodeId.Null, null);
+            variable.FullAttributes.DataType = new UADataType(DataTypeIds.Boolean);
 
             TestConvert(variable,
                 @"{""externalId"":""gp.base:s=test"",""name"":""test"","
@@ -293,7 +289,7 @@ namespace Test.Unit
             var converter = tester.Client.StringConverter;
             converter.AddConverters(options, ConverterType.Node);
 
-            void TestConvert(UANode node, string expected)
+            void TestConvert(BaseUANode node, string expected)
             {
                 var result = JsonSerializer.Serialize(node, options);
 
@@ -301,42 +297,46 @@ namespace Test.Unit
             }
 
             tester.Config.Extraction.DataTypes.AppendInternalValues = true;
-            var node = new UANode(new NodeId("test"), "test", NodeId.Null, NodeClass.Object);
+            tester.Config.Events.Enabled = true;
+            tester.Config.Events.History = true;
+            var node = new UAObject(new NodeId("test"), "test", null, null, NodeId.Null, null);
             TestConvert(node,
                 @"{""externalId"":""gp.base:s=test"",""name"":""test"","
                 + @"""description"":null,""metadata"":null,""parentExternalId"":null,"
-                + @"""InternalInfo"":{""EventNotifier"":0,""ShouldSubscribeEvents"":false,""NodeClass"":1}}");
+                + @"""InternalInfo"":{""EventNotifier"":0,""ShouldSubscribeEvents"":false,"
+                + @"""ShouldReadHistoryEvents"":false,""NodeClass"":1}}");
 
-            node.Attributes.EventNotifier |= EventNotifiers.HistoryRead | EventNotifiers.SubscribeToEvents;
-            node.Attributes.ShouldSubscribeEvents = true;
+            node.FullAttributes.EventNotifier |= EventNotifiers.HistoryRead | EventNotifiers.SubscribeToEvents;
             TestConvert(node,
                 @"{""externalId"":""gp.base:s=test"",""name"":""test"","
                 + @"""description"":null,""metadata"":null,""parentExternalId"":null,"
-                + @"""InternalInfo"":{""EventNotifier"":5,""ShouldSubscribeEvents"":true,""NodeClass"":1}}");
+                + @"""InternalInfo"":{""EventNotifier"":5,""ShouldSubscribeEvents"":true,"
+                + @"""ShouldReadHistoryEvents"":true,""NodeClass"":1}}");
 
-            var variable = new UAVariable(new NodeId("test"), "test", NodeId.Null, NodeClass.Variable);
+            var variable = new UAVariable(new NodeId("test"), "test", null, null, NodeId.Null, null);
             options = new JsonSerializerOptions();
             converter.AddConverters(options, ConverterType.Variable);
-            variable.VariableAttributes.AccessLevel |= AccessLevels.CurrentRead | AccessLevels.HistoryRead;
-            variable.VariableAttributes.Historizing = true;
-            variable.VariableAttributes.ValueRank = -1;
+            variable.FullAttributes.AccessLevel |= AccessLevels.CurrentRead | AccessLevels.HistoryRead;
+            variable.FullAttributes.Historizing = true;
+            variable.FullAttributes.ValueRank = -1;
+            variable.FullAttributes.DataType = new UADataType(DataTypeIds.Double);
             TestConvert(variable,
                 @"{""externalId"":""gp.base:s=test"",""name"":""test"","
                 + @"""description"":null,""metadata"":null,""assetExternalId"":null,"
                 + @"""isString"":false,""isStep"":false,"
-                + @"""InternalInfo"":{""EventNotifier"":0,""ShouldSubscribeEvents"":false,""NodeClass"":2,""AccessLevel"":5,"
-                + @"""Historizing"":true,""ValueRank"":-1,""ShouldSubscribeData"":true}}");
+                + @"""InternalInfo"":{""NodeClass"":2,""AccessLevel"":5,"
+                + @"""Historizing"":true,""ValueRank"":-1,""ShouldSubscribeData"":true,""ShouldReadHistoryData"":true}}");
 
-            variable.VariableAttributes.ValueRank = ValueRanks.OneDimension;
-            variable.VariableAttributes.ArrayDimensions = new[] { 5 };
+            variable.FullAttributes.ValueRank = ValueRanks.OneDimension;
+            variable.FullAttributes.ArrayDimensions = new[] { 5 };
             variable.AsEvents = true;
             TestConvert(variable,
                 @"{""externalId"":""gp.base:s=test"",""name"":""test"","
                 + @"""description"":null,""metadata"":null,""assetExternalId"":null,"
                 + @"""isString"":false,""isStep"":false,"
-                + @"""InternalInfo"":{""EventNotifier"":0,""ShouldSubscribeEvents"":false,""NodeClass"":2,""AccessLevel"":5,"
-                + @"""Historizing"":true,""ValueRank"":1,""ShouldSubscribeData"":true,""ArrayDimensions"":[5],""Index"":-1,"
-                + @"""AsEvents"":true}}"
+                + @"""InternalInfo"":{""NodeClass"":2,""AccessLevel"":5,"
+                + @"""Historizing"":true,""ValueRank"":1,""ShouldSubscribeData"":true,""ShouldReadHistoryData"":true,"
+                + @"""ArrayDimensions"":[5],""Index"":-1,""AsEvents"":true}}"
                 );
         }
         [Fact]
@@ -347,14 +347,13 @@ namespace Test.Unit
             var converter = tester.Client.StringConverter;
             converter.AddConverters(options, ConverterType.Node);
 
-            var node = new UANode(new NodeId("test", 2), "test", new NodeId("parent"), NodeClass.Object);
-            node.Attributes.EventNotifier = 5;
-            node.Attributes.ShouldSubscribeEvents = true;
+            var node = new UAObject(new NodeId("test", 2), "test", null, null, new NodeId("parent"), null);
+            node.FullAttributes.EventNotifier = 5;
 
             tester.Config.Extraction.DataTypes.AppendInternalValues = true;
             tester.Config.Extraction.DataTypes.ExpandNodeIds = true;
 
-            SavedNode Convert(UANode node)
+            SavedNode Convert(BaseUANode node)
             {
                 var json = JsonSerializer.Serialize(node, options);
 
@@ -367,36 +366,31 @@ namespace Test.Unit
             Assert.Equal(node.Id, saved.NodeId);
             Assert.Equal(node.NodeClass, saved.InternalInfo.NodeClass);
             Assert.Equal(node.ParentId, saved.ParentNodeId);
-            Assert.Equal(node.ShouldSubscribeEvents, saved.InternalInfo.ShouldSubscribeEvents);
-            Assert.Equal(node.EventNotifier, saved.InternalInfo.EventNotifier);
+            Assert.Equal(node.FullAttributes.ShouldSubscribeToEvents(tester.Config), saved.InternalInfo.ShouldSubscribeEvents);
+            Assert.Equal(node.FullAttributes.EventNotifier, saved.InternalInfo.EventNotifier);
 
             // Variables
             options = new JsonSerializerOptions();
             converter.AddConverters(options, ConverterType.Variable);
 
-            var variable = new UAVariable(new NodeId("test", 2), "test", new NodeId("parent"), NodeClass.Variable);
-            variable.VariableAttributes.AccessLevel = 5;
-            variable.VariableAttributes.EventNotifier = 5;
-            variable.VariableAttributes.ShouldSubscribeEvents = true;
-            variable.VariableAttributes.ShouldSubscribeData = true;
-            variable.VariableAttributes.DataType = new UADataType(DataTypeIds.Double);
-            variable.VariableAttributes.ValueRank = -1;
+            var variable = new UAVariable(new NodeId("test", 2), "test", null, null, new NodeId("parent"), null);
+            variable.FullAttributes.AccessLevel = 5;
+            variable.FullAttributes.DataType = new UADataType(DataTypeIds.Double);
+            variable.FullAttributes.ValueRank = -1;
 
             saved = Convert(variable);
             Assert.Equal(variable.Id, saved.NodeId);
             Assert.Equal(variable.NodeClass, saved.InternalInfo.NodeClass);
             Assert.Equal(variable.ParentId, saved.ParentNodeId);
-            Assert.Equal(variable.ShouldSubscribeData, saved.InternalInfo.ShouldSubscribeData);
-            Assert.Equal(variable.ShouldSubscribeEvents, saved.InternalInfo.ShouldSubscribeEvents);
-            Assert.Equal(variable.EventNotifier, saved.InternalInfo.EventNotifier);
-            Assert.Equal(variable.DisplayName, saved.Name);
-            Assert.Equal(variable.DataType.Raw, saved.DataTypeId);
-            Assert.Equal(variable.AccessLevel, saved.InternalInfo.AccessLevel);
-            Assert.Equal(variable.VariableAttributes.Historizing, saved.InternalInfo.Historizing);
+            Assert.Equal(variable.FullAttributes.ShouldSubscribe(tester.Config), saved.InternalInfo.ShouldSubscribeData);
+            Assert.Equal(variable.Name, saved.Name);
+            Assert.Equal(variable.FullAttributes.DataType.Id, saved.DataTypeId);
+            Assert.Equal(variable.FullAttributes.AccessLevel, saved.InternalInfo.AccessLevel);
+            Assert.Equal(variable.FullAttributes.Historizing, saved.InternalInfo.Historizing);
             Assert.Equal(variable.ValueRank, saved.InternalInfo.ValueRank);
 
-            variable.VariableAttributes.ValueRank = 2;
-            variable.VariableAttributes.ArrayDimensions = new[] { 3, 4 };
+            variable.FullAttributes.ValueRank = 2;
+            variable.FullAttributes.ArrayDimensions = new[] { 3, 4 };
 
             saved = Convert(variable);
             Assert.Equal(variable.ArrayDimensions, saved.InternalInfo.ArrayDimensions);

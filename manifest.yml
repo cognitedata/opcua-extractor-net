@@ -60,6 +60,21 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.16.1":
+    description: "Correctly restart history after reconnect due to service level threshold"
+    changelog:
+      fixed:
+        - "Fixed a bug causing the extractor to not properly detect that the server had changed when reconnecting due to service level change"
+  "2.16.0":
+    description: "Support for certificate authentication to CDF"
+    changelog:
+      added:
+        - "Support for using a private key and certificate when authenticating towards CDF"
+  "2.15.3":
+    description: Improve handling of incorrect proto node ids
+    changelog:
+      changed:
+        - "Incorrect proto node ids no longer default to anything, and are instead always skipped."
   "2.15.2":
     description: Add bill of materials
   "2.15.1":

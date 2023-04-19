@@ -374,7 +374,6 @@ namespace Cognite.OpcUa.PubSub
                 new[] { ObjectIds.PublishSubscribe },
                 HandleNode,
                 token,
-                ignoreVisited: false,
                 doFilter: false,
                 purpose: "identifying PubSub settings");
 

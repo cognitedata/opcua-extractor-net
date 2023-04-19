@@ -54,7 +54,7 @@ namespace Cognite.OpcUa.Config
             await PopulateNodes(token);
 
             int oldArraySize = Config.Extraction.DataTypes.MaxArraySize;
-            int expectedAttributeReads = nodeList.Sum(node => node.Attributes.GetAttributeIds(Config).Count());
+            int expectedAttributeReads = nodeList.Sum(node => node.Attributes.GetAttributeSet(Config).Count());
             Config.History.Enabled = true;
             Config.Extraction.DataTypes.MaxArraySize = 10;
 
@@ -76,7 +76,7 @@ namespace Cognite.OpcUa.Config
                 int count = 0;
                 var toCheck = nodeList.TakeWhile(node =>
                 {
-                    count += node.Attributes.GetAttributeIds(Config).Count();
+                    count += node.Attributes.GetAttributeSet(Config).Count();
                     return count < chunkSize + 10;
                 }).ToList();
                 log.LogInformation("Total {Total}", nodeList.Count);
@@ -84,7 +84,7 @@ namespace Cognite.OpcUa.Config
                 Config.Source.AttributesChunk = chunkSize;
                 try
                 {
-                    await ToolUtil.RunWithTimeout(ReadNodeData(toCheck, token), 120);
+                    await ToolUtil.RunWithTimeout(ReadNodeData(toCheck, token, "testing read tolerance"), 120);
                 }
                 catch (Exception e)
                 {

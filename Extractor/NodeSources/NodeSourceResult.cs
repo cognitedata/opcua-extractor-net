@@ -16,6 +16,8 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using Cognite.Extractor.Common;
+using Cognite.OpcUa.Config;
+using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.Types;
 using System.Collections.Generic;
 using System.Linq;
@@ -30,9 +32,9 @@ namespace Cognite.OpcUa.NodeSources
     public class NodeSourceResult
     {
         public NodeSourceResult(
-            IEnumerable<UANode> sourceObjects,
+            IEnumerable<BaseUANode> sourceObjects,
             IEnumerable<UAVariable> sourceVariables,
-            IEnumerable<UANode> destinationObjects,
+            IEnumerable<BaseUANode> destinationObjects,
             IEnumerable<UAVariable> destinationVariables,
             IEnumerable<UAReference> destinationReferences,
             bool canBeUsedForDeletes)
@@ -44,9 +46,9 @@ namespace Cognite.OpcUa.NodeSources
             DestinationReferences = destinationReferences;
             CanBeUsedForDeletes = canBeUsedForDeletes;
         }
-        public IEnumerable<UANode> SourceObjects { get; }
+        public IEnumerable<BaseUANode> SourceObjects { get; }
         public IEnumerable<UAVariable> SourceVariables { get; }
-        public IEnumerable<UANode> DestinationObjects { get; }
+        public IEnumerable<BaseUANode> DestinationObjects { get; }
         public IEnumerable<UAVariable> DestinationVariables { get; }
         public IEnumerable<UAReference> DestinationReferences { get; }
 
@@ -58,12 +60,12 @@ namespace Cognite.OpcUa.NodeSources
     /// </summary>
     public class PusherInput
     {
-        public IEnumerable<UANode> Objects { get; }
+        public IEnumerable<BaseUANode> Objects { get; }
         public IEnumerable<UAVariable> Variables { get; }
         public IEnumerable<UAReference> References { get; }
         public DeletedNodes? Deletes { get; }
 
-        public PusherInput(IEnumerable<UANode> objects, IEnumerable<UAVariable> variables, IEnumerable<UAReference> references, DeletedNodes? deletes)
+        public PusherInput(IEnumerable<BaseUANode> objects, IEnumerable<UAVariable> variables, IEnumerable<UAReference> references, DeletedNodes? deletes)
         {
             Objects = objects;
             Variables = variables;
@@ -84,22 +86,22 @@ namespace Cognite.OpcUa.NodeSources
         public PusherInput Merge(PusherInput other)
         {
             var objects = Objects.Concat(other.Objects).DistinctBy(n => n.Id).ToList();
-            var variables = Variables.Concat(other.Variables).DistinctBy(n => (n.Index, n.Id)).ToList();
+            var variables = Variables.Concat(other.Variables).DistinctBy(n => n.DestinationId()).ToList();
             var references = References.Concat(other.References).DistinctBy(n => (n.Source.Id, n.Target.Id, n.Type.Id)).ToList();
             var deleted = Deletes?.Merge(other.Deletes!);
 
             return new PusherInput(objects, variables, references, deleted);
         }
 
-        public PusherInput Filter(FullPushResult result)
+        public PusherInput Filter(FullPushResult result, FullConfig config)
         {
-            var objects = result.Objects ? Enumerable.Empty<UANode>() : Objects;
+            var objects = result.Objects ? Enumerable.Empty<BaseUANode>() : Objects;
             var variables = result.Variables ? Enumerable.Empty<UAVariable>() : Variables;
             var references = result.References ? Enumerable.Empty<UAReference>() : References;
 
             if (result.Variables && !result.Ranges)
             {
-                variables = Variables.Where(v => v.ReadHistory).DistinctBy(n => n.Id).ToList();
+                variables = Variables.Where(v => v.FullAttributes.ShouldReadHistory(config)).DistinctBy(n => n.Id).ToList();
             }
 
             var deleted = result.Deletes ? null : Deletes;
