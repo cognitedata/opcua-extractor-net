@@ -55,10 +55,6 @@ namespace Test.Unit
         {
             handler.AllowConnectionTest = false;
 
-            tester.Config.Cognite.Debug = true;
-            Assert.True(await pusher.TestConnection(tester.Config, tester.Source.Token));
-            tester.Config.Cognite.Debug = false;
-
             Assert.False(await pusher.TestConnection(tester.Config, tester.Source.Token));
 
             handler.AllowConnectionTest = true;
@@ -118,8 +114,6 @@ namespace Test.Unit
             // Null input
             Assert.Null(await pusher.PushDataPoints(null, tester.Source.Token));
 
-            tester.Config.Cognite.Debug = true;
-
             var time = DateTime.UtcNow;
 
             var invalidDps = new[]
@@ -138,11 +132,6 @@ namespace Test.Unit
                 new UADataPoint(time.AddSeconds(1), "test-ts-string", "string2"),
                 new UADataPoint(time, "test-ts-missing", "value")
             };
-
-            // Debug true
-            Assert.Null(await pusher.PushDataPoints(dps, tester.Source.Token));
-
-            tester.Config.Cognite.Debug = false;
 
             handler.FailedRoutes.Add("/timeseries/data");
 
@@ -247,10 +236,6 @@ namespace Test.Unit
                 }
             };
 
-            tester.Config.Cognite.Debug = true;
-            Assert.Null(await pusher.PushEvents(events, tester.Source.Token));
-            tester.Config.Cognite.Debug = false;
-
             handler.FailedRoutes.Add("/events");
             Assert.False(await pusher.PushEvents(events, tester.Source.Token));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_event_push_failures_cdf", 1));
@@ -288,15 +273,8 @@ namespace Test.Unit
             var update = new UpdateConfig();
             Assert.True((await pusher.PushNodes(Enumerable.Empty<BaseUANode>(), tss, rels, update, tester.Source.Token)).Objects);
 
-            // Test debug mode
-            var node = new UAObject(tester.Server.Ids.Base.Root, "BaseRoot", null, null, NodeId.Null, null);
-            tester.Config.Cognite.Debug = true;
-            Assert.True((await pusher.PushNodes(new[] { node }, tss, rels, update, tester.Source.Token)).Objects);
-            tester.Config.Cognite.Debug = false;
-            Assert.Empty(handler.Assets);
-
             // Fail to create assets
-            node = new UAObject(tester.Server.Ids.Base.Root, "BaseRoot", null, null, NodeId.Null, null);
+            var node = new UAObject(tester.Server.Ids.Base.Root, "BaseRoot", null, null, NodeId.Null, null);
             handler.FailedRoutes.Add("/assets");
             Assert.False((await pusher.PushNodes(new[] { node }, tss, rels, update, tester.Source.Token)).Objects);
             handler.FailedRoutes.Clear();
@@ -430,16 +408,8 @@ namespace Test.Unit
             var assets = Enumerable.Empty<BaseUANode>();
             var update = new UpdateConfig();
 
-            // Test debug mode
-            var node = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", null, null, new NodeId("parent"), null);
-            node.FullAttributes.DataType = dt;
-            tester.Config.Cognite.Debug = true;
-            Assert.True((await pusher.PushNodes(assets, new[] { node }, rels, update, tester.Source.Token)).Variables);
-            tester.Config.Cognite.Debug = false;
-            Assert.Empty(handler.Timeseries);
-
             // Fail to create timeseries
-            node = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", null, null, new NodeId("parent"), null);
+            var node = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", null, null, new NodeId("parent"), null);
             node.FullAttributes.DataType = dt;
             handler.FailedRoutes.Add("/timeseries");
             Assert.False((await pusher.PushNodes(assets, new[] { node }, rels, update, tester.Source.Token)).Variables);

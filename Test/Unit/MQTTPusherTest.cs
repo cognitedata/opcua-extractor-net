@@ -108,7 +108,6 @@ namespace Test.Unit
             };
             Assert.Null(await pusher.PushDataPoints(invalidDps, tester.Source.Token));
 
-            tester.Config.Mqtt.Debug = true;
 
             var time = DateTime.UtcNow;
 
@@ -120,11 +119,6 @@ namespace Test.Unit
                 new UADataPoint(time.AddSeconds(1), "test-ts-string", "string2"),
                 new UADataPoint(time, "test-ts-missing", "value")
             };
-
-            // Debug true
-            Assert.Null(await pusher.PushDataPoints(dps, tester.Source.Token));
-
-            tester.Config.Mqtt.Debug = false;
 
             // Missing timeseries, but the others should succeed
             var waitTask = bridge.WaitForNextMessage();
@@ -207,10 +201,6 @@ namespace Test.Unit
                 }
             };
 
-            tester.Config.Mqtt.Debug = true;
-            Assert.Null(await pusher.PushEvents(events, tester.Source.Token));
-            tester.Config.Mqtt.Debug = false;
-
             var waitTask = bridge.WaitForNextMessage();
             Assert.True(await pusher.PushEvents(events, tester.Source.Token));
             await waitTask;
@@ -248,15 +238,8 @@ namespace Test.Unit
             var update = new UpdateConfig();
             Assert.True((await pusher.PushNodes(Enumerable.Empty<BaseUANode>(), tss, rels, update, tester.Source.Token)).Objects);
 
-            // Test debug mode
-            var node = new UAObject(tester.Server.Ids.Base.Root, "BaseRoot", null, null, NodeId.Null, null);
-            tester.Config.Mqtt.Debug = true;
-            Assert.True((await pusher.PushNodes(new[] { node }, tss, rels, update, tester.Source.Token)).Objects);
-            tester.Config.Mqtt.Debug = false;
-            Assert.Empty(handler.Assets);
-
             // Create the asset
-            node = new UAObject(tester.Server.Ids.Base.Root, "BaseRoot", null, null, NodeId.Null, null);
+            var node = new UAObject(tester.Server.Ids.Base.Root, "BaseRoot", null, null, NodeId.Null, null);
             var waitTask = bridge.WaitForNextMessage();
             Assert.True((await pusher.PushNodes(new[] { node }, tss, rels, update, tester.Source.Token)).Objects);
             await waitTask;
@@ -369,15 +352,9 @@ namespace Test.Unit
             // Test debug mode
             var node = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", null, null, new NodeId("parent"), null);
             node.FullAttributes.DataType = dt;
-            tester.Config.Mqtt.Debug = true;
-            var waitTask = bridge.WaitForNextMessage(1);
-            Assert.True((await pusher.PushNodes(assets, new[] { node }, rels, update, tester.Source.Token)).Variables);
-            await Assert.ThrowsAsync<TimeoutException>(() => waitTask);
-            tester.Config.Mqtt.Debug = false;
-            Assert.Empty(handler.Timeseries);
 
             // Create the timeseries
-            waitTask = bridge.WaitForNextMessage();
+            var waitTask = bridge.WaitForNextMessage();
             Assert.True((await pusher.PushNodes(assets, new[] { node }, rels, update, tester.Source.Token)).Variables);
             await waitTask;
             Assert.Single(handler.Timeseries);

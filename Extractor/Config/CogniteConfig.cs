@@ -34,7 +34,7 @@ namespace Cognite.OpcUa.Config
         /// </summary>
         public string? DataSetExternalId { get; set; }
         /// <summary>
-        ///  Debug mode, if true, Extractor will not push to target
+        /// DEPRECATED. Debug mode, if true, Extractor will not push to target
         /// </summary>
         public bool Debug { get; set; }
         /// <summary>

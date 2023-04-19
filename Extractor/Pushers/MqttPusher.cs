@@ -151,7 +151,6 @@ namespace Cognite.OpcUa.Pushers
             client = new MqttFactory().CreateMqttClient();
             baseBuilder = new MqttApplicationMessageBuilder()
                 .WithAtLeastOnceQoS();
-            if (config.Debug) return;
 
             client.UseDisconnectedHandler(async e =>
             {
@@ -233,7 +232,7 @@ namespace Cognite.OpcUa.Pushers
                 dataPointList[dp.Id].Add(dp);
             }
 
-            if (count == 0 || config.Debug) return null;
+            if (count == 0) return null;
 
             var dpChunks = dataPointList.Select(kvp => (kvp.Key, (IEnumerable<UADataPoint>)kvp.Value)).ChunkBy(100000, 10000).ToArray();
             var pushTasks = dpChunks.Select(chunk => PushDataPointsChunk(chunk.ToDictionary(pair => pair.Key, pair => pair.Values), token)).ToList();
@@ -370,8 +369,6 @@ namespace Cognite.OpcUa.Pushers
 
             log.LogInformation("Pushing {ObjCount} assets and {VarCount} timeseries over MQTT", objects.Count(), variables.Count());
 
-            if (config.Debug) return result;
-
             if (objects.Any() && !config.SkipMetadata)
             {
                 var results = await Task.WhenAll(objects.ChunkBy(1000).Select(chunk => PushAssets(chunk, update.Objects, token)));
@@ -409,7 +406,7 @@ namespace Cognite.OpcUa.Pushers
                 existingNodes.Add(state.Id);
             }
 
-            if (!string.IsNullOrEmpty(config.LocalState) && Extractor.StateStorage != null)
+            if (!string.IsNullOrEmpty(config.LocalState) && Extractor.StateStorage != null && !fullConfig.DryRun)
             {
                 await Extractor.StateStorage.StoreExtractionState(
                     newStates,
@@ -441,7 +438,6 @@ namespace Cognite.OpcUa.Pushers
                 count++;
             }
             if (count == 0) return null;
-            if (config.Debug) return null;
 
             var results = await Task.WhenAll(eventList.ChunkBy(1000).Select(chunk => PushEventsChunk(chunk, token)));
             if (!results.All(result => result))
@@ -770,7 +766,6 @@ namespace Cognite.OpcUa.Pushers
         /// <returns>True on success</returns>
         private async Task<bool> PushEventsChunk(IEnumerable<UAEvent> evts, CancellationToken token)
         {
-            if (config.Debug) return true;
             var events = evts
                 .Select(evt => evt.ToStatelessCDFEvent(Extractor, config.DataSetId, eventParents))
                 .Where(evt => evt != null);

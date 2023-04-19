@@ -984,32 +984,70 @@ namespace Cognite.OpcUa
 
             bool initial = input.Variables.Count() + input.Objects.Count() >= State.NumActiveNodes;
 
-            var pushTasks = pushers.Select(pusher => PushNodes(input, pusher, initial));
-
-            if (StateStorage != null && Config.StateStorage.IntervalValue.Value != Timeout.InfiniteTimeSpan)
+            if (!Config.DryRun)
             {
-                if (Streamer.AllowEvents)
+                var pushTasks = pushers.Select(pusher => PushNodes(input, pusher, initial));
+
+                if (StateStorage != null && Config.StateStorage.IntervalValue.Value != Timeout.InfiniteTimeSpan)
                 {
-                    pushTasks = pushTasks.Append(StateStorage.RestoreExtractionState(
-                        State.EmitterStates.Where(state => state.FrontfillEnabled).ToDictionary(state => state.Id),
-                        Config.StateStorage.EventStore,
-                        false,
-                        Source.Token));
+                    if (Streamer.AllowEvents)
+                    {
+                        pushTasks = pushTasks.Append(StateStorage.RestoreExtractionState(
+                            State.EmitterStates.Where(state => state.FrontfillEnabled).ToDictionary(state => state.Id),
+                            Config.StateStorage.EventStore,
+                            false,
+                            Source.Token));
+                    }
+
+                    if (Streamer.AllowData)
+                    {
+                        pushTasks = pushTasks.Append(StateStorage.RestoreExtractionState(
+                            newStates.Where(state => state != null && state.FrontfillEnabled).ToDictionary(state => state?.Id!, state => state!),
+                            Config.StateStorage.VariableStore,
+                            false,
+                            Source.Token));
+                    }
                 }
 
-                if (Streamer.AllowData)
+                pushTasks = pushTasks.ToList();
+                log.LogInformation("Waiting for pushes on pushers");
+                await Task.WhenAll(pushTasks);
+            }
+            else
+            {
+                log.LogInformation("Dry run is enabled, not pushing to destinations");
+                log.LogInformation("Would push {Count} nodes without dry run:", input.Variables.Count() + input.Objects.Count());
+                foreach (var node in input.Variables.Concat(input.Objects))
                 {
-                    pushTasks = pushTasks.Append(StateStorage.RestoreExtractionState(
-                        newStates.Where(state => state != null && state.FrontfillEnabled).ToDictionary(state => state?.Id!, state => state!),
-                        Config.StateStorage.VariableStore,
-                        false,
-                        Source.Token));
+                    if (Source.IsCancellationRequested) break;
+                    log.LogDebug("{Node}", node);
+                }
+                log.LogInformation("Would push {Count} references without dry run:", input.References.Count());
+                foreach (var rf in input.References)
+                {
+                    if (Source.IsCancellationRequested) break;
+                    log.LogDebug("{Ref}", rf);
+                }
+                if (input.Deletes != null)
+                {
+                    log.LogInformation("Would delete {Count} nodes and {Count} references without dry run:", input.Deletes.Variables.Count() + input.Deletes.Objects.Count(), input.Deletes.References.Count());
+                    foreach (var node in input.Deletes.Variables)
+                    {
+                        if (Source.IsCancellationRequested) break;
+                        log.LogDebug("Delete variable {Node}", node);
+                    }
+                    foreach (var node in input.Deletes.Objects)
+                    {
+                        if (Source.IsCancellationRequested) break;
+                        log.LogDebug("Delete object {Node}", node);
+                    }
+                    foreach (var rf in input.Deletes.References)
+                    {
+                        if (Source.IsCancellationRequested) break;
+                        log.LogDebug("Delete reference {Node}", rf);
+                    }
                 }
             }
-
-            pushTasks = pushTasks.ToList();
-            log.LogInformation("Waiting for pushes on pushers");
-            await Task.WhenAll(pushTasks);
 
             if (initial)
             {
@@ -1043,7 +1081,7 @@ namespace Cognite.OpcUa
             Interlocked.Increment(ref subscribed);
             if (!State.NodeStates.Any() || subscribed > 1) subscribeFlag = true;
             if (!Config.Events.History) return;
-            if (pushers.Any(pusher => pusher.Initialized))
+            if (pushers.Any(pusher => pusher.Initialized) || Config.DryRun)
             {
                 await historyReader.FrontfillEvents(State.EmitterStates.Where(state => state.IsFrontfilling));
                 if (Config.History.Backfill)
@@ -1073,7 +1111,7 @@ namespace Cognite.OpcUa
             Interlocked.Increment(ref subscribed);
             if (!State.EmitterStates.Any() || subscribed > 1) subscribeFlag = true;
             if (!Config.History.Enabled) return;
-            if (pushers.Any(pusher => pusher.Initialized))
+            if (pushers.Any(pusher => pusher.Initialized) || Config.DryRun)
             {
                 await historyReader.FrontfillData(states.Where(state => state.IsFrontfilling));
                 if (Config.History.Backfill)

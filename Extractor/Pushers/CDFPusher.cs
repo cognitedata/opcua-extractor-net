@@ -129,7 +129,6 @@ namespace Cognite.OpcUa.Pushers
                 kvp => kvp.Value.Select(
                     dp => dp.IsString ? new Datapoint(dp.Timestamp, dp.StringValue) : new Datapoint(dp.Timestamp, dp.DoubleValue.Value))
                 );
-            if (config.Debug) return null;
 
             try
             {
@@ -203,7 +202,7 @@ namespace Cognite.OpcUa.Pushers
                 count++;
             }
 
-            if (count == 0 || config.Debug) return null;
+            if (count == 0) return null;
 
             try
             {
@@ -269,7 +268,7 @@ namespace Cognite.OpcUa.Pushers
 
             if (!variables.Any() && !objects.Any() && !references.Any())
             {
-                if (!config.Debug && callback != null)
+                if (callback != null)
                 {
                     await callback.Call(report, token);
                 }
@@ -278,15 +277,6 @@ namespace Cognite.OpcUa.Pushers
             }
 
             log.LogInformation("Testing {TotalNodesToTest} nodes against CDF", variables.Count() + objects.Count());
-            if (config.Debug)
-            {
-                foreach (var node in objects.Concat(variables))
-                {
-                    log.LogDebug("{Node}", node);
-                }
-                log.LogInformation("Pusher is in debug mode, no nodes will be pushed to CDF");
-                return result;
-            }
 
             try
             {
@@ -369,7 +359,7 @@ namespace Cognite.OpcUa.Pushers
             bool backfillEnabled,
             CancellationToken token)
         {
-            if (!states.Any() || config.Debug || !config.ReadExtractedRanges) return true;
+            if (!states.Any() || !config.ReadExtractedRanges) return true;
             var ids = new List<string>();
             foreach (var state in states)
             {
@@ -448,7 +438,6 @@ namespace Cognite.OpcUa.Pushers
         /// <returns>True if pushing is possible, false if not.</returns>
         public async Task<bool?> TestConnection(FullConfig fullConfig, CancellationToken token)
         {
-            if (config.Debug) return true;
             try
             {
                 await destination.TestCogniteConfig(token);

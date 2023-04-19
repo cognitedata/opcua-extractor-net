@@ -193,7 +193,7 @@ namespace Cognite.OpcUa
                 }
                 if (extractor.AllowUpdateState) bufferState.UpdateDestinationRange(value.First, value.Last);
             }
-            if (config.InfluxStateStore && extractor.StateStorage != null)
+            if (config.InfluxStateStore && extractor.StateStorage != null && !fullConfig.DryRun)
             {
                 log.LogInformation("Try to write {Count} states to state store", nodeBufferStates.Count);
                 await extractor.StateStorage.StoreExtractionState(nodeBufferStates.Values,
@@ -222,7 +222,7 @@ namespace Cognite.OpcUa
 
             log.LogInformation("Push {Count} points to failurebuffer", points.Count());
 
-            if (config.Influx && influxPusher != null)
+            if (config.Influx && influxPusher != null && !fullConfig.DryRun)
             {
                 await WriteDatapointsInflux(pointRanges, token);
             }
@@ -252,7 +252,7 @@ namespace Cognite.OpcUa
         {
             bool success = true;
 
-            if (UseInflux() && nodeBufferStates.Any())
+            if (UseInflux() && nodeBufferStates.Any() && !fullConfig.DryRun)
             {
                 try
                 {
@@ -316,7 +316,7 @@ namespace Cognite.OpcUa
                 if (extractor.AllowUpdateState) bufferState.UpdateDestinationRange(group.Range.Min, group.Range.Max);
             }
 
-            if (config.InfluxStateStore && extractor.StateStorage != null)
+            if (config.InfluxStateStore && extractor.StateStorage != null && !fullConfig.DryRun)
             {
                 await extractor.StateStorage.StoreExtractionState(eventBufferStates.Values,
                     fullConfig.StateStorage.InfluxEventStore, token);
@@ -343,7 +343,7 @@ namespace Cognite.OpcUa
 
             log.LogInformation("Push {Count} events to failurebuffer", events.Count());
 
-            if (config.Influx)
+            if (config.Influx && !fullConfig.DryRun)
             {
                 await WriteEventsInflux(events, token);
             }
@@ -373,7 +373,7 @@ namespace Cognite.OpcUa
         {
             bool success = true;
 
-            if (UseInflux() && eventBufferStates.Any())
+            if (UseInflux() && eventBufferStates.Any() && !fullConfig.DryRun)
             {
                 try
                 {

@@ -46,11 +46,6 @@ namespace Test.Unit
             tester.Config.Influx.Host = "http://localhost:8000";
             pusher.Reconfigure();
 
-            // Debug true
-            tester.Config.Influx.Debug = true;
-            Assert.True(await pusher.TestConnection(tester.Config, tester.Source.Token));
-            tester.Config.Influx.Debug = false;
-
             // Fail due to bad host
             Assert.False(await pusher.TestConnection(tester.Config, tester.Source.Token));
 
@@ -118,8 +113,6 @@ namespace Test.Unit
             };
             Assert.Null(await pusher.PushDataPoints(invalidDps, tester.Source.Token));
 
-            tester.Config.Influx.Debug = true;
-
             var time = DateTime.UtcNow;
 
             var dps = new[]
@@ -129,14 +122,6 @@ namespace Test.Unit
                 new UADataPoint(time, "test-ts-string", "string"),
                 new UADataPoint(time.AddSeconds(1), "test-ts-string", "string2")
             };
-
-            // Debug true
-            Assert.Null(await pusher.PushDataPoints(dps, tester.Source.Token));
-
-            Assert.Empty(await GetAllDataPoints(pusher, extractor, "test-ts-double"));
-            Assert.Empty(await GetAllDataPoints(pusher, extractor, "test-ts-string", true));
-
-            tester.Config.Influx.Debug = false;
 
             tester.Config.Influx.Host = "http://localhost:8000";
             pusher.Reconfigure();
@@ -257,11 +242,6 @@ namespace Test.Unit
                     }
                 }
             };
-
-            tester.Config.Influx.Debug = true;
-            Assert.Null(await pusher.PushEvents(events, tester.Source.Token));
-            tester.Config.Influx.Debug = false;
-
 
             tester.Config.Influx.Host = "http://localhost:8000";
             pusher.Reconfigure();

@@ -127,8 +127,6 @@ namespace Cognite.OpcUa
                 ipoints.AddRange(group.Select(dp => UADataPointToInflux(ts, dp)));
             }
 
-            if (config.Debug) return null;
-
             try
             {
                 await client.PostPointsAsync(config.Database, ipoints, config.PointChunkSize);
@@ -190,7 +188,6 @@ namespace Cognite.OpcUa
             if (count == 0) return null;
 
             var points = evts.Select(UAEventToInflux);
-            if (config.Debug) return null;
             try
             {
                 await client.PostPointsAsync(config.Database, points, config.PointChunkSize);
@@ -217,7 +214,7 @@ namespace Cognite.OpcUa
             bool backfillEnabled,
             CancellationToken token)
         {
-            if (states == null || !states.Any() || config.Debug || !config.ReadExtractedRanges) return true;
+            if (states == null || !states.Any() || !config.ReadExtractedRanges) return true;
             if (Extractor == null) throw new InvalidOperationException("Extractor must be set");
             var ranges = new ConcurrentDictionary<string, TimeRange>();
 
@@ -383,7 +380,7 @@ namespace Cognite.OpcUa
             bool backfillEnabled,
             CancellationToken token)
         {
-            if (states == null || !states.Any() || config.Debug || !config.ReadExtractedEventRanges) return true;
+            if (states == null || !states.Any() || !config.ReadExtractedEventRanges) return true;
             IEnumerable<string> eventSeries;
             try
             {
@@ -424,7 +421,6 @@ namespace Cognite.OpcUa
         /// <returns>True on success</returns>
         public async Task<bool?> TestConnection(FullConfig fullConfig, CancellationToken token)
         {
-            if (config.Debug) return true;
             IEnumerable<string> dbs;
             try
             {
@@ -570,7 +566,6 @@ namespace Cognite.OpcUa
             IDictionary<string, InfluxBufferState> states,
             CancellationToken token)
         {
-            if (config.Debug) return Array.Empty<UADataPoint>();
             token.ThrowIfCancellationRequested();
 
             var fetchTasks = states.Select(state => client.QueryMultiSeriesAsync(config.Database,
@@ -682,7 +677,7 @@ namespace Cognite.OpcUa
             CancellationToken token)
         {
             if (Extractor == null) throw new InvalidOperationException("Extractor must be set");
-            if (config.Debug || states == null) return Array.Empty<UAEvent>();
+            if (states == null) return Array.Empty<UAEvent>();
             token.ThrowIfCancellationRequested();
 
             var fetchTasks = states.Select(state => client.QueryMultiSeriesAsync(config.Database,
