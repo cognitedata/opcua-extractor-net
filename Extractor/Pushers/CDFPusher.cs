@@ -146,7 +146,6 @@ namespace Cognite.OpcUa.Pushers
                         foreach (var skipped in missing.Skipped)
                         {
                             missingTimeseries.Add(skipped.Id.ExternalId);
-                            realCount -= skipped.DataPoints.Count();
                         }
                         missingTimeseriesCnt.Set(missing.Skipped.Count());
                     }
@@ -158,11 +157,23 @@ namespace Cognite.OpcUa.Pushers
                         foreach (var skipped in mismatched.Skipped)
                         {
                             mismatchedTimeseries.Add(skipped.Id.ExternalId);
-                            realCount -= skipped.DataPoints.Count();
                         }
                         mismatchedTimeseriesCnt.Set(mismatched.Skipped.Count());
                     }
+
+                    foreach (var err in result.Errors)
+                    {
+                        if (err.Skipped != null)
+                        {
+                            foreach (var skipped in err.Skipped)
+                            {
+                                realCount -= skipped.DataPoints.Count();
+                            }
+                        }
+                    }
                 }
+
+                
 
                 result.ThrowOnFatal();
                 log.LogDebug("Successfully pushed {Real} / {Total} points to CDF", realCount, count);

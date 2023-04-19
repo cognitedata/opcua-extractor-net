@@ -122,6 +122,8 @@ namespace Test.Unit
                 new UADataPoint(time.AddSeconds(1), "test-ts-double", double.NaN)
             };
 
+            Assert.Null(await pusher.PushDataPoints(invalidDps, tester.Source.Token));
+
             var dps = new[]
             {
                 new UADataPoint(time, "test-ts-double", 123),
@@ -180,7 +182,7 @@ namespace Test.Unit
             Assert.Null(await pusher.PushDataPoints(invalidDps, tester.Source.Token));
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_datapoints_pushed_cdf", 6));
-            Assert.True(CommonTestUtils.TestMetricValue("opcua_datapoint_pushes_cdf", 2));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_datapoint_pushes_cdf", 3));
         }
         [Fact]
         public async Task TestPushEvents()
