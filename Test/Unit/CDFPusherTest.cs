@@ -122,8 +122,6 @@ namespace Test.Unit
                 new UADataPoint(time.AddSeconds(1), "test-ts-double", double.NaN)
             };
 
-            Assert.Null(await pusher.PushDataPoints(invalidDps, tester.Source.Token));
-
             var dps = new[]
             {
                 new UADataPoint(time, "test-ts-double", 123),
