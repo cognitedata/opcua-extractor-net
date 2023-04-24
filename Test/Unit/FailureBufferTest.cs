@@ -92,7 +92,7 @@ namespace Test.Unit
 
             cfg.FailureBuffer.Influx = true;
             var iflog = tester.Provider.GetRequiredService<ILogger<InfluxPusher>>();
-            using var pusher = new InfluxPusher(iflog, tester.Config.Influx);
+            using var pusher = new InfluxPusher(iflog, tester.Config);
             Assert.Throws<ConfigurationException>(() => new FailureBuffer(log, cfg, extractor, null));
 
             var fb3 = new FailureBuffer(log, cfg, extractor, pusher);
@@ -109,7 +109,7 @@ namespace Test.Unit
             var log = tester.Provider.GetRequiredService<ILogger<FailureBuffer>>();
             var iflog = tester.Provider.GetRequiredService<ILogger<InfluxPusher>>();
 
-            using var pusher = new InfluxPusher(iflog, tester.Config.Influx);
+            using var pusher = new InfluxPusher(iflog, tester.Config);
             var fb1 = new FailureBuffer(log, cfg, extractor, pusher);
 
             Assert.False(fb1.AnyPoints);
@@ -194,7 +194,7 @@ namespace Test.Unit
             var log = tester.Provider.GetRequiredService<ILogger<FailureBuffer>>();
             var iflog = tester.Provider.GetRequiredService<ILogger<InfluxPusher>>();
 
-            using var pusher = new InfluxPusher(iflog, tester.Config.Influx);
+            using var pusher = new InfluxPusher(iflog, tester.Config);
             var fb1 = new FailureBuffer(log, cfg, extractor, pusher);
 
             var dt = new UADataType(DataTypeIds.Double);
@@ -282,7 +282,7 @@ namespace Test.Unit
             var log = tester.Provider.GetRequiredService<ILogger<FailureBuffer>>();
             var iflog = tester.Provider.GetRequiredService<ILogger<InfluxPusher>>();
 
-            using var pusher = new InfluxPusher(iflog, tester.Config.Influx);
+            using var pusher = new InfluxPusher(iflog, tester.Config);
             var fb1 = new FailureBuffer(log, cfg, extractor, pusher);
 
             var estate1 = new EventExtractionState(extractor, new NodeId("emitter1"), false, false, true);

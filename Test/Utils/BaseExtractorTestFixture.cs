@@ -142,7 +142,7 @@ namespace Test.Utils
             {
                 ClearLiteDB(client).Wait();
             }
-            var pusher = new InfluxPusher(Provider.GetRequiredService<ILogger<InfluxPusher>>(), Config.Influx);
+            var pusher = new InfluxPusher(Provider.GetRequiredService<ILogger<InfluxPusher>>(), Config);
             return (pusher, client);
         }
 

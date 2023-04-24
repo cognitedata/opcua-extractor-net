@@ -291,7 +291,7 @@ namespace Cognite.OpcUa.Pushers
 
             if (!variables.Any() && !objects.Any() && !references.Any())
             {
-                if (callback != null)
+                if (callback != null && !fullConfig.DryRun)
                 {
                     await callback.Call(report, token);
                 }

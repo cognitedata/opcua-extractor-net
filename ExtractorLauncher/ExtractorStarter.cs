@@ -292,7 +292,7 @@ namespace Cognite.OpcUa
                 var conf = provider.GetService<FullConfig>();
                 var log = provider.GetRequiredService<ILogger<InfluxPusher>>();
                 if (conf?.Influx == null) return null!;
-                return new InfluxPusher(log, conf.Influx);
+                return new InfluxPusher(log, conf);
             });
             services.AddSingleton<IPusher, MQTTPusher>(provider =>
             {
