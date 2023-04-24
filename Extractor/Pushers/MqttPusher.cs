@@ -152,6 +152,8 @@ namespace Cognite.OpcUa.Pushers
             baseBuilder = new MqttApplicationMessageBuilder()
                 .WithAtLeastOnceQoS();
 
+            if (fullConfig.DryRun) return;
+
             client.UseDisconnectedHandler(async e =>
             {
                 log.LogWarning(e.Exception, "MQTT client disconnected");
@@ -192,6 +194,7 @@ namespace Cognite.OpcUa.Pushers
                 log.LogWarning("Client is not connected");
                 return false;
             }
+
             int count = 0;
             var dataPointList = new Dictionary<string, List<UADataPoint>>();
 
@@ -234,6 +237,12 @@ namespace Cognite.OpcUa.Pushers
 
             if (count == 0) return null;
 
+            if (fullConfig.DryRun)
+            {
+                log.LogInformation("Dry run enabled. Would insert {Count} datapoints over {C2} timeseries using MQTT", count, dataPointList.Count);
+                return null;
+            }
+
             var dpChunks = dataPointList.Select(kvp => (kvp.Key, (IEnumerable<UADataPoint>)kvp.Value)).ChunkBy(100000, 10000).ToArray();
             var pushTasks = dpChunks.Select(chunk => PushDataPointsChunk(chunk.ToDictionary(pair => pair.Key, pair => pair.Values), token)).ToList();
             var results = await Task.WhenAll(pushTasks);
@@ -254,7 +263,7 @@ namespace Cognite.OpcUa.Pushers
         /// <returns>True if connected, false if not</returns>
         public async Task<bool?> TestConnection(FullConfig fullConfig, CancellationToken token)
         {
-            if (client.IsConnected) return true;
+            if (client.IsConnected || fullConfig.DryRun) return true;
             closed = false;
             try
             {
@@ -292,6 +301,8 @@ namespace Cognite.OpcUa.Pushers
             {
                 relationships = references.Select(rel => rel.ToRelationship(config.DataSetId, Extractor));
             }
+
+            if (fullConfig.DryRun) return new PushResult();
 
             if (!string.IsNullOrEmpty(config.LocalState) && Extractor.StateStorage != null)
             {
@@ -406,7 +417,7 @@ namespace Cognite.OpcUa.Pushers
                 existingNodes.Add(state.Id);
             }
 
-            if (!string.IsNullOrEmpty(config.LocalState) && Extractor.StateStorage != null && !fullConfig.DryRun)
+            if (!string.IsNullOrEmpty(config.LocalState) && Extractor.StateStorage != null)
             {
                 await Extractor.StateStorage.StoreExtractionState(
                     newStates,
@@ -438,6 +449,12 @@ namespace Cognite.OpcUa.Pushers
                 count++;
             }
             if (count == 0) return null;
+
+            if (fullConfig.DryRun)
+            {
+                log.LogInformation("Dry run enabled. Would insert {Count} events using MQTT", count);
+                return null;
+            }
 
             var results = await Task.WhenAll(eventList.ChunkBy(1000).Select(chunk => PushEventsChunk(chunk, token)));
             if (!results.All(result => result))

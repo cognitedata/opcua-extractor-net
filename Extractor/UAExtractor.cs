@@ -141,7 +141,7 @@ namespace Cognite.OpcUa
 
             if (Config.PubSub.Enabled)
             {
-                pubSubManager = new PubSubManager(provider.GetRequiredService<ILogger<PubSubManager>>(), uaClient, this, Config.PubSub);
+                pubSubManager = new PubSubManager(provider.GetRequiredService<ILogger<PubSubManager>>(), uaClient, this, Config);
             }
 
             foreach (var pusher in this.pushers)
@@ -984,38 +984,11 @@ namespace Cognite.OpcUa
 
             bool initial = input.Variables.Count() + input.Objects.Count() >= State.NumActiveNodes;
 
-            if (!Config.DryRun)
+            var pushTasks = pushers.Select(pusher => PushNodes(input, pusher, initial));
+
+            if (Config.DryRun)
             {
-                var pushTasks = pushers.Select(pusher => PushNodes(input, pusher, initial));
-
-                if (StateStorage != null && Config.StateStorage.IntervalValue.Value != Timeout.InfiniteTimeSpan)
-                {
-                    if (Streamer.AllowEvents)
-                    {
-                        pushTasks = pushTasks.Append(StateStorage.RestoreExtractionState(
-                            State.EmitterStates.Where(state => state.FrontfillEnabled).ToDictionary(state => state.Id),
-                            Config.StateStorage.EventStore,
-                            false,
-                            Source.Token));
-                    }
-
-                    if (Streamer.AllowData)
-                    {
-                        pushTasks = pushTasks.Append(StateStorage.RestoreExtractionState(
-                            newStates.Where(state => state != null && state.FrontfillEnabled).ToDictionary(state => state?.Id!, state => state!),
-                            Config.StateStorage.VariableStore,
-                            false,
-                            Source.Token));
-                    }
-                }
-
-                pushTasks = pushTasks.ToList();
-                log.LogInformation("Waiting for pushes on pushers");
-                await Task.WhenAll(pushTasks);
-            }
-            else
-            {
-                log.LogInformation("Dry run is enabled, not pushing to destinations");
+                log.LogInformation("Dry run is enabled");
                 log.LogInformation("Would push {Count} nodes without dry run:", input.Variables.Count() + input.Objects.Count());
                 foreach (var node in input.Variables.Concat(input.Objects))
                 {
@@ -1048,6 +1021,31 @@ namespace Cognite.OpcUa
                     }
                 }
             }
+
+            if (StateStorage != null && Config.StateStorage.IntervalValue.Value != Timeout.InfiniteTimeSpan)
+            {
+                if (Streamer.AllowEvents)
+                {
+                    pushTasks = pushTasks.Append(StateStorage.RestoreExtractionState(
+                        State.EmitterStates.Where(state => state.FrontfillEnabled).ToDictionary(state => state.Id),
+                        Config.StateStorage.EventStore,
+                        false,
+                        Source.Token));
+                }
+
+                if (Streamer.AllowData)
+                {
+                    pushTasks = pushTasks.Append(StateStorage.RestoreExtractionState(
+                        newStates.Where(state => state != null && state.FrontfillEnabled).ToDictionary(state => state?.Id!, state => state!),
+                        Config.StateStorage.VariableStore,
+                        false,
+                        Source.Token));
+                }
+            }
+
+            pushTasks = pushTasks.ToList();
+            log.LogInformation("Waiting for pushes on pushers");
+            await Task.WhenAll(pushTasks);
 
             if (initial)
             {

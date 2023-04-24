@@ -211,7 +211,7 @@ namespace Cognite.OpcUa
         /// <returns>True on success</returns>
         public async Task<bool> WriteDatapoints(IEnumerable<UADataPoint> points, IDictionary<string, TimeRange> pointRanges, CancellationToken token)
         {
-            if (points == null || !points.Any() || pointRanges == null || !pointRanges.Any()) return true;
+            if (points == null || !points.Any() || pointRanges == null || !pointRanges.Any() || fullConfig.DryRun) return true;
 
             points = points.GroupBy(pt => pt.Id)
                 .Where(group => !extractor.State.GetNodeState(group.Key)?.FrontfillEnabled ?? false)
@@ -222,7 +222,7 @@ namespace Cognite.OpcUa
 
             log.LogInformation("Push {Count} points to failurebuffer", points.Count());
 
-            if (config.Influx && influxPusher != null && !fullConfig.DryRun)
+            if (config.Influx && influxPusher != null)
             {
                 await WriteDatapointsInflux(pointRanges, token);
             }
@@ -332,7 +332,7 @@ namespace Cognite.OpcUa
         /// <returns>True on success</returns>
         public async Task<bool> WriteEvents(IEnumerable<UAEvent> events, CancellationToken token)
         {
-            if (events == null || !events.Any()) return true;
+            if (events == null || !events.Any() || fullConfig.DryRun) return true;
 
             events = events.GroupBy(evt => evt.EmittingNode)
                 .Where(group => !extractor.State.GetEmitterState(group.Key)?.FrontfillEnabled ?? false)
@@ -343,7 +343,7 @@ namespace Cognite.OpcUa
 
             log.LogInformation("Push {Count} events to failurebuffer", events.Count());
 
-            if (config.Influx && !fullConfig.DryRun)
+            if (config.Influx)
             {
                 await WriteEventsInflux(events, token);
             }

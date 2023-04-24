@@ -171,35 +171,32 @@ namespace Cognite.OpcUa
         {
             if (token.IsCancellationRequested) return;
 
-            if (!config.DryRun)
+            await CheckFailingPushers(token);
+
+            var results = await Task.WhenAll(
+            Task.Run(async () =>
+                await extractor.Streamer.PushDataPoints(passingPushers, failingPushers, token), token),
+            Task.Run(async () => await extractor.Streamer.PushEvents(passingPushers, failingPushers, token), token));
+
+            if (results.Any(res => res))
             {
-                await CheckFailingPushers(token);
-
-                var results = await Task.WhenAll(
-                Task.Run(async () =>
-                    await extractor.Streamer.PushDataPoints(passingPushers, failingPushers, token), token),
-                Task.Run(async () => await extractor.Streamer.PushEvents(passingPushers, failingPushers, token), token));
-
-                if (results.Any(res => res))
+                try
                 {
-                    try
-                    {
-                        Scheduler.TryTriggerTask(nameof(HistoryRestart));
-                    }
-                    catch { }
+                    Scheduler.TryTriggerTask(nameof(HistoryRestart));
                 }
+                catch { }
+            }
 
-                var failedPushers = passingPushers.Where(pusher =>
-                pusher.DataFailing && extractor.Streamer.AllowData
-                || pusher.EventsFailing && extractor.Streamer.AllowEvents
-                || !pusher.Initialized).ToList();
-                foreach (var pusher in failedPushers)
-                {
-                    pusher.DataFailing = extractor.Streamer.AllowData;
-                    pusher.EventsFailing = extractor.Streamer.AllowEvents;
-                    failingPushers.Add(pusher);
-                    passingPushers.Remove(pusher);
-                }
+            var failedPushers = passingPushers.Where(pusher =>
+            pusher.DataFailing && extractor.Streamer.AllowData
+            || pusher.EventsFailing && extractor.Streamer.AllowEvents
+            || !pusher.Initialized).ToList();
+            foreach (var pusher in failedPushers)
+            {
+                pusher.DataFailing = extractor.Streamer.AllowData;
+                pusher.EventsFailing = extractor.Streamer.AllowEvents;
+                failingPushers.Add(pusher);
+                passingPushers.Remove(pusher);
             }
 
             numPushes.Inc();

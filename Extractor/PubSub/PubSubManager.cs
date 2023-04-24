@@ -35,11 +35,13 @@ namespace Cognite.OpcUa.PubSub
         private UaPubSubApplication? app;
         private readonly ILogger<PubSubManager> log;
         private readonly PubSubConfig config;
+        private readonly FullConfig fullConfig;
         private readonly UAExtractor extractor;
-        public PubSubManager(ILogger<PubSubManager> logger, UAClient client, UAExtractor extractor, PubSubConfig config)
+        public PubSubManager(ILogger<PubSubManager> logger, UAClient client, UAExtractor extractor, FullConfig config)
         {
-            this.config = config;
-            configurator = new ServerPubSubConfigurator(logger, client, config);
+            this.config = config.PubSub;
+            fullConfig = config;
+            configurator = new ServerPubSubConfigurator(logger, client, this.config);
             this.extractor = extractor;
             log = logger;
         }
@@ -119,7 +121,7 @@ namespace Cognite.OpcUa.PubSub
 
         private void SaveConfig(PubSubConfigurationDataType config)
         {
-            if (string.IsNullOrWhiteSpace(this.config.FileName)) return;
+            if (string.IsNullOrWhiteSpace(this.config.FileName) || fullConfig.DryRun) return;
             log.LogInformation("Saving PubSub configuration to {Name}", this.config.FileName);
             using var stream = new FileStream(this.config.FileName, FileMode.Create, FileAccess.Write);
 

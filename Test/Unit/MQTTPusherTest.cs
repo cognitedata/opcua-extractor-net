@@ -108,6 +108,7 @@ namespace Test.Unit
             };
             Assert.Null(await pusher.PushDataPoints(invalidDps, tester.Source.Token));
 
+            tester.Config.DryRun = true;
 
             var time = DateTime.UtcNow;
 
@@ -119,6 +120,11 @@ namespace Test.Unit
                 new UADataPoint(time.AddSeconds(1), "test-ts-string", "string2"),
                 new UADataPoint(time, "test-ts-missing", "value")
             };
+
+            // Debug true
+            Assert.Null(await pusher.PushDataPoints(dps, tester.Source.Token));
+
+            tester.Config.DryRun = false;
 
             // Missing timeseries, but the others should succeed
             var waitTask = bridge.WaitForNextMessage();
@@ -201,6 +207,10 @@ namespace Test.Unit
                 }
             };
 
+            tester.Config.DryRun = true;
+            Assert.Null(await pusher.PushEvents(events, tester.Source.Token));
+            tester.Config.DryRun = false;
+
             var waitTask = bridge.WaitForNextMessage();
             Assert.True(await pusher.PushEvents(events, tester.Source.Token));
             await waitTask;
@@ -238,8 +248,15 @@ namespace Test.Unit
             var update = new UpdateConfig();
             Assert.True((await pusher.PushNodes(Enumerable.Empty<BaseUANode>(), tss, rels, update, tester.Source.Token)).Objects);
 
-            // Create the asset
+            // Test debug mode
             var node = new UAObject(tester.Server.Ids.Base.Root, "BaseRoot", null, null, NodeId.Null, null);
+            tester.Config.DryRun = true;
+            Assert.True((await pusher.PushNodes(new[] { node }, tss, rels, update, tester.Source.Token)).Objects);
+            tester.Config.DryRun = false;
+            Assert.Empty(handler.Assets);
+
+            // Create the asset
+            node = new UAObject(tester.Server.Ids.Base.Root, "BaseRoot", null, null, NodeId.Null, null);
             var waitTask = bridge.WaitForNextMessage();
             Assert.True((await pusher.PushNodes(new[] { node }, tss, rels, update, tester.Source.Token)).Objects);
             await waitTask;
@@ -352,9 +369,15 @@ namespace Test.Unit
             // Test debug mode
             var node = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", null, null, new NodeId("parent"), null);
             node.FullAttributes.DataType = dt;
+            tester.Config.DryRun = true;
+            var waitTask = bridge.WaitForNextMessage(1);
+            Assert.True((await pusher.PushNodes(assets, new[] { node }, rels, update, tester.Source.Token)).Variables);
+            await Assert.ThrowsAsync<TimeoutException>(() => waitTask);
+            tester.Config.DryRun = false;
+            Assert.Empty(handler.Timeseries);
 
             // Create the timeseries
-            var waitTask = bridge.WaitForNextMessage();
+            waitTask = bridge.WaitForNextMessage();
             Assert.True((await pusher.PushNodes(assets, new[] { node }, rels, update, tester.Source.Token)).Variables);
             await waitTask;
             Assert.Single(handler.Timeseries);

@@ -130,6 +130,12 @@ namespace Cognite.OpcUa.Pushers
                     dp => dp.IsString ? new Datapoint(dp.Timestamp, dp.StringValue) : new Datapoint(dp.Timestamp, dp.DoubleValue.Value))
                 );
 
+            if (fullConfig.DryRun)
+            {
+                log.LogInformation("Dry run enabled. Would insert {Count} datapoints over {C2} timeseries to CDF", count, inserts.Count);
+                return null;
+            }
+
             try
             {
                 var result = await destination.InsertDataPointsAsync(inserts, SanitationMode.Clean, RetryMode.OnError, token);
@@ -215,6 +221,12 @@ namespace Cognite.OpcUa.Pushers
 
             if (count == 0) return null;
 
+            if (fullConfig.DryRun)
+            {
+                log.LogInformation("Dry run enabled. Would insert {Count} events to CDF", count);
+                return null;
+            }
+
             try
             {
                 var result = await destination.EnsureEventsExistsAsync(eventList
@@ -288,6 +300,8 @@ namespace Cognite.OpcUa.Pushers
             }
 
             log.LogInformation("Testing {TotalNodesToTest} nodes against CDF", variables.Count() + objects.Count());
+
+            if (fullConfig.DryRun) return result;
 
             try
             {
@@ -370,7 +384,7 @@ namespace Cognite.OpcUa.Pushers
             bool backfillEnabled,
             CancellationToken token)
         {
-            if (!states.Any() || !config.ReadExtractedRanges) return true;
+            if (!states.Any() || !config.ReadExtractedRanges || fullConfig.DryRun) return true;
             var ids = new List<string>();
             foreach (var state in states)
             {
@@ -449,6 +463,8 @@ namespace Cognite.OpcUa.Pushers
         /// <returns>True if pushing is possible, false if not.</returns>
         public async Task<bool?> TestConnection(FullConfig fullConfig, CancellationToken token)
         {
+            if (fullConfig.DryRun) return true;
+
             try
             {
                 await destination.TestCogniteConfig(token);
@@ -532,6 +548,8 @@ namespace Cognite.OpcUa.Pushers
 
         public async Task<bool> ExecuteDeletes(DeletedNodes deletes, CancellationToken token)
         {
+            if (fullConfig.DryRun) return true;
+
             var tasks = new List<Task>();
             if (deletes.Objects.Any())
             {
