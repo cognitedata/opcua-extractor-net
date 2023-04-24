@@ -89,6 +89,21 @@ namespace Cognite.OpcUa
                 log.LogWarning("source.queue-length is deprecated. Use subscriptions.queue-length instead.");
                 config.Subscriptions.QueueLength = config.Source.QueueLength.Value;
             }
+            if (config.Cognite?.Debug ?? false)
+            {
+                log.LogWarning("cognite.debug is deprecated. Use dry-run instead.");
+                config.DryRun = true;
+            }
+            if (config.Mqtt?.Debug ?? false)
+            {
+                log.LogWarning("mqtt.debug is deprecated. Use dry-run instead.");
+                config.DryRun = true;
+            }
+            if (config.Influx?.Debug ?? false)
+            {
+                log.LogWarning("influx.debug is deprecated. Use dry-run instead.");
+                config.DryRun = true;
+            }
 
             return null;
         }
@@ -120,6 +135,7 @@ namespace Cognite.OpcUa
             }
             config.Source.AutoAccept |= setup.AutoAccept;
             config.Source.ExitOnFailure |= setup is ExtractorParams p2 && p2.Exit;
+            config.DryRun |= setup.DryRun;
 
             if (options != null)
             {
@@ -276,7 +292,7 @@ namespace Cognite.OpcUa
                 var conf = provider.GetService<FullConfig>();
                 var log = provider.GetRequiredService<ILogger<InfluxPusher>>();
                 if (conf?.Influx == null) return null!;
-                return new InfluxPusher(log, conf.Influx);
+                return new InfluxPusher(log, conf);
             });
             services.AddSingleton<IPusher, MQTTPusher>(provider =>
             {

@@ -46,7 +46,7 @@ namespace Cognite.OpcUa.Config
         [DefaultValue(100_000)]
         public int PointChunkSize { get; set; } = 100000;
         /// <summary>
-        /// Debug mode, if true, Extractor will not push to target.
+        /// DEPRECATED. Debug mode, if true, Extractor will not push to target.
         /// </summary>
         public bool Debug { get; set; }
         /// <summary>

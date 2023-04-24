@@ -151,7 +151,8 @@ namespace Cognite.OpcUa.Pushers
             client = new MqttFactory().CreateMqttClient();
             baseBuilder = new MqttApplicationMessageBuilder()
                 .WithAtLeastOnceQoS();
-            if (config.Debug) return;
+
+            if (fullConfig.DryRun) return;
 
             client.UseDisconnectedHandler(async e =>
             {
@@ -193,6 +194,7 @@ namespace Cognite.OpcUa.Pushers
                 log.LogWarning("Client is not connected");
                 return false;
             }
+
             int count = 0;
             var dataPointList = new Dictionary<string, List<UADataPoint>>();
 
@@ -233,7 +235,13 @@ namespace Cognite.OpcUa.Pushers
                 dataPointList[dp.Id].Add(dp);
             }
 
-            if (count == 0 || config.Debug) return null;
+            if (count == 0) return null;
+
+            if (fullConfig.DryRun)
+            {
+                log.LogInformation("Dry run enabled. Would insert {Count} datapoints over {C2} timeseries using MQTT", count, dataPointList.Count);
+                return null;
+            }
 
             var dpChunks = dataPointList.Select(kvp => (kvp.Key, (IEnumerable<UADataPoint>)kvp.Value)).ChunkBy(100000, 10000).ToArray();
             var pushTasks = dpChunks.Select(chunk => PushDataPointsChunk(chunk.ToDictionary(pair => pair.Key, pair => pair.Values), token)).ToList();
@@ -255,7 +263,7 @@ namespace Cognite.OpcUa.Pushers
         /// <returns>True if connected, false if not</returns>
         public async Task<bool?> TestConnection(FullConfig fullConfig, CancellationToken token)
         {
-            if (client.IsConnected) return true;
+            if (client.IsConnected || fullConfig.DryRun) return true;
             closed = false;
             try
             {
@@ -293,6 +301,8 @@ namespace Cognite.OpcUa.Pushers
             {
                 relationships = references.Select(rel => rel.ToRelationship(config.DataSetId, Extractor));
             }
+
+            if (fullConfig.DryRun) return new PushResult();
 
             if (!string.IsNullOrEmpty(config.LocalState) && Extractor.StateStorage != null)
             {
@@ -370,8 +380,6 @@ namespace Cognite.OpcUa.Pushers
 
             log.LogInformation("Pushing {ObjCount} assets and {VarCount} timeseries over MQTT", objects.Count(), variables.Count());
 
-            if (config.Debug) return result;
-
             if (objects.Any() && !config.SkipMetadata)
             {
                 var results = await Task.WhenAll(objects.ChunkBy(1000).Select(chunk => PushAssets(chunk, update.Objects, token)));
@@ -441,7 +449,12 @@ namespace Cognite.OpcUa.Pushers
                 count++;
             }
             if (count == 0) return null;
-            if (config.Debug) return null;
+
+            if (fullConfig.DryRun)
+            {
+                log.LogInformation("Dry run enabled. Would insert {Count} events using MQTT", count);
+                return null;
+            }
 
             var results = await Task.WhenAll(eventList.ChunkBy(1000).Select(chunk => PushEventsChunk(chunk, token)));
             if (!results.All(result => result))
@@ -770,7 +783,6 @@ namespace Cognite.OpcUa.Pushers
         /// <returns>True on success</returns>
         private async Task<bool> PushEventsChunk(IEnumerable<UAEvent> evts, CancellationToken token)
         {
-            if (config.Debug) return true;
             var events = evts
                 .Select(evt => evt.ToStatelessCDFEvent(Extractor, config.DataSetId, eventParents))
                 .Where(evt => evt != null);

@@ -129,7 +129,12 @@ namespace Cognite.OpcUa.Pushers
                 kvp => kvp.Value.Select(
                     dp => dp.IsString ? new Datapoint(dp.Timestamp, dp.StringValue) : new Datapoint(dp.Timestamp, dp.DoubleValue.Value))
                 );
-            if (config.Debug) return null;
+
+            if (fullConfig.DryRun)
+            {
+                log.LogInformation("Dry run enabled. Would insert {Count} datapoints over {C2} timeseries to CDF", count, inserts.Count);
+                return null;
+            }
 
             try
             {
@@ -147,7 +152,6 @@ namespace Cognite.OpcUa.Pushers
                         foreach (var skipped in missing.Skipped)
                         {
                             missingTimeseries.Add(skipped.Id.ExternalId);
-                            realCount -= skipped.DataPoints.Count();
                         }
                         missingTimeseriesCnt.Set(missing.Skipped.Count());
                     }
@@ -159,11 +163,23 @@ namespace Cognite.OpcUa.Pushers
                         foreach (var skipped in mismatched.Skipped)
                         {
                             mismatchedTimeseries.Add(skipped.Id.ExternalId);
-                            realCount -= skipped.DataPoints.Count();
                         }
                         mismatchedTimeseriesCnt.Set(mismatched.Skipped.Count());
                     }
+
+                    foreach (var err in result.Errors)
+                    {
+                        if (err.Skipped != null)
+                        {
+                            foreach (var skipped in err.Skipped)
+                            {
+                                realCount -= skipped.DataPoints.Count();
+                            }
+                        }
+                    }
                 }
+
+                
 
                 result.ThrowOnFatal();
                 log.LogDebug("Successfully pushed {Real} / {Total} points to CDF", realCount, count);
@@ -203,7 +219,13 @@ namespace Cognite.OpcUa.Pushers
                 count++;
             }
 
-            if (count == 0 || config.Debug) return null;
+            if (count == 0) return null;
+
+            if (fullConfig.DryRun)
+            {
+                log.LogInformation("Dry run enabled. Would insert {Count} events to CDF", count);
+                return null;
+            }
 
             try
             {
@@ -269,7 +291,7 @@ namespace Cognite.OpcUa.Pushers
 
             if (!variables.Any() && !objects.Any() && !references.Any())
             {
-                if (!config.Debug && callback != null)
+                if (callback != null && !fullConfig.DryRun)
                 {
                     await callback.Call(report, token);
                 }
@@ -278,15 +300,8 @@ namespace Cognite.OpcUa.Pushers
             }
 
             log.LogInformation("Testing {TotalNodesToTest} nodes against CDF", variables.Count() + objects.Count());
-            if (config.Debug)
-            {
-                foreach (var node in objects.Concat(variables))
-                {
-                    log.LogDebug("{Node}", node);
-                }
-                log.LogInformation("Pusher is in debug mode, no nodes will be pushed to CDF");
-                return result;
-            }
+
+            if (fullConfig.DryRun) return result;
 
             try
             {
@@ -369,7 +384,7 @@ namespace Cognite.OpcUa.Pushers
             bool backfillEnabled,
             CancellationToken token)
         {
-            if (!states.Any() || config.Debug || !config.ReadExtractedRanges) return true;
+            if (!states.Any() || !config.ReadExtractedRanges || fullConfig.DryRun) return true;
             var ids = new List<string>();
             foreach (var state in states)
             {
@@ -448,7 +463,8 @@ namespace Cognite.OpcUa.Pushers
         /// <returns>True if pushing is possible, false if not.</returns>
         public async Task<bool?> TestConnection(FullConfig fullConfig, CancellationToken token)
         {
-            if (config.Debug) return true;
+            if (fullConfig.DryRun) return true;
+
             try
             {
                 await destination.TestCogniteConfig(token);
@@ -532,6 +548,8 @@ namespace Cognite.OpcUa.Pushers
 
         public async Task<bool> ExecuteDeletes(DeletedNodes deletes, CancellationToken token)
         {
+            if (fullConfig.DryRun) return true;
+
             var tasks = new List<Task>();
             if (deletes.Objects.Any())
             {
