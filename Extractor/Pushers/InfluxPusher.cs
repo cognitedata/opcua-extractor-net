@@ -197,13 +197,14 @@ namespace Cognite.OpcUa
 
             if (count == 0) return null;
 
+            var points = evts.Select(UAEventToInflux);
+
             if (fullConfig.DryRun)
             {
                 log.LogInformation("Dry run enabled. Would insert {Count} events to influxdb", count);
                 return null;
             }
 
-            var points = evts.Select(UAEventToInflux);
             try
             {
                 await client.PostPointsAsync(config.Database, points, config.PointChunkSize);
