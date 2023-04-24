@@ -151,7 +151,8 @@ namespace Cognite.OpcUa.NodeSources
             var nonHierarchicalReferences = await GetReferencesAsync(
                 nodes.Select(node => node.Id).ToList(),
                 ReferenceTypeIds.NonHierarchicalReferences,
-                token);
+                token,
+                getTypeReferences);
 
             Log.LogInformation("Found {Count} non-hierarchical references", nonHierarchicalReferences.Count());
 
@@ -263,7 +264,8 @@ namespace Cognite.OpcUa.NodeSources
         private async Task<IEnumerable<UAReference>> GetReferencesAsync(
             IEnumerable<NodeId> nodes,
             NodeId referenceTypes,
-            CancellationToken token)
+            CancellationToken token,
+            bool getTypeReferences = false)
         {
             if (!nodes.Any()) return Enumerable.Empty<UAReference>();
 
@@ -272,7 +274,7 @@ namespace Cognite.OpcUa.NodeSources
             var browseNodes = nodes.Select(node => new BrowseNode(node)).ToDictionary(node => node.Id);
 
             var classMask = NodeClass.Object | NodeClass.Variable;
-            if (Config.Extraction.NodeTypes?.AsNodes ?? false)
+            if (Config.Extraction.NodeTypes?.AsNodes ?? false || getTypeReferences)
             {
                 classMask |= NodeClass.ObjectType | NodeClass.VariableType | NodeClass.DataType | NodeClass.ReferenceType;
             }

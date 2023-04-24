@@ -28,6 +28,8 @@ using Cognite.OpcUa.Config;
 using CogniteSdk.Beta.DataModels;
 using System.Text.Json;
 using System;
+using Cognite.OpcUa.Nodes;
+using CogniteSdk;
 
 namespace Cognite.OpcUa.Pushers.FDM
 {
@@ -46,9 +48,9 @@ namespace Cognite.OpcUa.Pushers.FDM
             instSpace = config.Cognite!.FlexibleDataModels!.Space;
         }
 
-        private async Task IngestInstances(IEnumerable<BaseInstanceWrite> instances, CancellationToken token)
+        private async Task IngestInstances(IEnumerable<BaseInstanceWrite> instances, int chunkSize, CancellationToken token)
         {
-            var chunks = instances.ChunkBy(1000).ToList();
+            var chunks = instances.ChunkBy(chunkSize).ToList();
             var results = new IEnumerable<SlimInstance>[chunks.Count];
             var generators = chunks
                 .Select<IEnumerable<BaseInstanceWrite>, Func<Task>>((c, idx) => async () =>
@@ -57,7 +59,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                     {
                         AutoCreateEndNodes = true,
                         AutoCreateStartNodes = true,
-                        Items = instances,
+                        Items = c,
                         Replace = true
                     };
                     results[idx] = await destination.CogniteClient.Beta.DataModels.UpsertInstances(req, token);
@@ -65,7 +67,7 @@ namespace Cognite.OpcUa.Pushers.FDM
 
             int taskNum = 0;
             await generators.RunThrottled(
-                10,
+                1,
                 (_) =>
                 {
                     if (chunks.Count > 1)
@@ -77,19 +79,34 @@ namespace Cognite.OpcUa.Pushers.FDM
 
         private async Task Initialize(FDMTypeBatch types, CancellationToken token)
         {
-            if (config.Cognite!.Debug)
+            var options = new JsonSerializerOptions(Oryx.Cognite.Common.jsonOptions) { WriteIndented = true };
+            foreach (var type in types.Containers)
             {
-                var options = new JsonSerializerOptions(Oryx.Cognite.Common.jsonOptions) { WriteIndented = true };
-                foreach (var type in types.Containers)
-                {
-                    log.LogDebug("Build container: {Type}", JsonSerializer.Serialize(type.Value, options));
-                }
-                foreach (var type in types.Views)
-                {
-                    log.LogDebug("Build view: {Type}", JsonSerializer.Serialize(type.Value, options));
-                }
-                return;
+                log.LogTrace("Build container: {Type}", JsonSerializer.Serialize(type.Value, options));
             }
+            foreach (var type in types.Views)
+            {
+                log.LogTrace("Build view: {Type}", JsonSerializer.Serialize(type.Value, options));
+            }
+            if (config.Cognite!.Debug) return;
+
+            // Check if the data model exists
+            try
+            {
+                var existingModels = await destination.CogniteClient.Beta.DataModels.RetrieveDataModels(new[] { new FDMExternalId("OPC_UA", instSpace, "1") }, false, token);
+                if (existingModels.Any())
+                {
+                    var existingModel = existingModels.First();
+                    var viewCount = existingModel.Views.Count();
+                    if (viewCount == types.Views.Count)
+                    {
+                        log.LogInformation("Number of views in model is the same, not updating");
+                        return;
+                    }
+                }
+
+            }
+            catch { }
 
             await destination.CogniteClient.Beta.DataModels.UpsertSpaces(new[]
             {
@@ -104,7 +121,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                 await destination.CogniteClient.Beta.DataModels.UpsertContainers(chunk, token);
             }
 
-            foreach (var level in types.Views.Values.ChunkByHierarchy(100, v => v.ExternalId, v => v.Implements?.FirstOrDefault()?.ExternalId))
+            foreach (var level in types.Views.Values.ChunkByHierarchy(100, v => v.ExternalId, v => v.Implements?.FirstOrDefault()?.ExternalId!))
             {
                 foreach (var item in level)
                 {
@@ -130,19 +147,20 @@ namespace Cognite.OpcUa.Pushers.FDM
             await destination.CogniteClient.Beta.DataModels.UpsertDataModels(new[] { model }, token);
         }
 
-        private IEnumerable<UANode> GetModellingRules()
+        private IEnumerable<BaseUANode> GetModellingRules()
         {
-            return new[] {
-                new UANode(ObjectIds.ModellingRule_Mandatory, "Mandatory", NodeId.Null, NodeClass.Object),
-                new UANode(ObjectIds.ModellingRule_Optional, "Optional", NodeId.Null, NodeClass.Object),
-                new UANode(ObjectIds.ModellingRule_MandatoryPlaceholder, "MandatoryPlaceholder", NodeId.Null, NodeClass.Object),
-                new UANode(ObjectIds.ModellingRule_OptionalPlaceholder, "OptionalPlaceholder", NodeId.Null, NodeClass.Object),
-                new UANode(ObjectIds.ModellingRule_ExposesItsArray, "ExposesItsArray", NodeId.Null, NodeClass.Object),
+            var typeDef = Extractor.TypeManager.GetObjectType(ObjectTypeIds.ModellingRuleType);
+            return new BaseUANode[] {
+                new UAObject(ObjectIds.ModellingRule_Mandatory, "Mandatory", "Mandatory", null, NodeId.Null, typeDef),
+                new UAObject(ObjectIds.ModellingRule_Optional, "Optional", "Optional", null, NodeId.Null, typeDef),
+                new UAObject(ObjectIds.ModellingRule_MandatoryPlaceholder, "MandatoryPlaceholder", "MandatoryPlaceholder", null, NodeId.Null, typeDef),
+                new UAObject(ObjectIds.ModellingRule_OptionalPlaceholder, "OptionalPlaceholder", "OptionalPlaceholder", null, NodeId.Null, typeDef),
+                new UAObject(ObjectIds.ModellingRule_ExposesItsArray, "ExposesItsArray", "ExposesItsArray", null, NodeId.Null, typeDef),
             };
         }
 
         public async Task<bool> PushNodes(
-            IEnumerable<UANode> objects,
+            IEnumerable<BaseUANode> objects,
             IEnumerable<UAVariable> variables,
             IEnumerable<UAReference> references,
             IUAClientAccess client,
@@ -164,21 +182,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                 .Where(node => node.Id != null && !node.Id.IsNullNodeId)
                 .ToList();
 
-            // Inject modelling rule nodes
-
-
             var nodeHierarchy = new NodeHierarchy(references, nodes);
-
-            foreach (var node in nodeHierarchy.NodeMap.Values)
-            {
-                log.LogTrace("Map node {Id}", node.Id);
-            }
-
-            foreach (var rf in nodeHierarchy.ReferencesBySourceId.Values.SelectMany(r => r))
-            {
-                log.LogTrace("Map reference {Source} to {Target}. Type: {Type}",
-                    rf.Source.Id, rf.Target.Id, rf.Type.Id);
-            }
 
             var types = builder.ConstructTypes(nodeHierarchy);
 
@@ -233,6 +237,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             var instanceBuilder = new InstanceBuilder(nodeHierarchy, types, converter, client, instSpace, log);
             log.LogInformation("Begin building instances");
             instanceBuilder.Build();
+            log.LogInformation("Finish building instances");
 
             if (config.Cognite!.Debug)
             {
@@ -247,19 +252,19 @@ namespace Cognite.OpcUa.Pushers.FDM
                 instanceBuilder.DataTypes.Count);
             await IngestInstances(instanceBuilder.ObjectTypes
                 .Concat(instanceBuilder.ReferenceTypes)
-                .Concat(instanceBuilder.DataTypes), token);
+                .Concat(instanceBuilder.DataTypes), 1000, token);
 
             // Then ingest variable types
             log.LogInformation("Ingesting {Count} variable types", instanceBuilder.VariableTypes.Count);
-            await IngestInstances(instanceBuilder.VariableTypes, token);
+            await IngestInstances(instanceBuilder.VariableTypes, 1000, token);
 
             // Ingest instances
             log.LogInformation("Ingesting {Count1} objects, {Count2} variables", instanceBuilder.Objects.Count, instanceBuilder.Variables.Count);
-            await IngestInstances(instanceBuilder.Objects.Concat(instanceBuilder.Variables), token);
+            await IngestInstances(instanceBuilder.Objects.Concat(instanceBuilder.Variables), 1000, token);
 
             // Finally, ingest edges
             log.LogInformation("Ingesting {Count} references", instanceBuilder.References.Count);
-            await IngestInstances(instanceBuilder.References, token);
+            await IngestInstances(instanceBuilder.References, 1000, token);
 
             /* var serverMetadata = new FDMServer(instSpace, config.Extraction.IdPrefix ?? "", uaClient, ObjectIds.RootFolder, uaClient.NamespaceTable!, config.Extraction.NamespaceMap);
 

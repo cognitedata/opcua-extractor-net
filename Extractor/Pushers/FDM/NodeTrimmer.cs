@@ -17,6 +17,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using Cognite.Extractor.Common;
 using Cognite.OpcUa.Config;
+using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
@@ -38,7 +39,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             this.log = log;
         }
 
-        private void TraverseNode(List<UANode> result, List<UAReference> refResult, UAReference? reference, UANode node)
+        private void TraverseNode(List<BaseUANode> result, List<UAReference> refResult, UAReference? reference, BaseUANode node)
         {
             if (reference != null) refResult.Add(reference);
             if (!visitedIds.Add(node.Id)) return;
@@ -48,24 +49,32 @@ namespace Cognite.OpcUa.Pushers.FDM
 
             if (!bySource.Any() && !byTarget.Any())
             {
-                log.LogWarning("Orphaned node: {Name} {Id}", node.DisplayName, node.Id);
+                log.LogWarning("Orphaned node: {Name} {Id}", node.Name, node.Id);
             }
 
-            if (node.NodeClass == NodeClass.Variable || node.NodeClass == NodeClass.VariableType)
+            NodeId? dataTypeId = null;
+            if (node is UAVariable variable)
             {
-                var dataTypeId = (node as UAVariable)!.VariableAttributes.DataType?.Raw;
-                if (dataTypeId != null && !dataTypeId.IsNullNodeId) TraverseNode(result, refResult, null, nodes.Get(dataTypeId));
+                dataTypeId = variable.FullAttributes.DataType.Id;
             }
+            else if (node is UAVariableType varType)
+            {
+                dataTypeId = varType.FullAttributes.DataType.Id;
+            }
+            if (dataTypeId != null && !dataTypeId.IsNullNodeId) TraverseNode(result, refResult, null, nodes.Get(dataTypeId));
+
 
             if (node.Id.NamespaceIndex != 0)
             {
                 // We explore all references for custom nodes
                 foreach (var rf in bySource)
                 {
+                    log.LogTrace("Traverse from {Id} to {T} by source reference", node.Id, rf.Target.Id);
                     TraverseNode(result, refResult, rf, nodes.Get(rf.Target.Id));
                 }
                 foreach (var rf in byTarget)
                 {
+                    log.LogTrace("Traverse from {Id} to {T} by target reference", node.Id, rf.Source.Id);
                     TraverseNode(result, refResult, rf, nodes.Get(rf.Source.Id));
                 }
             }
@@ -83,11 +92,13 @@ namespace Cognite.OpcUa.Pushers.FDM
                         if (node.Id == ObjectIds.XmlSchema_TypeSystem || node.Id == ObjectIds.OPCBinarySchema_TypeSystem) continue;
                         if (target.NodeClass == NodeClass.Object || target.NodeClass == NodeClass.Variable)
                         {
+                            log.LogTrace("Traverse from {Id} to {T} by hierarchical reference", node.Id, rf.Target.Id);
                             TraverseNode(result, refResult, rf, target);
                         }
                     }
                     else
                     {
+                        log.LogTrace("Traverse from {Id} to {T} by non-hierarchical reference", node.Id, rf.Target.Id);
                         TraverseNode(result, refResult, rf, target);
                     }
                 }
@@ -95,31 +106,33 @@ namespace Cognite.OpcUa.Pushers.FDM
                 {
                     if (rf.IsHierarchical)
                     {
+                        log.LogTrace("Traverse from {Id} to {T} by inverse hierarchical reference", node.Id, rf.Source.Id);
                         TraverseNode(result, refResult, rf, nodes.Get(rf.Source.Id));
                     }
                 }
             }
         }
 
-        private void TraverseHierarchy(List<UANode> result, List<UAReference> refResult, UAReference? reference, UANode node)
+        private void TraverseHierarchy(List<BaseUANode> result, List<UAReference> refResult, UAReference? reference, BaseUANode node)
         {
             if (reference != null) refResult.Add(reference);
             if (visitedIds.Add(node.Id)) result.Add(node);
             var bySource = nodes.BySource(node.Id);
 
-            if (node.NodeClass == NodeClass.Variable || node.NodeClass == NodeClass.VariableType)
+            NodeId? dataTypeId = null;
+            if (node is UAVariable variable)
             {
-                var dataTypeId = (node as UAVariable)!.VariableAttributes.DataType?.Raw;
-                if (dataTypeId != null && !dataTypeId.IsNullNodeId) TraverseNode(result, refResult, null, nodes.Get(dataTypeId));
-
-                if ((node as UAVariable)?.Value.Value is NodeId id && !id.IsNullNodeId)
-                {
-                    TraverseNode(result, refResult, null, nodes.Get(id));
-                }
+                dataTypeId = variable.FullAttributes.DataType.Id;
             }
-            if (node.NodeType?.Id != null)
+            else if (node is UAVariableType varType)
             {
-                TraverseNode(result, refResult, null, nodes.Get(node.NodeType.Id));
+                dataTypeId = varType.FullAttributes.DataType.Id;
+            }
+            if (dataTypeId != null && !dataTypeId.IsNullNodeId) TraverseNode(result, refResult, null, nodes.Get(dataTypeId));
+
+            if (node.TypeDefinition != null && !node.TypeDefinition.IsNullNodeId)
+            {
+                TraverseNode(result, refResult, null, nodes.Get(node.TypeDefinition));
             }
 
             // For hierarchical nodes we just follow all outgoing references.
@@ -140,7 +153,7 @@ namespace Cognite.OpcUa.Pushers.FDM
 
         public NodeHierarchy Filter()
         {
-            var result = new List<UANode>();
+            var result = new List<BaseUANode>();
             var refResult = new List<UAReference>();
             var roots = nodes.NodeMap.Values.Where(nd => nd.Id.NamespaceIndex != 0).ToList();
 
@@ -161,6 +174,9 @@ namespace Cognite.OpcUa.Pushers.FDM
             {
                 TraverseNode(result, refResult, null, nodes.Get(type));
             }
+
+            // Make sure the modelling rule type definition is added
+            TraverseNode(result, refResult, null, nodes.Get(ObjectTypeIds.ModellingRuleType));
 
             refResult = refResult.DistinctBy(rf => (rf.Source.Id, rf.Target.Id, rf.Type.Id)).ToList();
 

@@ -120,6 +120,10 @@ namespace Cognite.OpcUa.Pushers.FDM
                     {
                         Type = BasePropertyType.Direct(new ContainerIdentifier(space, "VariableType"))
                     } }
+                },
+                Indexes = new Dictionary<string, BaseIndex>
+                {
+                    { "typeDefinition_index", new BTreeIndex { Properties = new[] { "TypeDefinition" } } }
                 }
             };
         }
@@ -143,6 +147,10 @@ namespace Cognite.OpcUa.Pushers.FDM
                     {
                         Type = BasePropertyType.Direct(new ContainerIdentifier(space, "ObjectType"))
                     } }
+                },
+                Indexes = new Dictionary<string, BaseIndex>
+                {
+                    { "typeDefinition_index", new BTreeIndex { Properties = new[] { "TypeDefinition" } } }
                 }
             };
         }
@@ -164,6 +172,10 @@ namespace Cognite.OpcUa.Pushers.FDM
                         Nullable = false,
                         Name = "TypeHierarchy"
                     } }
+                },
+                Indexes = new Dictionary<string, BaseIndex>
+                {
+                    { "typeHierarchy_index", new BTreeIndex { Properties = new[] { "TypeHierarchy" } } }
                 }
             };
         }
@@ -247,13 +259,6 @@ namespace Cognite.OpcUa.Pushers.FDM
                 UsedFor = UsedFor.node,
                 Properties = new Dictionary<string, ContainerPropertyDefinition>
                 {
-                    { "IsAbstract", new ContainerPropertyDefinition
-                    {
-                        Type = BasePropertyType.Create(PropertyTypeVariant.boolean),
-                        Nullable = false,
-                        Name = "IsAbstract",
-                        DefaultValue = new RawPropertyValue<bool>(false)
-                    } },
                     { "InverseName", new ContainerPropertyDefinition
                     {
                         Type = BasePropertyType.Text(),

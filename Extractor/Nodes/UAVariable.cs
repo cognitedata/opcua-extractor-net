@@ -356,7 +356,7 @@ namespace Cognite.OpcUa.Nodes
                     string.Join(", ", FullAttributes.ArrayDimensions));
                 builder.AppendLine();
             }
-            if (FullAttributes.TypeDefinition != null)
+            if (FullAttributes.TypeDefinition != null && writeParent)
             {
                 FullAttributes.TypeDefinition.Format(builder, indent + 4, false, false);
             }

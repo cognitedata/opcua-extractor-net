@@ -38,9 +38,9 @@ namespace Cognite.OpcUa.Pushers.FDM
 
         public void Add(FullUANodeType type, DMSValueConverter converter)
         {
-            log.LogInformation("Add type {Name} {Id} impl {Parent}", type.Node.DisplayName, type.Node.Id, type.Parent?.ExternalId);
+            log.LogInformation("Add type {Name} {Id} impl {Parent}", type.Node.Name, type.Node.Id, type.Parent?.ExternalId);
             // If the type is in views, it and all its parents are already added
-            if (Views.ContainsKey(type.Node.DisplayName))
+            if (Views.ContainsKey(type.Node.Name!))
             {
                 if (type.Node.Id == ObjectTypeIds.BaseObjectType || type.Node.Id == VariableTypeIds.BaseVariableType)
                 {
@@ -51,7 +51,7 @@ namespace Cognite.OpcUa.Pushers.FDM
 
             if (type.Parent == null)
             {
-                log.LogWarning("Found type {Name} that is not a subtype of a base type", type.Node.DisplayName);
+                log.LogWarning("Found type {Name} that is not a subtype of a base type", type.Node.Name);
                 return;
             }
 
@@ -65,14 +65,14 @@ namespace Cognite.OpcUa.Pushers.FDM
             {
                 var ct = new ContainerCreate
                 {
-                    Description = type.Node.Description,
-                    Name = type.Node.DisplayName,
+                    Description = type.Node.Attributes.Description,
+                    Name = type.Node.Name,
                     ExternalId = type.ExternalId,
                     UsedFor = UsedFor.node,
                     Space = space,
                     Properties = GetContainerProperties(type, converter)
                 };
-                Containers.Add(ct.Name, ct);
+                Containers.Add(ct.Name!, ct);
                 view = BaseDataModelDefinitions.ViewFromContainer(ct, viewVersion, type.Parent.ExternalId);
             }
             else
@@ -80,8 +80,8 @@ namespace Cognite.OpcUa.Pushers.FDM
                 var baseNodeType = type.Node.NodeClass == NodeClass.VariableType ? "BaseVariableType" : "BaseObjectType";
                 view = new ViewCreate
                 {
-                    Description = type.Node.Description,
-                    Name = type.Node.DisplayName,
+                    Description = type.Node.Attributes.Description,
+                    Name = type.Node.Name,
                     ExternalId = type.ExternalId,
                     Version = viewVersion,
                     Space = space,
@@ -113,7 +113,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                     });
                 }
             }
-            Views.Add(view.Name, view);
+            Views.Add(view.Name!, view);
         }
 
         private Dictionary<string, ContainerPropertyDefinition> GetContainerProperties(FullUANodeType type, DMSValueConverter converter)
@@ -122,7 +122,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             foreach (var kvp in type.Properties)
             {
                 BasePropertyType typ;
-                if (kvp.Value.Node.Attributes.IsRawProperty)
+                if (kvp.Value.Node.IsRawProperty)
                 {
                     typ = GetPropertyType(kvp.Value, kvp.Value.Node.IsArray);
                 }
@@ -133,7 +133,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                 kvp.Value.DMSType = typ;
                 res[kvp.Value.ExternalId] = new ContainerPropertyDefinition
                 {
-                    Description = type.Node.Description,
+                    Description = type.Node.Attributes.Description,
                     Name = kvp.Value.BrowseName,
                     Type = typ,
                     Nullable = kvp.Value.ModellingRule != ModellingRule.Mandatory || (typ is DirectRelationPropertyType),
@@ -146,34 +146,34 @@ namespace Cognite.OpcUa.Pushers.FDM
 
         private BasePropertyType GetPropertyType(NodeTypeProperty prop, bool isArray)
         {
-            if (prop.Node.DataType == null)
+            if (prop.Node.FullAttributes.DataType == null)
             {
                 log.LogWarning("Property {Name} has unknown datatype, falling back to JSON", prop.BrowseName);
                 return BasePropertyType.Create(PropertyTypeVariant.json);
             }
-            var dt = prop.Node.DataType;
-            if (dt.Raw == DataTypeIds.Byte
-                || dt.Raw == DataTypeIds.SByte
-                || dt.Raw == DataTypeIds.UInt16
-                || dt.Raw == DataTypeIds.Int16
-                || dt.Raw == DataTypeIds.Int32) return BasePropertyType.Create(PropertyTypeVariant.int32, isArray);
-            if (dt.Raw == DataTypeIds.Int64
-                || dt.Raw == DataTypeIds.UInt32
-                || dt.Raw == DataTypeIds.UInt64
-                || dt.Raw == DataTypeIds.UInteger
-                || dt.Raw == DataTypeIds.Integer) return BasePropertyType.Create(PropertyTypeVariant.int64, isArray);
-            if (dt.Raw == DataTypeIds.Float) return BasePropertyType.Create(PropertyTypeVariant.float32, isArray);
-            if (dt.Raw == DataTypeIds.Double
-                || dt.Raw == DataTypeIds.Duration
+            var dt = prop.Node.FullAttributes.DataType;
+            if (dt.Id == DataTypeIds.Byte
+                || dt.Id == DataTypeIds.SByte
+                || dt.Id == DataTypeIds.UInt16
+                || dt.Id == DataTypeIds.Int16
+                || dt.Id == DataTypeIds.Int32) return BasePropertyType.Create(PropertyTypeVariant.int32, isArray);
+            if (dt.Id == DataTypeIds.Int64
+                || dt.Id == DataTypeIds.UInt32
+                || dt.Id == DataTypeIds.UInt64
+                || dt.Id == DataTypeIds.UInteger
+                || dt.Id == DataTypeIds.Integer) return BasePropertyType.Create(PropertyTypeVariant.int64, isArray);
+            if (dt.Id == DataTypeIds.Float) return BasePropertyType.Create(PropertyTypeVariant.float32, isArray);
+            if (dt.Id == DataTypeIds.Double
+                || dt.Id == DataTypeIds.Duration
                 || !dt.IsString) return BasePropertyType.Create(PropertyTypeVariant.float64, isArray);
-            if (dt.Raw == DataTypeIds.LocalizedText
-                || dt.Raw == DataTypeIds.QualifiedName) return BasePropertyType.Text(isArray);
-            if (dt.Raw == DataTypeIds.DateTime
-                || dt.Raw == DataTypeIds.Date
-                || dt.Raw == DataTypeIds.Time
-                || dt.Raw == DataTypeIds.UtcTime) return BasePropertyType.Create(PropertyTypeVariant.timestamp, isArray);
+            if (dt.Id == DataTypeIds.LocalizedText
+                || dt.Id == DataTypeIds.QualifiedName) return BasePropertyType.Text(isArray);
+            if (dt.Id == DataTypeIds.DateTime
+                || dt.Id == DataTypeIds.Date
+                || dt.Id == DataTypeIds.Time
+                || dt.Id == DataTypeIds.UtcTime) return BasePropertyType.Create(PropertyTypeVariant.timestamp, isArray);
 
-            if (dt.Raw == DataTypeIds.NodeId || dt.Raw == DataTypeIds.ExpandedNodeId)
+            if (dt.Id == DataTypeIds.NodeId || dt.Id == DataTypeIds.ExpandedNodeId)
             {
                 if (isArray) return BasePropertyType.Create(PropertyTypeVariant.json);
                 return BasePropertyType.Direct(new ContainerIdentifier(space, "BaseNode"));
@@ -245,14 +245,20 @@ namespace Cognite.OpcUa.Pushers.FDM
         {
             // Skip events here
             if (IsEventType(node)) return;
-            if (!typeMap.ContainsKey(node.Node.Id))
-            {
-                typeMap.Add(node.Node.Id, node);
-                batch.Add(node, converter);
-            }
+            if (typeMap.ContainsKey(node.Node.Id)) return;
+            typeMap.Add(node.Node.Id, node);
+            batch.Add(node, converter);
             if (node.Parent != null)
             {
                 AddType(batch, node.Parent);
+            }
+            foreach (var child in node.GetAllChildren())
+            {
+                if (child.Node.TypeDefinition != null && !child.Node.TypeDefinition.IsNullNodeId && nodeTypes.Types.TryGetValue(child.Node.TypeDefinition, out var childTypeDef))
+                {
+                    log.LogTrace("Add type {Type} {Name} due to reference from other type: {Source} {SourceName}", childTypeDef.Node.Id, childTypeDef.Node.Name, child.Node.Id, child.Node.Name);
+                    AddType(batch, childTypeDef);
+                }
             }
         }
     }

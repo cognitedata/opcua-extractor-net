@@ -1,4 +1,5 @@
 ﻿using Cognite.OpcUa.Config;
+using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.Types;
 using CogniteSdk.Beta.DataModels;
 using Microsoft.Extensions.Logging;
@@ -167,7 +168,7 @@ namespace Cognite.OpcUa.Pushers.FDM
         private void CollectChild(FullUANodeType type, FullChildNode node, IEnumerable<string> path)
         {
             var name = node.BrowseName;
-            var nodeType = Types[node.Node.NodeType!.Id];
+            var nodeType = Types[node.Node.TypeDefinition!];
             var fullName = GetPath(path, name);
             if (!nodeType.IsSimple()
                 || node.ModellingRule != ModellingRule.Optional && node.ModellingRule != ModellingRule.Mandatory
@@ -245,7 +246,7 @@ namespace Cognite.OpcUa.Pushers.FDM
         public UAVariable Node { get; set; }
         public BasePropertyType? DMSType { get; set; }
         public NodeTypeProperty(UAVariable node, UAReference reference, string externalId)
-            : base(node.NodeClass, node.BrowseName, externalId, reference)
+            : base(node.NodeClass, node.Attributes.BrowseName?.Name ?? node.Name ?? "", externalId, reference)
         {
             Node = node;
         }
@@ -253,39 +254,51 @@ namespace Cognite.OpcUa.Pushers.FDM
 
     public class FullChildNode : BaseNodeTypeReference
     {
-        public UANode Node { get; }
+        public BaseUANode Node { get; }
         public Dictionary<string, FullChildNode> Children { get; }
-        public FullChildNode(UANode node, UAReference reference)
-            : base(node.NodeClass, node.BrowseName, node.BrowseName, reference)
+        public FullChildNode(BaseUANode node, UAReference reference)
+            : base(node.NodeClass, node.Attributes.BrowseName?.Name ?? node.Name ?? "", node.Attributes.BrowseName?.Name ?? node.Name ?? "", reference)
         {
             Node = node;
             Children = new Dictionary<string, FullChildNode>();
         }
 
-        public FullChildNode AddChild(UANode node, UAReference reference)
+        public FullChildNode AddChild(BaseUANode node, UAReference reference)
         {
             var child = new FullChildNode(node, reference);
             Children[child.BrowseName] = child;
             return child;
         }
+
+        public IEnumerable<FullChildNode> GetAllChildren()
+        {
+            yield return this;
+            foreach (var child in Children.Values)
+            {
+                foreach (var gc in child.GetAllChildren())
+                {
+                    yield return gc;
+                }
+            }
+        }
     }
 
     public class FullUANodeType
     {
-        public UANode Node { get; }
+        public BaseUANode Node { get; }
         public Dictionary<string, NodeTypeReference> References { get; }
         public Dictionary<string, NodeTypeProperty> Properties { get; }
         public Dictionary<string, FullChildNode> RawChildren { get; }
         public FullUANodeType? Parent { get; set; }
         public string ExternalId { get; set; }
 
-        public FullUANodeType(UANode node)
+        public FullUANodeType(BaseUANode node)
         {
             Node = node;
             References = new();
             Properties = new();
             RawChildren = new();
-            ExternalId = FDMUtils.SanitizeExternalId(node.DisplayName);
+            ExternalId = FDMUtils.SanitizeExternalId(node.Name ?? "");
         }
 
         public bool IsSimple()
@@ -294,11 +307,22 @@ namespace Cognite.OpcUa.Pushers.FDM
                 && (Parent == null || Parent.IsSimple());
         }
 
-        public FullChildNode AddChild(UANode node, UAReference reference)
+        public FullChildNode AddChild(BaseUANode node, UAReference reference)
         {
             var child = new FullChildNode(node, reference);
             RawChildren[child.BrowseName] = child;
             return child;
+        }
+
+        public IEnumerable<FullChildNode> GetAllChildren()
+        {
+            foreach (var child in RawChildren.Values)
+            {
+                foreach (var gc in child.GetAllChildren())
+                {
+                    yield return gc;
+                }
+            }
         }
     }
 }

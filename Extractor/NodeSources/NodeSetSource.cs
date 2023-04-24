@@ -26,6 +26,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -101,14 +102,20 @@ namespace Cognite.OpcUa.NodeSources
                 foreach (var rf in rawRefs)
                 {
                     AddReference(refs, rf);
+                    // if (!rf.IsInverse) Log.LogTrace("Add regular reference {Parent} -> {Child}", node.NodeId, rf.TargetId);
+                    // else Log.LogTrace("Add regular reference {Parent} -> {Child}", rf.TargetId, node.NodeId);
                 }
 
-                if (node is BaseTypeState type) AddReference(refs, new BasicReference
+                if (node is BaseTypeState type && type.SuperTypeId != null && !type.SuperTypeId.IsNullNodeId)
                 {
-                    IsInverse = true,
-                    ReferenceTypeId = ReferenceTypeIds.HasSubtype,
-                    TargetId = type.SuperTypeId
-                });
+                    AddReference(refs, new BasicReference
+                    {
+                        IsInverse = true,
+                        ReferenceTypeId = ReferenceTypeIds.HasSubtype,
+                        TargetId = type.SuperTypeId
+                    });
+                    // Log.LogTrace("Add supertype reference from {Parent} -> {Child}", type.SuperTypeId, node.NodeId);
+                }
                 if (node is BaseInstanceState instance)
                 {
                     if (instance.ModellingRuleId != null && !instance.ModellingRuleId.IsNullNodeId) AddReference(refs, new BasicReference
@@ -126,6 +133,7 @@ namespace Cognite.OpcUa.NodeSources
                 }
                 cnt += refs.Count;
             }
+
             // Create all inverse references
             foreach (var node in nodes)
             {
@@ -136,8 +144,12 @@ namespace Cognite.OpcUa.NodeSources
                     {
                         references[targetId] = targetRefs = new Dictionary<(NodeId, NodeId, bool), IReference>();
                     }
-                    if (!targetRefs.ContainsKey((node.NodeId, reference.ReferenceTypeId, reference.IsInverse)))
+                    if (!targetRefs.ContainsKey((node.NodeId, reference.ReferenceTypeId, !reference.IsInverse)))
                     {
+                        if (reference.IsInverse)
+                        {
+                            // Log.LogTrace("Add reference {P} -> {T} of type {Typ}", targetId, node.NodeId, reference.ReferenceTypeId);
+                        }
                         AddReference(targetRefs, new BasicReference
                         {
                             IsInverse = !reference.IsInverse,
@@ -153,7 +165,10 @@ namespace Cognite.OpcUa.NodeSources
 
         private bool IsOfType(NodeId source, NodeId parent)
         {
-            return TypeManager.NodeMap.TryGetValue(source, out var node) && node is BaseUAType type && type.IsChildOf(parent);
+            if (!TypeManager.NodeMap.TryGetValue(source, out var node)) return false;
+            if (node is not BaseUAType type) return false;
+
+            return type.IsChildOf(parent);
         }
 
         private IEnumerable<IReference> Browse(NodeId node, NodeId referenceTypeId, BrowseDirection direction, bool allowSubTypes)
@@ -162,13 +177,18 @@ namespace Cognite.OpcUa.NodeSources
             foreach (var reference in refs)
             {
                 if (!allowSubTypes && referenceTypeId != reference.ReferenceTypeId) continue;
-                else if (allowSubTypes && !IsOfType(reference.ReferenceTypeId, referenceTypeId)) continue;
+                else if (allowSubTypes && !IsOfType(reference.ReferenceTypeId, referenceTypeId))
+                {
+                    // Log.LogTrace("Skipping reference from {N} to {T} due to bad reference type {Typ}", node, reference.TargetId, reference.ReferenceTypeId);
+                    continue;
+                }
 
                 if (reference.IsInverse && direction != BrowseDirection.Inverse
                     && direction != BrowseDirection.Both) continue;
                 else if (!reference.IsInverse && direction != BrowseDirection.Forward
                     && direction != BrowseDirection.Both) continue;
 
+                // Log.LogTrace("Discovered reference from {N} to {T} of type {Typ}", node, reference.TargetId, reference.ReferenceTypeId);
                 yield return reference;
             }
         }
@@ -216,6 +236,7 @@ namespace Cognite.OpcUa.NodeSources
         private void BrowseHierarchy(IEnumerable<NodeId> rootIds, Func<NodeId, NodeId, bool> callback)
         {
             var visitedNodes = new HashSet<NodeId>();
+            visitedNodes.Add(ObjectIds.Server);
 
             var nextIds = new HashSet<NodeId>();
             foreach (var id in rootIds)
@@ -272,9 +293,11 @@ namespace Cognite.OpcUa.NodeSources
             // We can't properly browse the type hierarchy without loading the reference types first.
             TypeManager.BuildTypeInfo();
 
+            Log.LogInformation("Browse types folder");
             BrowseHierarchy(new[] { ObjectIds.TypesFolder }, BuildType);
             TypeManager.BuildTypeInfo();
 
+            Log.LogInformation("Browse root nodes {Nodes}", string.Join(", ", rootNodes));
             BrowseHierarchy(rootNodes, BuildNode);
 
             if (Config.Source.NodeSetSource!.Types)

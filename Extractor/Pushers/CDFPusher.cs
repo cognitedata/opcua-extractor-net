@@ -331,7 +331,7 @@ namespace Cognite.OpcUa.Pushers
                 try
                 {
                     var tsIds = new ConcurrentDictionary<string, UAVariable>(
-                        variables.ToDictionary(ts => Extractor.GetUniqueId(ts.Id, ts.Index)!));
+                        variables.ToDictionary(ts => ts.GetUniqueId(Extractor))!);
                     await CreateTimeseries(tsIds, report, true, token);
                 }
                 catch (Exception ex)

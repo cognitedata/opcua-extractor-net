@@ -137,6 +137,11 @@ namespace Cognite.OpcUa.TypeCollectors
                 if (node.Parent == null && NodeMap.TryGetValue(node.ParentId, out var parent))
                 {
                     node.Parent = parent;
+                    log.LogTrace("Add parent to node {Id}: {P}", node.Id, node.ParentId);
+                    if (node is BaseUAType t)
+                    {
+                        log.LogTrace("Node is hierarchical: {T}", t.IsChildOf(ReferenceTypeIds.HierarchicalReferences));
+                    }
                 }
             }
         }

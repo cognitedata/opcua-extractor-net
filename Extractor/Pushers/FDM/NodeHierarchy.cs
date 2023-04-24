@@ -1,9 +1,8 @@
-﻿using Cognite.OpcUa.Types;
+﻿using Cognite.OpcUa.Nodes;
+using Cognite.OpcUa.Types;
 using Opc.Ua;
-using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 
 namespace Cognite.OpcUa.Pushers.FDM
 {
@@ -11,18 +10,18 @@ namespace Cognite.OpcUa.Pushers.FDM
     {
         public Dictionary<NodeId, IEnumerable<UAReference>> ReferencesByTargetId { get; }
         public Dictionary<NodeId, IEnumerable<UAReference>> ReferencesBySourceId { get; }
-        public Dictionary<NodeId, UANode> NodeMap { get; }
+        public Dictionary<NodeId, BaseUANode> NodeMap { get; }
         public HashSet<NodeId> KnownTypeDefinitions { get; }
 
-        public NodeHierarchy(IEnumerable<UAReference> references, IEnumerable<UANode> nodes)
+        public NodeHierarchy(IEnumerable<UAReference> references, IEnumerable<BaseUANode> nodes)
         {
-            ReferencesByTargetId = references.GroupBy(rf => rf.Target.Id).ToDictionary(group => group.Key, group => (IEnumerable<UAReference>)group);
-            ReferencesBySourceId = references.GroupBy(rf => rf.Source.Id).ToDictionary(group => group.Key, group => (IEnumerable<UAReference>)group);
+            ReferencesByTargetId = references.Where(rf => rf.IsForward).GroupBy(rf => rf.Target.Id).ToDictionary(group => group.Key, group => (IEnumerable<UAReference>)group);
+            ReferencesBySourceId = references.Where(rf => rf.IsForward).GroupBy(rf => rf.Source.Id).ToDictionary(group => group.Key, group => (IEnumerable<UAReference>)group);
             NodeMap = nodes.ToDictionary(node => node.Id);
-            KnownTypeDefinitions = new HashSet<NodeId>(nodes.Where(node => !IsChildOfType(node)).SelectNonNull(s => s.NodeType?.Id));
+            KnownTypeDefinitions = new HashSet<NodeId>(nodes.Where(node => node.Id.NamespaceIndex > 0 || !IsChildOfType(node)).SelectNonNull(s => s.TypeDefinition));
         }
 
-        private bool IsChildOfType(UANode node)
+        private bool IsChildOfType(BaseUANode node)
         {
             if (node.NodeClass == NodeClass.ObjectType || node.NodeClass == NodeClass.VariableType)
             {
@@ -42,7 +41,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             return ReferencesByTargetId.GetValueOrDefault(id) ?? Enumerable.Empty<UAReference>();
         }
 
-        public UANode Get(NodeId id)
+        public BaseUANode Get(NodeId id)
         {
             return NodeMap[id];
         }

@@ -30,10 +30,10 @@ namespace Cognite.OpcUa.Nodes
 
         public void Initialize(string? name, QualifiedName? browseName, BaseUANode? parent, NodeId? parentId)
         {
-            Parent = parent;
-            FallbackParentId = parentId;
-            Attributes.DisplayName = name;
-            Attributes.BrowseName = browseName;
+            Parent = parent ?? Parent;
+            FallbackParentId = parentId ?? FallbackParentId;
+            Attributes.DisplayName = name ?? Attributes.DisplayName;
+            Attributes.BrowseName = browseName ?? Attributes.BrowseName;
         }
 
 

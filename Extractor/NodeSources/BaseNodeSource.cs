@@ -322,7 +322,7 @@ namespace Cognite.OpcUa.NodeSources
                 if (node.Parent == null) return;
                 node.Parent.Attributes.AddProperty(node);
             }
-            else if (variable is not null)
+            else if (node is UAVariable variable)
             {
                 RawVariables.Add(variable);
             }
