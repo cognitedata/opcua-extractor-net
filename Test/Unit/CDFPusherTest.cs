@@ -1,4 +1,5 @@
-﻿using Cognite.Extractor.Common;
+﻿using Cognite.Extensions;
+using Cognite.Extractor.Common;
 using Cognite.Extractor.Testing;
 using Cognite.OpcUa;
 using Cognite.OpcUa.Config;
@@ -83,7 +84,7 @@ namespace Test.Unit
 
             tester.Config.Events.Enabled = false;
 
-            Assert.Null(tester.Config.Cognite.DataSetId);
+            Assert.Null(tester.Config.Cognite.DataSet?.Id);
             handler.DataSets.Add("test-data-set", new DataSet
             {
                 ExternalId = "test-data-set",
@@ -91,18 +92,18 @@ namespace Test.Unit
                 CreatedTime = 1000,
                 LastUpdatedTime = 1000
             });
-            tester.Config.Cognite.DataSetExternalId = "test-data-set";
+            tester.Config.Cognite.DataSet = new DataSetConfig { ExternalId = "test-data-set" };
 
             Assert.True(await pusher.TestConnection(tester.Config, tester.Source.Token));
-            Assert.Equal(123, tester.Config.Cognite.DataSetId);
+            Assert.Equal(123, tester.Config.Cognite.DataSet?.Id);
 
             handler.FailedRoutes.Add("/datasets/byids");
             Assert.True(await pusher.TestConnection(tester.Config, tester.Source.Token));
 
-            tester.Config.Cognite.DataSetId = null;
+            tester.Config.Cognite.DataSet.Id = null;
 
             Assert.False(await pusher.TestConnection(tester.Config, tester.Source.Token));
-            Assert.Null(tester.Config.Cognite.DataSetId);
+            Assert.Null(tester.Config.Cognite.DataSet.Id);
         }
         [Fact]
         public async Task TestPushDatapoints()

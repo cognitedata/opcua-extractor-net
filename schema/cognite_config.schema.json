@@ -6,13 +6,19 @@
     "allOf": [{ "$ref": "https://raw.githubusercontent.com/cognitedata/dotnet-extractor-utils/v1.7.0/schema/cognite_config.schema.json" }],
     "unevaluatedProperties": false,
     "properties": {
-        "data-set-id": {
-            "type": "integer",
-            "description": "Data set used for new objects. Existing objects will not be updated"
-        },
-        "data-set-external-id": {
-            "type": "string",
-            "description": "Data set used for new objects, overridden by `data-set-id`. Requires the capability `datasets:Read` for the given data set"
+        "data-set": {
+            "type": "object",
+            "unevaluatedProperties": false,
+            "properties": {
+                "id": {
+                    "type": "integer",
+                    "description": "Data set used for new objects. Existing objects will not be updated"
+                },
+                "external-id": {
+                    "type": "string",
+                    "description": "Data set used for new objects. Requires the capability `datasets:Read` for the given data set"
+                }
+            }
         },
         "debug": {
             "type": "boolean",
@@ -31,7 +37,7 @@
             "type": "object",
             "description": "Store assets/timeseries metadata and relationships in raw. Assets will not be created at all, timeseries will be created with just `externalId`, `isStep`, and `isString`. Both timeseries and assets will be persisted in their entirity to CDF Raw. Datapoints are not affected, events will be created but without being contextualized to assets. The externalId of the source node is added to metadata if applicable",
             "unevaluatedProperties": false,
-            "required": ["database"],
+            "required": [ "database" ],
             "properties": {
                 "database": {
                     "type": "string",
@@ -54,15 +60,17 @@
         "metadata-mapping": {
             "type": "object",
             "description": "Map metadata to asset/timeseries attributes. This lets you assign properties in OPC-UA directly to fields like `description` and `unit` in CDF",
-            "examples": [{
-                "timeseries": {
-                    "EngineeringUnits": "unit",
-                    "EURange": "description"
-                },
-                "assets": {
-                    "Name": "name"
+            "examples": [
+                {
+                    "timeseries": {
+                        "EngineeringUnits": "unit",
+                        "EURange": "description"
+                    },
+                    "assets": {
+                        "Name": "name"
+                    }
                 }
-            }],
+            ],
             "unevaluatedProperties": false,
             "properties": {
                 "assets": {
@@ -71,7 +79,7 @@
                     "patternProperties": {
                         ".*": {
                             "type": "string",
-                            "enum": ["description", "name", "parentId"]
+                            "enum": [ "description", "name", "parentId" ]
                         }
                     }
                 },
@@ -81,7 +89,7 @@
                     "patternProperties": {
                         ".*": {
                             "type": "string",
-                            "enum": ["description", "name", "parentId", "unit"]
+                            "enum": [ "description", "name", "parentId", "unit" ]
                         }
                     }
                 }
@@ -91,7 +99,7 @@
             "type": "object",
             "description": "Read from CDF instead of OPC-UA when starting, to speed up start on slow servers. Requires `extraction-data-types.expand-node-ids` and `append-internal-values` to be set to `true`. This should generaly be enabled along with `skip-metadata` or `raw-metadata`. If `browse-on-empty` is set to `true` and `raw-metadata` is configured with the same database and tables the extractor will read into raw on first run, then use raw as source for later runs. The Raw database can be deleted to reset on next read.",
             "unevaluatedProperties": false,
-            "required": ["enable", "database"],
+            "required": [ "enable", "database" ],
             "properties": {
                 "enable": {
                     "type": "boolean",
@@ -116,7 +124,7 @@
             }
         },
         "non-finite-replacement": {
-            "type": ["number", "null"],
+            "type": [ "number", "null" ],
             "description": "Replacement for NaN values. Deprecated in favor of `nan-replacement`",
             "deprecated": true
         },
