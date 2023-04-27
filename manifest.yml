@@ -60,6 +60,17 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.17.0":
+    description: Various config changes and some internal changes
+    changelog:
+      deprecated:
+        - "Deprecated the debug option on cognite, influx, and mqtt."
+        - "Deprecated cognite.data-set-id, and cognite.data-set-external-id, in favor of cognite.data-set.id and cognite.data-set.external-id"
+      added:
+        - "Added a dry-run option, which serves the same purpose as debug but applies to the entire extractor."
+        - "Added --dry-run as a command line option."
+      changed:
+        - "Major internal changes. This should not be visible to users at all, except in some changed logs."
   "2.16.1":
     description: "Correctly restart history after reconnect due to service level threshold"
     changelog:
