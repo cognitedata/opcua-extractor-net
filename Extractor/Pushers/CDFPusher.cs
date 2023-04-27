@@ -230,7 +230,7 @@ namespace Cognite.OpcUa.Pushers
             try
             {
                 var result = await destination.EnsureEventsExistsAsync(eventList
-                    .Select(evt => evt.ToCDFEvent(Extractor, config.DataSetId, nodeToAssetIds))
+                    .Select(evt => evt.ToCDFEvent(Extractor, config.DataSet?.Id, nodeToAssetIds))
                     .Where(evt => evt != null), RetryMode.OnError, SanitationMode.Clean, token);
 
                 log.LogResult(result, RequestType.CreateEvents, false, LogLevel.Debug);
@@ -524,7 +524,7 @@ namespace Cognite.OpcUa.Pushers
             if (references == null || !references.Any()) return;
 
             var relationships = references
-                .Select(reference => reference.ToRelationship(config.DataSetId, Extractor))
+                .Select(reference => reference.ToRelationship(config.DataSet?.Id, Extractor))
                 .DistinctBy(rel => rel.ExternalId);
 
             bool useRawRelationships = config.RawMetadata != null
@@ -662,7 +662,7 @@ namespace Cognite.OpcUa.Pushers
                 {
                     var assets = ids.Select(id => assetMap[id]);
                     var creates = assets
-                        .Select(node => node.ToCDFAsset(fullConfig, Extractor, config.DataSetId, config.MetadataMapping?.Assets))
+                        .Select(node => node.ToCDFAsset(fullConfig, Extractor, config.DataSet?.Id, config.MetadataMapping?.Assets))
                         .Where(asset => asset != null);
                     report.AssetsCreated += creates.Count();
                     return creates;
@@ -894,7 +894,7 @@ namespace Cognite.OpcUa.Pushers
                     fullConfig,
                     Extractor,
                     Extractor,
-                    config.DataSetId,
+                    config.DataSet?.Id,
                     nodeToAssetIds,
                     config.MetadataMapping?.Timeseries,
                     createMinimalTimeseries))
@@ -1253,18 +1253,18 @@ namespace Cognite.OpcUa.Pushers
         /// </summary>
         private async Task EnsureConfigInit(CancellationToken token)
         {
-            if (!config.DataSetId.HasValue && !string.IsNullOrEmpty(config.DataSetExternalId))
+            if (config.DataSet != null)
             {
                 try
                 {
-                    var dataSet = await destination.CogniteClient.DataSets.RetrieveAsync(new[] { config.DataSetExternalId }, false, token);
-                    config.DataSetId = dataSet.First().Id;
+                    var id = await destination.CogniteClient.DataSets.GetId(config.DataSet, token);
+                    config.DataSet.Id = id;
                 }
                 catch (ResponseException ex)
                 {
                     log.LogError("Could not fetch data set by external id. It may not exist, or the user may lack" +
                         " sufficient access rights. Project {Project} at {Host}, id {Id}: {Message}",
-                        config.Project, config.Host, config.DataSetExternalId, ex.Message);
+                        config.Project, config.Host, config.DataSet.ExternalId, ex.Message);
                     throw;
                 }
             }
