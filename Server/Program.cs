@@ -183,6 +183,34 @@ namespace Server
                 exitEvent.Set();
             };
 
+            var _ = Task.Run(() =>
+            {
+                int sl = opt.ServiceLevel;
+                while (true)
+                {
+                    var key = Console.ReadKey(true);
+                    if (key.Key == ConsoleKey.L && sl != 190)
+                    {
+                        server.SetServerRedundancyStatus(190, Opc.Ua.RedundancySupport.Hot);
+                        sl = 190;
+                        Console.WriteLine("Set service level to 190");
+                    }
+                    if (key.Key == ConsoleKey.H && sl != 255)
+                    {
+                        server.SetServerRedundancyStatus(255, Opc.Ua.RedundancySupport.Hot);
+                        sl = 255;
+                        Console.WriteLine("Set service level to 255");
+                    }
+                    if (key.Key == ConsoleKey.G && sl != 180)
+                    {
+                        server.SetServerRedundancyStatus(180, Opc.Ua.RedundancySupport.Hot);
+                        sl = 180;
+                        Console.WriteLine("Set service level to 180");
+                    }
+                }
+
+            });
+
             exitEvent.WaitOne();
         }
 
