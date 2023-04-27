@@ -229,9 +229,11 @@ cognite:
     # and need to be re-read from history.
     read-extracted-ranges: true
     # Data set to use for new objects. Existing objects will not be updated
-    data-set-id:
-    # Data set to use for new objects, overridden by data-set-id. Requires the capability datasets:read for the given data set.
-    data-set-external-id:
+    data-set:
+        # Data set internal id.
+        id:
+        # Data set external id. Requires the capability datasets:read for the given data set.
+        external-id:
     # Do not push any metadata at all. If this is true, plain timeseries without metadata will be created,
     # similarly to raw-metadata, and datapoints will be pushed. Nothing will be written to raw, and no assets will be created.
     # Events will be created, but without asset context.

@@ -104,6 +104,18 @@ namespace Cognite.OpcUa
                 log.LogWarning("influx.debug is deprecated. Use dry-run instead.");
                 config.DryRun = true;
             }
+            if (config.Cognite?.DataSetId != null)
+            {
+                log.LogWarning("cognite.data-set-id is deprecated. Use cognite.data-set.id instead");
+                if (config.Cognite.DataSet == null) config.Cognite.DataSet = new Extensions.DataSetConfig();
+                config.Cognite.DataSet.Id = config.Cognite.DataSetId.Value;
+            }
+            if (config.Cognite?.DataSetExternalId != null)
+            {
+                log.LogWarning("cognite.data-set-external-id is deprecated. Use cognite.data-set.external-id instead");
+                if (config.Cognite.DataSet == null) config.Cognite.DataSet = new Extensions.DataSetConfig();
+                config.Cognite.DataSet.ExternalId = config.Cognite.DataSetExternalId;
+            }
 
             return null;
         }

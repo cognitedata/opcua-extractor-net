@@ -26,13 +26,17 @@ namespace Cognite.OpcUa.Config
     public class CognitePusherConfig : CogniteConfig, IPusherConfig
     {
         /// <summary>
-        /// Data set to use for new objects. Existing objects will not be updated.
+        /// DEPRECATED. Data set to use for new objects. Existing objects will not be updated.
         /// </summary>
         public long? DataSetId { get; set; }
         /// <summary>
-        /// Data set to use for new objects, overridden by data-set-id. Requires the capability datasets:read for the given data set.
+        /// DEPRECATED. Data set to use for new objects, overridden by data-set-id. Requires the capability datasets:read for the given data set.
         /// </summary>
         public string? DataSetExternalId { get; set; }
+        /// <summary>
+        /// Data set to use for new objects. Requires the capability datasets:read if external-id is used.
+        /// </summary>
+        public DataSetConfig? DataSet { get; set; }
         /// <summary>
         /// DEPRECATED. Debug mode, if true, Extractor will not push to target
         /// </summary>
