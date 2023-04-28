@@ -113,7 +113,7 @@ namespace Cognite.OpcUa
                 }
                 else if (config.IsRedundancyEnabled)
                 {
-                    var result = await CreateSessionWithRedundancy(config.EndpointUrl!, config.AltEndpointUrls!, null, null, liveToken);
+                    var result = await CreateSessionWithRedundancy(config.AltEndpointUrls!.Prepend(config.EndpointUrl!), null);
                     newSession = result.Session;
                     EndpointUrl = result.EndpointUrl;
                     await UpdateServiceLevel(result.ServiceLevel, true);
@@ -291,7 +291,7 @@ namespace Cognite.OpcUa
         {
             public ISession Session { get; }
             public string EndpointUrl { get; }
-            public byte ServiceLevel { get; }
+            public byte ServiceLevel { get; set; }
             public SessionRedundancyResult(ISession session, string endpointUrl, byte serviceLevel)
             {
                 Session = session;
@@ -300,56 +300,37 @@ namespace Cognite.OpcUa
             }
         }
 
-        private async Task<SessionRedundancyResult> CreateSessionWithRedundancy(string initialUrl, IEnumerable<string> endpointUrls, ISession? initialSession, byte? initialServiceLevel, CancellationToken token)
+        private async Task<SessionRedundancyResult> CreateSessionWithRedundancy(IEnumerable<string> endpointUrls, SessionRedundancyResult? initial)
         {
-            string? bestUrl = null;
-            byte bestServiceLevel = 0;
-
-            endpointUrls = endpointUrls.Prepend(initialUrl).Distinct().ToList();
+            endpointUrls = endpointUrls.Distinct().ToList();
             log.LogInformation("Create session with redundant connections to {Urls}", string.Join(", ", endpointUrls));
 
-            ISession? activeSession = initialSession;
-
-            if (activeSession != null)
+            if (initial != null)
             {
-                if (initialServiceLevel == null) throw new InvalidOperationException("InitialServiceLevel required when initialSession is non-null");
-                if (EndpointUrl == null) throw new InvalidOperationException("EndpointUrl must be set if initialSession is passed");
-                bestUrl = EndpointUrl;
-                bestServiceLevel = initialServiceLevel.Value;
+                initial.ServiceLevel = await ReadServiceLevel(initial.Session);
             }
 
-            string? activeEndpoint = null;
             var exceptions = new List<Exception>();
 
+            SessionRedundancyResult? current = initial;
             foreach (var url in endpointUrls)
             {
                 try
                 {
-                    ISession session;
-                    if (url == bestUrl && activeSession != null)
-                    {
-                        session = activeSession;
-                    }
-                    else
-                    {
-                        session = await CreateSessionDirect(url);
-                    }
+                    if (initial != null && url == initial.EndpointUrl) continue;
 
+                    var session = await CreateSessionDirect(url);
                     var serviceLevel = await ReadServiceLevel(session);
 
-                    if (serviceLevel > bestServiceLevel)
+                    if (serviceLevel > (current?.ServiceLevel ?? 0))
                     {
-                        if (activeSession != null && url != activeEndpoint)
+                        if (current != null)
                         {
-                            activeSession.Close();
-                            activeSession.Dispose();
+                            current.Session.Close();
+                            current.Session.Dispose();
                         }
-                        activeSession = session;
-                        bestServiceLevel = serviceLevel;
-                        bestUrl = url;
+                        current = new SessionRedundancyResult(session, url, serviceLevel);
                     }
-
-                    log.LogInformation("Connected to session with endpoint {Endpoint}. ServiceLevel: {Level}", url, serviceLevel);
                 }
                 catch (Exception ex)
                 {
@@ -358,15 +339,15 @@ namespace Cognite.OpcUa
                 }
             }
 
-            if (activeSession == null)
+            if (current == null)
             {
                 throw new AggregateException("Failed to connect to any configured endpoint", exceptions);
             }
 
             liveToken.ThrowIfCancellationRequested();
-            log.LogInformation("Successfully connected to server with endpoint: {Endpoint}, ServiceLevel: {Level}", bestUrl, bestServiceLevel);
+            log.LogInformation("Successfully connected to server with endpoint: {Endpoint}, ServiceLevel: {Level}", current.EndpointUrl, current.ServiceLevel);
 
-            return new SessionRedundancyResult(activeSession, bestUrl!, bestServiceLevel);
+            return current;
         }
 
         private async Task<byte> ReadServiceLevel(ISession session)
@@ -544,7 +525,7 @@ namespace Cognite.OpcUa
                 // We don't want to reconnect too frequently
                 if (lastLowSLConnectAttempt != null)
                 {
-                    var timeSinceLastAttempt = DateTime.UtcNow - lastLowSLConnectAttempt.Value;
+                    var timeSinceLastAttempt = (DateTime.UtcNow - lastLowSLConnectAttempt.Value) + TimeSpan.FromSeconds(5);
                     if (config.Redundancy.ReconnectIntervalValue.Value != System.Threading.Timeout.InfiniteTimeSpan
                         && timeSinceLastAttempt < config.Redundancy.ReconnectIntervalValue.Value)
                     {
@@ -576,11 +557,16 @@ namespace Cognite.OpcUa
 
                 client.Callbacks.TaskScheduler.ScheduleTask(null, async (token) =>
                 {
-                    var result = await CreateSessionWithRedundancy(config.EndpointUrl!, config.AltEndpointUrls!, session, CurrentServiceLevel, token);
+                    var current = session != null ? new SessionRedundancyResult(session, EndpointUrl!, CurrentServiceLevel) : null;
+                    var result = await CreateSessionWithRedundancy(config.AltEndpointUrls!.Prepend(config.EndpointUrl!), current);
                     if (result.EndpointUrl == EndpointUrl)
                     {
                         log.LogWarning("Attempted reconnect due to low service level resulted in same server {Url}. Proceeding with ServiceLevel {Level}", result.EndpointUrl, result.ServiceLevel);
                         await UpdateServiceLevel(result.ServiceLevel, false);
+                        if (result.Session != session)
+                        {
+                            log.LogError("Error! Returned endpoint was the same, but session had changed. This is a bug!");
+                        }
                     }
                     else
                     {
