@@ -10,7 +10,7 @@
     <None Include="$(SolutionDir)config\**" CopyToOutputDirectory="Always" LinkBase="config\" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="Cognite.ExtractorUtils" Version="1.6.2" />
+    <PackageReference Include="Cognite.ExtractorUtils" Version="1.8.0" />
     <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
     <PackageReference Include="Microsoft.NETCore.Platforms" Version="7.0.2" />
 	<PackageReference Include="MQTTnet" Version="3.1.2" />
