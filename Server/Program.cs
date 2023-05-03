@@ -23,6 +23,7 @@ using System.Collections.Generic;
 using System.CommandLine;
 using System.CommandLine.Builder;
 using System.CommandLine.Parsing;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -101,6 +102,9 @@ namespace Server
         [CommandLineOption("Server issue: This is the denominator for a probability that an arbitrary browse operation will fail " +
             "I.e. 5 means that 1/5 browse ops will fail with BadNoCommunication")]
         public int RandomBrowseFail { get; set; }
+        [CommandLineOption("List of NodeSet2 XML schemas to load the node hierarchy from, the base node hierarchy will not be loaded if this is specified. " +
+            "May be specified more than once, the base OPC-UA nodeset should not be added.", true, "-s")]
+        public IEnumerable<string> NodeSetFiles { get; set; }
     }
 
 
@@ -113,8 +117,19 @@ namespace Server
 
         private static ServerController BuildServer(IServiceProvider provider, ServerOptions opt)
         {
-            var setups = new List<PredefinedSetup> { PredefinedSetup.Custom, PredefinedSetup.Base,
-                PredefinedSetup.Events, PredefinedSetup.Wrong, PredefinedSetup.Auditing };
+            List<PredefinedSetup> setups;
+            if (opt.NodeSetFiles != null && opt.NodeSetFiles.Any())
+            {
+                setups = new List<PredefinedSetup>();
+                if (opt.BaseHistory || opt.CoreProfile) setups.Add(PredefinedSetup.Base);
+                if (opt.CustomHistory || opt.CoreProfile) setups.Add(PredefinedSetup.Custom);
+                if (opt.EventHistory || opt.CoreProfile) setups.Add(PredefinedSetup.Events);
+                if (opt.GrowthPeriodic) setups.Add(PredefinedSetup.Auditing);
+            } else
+            {
+                setups = new List<PredefinedSetup> { PredefinedSetup.Custom, PredefinedSetup.Base,
+                    PredefinedSetup.Events, PredefinedSetup.Wrong, PredefinedSetup.Auditing };
+            }
             if (opt.Pubsub) setups.Add(PredefinedSetup.PubSub);
             if (opt.LargeHierarchy) setups.Add(PredefinedSetup.Full);
             if (opt.VeryLargeHierarchy) setups.Add(PredefinedSetup.VeryLarge);
@@ -123,7 +138,7 @@ namespace Server
             string endpointUrl = opt.EndpointUrl ?? "opc.tcp://localhost";
             string mqttUrl = opt.MqttUrl ?? "mqtt://localhost:4060";
 
-            var controller = new ServerController(setups, provider, port, mqttUrl, endpointUrl, opt.LogTrace);
+            var controller = new ServerController(setups, provider, port, mqttUrl, endpointUrl, opt.LogTrace, opt.NodeSetFiles);
 
             return controller;
         }

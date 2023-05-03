@@ -44,6 +44,7 @@ namespace Server
         private readonly bool logTrace;
         private readonly IServiceProvider provider;
         private bool running;
+        private IEnumerable<string> nodeSetFiles;
 
         public ServerController(
             IEnumerable<PredefinedSetup> setups,
@@ -51,7 +52,8 @@ namespace Server
             int port = 62546,
             string mqttUrl = "mqtt://localhost:4060",
             string endpointUrl = "opc.tcp://localhost",
-            bool logTrace = false)
+            bool logTrace = false,
+            IEnumerable<string> nodeSetFiles = null)
         {
             this.setups = setups;
             this.port = port;
@@ -60,6 +62,7 @@ namespace Server
             this.logTrace = logTrace;
             log = provider.GetRequiredService<ILogger<ServerController>>();
             this.provider = provider;
+            this.nodeSetFiles = nodeSetFiles;
         }
 
         public void Dispose()
@@ -81,7 +84,7 @@ namespace Server
                 var cfg = await app.LoadApplicationConfiguration(Path.Join("config", $"{ConfigRoot}.Config.xml"), false);
                 var address = cfg.ServerConfiguration.BaseAddresses[0] = $"{endpointUrl}:{port}";
                 await app.CheckApplicationInstanceCertificate(false, 0);
-                Server = new TestServer(setups, mqttUrl, provider, logTrace);
+                Server = new TestServer(setups, mqttUrl, provider, logTrace, nodeSetFiles);
                 await Task.Run(async () => await app.Start(Server));
                 log.LogInformation("Server started on address: {Address}", address);
                 running = true;
