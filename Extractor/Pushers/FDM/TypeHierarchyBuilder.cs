@@ -224,6 +224,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                     || fdmConfig.TypesToMap == TypesToMap.Custom
                     && kvp.Key.NamespaceIndex > 0)
                 {
+                    log.LogTrace("Including node {Name} due to a known type definition", kvp.Value.Node.Name);
                     AddType(batch, kvp.Value);
                 }
             }

@@ -142,7 +142,7 @@ namespace Cognite.OpcUa
 
             if (Config.PubSub.Enabled)
             {
-                pubSubManager = new PubSubManager(provider.GetRequiredService<ILogger<PubSubManager>>(), uaClient, this, Config.PubSub);
+                pubSubManager = new PubSubManager(provider.GetRequiredService<ILogger<PubSubManager>>(), uaClient, this, Config);
             }
 
             foreach (var pusher in this.pushers)
@@ -987,6 +987,42 @@ namespace Cognite.OpcUa
 
             var pushTasks = pushers.Select(pusher => PushNodes(input, pusher, initial));
 
+            if (Config.DryRun)
+            {
+                log.LogInformation("Dry run is enabled");
+                log.LogInformation("Would push {Count} nodes without dry run:", input.Variables.Count() + input.Objects.Count());
+                foreach (var node in input.Variables.Concat(input.Objects))
+                {
+                    if (Source.IsCancellationRequested) break;
+                    log.LogDebug("{Node}", node);
+                }
+                log.LogInformation("Would push {Count} references without dry run:", input.References.Count());
+                foreach (var rf in input.References)
+                {
+                    if (Source.IsCancellationRequested) break;
+                    log.LogDebug("{Ref}", rf);
+                }
+                if (input.Deletes != null)
+                {
+                    log.LogInformation("Would delete {Count} nodes and {Count} references without dry run:", input.Deletes.Variables.Count() + input.Deletes.Objects.Count(), input.Deletes.References.Count());
+                    foreach (var node in input.Deletes.Variables)
+                    {
+                        if (Source.IsCancellationRequested) break;
+                        log.LogDebug("Delete variable {Node}", node);
+                    }
+                    foreach (var node in input.Deletes.Objects)
+                    {
+                        if (Source.IsCancellationRequested) break;
+                        log.LogDebug("Delete object {Node}", node);
+                    }
+                    foreach (var rf in input.Deletes.References)
+                    {
+                        if (Source.IsCancellationRequested) break;
+                        log.LogDebug("Delete reference {Node}", rf);
+                    }
+                }
+            }
+
             if (StateStorage != null && Config.StateStorage.IntervalValue.Value != Timeout.InfiniteTimeSpan)
             {
                 if (Streamer.AllowEvents)
@@ -1044,7 +1080,7 @@ namespace Cognite.OpcUa
             Interlocked.Increment(ref subscribed);
             if (!State.NodeStates.Any() || subscribed > 1) subscribeFlag = true;
             if (!Config.Events.History) return;
-            if (pushers.Any(pusher => pusher.Initialized))
+            if (pushers.Any(pusher => pusher.Initialized) || Config.DryRun)
             {
                 await historyReader.FrontfillEvents(State.EmitterStates.Where(state => state.IsFrontfilling));
                 if (Config.History.Backfill)
@@ -1074,7 +1110,7 @@ namespace Cognite.OpcUa
             Interlocked.Increment(ref subscribed);
             if (!State.EmitterStates.Any() || subscribed > 1) subscribeFlag = true;
             if (!Config.History.Enabled) return;
-            if (pushers.Any(pusher => pusher.Initialized))
+            if (pushers.Any(pusher => pusher.Initialized) || Config.DryRun)
             {
                 await historyReader.FrontfillData(states.Where(state => state.IsFrontfilling));
                 if (Config.History.Backfill)

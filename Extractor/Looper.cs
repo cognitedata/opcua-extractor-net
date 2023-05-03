@@ -16,6 +16,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using Cognite.Extractor.Common;
+using Cognite.Extractor.Logging;
 using Cognite.OpcUa.Config;
 using Microsoft.Extensions.Logging;
 using Prometheus;
@@ -78,7 +79,7 @@ namespace Cognite.OpcUa
             Scheduler.SchedulePeriodicTask(nameof(ExtraTasks), Timeout.InfiniteTimeSpan, ExtraTasks, false);
 
             Scheduler.SchedulePeriodicTask(nameof(Rebrowse), config.Extraction.AutoRebrowsePeriodValue, Rebrowse, false);
-            if (extractor.StateStorage != null)
+            if (extractor.StateStorage != null && !config.DryRun)
             {
                 var interval = config.StateStorage.IntervalValue.Value;
                 Scheduler.SchedulePeriodicTask(nameof(StoreState), interval, StoreState, interval != Timeout.InfiniteTimeSpan);
@@ -126,50 +127,56 @@ namespace Cognite.OpcUa
         }
 
 
+        private async Task CheckFailingPushers(CancellationToken token)
+        {
+            if (!failingPushers.Any()) return;
+
+            var result = await Task.WhenAll(failingPushers.Select(pusher => pusher.TestConnection(config, token)));
+            var recovered = result.Select((res, idx) => (result: res, pusher: failingPushers.ElementAt(idx)))
+                .Where(x => x.result == true).ToList();
+
+            if (recovered.Any())
+            {
+                log.LogInformation("Pushers {Names} recovered", string.Join(", ", recovered.Select(val => val.pusher.GetType())));
+            }
+
+
+            if (recovered.Any(pair => !pair.pusher.Initialized))
+            {
+                var tasks = new List<Task>();
+                var toInit = recovered.Select(pair => pair.pusher).Where(pusher => !pusher.Initialized);
+                foreach (var pusher in toInit)
+                {
+                    pusher.NoInit = false;
+                    tasks.Add(extractor.PushNodes(pusher.PendingNodes, pusher, true));
+                    pusher.PendingNodes = null;
+                }
+
+                await Task.WhenAll(tasks);
+            }
+            foreach (var pair in recovered)
+            {
+                if (pair.pusher.Initialized)
+                {
+                    pair.pusher.DataFailing = true;
+                    pair.pusher.EventsFailing = true;
+                    failingPushers.Remove(pair.pusher);
+                    passingPushers.Add(pair.pusher);
+                }
+            }
+        }
+
+
         private async Task Pushers(CancellationToken token)
         {
             if (token.IsCancellationRequested) return;
-            if (failingPushers.Any())
-            {
-                var result = await Task.WhenAll(failingPushers.Select(pusher => pusher.TestConnection(config, token)));
-                var recovered = result.Select((res, idx) => (result: res, pusher: failingPushers.ElementAt(idx)))
-                    .Where(x => x.result == true).ToList();
 
-                if (recovered.Any())
-                {
-                    log.LogInformation("Pushers {Names} recovered", string.Join(", ", recovered.Select(val => val.pusher.GetType())));
-                }
-
-
-                if (recovered.Any(pair => !pair.pusher.Initialized))
-                {
-                    var tasks = new List<Task>();
-                    var toInit = recovered.Select(pair => pair.pusher).Where(pusher => !pusher.Initialized);
-                    foreach (var pusher in toInit)
-                    {
-                        pusher.NoInit = false;
-                        tasks.Add(extractor.PushNodes(pusher.PendingNodes, pusher, true));
-                        pusher.PendingNodes = null;
-                    }
-
-                    await Task.WhenAll(tasks);
-                }
-                foreach (var pair in recovered)
-                {
-                    if (pair.pusher.Initialized)
-                    {
-                        pair.pusher.DataFailing = true;
-                        pair.pusher.EventsFailing = true;
-                        failingPushers.Remove(pair.pusher);
-                        passingPushers.Add(pair.pusher);
-                    }
-                }
-            }
+            await CheckFailingPushers(token);
 
             var results = await Task.WhenAll(
-                Task.Run(async () =>
-                    await extractor.Streamer.PushDataPoints(passingPushers, failingPushers, token), token),
-                Task.Run(async () => await extractor.Streamer.PushEvents(passingPushers, failingPushers, token), token));
+            Task.Run(async () =>
+                await extractor.Streamer.PushDataPoints(passingPushers, failingPushers, token), token),
+            Task.Run(async () => await extractor.Streamer.PushEvents(passingPushers, failingPushers, token), token));
 
             if (results.Any(res => res))
             {
@@ -181,9 +188,9 @@ namespace Cognite.OpcUa
             }
 
             var failedPushers = passingPushers.Where(pusher =>
-                pusher.DataFailing && extractor.Streamer.AllowData
-                || pusher.EventsFailing && extractor.Streamer.AllowEvents
-                || !pusher.Initialized).ToList();
+            pusher.DataFailing && extractor.Streamer.AllowData
+            || pusher.EventsFailing && extractor.Streamer.AllowEvents
+            || !pusher.Initialized).ToList();
             foreach (var pusher in failedPushers)
             {
                 pusher.DataFailing = extractor.Streamer.AllowData;

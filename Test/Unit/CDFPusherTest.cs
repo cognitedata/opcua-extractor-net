@@ -1,4 +1,5 @@
-﻿using Cognite.Extractor.Common;
+﻿using Cognite.Extensions;
+using Cognite.Extractor.Common;
 using Cognite.Extractor.Testing;
 using Cognite.OpcUa;
 using Cognite.OpcUa.Config;
@@ -55,9 +56,9 @@ namespace Test.Unit
         {
             handler.AllowConnectionTest = false;
 
-            tester.Config.Cognite.Debug = true;
+            tester.Config.DryRun = true;
             Assert.True(await pusher.TestConnection(tester.Config, tester.Source.Token));
-            tester.Config.Cognite.Debug = false;
+            tester.Config.DryRun = false;
 
             Assert.False(await pusher.TestConnection(tester.Config, tester.Source.Token));
 
@@ -83,7 +84,7 @@ namespace Test.Unit
 
             tester.Config.Events.Enabled = false;
 
-            Assert.Null(tester.Config.Cognite.DataSetId);
+            Assert.Null(tester.Config.Cognite.DataSet?.Id);
             handler.DataSets.Add("test-data-set", new DataSet
             {
                 ExternalId = "test-data-set",
@@ -91,18 +92,18 @@ namespace Test.Unit
                 CreatedTime = 1000,
                 LastUpdatedTime = 1000
             });
-            tester.Config.Cognite.DataSetExternalId = "test-data-set";
+            tester.Config.Cognite.DataSet = new DataSetConfig { ExternalId = "test-data-set" };
 
             Assert.True(await pusher.TestConnection(tester.Config, tester.Source.Token));
-            Assert.Equal(123, tester.Config.Cognite.DataSetId);
+            Assert.Equal(123, tester.Config.Cognite.DataSet?.Id);
 
             handler.FailedRoutes.Add("/datasets/byids");
             Assert.True(await pusher.TestConnection(tester.Config, tester.Source.Token));
 
-            tester.Config.Cognite.DataSetId = null;
+            tester.Config.Cognite.DataSet.Id = null;
 
             Assert.False(await pusher.TestConnection(tester.Config, tester.Source.Token));
-            Assert.Null(tester.Config.Cognite.DataSetId);
+            Assert.Null(tester.Config.Cognite.DataSet.Id);
         }
         [Fact]
         public async Task TestPushDatapoints()
@@ -118,7 +119,7 @@ namespace Test.Unit
             // Null input
             Assert.Null(await pusher.PushDataPoints(null, tester.Source.Token));
 
-            tester.Config.Cognite.Debug = true;
+            tester.Config.DryRun = true;
 
             var time = DateTime.UtcNow;
 
@@ -142,7 +143,7 @@ namespace Test.Unit
             // Debug true
             Assert.Null(await pusher.PushDataPoints(dps, tester.Source.Token));
 
-            tester.Config.Cognite.Debug = false;
+            tester.Config.DryRun = false;
 
             handler.FailedRoutes.Add("/timeseries/data");
 
@@ -247,9 +248,9 @@ namespace Test.Unit
                 }
             };
 
-            tester.Config.Cognite.Debug = true;
+            tester.Config.DryRun = true;
             Assert.Null(await pusher.PushEvents(events, tester.Source.Token));
-            tester.Config.Cognite.Debug = false;
+            tester.Config.DryRun = false;
 
             handler.FailedRoutes.Add("/events");
             Assert.False(await pusher.PushEvents(events, tester.Source.Token));
@@ -290,9 +291,9 @@ namespace Test.Unit
 
             // Test debug mode
             var node = new UAObject(tester.Server.Ids.Base.Root, "BaseRoot", null, null, NodeId.Null, null);
-            tester.Config.Cognite.Debug = true;
+            tester.Config.DryRun = true;
             Assert.True((await pusher.PushNodes(new[] { node }, tss, rels, update, tester.Source.Token)).Objects);
-            tester.Config.Cognite.Debug = false;
+            tester.Config.DryRun = false;
             Assert.Empty(handler.Assets);
 
             // Fail to create assets
@@ -433,9 +434,9 @@ namespace Test.Unit
             // Test debug mode
             var node = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", null, null, new NodeId("parent"), null);
             node.FullAttributes.DataType = dt;
-            tester.Config.Cognite.Debug = true;
+            tester.Config.DryRun = true;
             Assert.True((await pusher.PushNodes(assets, new[] { node }, rels, update, tester.Source.Token)).Variables);
-            tester.Config.Cognite.Debug = false;
+            tester.Config.DryRun = false;
             Assert.Empty(handler.Timeseries);
 
             // Fail to create timeseries

@@ -101,7 +101,7 @@ namespace Cognite.OpcUa.Config
         /// </summary>
         public long InvalidateBefore { get; set; }
         /// <summary>
-        /// If true, pusher will not push to target.
+        /// DEPRECATED. If true, pusher will not push to target.
         /// </summary>
         public bool Debug { get; set; }
         public bool ReadExtractedRanges { get; set; }

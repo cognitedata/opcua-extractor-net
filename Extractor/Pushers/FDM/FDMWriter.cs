@@ -88,7 +88,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             {
                 log.LogTrace("Build view: {Type}", JsonSerializer.Serialize(type.Value, options));
             }
-            if (config.Cognite!.Debug) return;
+            if (config.DryRun) return;
 
             // Check if the data model exists
             try
@@ -239,7 +239,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             instanceBuilder.Build();
             log.LogInformation("Finish building instances");
 
-            if (config.Cognite!.Debug)
+            if (config.DryRun)
             {
                 instanceBuilder.DebugLog(log);
                 return true;

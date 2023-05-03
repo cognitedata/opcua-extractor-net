@@ -95,6 +95,10 @@ namespace Cognite.OpcUa.Config
         /// Configuration for high availability support.
         /// </summary>
         public HighAvailabilityConfig HighAvailability { get; set; } = null!;
+        /// <summary>
+        /// Do not push any data to destinations.
+        /// </summary>
+        public bool DryRun { get; set; }
         public override void GenerateDefaults()
         {
             if (Source == null) Source = new SourceConfig();
