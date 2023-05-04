@@ -21,6 +21,8 @@ using Opc.Ua;
 using Opc.Ua.Server;
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Security.Cryptography.X509Certificates;
 
 namespace Server
@@ -35,6 +37,17 @@ namespace Server
         public void Validate(X509Certificate2Collection certificates)
         {
             throw ServiceResultException.Create(StatusCodes.BadCertificateInvalid, "Bad certificate");
+        }
+    }
+
+    internal class NodeSetBundle
+    {
+        public NodeStateCollection Nodes { get; }
+        public IEnumerable<string> NamespaceUris { get; }
+        public NodeSetBundle(NodeStateCollection nodes, IEnumerable<string> namespaceUris)
+        {
+            Nodes = nodes;
+            NamespaceUris = namespaceUris;
         }
     }
 
@@ -60,14 +73,16 @@ namespace Server
         private readonly bool logTrace;
         private readonly ILogger traceLog;
         private readonly IServiceProvider provider;
+        private readonly IEnumerable<string> nodeSetFiles;
 
-        public TestServer(IEnumerable<PredefinedSetup> setups, string mqttUrl, IServiceProvider provider, bool logTrace = false)
+        public TestServer(IEnumerable<PredefinedSetup> setups, string mqttUrl, IServiceProvider provider, bool logTrace = false, IEnumerable<string> nodeSetFiles = null)
         {
             this.setups = setups;
             this.mqttUrl = mqttUrl;
             this.logTrace = logTrace;
             this.provider = provider;
             this.traceLog = provider.GetRequiredService<ILogger<Tracing>>();
+            this.nodeSetFiles = nodeSetFiles;
         }
 
         protected override void OnServerStarting(ApplicationConfiguration configuration)
@@ -129,7 +144,7 @@ namespace Server
 
         protected override MasterNodeManager CreateMasterNodeManager(IServerInternal server, ApplicationConfiguration configuration)
         {
-            custom = new TestNodeManager(server, configuration, setups, mqttUrl, provider);
+            custom = new TestNodeManager(server, configuration, setups, mqttUrl, provider, BuildNodeSetFiles(server.DefaultSystemContext));
             var nodeManagers = new List<INodeManager> { custom };
             // create the custom node managers.
 
@@ -180,6 +195,27 @@ namespace Server
             args.Identity = new UserIdentity();
             args.Identity.GrantedRoleIds.Add(ObjectIds.WellKnownRole_ConfigureAdmin);
             args.Identity.GrantedRoleIds.Add(ObjectIds.WellKnownRole_SecurityAdmin);
+        }
+
+        private IEnumerable<NodeSetBundle> BuildNodeSetFiles(ISystemContext context)
+        {
+            if (nodeSetFiles == null || !nodeSetFiles.Any()) return Enumerable.Empty<NodeSetBundle>();
+            var results = new List<NodeSetBundle>();
+
+            foreach (var file in nodeSetFiles)
+            {
+                var predefinedNodes = new NodeStateCollection();
+                using var stream = new FileStream(file, FileMode.Open);
+                var nodeSet = Opc.Ua.Export.UANodeSet.Read(stream);
+                foreach (var ns in nodeSet.NamespaceUris)
+                {
+                    context.NamespaceUris.GetIndexOrAppend(ns);
+                }
+                nodeSet.Import(context, predefinedNodes);
+                results.Add(new NodeSetBundle(predefinedNodes, nodeSet.NamespaceUris));
+            }
+
+            return results;
         }
 
         public void UpdateNode(NodeId id, object value)

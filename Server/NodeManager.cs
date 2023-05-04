@@ -41,26 +41,39 @@ namespace Server
         private readonly ILogger log;
 
         private readonly PubSubManager pubSub;
+        private IEnumerable<NodeSetBundle> nodeSetFiles;
 
-        public TestNodeManager(IServerInternal server, ApplicationConfiguration configuration, IServiceProvider provider)
-            : base(server, configuration, "opc.tcp://test.localhost")
+        public TestNodeManager(IServerInternal server, ApplicationConfiguration configuration, IServiceProvider provider, IEnumerable<NodeSetBundle> nodeSetFiles = null)
+            : base(server, configuration, GetNamespaces(nodeSetFiles))
         {
             SystemContext.NodeIdFactory = this;
             store = new HistoryMemoryStore(provider.GetRequiredService<ILogger<HistoryMemoryStore>>());
             log = provider.GetRequiredService<ILogger<TestNodeManager>>();
             Ids = new NodeIdReference();
+            this.nodeSetFiles = nodeSetFiles;
         }
 
         public TestNodeManager(IServerInternal server,
             ApplicationConfiguration configuration,
             IEnumerable<PredefinedSetup> predefinedNodes,
             string mqttUrl,
-            IServiceProvider provider) :
-            this(server, configuration, provider)
+            IServiceProvider provider,
+            IEnumerable<NodeSetBundle> nodeSetFiles = null) :
+            this(server, configuration, provider, nodeSetFiles)
         {
             this.predefinedNodes = predefinedNodes;
             pubSub = new PubSubManager(mqttUrl, provider.GetRequiredService<ILogger<PubSubManager>>());
         }
+
+        private static string[] GetNamespaces(IEnumerable<NodeSetBundle> nodeSetFiles)
+        {
+            if (nodeSetFiles == null)
+            {
+                return new[] { "opc.tcp://test.localhost" };
+            }
+            return nodeSetFiles.SelectMany(n => n.NamespaceUris).Prepend("opc.tcp://test.localhost").Distinct().ToArray();
+        }
+
         #region access
         public void UpdateNode(NodeId id, object value, DateTime? timestamp = null)
         {
@@ -532,6 +545,8 @@ namespace Server
                     }
                 }
 
+                LoadAddressSpaceFiles(externalReferences);
+
                 CreateNamespaceMetadataNode(externalReferences);
             }
             catch (Exception ex)
@@ -954,7 +969,7 @@ namespace Server
             }
         }
 
-        public void CreateWrongAddressSpace(IDictionary<NodeId, IList<IReference>> externalReferences)
+        private void CreateWrongAddressSpace(IDictionary<NodeId, IList<IReference>> externalReferences)
         {
             log.LogInformation("Create wrong address space");
 
@@ -1010,7 +1025,7 @@ namespace Server
 
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification =
             "NodeStates are disposed in CustomNodeManager2, so long as they are added to the list of predefined nodes")]
-        public void CreateVeryLargeAddressSpace(IDictionary<NodeId, IList<IReference>> externalReferences)
+        private void CreateVeryLargeAddressSpace(IDictionary<NodeId, IList<IReference>> externalReferences)
         {
             log.LogInformation("Create very large address space");
 
@@ -1042,7 +1057,7 @@ namespace Server
             }
         }
 
-        public void CreatePubSubNodes(IDictionary<NodeId, IList<IReference>> externalReferences)
+        private void CreatePubSubNodes(IDictionary<NodeId, IList<IReference>> externalReferences)
         {
             var cfnm = (ConfigurationNodeManager)Server.NodeManager.NodeManagers.First(nm => nm.GetType() == typeof(ConfigurationNodeManager));
             lock (cfnm.Lock)
@@ -1235,6 +1250,23 @@ namespace Server
                 AddPredefinedNode(SystemContext, s);
             }
             pubSub.Start();
+        }
+
+        private void LoadAddressSpaceFiles(IDictionary<NodeId, IList<IReference>> externalReferences)
+        {
+            if (nodeSetFiles == null) return;
+            foreach (var file in nodeSetFiles)
+            {
+                log.LogInformation("Loading namespaces: {Ns}", string.Join(", ", file.NamespaceUris));
+
+                foreach (var node in file.Nodes)
+                {
+                    AddPredefinedNode(SystemContext, node);
+                }
+            }
+            nodeSetFiles = null;
+
+            AddReverseReferences(externalReferences);
         }
 
         // Utility methods to create nodes
