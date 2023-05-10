@@ -1,9 +1,5 @@
 ﻿using CogniteSdk.Beta.DataModels;
-using Serilog;
-using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 
 namespace Cognite.OpcUa.Pushers.FDM
 {
@@ -25,6 +21,24 @@ namespace Cognite.OpcUa.Pushers.FDM
                         Type = BasePropertyType.Create(PropertyTypeVariant.int32),
                         Name = "NodeClass",
                         Nullable = false
+                    } },
+                    { "DisplayName", new ContainerPropertyDefinition
+                    {
+                        Type = BasePropertyType.Text(),
+                        Name = "DisplayName",
+                        Nullable = true
+                    } },
+                    { "Description", new ContainerPropertyDefinition
+                    {
+                        Type = BasePropertyType.Text(),
+                        Name = "Description",
+                        Nullable = true
+                    } },
+                    { "BrowseName", new ContainerPropertyDefinition
+                    {
+                        Type = BasePropertyType.Text(),
+                        Name = "BrowseName",
+                        Nullable = true
                     } }
                 },
                 Indexes = new Dictionary<string, BaseIndex>

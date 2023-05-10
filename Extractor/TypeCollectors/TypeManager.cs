@@ -324,6 +324,11 @@ namespace Cognite.OpcUa.TypeCollectors
         #region typeGetters
         public UADataType GetDataType(NodeId nodeId)
         {
+            if (nodeId == null)
+            {
+                return new UADataType(NodeId.Null);
+            }
+
             if (NodeMap.TryGetValue(nodeId, out var node))
             {
                 if (node is not UADataType dt)
@@ -346,9 +351,9 @@ namespace Cognite.OpcUa.TypeCollectors
 
         public UAReferenceType GetReferenceType(NodeId nodeId)
         {
-            if (nodeId.IsNullNodeId)
+            if (nodeId == null || nodeId.IsNullNodeId)
             {
-                return new UAReferenceType(nodeId);
+                return new UAReferenceType(NodeId.Null);
             }
 
             if (NodeMap.TryGetValue(nodeId, out var node))
@@ -371,9 +376,9 @@ namespace Cognite.OpcUa.TypeCollectors
 
         public UAObjectType GetObjectType(NodeId nodeId)
         {
-            if (nodeId.IsNullNodeId)
+            if (nodeId == null || nodeId.IsNullNodeId)
             {
-                return new UAObjectType(nodeId);
+                return new UAObjectType(NodeId.Null);
             }
 
             if (NodeMap.TryGetValue(nodeId, out var node))
@@ -396,9 +401,9 @@ namespace Cognite.OpcUa.TypeCollectors
 
         public UAVariableType GetVariableType(NodeId nodeId)
         {
-            if (nodeId.IsNullNodeId)
+            if (nodeId == null || nodeId.IsNullNodeId)
             {
-                return new UAVariableType(nodeId);
+                return new UAVariableType(NodeId.Null);
             }
 
             if (NodeMap.TryGetValue(nodeId, out var node))

@@ -29,6 +29,7 @@ namespace Cognite.OpcUa.Pushers.FDM
         public Dictionary<string, ContainerCreate> Containers { get; } = new();
         public Dictionary<string, ViewCreate> Views { get; } = new();
         public Dictionary<NodeId, FullUANodeType> Types { get; } = new();
+        public Dictionary<string, bool> ViewIsReferenced { get; } = new();
 
         public void Add(ContainerCreate container, string? baseView = null)
         {
@@ -38,7 +39,6 @@ namespace Cognite.OpcUa.Pushers.FDM
 
         public void Add(FullUANodeType type, DMSValueConverter converter)
         {
-            log.LogInformation("Add type {Name} {Id} impl {Parent}", type.Node.Name, type.Node.Id, type.Parent?.ExternalId);
             // If the type is in views, it and all its parents are already added
             if (Views.ContainsKey(type.Node.Name!))
             {
@@ -99,6 +99,8 @@ namespace Cognite.OpcUa.Pushers.FDM
                 };
             }
 
+            ViewIsReferenced[type.Parent.ExternalId] = true;
+
             foreach (var rf in type.References.Values)
             {
                 if (rf.ModellingRule != ModellingRule.ExposesItsArray)
@@ -111,6 +113,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                         Source = new ViewIdentifier(space, rf.Type!.ExternalId, viewVersion),
                         Type = new DirectRelationIdentifier(space, rf.Reference.Type.Id.ToString())
                     });
+                    ViewIsReferenced[rf.Type!.ExternalId] = true;
                 }
             }
             Views.Add(view.Name!, view);
@@ -167,7 +170,8 @@ namespace Cognite.OpcUa.Pushers.FDM
                 || dt.Id == DataTypeIds.Duration
                 || !dt.IsString) return BasePropertyType.Create(PropertyTypeVariant.float64, isArray);
             if (dt.Id == DataTypeIds.LocalizedText
-                || dt.Id == DataTypeIds.QualifiedName) return BasePropertyType.Text(isArray);
+                || dt.Id == DataTypeIds.QualifiedName
+                || dt.Id == DataTypeIds.String) return BasePropertyType.Text(isArray);
             if (dt.Id == DataTypeIds.DateTime
                 || dt.Id == DataTypeIds.Date
                 || dt.Id == DataTypeIds.Time
@@ -224,7 +228,6 @@ namespace Cognite.OpcUa.Pushers.FDM
                     || fdmConfig.TypesToMap == TypesToMap.Custom
                     && kvp.Key.NamespaceIndex > 0)
                 {
-                    log.LogTrace("Including node {Name} due to a known type definition", kvp.Value.Node.Name);
                     AddType(batch, kvp.Value);
                 }
             }
@@ -257,7 +260,6 @@ namespace Cognite.OpcUa.Pushers.FDM
             {
                 if (child.Node.TypeDefinition != null && !child.Node.TypeDefinition.IsNullNodeId && nodeTypes.Types.TryGetValue(child.Node.TypeDefinition, out var childTypeDef))
                 {
-                    log.LogTrace("Add type {Type} {Name} due to reference from other type: {Source} {SourceName}", childTypeDef.Node.Id, childTypeDef.Node.Name, child.Node.Id, child.Node.Name);
                     AddType(batch, childTypeDef);
                 }
             }

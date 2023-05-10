@@ -75,7 +75,6 @@ namespace Cognite.OpcUa.Pushers.FDM
         {
             // if (nodeId == ObjectTypeIds.BaseEventType) return;
             var node = nodes.Get(nodeId);
-            log.LogTrace("Traverse node {Id}", nodeId);
             if (!visitedIds.Add(nodeId)) return;
             bool isType = false;
             if (node.NodeClass == NodeClass.VariableType || node.NodeClass == NodeClass.ObjectType)
@@ -127,8 +126,6 @@ namespace Cognite.OpcUa.Pushers.FDM
                             modellingRule = ModellingRule.Other;
                             log.LogWarning("Found unknown modelling rule: {Id}", subRef.Target.Id);
                         }
-
-                        
 
                         properties[nodeId].ModellingRule = modellingRule;
                     }

@@ -340,7 +340,6 @@ namespace Cognite.OpcUa.Pushers.FDM
             if (res.Length > size)
             {
                 size = res.Length;
-                log.LogTrace("New max size: {Data}", res);
             }
             return res;
         }
@@ -392,9 +391,21 @@ namespace Cognite.OpcUa.Pushers.FDM
     {
         [JsonPropertyName("NodeClass")]
         public int NodeClass { get; }
+        [JsonPropertyName("DisplayName")]
+        public string? DisplayName { get; }
+        [JsonPropertyName("Description")]
+        public string? Description { get; }
+        [JsonPropertyName("BrowseName")]
+        public string? BrowseName { get; }
         public BaseNodeData(BaseUANode node)
         {
             NodeClass = (int)node.NodeClass;
+            DisplayName = node.Attributes.DisplayName;
+            Description = node.Attributes.Description;
+            if (node.Attributes.BrowseName != null)
+            {
+                BrowseName = $"{node.Attributes.BrowseName.NamespaceIndex}:{node.Attributes.BrowseName.Name}";
+            }
         }
     }
 

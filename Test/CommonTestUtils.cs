@@ -40,7 +40,7 @@ namespace Test
     public static class CommonTestUtils
     {
         private static readonly object portCounterLock = new object();
-        private static int portCounter = 62100;
+        private static int portCounter = 62200;
         public static int NextPort
         {
             get

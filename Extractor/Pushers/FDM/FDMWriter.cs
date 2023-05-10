@@ -62,7 +62,15 @@ namespace Cognite.OpcUa.Pushers.FDM
                         Items = c,
                         Replace = true
                     };
-                    results[idx] = await destination.CogniteClient.Beta.DataModels.UpsertInstances(req, token);
+                    try
+                    {
+                        results[idx] = await destination.CogniteClient.Beta.DataModels.UpsertInstances(req, token);
+                    }
+                    catch (ResponseException rex)
+                    {
+                        log.LogError("Response exception: {Err}, {ReqId}", rex.Message, rex.RequestId);
+                        throw;
+                    }
                 });
 
             int taskNum = 0;
@@ -80,13 +88,21 @@ namespace Cognite.OpcUa.Pushers.FDM
         private async Task Initialize(FDMTypeBatch types, CancellationToken token)
         {
             var options = new JsonSerializerOptions(Oryx.Cognite.Common.jsonOptions) { WriteIndented = true };
-            foreach (var type in types.Containers)
+
+            var viewsToInsert = types.Views.Values.ToList();
+            if (config.Cognite!.FlexibleDataModels!.SkipSimpleTypes)
             {
-                log.LogTrace("Build container: {Type}", JsonSerializer.Serialize(type.Value, options));
+                viewsToInsert = viewsToInsert.Where(v => v.Properties.Any() || types.ViewIsReferenced.GetValueOrDefault(v.ExternalId)).ToList();
             }
-            foreach (var type in types.Views)
+
+            log.LogInformation("Building {Count} containers, and {Count2} views", types.Containers.Count, viewsToInsert.Count);
+            foreach (var type in types.Containers.Values)
             {
-                log.LogTrace("Build view: {Type}", JsonSerializer.Serialize(type.Value, options));
+                log.LogTrace("Build container: {Type}", JsonSerializer.Serialize(type, options));
+            }
+            foreach (var type in viewsToInsert)
+            {
+                log.LogTrace("Build view: {Type}", JsonSerializer.Serialize(type, options));
             }
             if (config.DryRun) return;
 
@@ -98,7 +114,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                 {
                     var existingModel = existingModels.First();
                     var viewCount = existingModel.Views.Count();
-                    if (viewCount == types.Views.Count)
+                    if (viewCount == viewsToInsert.Count)
                     {
                         log.LogInformation("Number of views in model is the same, not updating");
                         return;
@@ -118,20 +134,15 @@ namespace Cognite.OpcUa.Pushers.FDM
 
             foreach (var chunk in types.Containers.Values.ChunkBy(100))
             {
+                log.LogDebug("Creating {Count} containers", chunk.Count());
                 await destination.CogniteClient.Beta.DataModels.UpsertContainers(chunk, token);
             }
 
-            foreach (var level in types.Views.Values.ChunkByHierarchy(100, v => v.ExternalId, v => v.Implements?.FirstOrDefault()?.ExternalId!))
+            foreach (var level in viewsToInsert.ChunkByHierarchy(100, v => v.ExternalId, v => v.Implements?.FirstOrDefault()?.ExternalId!))
             {
-                foreach (var item in level)
-                {
-                    log.LogTrace("Create type {Id} parent: {Parent}", item.ExternalId, item.Implements?.FirstOrDefault()?.ExternalId);
-                }
-
-                log.LogInformation("Inserting level with {Count} items", level.Count());
                 foreach (var chunk in level.ChunkBy(100))
                 {
-                    log.LogInformation("Inserting {Count} items", chunk.Count());
+                    log.LogDebug("Creating {Count} views", chunk.Count());
                     await destination.CogniteClient.Beta.DataModels.UpsertViews(chunk, token);
                 }
             }
@@ -142,7 +153,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                 ExternalId = "OPC_UA",
                 Space = instSpace,
                 Version = "1",
-                Views = types.Views.Select(v => new ViewIdentifier(instSpace, v.Value.ExternalId, v.Value.Version))
+                Views = viewsToInsert.Select(v => new ViewIdentifier(instSpace, v.ExternalId, v.Version))
             };
             await destination.CogniteClient.Beta.DataModels.UpsertDataModels(new[] { model }, token);
         }
@@ -265,69 +276,6 @@ namespace Cognite.OpcUa.Pushers.FDM
             // Finally, ingest edges
             log.LogInformation("Ingesting {Count} references", instanceBuilder.References.Count);
             await IngestInstances(instanceBuilder.References, 1000, token);
-
-            /* var serverMetadata = new FDMServer(instSpace, config.Extraction.IdPrefix ?? "", uaClient, ObjectIds.RootFolder, uaClient.NamespaceTable!, config.Extraction.NamespaceMap);
-
-            var fdmObjects = new List<FDMBaseInstance>();
-            var fdmVariables = new List<FDMVariable>();
-            var fdmObjectTypes = new List<FDMBaseType>();
-            var fdmVariableTypes = new List<FDMVariableType>();
-            var fdmReferences = new List<FDMReference>();
-            var fdmReferenceTypes = new List<FDMReferenceType>();
-            var fdmDataTypes = new List<FDMDataType>();
-
-            foreach (var node in nodes)
-            {
-                switch (node.NodeClass) {
-                    case NodeClass.ReferenceType:
-                        fdmReferenceTypes.Add(new FDMReferenceType(uaClient, ObjectIds.RootFolder, node));
-                        break;
-                    case NodeClass.Object:
-                        fdmObjects.Add(new FDMBaseInstance(instSpace, uaClient, node));
-                        break;
-                    case NodeClass.ObjectType:
-                        fdmObjectTypes.Add(new FDMBaseType(uaClient, ObjectIds.RootFolder, node));
-                        break;
-                    case NodeClass.Variable:
-                        fdmVariables.Add(new FDMVariable(instSpace, uaClient, node));
-                        break;
-                    case NodeClass.VariableType:
-                        fdmVariableTypes.Add(new FDMVariableType(instSpace, uaClient, ObjectIds.RootFolder, node));
-                        break;
-                    case NodeClass.DataType:
-                        fdmDataTypes.Add(new FDMDataType(uaClient, ObjectIds.RootFolder, node));
-                        break;
-                    default:
-                        break;
-                }
-            }
-
-            foreach (var rf in finalReferences)
-            {
-                fdmReferences.Add(new FDMReference(config.Extraction.IdPrefix ?? "", instSpace, uaClient, rf));
-            }
-
-            // Ingest types first
-            await Task.WhenAll(
-                IngestNodes("BaseType", fdmObjectTypes, token),
-                IngestNodes("ReferenceType", fdmReferenceTypes, token),
-                IngestNodes("DataType", fdmDataTypes, token)
-            );
-
-            // Need to ingest variable types after data types.
-            await IngestNodes("VariableType", fdmVariableTypes, token);
-
-            // Next ingest instances
-            await Task.WhenAll(
-                IngestNodes("BaseInstance", fdmObjects, token),
-                IngestNodes("Variable", fdmVariables, token)
-            );
-
-            // Finally, ingest references and the server object
-            await Task.WhenAll(
-                IngestEdges("Reference", fdmReferences, token),
-                IngestNodes("Server", new[] { serverMetadata }, token)
-            );   */
 
             return true;
         }

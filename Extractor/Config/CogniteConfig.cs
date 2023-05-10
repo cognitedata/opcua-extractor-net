@@ -186,7 +186,7 @@ namespace Cognite.OpcUa.Config
         /// <summary>
         /// Instance space to write to
         /// </summary>
-        public string Space { get; set; } = "opcua_test";
+        public string Space { get; set; } = "opcua_test_2";
         /// <summary>
         /// True to enable. This will not produce meaningful results unless
         /// extraction.types.as-nodes, extraction.relationships.enabled, extraction.relationships.hierarchical,
@@ -213,5 +213,11 @@ namespace Cognite.OpcUa.Config
         /// Enum for which types to map to FDM
         /// </summary>
         public TypesToMap TypesToMap { get; set; } = TypesToMap.Custom;
+
+        /// <summary>
+        /// Do not create views without an associated container.
+        /// Simplifies the model greatly.
+        /// </summary>
+        public bool SkipSimpleTypes { get; set; }
     }
 }

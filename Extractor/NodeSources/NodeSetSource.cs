@@ -102,8 +102,6 @@ namespace Cognite.OpcUa.NodeSources
                 foreach (var rf in rawRefs)
                 {
                     AddReference(refs, rf);
-                    // if (!rf.IsInverse) Log.LogTrace("Add regular reference {Parent} -> {Child}", node.NodeId, rf.TargetId);
-                    // else Log.LogTrace("Add regular reference {Parent} -> {Child}", rf.TargetId, node.NodeId);
                 }
 
                 if (node is BaseTypeState type && type.SuperTypeId != null && !type.SuperTypeId.IsNullNodeId)
@@ -114,7 +112,6 @@ namespace Cognite.OpcUa.NodeSources
                         ReferenceTypeId = ReferenceTypeIds.HasSubtype,
                         TargetId = type.SuperTypeId
                     });
-                    // Log.LogTrace("Add supertype reference from {Parent} -> {Child}", type.SuperTypeId, node.NodeId);
                 }
                 if (node is BaseInstanceState instance)
                 {
@@ -146,10 +143,6 @@ namespace Cognite.OpcUa.NodeSources
                     }
                     if (!targetRefs.ContainsKey((node.NodeId, reference.ReferenceTypeId, !reference.IsInverse)))
                     {
-                        if (reference.IsInverse)
-                        {
-                            // Log.LogTrace("Add reference {P} -> {T} of type {Typ}", targetId, node.NodeId, reference.ReferenceTypeId);
-                        }
                         AddReference(targetRefs, new BasicReference
                         {
                             IsInverse = !reference.IsInverse,
@@ -177,18 +170,13 @@ namespace Cognite.OpcUa.NodeSources
             foreach (var reference in refs)
             {
                 if (!allowSubTypes && referenceTypeId != reference.ReferenceTypeId) continue;
-                else if (allowSubTypes && !IsOfType(reference.ReferenceTypeId, referenceTypeId))
-                {
-                    // Log.LogTrace("Skipping reference from {N} to {T} due to bad reference type {Typ}", node, reference.TargetId, reference.ReferenceTypeId);
-                    continue;
-                }
+                if (allowSubTypes && !IsOfType(reference.ReferenceTypeId, referenceTypeId)) continue;
 
                 if (reference.IsInverse && direction != BrowseDirection.Inverse
                     && direction != BrowseDirection.Both) continue;
                 else if (!reference.IsInverse && direction != BrowseDirection.Forward
                     && direction != BrowseDirection.Both) continue;
 
-                // Log.LogTrace("Discovered reference from {N} to {T} of type {Typ}", node, reference.TargetId, reference.ReferenceTypeId);
                 yield return reference;
             }
         }

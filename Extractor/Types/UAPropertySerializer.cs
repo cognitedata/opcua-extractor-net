@@ -144,7 +144,7 @@ namespace Cognite.OpcUa.Types
                     var longVal = Convert.ToInt64(value, CultureInfo.InvariantCulture);
                     if (enumValues.TryGetValue(longVal, out string enumVal))
                     {
-                        if (mode != StringConverterMode.Json)
+                        if (mode != StringConverterMode.Simple)
                         {
                             return JsonSerializer.Serialize(enumVal);
                         }

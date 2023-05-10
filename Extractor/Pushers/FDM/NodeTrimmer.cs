@@ -69,12 +69,10 @@ namespace Cognite.OpcUa.Pushers.FDM
                 // We explore all references for custom nodes
                 foreach (var rf in bySource)
                 {
-                    log.LogTrace("Traverse from {Id} to {T} by source reference", node.Id, rf.Target.Id);
                     TraverseNode(result, refResult, rf, nodes.Get(rf.Target.Id));
                 }
                 foreach (var rf in byTarget)
                 {
-                    log.LogTrace("Traverse from {Id} to {T} by target reference", node.Id, rf.Source.Id);
                     TraverseNode(result, refResult, rf, nodes.Get(rf.Source.Id));
                 }
             }
@@ -92,13 +90,11 @@ namespace Cognite.OpcUa.Pushers.FDM
                         if (node.Id == ObjectIds.XmlSchema_TypeSystem || node.Id == ObjectIds.OPCBinarySchema_TypeSystem) continue;
                         if (target.NodeClass == NodeClass.Object || target.NodeClass == NodeClass.Variable)
                         {
-                            log.LogTrace("Traverse from {Id} to {T} by hierarchical reference", node.Id, rf.Target.Id);
                             TraverseNode(result, refResult, rf, target);
                         }
                     }
                     else
                     {
-                        log.LogTrace("Traverse from {Id} to {T} by non-hierarchical reference", node.Id, rf.Target.Id);
                         TraverseNode(result, refResult, rf, target);
                     }
                 }
@@ -106,7 +102,6 @@ namespace Cognite.OpcUa.Pushers.FDM
                 {
                     if (rf.IsHierarchical)
                     {
-                        log.LogTrace("Traverse from {Id} to {T} by inverse hierarchical reference", node.Id, rf.Source.Id);
                         TraverseNode(result, refResult, rf, nodes.Get(rf.Source.Id));
                     }
                 }
