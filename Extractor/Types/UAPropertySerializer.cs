@@ -95,22 +95,17 @@ namespace Cognite.OpcUa.Types
             {
                 return mode != StringConverterMode.Simple ? "null" : "";
             }
-            if (value is Variant variantValue)
-            {
-                // This helps reduce code duplication, by making it possible to call ConvertToString with both variants and non-variants.
-                return ConvertToString(variantValue.Value, enumValues, variantValue.TypeInfo, mode);
-            }
             if (value is string strValue)
             {
                 return mode != StringConverterMode.Simple ? JsonSerializer.Serialize(strValue) : strValue;
             }
             // If this is true, the value should be converted using the built-in JsonEncoder.
-            if (typeInfo != null && ShouldUseJson(value, mode) && uaClient != null)
+            if (ShouldUseJson(value, mode) && uaClient != null && value is Variant variant2)
             {
                 try
                 {
                     using var encoder = new JsonEncoder(uaClient.MessageContext, mode == StringConverterMode.ReversibleJson, null, false);
-                    encoder.WriteVariantContents(value, typeInfo);
+                    encoder.WriteVariant(null, variant2, false);
                     var result = encoder.CloseAndReturnText();
 
                     return result[1..^1];
@@ -119,6 +114,12 @@ namespace Cognite.OpcUa.Types
                 {
                     log.LogWarning("Failed to serialize built in type: {Message}", ex.Message);
                 }
+            }
+
+            if (value is Variant variantValue)
+            {
+                // This helps reduce code duplication, by making it possible to call ConvertToString with both variants and non-variants.
+                return ConvertToString(variantValue.Value, enumValues, variantValue.TypeInfo, mode);
             }
 
             // If the type is enumerable we can write it to a JSON array.
@@ -281,6 +282,11 @@ namespace Cognite.OpcUa.Types
         private static bool ShouldUseJson(object value, StringConverterMode mode)
         {
             if (value == null) return false;
+            if (value is Variant variantValue)
+            {
+                value = variantValue.Value;
+                if (value == null) return false;
+            }
             // Go through the value to check if we can parse it ourselves.
             // i.e. this is either an enumerable of a handled type, or an extensionobject
             // around a handled type.

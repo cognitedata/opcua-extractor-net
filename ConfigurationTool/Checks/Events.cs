@@ -63,24 +63,37 @@ namespace Cognite.OpcUa.Config
             var emitterReferences = new List<BaseUANode>();
             try
             {
-                await Browser.BrowseDirectory(nodeList.Select(node => node.Id).Append(ObjectIds.Server).ToList(),
-                    ToolUtil.GetSimpleListWriterCallback(emitterReferences, this, TypeManager, log),
-                    token,
-                    ReferenceTypeIds.GeneratesEvent, (uint)NodeClass.ObjectType, false, purpose: "identifying GeneratesEvent references");
+                var res = await Browser.BrowseLevel(new BrowseParams
+                {
+                    BrowseDirection = BrowseDirection.Forward,
+                    IncludeSubTypes = false,
+                    ReferenceTypeId = ReferenceTypeIds.GeneratesEvent,
+                    Nodes = nodeList.Select(node => node.Id).Append(ObjectIds.Server).Select(n => new BrowseNode(n)).ToDictionary(n => n.Id),
+                    NodeClassMask = (uint)NodeClass.ObjectType
+                }, token, purpose: "identifying GeneratesEvent references");
+
+                foreach (var pair in res)
+                {
+                    foreach (var node in pair.Value)
+                    {
+                        emitterReferences.Add(new UAObjectType(ToNodeId(node.NodeId), node.DisplayName.Text, node.BrowseName, null, pair.Key));
+                    }
+                }
             }
             catch (Exception ex)
             {
                 log.LogWarning(ex, "Failed to look for GeneratesEvent references, this tool will not be able to identify emitted event types this way");
             }
 
-            var referencedEvents = emitterReferences.Select(evt => evt.Id)
-                .Distinct().ToHashSet();
-
-            var emittedEvents = referencedEvents.ToList();
+            var emittedEvents = emitterReferences.Select(evt => evt.Id).ToList();
 
             if (emittedEvents.Any())
             {
                 log.LogInformation("Identified {Count} events by looking at GeneratesEvent references", emittedEvents.Count);
+                foreach (var rf in emitterReferences)
+                {
+                    log.LogInformation("Test {T} {E}", rf.ParentId, rf.Id);
+                }
                 bool auditReferences = emitterReferences.Any(evt => evt.ParentId == ObjectIds.Server
                 && (evt.Id == ObjectTypeIds.AuditAddNodesEventType || evt.Id == ObjectTypeIds.AuditAddReferencesEventType));
 

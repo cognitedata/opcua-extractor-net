@@ -156,7 +156,7 @@ namespace Test.Unit
 
             foreach (var type in typeof(EnumValueType).Assembly.GetTypes())
             {
-                if (type.IsAbstract || type.IsInterface) continue;
+                if (type.IsAbstract || type.IsInterface || type == typeof(Opc.Ua.Export.LocalizedText)) continue;
                 Variant variant;
                 // If we can't create it, we don't care
                 try

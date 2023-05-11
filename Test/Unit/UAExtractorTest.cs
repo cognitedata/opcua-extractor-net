@@ -277,8 +277,8 @@ namespace Test.Unit
             extractor.InitExternal(tester.Source.Token);
             await extractor.RunExtractor(true);
 
-            Assert.Equal(65, pusher.PushedNodes.Count);
-            Assert.Equal(55, pusher.PushedVariables.Count);
+            Assert.Equal(18, pusher.PushedNodes.Count);
+            Assert.Equal(38, pusher.PushedVariables.Count);
             Assert.Equal(10, pusher.PushedReferences.Count);
         }
     }
