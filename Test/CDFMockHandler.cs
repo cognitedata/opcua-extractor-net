@@ -17,6 +17,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using Cognite.OpcUa;
 using CogniteSdk;
+using CogniteSdk.Beta.DataModels;
 using Com.Cognite.V1.Timeseries.Proto;
 using Google.Protobuf;
 using Microsoft.Extensions.Logging;
@@ -30,6 +31,7 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -52,6 +54,11 @@ namespace Test
         public Dictionary<string, RelationshipDummy> Relationships { get; } = new Dictionary<string, RelationshipDummy>();
         public Dictionary<string, RelationshipDummy> RelationshipsRaw { get; } = new Dictionary<string, RelationshipDummy>();
         public Dictionary<string, DataSet> DataSets { get; } = new Dictionary<string, DataSet>();
+        public Dictionary<string, Space> Spaces { get; } = new();
+        public Dictionary<string, JsonObject> DataModels { get; } = new();
+        public Dictionary<string, JsonObject> Views { get; } = new();
+        public Dictionary<string, JsonObject> Containers { get; } = new();
+        public Dictionary<string, JsonObject> Instances { get; } = new();
         public List<BrowseReport> Callbacks { get; } = new List<BrowseReport>();
 
         private long assetIdCounter = 1;
@@ -231,6 +238,21 @@ namespace Test
                             break;
                         case "/datasets/byids":
                             res = HandleRetrieveDataSets(content);
+                            break;
+                        case "/models/spaces":
+                            res = HandleCreateSpaces(content);
+                            break;
+                        case "/models/containers":
+                            res = HandleCreateContainers(content);
+                            break;
+                        case "/models/views":
+                            res = HandleCreateViews(content);
+                            break;
+                        case "/models/datamodels":
+                            res = HandleCreateDataModels(content);
+                            break;
+                        case "/models/instances":
+                            res = HandleCreateInstances(content);
                             break;
                         default:
                             log.LogWarning("Unknown path: {DummyFactoryUnknownPath}", reqPath);
@@ -1109,6 +1131,76 @@ namespace Test
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent(data)
+            };
+        }
+
+        private HttpResponseMessage HandleCreateSpaces(string content)
+        {
+            var data = System.Text.Json.JsonSerializer.Deserialize<ItemsWithoutCursor<Space>>(content,
+                Oryx.Cognite.Common.jsonOptions);
+            foreach (var dt in data.Items)
+            {
+                Spaces[dt.Space] = dt;
+            }
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(content)
+            };
+        }
+
+        private HttpResponseMessage HandleCreateViews(string content)
+        {
+            var data = System.Text.Json.JsonSerializer.Deserialize<ItemsWithoutCursor<JsonObject>>(content,
+                Oryx.Cognite.Common.jsonOptions);
+            foreach (var dt in data.Items)
+            {
+                Views[(string)dt["externalId"].AsValue()] = dt;
+            }
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(content)
+            };
+        }
+
+        private HttpResponseMessage HandleCreateContainers(string content)
+        {
+            var data = System.Text.Json.JsonSerializer.Deserialize<ItemsWithoutCursor<JsonObject>>(content,
+                Oryx.Cognite.Common.jsonOptions);
+            foreach (var dt in data.Items)
+            {
+                Containers[(string)dt["externalId"].AsValue()] = dt;
+            }
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(content)
+            };
+        }
+
+        private HttpResponseMessage HandleCreateDataModels(string content)
+        {
+            var data = System.Text.Json.JsonSerializer.Deserialize<ItemsWithoutCursor<JsonObject>>(content,
+                Oryx.Cognite.Common.jsonOptions);
+            foreach (var dt in data.Items)
+            {
+                DataModels[(string)dt["externalId"].AsValue()] = dt;
+            }
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(content)
+            };
+        }
+
+        private HttpResponseMessage HandleCreateInstances(string content)
+        {
+            var data = System.Text.Json.JsonSerializer.Deserialize<ItemsWithoutCursor<JsonObject>>(content,
+                Oryx.Cognite.Common.jsonOptions);
+            foreach (var dt in data.Items)
+            {
+                Instances[(string)dt["externalId"].AsValue()] = dt;
+            }
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(content)
             };
         }
     }

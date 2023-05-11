@@ -167,22 +167,9 @@ namespace Cognite.OpcUa.NodeSources
                     // The child should always be in the list of mapped nodes here
                     var nodeId = Client.ToNodeId(pair.Node.NodeId);
                     var childNode = Extractor.State.GetMappedNode(nodeId);
-                    if (childNode == null)
-                    {
-                        Log.LogInformation("Child node does not exist: {R}", nodeId);
-                    }
                     if (childNode == null) continue;
                     var parentNode = Extractor.State.GetMappedNode(pair.ParentId);
-                    if (parentNode == null)
-                    {
-                        Log.LogInformation("Parent node does not exist: {R}", pair.ParentId);
-                    }
                     if (parentNode == null) continue;
-
-                    if (childNode.IsProperty && childNode.Id.NamespaceIndex != 0)
-                    {
-                        Log.LogInformation("Added reference from node {P} to {C}", parentNode.Id, childNode.Id);
-                    }
 
                     hierarchicalReferences.Add(new UAReference(
                         type: pair.Node.ReferenceTypeId,
