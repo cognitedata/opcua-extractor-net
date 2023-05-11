@@ -45,7 +45,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             this.config = config;
             this.destination = destination;
             this.log = log;
-            instSpace = config.Cognite!.FlexibleDataModels!.Space;
+            instSpace = config.Cognite!.FlexibleDataModels!.Space!;
         }
 
         private async Task IngestInstances(IEnumerable<BaseInstanceWrite> instances, int chunkSize, CancellationToken token)
@@ -75,7 +75,7 @@ namespace Cognite.OpcUa.Pushers.FDM
 
             int taskNum = 0;
             await generators.RunThrottled(
-                1,
+                5,
                 (_) =>
                 {
                     if (chunks.Count > 1)
@@ -107,22 +107,26 @@ namespace Cognite.OpcUa.Pushers.FDM
             if (config.DryRun) return;
 
             // Check if the data model exists
-            try
+            if (config.Cognite!.FlexibleDataModels!.SkipTypesOnEqualCount)
             {
-                var existingModels = await destination.CogniteClient.Beta.DataModels.RetrieveDataModels(new[] { new FDMExternalId("OPC_UA", instSpace, "1") }, false, token);
-                if (existingModels.Any())
+                try
                 {
-                    var existingModel = existingModels.First();
-                    var viewCount = existingModel.Views.Count();
-                    if (viewCount == viewsToInsert.Count)
+                    var existingModels = await destination.CogniteClient.Beta.DataModels.RetrieveDataModels(new[] { new FDMExternalId("OPC_UA", instSpace, "1") }, false, token);
+                    if (existingModels.Any())
                     {
-                        log.LogInformation("Number of views in model is the same, not updating");
-                        return;
+                        var existingModel = existingModels.First();
+                        var viewCount = existingModel.Views.Count();
+                        if (viewCount == viewsToInsert.Count)
+                        {
+                            log.LogInformation("Number of views in model is the same, not updating");
+                            return;
+                        }
                     }
-                }
 
+                }
+                catch { }
             }
-            catch { }
+            
 
             await destination.CogniteClient.Beta.DataModels.UpsertSpaces(new[]
             {
@@ -178,7 +182,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             CancellationToken token)
         {
             var converter = new DMSValueConverter(client.StringConverter, instSpace);
-            var builder = new TypeHierarchyBuilder(log, client, converter, config);
+            var builder = new TypeHierarchyBuilder(log, converter, config);
             // First, collect all nodes, including properties.
             var nodes = objects
                 .SelectMany(obj => obj.GetAllProperties())

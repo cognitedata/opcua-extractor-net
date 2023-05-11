@@ -167,7 +167,6 @@ namespace Cognite.OpcUa.Pushers.FDM
             {
                 nextPath = path;
             }
-
             
             var refs = nodes.BySource(node.Id);
             foreach (var rf in refs)
@@ -199,6 +198,16 @@ namespace Cognite.OpcUa.Pushers.FDM
             {
                 MappedAsProperty.Add(node.Id);
             }
+
+            if (first)
+            {
+                foreach (var prop in type.Properties)
+                {
+                    if (properties.ContainsKey(prop.Key)) continue;
+                    properties[prop.Key] = null;
+                }
+            }
+
             return collected;
         }
 

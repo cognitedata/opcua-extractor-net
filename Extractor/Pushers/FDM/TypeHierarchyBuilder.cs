@@ -196,12 +196,12 @@ namespace Cognite.OpcUa.Pushers.FDM
         private readonly DMSValueConverter converter;
         private readonly string space;
         private readonly Dictionary<NodeId, FullUANodeType> typeMap = new();
-        public TypeHierarchyBuilder(ILogger log, IUAClientAccess client, DMSValueConverter converter, FullConfig config)
+        public TypeHierarchyBuilder(ILogger log, DMSValueConverter converter, FullConfig config)
         {
             this.log = log;
             this.config = config;
             nodeTypes = new NodeTypeCollector(log, config);
-            space = config.Cognite!.FlexibleDataModels!.Space;
+            space = config.Cognite!.FlexibleDataModels!.Space!;
             fdmConfig = config.Cognite.FlexibleDataModels!;
             this.converter = converter;
         }

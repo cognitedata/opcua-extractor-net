@@ -186,7 +186,7 @@ namespace Cognite.OpcUa.Config
         /// <summary>
         /// Instance space to write to
         /// </summary>
-        public string Space { get; set; } = "opcua_test_2";
+        public string? Space { get; set; }
         /// <summary>
         /// True to enable. This will not produce meaningful results unless
         /// extraction.types.as-nodes, extraction.relationships.enabled, extraction.relationships.hierarchical,
@@ -219,5 +219,10 @@ namespace Cognite.OpcUa.Config
         /// Simplifies the model greatly.
         /// </summary>
         public bool SkipSimpleTypes { get; set; }
+        
+        /// <summary>
+        /// Do not ingest views if the number of views in the data model is equal to the number of views in OPC-UA.
+        /// </summary>
+        public bool SkipTypesOnEqualCount { get; set; }
     }
 }
