@@ -1418,6 +1418,23 @@ namespace Server
             AddReverseReferences(externalReferences);
         }
 
+        private void LoadAddressSpaceFiles(IDictionary<NodeId, IList<IReference>> externalReferences)
+        {
+            if (nodeSetFiles == null) return;
+            foreach (var file in nodeSetFiles)
+            {
+                log.LogInformation("Loading namespaces: {Ns}", string.Join(", ", file.NamespaceUris));
+
+                foreach (var node in file.Nodes)
+                {
+                    AddPredefinedNode(SystemContext, node);
+                }
+            }
+            nodeSetFiles = null;
+
+            AddReverseReferences(externalReferences);
+        }
+
         // Utility methods to create nodes
         private void AddNodeToExt(NodeState state, NodeId id, NodeId typeId,
             IDictionary<NodeId, IList<IReference>> externalReferences)
