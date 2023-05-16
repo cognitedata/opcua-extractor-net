@@ -52,8 +52,6 @@ namespace Cognite.OpcUa.NodeSources
         private readonly Dictionary<NodeId, BaseUANode> nodeMap = new();
         protected IEnumerable<BaseUANode> NodeList => nodeList;
         protected IReadOnlyDictionary<NodeId, BaseUANode> NodeMap => nodeMap;
-        protected List<BaseUANode> RawObjects { get; } = new List<BaseUANode>();
-        protected List<UAVariable> RawVariables { get; } = new List<UAVariable>();
 
         // Nodes that are treated as variables (and synchronized) in the source system
         protected List<UAVariable> FinalSourceVariables { get; } = new List<UAVariable>();
@@ -274,7 +272,7 @@ namespace Cognite.OpcUa.NodeSources
         /// Apply transformations and sort the given node as variable, object or property.
         /// </summary>
         /// <param name="node"></param>
-        protected void SortNode(BaseUANode node)
+        protected void SortNode(BaseUANode node, IList<BaseUANode> rawObjects, IList<UAVariable> rawVariables)
         {
             if (node.Parent == null && !node.ParentId.IsNullNodeId)
             {
@@ -324,11 +322,11 @@ namespace Cognite.OpcUa.NodeSources
             }
             else if (node is UAVariable variable)
             {
-                RawVariables.Add(variable);
+                rawVariables.Add(variable);
             }
             else
             {
-                RawObjects.Add(node);
+                rawObjects.Add(node);
             }
         }
 

@@ -78,6 +78,7 @@ namespace Cognite.OpcUa.NodeSources
             {
                 Client.AddExternalNamespaces(set.NamespaceUris);
             }
+            Log.LogDebug("Import nodeset into common node collection");
             set.Import(Client.SystemContext, nodes);
             Log.LogDebug("Imported nodeset from file {File}, buiding internal data structures", file);
         }
@@ -297,23 +298,16 @@ namespace Cognite.OpcUa.NodeSources
 
         #region parse
 
-        public override async Task<NodeSourceResult?> ParseResults(CancellationToken token)
+        private async Task InitNodes(IEnumerable<BaseUANode> nodes, CancellationToken token)
         {
-            if (!NodeMap.Any()) return null;
-
-            RawObjects.Clear();
-            RawVariables.Clear();
-            FinalDestinationObjects.Clear();
-            FinalDestinationVariables.Clear();
-            FinalReferences.Clear();
-            FinalSourceObjects.Clear();
-            FinalSourceVariables.Clear();
+            var rawObjects = new List<BaseUANode>();
+            var rawVariables = new List<UAVariable>();
 
             var properties = new List<UAVariable>();
 
-            foreach (var node in NodeList)
+            foreach (var node in nodes)
             {
-                SortNode(node);
+                SortNode(node, rawObjects, rawVariables);
                 node.Attributes.IsDataRead = true;
                 if (node.IsProperty && (node is UAVariable variable))
                 {
@@ -324,14 +318,14 @@ namespace Cognite.OpcUa.NodeSources
 
             if (Config.Extraction.DataTypes.MaxArraySize != 0 && Config.Extraction.DataTypes.EstimateArraySizes)
             {
-                await EstimateArraySizes(RawVariables, token);
+                await EstimateArraySizes(rawVariables, token);
             }
 
             var update = Config.Extraction.Update;
-            var mappedObjects = RawObjects.Where(obj => FilterObject(update.Objects, obj)).ToList();
+            var mappedObjects = rawObjects.Where(obj => FilterObject(update.Objects, obj)).ToList();
             FinalDestinationObjects.AddRange(mappedObjects);
             FinalSourceObjects.AddRange(mappedObjects);
-            foreach (var variable in RawVariables)
+            foreach (var variable in rawVariables)
             {
                 SortVariable(update.Variables, variable);
             }
@@ -341,11 +335,54 @@ namespace Cognite.OpcUa.NodeSources
                 InitNodeState(update, node);
             }
 
+        }
+
+        public override async Task<NodeSourceResult?> ParseResults(CancellationToken token)
+        {
+            if (!NodeMap.Any()) return null;
+
+            FinalDestinationObjects.Clear();
+            FinalDestinationVariables.Clear();
+            FinalReferences.Clear();
+            FinalSourceObjects.Clear();
+            FinalSourceVariables.Clear();
+
+            await InitNodes(NodeList, token);
+
             var usesFdm = Config.Cognite?.FlexibleDataModels?.Enabled ?? false;
 
             if (Config.Extraction.Relationships.Enabled)
             {
-                GetRelationshipData(usesFdm, usesFdm ? ModellingRules : new HashSet<NodeId>());
+                var newNodes = new List<(NodeId, IReference)>();
+                var additionalKnownNodes = usesFdm ? ModellingRules : new HashSet<NodeId>();
+
+                GetRelationshipData(usesFdm, additionalKnownNodes, newNodes);
+
+                await InitNodes(newNodes.Where(pair => !pair.Item2.IsInverse).SelectNonNull(pair => NodeMap.GetValueOrDefault(Client.ToNodeId(pair.Item2.TargetId))), token);
+
+                foreach (var (parentId, rf) in newNodes)
+                {
+                    var parentNode = Extractor.State.GetMappedNode(parentId);
+                    if (parentNode == null) continue;
+
+                    bool isHierarchical = IsOfType(rf.ReferenceTypeId, ReferenceTypeIds.HierarchicalReferences);
+                    var childNode = Extractor.State.GetMappedNode(Client.ToNodeId(rf.TargetId));
+                    if (childNode == null) continue;
+
+                    var reference = new UAReference(
+                        type: Client.ToNodeId(rf.ReferenceTypeId),
+                        isForward: !rf.IsInverse,
+                        source: parentId,
+                        target: childNode.Id,
+                        sourceTs: !parentNode.IsObject,
+                        targetTs: !childNode.IsObject,
+                        isHierarchical,
+                        manager: TypeManager);
+
+                    if (!FilterReference(reference, usesFdm, additionalKnownNodes)) continue;
+
+                    FinalReferences.Add(reference);
+                }
             }
 
             ClearRaw();
@@ -375,7 +412,7 @@ namespace Cognite.OpcUa.NodeSources
                 isFullBrowse);
         }
 
-        private void GetRelationshipData(bool getPropertyReferences, HashSet<NodeId> additionalKnownNodes)
+        private void GetRelationshipData(bool getPropertyReferences, HashSet<NodeId> additionalKnownNodes, List<(NodeId, IReference)> newNodes)
         {
             foreach (var (id, refs) in references)
             {
@@ -387,7 +424,21 @@ namespace Cognite.OpcUa.NodeSources
                     bool isHierarchical = IsOfType(rf.ReferenceTypeId, ReferenceTypeIds.HierarchicalReferences);
 
                     var childNode = Extractor.State.GetMappedNode(Client.ToNodeId(rf.TargetId));
-                    if (childNode == null) continue;
+                    if (childNode == null)
+                    {
+                        if (Config.Extraction.Relationships.CreateReferencedNodes)
+                        {
+                            var childId = Client.ToNodeId(rf.TargetId);
+                            if (!nodeDict.ContainsKey(childId)) continue;
+                            if (!BuildNode(childId, NodeId.Null)) continue;
+                            newNodes.Add((id, rf));
+                        }
+                        else
+                        {
+                            Log.LogTrace("Skipping reference from {Parent} to {Child} due to missing child node", id, rf.TargetId);
+                        }
+                        continue;
+                    }
 
                     var reference = new UAReference(
                         type: Client.ToNodeId(rf.ReferenceTypeId),

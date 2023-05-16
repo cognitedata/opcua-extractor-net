@@ -37,7 +37,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             Views.Add(container.Name, BaseDataModelDefinitions.ViewFromContainer(container, viewVersion, baseView));
         }
 
-        public void Add(FullUANodeType type, DMSValueConverter converter)
+        public void Add(FullUANodeType type, DMSValueConverter converter, FdmDestinationConfig config)
         {
             // If the type is in views, it and all its parents are already added
             if (Views.ContainsKey(type.Node.Name!))
@@ -70,7 +70,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                     ExternalId = type.ExternalId,
                     UsedFor = UsedFor.node,
                     Space = space,
-                    Properties = GetContainerProperties(type, converter)
+                    Properties = GetContainerProperties(type, converter, config)
                 };
                 Containers.Add(ct.Name!, ct);
                 view = BaseDataModelDefinitions.ViewFromContainer(ct, viewVersion, type.Parent.ExternalId);
@@ -110,7 +110,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                         Description = rf.BrowseName,
                         Name = rf.BrowseName,
                         Direction = ConnectionDirection.outwards,
-                        Source = new ViewIdentifier(space, rf.Type!.ExternalId, viewVersion),
+                        Source = GetViewIdentifier(rf.ExternalId, type.ExternalId, rf, config),
                         Type = new DirectRelationIdentifier(space, rf.Reference.Type.Id.ToString())
                     });
                     ViewIsReferenced[rf.Type!.ExternalId] = true;
@@ -119,7 +119,34 @@ namespace Cognite.OpcUa.Pushers.FDM
             Views.Add(view.Name!, view);
         }
 
-        private Dictionary<string, ContainerPropertyDefinition> GetContainerProperties(FullUANodeType type, DMSValueConverter converter)
+        private ViewIdentifier GetViewIdentifier(string externalId, string typeName, NodeTypeReference rf, FdmDestinationConfig config)
+        {
+            if (config.ConnectionTargetMap != null && config.ConnectionTargetMap.TryGetValue($"{typeName}.{externalId}", out var mapped))
+            {
+                return new ViewIdentifier(space, mapped, viewVersion);
+            }
+
+            if (rf.NodeClass == NodeClass.Object || rf.NodeClass == NodeClass.Variable)
+            {
+                return new ViewIdentifier(space, rf.Type!.ExternalId, viewVersion);
+            } else if (rf.NodeClass == NodeClass.ObjectType)
+            {
+                return new ViewIdentifier(space, "ObjectType", viewVersion);
+            } else if (rf.NodeClass == NodeClass.VariableType)
+            {
+                return new ViewIdentifier(space, "VariableType", viewVersion);
+            }
+            else if (rf.NodeClass == NodeClass.ReferenceType)
+            {
+                return new ViewIdentifier(space, "ReferenceType", viewVersion);
+            }
+            else
+            {
+                return new ViewIdentifier(space, "DataType", viewVersion);
+            }
+        }
+
+        private Dictionary<string, ContainerPropertyDefinition> GetContainerProperties(FullUANodeType type, DMSValueConverter converter, FdmDestinationConfig config)
         {
             var res = new Dictionary<string, ContainerPropertyDefinition>();
             foreach (var kvp in type.Properties)
@@ -139,7 +166,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                     Description = type.Node.Attributes.Description,
                     Name = kvp.Value.BrowseName,
                     Type = typ,
-                    Nullable = kvp.Value.ModellingRule != ModellingRule.Mandatory || (typ is DirectRelationPropertyType),
+                    Nullable = kvp.Value.ModellingRule != ModellingRule.Mandatory || (typ is DirectRelationPropertyType) || config.IgnoreMandatory,
                     DefaultValue = (typ.Type == PropertyTypeVariant.direct || kvp.Value.Node.IsArray && typ.Type != PropertyTypeVariant.json)
                         ? null : converter.ConvertVariant(typ, kvp.Value.Node.Value)
                 };
@@ -251,7 +278,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             if (IsEventType(node)) return;
             if (typeMap.ContainsKey(node.Node.Id)) return;
             typeMap.Add(node.Node.Id, node);
-            batch.Add(node, converter);
+            batch.Add(node, converter, fdmConfig);
             if (node.Parent != null)
             {
                 AddType(batch, node.Parent);

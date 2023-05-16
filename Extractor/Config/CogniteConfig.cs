@@ -224,5 +224,18 @@ namespace Cognite.OpcUa.Config
         /// Do not ingest views if the number of views in the data model is equal to the number of views in OPC-UA.
         /// </summary>
         public bool SkipTypesOnEqualCount { get; set; }
+
+        /// <summary>
+        /// Let mandatory options be nullable.
+        /// 
+        /// Lots of servers don't do this properly.
+        /// </summary>
+        public bool IgnoreMandatory { get; set; }
+
+        /// <summary>
+        /// Target connections on the form "Type"."Property": "Target"
+        /// Useful for certain schemas.
+        /// </summary>
+        public Dictionary<string, string>? ConnectionTargetMap { get; set; }
     }
 }

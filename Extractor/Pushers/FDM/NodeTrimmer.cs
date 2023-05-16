@@ -62,7 +62,10 @@ namespace Cognite.OpcUa.Pushers.FDM
                 dataTypeId = varType.FullAttributes.DataType.Id;
             }
             if (dataTypeId != null && !dataTypeId.IsNullNodeId) TraverseNode(result, refResult, null, nodes.Get(dataTypeId));
-
+            if (node.TypeDefinition != null && !node.TypeDefinition.IsNullNodeId)
+            {
+                TraverseNode(result, refResult, null, nodes.Get(node.TypeDefinition));
+            }
 
             if (node.Id.NamespaceIndex != 0)
             {

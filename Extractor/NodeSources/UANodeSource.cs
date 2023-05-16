@@ -48,24 +48,17 @@ namespace Cognite.OpcUa.NodeSources
             this.isFullBrowse = isFullBrowse;
         }
 
-        /// <summary>
-        /// Called after mapping has completed.
-        /// Transforms the list of raw nodes into five collections:
-        /// Source variables, source objects,
-        /// destination variables, destination objects, and references.
-        /// This reads necessary information from the state and the server.
-        /// </summary>
-        /// <returns>Resulting lists of populated and sorted nodes.</returns>
-        public override async Task<NodeSourceResult?> ParseResults(CancellationToken token)
+        private async Task InitNodes(IEnumerable<BaseUANode> nodes, CancellationToken token)
         {
-            if (parsed) throw new InvalidOperationException("Browse result has already been parsed");
-            if (!NodeMap.Any()) return null;
-            await Client.ReadNodeData(NodeList, token, "node hierarchy information");
+            var rawObjects = new List<BaseUANode>();
+            var rawVariables = new List<UAVariable>();
+
+            await Client.ReadNodeData(nodes, token, "node hierarchy information");
 
             var properties = new HashSet<UAVariable>();
-            foreach (var node in NodeList)
+            foreach (var node in nodes)
             {
-                SortNode(node);
+                SortNode(node, rawObjects, rawVariables);
                 if ((node.IsProperty || Config.Extraction.NodeTypes.AsNodes && node.NodeClass == NodeClass.VariableType)
                     && (node is UAVariable variable))
                 {
@@ -83,15 +76,15 @@ namespace Cognite.OpcUa.NodeSources
 
             if (Config.Extraction.DataTypes.MaxArraySize != 0 && Config.Extraction.DataTypes.EstimateArraySizes == true)
             {
-                await EstimateArraySizes(RawVariables, token);
+                await EstimateArraySizes(rawVariables, token);
             }
 
             var update = Config.Extraction.Update;
 
-            var mappedObjects = RawObjects.Where(obj => FilterObject(update.Objects, obj)).ToList();
+            var mappedObjects = rawObjects.Where(obj => FilterObject(update.Objects, obj)).ToList();
             FinalDestinationObjects.AddRange(mappedObjects);
             FinalSourceObjects.AddRange(mappedObjects);
-            foreach (var variable in RawVariables)
+            foreach (var variable in rawVariables)
             {
                 SortVariable(update.Variables, variable);
             }
@@ -100,6 +93,23 @@ namespace Cognite.OpcUa.NodeSources
             {
                 InitNodeState(update, node);
             }
+        }
+
+        /// <summary>
+        /// Called after mapping has completed.
+        /// Transforms the list of raw nodes into five collections:
+        /// Source variables, source objects,
+        /// destination variables, destination objects, and references.
+        /// This reads necessary information from the state and the server.
+        /// </summary>
+        /// <returns>Resulting lists of populated and sorted nodes.</returns>
+        public override async Task<NodeSourceResult?> ParseResults(CancellationToken token)
+        {
+            if (parsed) throw new InvalidOperationException("Browse result has already been parsed");
+            if (!NodeMap.Any()) return null;
+
+            await InitNodes(NodeList, token);
+
             var usesFdm = Config.Cognite?.FlexibleDataModels?.Enabled ?? false;
 
             if (Config.Extraction.Relationships.Enabled)

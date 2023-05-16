@@ -279,6 +279,10 @@ namespace Cognite.OpcUa.Config
         /// Does nothing if hierarchical is false.
         /// </summary>
         public bool InverseHierarchical { get; set; }
+        /// <summary>
+        /// Create any nodes that are found through non-hierarchical references but not in the hierarchy.
+        /// </summary>
+        public bool CreateReferencedNodes { get; set; }
     }
     public class NodeTypeConfig
     {
