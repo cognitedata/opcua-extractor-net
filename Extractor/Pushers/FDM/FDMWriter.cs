@@ -30,6 +30,7 @@ using System.Text.Json;
 using System;
 using Cognite.OpcUa.Nodes;
 using CogniteSdk;
+using System.Text.Json.Serialization;
 
 namespace Cognite.OpcUa.Pushers.FDM
 {
@@ -260,6 +261,23 @@ namespace Cognite.OpcUa.Pushers.FDM
                 return true;
             }
 
+            var serverMeta = new NodeWrite
+            {
+                ExternalId = $"{config.Extraction.IdPrefix}Server",
+                Sources = new[]
+                {
+                    new InstanceData<ServerMeta>
+                    {
+                        Source = new ContainerIdentifier(instSpace, "ServerMeta"),
+                        Properties = new ServerMeta
+                        {
+                            Namespaces = client.NamespaceTable!.ToArray()
+                        }
+                    }
+                },
+                Space = instSpace
+            };
+
             // Ingest types first
             log.LogInformation("Ingesting {Count1} object types, {Count2} reference types, {Count3} dataTypes",
                 instanceBuilder.ObjectTypes.Count,
@@ -267,7 +285,8 @@ namespace Cognite.OpcUa.Pushers.FDM
                 instanceBuilder.DataTypes.Count);
             await IngestInstances(instanceBuilder.ObjectTypes
                 .Concat(instanceBuilder.ReferenceTypes)
-                .Concat(instanceBuilder.DataTypes), 1000, token);
+                .Concat(instanceBuilder.DataTypes)
+                .Append(serverMeta), 1000, token);
 
             // Then ingest variable types
             log.LogInformation("Ingesting {Count} variable types", instanceBuilder.VariableTypes.Count);
@@ -283,5 +302,11 @@ namespace Cognite.OpcUa.Pushers.FDM
 
             return true;
         }
+    }
+
+    class ServerMeta
+    {
+        [JsonPropertyName("Namespaces")]
+        public IEnumerable<string>? Namespaces { get; set; }
     }
 }

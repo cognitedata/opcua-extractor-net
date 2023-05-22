@@ -310,5 +310,25 @@ namespace Cognite.OpcUa.Pushers.FDM
                 }
             };
         }
+
+        public static ContainerCreate ServerMeta(string space)
+        {
+            return new ContainerCreate
+            {
+                Description = "Type for OPC UA server metadata",
+                ExternalId = "ServerMeta",
+                Name = "ServerMeta",
+                Space = space,
+                UsedFor = UsedFor.node,
+                Properties = new Dictionary<string, ContainerPropertyDefinition>
+                {
+                    { "Namespaces", new ContainerPropertyDefinition
+                    {
+                        Type = BasePropertyType.Text(true),
+                        Nullable = false
+                    } }
+                }
+            };
+        }
     }
 }
