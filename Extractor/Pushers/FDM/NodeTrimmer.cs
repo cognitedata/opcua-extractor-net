@@ -39,8 +39,21 @@ namespace Cognite.OpcUa.Pushers.FDM
             this.log = log;
         }
 
+        private bool IsExcludedNode(BaseUANode node)
+        {
+            if (node.TypeDefinition == null) return false;
+            // Is this one of the type system nodes?
+            if (node.Id == ObjectIds.XmlSchema_TypeSystem || node.Id == ObjectIds.OPCBinarySchema_TypeSystem) return true;
+
+            // Is the type defintion of the node from the type system?
+            if (node.TypeDefinition == ObjectTypeIds.DataTypeSystemType || node.TypeDefinition == VariableTypeIds.DataTypeDescriptionType
+                || node.TypeDefinition == VariableTypeIds.DataTypeDictionaryType) return true;
+            return false;
+        }
+
         private void TraverseNode(List<BaseUANode> result, List<UAReference> refResult, UAReference? reference, BaseUANode node)
         {
+            if (IsExcludedNode(node)) return;
             if (reference != null) refResult.Add(reference);
             if (!visitedIds.Add(node.Id)) return;
             result.Add(node);
@@ -90,7 +103,6 @@ namespace Cognite.OpcUa.Pushers.FDM
                     {
                         // These nodes in particular we skip here, as they are huge, and we only need custom members.
                         // They contain the binary schema for every OPC-UA type.
-                        if (node.Id == ObjectIds.XmlSchema_TypeSystem || node.Id == ObjectIds.OPCBinarySchema_TypeSystem) continue;
                         if (target.NodeClass == NodeClass.Object || target.NodeClass == NodeClass.Variable)
                         {
                             TraverseNode(result, refResult, rf, target);
@@ -113,6 +125,7 @@ namespace Cognite.OpcUa.Pushers.FDM
 
         private void TraverseHierarchy(List<BaseUANode> result, List<UAReference> refResult, UAReference? reference, BaseUANode node)
         {
+            if (IsExcludedNode(node)) return;
             if (reference != null) refResult.Add(reference);
             if (visitedIds.Add(node.Id)) result.Add(node);
             var bySource = nodes.BySource(node.Id);

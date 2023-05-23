@@ -56,16 +56,16 @@ namespace Test.Unit
             Assert.Single(handler.Spaces);
             // FolderType, BaseObjectType, BaseVariableType, BaseDataVariableType, PropertyType,
             // 3 custom object types, 2 custom variable types
-            // BaseNode, BaseType, +4 type types, ModellingRuleType, and DataTypeSystemType
-            Assert.Equal(19, handler.Views.Count);
+            // BaseNode, BaseType, +4 type types, and ModellingRuleType
+            Assert.Equal(18, handler.Views.Count);
             // 8 base types, 2 custom object types, 1 custom variable type have container data
             Assert.Equal(12, handler.Containers.Count);
             foreach (var inst in handler.Instances)
             {
                 tester.Log.LogInformation("{Key}", inst.Key);
             }
-            Assert.Equal(55, handler.Instances.Count(inst => inst.Value["instanceType"].ToString() == "node"));
-            Assert.Equal(76, handler.Instances.Count(inst => inst.Value["instanceType"].ToString() == "edge"));
+            Assert.Equal(52, handler.Instances.Count(inst => inst.Value["instanceType"].ToString() == "node"));
+            Assert.Equal(71, handler.Instances.Count(inst => inst.Value["instanceType"].ToString() == "edge"));
         }
 
         [Fact]
@@ -82,12 +82,12 @@ namespace Test.Unit
             Assert.Single(handler.Spaces);
             // FolderType, BaseObjectType, BaseVariableType, BaseDataVariableType, PropertyType,
             // 3 custom object types, 1 custom variable type
-            // BaseNode, BaseType, +4 type types, ModellingRuleType, and DataTypeSystemType
-            Assert.Equal(18, handler.Views.Count);
+            // BaseNode, BaseType, +4 type types, and ModellingRuleType
+            Assert.Equal(17, handler.Views.Count);
             // 8 base types, 2 custom object types, 1 custom variable type have container data
             Assert.Equal(12, handler.Containers.Count);
-            Assert.Equal(55, handler.Instances.Count(inst => inst.Value["instanceType"].ToString() == "node"));
-            Assert.Equal(76, handler.Instances.Count(inst => inst.Value["instanceType"].ToString() == "edge"));
+            Assert.Equal(52, handler.Instances.Count(inst => inst.Value["instanceType"].ToString() == "node"));
+            Assert.Equal(71, handler.Instances.Count(inst => inst.Value["instanceType"].ToString() == "edge"));
         }
 
         [Fact]

@@ -200,14 +200,8 @@ namespace Cognite.OpcUa.Pushers.FDM
 
             var nodeHierarchy = new NodeHierarchy(references, nodes);
 
-            var types = builder.ConstructTypes(nodeHierarchy);
-
-            // Initialize if needed
-            await Initialize(types, token);
-
-            var nodeIds = nodes.Select(node => node.Id).ToHashSet();
-
             var finalReferences = new List<UAReference>();
+            var nodeIds = nodes.Select(node => node.Id).ToHashSet();
 
             // Iterate over references and identify any that are missing source or target nodes
             // Some servers are not in the node hierarchy, we currently don't map those, but we might in the future.
@@ -249,6 +243,11 @@ namespace Cognite.OpcUa.Pushers.FDM
                 nodeHierarchy = trimmer.Filter();
                 log.LogInformation("After filtering {Nodes} nodes are left", nodeHierarchy.NodeMap.Count);
             }
+
+            var types = builder.ConstructTypes(nodeHierarchy);
+
+            // Initialize if needed
+            await Initialize(types, token);
 
             var instanceBuilder = new InstanceBuilder(nodeHierarchy, types, converter, client, instSpace, log);
             log.LogInformation("Begin building instances");
