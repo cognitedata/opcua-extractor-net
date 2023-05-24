@@ -1,9 +1,3 @@
-﻿using Cognite.OpcUa.Config;
-using Cognite.OpcUa.TypeCollectors;
-using Cognite.OpcUa.Types;
-using CogniteSdk.Beta.DataModels;
-using Microsoft.Extensions.Logging;
-using Opc.Ua;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -11,6 +5,12 @@ using System.Net;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using Cognite.OpcUa.Config;
+using Cognite.OpcUa.TypeCollectors;
+using Cognite.OpcUa.Types;
+using CogniteSdk.Beta.DataModels;
+using Microsoft.Extensions.Logging;
+using Opc.Ua;
 
 namespace Cognite.OpcUa.Pushers.FDM
 {
@@ -129,10 +129,12 @@ namespace Cognite.OpcUa.Pushers.FDM
             if (rf.NodeClass == NodeClass.Object || rf.NodeClass == NodeClass.Variable)
             {
                 return new ViewIdentifier(space, rf.Type!.ExternalId, viewVersion);
-            } else if (rf.NodeClass == NodeClass.ObjectType)
+            }
+            else if (rf.NodeClass == NodeClass.ObjectType)
             {
                 return new ViewIdentifier(space, "ObjectType", viewVersion);
-            } else if (rf.NodeClass == NodeClass.VariableType)
+            }
+            else if (rf.NodeClass == NodeClass.VariableType)
             {
                 return new ViewIdentifier(space, "VariableType", viewVersion);
             }
