@@ -128,7 +128,7 @@ namespace Cognite.OpcUa.Pushers.FDM
 
         private bool CollectProperties(
             BaseUANode node,
-            Dictionary<string, FullChildNode> currentChildren,
+            Dictionary<string, ChildNode> currentChildren,
             IEnumerable<string> path,
             Dictionary<string, IDMSValue?> properties,
             FullUANodeType type,

@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Nodes;
@@ -13,7 +13,7 @@ namespace Cognite.OpcUa.Pushers.FDM
     {
         private readonly ILogger log;
         public Dictionary<NodeId, FullUANodeType> Types { get; }
-        private readonly Dictionary<NodeId, FullChildNode> properties;
+        private readonly Dictionary<NodeId, ChildNode> properties;
         private readonly FullConfig config;
         private readonly HashSet<NodeId> visitedIds = new();
         public NodeTypeCollector(ILogger log, FullConfig config)
@@ -53,7 +53,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                 var node = nodes.Get(reference.Target.Id);
                 if (node.NodeClass != NodeClass.Object && node.NodeClass != NodeClass.Variable) continue;
 
-                FullChildNode child;
+                ChildNode child;
                 if (Types.TryGetValue(reference.Source.Id, out var typeSource))
                 {
                     child = typeSource.AddChild(node, reference);
@@ -87,7 +87,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             else
             {
                 if (reference == null) return;
-                FullChildNode child;
+                ChildNode child;
                 if (Types.TryGetValue(reference.Source.Id, out var parentNode))
                 {
                     child = parentNode.AddChild(node, reference);
@@ -126,7 +126,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                             log.LogWarning("Found unknown modelling rule: {Id}", subRef.Target.Id);
                         }
 
-                        properties[nodeId].ModellingRule = modellingRule;
+                        properties[nodeId].Reference.ModellingRule = modellingRule;
                     }
                     else
                     {
@@ -156,28 +156,28 @@ namespace Cognite.OpcUa.Pushers.FDM
             return name;
         }
 
-        private void CollectChild(FullUANodeType type, FullChildNode node, IEnumerable<string> path)
+        private void CollectChild(FullUANodeType type, ChildNode node, IEnumerable<string> path)
         {
-            var name = node.BrowseName;
+            var name = node.Reference.BrowseName;
             var nodeType = Types[node.Node.TypeDefinition!];
             var fullName = GetPath(path, name);
             if (!nodeType.IsSimple()
-                || node.ModellingRule != ModellingRule.Optional && node.ModellingRule != ModellingRule.Mandatory
-                || !node.Reference.IsHierarchical)
+                || node.Reference.ModellingRule != ModellingRule.Optional && node.Reference.ModellingRule != ModellingRule.Mandatory
+                || !node.Reference.Reference.IsHierarchical)
             {
-                type.References[fullName] = new NodeTypeReference(node.NodeClass, node.BrowseName, fullName, node.Reference)
+                type.References[fullName] = new NodeTypeReference(node.Reference.NodeClass, node.Reference.BrowseName, fullName, node.Reference.Reference)
                 {
                     Type = nodeType,
-                    ModellingRule = node.ModellingRule,
+                    ModellingRule = node.Reference.ModellingRule,
                 };
                 return;
             }
 
             if (node.Node is UAVariable variable)
             {
-                type.Properties[fullName] = new NodeTypeProperty(variable, node.Reference, fullName)
+                type.Properties[fullName] = new NodeTypeProperty(variable, node.Reference.Reference, fullName)
                 {
-                    ModellingRule = node.ModellingRule
+                    ModellingRule = node.Reference.ModellingRule
                 };
             }
 
@@ -208,20 +208,27 @@ namespace Cognite.OpcUa.Pushers.FDM
     public class BaseNodeTypeReference
     {
         public NodeClass NodeClass { get; }
-        public UAReference Reference { get; }
         public string BrowseName { get; }
         public string ExternalId { get; }
-        public ModellingRule ModellingRule { get; set; } = ModellingRule.Optional;
 
-        public BaseNodeTypeReference(NodeClass nodeClass, string browseName, string externalId, UAReference uaReference)
+        public BaseNodeTypeReference(NodeClass nodeClass, string browseName, string externalId)
         {
-            Reference = uaReference;
             BrowseName = browseName;
             NodeClass = nodeClass;
             ExternalId = FDMUtils.SanitizeExternalId(externalId);
         }
     }
-    public class NodeTypeReference : BaseNodeTypeReference
+    public class EdgeNodeTypeReference : BaseNodeTypeReference
+    {
+        public UAReference Reference { get; }
+        public ModellingRule ModellingRule { get; set; } = ModellingRule.Optional;
+
+        public EdgeNodeTypeReference(NodeClass nodeClass, string browseName, string externalId, UAReference uaReference) : base(nodeClass, browseName, externalId)
+        {
+            Reference = uaReference;
+        }
+    }
+    public class NodeTypeReference : EdgeNodeTypeReference
     {
         public NodeTypeReference(NodeClass nodeClass, string browseName, string externalId, UAReference uaReference)
             : base(nodeClass, browseName, externalId, uaReference)
@@ -232,7 +239,7 @@ namespace Cognite.OpcUa.Pushers.FDM
     }
 
 
-    public class NodeTypeProperty : BaseNodeTypeReference
+    public class NodeTypeProperty : EdgeNodeTypeReference
     {
         public UAVariable Node { get; set; }
         public BasePropertyType? DMSType { get; set; }
@@ -243,52 +250,17 @@ namespace Cognite.OpcUa.Pushers.FDM
         }
     }
 
-    public class FullChildNode : BaseNodeTypeReference
+    public class FullUANodeType : BaseChildNode
     {
-        public BaseUANode Node { get; }
-        public Dictionary<string, FullChildNode> Children { get; }
-        public FullChildNode(BaseUANode node, UAReference reference)
-            : base(node.NodeClass, node.Attributes.BrowseName?.Name ?? node.Name ?? "", node.Attributes.BrowseName?.Name ?? node.Name ?? "", reference)
-        {
-            Node = node;
-            Children = new();
-        }
-
-        public FullChildNode AddChild(BaseUANode node, UAReference reference)
-        {
-            var child = new FullChildNode(node, reference);
-            Children[child.BrowseName] = child;
-            return child;
-        }
-
-        public IEnumerable<FullChildNode> GetAllChildren()
-        {
-            yield return this;
-            foreach (var child in Children.Values)
-            {
-                foreach (var gc in child.GetAllChildren())
-                {
-                    yield return gc;
-                }
-            }
-        }
-    }
-
-    public class FullUANodeType
-    {
-        public BaseUANode Node { get; }
         public Dictionary<string, NodeTypeReference> References { get; }
         public Dictionary<string, NodeTypeProperty> Properties { get; }
-        public Dictionary<string, FullChildNode> Children { get; }
         public FullUANodeType? Parent { get; set; }
         public string ExternalId { get; set; }
 
-        public FullUANodeType(BaseUANode node)
+        public FullUANodeType(BaseUANode node) : base(node)
         {
-            Node = node;
             References = new();
             Properties = new();
-            Children = new();
             ExternalId = FDMUtils.SanitizeExternalId(node.Name ?? "");
         }
 
@@ -297,22 +269,58 @@ namespace Cognite.OpcUa.Pushers.FDM
             return Children.Count == 0
                 && (Parent == null || Parent.IsSimple());
         }
+    }
 
-        public FullChildNode AddChild(BaseUANode node, UAReference reference)
+    public class BaseChildNode
+    {
+        public BaseUANode Node { get; }
+        public Dictionary<string, ChildNode> Children { get; }
+
+        public BaseChildNode(BaseUANode node)
         {
-            var child = new FullChildNode(node, reference);
-            Children[child.BrowseName] = child;
+            Node = node;
+            Children = new();
+        }
+        public ChildNode AddChild(BaseUANode node, UAReference reference)
+        {
+            var child = new ChildNode(node, reference);
+            Children[child.Reference.BrowseName] = child;
             return child;
         }
 
-        public IEnumerable<FullChildNode> GetAllChildren()
+        public IEnumerable<ChildNode> GetAllChildren()
         {
-            foreach (var child in Children.Values)
+            foreach (ChildNode child in Children.Values)
             {
-                foreach (var gc in child.GetAllChildren())
+                foreach (ChildNode gc in child.GetAllChildren())
                 {
                     yield return gc;
                 }
+            }
+        }
+    }
+
+    public class ChildNode : BaseChildNode
+    {
+        public EdgeNodeTypeReference Reference { get; }
+        public ChildNode(BaseUANode node, UAReference reference, string? externalId = null) : base(node)
+        {
+            Reference = new EdgeNodeTypeReference(
+              node.NodeClass,
+              node.Attributes.BrowseName?.Name ?? node.Name ?? "",
+              externalId ?? node.Attributes.BrowseName?.Name ?? node.Name ?? "",
+              reference
+            );
+        }
+
+        public IEnumerable<ChildNode> GetAllChildren(bool getParent = true)
+        {
+            if (getParent)
+                yield return this;
+
+            foreach (var child in base.GetAllChildren())
+            {
+                yield return child;
             }
         }
     }
