@@ -2,8 +2,8 @@
 using System.Linq;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Nodes;
+using Cognite.OpcUa.Pushers.FDM.Types;
 using Cognite.OpcUa.Types;
-using CogniteSdk.Beta.DataModels;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 
@@ -165,7 +165,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                 || node.Reference.ModellingRule != ModellingRule.Optional && node.Reference.ModellingRule != ModellingRule.Mandatory
                 || !node.Reference.Reference.IsHierarchical)
             {
-                type.References[fullName] = new NodeTypeReference(node.Reference.NodeClass, node.Reference.BrowseName, fullName, node.Reference.Reference)
+                type.References[fullName] = new ReferenceNodeType(node.Reference.NodeClass, node.Reference.BrowseName, fullName, node.Reference.Reference)
                 {
                     Type = nodeType,
                     ModellingRule = node.Reference.ModellingRule,
@@ -175,7 +175,7 @@ namespace Cognite.OpcUa.Pushers.FDM
 
             if (node.Node is UAVariable variable)
             {
-                type.Properties[fullName] = new NodeTypeProperty(variable, node.Reference.Reference, fullName)
+                type.Properties[fullName] = new DMSReferenceNode(variable, node.Reference.Reference, fullName)
                 {
                     ModellingRule = node.Reference.ModellingRule
                 };
@@ -203,125 +203,5 @@ namespace Cognite.OpcUa.Pushers.FDM
         MandatoryPlaceholder,
         // Modelling rules are extensible, we have no clue what to do with these.
         Other
-    }
-
-    public class BaseNodeTypeReference
-    {
-        public NodeClass NodeClass { get; }
-        public string BrowseName { get; }
-        public string ExternalId { get; }
-
-        public BaseNodeTypeReference(NodeClass nodeClass, string browseName, string externalId)
-        {
-            BrowseName = browseName;
-            NodeClass = nodeClass;
-            ExternalId = FDMUtils.SanitizeExternalId(externalId);
-        }
-    }
-    public class EdgeNodeTypeReference : BaseNodeTypeReference
-    {
-        public UAReference Reference { get; }
-        public ModellingRule ModellingRule { get; set; } = ModellingRule.Optional;
-
-        public EdgeNodeTypeReference(NodeClass nodeClass, string browseName, string externalId, UAReference uaReference) : base(nodeClass, browseName, externalId)
-        {
-            Reference = uaReference;
-        }
-    }
-    public class NodeTypeReference : EdgeNodeTypeReference
-    {
-        public NodeTypeReference(NodeClass nodeClass, string browseName, string externalId, UAReference uaReference)
-            : base(nodeClass, browseName, externalId, uaReference)
-        {
-        }
-
-        public FullUANodeType? Type { get; set; }
-    }
-
-
-    public class NodeTypeProperty : EdgeNodeTypeReference
-    {
-        public UAVariable Node { get; set; }
-        public BasePropertyType? DMSType { get; set; }
-        public NodeTypeProperty(UAVariable node, UAReference reference, string externalId)
-            : base(node.NodeClass, node.Attributes.BrowseName?.Name ?? node.Name ?? "", externalId, reference)
-        {
-            Node = node;
-        }
-    }
-
-    public class FullUANodeType : NodeBase
-    {
-        public Dictionary<string, NodeTypeReference> References { get; }
-        public Dictionary<string, NodeTypeProperty> Properties { get; }
-        public FullUANodeType? Parent { get; set; }
-        public string ExternalId { get; set; }
-
-        public FullUANodeType(BaseUANode node) : base(node)
-        {
-            References = new();
-            Properties = new();
-            ExternalId = FDMUtils.SanitizeExternalId(node.Name ?? "");
-        }
-
-        public bool IsSimple()
-        {
-            return Children.Count == 0
-                && (Parent == null || Parent.IsSimple());
-        }
-    }
-
-    public class ChildNode : NodeBase
-    {
-        public EdgeNodeTypeReference Reference { get; }
-        public ChildNode(BaseUANode node, UAReference reference, string? externalId = null) : base(node)
-        {
-            Reference = new EdgeNodeTypeReference(
-              node.NodeClass,
-              node.Attributes.BrowseName?.Name ?? node.Name ?? "",
-              externalId ?? node.Attributes.BrowseName?.Name ?? node.Name ?? "",
-              reference
-            );
-        }
-
-        public IEnumerable<ChildNode> GetAllChildren(bool getParent = true)
-        {
-            if (getParent)
-                yield return this;
-
-            foreach (var child in base.GetAllChildren())
-            {
-                yield return child;
-            }
-        }
-    }
-
-    public abstract class NodeBase
-    {
-        public BaseUANode Node { get; }
-        public Dictionary<string, ChildNode> Children { get; }
-
-        public NodeBase(BaseUANode node)
-        {
-            Node = node;
-            Children = new();
-        }
-        public ChildNode AddChild(BaseUANode node, UAReference reference)
-        {
-            var child = new ChildNode(node, reference);
-            Children[child.Reference.BrowseName] = child;
-            return child;
-        }
-
-        public IEnumerable<ChildNode> GetAllChildren()
-        {
-            foreach (ChildNode child in Children.Values)
-            {
-                foreach (ChildNode gc in child.GetAllChildren())
-                {
-                    yield return gc;
-                }
-            }
-        }
     }
 }

@@ -6,6 +6,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Cognite.OpcUa.Config;
+using Cognite.OpcUa.Pushers.FDM.Types;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
 using CogniteSdk.Beta.DataModels;
@@ -119,7 +120,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             Views.Add(view.Name!, view);
         }
 
-        private ViewIdentifier GetViewIdentifier(string externalId, string typeName, NodeTypeReference rf, FdmDestinationConfig config)
+        private ViewIdentifier GetViewIdentifier(string externalId, string typeName, ReferenceNodeType rf, FdmDestinationConfig config)
         {
             if (config.ConnectionTargetMap != null && config.ConnectionTargetMap.TryGetValue($"{typeName}.{externalId}", out var mapped))
             {
@@ -176,7 +177,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             return res;
         }
 
-        private BasePropertyType GetPropertyType(NodeTypeProperty prop, bool isArray)
+        private BasePropertyType GetPropertyType(DMSReferenceNode prop, bool isArray)
         {
             if (prop.Node.FullAttributes.DataType == null)
             {

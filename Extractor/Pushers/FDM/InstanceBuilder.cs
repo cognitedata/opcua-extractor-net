@@ -8,6 +8,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Xml.Linq;
 using Cognite.OpcUa.Nodes;
+using Cognite.OpcUa.Pushers.FDM.Types;
 using Cognite.OpcUa.Types;
 using CogniteSdk.Beta.DataModels;
 using Microsoft.Extensions.Logging;
