@@ -250,7 +250,7 @@ namespace Cognite.OpcUa.Pushers.FDM
         }
     }
 
-    public class FullUANodeType : BaseChildNode
+    public class FullUANodeType : NodeBase
     {
         public Dictionary<string, NodeTypeReference> References { get; }
         public Dictionary<string, NodeTypeProperty> Properties { get; }
@@ -271,36 +271,7 @@ namespace Cognite.OpcUa.Pushers.FDM
         }
     }
 
-    public class BaseChildNode
-    {
-        public BaseUANode Node { get; }
-        public Dictionary<string, ChildNode> Children { get; }
-
-        public BaseChildNode(BaseUANode node)
-        {
-            Node = node;
-            Children = new();
-        }
-        public ChildNode AddChild(BaseUANode node, UAReference reference)
-        {
-            var child = new ChildNode(node, reference);
-            Children[child.Reference.BrowseName] = child;
-            return child;
-        }
-
-        public IEnumerable<ChildNode> GetAllChildren()
-        {
-            foreach (ChildNode child in Children.Values)
-            {
-                foreach (ChildNode gc in child.GetAllChildren())
-                {
-                    yield return gc;
-                }
-            }
-        }
-    }
-
-    public class ChildNode : BaseChildNode
+    public class ChildNode : NodeBase
     {
         public EdgeNodeTypeReference Reference { get; }
         public ChildNode(BaseUANode node, UAReference reference, string? externalId = null) : base(node)
@@ -321,6 +292,35 @@ namespace Cognite.OpcUa.Pushers.FDM
             foreach (var child in base.GetAllChildren())
             {
                 yield return child;
+            }
+        }
+    }
+
+    public abstract class NodeBase
+    {
+        public BaseUANode Node { get; }
+        public Dictionary<string, ChildNode> Children { get; }
+
+        public NodeBase(BaseUANode node)
+        {
+            Node = node;
+            Children = new();
+        }
+        public ChildNode AddChild(BaseUANode node, UAReference reference)
+        {
+            var child = new ChildNode(node, reference);
+            Children[child.Reference.BrowseName] = child;
+            return child;
+        }
+
+        public IEnumerable<ChildNode> GetAllChildren()
+        {
+            foreach (ChildNode child in Children.Values)
+            {
+                foreach (ChildNode gc in child.GetAllChildren())
+                {
+                    yield return gc;
+                }
             }
         }
     }
