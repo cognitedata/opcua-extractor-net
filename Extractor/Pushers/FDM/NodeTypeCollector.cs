@@ -1,11 +1,11 @@
-﻿using Cognite.OpcUa.Config;
+using System.Collections.Generic;
+using System.Linq;
+using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.Types;
 using CogniteSdk.Beta.DataModels;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
-using System.Collections.Generic;
-using System.Linq;
 
 namespace Cognite.OpcUa.Pushers.FDM
 {
@@ -67,7 +67,6 @@ namespace Cognite.OpcUa.Pushers.FDM
                     continue;
                 }
                 properties[child.Node.Id] = child;
-
             }
         }
 
@@ -141,15 +140,10 @@ namespace Cognite.OpcUa.Pushers.FDM
         {
             foreach (var type in Types.Values)
             {
-                BuildType(type);
-            }
-        }
-
-        private void BuildType(FullUANodeType type)
-        {
-            foreach (var child in type.RawChildren.Values)
-            {
-                CollectChild(type, child, Enumerable.Empty<string>());
+                foreach (var child in type.Children.Values)
+                {
+                    CollectChild(type, child, Enumerable.Empty<string>());
+                }
             }
         }
 
@@ -186,7 +180,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                     ModellingRule = node.ModellingRule
                 };
             }
-            
+
             var nextPath = path.Append(name);
             foreach (var child in node.Children.Values)
             {
@@ -257,7 +251,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             : base(node.NodeClass, node.Attributes.BrowseName?.Name ?? node.Name ?? "", node.Attributes.BrowseName?.Name ?? node.Name ?? "", reference)
         {
             Node = node;
-            Children = new Dictionary<string, FullChildNode>();
+            Children = new();
         }
 
         public FullChildNode AddChild(BaseUANode node, UAReference reference)
@@ -285,7 +279,7 @@ namespace Cognite.OpcUa.Pushers.FDM
         public BaseUANode Node { get; }
         public Dictionary<string, NodeTypeReference> References { get; }
         public Dictionary<string, NodeTypeProperty> Properties { get; }
-        public Dictionary<string, FullChildNode> RawChildren { get; }
+        public Dictionary<string, FullChildNode> Children { get; }
         public FullUANodeType? Parent { get; set; }
         public string ExternalId { get; set; }
 
@@ -294,26 +288,26 @@ namespace Cognite.OpcUa.Pushers.FDM
             Node = node;
             References = new();
             Properties = new();
-            RawChildren = new();
+            Children = new();
             ExternalId = FDMUtils.SanitizeExternalId(node.Name ?? "");
         }
 
         public bool IsSimple()
         {
-            return RawChildren.Count == 0
+            return Children.Count == 0
                 && (Parent == null || Parent.IsSimple());
         }
 
         public FullChildNode AddChild(BaseUANode node, UAReference reference)
         {
             var child = new FullChildNode(node, reference);
-            RawChildren[child.BrowseName] = child;
+            Children[child.BrowseName] = child;
             return child;
         }
 
         public IEnumerable<FullChildNode> GetAllChildren()
         {
-            foreach (var child in RawChildren.Values)
+            foreach (var child in Children.Values)
             {
                 foreach (var gc in child.GetAllChildren())
                 {
