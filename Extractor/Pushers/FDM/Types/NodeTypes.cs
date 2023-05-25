@@ -6,7 +6,7 @@ namespace Cognite.OpcUa.Pushers.FDM.Types
 {
     public class FullUANodeType : NodeBase
     {
-        public Dictionary<string, ReferenceNodeType> References { get; }
+        public Dictionary<string, NodeTypeReference> References { get; }
         public Dictionary<string, DMSReferenceNode> Properties { get; }
         public FullUANodeType? Parent { get; set; }
         public string ExternalId { get; set; }

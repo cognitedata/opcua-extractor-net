@@ -165,7 +165,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                 || node.Reference.ModellingRule != ModellingRule.Optional && node.Reference.ModellingRule != ModellingRule.Mandatory
                 || !node.Reference.Reference.IsHierarchical)
             {
-                type.References[fullName] = new ReferenceNodeType(node.Reference.NodeClass, node.Reference.BrowseName, fullName, node.Reference.Reference)
+                type.References[fullName] = new NodeTypeReference(node.Reference.NodeClass, node.Reference.BrowseName, fullName, node.Reference.Reference)
                 {
                     Type = nodeType,
                     ModellingRule = node.Reference.ModellingRule,

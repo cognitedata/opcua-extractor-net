@@ -120,7 +120,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             Views.Add(view.Name!, view);
         }
 
-        private ViewIdentifier GetViewIdentifier(string externalId, string typeName, ReferenceNodeType rf, FdmDestinationConfig config)
+        private ViewIdentifier GetViewIdentifier(string externalId, string typeName, NodeTypeReference rf, FdmDestinationConfig config)
         {
             if (config.ConnectionTargetMap != null && config.ConnectionTargetMap.TryGetValue($"{typeName}.{externalId}", out var mapped))
             {

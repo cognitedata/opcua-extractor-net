@@ -5,9 +5,9 @@ using Opc.Ua;
 
 namespace Cognite.OpcUa.Pushers.FDM.Types
 {
-    public class ReferenceNodeType : ReferenceNode
+    public class NodeTypeReference : ReferenceNode
     {
-        public ReferenceNodeType(NodeClass nodeClass, string browseName, string externalId, UAReference uaReference)
+        public NodeTypeReference(NodeClass nodeClass, string browseName, string externalId, UAReference uaReference)
             : base(nodeClass, browseName, externalId, uaReference)
         {
         }
