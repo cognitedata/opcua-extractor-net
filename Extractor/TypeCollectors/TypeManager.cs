@@ -323,9 +323,9 @@ namespace Cognite.OpcUa.TypeCollectors
         #endregion
 
         #region typeGetters
-        private T GetType<T>(NodeId nodeId, Func<NodeId, T> constructor, string typeName) where T : BaseUAType
+        private T GetType<T>(NodeId nodeId, Func<NodeId, T> constructor, string typeName, bool allowNullNodeId = false) where T : BaseUAType
         {
-            if (nodeId == null || nodeId.IsNullNodeId)
+            if (nodeId == null || (nodeId.IsNullNodeId && !allowNullNodeId))
             {
                 return constructor(NodeId.Null);
             }
@@ -350,7 +350,7 @@ namespace Cognite.OpcUa.TypeCollectors
         }
         public UADataType GetDataType(NodeId nodeId)
         {
-            return GetType<UADataType>(nodeId, x => new UADataType(x), "data");
+            return GetType<UADataType>(nodeId, x => new UADataType(x), "data", true);
         }
 
         public UAReferenceType GetReferenceType(NodeId nodeId)
