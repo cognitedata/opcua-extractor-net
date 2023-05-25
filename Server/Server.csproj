@@ -16,6 +16,6 @@
 	<PackageReference Include="MQTTnet" Version="3.1.2" />
 	<PackageReference Include="OPCFoundation.NetStandard.Opc.Ua.Configuration" Version="1.4.371.60" />
     <PackageReference Include="OPCFoundation.NetStandard.Opc.Ua.PubSub" Version="1.4.371.60-beta" />
-    <PackageReference Include="OPCFoundation.NetStandard.Opc.Ua.Server" Version="1.4.371.60" />
+    <PackageReference Include="OPCFoundation.NetStandard.Opc.Ua.Server" Version="1.4.371.91" />
   </ItemGroup>
 </Project>
