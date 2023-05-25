@@ -1,9 +1,4 @@
-﻿using Cognite.OpcUa.Nodes;
-using Cognite.OpcUa.Types;
-using CogniteSdk.Beta.DataModels;
-using Microsoft.Extensions.Logging;
-using Opc.Ua;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -12,6 +7,12 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Xml.Linq;
+using Cognite.OpcUa.Nodes;
+using Cognite.OpcUa.Pushers.FDM.Types;
+using Cognite.OpcUa.Types;
+using CogniteSdk.Beta.DataModels;
+using Microsoft.Extensions.Logging;
+using Opc.Ua;
 
 namespace Cognite.OpcUa.Pushers.FDM
 {
@@ -128,7 +129,7 @@ namespace Cognite.OpcUa.Pushers.FDM
 
         private bool CollectProperties(
             BaseUANode node,
-            Dictionary<string, FullChildNode> currentChildren,
+            Dictionary<string, ChildNode> currentChildren,
             IEnumerable<string> path,
             Dictionary<string, IDMSValue?> properties,
             FullUANodeType type,
@@ -167,7 +168,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             {
                 nextPath = path;
             }
-            
+
             var refs = nodes.BySource(node.Id);
             foreach (var rf in refs)
             {
@@ -248,14 +249,14 @@ namespace Cognite.OpcUa.Pushers.FDM
             var currentType = type;
             while (currentType != null)
             {
-                if (!currentType.RawChildren.Any())
+                if (!currentType.Children.Any())
                 {
                     currentType = currentType.Parent;
                     continue;
                 }
 
                 var props = new Dictionary<string, IDMSValue?>();
-                CollectProperties(node, currentType.RawChildren, Enumerable.Empty<string>(), props, currentType, true);
+                CollectProperties(node, currentType.Children, Enumerable.Empty<string>(), props, currentType, true);
                 if (props.Any())
                 {
                     data.Add(new InstanceData<Dictionary<string, IDMSValue?>>
