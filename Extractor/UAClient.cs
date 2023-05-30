@@ -1044,6 +1044,12 @@ namespace Cognite.OpcUa
         {
             if (sender is not Subscription sub || !sub.PublishingStopped) return;
 
+            if (Callbacks?.TaskScheduler == null)
+            {
+                log.LogWarning("Failed to recreate subscription, client callbacks are not set");
+                return;
+            }
+
             Callbacks.TaskScheduler.ScheduleTask(null, t => RecreateSubscription(sub, t));
         }
 
