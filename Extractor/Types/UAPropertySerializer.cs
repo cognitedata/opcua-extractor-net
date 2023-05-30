@@ -242,9 +242,10 @@ namespace Cognite.OpcUa.Types
                     {
                         return JsonSerializer.Serialize(new StringWrapper { Value = returnStr });
                     }
+                default:
+                    // Should be impossible, but C# doesn't seem to realize.
+                    return returnStr;
             }
-
-            return mode != StringConverterMode.Simple ? JsonSerializer.Serialize(returnStr) : returnStr;
         }
 
         /// <summary>
