@@ -1172,6 +1172,7 @@ namespace Test.Integration
             Assert.Equal(2, pusher.PushedVariables.Count);
             var customVarType = pusher.PushedNodes[tester.Server.Ids.Custom.VariableType] as UAVariableType;
             Assert.Equal("CustomVariableType", customVarType.Name);
+
             Assert.Equal(NodeClass.VariableType, customVarType.NodeClass);
             var meta = customVarType.BuildMetadata(tester.Config, extractor, true);
             Assert.Single(meta);

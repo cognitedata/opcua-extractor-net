@@ -51,6 +51,7 @@ namespace Cognite.OpcUa
                 new[] { serverNamespaces },
                 (refDef, parent, visited) =>
                 {
+                    if (visited) return;
                     var nodeId = (NodeId)refDef.NodeId;
 
                     if (parent == serverNamespaces && !grouping.ContainsKey(nodeId))

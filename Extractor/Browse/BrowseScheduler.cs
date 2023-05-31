@@ -44,6 +44,7 @@ namespace Cognite.OpcUa
         private readonly DirectoryBrowseParams options;
 
         private readonly IEnumerable<NodeFilter>? filters;
+
         private readonly Action<ReferenceDescription, NodeId, bool>? callback;
         private readonly ISet<NodeId> localVisitedNodes = new HashSet<NodeId>();
 

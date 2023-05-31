@@ -22,8 +22,10 @@ using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.NodeSources;
+using Cognite.OpcUa.Pushers.FDM;
 using Cognite.OpcUa.Types;
 using CogniteSdk;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using Prometheus;
@@ -31,6 +33,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Http;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -54,7 +57,14 @@ namespace Cognite.OpcUa.Pushers
 
         public PusherInput? PendingNodes { get; set; }
 
-        public UAExtractor Extractor { get; set; } = null!;
+        private UAExtractor extractor;
+        public UAExtractor Extractor { get => extractor; set {
+            extractor = value;
+            if (fdmDestination != null)
+            {
+                fdmDestination.Extractor = value;
+            }
+        } }
         public IPusherConfig BaseConfig { get; }
 
         private readonly HashSet<string> mismatchedTimeseries = new HashSet<string>();
@@ -62,13 +72,16 @@ namespace Cognite.OpcUa.Pushers
         private readonly CogniteDestination destination;
 
         private readonly BrowseCallback? callback;
+        private readonly FDMWriter? fdmDestination;
 
         public CDFPusher(
             ILogger<CDFPusher> log,
             FullConfig fullConfig,
             CognitePusherConfig config,
-            CogniteDestination destination)
+            CogniteDestination destination,
+            IServiceProvider provider)
         {
+            extractor = null!;
             this.log = log;
             this.config = config;
             BaseConfig = config;
@@ -77,6 +90,11 @@ namespace Cognite.OpcUa.Pushers
             if (config.BrowseCallback != null && (config.BrowseCallback.Id.HasValue || !string.IsNullOrEmpty(config.BrowseCallback.ExternalId)))
             {
                 callback = new BrowseCallback(destination, config.BrowseCallback, log);
+            }
+            if (config.FlexibleDataModels != null && config.FlexibleDataModels.Enabled)
+            {
+                fdmDestination = new FDMWriter(provider.GetRequiredService<FullConfig>(), destination,
+                    provider.GetRequiredService<ILogger<FDMWriter>>());
             }
         }
 
@@ -301,7 +319,14 @@ namespace Cognite.OpcUa.Pushers
 
             log.LogInformation("Testing {TotalNodesToTest} nodes against CDF", variables.Count() + objects.Count());
 
-            if (fullConfig.DryRun) return result;
+            if (fullConfig.DryRun)
+            {
+                if (fdmDestination != null)
+                {
+                    await fdmDestination.PushNodes(objects, variables, references, Extractor, token);
+                }
+                return result;
+            }
 
             try
             {
@@ -317,36 +342,70 @@ namespace Cognite.OpcUa.Pushers
                 return result;
             }
 
-            try
+            if (fdmDestination != null)
             {
-                await PushAssets(objects, update.Objects, report, token);
+                bool pushResult = true;
+                try
+                {
+                    var tsIds = new ConcurrentDictionary<string, UAVariable>(
+                        variables.ToDictionary(ts => ts.GetUniqueId(Extractor))!);
+                    await CreateTimeseries(tsIds, report, true, token);
+                }
+                catch (Exception ex)
+                {
+                    log.LogError(ex, "Failed to push minimal timeseries to CDF");
+                    pushResult = false;
+                }
+                
+                if (pushResult)
+                {
+                    try
+                    {
+                        pushResult = await fdmDestination.PushNodes(objects, variables, references, Extractor, token);
+                    }
+                    catch (Exception e)
+                    {
+                        log.LogError(e, "Failed to push to flexible data models");
+                        pushResult = false;
+                    }
+                }
+                
+                result.Objects = pushResult;
+                result.Variables = pushResult;
+                result.References = pushResult;
             }
-            catch (Exception e)
+            else
             {
-                log.LogError(e, "Failed to ensure assets");
-                result.Objects = false;
-            }
+                try
+                {
+                    await PushAssets(objects, update.Objects, report, token);
+                }
+                catch (Exception e)
+                {
+                    log.LogError(e, "Failed to ensure assets");
+                    result.Objects = false;
+                }
 
-            try
-            {
-                await PushTimeseries(variables, update.Variables, report, token);
-            }
-            catch (Exception e)
-            {
-                log.LogError(e, "Failed to ensure timeseries");
-                result.Variables = false;
-            }
+                try
+                {
+                    await PushTimeseries(variables, update.Variables, report, token);
+                }
+                catch (Exception e)
+                {
+                    log.LogError(e, "Failed to ensure timeseries");
+                    result.Variables = false;
+                }
 
-            try
-            {
-                await PushReferences(references, report, token);
+                try
+                {
+                    await PushReferences(references, report, token);
+                }
+                catch (Exception e)
+                {
+                    log.LogError(e, "Failed to ensure references");
+                    result.References = false;
+                }
             }
-            catch (Exception e)
-            {
-                log.LogError(e, "Failed to ensure references");
-                result.References = false;
-            }
-
 
             log.LogInformation("Finish pushing nodes to CDF");
 

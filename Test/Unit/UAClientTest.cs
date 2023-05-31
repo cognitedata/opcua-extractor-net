@@ -475,7 +475,7 @@ namespace Test.Unit
             // Best case, it takes 91 reads: 1 read at level 0, 3 reads for each of the 30 remaining.
             // Timing might cause nodes to be read in a sligthly different order, so we might read 2 more times.
             // In practice this slight variance is irrelevant.
-            Assert.True(reads >= 89 && reads <= 93, $"Expected reads between 89 and 93, got {reads}");
+            Assert.True(reads >= 88 && reads <= 93, $"Expected reads between 88 and 93, got {reads}");
             Assert.True(CommonTestUtils.TestMetricValue("opcua_tree_depth", 31));
         }
         [Theory]

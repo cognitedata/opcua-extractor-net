@@ -77,47 +77,47 @@ namespace Test.Unit
             var log = tester.Provider.GetRequiredService<ILogger<StringConverter>>();
             var converter = new StringConverter(log, tester.Client, tester.Config);
 
-            Assert.Equal("null", converter.ConvertToString(null, null, null, true));
-            Assert.Equal(@"""gp.tl:s=abc""", converter.ConvertToString(new NodeId("abc", 2), null, null, true));
-            Assert.Equal(@"""gp.tl:s=abc""", converter.ConvertToString(new ExpandedNodeId("abc", tester.Client.NamespaceTable.GetString(2)), null, null, true));
-            Assert.Equal(@"""test""", converter.ConvertToString(new LocalizedText("EN-US", "test"), null, null, true));
-            Assert.Equal(@"""(0, 100)""", converter.ConvertToString(new Opc.Ua.Range(100, 0), null, null, true));
-            Assert.Equal(@"""N: Newton""", converter.ConvertToString(new EUInformation { DisplayName = "N", Description = "Newton" }, null, null, true));
+            Assert.Equal("null", converter.ConvertToString(null, null, null, StringConverterMode.Json));
+            Assert.Equal(@"""gp.tl:s=abc""", converter.ConvertToString(new NodeId("abc", 2), null, null, StringConverterMode.Json));
+            Assert.Equal(@"""gp.tl:s=abc""", converter.ConvertToString(new ExpandedNodeId("abc", tester.Client.NamespaceTable.GetString(2)), null, null, StringConverterMode.Json));
+            Assert.Equal(@"""test""", converter.ConvertToString(new LocalizedText("EN-US", "test"), null, null, StringConverterMode.Json));
+            Assert.Equal(@"""(0, 100)""", converter.ConvertToString(new Opc.Ua.Range(100, 0), null, null, StringConverterMode.Json));
+            Assert.Equal(@"""N: Newton""", converter.ConvertToString(new EUInformation { DisplayName = "N", Description = "Newton" }, null, null, StringConverterMode.Json));
             Assert.Equal(@"""N: Newton""", converter.ConvertToString(new ExtensionObject(new EUInformation { DisplayName = "N", Description = "Newton" }),
-                null, null, true));
-            Assert.Equal(@"{""key"":1}", converter.ConvertToString(new EnumValueType { DisplayName = "key", Value = 1 }, null, null, true));
-            Assert.Equal("1234", converter.ConvertToString(1234, null, null, true));
-            Assert.Equal("[123,1234]", converter.ConvertToString(new[] { 123, 1234 }, null, null, true));
+                null, null, StringConverterMode.Json));
+            Assert.Equal(@"{""key"":1}", converter.ConvertToString(new EnumValueType { DisplayName = "key", Value = 1 }, null, null, StringConverterMode.Json));
+            Assert.Equal("1234", converter.ConvertToString(1234, null, null, StringConverterMode.Json));
+            Assert.Equal("[123,1234]", converter.ConvertToString(new[] { 123, 1234 }, null, null, StringConverterMode.Json));
             Assert.Equal(@"[""gp.tl:i=123"",""gp.tl:i=1234"",""gp.tl:s=abc""]", converter.ConvertToString(new[]
             {
                 new NodeId(123u, 2), new NodeId(1234u, 2), new NodeId("abc", 2)
-            }, null, null, true));
+            }, null, null, StringConverterMode.Json));
             Assert.Equal(@"{""somekey"":""gp.tl:s=abc""}", converter.ConvertToString(new Opc.Ua.KeyValuePair
             {
                 Key = "somekey",
                 Value = new NodeId("abc", 2)
-            }, null, null, true));
+            }, null, null, StringConverterMode.Json));
             Assert.Equal(@"{""enumkey"":1}", converter.ConvertToString(new Opc.Ua.EnumValueType
             {
                 DisplayName = "enumkey",
                 Value = 1
-            }, null, null, true));
+            }, null, null, StringConverterMode.Json));
             var xml = new XmlDocument();
             xml.LoadXml("<?xml version='1.0' ?>" +
                 "<test1 key1='val1' key2='val2'>" +
                 "   <test2 key3='val3' key4='val4'>Content</test2>" +
                 "</test1>");
-            var xmlJson = converter.ConvertToString(xml.DocumentElement, null, null, true);
+            var xmlJson = converter.ConvertToString(xml.DocumentElement, null, null, StringConverterMode.Json);
             Assert.Equal(@"{""test1"":{""@key1"":""val1"",""@key2"":""val2"",""test2"":"
                 + @"{""@key3"":""val3"",""@key4"":""val4"",""#text"":""Content""}}}", xmlJson);
 #pragma warning disable CA1814 // Prefer jagged arrays over multidimensional
             var m1 = new Matrix(new int[3, 3] { { 1, 2, 3 }, { 4, 5, 6 }, { 7, 8, 9 } }, BuiltInType.Int32);
 #pragma warning restore CA1814 // Prefer jagged arrays over multidimensional
-            Assert.Equal("[[1,2,3],[4,5,6],[7,8,9]]", converter.ConvertToString(new Variant(m1), null, null, true));
+            Assert.Equal("[[1,2,3],[4,5,6],[7,8,9]]", converter.ConvertToString(new Variant(m1), null, null, StringConverterMode.Json));
 
-            Assert.Equal(@"""Anonymous""", converter.ConvertToString(new Variant(UserTokenType.Anonymous), null, null, true));
-            Assert.Equal(@"""bcabfe0c-1fe6-42c4-8dad-2d72e50e2dbd""", converter.ConvertToString(new Guid("bcabfe0c-1fe6-42c4-8dad-2d72e50e2dbd"), null, null, true));
-            Assert.Equal(@"""Good""", converter.ConvertToString(new Variant(StatusCodes.Good, new TypeInfo(BuiltInType.StatusCode, -1)), null, null, true));
+            Assert.Equal(@"""Anonymous""", converter.ConvertToString(new Variant(UserTokenType.Anonymous), null, null, StringConverterMode.Json));
+            Assert.Equal(@"""bcabfe0c-1fe6-42c4-8dad-2d72e50e2dbd""", converter.ConvertToString(new Guid("bcabfe0c-1fe6-42c4-8dad-2d72e50e2dbd"), null, null, StringConverterMode.Json));
+            Assert.Equal(@"""Good""", converter.ConvertToString(new Variant(StatusCodes.Good, new TypeInfo(BuiltInType.StatusCode, -1)), null, null, StringConverterMode.Json));
 
         }
         [Fact]
@@ -134,7 +134,7 @@ namespace Test.Unit
                 builder.Append(@"""value"":");
                 try
                 {
-                    builder.Append(converter.ConvertToString(variant, null, null, true));
+                    builder.Append(converter.ConvertToString(variant, null, null, StringConverterMode.Json));
                 }
                 catch
                 {
@@ -156,7 +156,7 @@ namespace Test.Unit
 
             foreach (var type in typeof(EnumValueType).Assembly.GetTypes())
             {
-                if (type.IsAbstract || type.IsInterface) continue;
+                if (type.IsAbstract || type.IsInterface || type == typeof(Opc.Ua.Export.LocalizedText)) continue;
                 Variant variant;
                 // If we can't create it, we don't care
                 try

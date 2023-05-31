@@ -60,6 +60,8 @@ namespace Server
         public bool LargeHierarchy { get; set; }
         [CommandLineOption("Create nodes from the very large 'VeryLarge' node hierarchy")]
         public bool VeryLargeHierarchy { get; set; }
+        [CommandLineOption("Create nodes with complex object and variable types")]
+        public bool Types { get; set; }
         [CommandLineOption("Create nodes for and load the 'PubSub' node hierarchy, and write to MQTT")]
         public bool Pubsub { get; set; }
         [CommandLineOption("Enable server diagnostics")]
@@ -133,6 +135,7 @@ namespace Server
             if (opt.Pubsub) setups.Add(PredefinedSetup.PubSub);
             if (opt.LargeHierarchy) setups.Add(PredefinedSetup.Full);
             if (opt.VeryLargeHierarchy) setups.Add(PredefinedSetup.VeryLarge);
+            if (opt.Types) setups.Add(PredefinedSetup.Types);
 
             int port = opt.Port ?? 62546;
             string endpointUrl = opt.EndpointUrl ?? "opc.tcp://localhost";

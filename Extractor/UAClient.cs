@@ -1172,10 +1172,12 @@ namespace Cognite.OpcUa
         /// Return systemContext. Can be used by SDK-tools for converting events.
         /// </summary>
         public ISystemContext? SystemContext => Session?.SystemContext ?? dummyContext;
+
+        private IServiceMessageContext? dummyMessageContext;
         /// <summary>
         /// Return MessageContext, used for serialization
         /// </summary>
-        public IServiceMessageContext? MessageContext => Session?.MessageContext;
+        public IServiceMessageContext? MessageContext => Session?.MessageContext ?? dummyMessageContext;
         /// <summary>
         /// Constructs a filter from the given list of permitted eventids, the already constructed field map and an optional receivedAfter property.
         /// </summary>
@@ -1352,6 +1354,7 @@ namespace Cognite.OpcUa
                     "http://opcfoundation.org/UA/"
                 });
                 dummyContext = new DummySystemContext(ExternalNamespaceUris);
+                dummyMessageContext = new DummyMessageContext(ExternalNamespaceUris);
             }
             if (table == null) return;
             foreach (var ns in table)

@@ -15,15 +15,16 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
-using Cognite.OpcUa.Config;
-using Cognite.OpcUa.Nodes;
-using Microsoft.Extensions.Logging;
-using Opc.Ua;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using Cognite.OpcUa.Config;
+using Cognite.OpcUa.Nodes;
+using Microsoft.Extensions.Logging;
+using Opc.Ua;
 
 namespace Cognite.OpcUa.TypeCollectors
 {
@@ -137,6 +138,11 @@ namespace Cognite.OpcUa.TypeCollectors
                 if (node.Parent == null && NodeMap.TryGetValue(node.ParentId, out var parent))
                 {
                     node.Parent = parent;
+                    log.LogTrace("Add parent to node {Id}: {P}", node.Id, node.ParentId);
+                    if (node is BaseUAType t)
+                    {
+                        log.LogTrace("Node is hierarchical: {T}", t.IsChildOf(ReferenceTypeIds.HierarchicalReferences));
+                    }
                 }
             }
         }
@@ -317,101 +323,49 @@ namespace Cognite.OpcUa.TypeCollectors
         #endregion
 
         #region typeGetters
-        public UADataType GetDataType(NodeId nodeId)
+        private T GetType<T>(NodeId nodeId, Func<NodeId, T> constructor, string typeName, bool allowNullNodeId = false) where T : BaseUAType
         {
+            if (nodeId == null || (nodeId.IsNullNodeId && !allowNullNodeId))
+            {
+                return constructor(NodeId.Null);
+            }
+
             if (NodeMap.TryGetValue(nodeId, out var node))
             {
-                if (node is not UADataType dt)
+                if (node is not T dt)
                 {
-                    log.LogWarning("Requested data type {Type}, but it was not a data type: {Class} {Name}",
-                        nodeId, node.NodeClass, node.Name);
+                    log.LogWarning($"Requested {typeName} type {nodeId}, but it was not a {typeName} type: {node.NodeClass} {node.Name}");
                     // This is a bug in the server, but instead of crashing we return a fresh node. The extracted data may be incomplete,
                     // but not incorrect.
-                    return new UADataType(nodeId);
+                    return constructor(nodeId);
                 }
                 return dt;
             }
             else
             {
-                var dt = new UADataType(nodeId);
+                var dt = constructor(nodeId);
                 NodeMap[nodeId] = dt;
                 return dt;
             }
+        }
+        public UADataType GetDataType(NodeId nodeId)
+        {
+            return GetType<UADataType>(nodeId, x => new UADataType(x), "data", true);
         }
 
         public UAReferenceType GetReferenceType(NodeId nodeId)
         {
-            if (nodeId.IsNullNodeId)
-            {
-                return new UAReferenceType(nodeId);
-            }
-
-            if (NodeMap.TryGetValue(nodeId, out var node))
-            {
-                if (node is not UAReferenceType dt)
-                {
-                    log.LogWarning("Requested reference type {Type}, but it was not a reference type: {Class} {Name}",
-                        nodeId, node.NodeClass, node.Name);
-                    return new UAReferenceType(nodeId);
-                }
-                return dt;
-            }
-            else
-            {
-                var dt = new UAReferenceType(nodeId);
-                NodeMap[nodeId] = dt;
-                return dt;
-            }
+            return GetType<UAReferenceType>(nodeId, x => new UAReferenceType(x), "reference");
         }
 
         public UAObjectType GetObjectType(NodeId nodeId)
         {
-            if (nodeId.IsNullNodeId)
-            {
-                return new UAObjectType(nodeId);
-            }
-
-            if (NodeMap.TryGetValue(nodeId, out var node))
-            {
-                if (node is not UAObjectType dt)
-                {
-                    log.LogWarning("Requested object type {Type}, but it was not an object type: {Class} {Name}",
-                        nodeId, node.NodeClass, node.Name);
-                    return new UAObjectType(nodeId);
-                }
-                return dt;
-            }
-            else
-            {
-                var dt = new UAObjectType(nodeId);
-                NodeMap[nodeId] = dt;
-                return dt;
-            }
+            return GetType<UAObjectType>(nodeId, x => new UAObjectType(x), "object");
         }
 
         public UAVariableType GetVariableType(NodeId nodeId)
         {
-            if (nodeId.IsNullNodeId)
-            {
-                return new UAVariableType(nodeId);
-            }
-
-            if (NodeMap.TryGetValue(nodeId, out var node))
-            {
-                if (node is not UAVariableType dt)
-                {
-                    log.LogWarning("Requested variable type {Type}, but it was not a variable type: {Class} {Name}",
-                        nodeId, node.NodeClass, node.Name);
-                    return new UAVariableType(nodeId);
-                }
-                return dt;
-            }
-            else
-            {
-                var dt = new UAVariableType(nodeId);
-                NodeMap[nodeId] = dt;
-                return dt;
-            }
+            return GetType<UAVariableType>(nodeId, x => new UAVariableType(x), "variable");
         }
         #endregion
     }

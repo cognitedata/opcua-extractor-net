@@ -52,8 +52,6 @@ namespace Cognite.OpcUa.NodeSources
         private readonly Dictionary<NodeId, BaseUANode> nodeMap = new();
         protected IEnumerable<BaseUANode> NodeList => nodeList;
         protected IReadOnlyDictionary<NodeId, BaseUANode> NodeMap => nodeMap;
-        protected List<BaseUANode> RawObjects { get; } = new List<BaseUANode>();
-        protected List<UAVariable> RawVariables { get; } = new List<UAVariable>();
 
         // Nodes that are treated as variables (and synchronized) in the source system
         protected List<UAVariable> FinalSourceVariables { get; } = new List<UAVariable>();
@@ -73,6 +71,12 @@ namespace Cognite.OpcUa.NodeSources
         protected UAExtractor Extractor { get; }
         protected UAClient Client { get; }
         protected TypeManager TypeManager { get; }
+
+        protected HashSet<NodeId> ModellingRules { get; } = new HashSet<NodeId>(new[]
+        {
+            ObjectIds.ModellingRule_ExposesItsArray, ObjectIds.ModellingRule_Mandatory, ObjectIds.ModellingRule_Optional,
+            ObjectIds.ModellingRule_OptionalPlaceholder, ObjectIds.ModellingRule_MandatoryPlaceholder
+        });
 
         protected BaseNodeSource(ILogger log, FullConfig config, UAExtractor extractor, UAClient client, TypeManager typeManager)
         {
@@ -259,6 +263,7 @@ namespace Cognite.OpcUa.NodeSources
                 }
             }
         }
+
         protected bool IsDescendantOfType(BaseUANode node)
         {
             return node.Parent != null && (node.Parent.IsType || node.Parent.IsChildOfType);
@@ -267,7 +272,7 @@ namespace Cognite.OpcUa.NodeSources
         /// Apply transformations and sort the given node as variable, object or property.
         /// </summary>
         /// <param name="node"></param>
-        protected void SortNode(BaseUANode node)
+        protected void SortNode(BaseUANode node, IList<BaseUANode> rawObjects, IList<UAVariable> rawVariables)
         {
             if (node.Parent == null && !node.ParentId.IsNullNodeId)
             {
@@ -317,11 +322,11 @@ namespace Cognite.OpcUa.NodeSources
             }
             else if (node is UAVariable variable)
             {
-                RawVariables.Add(variable);
+                rawVariables.Add(variable);
             }
             else
             {
-                RawObjects.Add(node);
+                rawObjects.Add(node);
             }
         }
 
@@ -368,16 +373,40 @@ namespace Cognite.OpcUa.NodeSources
         /// <param name="reference">Reference to filter.</param>
         /// <param name="requireChild">True to require a child node in nodeMap</param>
         /// <returns>True if reference should be mapped.</returns>
-        protected bool FilterReference(UAReference reference)
+        protected bool FilterReference(UAReference reference, bool mapProperties, HashSet<NodeId> additionalKnownNodes)
         {
             var source = Extractor.State.GetMappedNode(reference.Source.Id);
-            if (source == null || source.IsProperty) return false;
+            if ((source == null || source.IsProperty && !mapProperties) && !additionalKnownNodes.Contains(reference.Source.Id))
+            {
+                if (source == null) Log.LogTrace("Skipping relationship from {Src} to {Trg} due to missing source",
+                    reference.Source.Id, reference.Target.Id);
+                else Log.LogTrace("Skipping relationship from {Src} to {Trg} since the source is a property",
+                    reference.Source.Id, reference.Target.Id);
+                return false;
+            }
 
             var target = Extractor.State.GetMappedNode(reference.Target.Id);
-            if (target == null || target.IsProperty) return false;
+            if ((target == null || target.IsProperty && !mapProperties) && !additionalKnownNodes.Contains(reference.Target.Id))
+            {
+                if (target == null) Log.LogTrace("Skipping relationship from {Src} to {Trg} due to missing target",
+                    reference.Source.Id, reference.Target.Id);
+                else Log.LogTrace("Skipping relationship from {Src} to {Trg} since the target is a property",
+                    reference.Source.Id, reference.Target.Id);
+                return false;
+            }
 
-            if (reference.IsHierarchical && !Config.Extraction.Relationships.Hierarchical) return false;
-            if (reference.IsHierarchical && !reference.IsForward && !Config.Extraction.Relationships.InverseHierarchical) return false;
+            if (reference.IsHierarchical && !Config.Extraction.Relationships.Hierarchical)
+            {
+                Log.LogTrace("Skipping relationship from {Src} to {Trg} since it is hierarchical, and hierarchical references are disabled",
+                    reference.Source.Id, reference.Target.Id);
+                return false;
+            }
+            if (reference.IsHierarchical && !reference.IsForward && !Config.Extraction.Relationships.InverseHierarchical)
+            {
+                Log.LogTrace("Skipping relationship from {Src} to {Trg} since it is inverse hierarchical, and inverse hierarchical references are disabled",
+                    reference.Source.Id, reference.Target.Id);
+                return false;
+            }
 
             return true;
         }

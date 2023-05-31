@@ -127,6 +127,7 @@ namespace Cognite.OpcUa
             if (string.IsNullOrEmpty(uniqueId)) return NodeId.Null;
             return externalToNodeId.GetValueOrDefault(uniqueId) ?? NodeId.Null;
         }
+
         /// <summary>
         /// Register a reverse node mapping
         /// </summary>

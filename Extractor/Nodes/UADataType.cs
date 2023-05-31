@@ -31,14 +31,17 @@ namespace Cognite.OpcUa.Nodes
     public class DataTypeAttributes : BaseNodeAttributes
     {
         public bool IsAbstract { get; private set; }
-        // public Variant? DataTypeDefinition { get; private set; }
+        public Variant? DataTypeDefinition { get; private set; }
         public DataTypeAttributes() : base(NodeClass.DataType)
         {
         }
 
         public override IEnumerable<uint> GetAttributeSet(FullConfig config)
         {
-            //yield return Attributes.DataTypeDefinition;
+            if (config.Cognite?.FlexibleDataModels?.Enabled ?? false)
+            {
+                yield return Attributes.DataTypeDefinition;
+            }
             yield return Attributes.IsAbstract;
             foreach (var attr in base.GetAttributeSet(config)) yield return attr;
         }
@@ -50,9 +53,9 @@ namespace Cognite.OpcUa.Nodes
                 case Attributes.IsAbstract:
                     IsAbstract = value.GetValue(false);
                     break;
-                //case Attributes.DataTypeDefinition:
-                //    DataTypeDefinition = value.WrappedValue;
-                //    break;
+                case Attributes.DataTypeDefinition:
+                    DataTypeDefinition = value.WrappedValue;
+                    break;
                 default:
                     base.LoadAttribute(value, attributeId, typeManager);
                     break;

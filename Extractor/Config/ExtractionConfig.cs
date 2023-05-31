@@ -253,6 +253,11 @@ namespace Cognite.OpcUa.Config
         /// reasonable or useful values.
         /// </summary>
         public bool EstimateArraySizes { get; set; }
+
+        /// <summary>
+        /// If true, variables not mapped due to array dimensions or data type are all mapped to properties instead.
+        /// </summary>
+        public bool UnmappedAsProperties { get; set; }
     }
 
     public class RelationshipConfig
@@ -274,6 +279,10 @@ namespace Cognite.OpcUa.Config
         /// Does nothing if hierarchical is false.
         /// </summary>
         public bool InverseHierarchical { get; set; }
+        /// <summary>
+        /// Create any nodes that are found through non-hierarchical references but not in the hierarchy.
+        /// </summary>
+        public bool CreateReferencedNodes { get; set; }
     }
     public class NodeTypeConfig
     {

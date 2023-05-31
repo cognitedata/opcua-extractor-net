@@ -364,7 +364,7 @@ namespace Cognite.OpcUa.Types
 
         private void WriteValueSafe(Utf8JsonWriter writer, EventFieldNode field)
         {
-            var value = converter.ConvertToString(field.Value, null, null, true);
+            var value = converter.ConvertToString(field.Value, null, null, StringConverterMode.Json);
             try
             {
                 writer.WriteRawValue(value);

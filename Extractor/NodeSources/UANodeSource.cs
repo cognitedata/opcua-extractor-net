@@ -48,24 +48,17 @@ namespace Cognite.OpcUa.NodeSources
             this.isFullBrowse = isFullBrowse;
         }
 
-        /// <summary>
-        /// Called after mapping has completed.
-        /// Transforms the list of raw nodes into five collections:
-        /// Source variables, source objects,
-        /// destination variables, destination objects, and references.
-        /// This reads necessary information from the state and the server.
-        /// </summary>
-        /// <returns>Resulting lists of populated and sorted nodes.</returns>
-        public override async Task<NodeSourceResult?> ParseResults(CancellationToken token)
+        private async Task InitNodes(IEnumerable<BaseUANode> nodes, CancellationToken token)
         {
-            if (parsed) throw new InvalidOperationException("Browse result has already been parsed");
-            if (!NodeMap.Any()) return null;
-            await Client.ReadNodeData(NodeList, token, "node hierarchy information");
+            var rawObjects = new List<BaseUANode>();
+            var rawVariables = new List<UAVariable>();
+
+            await Client.ReadNodeData(nodes, token, "node hierarchy information");
 
             var properties = new HashSet<UAVariable>();
-            foreach (var node in NodeList)
+            foreach (var node in nodes)
             {
-                SortNode(node);
+                SortNode(node, rawObjects, rawVariables);
                 if ((node.IsProperty || Config.Extraction.NodeTypes.AsNodes && node.NodeClass == NodeClass.VariableType)
                     && (node is UAVariable variable))
                 {
@@ -83,15 +76,15 @@ namespace Cognite.OpcUa.NodeSources
 
             if (Config.Extraction.DataTypes.MaxArraySize != 0 && Config.Extraction.DataTypes.EstimateArraySizes == true)
             {
-                await EstimateArraySizes(RawVariables, token);
+                await EstimateArraySizes(rawVariables, token);
             }
 
             var update = Config.Extraction.Update;
 
-            var mappedObjects = RawObjects.Where(obj => FilterObject(update.Objects, obj)).ToList();
+            var mappedObjects = rawObjects.Where(obj => FilterObject(update.Objects, obj)).ToList();
             FinalDestinationObjects.AddRange(mappedObjects);
             FinalSourceObjects.AddRange(mappedObjects);
-            foreach (var variable in RawVariables)
+            foreach (var variable in rawVariables)
             {
                 SortVariable(update.Variables, variable);
             }
@@ -100,10 +93,28 @@ namespace Cognite.OpcUa.NodeSources
             {
                 InitNodeState(update, node);
             }
+        }
+
+        /// <summary>
+        /// Called after mapping has completed.
+        /// Transforms the list of raw nodes into five collections:
+        /// Source variables, source objects,
+        /// destination variables, destination objects, and references.
+        /// This reads necessary information from the state and the server.
+        /// </summary>
+        /// <returns>Resulting lists of populated and sorted nodes.</returns>
+        public override async Task<NodeSourceResult?> ParseResults(CancellationToken token)
+        {
+            if (parsed) throw new InvalidOperationException("Browse result has already been parsed");
+            if (!NodeMap.Any()) return null;
+
+            await InitNodes(NodeList, token);
+
+            var usesFdm = Config.Cognite?.FlexibleDataModels?.Enabled ?? false;
 
             if (Config.Extraction.Relationships.Enabled)
             {
-                await GetRelationshipData(false, token);
+                await GetRelationshipData(usesFdm, usesFdm, usesFdm ? ModellingRules : new HashSet<NodeId>(), token);
             }
 
             if (!FinalDestinationObjects.Any() && !FinalDestinationVariables.Any() && !FinalSourceVariables.Any() && !FinalReferences.Any())
@@ -134,7 +145,7 @@ namespace Cognite.OpcUa.NodeSources
         /// Get references for the mapped nodes.
         /// </summary>
         /// <returns>A list of references.</returns>
-        private async Task GetRelationshipData(bool getPropertyReferences, CancellationToken token)
+        private async Task GetRelationshipData(bool getPropertyReferences, bool getTypeReferences, HashSet<NodeId> additionalKnownNodes, CancellationToken token)
         {
             var nodes = FinalSourceObjects.Concat(FinalSourceVariables);
 
@@ -150,7 +161,8 @@ namespace Cognite.OpcUa.NodeSources
             var nonHierarchicalReferences = await GetReferencesAsync(
                 nodes.Select(node => node.Id).ToList(),
                 ReferenceTypeIds.NonHierarchicalReferences,
-                token);
+                token,
+                getTypeReferences);
 
             Log.LogInformation("Found {Count} non-hierarchical references", nonHierarchicalReferences.Count());
 
@@ -197,7 +209,7 @@ namespace Cognite.OpcUa.NodeSources
 
             foreach (var reference in nonHierarchicalReferences.Concat(hierarchicalReferences))
             {
-                if (!FilterReference(reference)) continue;
+                if (!FilterReference(reference, getPropertyReferences, additionalKnownNodes)) continue;
                 FinalReferences.Add(reference);
             }
         }
@@ -231,7 +243,7 @@ namespace Cognite.OpcUa.NodeSources
             {
                 mapped = NodeMap.ContainsKey(Client.ToNodeId(node.NodeId));
             }
-
+            
             if (mapped && Config.Extraction.Relationships.Enabled && Config.Extraction.Relationships.Hierarchical)
             {
                 if (parentId == null || parentId.IsNullNodeId) return;
@@ -249,7 +261,8 @@ namespace Cognite.OpcUa.NodeSources
         private async Task<IEnumerable<UAReference>> GetReferencesAsync(
             IEnumerable<NodeId> nodes,
             NodeId referenceTypes,
-            CancellationToken token)
+            CancellationToken token,
+            bool getTypeReferences = false)
         {
             if (!nodes.Any()) return Enumerable.Empty<UAReference>();
 
@@ -258,9 +271,9 @@ namespace Cognite.OpcUa.NodeSources
             var browseNodes = nodes.Select(node => new BrowseNode(node)).ToDictionary(node => node.Id);
 
             var classMask = NodeClass.Object | NodeClass.Variable;
-            if (Config.Extraction.NodeTypes?.AsNodes ?? false)
+            if (Config.Extraction.NodeTypes?.AsNodes ?? false || getTypeReferences)
             {
-                classMask |= NodeClass.ObjectType | NodeClass.VariableType;
+                classMask |= NodeClass.ObjectType | NodeClass.VariableType | NodeClass.DataType | NodeClass.ReferenceType;
             }
 
             var baseParams = new BrowseParams

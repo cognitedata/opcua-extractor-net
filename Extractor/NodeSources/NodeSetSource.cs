@@ -26,6 +26,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -77,6 +78,7 @@ namespace Cognite.OpcUa.NodeSources
             {
                 Client.AddExternalNamespaces(set.NamespaceUris);
             }
+            Log.LogDebug("Import nodeset into common node collection");
             set.Import(Client.SystemContext, nodes);
             Log.LogDebug("Imported nodeset from file {File}, buiding internal data structures", file);
         }
@@ -103,12 +105,15 @@ namespace Cognite.OpcUa.NodeSources
                     AddReference(refs, rf);
                 }
 
-                if (node is BaseTypeState type) AddReference(refs, new BasicReference
+                if (node is BaseTypeState type && type.SuperTypeId != null && !type.SuperTypeId.IsNullNodeId)
                 {
-                    IsInverse = true,
-                    ReferenceTypeId = ReferenceTypeIds.HasSubtype,
-                    TargetId = type.SuperTypeId
-                });
+                    AddReference(refs, new BasicReference
+                    {
+                        IsInverse = true,
+                        ReferenceTypeId = ReferenceTypeIds.HasSubtype,
+                        TargetId = type.SuperTypeId
+                    });
+                }
                 if (node is BaseInstanceState instance)
                 {
                     if (instance.ModellingRuleId != null && !instance.ModellingRuleId.IsNullNodeId) AddReference(refs, new BasicReference
@@ -126,6 +131,7 @@ namespace Cognite.OpcUa.NodeSources
                 }
                 cnt += refs.Count;
             }
+
             // Create all inverse references
             foreach (var node in nodes)
             {
@@ -136,7 +142,7 @@ namespace Cognite.OpcUa.NodeSources
                     {
                         references[targetId] = targetRefs = new Dictionary<(NodeId, NodeId, bool), IReference>();
                     }
-                    if (!targetRefs.ContainsKey((node.NodeId, reference.ReferenceTypeId, reference.IsInverse)))
+                    if (!targetRefs.ContainsKey((node.NodeId, reference.ReferenceTypeId, !reference.IsInverse)))
                     {
                         AddReference(targetRefs, new BasicReference
                         {
@@ -153,7 +159,10 @@ namespace Cognite.OpcUa.NodeSources
 
         private bool IsOfType(NodeId source, NodeId parent)
         {
-            return TypeManager.NodeMap.TryGetValue(source, out var node) && node is BaseUAType type && type.IsChildOf(parent);
+            if (!TypeManager.NodeMap.TryGetValue(source, out var node)) return false;
+            if (node is not BaseUAType type) return false;
+
+            return type.IsChildOf(parent);
         }
 
         private IEnumerable<IReference> Browse(NodeId node, NodeId referenceTypeId, BrowseDirection direction, bool allowSubTypes)
@@ -162,7 +171,7 @@ namespace Cognite.OpcUa.NodeSources
             foreach (var reference in refs)
             {
                 if (!allowSubTypes && referenceTypeId != reference.ReferenceTypeId) continue;
-                else if (allowSubTypes && !IsOfType(reference.ReferenceTypeId, referenceTypeId)) continue;
+                if (allowSubTypes && !IsOfType(reference.ReferenceTypeId, referenceTypeId)) continue;
 
                 if (reference.IsInverse && direction != BrowseDirection.Inverse
                     && direction != BrowseDirection.Both) continue;
@@ -216,6 +225,7 @@ namespace Cognite.OpcUa.NodeSources
         private void BrowseHierarchy(IEnumerable<NodeId> rootIds, Func<NodeId, NodeId, bool> callback)
         {
             var visitedNodes = new HashSet<NodeId>();
+            visitedNodes.Add(ObjectIds.Server);
 
             var nextIds = new HashSet<NodeId>();
             foreach (var id in rootIds)
@@ -272,9 +282,11 @@ namespace Cognite.OpcUa.NodeSources
             // We can't properly browse the type hierarchy without loading the reference types first.
             TypeManager.BuildTypeInfo();
 
+            Log.LogInformation("Browse types folder");
             BrowseHierarchy(new[] { ObjectIds.TypesFolder }, BuildType);
             TypeManager.BuildTypeInfo();
 
+            Log.LogInformation("Browse root nodes {Nodes}", string.Join(", ", rootNodes));
             BrowseHierarchy(rootNodes, BuildNode);
 
             if (Config.Source.NodeSetSource!.Types)
@@ -286,23 +298,16 @@ namespace Cognite.OpcUa.NodeSources
 
         #region parse
 
-        public override async Task<NodeSourceResult?> ParseResults(CancellationToken token)
+        private async Task InitNodes(IEnumerable<BaseUANode> nodes, CancellationToken token)
         {
-            if (!NodeMap.Any()) return null;
-
-            RawObjects.Clear();
-            RawVariables.Clear();
-            FinalDestinationObjects.Clear();
-            FinalDestinationVariables.Clear();
-            FinalReferences.Clear();
-            FinalSourceObjects.Clear();
-            FinalSourceVariables.Clear();
+            var rawObjects = new List<BaseUANode>();
+            var rawVariables = new List<UAVariable>();
 
             var properties = new List<UAVariable>();
 
-            foreach (var node in NodeList)
+            foreach (var node in nodes)
             {
-                SortNode(node);
+                SortNode(node, rawObjects, rawVariables);
                 node.Attributes.IsDataRead = true;
                 if (node.IsProperty && (node is UAVariable variable))
                 {
@@ -313,14 +318,14 @@ namespace Cognite.OpcUa.NodeSources
 
             if (Config.Extraction.DataTypes.MaxArraySize != 0 && Config.Extraction.DataTypes.EstimateArraySizes)
             {
-                await EstimateArraySizes(RawVariables, token);
+                await EstimateArraySizes(rawVariables, token);
             }
 
             var update = Config.Extraction.Update;
-            var mappedObjects = RawObjects.Where(obj => FilterObject(update.Objects, obj)).ToList();
+            var mappedObjects = rawObjects.Where(obj => FilterObject(update.Objects, obj)).ToList();
             FinalDestinationObjects.AddRange(mappedObjects);
             FinalSourceObjects.AddRange(mappedObjects);
-            foreach (var variable in RawVariables)
+            foreach (var variable in rawVariables)
             {
                 SortVariable(update.Variables, variable);
             }
@@ -330,9 +335,54 @@ namespace Cognite.OpcUa.NodeSources
                 InitNodeState(update, node);
             }
 
+        }
+
+        public override async Task<NodeSourceResult?> ParseResults(CancellationToken token)
+        {
+            if (!NodeMap.Any()) return null;
+
+            FinalDestinationObjects.Clear();
+            FinalDestinationVariables.Clear();
+            FinalReferences.Clear();
+            FinalSourceObjects.Clear();
+            FinalSourceVariables.Clear();
+
+            await InitNodes(NodeList, token);
+
+            var usesFdm = Config.Cognite?.FlexibleDataModels?.Enabled ?? false;
+
             if (Config.Extraction.Relationships.Enabled)
             {
-                GetRelationshipData();
+                var newNodes = new List<(NodeId, IReference)>();
+                var additionalKnownNodes = usesFdm ? ModellingRules : new HashSet<NodeId>();
+
+                GetRelationshipData(usesFdm, additionalKnownNodes, newNodes);
+
+                await InitNodes(newNodes.Where(pair => !pair.Item2.IsInverse).SelectNonNull(pair => NodeMap.GetValueOrDefault(Client.ToNodeId(pair.Item2.TargetId))), token);
+
+                foreach (var (parentId, rf) in newNodes)
+                {
+                    var parentNode = Extractor.State.GetMappedNode(parentId);
+                    if (parentNode == null) continue;
+
+                    bool isHierarchical = IsOfType(rf.ReferenceTypeId, ReferenceTypeIds.HierarchicalReferences);
+                    var childNode = Extractor.State.GetMappedNode(Client.ToNodeId(rf.TargetId));
+                    if (childNode == null) continue;
+
+                    var reference = new UAReference(
+                        type: Client.ToNodeId(rf.ReferenceTypeId),
+                        isForward: !rf.IsInverse,
+                        source: parentId,
+                        target: childNode.Id,
+                        sourceTs: !parentNode.IsObject,
+                        targetTs: !childNode.IsObject,
+                        isHierarchical,
+                        manager: TypeManager);
+
+                    if (!FilterReference(reference, usesFdm, additionalKnownNodes)) continue;
+
+                    FinalReferences.Add(reference);
+                }
             }
 
             ClearRaw();
@@ -362,7 +412,7 @@ namespace Cognite.OpcUa.NodeSources
                 isFullBrowse);
         }
 
-        private void GetRelationshipData()
+        private void GetRelationshipData(bool getPropertyReferences, HashSet<NodeId> additionalKnownNodes, List<(NodeId, IReference)> newNodes)
         {
             foreach (var (id, refs) in references)
             {
@@ -374,7 +424,21 @@ namespace Cognite.OpcUa.NodeSources
                     bool isHierarchical = IsOfType(rf.ReferenceTypeId, ReferenceTypeIds.HierarchicalReferences);
 
                     var childNode = Extractor.State.GetMappedNode(Client.ToNodeId(rf.TargetId));
-                    if (childNode == null) continue;
+                    if (childNode == null)
+                    {
+                        if (Config.Extraction.Relationships.CreateReferencedNodes)
+                        {
+                            var childId = Client.ToNodeId(rf.TargetId);
+                            if (!nodeDict.ContainsKey(childId)) continue;
+                            if (!BuildNode(childId, NodeId.Null)) continue;
+                            newNodes.Add((id, rf));
+                        }
+                        else
+                        {
+                            Log.LogTrace("Skipping reference from {Parent} to {Child} due to missing child node", id, rf.TargetId);
+                        }
+                        continue;
+                    }
 
                     var reference = new UAReference(
                         type: Client.ToNodeId(rf.ReferenceTypeId),
@@ -386,7 +450,7 @@ namespace Cognite.OpcUa.NodeSources
                         isHierarchical,
                         manager: TypeManager);
 
-                    if (!FilterReference(reference)) continue;
+                    if (!FilterReference(reference, getPropertyReferences, additionalKnownNodes)) continue;
 
                     FinalReferences.Add(reference);
                 }

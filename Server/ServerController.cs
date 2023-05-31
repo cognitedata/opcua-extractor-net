@@ -92,6 +92,7 @@ namespace Server
             catch (Exception e)
             {
                 log.LogError(e, "Failed to start server");
+                throw;
             }
         }
         public void Stop()

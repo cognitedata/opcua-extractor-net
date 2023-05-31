@@ -167,7 +167,7 @@ namespace Test.Utils
             var provider = Services.BuildServiceProvider();
             var destination = provider.GetRequiredService<CogniteDestination>();
             var pusher = new CDFPusher(Provider.GetRequiredService<ILogger<CDFPusher>>(),
-                Config, Config.Cognite, destination);
+                Config, Config.Cognite, destination, provider);
             var handler = provider.GetRequiredService<CDFMockHandler>();
             return (handler, pusher);
         }
