@@ -90,10 +90,6 @@ namespace Cognite.OpcUa.Config
             if (emittedEvents.Any())
             {
                 log.LogInformation("Identified {Count} events by looking at GeneratesEvent references", emittedEvents.Count);
-                foreach (var rf in emitterReferences)
-                {
-                    log.LogInformation("Test {T} {E}", rf.ParentId, rf.Id);
-                }
                 bool auditReferences = emitterReferences.Any(evt => evt.ParentId == ObjectIds.Server
                 && (evt.Id == ObjectTypeIds.AuditAddNodesEventType || evt.Id == ObjectTypeIds.AuditAddReferencesEventType));
 

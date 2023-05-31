@@ -356,7 +356,7 @@ namespace Cognite.OpcUa.NodeSources
                 var newNodes = new List<(NodeId, IReference)>();
                 var additionalKnownNodes = usesFdm ? ModellingRules : new HashSet<NodeId>();
 
-                GetRelationshipData(usesFdm, additionalKnownNodes, newNodes);
+                LoadRelationshipData(usesFdm, additionalKnownNodes, newNodes);
 
                 await InitNodes(newNodes.Where(pair => !pair.Item2.IsInverse).SelectNonNull(pair => NodeMap.GetValueOrDefault(Client.ToNodeId(pair.Item2.TargetId))), token);
 
@@ -412,7 +412,7 @@ namespace Cognite.OpcUa.NodeSources
                 isFullBrowse);
         }
 
-        private void GetRelationshipData(bool getPropertyReferences, HashSet<NodeId> additionalKnownNodes, List<(NodeId, IReference)> newNodes)
+        private void LoadRelationshipData(bool getPropertyReferences, HashSet<NodeId> additionalKnownNodes, List<(NodeId, IReference)> newNodes)
         {
             foreach (var (id, refs) in references)
             {

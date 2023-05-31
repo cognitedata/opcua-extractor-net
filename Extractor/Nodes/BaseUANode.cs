@@ -152,7 +152,6 @@ namespace Cognite.OpcUa.Nodes
 
         public BaseUANode(NodeId id, BaseUANode? parent, NodeId? parentId)
         {
-            // if (id.IsNullNodeId) throw new ArgumentException("Id may not be the null NodeId", nameof(id));
             Id = id;
             Parent = parent;
             FallbackParentId = parentId;
