@@ -52,7 +52,7 @@ extractor:
     - name: Troubleshooting
       url: "https://docs.cognite.com/cdf/integration/guides/extraction/opc_ua/opc_ua_troubleshooting"
       type: "externalDocumentation"
-  image: opc-ua.svg
+  image: opc-ua.png
 
 schema:
   rootSchema: schema/full_config.schema.json
