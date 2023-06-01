@@ -61,7 +61,7 @@ schema:
 
 versions:
   "2.18.0":
-    description: Options for configuring lifetime-count and keep-alive-count
+    description: Options for configuring lifetime-count and keep-alive-count of subscriptions
     changelog:
       added:
         - "subscriptions.lifetime-count setting maximum number of empty publish requests before subscription shutdown"
