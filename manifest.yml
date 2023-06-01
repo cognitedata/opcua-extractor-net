@@ -60,6 +60,14 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.18.0":
+    description: Options for configuring lifetime-count and keep-alive-count of subscriptions
+    changelog:
+      added:
+        - "subscriptions.lifetime-count setting maximum number of empty publish requests before subscription shutdown"
+        - "subscriptions.keep-alive-count setting maximum number of empty publish requests before a keep alive response is sent"
+      changed:
+        - "Delete subscriptions on session shutdown"
   "2.17.0":
     description: Various config changes and some internal changes
     changelog:

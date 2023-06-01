@@ -92,7 +92,7 @@ namespace Cognite.OpcUa
             {
                 try
                 {
-                    session.Close();
+                    await session.CloseAsync();
                 }
                 catch { }
                 session.KeepAlive -= ClientKeepAlive;
@@ -230,6 +230,7 @@ namespace Cognite.OpcUa
                     0,
                     identity,
                     null);
+                session.DeleteSubscriptionsOnClose = true;
                 return session;
             }
             catch (Exception ex)
@@ -279,6 +280,7 @@ namespace Cognite.OpcUa
                     identity,
                     null
                 );
+                session.DeleteSubscriptionsOnClose = true;
                 return session;
             }
             catch (Exception ex)
@@ -326,7 +328,7 @@ namespace Cognite.OpcUa
                     {
                         if (current != null)
                         {
-                            current.Session.Close();
+                            await current.Session.CloseAsync();
                             current.Session.Dispose();
                         }
                         current = new SessionRedundancyResult(session, url, serviceLevel);
@@ -457,7 +459,7 @@ namespace Cognite.OpcUa
             {
                 if (session != null && !session.Disposed)
                 {
-                    var closeTask = session.CloseSessionAsync(null, true, token);
+                    var closeTask = session.CloseAsync(token);
                     var resultTask = await Task.WhenAny(Task.Delay(5000, token), closeTask);
                     if (closeTask != resultTask)
                     {

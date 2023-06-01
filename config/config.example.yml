@@ -833,6 +833,11 @@ subscriptions:
     sampling-interval: 100
     # Length of internal server queue for each subscribed item. < 2 means that any updates occuring between publish requests are lost.
     queue-length: 10
+    # The number of publish requests without a response before the server should send a keep alive message.
+    keep-alive-count: 10
+    # The number of publish requests without a response before the server should close the subscription.
+    # Must be at least 3 * keep-alive-count.
+    lifetime-count: 1000
     # List of alternative subscription configurations.
     # The first entry with a matching filter will be used for each node.
     alternative-configs:
