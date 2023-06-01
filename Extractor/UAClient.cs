@@ -917,7 +917,9 @@ namespace Cognite.OpcUa
                 subscription = new Subscription(Session.DefaultSubscription)
                 {
                     PublishingInterval = Config.Source.PublishingInterval,
-                    DisplayName = name
+                    DisplayName = name,
+                    KeepAliveCount = Config.Subscriptions.KeepAliveCount,
+                    LifetimeCount = Config.Subscriptions.LifetimeCount
                 };
                 subscription.PublishStatusChanged += OnSubscriptionPublishStatusChange;
             }

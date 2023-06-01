@@ -116,6 +116,14 @@ namespace Cognite.OpcUa
                 if (config.Cognite.DataSet == null) config.Cognite.DataSet = new Extensions.DataSetConfig();
                 config.Cognite.DataSet.ExternalId = config.Cognite.DataSetExternalId;
             }
+            if (config.Subscriptions.LifetimeCount <= 0 || config.Subscriptions.LifetimeCount < 3 * config.Subscriptions.KeepAliveCount)
+            {
+                return "subscriptions.lifetime-count must be greater than 0 and at least 3 * subscriptions.keep-alive-count";
+            }
+            if (config.Subscriptions.KeepAliveCount <= 0)
+            {
+                return "subscriptions.keep-alive-count must be greater than 0";
+            }
 
             return null;
         }
