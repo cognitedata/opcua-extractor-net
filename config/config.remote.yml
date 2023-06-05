@@ -1,0 +1,30 @@
+# This is a minimal configuration for remote configuration of the extractor. 
+# A full configuration file needs to be added to the extraction pipeline in addition to using this file locally.
+
+type: remote
+
+version: 2
+
+cognite:
+    # The project to connect to in the API, uses the environment variable COGNITE_PROJECT.
+    project: "${COGNITE_PROJECT}"
+
+    # This is for microsoft as IdP, to use a different provider,
+    # set implementation: Basic, and use token-url instead of tenant.
+    # See the example config for the full list of options.
+    idp-authentication:
+        # Directory tenant
+        tenant: ${COGNITE_TENANT_ID}
+        # Application Id
+        client-id: ${COGNITE_CLIENT_ID}
+        # Client secret
+        secret: ${COGNITE_CLIENT_SECRET}
+        # List of resource scopes, ex:
+        # scopes:
+        #   - scopeA
+        #   - scopeB
+        scopes:
+          - ${COGNITE_SCOPE}
+          
+    extraction-pipeline:
+        external-id: ${COGNITE_EXTRACTION_PIPELINE}
