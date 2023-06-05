@@ -7,14 +7,13 @@ version: 2
 
 cognite:
     # The project to connect to in the API, uses the environment variable COGNITE_PROJECT.
-    project: "${COGNITE_PROJECT}"
-
-    # This is for microsoft as IdP, to use a different provider,
-    # set implementation: Basic, and use token-url instead of tenant.
+    project: "${COGNITE_PROJECT}"    
+    # Cognite base url
+    host: "${COGNITE_BASE_URL}"
     # See the example config for the full list of options.
     idp-authentication:
-        # Directory tenant
-        tenant: ${COGNITE_TENANT_ID}
+        # URL to fetch tokens from. Either this or tenant must be present.
+        token-url: ${COGNITE_TOKEN_URL}
         # Application Id
         client-id: ${COGNITE_CLIENT_ID}
         # Client secret
@@ -25,6 +24,13 @@ cognite:
         #   - scopeB
         scopes:
           - ${COGNITE_SCOPE}
-          
+
+        audience: ${COGNITE_AUDIENCE}
+        # Which implementation to use in the authenticator. One of
+        # MSAL (recommended) - Microsoft Authentication Library, works only with authority/tenant
+        # Basic - Post to authentication endpoint and parse JSON response, works with both authority/tenant and token-url
+        # Default is MSAL
+        implementation: Basic
+
     extraction-pipeline:
         external-id: ${COGNITE_EXTRACTION_PIPELINE}
