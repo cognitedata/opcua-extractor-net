@@ -8,7 +8,7 @@ namespace Cognite.OpcUa.Pushers.FDM.Types
 {
     public class NodeTypeReference : ReferenceNode
     {
-        public NodeTypeReference(NodeClass nodeClass, string browseName, string externalId, UAReference uaReference)
+        public NodeTypeReference(NodeClass nodeClass, QualifiedName browseName, string externalId, UAReference uaReference)
             : base(nodeClass, browseName, externalId, uaReference)
         {
         }
@@ -20,9 +20,9 @@ namespace Cognite.OpcUa.Pushers.FDM.Types
     {
         public UAVariable Node { get; set; }
         public BasePropertyType? DMSType { get; set; }
-        public IEnumerable<string> BrowsePath { get; set; }
-        public DMSReferenceNode(UAVariable node, UAReference reference, string externalId, IEnumerable<string> browsePath)
-            : base(node.NodeClass, node.Attributes.BrowseName?.Name ?? node.Name ?? "", externalId, reference)
+        public IEnumerable<QualifiedName> BrowsePath { get; set; }
+        public DMSReferenceNode(UAVariable node, UAReference reference, string externalId, IEnumerable<QualifiedName> browsePath)
+            : base(node.NodeClass, node.Attributes.BrowseName ?? new QualifiedName(node.Name ?? ""), externalId, reference)
         {
             Node = node;
             BrowsePath = browsePath;
@@ -31,12 +31,12 @@ namespace Cognite.OpcUa.Pushers.FDM.Types
     public class ReferenceNode
     {
         public NodeClass NodeClass { get; }
-        public string BrowseName { get; }
+        public QualifiedName BrowseName { get; }
         public string ExternalId { get; }
         public UAReference Reference { get; }
         public ModellingRule ModellingRule { get; set; } = ModellingRule.Optional;
 
-        public ReferenceNode(NodeClass nodeClass, string browseName, string externalId, UAReference uaReference)
+        public ReferenceNode(NodeClass nodeClass, QualifiedName browseName, string externalId, UAReference uaReference)
         {
             Reference = uaReference;
             BrowseName = browseName;

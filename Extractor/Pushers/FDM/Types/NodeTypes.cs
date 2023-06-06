@@ -34,11 +34,11 @@ namespace Cognite.OpcUa.Pushers.FDM.Types
             {
                 IsSimple = IsSimple(),
                 NodeId = NodeId.ToString(),
-                Parent = Parent?.NodeId?.ToString(),
+                Parent = Parent?.ExternalId,
                 Properties = Properties.ToDictionary(kvp => kvp.Key, kvp => new PropertyMetadata
                 {
                     ArrayDimensions = kvp.Value.Node.ArrayDimensions,
-                    BrowsePath = kvp.Value.BrowsePath,
+                    BrowsePath = kvp.Value.BrowsePath.Select(p => $"{p.NamespaceIndex}:{p.Name}"),
                     DataType = kvp.Value.Node.FullAttributes.DataType.Id.ToString(),
                     TypeDefinition = kvp.Value.Node.TypeDefinition?.ToString(),
                     NodeId = kvp.Value.Node.Id.ToString(),
@@ -55,7 +55,7 @@ namespace Cognite.OpcUa.Pushers.FDM.Types
         {
             Reference = new ReferenceNode(
               node.NodeClass,
-              node.Attributes.BrowseName?.Name ?? node.Name ?? "",
+              node.Attributes.BrowseName ?? new QualifiedName(node.Name ?? ""),
               externalId ?? node.Attributes.BrowseName?.Name ?? node.Name ?? "",
               reference
             );
@@ -86,7 +86,7 @@ namespace Cognite.OpcUa.Pushers.FDM.Types
         public ChildNode AddChild(BaseUANode node, UAReference reference)
         {
             var child = new ChildNode(node, reference);
-            Children[child.Reference.BrowseName] = child;
+            Children[child.Reference.BrowseName.Name] = child;
             return child;
         }
 
