@@ -249,6 +249,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             batch.Add(BaseDataModelDefinitions.ReferenceType(space), "BaseType");
             batch.Add(BaseDataModelDefinitions.DataType(space), "BaseType");
             batch.Add(BaseDataModelDefinitions.ServerMeta(space));
+            batch.Add(BaseDataModelDefinitions.TypeMeta(space));
 
             nodeTypes.MapNodeTypes(nodes);
 

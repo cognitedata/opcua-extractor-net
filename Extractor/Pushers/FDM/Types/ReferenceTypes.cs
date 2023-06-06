@@ -2,6 +2,7 @@ using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.Types;
 using CogniteSdk.Beta.DataModels;
 using Opc.Ua;
+using System.Collections.Generic;
 
 namespace Cognite.OpcUa.Pushers.FDM.Types
 {
@@ -19,10 +20,12 @@ namespace Cognite.OpcUa.Pushers.FDM.Types
     {
         public UAVariable Node { get; set; }
         public BasePropertyType? DMSType { get; set; }
-        public DMSReferenceNode(UAVariable node, UAReference reference, string externalId)
+        public IEnumerable<string> BrowsePath { get; set; }
+        public DMSReferenceNode(UAVariable node, UAReference reference, string externalId, IEnumerable<string> browsePath)
             : base(node.NodeClass, node.Attributes.BrowseName?.Name ?? node.Name ?? "", externalId, reference)
         {
             Node = node;
+            BrowsePath = browsePath;
         }
     }
     public class ReferenceNode

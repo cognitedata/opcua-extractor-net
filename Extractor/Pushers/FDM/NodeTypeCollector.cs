@@ -173,15 +173,15 @@ namespace Cognite.OpcUa.Pushers.FDM
                 return;
             }
 
+            var nextPath = path.Append(name);
             if (node.Node is UAVariable variable)
             {
-                type.Properties[fullName] = new DMSReferenceNode(variable, node.Reference.Reference, fullName)
+                type.Properties[fullName] = new DMSReferenceNode(variable, node.Reference.Reference, fullName, nextPath)
                 {
                     ModellingRule = node.Reference.ModellingRule
                 };
             }
 
-            var nextPath = path.Append(name);
             foreach (var child in node.Children.Values)
             {
                 CollectChild(type, child, nextPath);

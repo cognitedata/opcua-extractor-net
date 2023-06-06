@@ -1,6 +1,8 @@
 using System.Collections.Generic;
+using System.Linq;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.Types;
+using Opc.Ua;
 
 namespace Cognite.OpcUa.Pushers.FDM.Types
 {
@@ -10,18 +12,39 @@ namespace Cognite.OpcUa.Pushers.FDM.Types
         public Dictionary<string, DMSReferenceNode> Properties { get; }
         public FullUANodeType? Parent { get; set; }
         public string ExternalId { get; set; }
+        public NodeId NodeId { get; set; }
 
         public FullUANodeType(BaseUANode node) : base(node)
         {
             References = new();
             Properties = new();
             ExternalId = FDMUtils.SanitizeExternalId(node.Name ?? "");
+            NodeId = node.Id;
         }
 
         public bool IsSimple()
         {
             return Children.Count == 0
                 && (Parent == null || Parent.IsSimple());
+        }
+
+        public TypeMetadata GetTypeMetadata()
+        {
+            return new TypeMetadata
+            {
+                IsSimple = IsSimple(),
+                NodeId = NodeId.ToString(),
+                Parent = Parent?.NodeId?.ToString(),
+                Properties = Properties.ToDictionary(kvp => kvp.Key, kvp => new PropertyMetadata
+                {
+                    ArrayDimensions = kvp.Value.Node.ArrayDimensions,
+                    BrowsePath = kvp.Value.BrowsePath,
+                    DataType = kvp.Value.Node.FullAttributes.DataType.Id.ToString(),
+                    TypeDefinition = kvp.Value.Node.TypeDefinition?.ToString(),
+                    NodeId = kvp.Value.Node.Id.ToString(),
+                    ValueRank = kvp.Value.Node.FullAttributes.ValueRank
+                })
+            };
         }
     }
 

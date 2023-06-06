@@ -277,6 +277,20 @@ namespace Cognite.OpcUa.Pushers.FDM
                 Space = instSpace
             };
 
+            var typeMeta = types.Types.Values.Select(v => (BaseInstanceWrite)new NodeWrite
+            {
+                ExternalId = $"{v.ExternalId}_TypeMetadata",
+                Space = instSpace,
+                Sources = new[]
+                {
+                    new InstanceData<TypeMetadata>
+                    {
+                        Source = new ContainerIdentifier(instSpace, "TypeMeta"),
+                        Properties = v.GetTypeMetadata()
+                    }
+                }
+            });
+
             // Ingest types first
             log.LogInformation("Ingesting {Count1} object types, {Count2} reference types, {Count3} dataTypes",
                 instanceBuilder.ObjectTypes.Count,
@@ -285,6 +299,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             await IngestInstances(instanceBuilder.ObjectTypes
                 .Concat(instanceBuilder.ReferenceTypes)
                 .Concat(instanceBuilder.DataTypes)
+                .Concat(typeMeta)
                 .Append(serverMeta), 1000, token);
 
             // Then ingest variable types
