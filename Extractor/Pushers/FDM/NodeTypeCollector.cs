@@ -176,7 +176,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             var nextPath = path.Append(name);
             if (node.Node is UAVariable variable)
             {
-                type.Properties[fullName] = new DMSReferenceNode(variable, node.Reference.Reference, fullName, nextPath)
+                type.Properties[fullName] = new DMSReferenceNode(variable, node.Reference.Reference, fullName)
                 {
                     ModellingRule = node.Reference.ModellingRule
                 };

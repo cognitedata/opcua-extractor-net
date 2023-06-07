@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Cognite.OpcUa.Nodes;
@@ -30,20 +31,42 @@ namespace Cognite.OpcUa.Pushers.FDM.Types
 
         public TypeMetadata GetTypeMetadata()
         {
+            var properties = new Dictionary<string, IEnumerable<PropertyNode>>();
+            foreach (var kvp in Properties)
+            {
+                var collectedNodes = new List<BaseUANode>();
+                var node = (BaseUANode)kvp.Value.Node;
+                while (node.Id != NodeId)
+                {
+                    collectedNodes.Add(node);
+                    node = node.Parent;
+                    if (node == null) throw new InvalidOperationException("Expected property to be proper child of type, followed parents to nothing");
+                }
+                properties[kvp.Key] = collectedNodes.Select(k =>
+                {
+                    var prop = new PropertyNode
+                    {
+                        TypeDefinition = k.TypeDefinition?.ToString(),
+                        BrowseName = $"{k.Attributes.BrowseName?.NamespaceIndex ?? 0}:{k.Attributes.BrowseName?.Name ?? k.Name ?? ""}",
+                        NodeId = k.Id.ToString(),
+                    };
+
+                    if (k is UAVariable kVar)
+                    {
+                        prop.ValueRank = kVar.ValueRank;
+                        prop.DataType = kVar.FullAttributes.DataType.Id.ToString();
+                        prop.ArrayDimensions = kVar.ArrayDimensions;
+                    }
+                    return prop;
+                }).ToList();
+            }
+
             return new TypeMetadata
             {
                 IsSimple = IsSimple(),
                 NodeId = NodeId.ToString(),
                 Parent = Parent?.ExternalId,
-                Properties = Properties.ToDictionary(kvp => kvp.Key, kvp => new PropertyMetadata
-                {
-                    ArrayDimensions = kvp.Value.Node.ArrayDimensions,
-                    BrowsePath = kvp.Value.BrowsePath.Select(p => $"{p.NamespaceIndex}:{p.Name}"),
-                    DataType = kvp.Value.Node.FullAttributes.DataType.Id.ToString(),
-                    TypeDefinition = kvp.Value.Node.TypeDefinition?.ToString(),
-                    NodeId = kvp.Value.Node.Id.ToString(),
-                    ValueRank = kvp.Value.Node.FullAttributes.ValueRank
-                })
+                Properties = properties
             };
         }
     }
