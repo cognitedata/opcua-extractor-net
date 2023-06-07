@@ -142,25 +142,25 @@ namespace Cognite.OpcUa.Pushers.FDM
             {
                 foreach (var child in type.Children.Values)
                 {
-                    CollectChild(type, child, Enumerable.Empty<string>());
+                    CollectChild(type, child, Enumerable.Empty<QualifiedName>());
                 }
             }
         }
 
-        private string GetPath(IEnumerable<string> path, string name)
+        private string GetPath(IEnumerable<QualifiedName> path, string name)
         {
             if (path.Any())
             {
-                return $"{string.Join('_', path)}_{name}";
+                return $"{string.Join('_', path.Select(p => p.Name))}_{name}";
             }
             return name;
         }
 
-        private void CollectChild(FullUANodeType type, ChildNode node, IEnumerable<string> path)
+        private void CollectChild(FullUANodeType type, ChildNode node, IEnumerable<QualifiedName> path)
         {
             var name = node.Reference.BrowseName;
             var nodeType = Types[node.Node.TypeDefinition!];
-            var fullName = GetPath(path, name);
+            var fullName = GetPath(path, name.Name);
             if (!nodeType.IsSimple()
                 || node.Reference.ModellingRule != ModellingRule.Optional && node.Reference.ModellingRule != ModellingRule.Mandatory
                 || !node.Reference.Reference.IsHierarchical)
@@ -173,6 +173,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                 return;
             }
 
+            var nextPath = path.Append(name);
             if (node.Node is UAVariable variable)
             {
                 type.Properties[fullName] = new DMSReferenceNode(variable, node.Reference.Reference, fullName)
@@ -181,7 +182,6 @@ namespace Cognite.OpcUa.Pushers.FDM
                 };
             }
 
-            var nextPath = path.Append(name);
             foreach (var child in node.Children.Values)
             {
                 CollectChild(type, child, nextPath);

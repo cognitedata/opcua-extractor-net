@@ -57,14 +57,14 @@ namespace Test.Unit
             // FolderType, BaseObjectType, BaseVariableType, BaseDataVariableType, PropertyType,
             // 3 custom object types, 2 custom variable types
             // BaseNode, BaseType, +4 type types, and ModellingRuleType
-            Assert.Equal(18, handler.Views.Count);
+            Assert.Equal(19, handler.Views.Count);
             // 8 base types, 2 custom object types, 1 custom variable type have container data
-            Assert.Equal(12, handler.Containers.Count);
+            Assert.Equal(13, handler.Containers.Count);
             foreach (var inst in handler.Instances)
             {
                 tester.Log.LogInformation("{Key}", inst.Key);
             }
-            Assert.Equal(52, handler.Instances.Count(inst => inst.Value["instanceType"].ToString() == "node"));
+            Assert.Equal(63, handler.Instances.Count(inst => inst.Value["instanceType"].ToString() == "node"));
             Assert.Equal(71, handler.Instances.Count(inst => inst.Value["instanceType"].ToString() == "edge"));
         }
 
@@ -83,10 +83,10 @@ namespace Test.Unit
             // FolderType, BaseObjectType, BaseVariableType, BaseDataVariableType, PropertyType,
             // 3 custom object types, 1 custom variable type
             // BaseNode, BaseType, +4 type types, and ModellingRuleType
-            Assert.Equal(17, handler.Views.Count);
+            Assert.Equal(18, handler.Views.Count);
             // 8 base types, 2 custom object types, 1 custom variable type have container data
-            Assert.Equal(12, handler.Containers.Count);
-            Assert.Equal(52, handler.Instances.Count(inst => inst.Value["instanceType"].ToString() == "node"));
+            Assert.Equal(13, handler.Containers.Count);
+            Assert.Equal(62, handler.Instances.Count(inst => inst.Value["instanceType"].ToString() == "node"));
             Assert.Equal(71, handler.Instances.Count(inst => inst.Value["instanceType"].ToString() == "edge"));
         }
 
@@ -105,10 +105,10 @@ namespace Test.Unit
             // FolderType, BaseObjectType, BaseVariableType, BaseDataVariableType, PropertyType,
             // 3 custom object types, 1 custom variable type
             // BaseNode, BaseType, +4 type types, ModellingRuleType, and DataTypeSystemType
-            Assert.Equal(18, handler.Views.Count);
+            Assert.Equal(19, handler.Views.Count);
             // 8 base types, 2 custom object types, 1 custom variable type have container data
-            Assert.Equal(12, handler.Containers.Count);
-            Assert.Equal(2144, handler.Instances.Count(inst => inst.Value["instanceType"].ToString() == "node"));
+            Assert.Equal(13, handler.Containers.Count);
+            Assert.Equal(2155, handler.Instances.Count(inst => inst.Value["instanceType"].ToString() == "node"));
             Assert.Equal(6137, handler.Instances.Count(inst => inst.Value["instanceType"].ToString() == "edge"));
         }
 
@@ -124,11 +124,11 @@ namespace Test.Unit
             await extractor.RunExtractor(true);
 
             Assert.Single(handler.Spaces);
-            Assert.Equal(213, handler.Views.Count);
-            Assert.Equal(132, handler.Containers.Count);
+            Assert.Equal(214, handler.Views.Count);
+            Assert.Equal(133, handler.Containers.Count);
             // Numbers are lower because more types are mapped, so more nodes are mapped as metadata.
             // This isn't always desired. You may want the entire type hierarchy without the types for all nodes.
-            Assert.Equal(1668, handler.Instances.Count(inst => inst.Value["instanceType"].ToString() == "node"));
+            Assert.Equal(1874, handler.Instances.Count(inst => inst.Value["instanceType"].ToString() == "node"));
             Assert.Equal(3824, handler.Instances.Count(inst => inst.Value["instanceType"].ToString() == "edge"));
         }
     }

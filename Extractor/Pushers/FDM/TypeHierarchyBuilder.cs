@@ -108,8 +108,8 @@ namespace Cognite.OpcUa.Pushers.FDM
                 {
                     view.Properties.Add(rf.ExternalId, new ConnectionDefinition
                     {
-                        Description = rf.BrowseName,
-                        Name = rf.BrowseName,
+                        Description = rf.BrowseName.Name,
+                        Name = rf.BrowseName.Name,
                         Direction = ConnectionDirection.outwards,
                         Source = GetViewIdentifier(rf.ExternalId, type.ExternalId, rf, config),
                         Type = new DirectRelationIdentifier(space, rf.Reference.Type.Id.ToString())
@@ -167,7 +167,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                 res[kvp.Value.ExternalId] = new ContainerPropertyDefinition
                 {
                     Description = type.Node.Attributes.Description,
-                    Name = kvp.Value.BrowseName,
+                    Name = kvp.Value.BrowseName.Name,
                     Type = typ,
                     Nullable = kvp.Value.ModellingRule != ModellingRule.Mandatory || (typ is DirectRelationPropertyType) || config.IgnoreMandatory,
                     DefaultValue = (typ.Type == PropertyTypeVariant.direct || kvp.Value.Node.IsArray && typ.Type != PropertyTypeVariant.json)
@@ -249,6 +249,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             batch.Add(BaseDataModelDefinitions.ReferenceType(space), "BaseType");
             batch.Add(BaseDataModelDefinitions.DataType(space), "BaseType");
             batch.Add(BaseDataModelDefinitions.ServerMeta(space));
+            batch.Add(BaseDataModelDefinitions.TypeMeta(space));
 
             nodeTypes.MapNodeTypes(nodes);
 
