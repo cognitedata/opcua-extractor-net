@@ -330,5 +330,40 @@ namespace Cognite.OpcUa.Pushers.FDM
                 }
             };
         }
+
+        public static ContainerCreate TypeMeta(string space)
+        {
+            return new ContainerCreate
+            {
+                Description = "Metadata for OPC UA types",
+                ExternalId = "TypeMeta",
+                Name = "TypeMeta",
+                Space = space,
+                UsedFor = UsedFor.node,
+                Properties = new Dictionary<string, ContainerPropertyDefinition>
+                {
+                    { "properties", new ContainerPropertyDefinition
+                    {
+                        Type = BasePropertyType.Create(PropertyTypeVariant.json),
+                        Nullable = false
+                    } },
+                    { "nodeId", new ContainerPropertyDefinition
+                    {
+                        Type = BasePropertyType.Text(),
+                        Nullable = false
+                    } },
+                    { "isSimple", new ContainerPropertyDefinition
+                    {
+                        Type = BasePropertyType.Create(PropertyTypeVariant.boolean),
+                        Nullable = false
+                    } },
+                    { "parent", new ContainerPropertyDefinition
+                    {
+                        Type = BasePropertyType.Text(),
+                        Nullable = true
+                    } }
+                }
+            };
+        }
     }
 }
