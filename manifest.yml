@@ -60,6 +60,12 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.19.0":
+    description: Add extra metadata per type and remote support in docker container
+    changelog:
+      added:
+        - "Extra metadata per type"
+        - "Set the environment variable OPCUA_CONFIG_DIR=/config_remote to have the docker container use a remote config from env variable COGNITE_EXTRACTION_PIPELINE"
   "2.18.0":
     description: Options for configuring lifetime-count and keep-alive-count of subscriptions
     changelog:
