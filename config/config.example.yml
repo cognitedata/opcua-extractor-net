@@ -210,6 +210,9 @@ history:
         max-node-parallelism: 0
     # Log bad history datapoints, count per read at debug and each datapoint at verbose
     log-bad-values: true
+    # Threshold for the percentage of read operations failed before the run is considered erroneous
+    # Example: 10.0 -> History read operation would consider the run as failed if more that %10 of read operations fail.
+    error-threshold: 10.0
 
 # Configuration for the pusher to CDF.
 cognite:
