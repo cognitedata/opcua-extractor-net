@@ -13,15 +13,15 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="AdysTech.InfluxDB.Client.Net.Core" Version="0.25.0" />
-    <PackageReference Include="Cognite.ExtractorUtils" Version="1.8.0" />
+    <PackageReference Include="Cognite.ExtractorUtils" Version="1.12.1" />
     <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
     <PackageReference Include="OPCFoundation.NetStandard.Opc.Ua.Client" Version="1.4.371.60" />
     <PackageReference Include="OPCFoundation.NetStandard.Opc.Ua.Configuration" Version="1.4.371.60" />
     <PackageReference Include="OPCFoundation.NetStandard.Opc.Ua.PubSub" Version="1.4.371.60-beta" />
     <PackageReference Include="System.ComponentModel.Annotations" Version="5.0.0" />
-	<PackageReference Include="MQTTnet" Version="3.1.2" />
-	<PackageReference Include="CogniteSdk" Version="3.8.1" />
-	<PackageReference Include="System.Text.Json" Version="7.0.3" />
+    <PackageReference Include="MQTTnet" Version="3.1.2" />
+    <PackageReference Include="CogniteSdk" Version="3.11.1" />
+    <PackageReference Include="System.Text.Json" Version="7.0.3" />
   </ItemGroup>
   <!--ItemGroup>
     <None Include="$(SolutionDir)config\**" CopyToOutputDirectory="Always" LinkBase="config\" />
