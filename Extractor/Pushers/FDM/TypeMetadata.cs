@@ -16,6 +16,8 @@ namespace Cognite.OpcUa.Pushers.FDM
         public int? NodeClass { get; set; }
         public bool Mandatory { get; set; }
         public string? ReferenceType { get; set; }
+        public string? DisplayName { get; set; }
+        public string? ExternalId { get; set; }
     }
 
 

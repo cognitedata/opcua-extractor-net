@@ -55,7 +55,9 @@ namespace Cognite.OpcUa.Pushers.FDM.Types
                         NodeId = pair.node.Id.ToString(),
                         NodeClass = (int)pair.node.NodeClass,
                         Mandatory = pair.mandatory,
-                        ReferenceType = pair.reference.Type.Id.ToString()
+                        ReferenceType = pair.reference.Type.Id.ToString(),
+                        DisplayName = pair.node.Name ?? "",
+                        ExternalId = FDMUtils.SanitizeExternalId(pair.node.Name ?? "")
                     };
 
                     if (pair.node is UAVariable nVar)
