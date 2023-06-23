@@ -13,6 +13,8 @@ namespace Cognite.OpcUa.Pushers.FDM
         public int[]? ArrayDimensions { get; set; }
         public int? ValueRank { get; set; }
         public string? BrowseName { get; set; }
+        public int? NodeClass { get; set; }
+        public bool Mandatory { get; set; }
     }
 
 
