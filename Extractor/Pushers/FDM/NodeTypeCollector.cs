@@ -142,21 +142,21 @@ namespace Cognite.OpcUa.Pushers.FDM
             {
                 foreach (var child in type.Children.Values)
                 {
-                    CollectChild(type, child, Enumerable.Empty<QualifiedName>());
+                    CollectChild(type, child, Enumerable.Empty<(UAReference Reference, QualifiedName Name)>());
                 }
             }
         }
 
-        private string GetPath(IEnumerable<QualifiedName> path, string name)
+        private string GetPath(IEnumerable<(UAReference Reference, QualifiedName Name)> path, string name)
         {
             if (path.Any())
             {
-                return $"{string.Join('_', path.Select(p => p.Name))}_{name}";
+                return $"{string.Join('_', path.Select(p => p.Name.Name))}_{name}";
             }
             return name;
         }
 
-        private void CollectChild(FullUANodeType type, ChildNode node, IEnumerable<QualifiedName> path)
+        private void CollectChild(FullUANodeType type, ChildNode node, IEnumerable<(UAReference Reference, QualifiedName Name)> path)
         {
             var name = node.Reference.BrowseName;
             var nodeType = Types[node.Node.TypeDefinition!];
@@ -173,10 +173,10 @@ namespace Cognite.OpcUa.Pushers.FDM
                 return;
             }
 
-            var nextPath = path.Append(name);
+            var nextPath = path.Append((node.Reference.Reference, name));
             if (node.Node is UAVariable variable)
             {
-                type.Properties[fullName] = new DMSReferenceNode(variable, node.Reference.Reference, fullName)
+                type.Properties[fullName] = new DMSReferenceNode(variable, node.Reference.Reference, fullName, nextPath)
                 {
                     ModellingRule = node.Reference.ModellingRule
                 };

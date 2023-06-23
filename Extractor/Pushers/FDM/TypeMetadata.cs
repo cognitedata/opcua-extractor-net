@@ -15,6 +15,7 @@ namespace Cognite.OpcUa.Pushers.FDM
         public string? BrowseName { get; set; }
         public int? NodeClass { get; set; }
         public bool Mandatory { get; set; }
+        public string? ReferenceType { get; set; }
     }
 
 

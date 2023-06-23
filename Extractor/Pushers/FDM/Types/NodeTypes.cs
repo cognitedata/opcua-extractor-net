@@ -34,11 +34,15 @@ namespace Cognite.OpcUa.Pushers.FDM.Types
             var properties = new Dictionary<string, IEnumerable<PropertyNode>>();
             foreach (var kvp in Properties)
             {
-                var collectedNodes = new List<(BaseUANode node, bool mandatory)>();
+                var collectedNodes = new List<(BaseUANode node, bool mandatory, UAReference reference)>();
                 var node = (BaseUANode)kvp.Value.Node;
+                var pathEnum = kvp.Value.Path.Reverse().GetEnumerator();
+                pathEnum.MoveNext();
                 while (node.Id != NodeId)
                 {
-                    collectedNodes.Add((node, kvp.Value.ModellingRule == ModellingRule.Mandatory));
+                    var pair = pathEnum.Current;
+                    collectedNodes.Add((node, kvp.Value.ModellingRule == ModellingRule.Mandatory, pair.Reference));
+                    pathEnum.MoveNext();
                     node = node.Parent;
                     if (node == null) throw new InvalidOperationException("Expected property to be proper child of type, followed parents to nothing");
                 }
@@ -50,7 +54,8 @@ namespace Cognite.OpcUa.Pushers.FDM.Types
                         BrowseName = $"{pair.node.Attributes.BrowseName?.NamespaceIndex ?? 0}:{pair.node.Attributes.BrowseName?.Name ?? pair.node.Name ?? ""}",
                         NodeId = pair.node.Id.ToString(),
                         NodeClass = (int)pair.node.NodeClass,
-                        Mandatory = pair.mandatory
+                        Mandatory = pair.mandatory,
+                        ReferenceType = pair.reference.Type.Id.ToString()
                     };
 
                     if (pair.node is UAVariable nVar)
