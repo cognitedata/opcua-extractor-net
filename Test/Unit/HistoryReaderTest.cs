@@ -42,6 +42,7 @@ namespace Test.Unit
             tester.ResetConfig();
             tester.Init(output);
             tester.Client.TypeManager.Reset();
+            tester.Server.Issues.HistoryReadStatusOverride.Clear();
         }
 
         [Fact(Timeout = 10000)]
