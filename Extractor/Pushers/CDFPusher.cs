@@ -57,21 +57,13 @@ namespace Cognite.OpcUa.Pushers
         public PusherInput? PendingNodes { get; set; }
 
         private UAExtractor extractor;
-        private bool pushCleanAssets;
-        private bool pushCleanTimeseries;
-
-        public UAExtractor Extractor
-        {
-            get => extractor;
-            set
+        public UAExtractor Extractor { get => extractor; set {
+            extractor = value;
+            if (fdmDestination != null)
             {
-                extractor = value;
-                if (fdmDestination != null)
-                {
-                    fdmDestination.Extractor = value;
-                }
+                fdmDestination.Extractor = value;
             }
-        }
+        } }
         public IPusherConfig BaseConfig { get; }
 
         private readonly HashSet<string> mismatchedTimeseries = new HashSet<string>();
@@ -80,14 +72,20 @@ namespace Cognite.OpcUa.Pushers
 
         private readonly BrowseCallback? callback;
         private readonly FDMWriter? fdmDestination;
+        private bool pushCleanAssets =>
+            string.IsNullOrWhiteSpace(config.RawMetadata?.Database)
+            && string.IsNullOrWhiteSpace(config.RawMetadata?.AssetsTable);
+        private bool pushCleanTimeseries =>
+            string.IsNullOrWhiteSpace(config.RawMetadata?.Database)
+            && string.IsNullOrWhiteSpace(config.RawMetadata?.TimeseriesTable);
+
 
         public CDFPusher(
             ILogger<CDFPusher> log,
             FullConfig fullConfig,
             CognitePusherConfig config,
             CogniteDestination destination,
-            IServiceProvider provider
-        )
+            IServiceProvider provider)
         {
             extractor = null!;
             this.log = log;
@@ -95,77 +93,40 @@ namespace Cognite.OpcUa.Pushers
             BaseConfig = config;
             this.destination = destination;
             this.fullConfig = fullConfig;
-            if (
-                config.BrowseCallback != null
-                && (
-                    config.BrowseCallback.Id.HasValue
-                    || !string.IsNullOrEmpty(config.BrowseCallback.ExternalId)
-                )
-            )
+            if (config.BrowseCallback != null && (config.BrowseCallback.Id.HasValue || !string.IsNullOrEmpty(config.BrowseCallback.ExternalId)))
             {
                 callback = new BrowseCallback(destination, config.BrowseCallback, log);
             }
             if (config.FlexibleDataModels != null && config.FlexibleDataModels.Enabled)
             {
-                fdmDestination = new FDMWriter(
-                    provider.GetRequiredService<FullConfig>(),
-                    destination,
-                    provider.GetRequiredService<ILogger<FDMWriter>>()
-                );
+                fdmDestination = new FDMWriter(provider.GetRequiredService<FullConfig>(), destination,
+                    provider.GetRequiredService<ILogger<FDMWriter>>());
             }
-
-            pushCleanAssets =
-                string.IsNullOrWhiteSpace(config.RawMetadata?.Database)
-                && string.IsNullOrWhiteSpace(config.RawMetadata?.AssetsTable);
-
-            pushCleanTimeseries =
-                string.IsNullOrWhiteSpace(config.RawMetadata?.Database)
-                && string.IsNullOrWhiteSpace(config.RawMetadata?.TimeseriesTable);
         }
 
-        private static readonly Counter dataPointsCounter = Metrics.CreateCounter(
-            "opcua_datapoints_pushed_cdf",
-            "Number of datapoints pushed to CDF"
-        );
-        private static readonly Counter dataPointPushes = Metrics.CreateCounter(
-            "opcua_datapoint_pushes_cdf",
-            "Number of times datapoints have been pushed to CDF"
-        );
-        private static readonly Counter dataPointPushFailures = Metrics.CreateCounter(
-            "opcua_datapoint_push_failures_cdf",
-            "Number of completely failed pushes of datapoints to CDF"
-        );
-        private static readonly Counter eventCounter = Metrics.CreateCounter(
-            "opcua_events_pushed_cdf",
-            "Number of events pushed to CDF"
-        );
-        private static readonly Counter eventPushCounter = Metrics.CreateCounter(
-            "opcua_event_pushes_cdf",
-            "Number of times events have been pushed to CDF"
-        );
-        private static readonly Counter eventPushFailures = Metrics.CreateCounter(
-            "opcua_event_push_failures_cdf",
-            "Number of times events have been pushed to CDF"
-        );
-        private static readonly Counter nodeEnsuringFailures = Metrics.CreateCounter(
-            "opcua_node_ensure_failures_cdf",
-            "Number of completely failed requests to CDF when ensuring assets/timeseries exist"
-        );
-        private static readonly Counter skippedEvents = Metrics.CreateCounter(
-            "opcua_skipped_events_cdf",
-            "Number of events skipped by CDF pusher"
-        );
-        private static readonly Gauge missingTimeseriesCnt = Metrics.CreateGauge(
-            "opcua_missing_timeseries",
-            "Number of distinct timeseries that have been found to be missing in CDF"
-        );
-        private static readonly Gauge mismatchedTimeseriesCnt = Metrics.CreateGauge(
-            "opcua_mismatched_timeseries",
-            "Number of distinct timeseries that have been found to have different types in OPC-UA and in CDF"
-        );
+        private static readonly Counter dataPointsCounter = Metrics
+            .CreateCounter("opcua_datapoints_pushed_cdf", "Number of datapoints pushed to CDF");
+        private static readonly Counter dataPointPushes = Metrics
+            .CreateCounter("opcua_datapoint_pushes_cdf", "Number of times datapoints have been pushed to CDF");
+        private static readonly Counter dataPointPushFailures = Metrics
+            .CreateCounter("opcua_datapoint_push_failures_cdf", "Number of completely failed pushes of datapoints to CDF");
+        private static readonly Counter eventCounter = Metrics
+            .CreateCounter("opcua_events_pushed_cdf", "Number of events pushed to CDF");
+        private static readonly Counter eventPushCounter = Metrics
+            .CreateCounter("opcua_event_pushes_cdf", "Number of times events have been pushed to CDF");
+        private static readonly Counter eventPushFailures = Metrics
+            .CreateCounter("opcua_event_push_failures_cdf", "Number of times events have been pushed to CDF");
+        private static readonly Counter nodeEnsuringFailures = Metrics
+            .CreateCounter("opcua_node_ensure_failures_cdf",
+            "Number of completely failed requests to CDF when ensuring assets/timeseries exist");
+        private static readonly Counter skippedEvents = Metrics
+            .CreateCounter("opcua_skipped_events_cdf", "Number of events skipped by CDF pusher");
+        private static readonly Gauge missingTimeseriesCnt = Metrics
+            .CreateGauge("opcua_missing_timeseries", "Number of distinct timeseries that have been found to be missing in CDF");
+        private static readonly Gauge mismatchedTimeseriesCnt = Metrics
+            .CreateGauge("opcua_mismatched_timeseries", "Number of distinct timeseries that have been found to have different types in OPC-UA and in CDF");
 
         private readonly ILogger<CDFPusher> log;
-
         #region Interface
 
 
@@ -173,72 +134,45 @@ namespace Cognite.OpcUa.Pushers
         /// Attempts to push the given list of datapoints to CDF.
         /// </summary>'
         /// <returns>True if push succeeded, false if it failed, null if there were no points to push.</returns>
-        public async Task<bool?> PushDataPoints(
-            IEnumerable<UADataPoint> points,
-            CancellationToken token
-        )
+        public async Task<bool?> PushDataPoints(IEnumerable<UADataPoint> points, CancellationToken token)
         {
-            if (points == null)
-                return null;
+            if (points == null) return null;
             Dictionary<string, List<UADataPoint>> dataPointList = points
                 .Where(dp => dp.Timestamp > DateTime.UnixEpoch)
                 .GroupBy(dp => dp.Id)
-                .Where(
-                    group =>
-                        !mismatchedTimeseries.Contains(group.Key)
-                        && !missingTimeseries.Contains(group.Key)
-                )
+                .Where(group => !mismatchedTimeseries.Contains(group.Key)
+                    && !missingTimeseries.Contains(group.Key))
                 .ToDictionary(group => group.Key, group => group.ToList());
 
             int count = dataPointList.Aggregate(0, (seed, points) => seed + points.Value.Count);
 
-            if (count == 0)
-                return null;
+            if (count == 0) return null;
 
-            var inserts = dataPointList.ToDictionary(
-                kvp => Identity.Create(kvp.Key),
-                kvp =>
-                    kvp.Value.Select(
-                        dp =>
-                            dp.IsString
-                                ? new Datapoint(dp.Timestamp, dp.StringValue)
-                                : new Datapoint(dp.Timestamp, dp.DoubleValue.Value)
-                    )
-            );
+            var inserts = dataPointList.ToDictionary(kvp =>
+                Identity.Create(kvp.Key),
+                kvp => kvp.Value.Select(
+                    dp => dp.IsString ? new Datapoint(dp.Timestamp, dp.StringValue) : new Datapoint(dp.Timestamp, dp.DoubleValue.Value))
+                );
 
             if (fullConfig.DryRun)
             {
-                log.LogInformation(
-                    "Dry run enabled. Would insert {Count} datapoints over {C2} timeseries to CDF",
-                    count,
-                    inserts.Count
-                );
+                log.LogInformation("Dry run enabled. Would insert {Count} datapoints over {C2} timeseries to CDF", count, inserts.Count);
                 return null;
             }
 
             try
             {
-                var result = await destination.InsertDataPointsAsync(
-                    inserts,
-                    SanitationMode.Clean,
-                    RetryMode.OnError,
-                    token
-                );
+                var result = await destination.InsertDataPointsAsync(inserts, SanitationMode.Clean, RetryMode.OnError, token);
                 int realCount = count;
 
                 log.LogResult(result, RequestType.CreateDatapoints, false, LogLevel.Debug);
 
                 if (result.Errors != null)
                 {
-                    var missing = result.Errors.FirstOrDefault(
-                        err => err.Type == ErrorType.ItemMissing
-                    );
+                    var missing = result.Errors.FirstOrDefault(err => err.Type == ErrorType.ItemMissing);
                     if (missing?.Skipped != null)
                     {
-                        log.LogError(
-                            "Failed to push datapoints to CDF, missing ids: {Ids}",
-                            missing.Skipped.Select(ms => ms.Id)
-                        );
+                        log.LogError("Failed to push datapoints to CDF, missing ids: {Ids}", missing.Skipped.Select(ms => ms.Id));
                         foreach (var skipped in missing.Skipped)
                         {
                             missingTimeseries.Add(skipped.Id.ExternalId);
@@ -246,15 +180,10 @@ namespace Cognite.OpcUa.Pushers
                         missingTimeseriesCnt.Set(missing.Skipped.Count());
                     }
 
-                    var mismatched = result.Errors.FirstOrDefault(
-                        err => err.Type == ErrorType.MismatchedType
-                    );
+                    var mismatched = result.Errors.FirstOrDefault(err => err.Type == ErrorType.MismatchedType);
                     if (mismatched?.Skipped != null)
                     {
-                        log.LogError(
-                            "Failed to push datapoints to CDF, mismatched timeseries: {Ids}",
-                            mismatched.Skipped.Select(ms => ms.Id)
-                        );
+                        log.LogError("Failed to push datapoints to CDF, mismatched timeseries: {Ids}", mismatched.Skipped.Select(ms => ms.Id));
                         foreach (var skipped in mismatched.Skipped)
                         {
                             mismatchedTimeseries.Add(skipped.Id.ExternalId);
@@ -274,18 +203,15 @@ namespace Cognite.OpcUa.Pushers
                     }
                 }
 
+                
+
                 result.ThrowOnFatal();
-                log.LogDebug(
-                    "Successfully pushed {Real} / {Total} points to CDF",
-                    realCount,
-                    count
-                );
+                log.LogDebug("Successfully pushed {Real} / {Total} points to CDF", realCount, count);
 
                 dataPointPushes.Inc();
                 dataPointsCounter.Inc(realCount);
 
-                if (realCount == 0)
-                    return null;
+                if (realCount == 0) return null;
             }
             catch (Exception e)
             {
@@ -297,23 +223,18 @@ namespace Cognite.OpcUa.Pushers
 
             return true;
         }
-
         /// <summary>
         /// Attempts to push the given list of events to CDF.
         /// </summary>
         /// <returns>True if push succeeded, false if it failed, null if there were no events to push.</returns>
         public async Task<bool?> PushEvents(IEnumerable<UAEvent> events, CancellationToken token)
         {
-            if (events == null)
-                return null;
+            if (events == null) return null;
             var eventList = new List<UAEvent>();
             int count = 0;
             foreach (var buffEvent in events)
             {
-                if (
-                    buffEvent.Time < PusherUtils.CogniteMinTime
-                    || buffEvent.Time > PusherUtils.CogniteMaxTime
-                )
+                if (buffEvent.Time < PusherUtils.CogniteMinTime || buffEvent.Time > PusherUtils.CogniteMaxTime)
                 {
                     skippedEvents.Inc();
                     continue;
@@ -322,8 +243,7 @@ namespace Cognite.OpcUa.Pushers
                 count++;
             }
 
-            if (count == 0)
-                return null;
+            if (count == 0) return null;
 
             if (fullConfig.DryRun)
             {
@@ -333,40 +253,24 @@ namespace Cognite.OpcUa.Pushers
 
             try
             {
-                var result = await destination.EnsureEventsExistsAsync(
-                    eventList
-                        .Select(
-                            evt => evt.ToCDFEvent(Extractor, config.DataSet?.Id, nodeToAssetIds)
-                        )
-                        .Where(evt => evt != null),
-                    RetryMode.OnError,
-                    SanitationMode.Clean,
-                    token
-                );
+                var result = await destination.EnsureEventsExistsAsync(eventList
+                    .Select(evt => evt.ToCDFEvent(Extractor, config.DataSet?.Id, nodeToAssetIds))
+                    .Where(evt => evt != null), RetryMode.OnError, SanitationMode.Clean, token);
 
                 log.LogResult(result, RequestType.CreateEvents, false, LogLevel.Debug);
 
                 int skipped = 0;
                 if (result.Errors != null)
                 {
-                    skipped = result.Errors.Aggregate(
-                        0,
-                        (seed, err) => seed + (err.Skipped?.Count() ?? 0)
-                    );
+                    skipped = result.Errors.Aggregate(0, (seed, err) =>
+                        seed + (err.Skipped?.Count() ?? 0));
 
-                    var fatalError = result.Errors.FirstOrDefault(
-                        err => err.Type == ErrorType.FatalFailure
-                    );
+                    var fatalError = result.Errors.FirstOrDefault(err => err.Type == ErrorType.FatalFailure);
                     if (fatalError != null)
                     {
-                        log.LogError(
-                            "Failed to push {NumFailedEvents} events to CDF: {Message}",
-                            count,
-                            fatalError.Exception?.Message
-                        );
+                        log.LogError("Failed to push {NumFailedEvents} events to CDF: {Message}", count, fatalError.Exception?.Message);
                         eventPushFailures.Inc();
-                        return fatalError.Exception is ResponseException rex
-                            && (rex.Code == 400 || rex.Code == 409);
+                        return fatalError.Exception is ResponseException rex && (rex.Code == 400 || rex.Code == 409);
                     }
                 }
 
@@ -377,12 +281,7 @@ namespace Cognite.OpcUa.Pushers
             }
             catch (Exception exc)
             {
-                log.LogError(
-                    exc,
-                    "Failed to push {NumFailedEvents} events to CDF: {Message}",
-                    count,
-                    exc.Message
-                );
+                log.LogError(exc, "Failed to push {NumFailedEvents} events to CDF: {Message}", count, exc.Message);
                 eventPushFailures.Inc();
                 return exc is ResponseException rex && (rex.Code == 400 || rex.Code == 409);
             }
@@ -463,43 +362,32 @@ namespace Cognite.OpcUa.Pushers
             var timeseriesMap = MapTimeseries(variables);
             bool isTimeseriesPushed = true;
 
-            if (pushCleanAssets)
+            if (pushCleanAssets && assetsMap.Any())
             {
-                await PushCleanAssets(assetsMap, update.Variables, report, token);
+                await PushCleanAssets(assetsMap, update.Objects, report, result, token);
             }
 
-            if (pushCleanTimeseries)
-            {
-                isTimeseriesPushed = await PushCleanTimeseries(
-                    timeseriesMap,
-                    update.Variables,
-                    report,
-                    token
-                );
-            }
+            isTimeseriesPushed = await PushCleanTimeseries(
+                timeseriesMap,
+                update.Variables,
+                report,
+                result,
+                token
+            );
 
             var tasks = new List<Task>();
 
             if (isTimeseriesPushed && fdmDestination != null)
             {
-                tasks.Add(
-                    Task.Run(
-                        () =>
-                            fdmDestination.PushNodes(
-                                objects,
-                                variables,
-                                references,
-                                Extractor,
-                                token
-                            )
-                    )
-                );
+                tasks.Add(Task.Run(() => PushFdm(objects, variables, references, result, token)));
             }
 
-            if (!pushCleanAssets)
+            if (!pushCleanAssets && assetsMap.Any())
             {
                 tasks.Add(
-                    Task.Run(() => PushRawAssets(assetsMap, update.Variables, report, token))
+                    Task.Run(
+                        () => PushRawAssets(assetsMap, update.Objects, report, result, token)
+                    )
                 );
             }
 
@@ -507,12 +395,12 @@ namespace Cognite.OpcUa.Pushers
             {
                 tasks.Add(
                     Task.Run(
-                        () => PushRawTimeseries(timeseriesMap, update.Variables, report, token)
+                        () => PushRawTimeseries(timeseriesMap, update.Variables, report, result, token)
                     )
                 );
             }
 
-            tasks.Add(Task.Run(() => PushReferences(references, report, token)));
+            tasks.Add(Task.Run(() => PushReferences(references, report, result, token)));
 
             await Task.WhenAll(tasks);
 
@@ -533,9 +421,37 @@ namespace Cognite.OpcUa.Pushers
             return result;
         }
 
+        private async Task PushFdm(
+            IEnumerable<BaseUANode> objects,
+            IEnumerable<UAVariable> variables,
+            IEnumerable<UAReference> references,
+            PushResult result,
+            CancellationToken token
+        )
+        {
+            bool pushResult = true;
+            try
+            {
+                pushResult = await fdmDestination!.PushNodes(
+                    objects,
+                    variables,
+                    references,
+                    Extractor,
+                    token
+                );
+            }
+            catch
+            {
+                pushResult = false;
+            }
+            result.Variables = pushResult;
+            result.Objects = pushResult;
+            result.References = pushResult;
+        }
+
         private ConcurrentDictionary<string, BaseUANode> MapAssets(IEnumerable<BaseUANode> objects)
         {
-            return new ConcurrentDictionary<string, BaseUANode>(
+            return config.SkipMetadata ? new ConcurrentDictionary<string, BaseUANode>() : new ConcurrentDictionary<string, BaseUANode>(
                 objects
                     .Where(node => node.Source != NodeSource.CDF)
                     .ToDictionary(obj => Extractor.GetUniqueId(obj.Id)!)
@@ -555,6 +471,25 @@ namespace Cognite.OpcUa.Pushers
             ConcurrentDictionary<string, BaseUANode> assetsMap,
             TypeUpdateConfig update,
             BrowseReport report,
+            PushResult result,
+            CancellationToken token
+        )
+        {
+            try
+            {
+                await PushCleanAssets(assetsMap, update, report, token);
+            }
+            catch
+            {
+                result.Objects = false;
+            }
+            return result.Objects;
+        }
+
+        private async Task PushCleanAssets(
+            ConcurrentDictionary<string, BaseUANode> assetsMap,
+            TypeUpdateConfig update,
+            BrowseReport report,
             CancellationToken token
         )
         {
@@ -564,11 +499,29 @@ namespace Cognite.OpcUa.Pushers
             {
                 await UpdateAssets(assetsMap, assets, update, report, token);
             }
-
-            return true;
         }
 
         private async Task<bool> PushCleanTimeseries(
+            ConcurrentDictionary<string, UAVariable> timeseriesMap,
+            TypeUpdateConfig update,
+            BrowseReport report,
+            PushResult result,
+            CancellationToken token
+        )
+        {
+            try
+            {
+                await PushCleanTimeseries(timeseriesMap, update, report, token);
+            }
+            catch
+            {
+                result.Variables = false;
+            }
+
+            return result.Variables;
+        }
+
+        private async Task PushCleanTimeseries(
             ConcurrentDictionary<string, UAVariable> timeseriesMap,
             TypeUpdateConfig update,
             BrowseReport report,
@@ -590,22 +543,7 @@ namespace Cognite.OpcUa.Pushers
             {
                 await UpdateTimeseries(toPushMeta, timeseries, update, report, token);
             }
-
-            return true;
         }
-
-        // {
-        //     await PushAssets(objects, variables, update.Objects, report, token);
-        //     await CreateTimeseriesMetadata(variables, report, token);
-        // }
-
-        // private async Task CreateTimeseriesMetadata(IEnumerable<UAVariable> variables, BrowseReport report, CancellationToken token)
-        // {
-        //     var tsMap = new ConcurrentDictionary<string, UAVariable>(
-        //             variables.ToDictionary(ts => ts.GetUniqueId(Extractor))!);
-        //     await CreateTimeseries(tsMap, report, true, token);
-        // }
-
 
         /// <summary>
         /// Reset the pusher, preparing it to be restarted
@@ -795,6 +733,24 @@ namespace Cognite.OpcUa.Pushers
         private async Task PushReferences(
             IEnumerable<UAReference> references,
             BrowseReport report,
+            PushResult result,
+            CancellationToken token
+        )
+        {
+            try
+            {
+                await PushReferences(references, report, token);
+            }
+            catch (Exception e)
+            {
+                log.LogError(e, "Failed to ensure references");
+                result.References = false;
+            }
+        }
+
+        private async Task PushReferences(
+            IEnumerable<UAReference> references,
+            BrowseReport report,
             CancellationToken token
         )
         {
@@ -864,86 +820,53 @@ namespace Cognite.OpcUa.Pushers
         /// Update list of nodes as assets in CDF Raw.
         /// </summary>
         /// <param name="assetMap">Id, node map for the assets that should be pushed.</param>
-        private async Task UpdateRawAssets(
-            IDictionary<string, BaseUANode> assetMap,
-            BrowseReport report,
-            CancellationToken token
-        )
+        private async Task UpdateRawAssets(IDictionary<string, BaseUANode> assetMap, BrowseReport report, CancellationToken token)
         {
-            if (config.RawMetadata?.Database == null || config.RawMetadata?.AssetsTable == null)
-                return;
-            await UpsertRawRows<JsonElement>(
-                config.RawMetadata.Database,
-                config.RawMetadata.AssetsTable,
-                rows =>
+            if (config.RawMetadata?.Database == null || config.RawMetadata?.AssetsTable == null) return;
+            await UpsertRawRows<JsonElement>(config.RawMetadata.Database, config.RawMetadata.AssetsTable, rows =>
+            {
+                if (rows == null)
                 {
-                    if (rows == null)
+                    return assetMap.Select(kvp => (
+                        kvp.Key,
+                        update: PusherUtils.CreateRawUpdate(log, Extractor.StringConverter, kvp.Value, null, ConverterType.Node)
+                    )).Where(elem => elem.update != null)
+                    .ToDictionary(pair => pair.Key, pair => pair.update!.Value);
+                }
+
+                var toWrite = new List<(string key, RawRow<Dictionary<string, JsonElement>> row, BaseUANode node)>();
+
+                foreach (var row in rows)
+                {
+                    if (assetMap.TryGetValue(row.Key, out var ts))
                     {
-                        return assetMap
-                            .Select(
-                                kvp =>
-                                    (
-                                        kvp.Key,
-                                        update: PusherUtils.CreateRawUpdate(
-                                            log,
-                                            Extractor.StringConverter,
-                                            kvp.Value,
-                                            null,
-                                            ConverterType.Node
-                                        )
-                                    )
-                            )
-                            .Where(elem => elem.update != null)
-                            .ToDictionary(pair => pair.Key, pair => pair.update!.Value);
+                        toWrite.Add((row.Key, row, ts));
+                        assetMap.Remove(row.Key);
                     }
+                }
 
-                    var toWrite =
-                        new List<(
-                            string key,
-                            RawRow<Dictionary<string, JsonElement>> row,
-                            BaseUANode node
-                        )>();
+                var updates = new Dictionary<string, JsonElement>();
 
-                    foreach (var row in rows)
+                foreach (var (key, row, node) in toWrite)
+                {
+                    var update = PusherUtils.CreateRawUpdate(log, Extractor.StringConverter, node, row, ConverterType.Node);
+
+                    if (update != null)
                     {
-                        if (assetMap.TryGetValue(row.Key, out var ts))
+                        updates[key] = update.Value;
+                        if (row == null)
                         {
-                            toWrite.Add((row.Key, row, ts));
-                            assetMap.Remove(row.Key);
+                            report.AssetsCreated++;
+                        }
+                        else
+                        {
+                            report.AssetsUpdated++;
                         }
                     }
+                }
 
-                    var updates = new Dictionary<string, JsonElement>();
-
-                    foreach (var (key, row, node) in toWrite)
-                    {
-                        var update = PusherUtils.CreateRawUpdate(
-                            log,
-                            Extractor.StringConverter,
-                            node,
-                            row,
-                            ConverterType.Node
-                        );
-
-                        if (update != null)
-                        {
-                            updates[key] = update.Value;
-                            if (row == null)
-                            {
-                                report.AssetsCreated++;
-                            }
-                            else
-                            {
-                                report.AssetsUpdated++;
-                            }
-                        }
-                    }
-
-                    return updates;
-                },
-                null,
-                token
-            );
+                return updates;
+            }, null, token);
         }
 
         /// <summary>
@@ -951,94 +874,45 @@ namespace Cognite.OpcUa.Pushers
         /// This does not create rows if they already exist.
         /// </summary>
         /// <param name="assetMap">Id, node map for the assets that should be pushed.</param>
-        private async Task CreateRawAssets(
-            IDictionary<string, BaseUANode> assetMap,
-            BrowseReport report,
-            CancellationToken token
-        )
+        private async Task CreateRawAssets(IDictionary<string, BaseUANode> assetMap, BrowseReport report, CancellationToken token)
         {
-            if (config.RawMetadata?.Database == null || config.RawMetadata?.AssetsTable == null)
-                return;
+            if (config.RawMetadata?.Database == null || config.RawMetadata?.AssetsTable == null) return;
 
-            await EnsureRawRows<JsonElement>(
-                config.RawMetadata.Database,
-                config.RawMetadata.AssetsTable,
-                assetMap.Keys,
-                ids =>
-                {
-                    var assets = ids.Select(id => (assetMap[id], id));
-                    var creates = assets
-                        .Select(
-                            pair =>
-                                (
-                                    pair.Item1.ToJson(
-                                        log,
-                                        Extractor.StringConverter,
-                                        ConverterType.Node
-                                    ),
-                                    pair.id
-                                )
-                        )
-                        .Where(pair => pair.Item1 != null)
-                        .ToDictionary(pair => pair.id, pair => pair.Item1!.RootElement);
-                    report.AssetsCreated += creates.Count;
-                    return creates;
-                },
-                new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase },
-                token
-            );
+            await EnsureRawRows<JsonElement>(config.RawMetadata.Database, config.RawMetadata.AssetsTable, assetMap.Keys, ids =>
+            {
+                var assets = ids.Select(id => (assetMap[id], id));
+                var creates = assets.Select(pair => (pair.Item1.ToJson(log, Extractor.StringConverter, ConverterType.Node), pair.id))
+                    .Where(pair => pair.Item1 != null)
+                    .ToDictionary(pair => pair.id, pair => pair.Item1!.RootElement);
+                report.AssetsCreated += creates.Count;
+                return creates;
+            }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }, token);
         }
 
         /// <summary>
         /// Create assets in CDF Clean.
         /// </summary>
         /// <param name="assetMap">Id, node map for the assets that should be pushed.</param>
-        private async Task<IEnumerable<Asset>> CreateAssets(
-            IDictionary<string, BaseUANode> assetMap,
-            BrowseReport report,
-            CancellationToken token
-        )
+        private async Task<IEnumerable<Asset>> CreateAssets(IDictionary<string, BaseUANode> assetMap, BrowseReport report, CancellationToken token)
         {
             var assets = new List<Asset>();
-            foreach (
-                var chunk in Chunking.ChunkByHierarchy(
-                    assetMap.Values,
-                    config.CdfChunking.Assets,
-                    node => node.Id,
-                    node => node.ParentId
-                )
-            )
+            foreach (var chunk in Chunking.ChunkByHierarchy(assetMap.Values, config.CdfChunking.Assets, node => node.Id, node => node.ParentId))
             {
-                var assetChunk = await destination.GetOrCreateAssetsAsync(
-                    chunk.Select(node => Extractor.GetUniqueId(node.Id)!),
-                    ids =>
-                    {
-                        var assets = ids.Select(id => assetMap[id]);
-                        var creates = assets
-                            .Select(
-                                node =>
-                                    node.ToCDFAsset(
-                                        fullConfig,
-                                        Extractor,
-                                        config.DataSet?.Id,
-                                        config.MetadataMapping?.Assets
-                                    )
-                            )
-                            .Where(asset => asset != null);
-                        report.AssetsCreated += creates.Count();
-                        return creates;
-                    },
-                    RetryMode.None,
-                    SanitationMode.Clean,
-                    token
-                );
+                var assetChunk = await destination.GetOrCreateAssetsAsync(chunk.Select(node => Extractor.GetUniqueId(node.Id)!), ids =>
+                {
+                    var assets = ids.Select(id => assetMap[id]);
+                    var creates = assets
+                        .Select(node => node.ToCDFAsset(fullConfig, Extractor, config.DataSet?.Id, config.MetadataMapping?.Assets))
+                        .Where(asset => asset != null);
+                    report.AssetsCreated += creates.Count();
+                    return creates;
+                }, RetryMode.None, SanitationMode.Clean, token);
 
                 log.LogResult(assetChunk, RequestType.CreateAssets, true);
 
                 assetChunk.ThrowOnFatal();
 
-                if (assetChunk.Results == null)
-                    continue;
+                if (assetChunk.Results == null) continue;
 
                 foreach (var asset in assetChunk.Results)
                 {
@@ -1116,31 +990,35 @@ namespace Cognite.OpcUa.Pushers
             ConcurrentDictionary<string, BaseUANode> assetsMap,
             TypeUpdateConfig update,
             BrowseReport report,
+            PushResult result,
             CancellationToken token
         )
         {
-            if (config.SkipMetadata)
-                return;
-
-            if (!assetsMap.Any())
-                return;
-
-            var metaMap = config.MetadataMapping?.Assets;
-            bool useRawAssets =
-                config.RawMetadata != null
-                && !string.IsNullOrWhiteSpace(config.RawMetadata.Database)
-                && !string.IsNullOrWhiteSpace(config.RawMetadata.AssetsTable);
-
-            if (useRawAssets)
+            try
             {
-                if (update.AnyUpdate)
-                {
-                    await UpdateRawAssets(assetsMap, report, token);
-                }
-                else
-                {
-                    await CreateRawAssets(assetsMap, report, token);
-                }
+                await PushRawAssets(assetsMap, update, report, token);
+            }
+            catch (Exception e)
+            {
+                log.LogError(e, "Failed to ensure assets");
+                result.Objects = false;
+            }
+        }
+
+        private async Task PushRawAssets(
+            ConcurrentDictionary<string, BaseUANode> assetsMap,
+            TypeUpdateConfig update,
+            BrowseReport report,
+            CancellationToken token
+        )
+        {
+            if (update.AnyUpdate)
+            {
+                await UpdateRawAssets(assetsMap, report, token);
+            }
+            else
+            {
+                await CreateRawAssets(assetsMap, report, token);
             }
         }
 
@@ -1466,6 +1344,24 @@ namespace Cognite.OpcUa.Pushers
         /// </summary>
         /// <param name="tsList">Timeseries to push</param>
         /// <param name="update">Configuration for which fields, if any, to update in CDF</param>
+        private async Task PushRawTimeseries(
+            ConcurrentDictionary<string, UAVariable> tsIds,
+            TypeUpdateConfig update,
+            BrowseReport report,
+            PushResult result,
+            CancellationToken token
+        )
+        {
+            try
+            {
+                await PushRawTimeseries(tsIds, update, report, token);
+            }
+            catch
+            {
+                result.Variables = false;
+            }
+        }
+
         private async Task PushRawTimeseries(
             ConcurrentDictionary<string, UAVariable> tsIds,
             TypeUpdateConfig update,

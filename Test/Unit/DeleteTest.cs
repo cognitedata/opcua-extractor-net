@@ -103,12 +103,15 @@ namespace Test.Unit
     public class DeleteTest
     {
         private readonly StaticServerTestFixture tester;
+        private readonly ITestOutputHelper _output;
+
         public DeleteTest(ITestOutputHelper output, StaticServerTestFixture tester)
         {
             this.tester = tester ?? throw new ArgumentNullException(nameof(tester));
             tester.ResetConfig();
             tester.Init(output);
             tester.Client.TypeManager.Reset();
+            _output = output;
         }
 
         private static UAObject GetObject(string id)
@@ -444,6 +447,7 @@ namespace Test.Unit
             await extractor.RunExtractor(true);
             Assert.True(handler.AssetRaw.ContainsKey(addedExtId));
             Assert.True(handler.TimeseriesRaw.ContainsKey(addedVarExtId));
+            handler.Timeseries.Values.ToList().ForEach(v => _output.WriteLine(v.ToString()));
             Assert.True(handler.Timeseries.ContainsKey(addedVarExtId));
             Assert.False(handler.AssetRaw[addedExtId].TryGetProperty("deleted", out _));
             Assert.False(handler.TimeseriesRaw[addedVarExtId].TryGetProperty("deleted", out _));
