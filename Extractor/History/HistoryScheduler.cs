@@ -87,7 +87,7 @@ namespace Cognite.OpcUa.History
         private readonly TimeSpan? maxReadLength;
 
         private readonly FailureThresholdManager<NodeId, Exception> thresholdManager;
-        private IDictionary<NodeId, Exception>? exceptions;
+        private IReadOnlyDictionary<NodeId, Exception>? exceptions;
 
         public HistoryScheduler(
             ILogger log,
@@ -122,7 +122,11 @@ namespace Cognite.OpcUa.History
 
             nodeCount = count;
 
-            this.thresholdManager = new FailureThresholdManager<NodeId, Exception>(config.ErrorThreshold, nodeCount, (x) => { this.exceptions = x; });
+            thresholdManager = new FailureThresholdManager<NodeId, Exception>(config.ErrorThreshold, nodeCount, (x) =>
+            {
+                exceptions = x;
+                TokenSource.Cancel();
+            });
 
             historyStartTime = GetStartTime(config.StartTime);
             if (!string.IsNullOrWhiteSpace(config.EndTime)) historyEndTime = CogniteTime.ParseTimestampString(config.EndTime)!;
@@ -403,8 +407,18 @@ namespace Cognite.OpcUa.History
                 return Enumerable.Empty<HistoryReadNode>();
             }
 
+            var failed = new List<(string id, string status)>();
             foreach (var node in chunk.Items)
             {
+                if (node.IsFailed)
+                {
+                    thresholdManager.Failed(node.Id, new ServiceResultException(node.LastStatus!.Value));
+                    var symbolicId = StatusCode.LookupSymbolicId((uint)node.LastStatus.Value);
+                    log.LogDebug("HistoryRead {Type} failed for node {Node}: {Status}", type, node.State.Id, symbolicId);
+                    failed.Add((node.State.Id, symbolicId));
+                    continue;
+                }
+
                 if (Data)
                 {
                     HistoryDataHandler(node);
@@ -422,7 +436,12 @@ namespace Cognite.OpcUa.History
                 metrics.NumItems.Inc(node.LastRead);
             }
 
-            var toTerminate = chunk.Items.Where(node => node.Completed).ToList();
+            if (failed.Any())
+            {
+                log.LogError("HistoryRead {Type} failed for {Nodes}", type, string.Join(", ", failed.Select(f => $"{f.id}: {f.status}")));
+            }
+
+            var toTerminate = chunk.Items.Where(node => node.Completed && !node.IsFailed).ToList();
             LogHistoryTermination(log, toTerminate, type);
 
             return Enumerable.Empty<HistoryReadNode>();

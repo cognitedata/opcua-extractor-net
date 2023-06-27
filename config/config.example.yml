@@ -210,16 +210,15 @@ history:
         max-node-parallelism: 0
     # Log bad history datapoints, count per read at debug and each datapoint at verbose
     log-bad-values: true
-    # Threshold for the percentage of read operations failed before the run is considered erroneous
-    # Example: 10.0 -> History read operation would consider the run as failed if more that %10 of read operations fail.
+    # Threshold in percent for a history run to be considered failed.
+    # Example: 10.0 -> History read operation would be considered failed if more than 10% of nodes fail to read at some point.
+    # Retries still apply, this only applies to nodes that fail even after retries.
     error-threshold: 10.0
 
 # Configuration for the pusher to CDF.
 cognite:
     # The project to connect to in the API
     project:
-    # Cognite api key
-    api-key:
     # Cognite service url
     host: "https://api.cognitedata.com"
     # Replace all instances of NaN with this floating point number. If left empty, ignore instead.

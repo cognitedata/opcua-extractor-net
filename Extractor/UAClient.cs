@@ -786,6 +786,10 @@ namespace Cognite.OpcUa
             {
                 var data = results[i];
                 var node = readParams.Nodes[i];
+                node.LastStatus = data.StatusCode;
+
+                if (StatusCode.IsBad(data.StatusCode)) continue;
+
                 LogDump("HistoryRead node", node);
                 LogDump("HistoryRead data", data);
 
@@ -823,13 +827,6 @@ namespace Cognite.OpcUa
 
             numHistoryReads.Inc();
 
-            foreach (var result in results)
-            {
-                if (StatusCode.IsBad(result.StatusCode))
-                {
-                    throw new ServiceResultException(result.StatusCode);
-                }
-            }
             return results;
         }
 
