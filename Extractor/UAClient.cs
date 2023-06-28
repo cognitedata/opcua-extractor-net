@@ -1415,8 +1415,11 @@ namespace Cognite.OpcUa
             if (datavalue is IEnumerable enumerable)
             {
                 var enumerator = enumerable.GetEnumerator();
-                enumerator.MoveNext();
-                return ConvertToDouble(enumerator.Current);
+                if (enumerator.MoveNext())
+                {
+                    return ConvertToDouble(enumerator.Current);
+                }
+                return 0;
             }
             // Give up if there is no clear way to convert it
             if (!typeof(IConvertible).IsAssignableFrom(datavalue.GetType())) return 0;
