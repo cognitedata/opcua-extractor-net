@@ -54,7 +54,7 @@ namespace Cognite.OpcUa.Pushers.FDM.Types
                         BrowseName = $"{pair.node.Attributes.BrowseName?.NamespaceIndex ?? 0}:{pair.node.Attributes.BrowseName?.Name ?? pair.node.Name ?? ""}",
                         NodeId = pair.node.Id.ToString(),
                         NodeClass = (int)pair.node.NodeClass,
-                        Mandatory = pair.mandatory,
+                        IsMandatory = pair.mandatory,
                         ReferenceType = pair.reference.Type.Id.ToString(),
                         DisplayName = pair.node.Name ?? "",
                         ExternalId = FDMUtils.SanitizeExternalId(pair.node.Name ?? "")
