@@ -379,28 +379,20 @@ namespace Cognite.OpcUa.Pushers
 
             if (isTimeseriesPushed && fdmDestination != null)
             {
-                tasks.Add(Task.Run(() => PushFdm(objects, variables, references, result, token)));
+                tasks.Add(PushFdm(objects, variables, references, result, token));
             }
 
             if (!pushCleanAssets && assetsMap.Any())
             {
-                tasks.Add(
-                    Task.Run(
-                        () => PushRawAssets(assetsMap, update.Objects, report, result, token)
-                    )
-                );
+                tasks.Add(PushRawAssets(assetsMap, update.Objects, report, result, token));
             }
 
             if (!pushCleanTimeseries)
             {
-                tasks.Add(
-                    Task.Run(
-                        () => PushRawTimeseries(timeseriesMap, update.Variables, report, result, token)
-                    )
-                );
+                tasks.Add(PushRawTimeseries(timeseriesMap, update.Variables, report, result, token));
             }
 
-            tasks.Add(Task.Run(() => PushReferences(references, report, result, token)));
+            tasks.Add(PushReferences(references, report, result, token));
 
             await Task.WhenAll(tasks);
 
@@ -531,7 +523,7 @@ namespace Cognite.OpcUa.Pushers
             var timeseries = await CreateTimeseries(
                 timeseriesMap,
                 report,
-                config.SkipMetadata,
+                !pushCleanTimeseries || config.SkipMetadata,
                 token
             );
 
@@ -539,7 +531,7 @@ namespace Cognite.OpcUa.Pushers
                 .Where(kvp => kvp.Value.Source != NodeSource.CDF)
                 .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
 
-            if (update.AnyUpdate && toPushMeta.Any())
+            if (update.AnyUpdate && toPushMeta.Any() && pushCleanTimeseries)
             {
                 await UpdateTimeseries(toPushMeta, timeseries, update, report, token);
             }
@@ -1292,8 +1284,7 @@ namespace Cognite.OpcUa.Pushers
             IEnumerable<TimeSeries> timeseries,
             TypeUpdateConfig update,
             BrowseReport report,
-            CancellationToken token
-        )
+            CancellationToken token)
         {
             var updates = new List<TimeSeriesUpdateItem>();
             var existing = timeseries.ToDictionary(asset => asset.ExternalId);
@@ -1301,22 +1292,10 @@ namespace Cognite.OpcUa.Pushers
             {
                 if (existing.TryGetValue(kvp.Key, out var ts))
                 {
-                    var tsUpdate = PusherUtils.GetTSUpdate(
-                        fullConfig,
-                        Extractor,
-                        ts,
-                        kvp.Value,
-                        update,
-                        nodeToAssetIds
-                    );
-                    if (tsUpdate == null)
-                        continue;
-                    if (
-                        tsUpdate.AssetId != null
-                        || tsUpdate.Description != null
-                        || tsUpdate.Name != null
-                        || tsUpdate.Metadata != null
-                    )
+                    var tsUpdate = PusherUtils.GetTSUpdate(fullConfig, Extractor, ts, kvp.Value, update, nodeToAssetIds);
+                    if (tsUpdate == null) continue;
+                    if (tsUpdate.AssetId != null || tsUpdate.Description != null
+                        || tsUpdate.Name != null || tsUpdate.Metadata != null)
                     {
                         updates.Add(new TimeSeriesUpdateItem(ts.ExternalId) { Update = tsUpdate });
                     }
@@ -1325,12 +1304,7 @@ namespace Cognite.OpcUa.Pushers
 
             if (updates.Any())
             {
-                var res = await destination.UpdateTimeSeriesAsync(
-                    updates,
-                    RetryMode.OnError,
-                    SanitationMode.Clean,
-                    token
-                );
+                var res = await destination.UpdateTimeSeriesAsync(updates, RetryMode.OnError, SanitationMode.Clean, token);
 
                 log.LogResult(res, RequestType.UpdateTimeSeries, false);
                 res.ThrowOnFatal();
@@ -1373,7 +1347,7 @@ namespace Cognite.OpcUa.Pushers
                 .Where(kvp => kvp.Value.Source != NodeSource.CDF)
                 .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
 
-            if (update.AnyUpdate)
+            if (update.AnyUpdate && !config.SkipMetadata)
             {
                 await UpdateRawTimeseries(toPushMeta, report, token);
             }
