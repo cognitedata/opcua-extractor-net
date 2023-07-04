@@ -1,4 +1,5 @@
 ﻿using AdysTech.InfluxDB.Client.Net;
+using Cognite.OpcUa.Pushers.Writers;
 using Cognite.Extractor.Configuration;
 using Cognite.Extractor.StateStorage;
 using Cognite.Extractor.Testing;
@@ -166,6 +167,7 @@ namespace Test.Utils
             Services.AddCogniteClient("appid", null, true, true, false);
             var provider = Services.BuildServiceProvider();
             var destination = provider.GetRequiredService<CogniteDestination>();
+            Services.AddWriters(Source.Token);
             var pusher = new CDFPusher(Provider.GetRequiredService<ILogger<CDFPusher>>(),
                 Config, Config.Cognite, destination, provider);
             var handler = provider.GetRequiredService<CDFMockHandler>();

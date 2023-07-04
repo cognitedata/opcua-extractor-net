@@ -21,6 +21,8 @@ using Cognite.Extractor.Logging;
 using Cognite.Extractor.Utils;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Pushers;
+using Cognite.OpcUa.Pushers.Writers;
+using Cognite.OpcUa.Pushers.Writers.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Prometheus;
@@ -323,6 +325,7 @@ namespace Cognite.OpcUa
             });
 
             services.AddSingleton<UAClient>();
+            services.AddWriters(token);
 
             var options = new ExtractorRunnerParams<FullConfig, UAExtractor>
             {

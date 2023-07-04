@@ -23,6 +23,7 @@ using Cognite.OpcUa.History;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.Pushers.FDM;
+using Cognite.OpcUa.Pushers.Writers.Interfaces;
 using Cognite.OpcUa.Types;
 using CogniteSdk;
 using Microsoft.Extensions.DependencyInjection;
@@ -47,6 +48,9 @@ namespace Cognite.OpcUa.Pushers
     {
         private readonly CognitePusherConfig config;
         private readonly FullConfig fullConfig;
+        private readonly IRawWriter rawWriter;
+        private readonly ITimeseriesWriter timeseriesWriter;
+        private readonly IAssetsWriter assetsWriter;
         private readonly IDictionary<NodeId, long> nodeToAssetIds = new Dictionary<NodeId, long>();
 
         public bool DataFailing { get; set; }
@@ -93,6 +97,10 @@ namespace Cognite.OpcUa.Pushers
             BaseConfig = config;
             this.destination = destination;
             this.fullConfig = fullConfig;
+            // rawWriter = provider.GetRequiredService<IRawWriter>();
+            // timeseriesWriter = provider.GetRequiredService<ITimeseriesWriter>();
+            // assetsWriter = provider.GetRequiredService<IAssetsWriter>();
+            Console.WriteLine("testing");
             if (config.BrowseCallback != null && (config.BrowseCallback.Id.HasValue || !string.IsNullOrEmpty(config.BrowseCallback.ExternalId)))
             {
                 callback = new BrowseCallback(destination, config.BrowseCallback, log);
@@ -1069,87 +1077,53 @@ namespace Cognite.OpcUa.Pushers
         /// Update list of nodes as timeseries in CDF Raw.
         /// </summary>
         /// <param name="tsMap">Id, node map for the timeseries that should be pushed.</param>
-        private async Task UpdateRawTimeseries(
-            IDictionary<string, UAVariable> tsMap,
-            BrowseReport report,
-            CancellationToken token
-        )
+        private async Task UpdateRawTimeseries(IDictionary<string, UAVariable> tsMap, BrowseReport report, CancellationToken token)
         {
-            if (config.RawMetadata?.Database == null || config.RawMetadata.TimeseriesTable == null)
-                return;
-
-            await UpsertRawRows<JsonElement>(
-                config.RawMetadata.Database,
-                config.RawMetadata.TimeseriesTable,
-                rows =>
+            if (config.RawMetadata?.Database == null || config.RawMetadata.TimeseriesTable == null) return;
+            await UpsertRawRows<JsonElement>(config.RawMetadata.Database, config.RawMetadata.TimeseriesTable, rows =>
+            {
+                if (rows == null)
                 {
-                    if (rows == null)
+                    return tsMap.Select(kvp => (
+                        kvp.Key,
+                        update: PusherUtils.CreateRawUpdate(log, Extractor.StringConverter, kvp.Value, null, ConverterType.Variable)
+                    )).Where(elem => elem.update != null)
+                    .ToDictionary(pair => pair.Key, pair => pair.update!.Value);
+                }
+
+                var toWrite = new List<(string key, RawRow<Dictionary<string, JsonElement>> row, UAVariable node)>();
+
+                foreach (var row in rows)
+                {
+                    if (tsMap.TryGetValue(row.Key, out var ts))
                     {
-                        return tsMap
-                            .Select(
-                                kvp =>
-                                    (
-                                        kvp.Key,
-                                        update: PusherUtils.CreateRawUpdate(
-                                            log,
-                                            Extractor.StringConverter,
-                                            kvp.Value,
-                                            null,
-                                            ConverterType.Variable
-                                        )
-                                    )
-                            )
-                            .Where(elem => elem.update != null)
-                            .ToDictionary(pair => pair.Key, pair => pair.update!.Value);
+                        toWrite.Add((row.Key, row, ts));
+                        tsMap.Remove(row.Key);
                     }
+                }
 
-                    var toWrite =
-                        new List<(
-                            string key,
-                            RawRow<Dictionary<string, JsonElement>> row,
-                            UAVariable node
-                        )>();
+                var updates = new Dictionary<string, JsonElement>();
 
-                    foreach (var row in rows)
+                foreach (var (key, row, node) in toWrite)
+                {
+                    var update = PusherUtils.CreateRawUpdate(log, Extractor.StringConverter, node, row, ConverterType.Variable);
+
+                    if (update != null)
                     {
-                        if (tsMap.TryGetValue(row.Key, out var ts))
+                        updates[key] = update.Value;
+                        if (row == null)
                         {
-                            toWrite.Add((row.Key, row, ts));
-                            tsMap.Remove(row.Key);
+                            report.TimeSeriesCreated++;
+                        }
+                        else
+                        {
+                            report.TimeSeriesUpdated++;
                         }
                     }
+                }
 
-                    var updates = new Dictionary<string, JsonElement>();
-
-                    foreach (var (key, row, node) in toWrite)
-                    {
-                        var update = PusherUtils.CreateRawUpdate(
-                            log,
-                            Extractor.StringConverter,
-                            node,
-                            row,
-                            ConverterType.Variable
-                        );
-
-                        if (update != null)
-                        {
-                            updates[key] = update.Value;
-                            if (row == null)
-                            {
-                                report.TimeSeriesCreated++;
-                            }
-                            else
-                            {
-                                report.TimeSeriesUpdated++;
-                            }
-                        }
-                    }
-
-                    return updates;
-                },
-                null,
-                token
-            );
+                return updates;
+            }, null, token);
         }
 
         /// <summary>
@@ -1157,43 +1131,20 @@ namespace Cognite.OpcUa.Pushers
         /// This does not create rows if they already exist.
         /// </summary>
         /// <param name="tsMap">Id, node map for the timeseries that should be pushed.</param>
-        private async Task CreateRawTimeseries(
-            IDictionary<string, UAVariable> tsMap,
-            BrowseReport report,
-            CancellationToken token
-        )
+        private async Task CreateRawTimeseries(IDictionary<string, UAVariable> tsMap, BrowseReport report, CancellationToken token)
         {
-            if (config.RawMetadata?.Database == null || config.RawMetadata.TimeseriesTable == null)
-                return;
+            if (config.RawMetadata?.Database == null || config.RawMetadata.TimeseriesTable == null) return;
 
-            await EnsureRawRows<JsonElement>(
-                config.RawMetadata.Database,
-                config.RawMetadata.TimeseriesTable,
-                tsMap.Keys,
-                ids =>
-                {
-                    var timeseries = ids.Select(id => (tsMap[id], id));
-                    var creates = timeseries
-                        .Select(
-                            pair =>
-                                (
-                                    pair.Item1.ToJson(
-                                        log,
-                                        Extractor.StringConverter,
-                                        ConverterType.Variable
-                                    ),
-                                    pair.id
-                                )
-                        )
-                        .Where(pair => pair.Item1 != null)
-                        .ToDictionary(pair => pair.id, pair => pair.Item1!.RootElement);
+            await EnsureRawRows<JsonElement>(config.RawMetadata.Database, config.RawMetadata.TimeseriesTable, tsMap.Keys, ids =>
+            {
+                var timeseries = ids.Select(id => (tsMap[id], id));
+                var creates = timeseries.Select(pair => (pair.Item1.ToJson(log, Extractor.StringConverter, ConverterType.Variable), pair.id))
+                    .Where(pair => pair.Item1 != null)
+                    .ToDictionary(pair => pair.id, pair => pair.Item1!.RootElement);
 
-                    report.TimeSeriesCreated += creates.Count;
-                    return creates;
-                },
-                new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase },
-                token
-            );
+                report.TimeSeriesCreated += creates.Count;
+                return creates;
+            }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }, token);
         }
 
         /// <summary>
