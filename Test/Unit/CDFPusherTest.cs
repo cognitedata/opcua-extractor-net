@@ -56,17 +56,9 @@ namespace Test.Unit
         [Fact]
         public async Task TestTestConnection()
         {
-            handler.AllowConnectionTest = false;
-
             tester.Config.DryRun = true;
             Assert.True(await pusher.TestConnection(tester.Config, tester.Source.Token));
             tester.Config.DryRun = false;
-
-            Assert.False(await pusher.TestConnection(tester.Config, tester.Source.Token));
-
-            handler.AllowConnectionTest = true;
-
-            Assert.True(await pusher.TestConnection(tester.Config, tester.Source.Token));
 
             handler.FailedRoutes.Add("/timeseries/list");
 

@@ -15,10 +15,10 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
-using Cognite.Extractor.Common;
 using System;
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
+using Cognite.Extractor.Common;
 
 namespace Cognite.OpcUa.Config
 {
@@ -137,5 +137,12 @@ namespace Cognite.OpcUa.Config
         /// </summary>
         [DefaultValue(true)]
         public bool LogBadValues { get; set; } = true;
+
+        /// <summary>
+        /// Threshold for the percentage of read operations failed before the run is considered erroneous. 
+        /// Example: 10.0 -> History read operation would consider the run as failed if more that %10 of read operations fail.
+        /// </summary>
+        [DefaultValue(10.0)]
+        public double ErrorThreshold { get; set; } = 10.0;
     }
 }

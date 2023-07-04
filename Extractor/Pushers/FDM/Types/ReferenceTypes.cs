@@ -20,10 +20,12 @@ namespace Cognite.OpcUa.Pushers.FDM.Types
     {
         public UAVariable Node { get; set; }
         public BasePropertyType? DMSType { get; set; }
-        public DMSReferenceNode(UAVariable node, UAReference reference, string externalId)
+        public IEnumerable<(UAReference Reference, QualifiedName Name)> Path { get; }
+        public DMSReferenceNode(UAVariable node, UAReference reference, string externalId, IEnumerable<(UAReference Reference, QualifiedName Name)> path)
             : base(node.NodeClass, node.Attributes.BrowseName ?? new QualifiedName(node.Name ?? ""), externalId, reference)
         {
             Node = node;
+            Path = path;
         }
     }
     public class ReferenceNode

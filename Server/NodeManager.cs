@@ -42,8 +42,9 @@ namespace Server
 
         private readonly PubSubManager pubSub;
         private IEnumerable<NodeSetBundle> nodeSetFiles;
+        private readonly ServerIssueConfig issues;
 
-        public TestNodeManager(IServerInternal server, ApplicationConfiguration configuration, IServiceProvider provider, IEnumerable<NodeSetBundle> nodeSetFiles = null)
+        public TestNodeManager(IServerInternal server, ApplicationConfiguration configuration, IServiceProvider provider, ServerIssueConfig issues, IEnumerable<NodeSetBundle> nodeSetFiles = null)
             : base(server, configuration, GetNamespaces(nodeSetFiles))
         {
             SystemContext.NodeIdFactory = this;
@@ -51,6 +52,7 @@ namespace Server
             log = provider.GetRequiredService<ILogger<TestNodeManager>>();
             Ids = new NodeIdReference();
             this.nodeSetFiles = nodeSetFiles;
+            this.issues = issues;
         }
 
         public TestNodeManager(IServerInternal server,
@@ -58,8 +60,9 @@ namespace Server
             IEnumerable<PredefinedSetup> predefinedNodes,
             string mqttUrl,
             IServiceProvider provider,
+            ServerIssueConfig issues,
             IEnumerable<NodeSetBundle> nodeSetFiles = null) :
-            this(server, configuration, provider, nodeSetFiles)
+            this(server, configuration, provider, issues, nodeSetFiles)
         {
             this.predefinedNodes = predefinedNodes;
             pubSub = new PubSubManager(mqttUrl, provider.GetRequiredService<ILogger<PubSubManager>>());
@@ -1771,11 +1774,18 @@ namespace Server
                     var (rawData, final) = store.ReadHistory(request);
                     var data = new HistoryData();
 
+                    if (issues.HistoryReadStatusOverride.TryGetValue(nodeToRead.NodeId, out var code))
+                    {
+                        errors[handle.Index] = code;
+                    }
+                    else
+                    {
+                        errors[handle.Index] = ServiceResult.Good;
+                    }
+
                     data.DataValues.AddRange(rawData);
 
                     log.LogInformation("Read raw modified: {Cnt}", rawData.Count());
-
-                    errors[handle.Index] = ServiceResult.Good;
 
                     if (!final)
                     {
@@ -1901,7 +1911,14 @@ namespace Server
 
                     log.LogInformation("Read events: {Cnt}", rawData.Count());
 
-                    errors[handle.Index] = ServiceResult.Good;
+                    if (issues.HistoryReadStatusOverride.TryGetValue(nodeToRead.NodeId, out var code))
+                    {
+                        errors[handle.Index] = code;
+                    }
+                    else
+                    {
+                        errors[handle.Index] = ServiceResult.Good;
+                    }
 
                     if (!final)
                     {

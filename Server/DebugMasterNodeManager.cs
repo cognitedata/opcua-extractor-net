@@ -35,6 +35,7 @@ namespace Server
         public int MaxHistoryNodes { get; set; }
         public int RemainingBrowseCount { get; set; }
         public int BrowseFailDenom { get; set; }
+        public Dictionary<NodeId, StatusCode> HistoryReadStatusOverride { get; } = new();
     }
     /// <summary>
     /// The master node manager is called from the server with most "regular" service calls.

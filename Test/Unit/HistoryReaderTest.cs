@@ -42,6 +42,7 @@ namespace Test.Unit
             tester.ResetConfig();
             tester.Init(output);
             tester.Client.TypeManager.Reset();
+            tester.Server.Issues.HistoryReadStatusOverride.Clear();
         }
 
         [Fact(Timeout = 10000)]
@@ -1040,6 +1041,67 @@ namespace Test.Unit
             // first 15 reads to catch up to history, then 3 reads per 100 10 times, then 5 reads to reach the start point
             Assert.Equal(50, metric);
             Assert.True(CommonTestUtils.TestMetricValue("opcua_backfill_data_points", 7070));
+        }
+
+        [Fact(Timeout = 10000)]
+        public async Task TestHistoryReadFailureThreshold()
+        {
+            using var extractor = tester.BuildExtractor();
+            var logger = tester.Provider.GetRequiredService<ILogger<HistoryReader>>();
+            var cfg = new HistoryConfig
+            {
+                Backfill = true,
+                Data = true,
+                EndTime = tester.HistoryStart.AddSeconds(20).ToUnixTimeMilliseconds().ToString(),
+                ErrorThreshold = 40
+            };
+
+            var dt = new UADataType(DataTypeIds.Double);
+            var dt2 = new UADataType(DataTypeIds.String);
+
+            var states = new[] { tester.Server.Ids.Custom.MysteryVar, tester.Server.Ids.Custom.Array,
+                tester.Server.Ids.Base.DoubleVar1, tester.Server.Ids.Base.StringVar }
+                .Select((id, idx) => new VariableExtractionState(
+                    extractor,
+                    CommonTestUtils.GetSimpleVariable("state",
+                        idx == 3 ? dt2 : dt,
+                        idx == 1 ? 4 : 0,
+                        id),
+                    true, true, true))
+                .ToList();
+
+            var start = tester.HistoryStart.AddSeconds(-5);
+
+            foreach (var state in states)
+            {
+                state.InitExtractedRange(start, start);
+                state.FinalizeRangeInit();
+                extractor.State.SetNodeState(state);
+            }
+
+            var queue = (Queue<UADataPoint>)extractor.Streamer.GetType()
+                .GetField("dataPointQueue", BindingFlags.NonPublic | BindingFlags.Instance)
+                .GetValue(extractor.Streamer);
+
+            using var reader = new HistoryReader(logger, tester.Client, extractor, extractor.TypeManager, cfg, tester.Source.Token);
+
+            tester.Server.Issues.HistoryReadStatusOverride[tester.Server.Ids.Custom.MysteryVar] = StatusCodes.BadInvalidArgument;
+
+            // Just one failure should not fail
+            await reader.FrontfillData(states);
+
+            // only 6 timeseries succeed, so we only get data for those
+            Assert.Equal(6000, queue.Count);
+
+            Assert.True(states[0].IsFrontfilling);
+            Assert.All(states, (st, idx) => Assert.True(!st.IsFrontfilling || idx == 0));
+
+            tester.Server.Issues.HistoryReadStatusOverride[tester.Server.Ids.Base.DoubleVar1] = StatusCodes.Bad;
+
+            var exc = await Assert.ThrowsAsync<AggregateException>(() => reader.BackfillData(states));
+            Assert.Equal(2, exc.InnerExceptions.Count);
+            var serviceExceptions = exc.InnerExceptions.OfType<ServiceResultException>().ToList();
+            Assert.Equal(2, serviceExceptions.Count);
         }
     }
 }

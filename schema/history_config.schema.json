@@ -83,6 +83,11 @@
             "type": "boolean",
             "description": "Log bad history datapoints: Count per read at Debug level, and each individual datapoint at Verbose level",
             "default": true
+        },
+        "error-threshold": {
+            "type": "number",
+            "description": "Threshold in percent for a history run to be considered failed. Example: 10.0 -> History read operation would be considered failed if more than 10% of nodes fail to read at some point. Retries still apply, this only applies to nodes that fail even after retries.",
+            "default": 10
         }
     }
 }
