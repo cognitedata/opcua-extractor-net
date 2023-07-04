@@ -69,7 +69,6 @@ namespace Test
         public bool BlockAllConnections { get; set; }
         public bool AllowPush { get; set; } = true;
         public bool AllowEvents { get; set; } = true;
-        public bool AllowConnectionTest { get; set; } = true;
         public bool StoreDatapoints { get; set; }
         public MockMode mode { get; set; }
         private HttpResponseMessage GetFailedRequest(HttpStatusCode code)
@@ -120,14 +119,6 @@ namespace Test
             if (BlockAllConnections)
             {
                 return GetFailedRequest(HttpStatusCode.InternalServerError);
-            }
-
-            if (req.RequestUri.AbsolutePath == "/login/status")
-            {
-                var res = HandleLoginStatus();
-                res.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
-                res.Headers.Add("x-request-id", (requestIdCounter++).ToString(CultureInfo.InvariantCulture));
-                return res;
             }
 
             if (req.RequestUri.AbsolutePath == $"/api/playground/projects/{project}/functions/1234/call")
@@ -676,41 +667,6 @@ namespace Test
             return new HttpResponseMessage(HttpStatusCode.Created)
             {
                 Content = new StringContent(result)
-            };
-        }
-
-        private HttpResponseMessage HandleLoginStatus()
-        {
-            if (!AllowConnectionTest)
-            {
-                return new HttpResponseMessage(HttpStatusCode.InternalServerError)
-                {
-                    Content = new StringContent(JsonConvert.SerializeObject(new ErrorWrapper
-                    {
-                        error = new ErrorContent
-                        {
-                            code = 501,
-                            message = "bad something or other"
-                        }
-                    }))
-                };
-            }
-            var status = new LoginInfo
-            {
-                apiKeyId = 1,
-                loggedIn = true,
-                project = project,
-                projectId = 1,
-                user = "user"
-            };
-            var result = new LoginInfoWrapper
-            {
-                data = status
-            };
-            var data = JsonConvert.SerializeObject(result);
-            return new HttpResponseMessage(HttpStatusCode.OK)
-            {
-                Content = new StringContent(data)
             };
         }
 

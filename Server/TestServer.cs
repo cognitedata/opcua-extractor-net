@@ -144,7 +144,7 @@ namespace Server
 
         protected override MasterNodeManager CreateMasterNodeManager(IServerInternal server, ApplicationConfiguration configuration)
         {
-            custom = new TestNodeManager(server, configuration, setups, mqttUrl, provider, BuildNodeSetFiles(server.DefaultSystemContext));
+            custom = new TestNodeManager(server, configuration, setups, mqttUrl, provider, Issues, BuildNodeSetFiles(server.DefaultSystemContext));
             var nodeManagers = new List<INodeManager> { custom };
             // create the custom node managers.
 

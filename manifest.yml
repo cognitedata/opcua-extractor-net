@@ -60,6 +60,11 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.20.0":
+    description: Improve error handling during history read.
+    changelog:
+      added:
+        - "Added an `error-threshold` option which indicates the percent of history read requests that must fail before the entire read is considered failed."
   "2.19.0":
     description: Add extra metadata per type and remote support in docker container
     changelog:

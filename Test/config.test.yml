@@ -13,7 +13,6 @@ logger:
 
 cognite:
     project: test
-    api-key: test
 
 mqtt:
     host: "localhost"
