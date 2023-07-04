@@ -10,6 +10,7 @@ namespace Cognite.OpcUa.Pushers.Writers.Interfaces
     public interface IAssetsWriter
     {
         Task PushNodes(
+            UAExtractor extractor,
             ConcurrentDictionary<string, BaseUANode> assetMap,
             IDictionary<NodeId, long> nodeToAssetIds,
             TypeUpdateConfig config,

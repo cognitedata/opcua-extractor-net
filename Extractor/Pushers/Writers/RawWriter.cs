@@ -22,21 +22,18 @@ namespace Cognite.OpcUa.Pushers.Writers
         private CancellationToken token { get; }
 
         private FullConfig config { get; }
-        private UAExtractor Extractor { get; }
         private CogniteDestination destination { get; }
 
         public RawWriter(
             ILogger<RawWriter> log,
             CancellationToken token,
             CogniteDestination destination,
-            FullConfig config,
-            UAExtractor extractor
+            FullConfig config
         )
         {
             this.log = log;
             this.token = token;
             this.config = config;
-            this.Extractor = extractor;
             this.destination = destination;
         }
 
@@ -79,6 +76,7 @@ namespace Cognite.OpcUa.Pushers.Writers
         }
 
         public async Task PushNodes<T>(
+            UAExtractor extractor,
             string database,
             string table,
             ConcurrentDictionary<string, T> rows,
@@ -89,15 +87,16 @@ namespace Cognite.OpcUa.Pushers.Writers
         {
             if (shouldUpdate)
             {
-                await UpdateRawAssets(database, table, rows, report);
+                await UpdateRawAssets(extractor, database, table, rows, report);
             }
             else
             {
-                await CreateRawAssets(database, table, rows, report);
+                await CreateRawAssets(extractor, database, table, rows, report);
             }
         }
 
         private async Task UpdateRawAssets<T>(
+            UAExtractor extractor,
             string database,
             string table,
             IDictionary<string, T> dataSet,
@@ -121,7 +120,7 @@ namespace Cognite.OpcUa.Pushers.Writers
                                         kvp.Key,
                                         update: PusherUtils.CreateRawUpdate(
                                             log,
-                                            Extractor.StringConverter,
+                                            extractor.StringConverter,
                                             kvp.Value,
                                             null,
                                             ConverterType.Node
@@ -154,7 +153,7 @@ namespace Cognite.OpcUa.Pushers.Writers
                     {
                         var update = PusherUtils.CreateRawUpdate(
                             log,
-                            Extractor.StringConverter,
+                            extractor.StringConverter,
                             node,
                             row,
                             ConverterType.Node
@@ -182,6 +181,7 @@ namespace Cognite.OpcUa.Pushers.Writers
         }
 
         private async Task CreateRawAssets<T>(
+            UAExtractor extractor,
             string database,
             string table,
             IDictionary<string, T> assetMap,
@@ -205,7 +205,7 @@ namespace Cognite.OpcUa.Pushers.Writers
                                 (
                                     pair.Item1.ToJson(
                                         log,
-                                        Extractor.StringConverter,
+                                        extractor.StringConverter,
                                         ConverterType.Node
                                     ),
                                     pair.id

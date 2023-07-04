@@ -11,29 +11,36 @@ namespace Cognite.OpcUa.Pushers.Writers
     {
         public static void AddWriters(this IServiceCollection services, CancellationToken token)
         {
-            services.AddSingleton<IAssetsWriter, AssetsWriter>(provider =>
+            services.AddSingleton<ICDFWriter, CDFWriter>(provider =>
             {
-                var config = provider.GetRequiredService<FullConfig>();
-                var logger = provider.GetRequiredService<ILogger<AssetsWriter>>();
                 var dest = provider.GetRequiredService<CogniteDestination>();
-                var extractor = provider.GetRequiredService<UAExtractor>();
-                return new AssetsWriter(logger, token, dest, config, extractor);
-            });
-            services.AddSingleton<IRawWriter, RawWriter>(provider =>
-            {
                 var config = provider.GetRequiredService<FullConfig>();
-                var logger = provider.GetRequiredService<ILogger<RawWriter>>();
-                var dest = provider.GetRequiredService<CogniteDestination>();
-                var extractor = provider.GetRequiredService<UAExtractor>();
-                return new RawWriter(logger, token, dest, config, extractor);
-            });
-            services.AddSingleton<ITimeseriesWriter, TimeseriesWriter>(provider =>
-            {
-                var config = provider.GetRequiredService<FullConfig>();
-                var logger = provider.GetRequiredService<ILogger<TimeseriesWriter>>();
-                var dest = provider.GetRequiredService<CogniteDestination>();
-                var extractor = provider.GetRequiredService<UAExtractor>();
-                return new TimeseriesWriter(logger, token, dest, config, extractor);
+                return new CDFWriter(
+                    new RawWriter(
+                        provider.GetRequiredService<ILogger<RawWriter>>(),
+                        token,
+                        dest,
+                        config
+                    ),
+                    new TimeseriesWriter(
+                        provider.GetRequiredService<ILogger<TimeseriesWriter>>(),
+                        token,
+                        dest,
+                        config
+                    ),
+                    new AssetsWriter(
+                        provider.GetRequiredService<ILogger<AssetsWriter>>(),
+                        token,
+                        dest,
+                        config
+                    ),
+                    new RelationshipsWriter(
+                        provider.GetRequiredService<ILogger<RelationshipsWriter>>(),
+                        token,
+                        dest,
+                        config
+                    )
+                );
             });
         }
     }

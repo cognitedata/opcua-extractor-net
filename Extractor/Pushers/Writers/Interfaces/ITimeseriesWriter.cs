@@ -10,6 +10,7 @@ namespace Cognite.OpcUa.Pushers.Writers.Interfaces
     public interface ITimeseriesWriter
     {
         Task PushVariables(
+            UAExtractor extractor,
             ConcurrentDictionary<string, UAVariable> timeseriesMap,
             IDictionary<NodeId, long> nodeToAssetIds,
             HashSet<string> mismatchedTimeseries,

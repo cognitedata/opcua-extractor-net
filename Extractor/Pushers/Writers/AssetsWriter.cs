@@ -21,38 +21,37 @@ namespace Cognite.OpcUa.Pushers.Writers
         private readonly FullConfig config;
         private readonly CogniteDestination destination;
         private readonly CancellationToken token;
-        private readonly UAExtractor extractor;
 
         public AssetsWriter(
             ILogger<AssetsWriter> logger,
             CancellationToken token,
             CogniteDestination destination,
-            FullConfig config,
-            UAExtractor extractor) 
+            FullConfig config)
         {
             this.log = logger;
             this.config = config;
             this.destination = destination;
             this.token = token;
-            this.extractor = extractor;
         }
 
         public async Task PushNodes(
+            UAExtractor extractor,
             ConcurrentDictionary<string, BaseUANode> nodes,
             IDictionary<NodeId, long> nodeToAssetIds,
             TypeUpdateConfig update,
             BrowseReport report
         )
         {
-            var assets = await CreateAssets(nodes, nodeToAssetIds, report);
+            var assets = await CreateAssets(extractor, nodes, nodeToAssetIds, report);
 
             if (update.AnyUpdate)
             {
-                await UpdateAssets(nodes, assets, update, report);
+                await UpdateAssets(extractor, nodes, assets, update, report);
             }
         }
         
         private async Task<IEnumerable<Asset>> CreateAssets(
+            UAExtractor extractor,
             IDictionary<string, BaseUANode> assetMap,
             IDictionary<NodeId, long> nodeToAssetIds,
             BrowseReport report)
@@ -91,6 +90,7 @@ namespace Cognite.OpcUa.Pushers.Writers
         }
 
         private async Task UpdateAssets(
+            UAExtractor extractor,
             IDictionary<string, BaseUANode> assetMap,
             IEnumerable<Asset> assets,
             TypeUpdateConfig update,

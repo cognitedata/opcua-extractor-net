@@ -48,9 +48,7 @@ namespace Cognite.OpcUa.Pushers
     {
         private readonly CognitePusherConfig config;
         private readonly FullConfig fullConfig;
-        private readonly IRawWriter rawWriter;
-        private readonly ITimeseriesWriter timeseriesWriter;
-        private readonly IAssetsWriter assetsWriter;
+        private readonly ICDFWriter cdfWriter;
         private readonly IDictionary<NodeId, long> nodeToAssetIds = new Dictionary<NodeId, long>();
 
         public bool DataFailing { get; set; }
@@ -97,10 +95,7 @@ namespace Cognite.OpcUa.Pushers
             BaseConfig = config;
             this.destination = destination;
             this.fullConfig = fullConfig;
-            // rawWriter = provider.GetRequiredService<IRawWriter>();
-            // timeseriesWriter = provider.GetRequiredService<ITimeseriesWriter>();
-            // assetsWriter = provider.GetRequiredService<IAssetsWriter>();
-            Console.WriteLine("testing");
+            cdfWriter =  provider.GetRequiredService<ICDFWriter>();
             if (config.BrowseCallback != null && (config.BrowseCallback.Id.HasValue || !string.IsNullOrEmpty(config.BrowseCallback.ExternalId)))
             {
                 callback = new BrowseCallback(destination, config.BrowseCallback, log);
@@ -372,15 +367,14 @@ namespace Cognite.OpcUa.Pushers
 
             if (pushCleanAssets && assetsMap.Any())
             {
-                await PushCleanAssets(assetsMap, update.Objects, report, result, token);
+                await PushCleanAssets(assetsMap, update.Objects, report, result);
             }
 
             isTimeseriesPushed = await PushCleanTimeseries(
                 timeseriesMap,
                 update.Variables,
                 report,
-                result,
-                token
+                result
             );
 
             var tasks = new List<Task>();
@@ -392,7 +386,7 @@ namespace Cognite.OpcUa.Pushers
 
             if (!pushCleanAssets && assetsMap.Any())
             {
-                tasks.Add(PushRawAssets(assetsMap, update.Objects, report, result, token));
+                tasks.Add(PushRawAssets(assetsMap, update.Objects, report, result));
             }
 
             if (!pushCleanTimeseries)
@@ -471,13 +465,12 @@ namespace Cognite.OpcUa.Pushers
             ConcurrentDictionary<string, BaseUANode> assetsMap,
             TypeUpdateConfig update,
             BrowseReport report,
-            PushResult result,
-            CancellationToken token
+            PushResult result
         )
         {
             try
             {
-                await PushCleanAssets(assetsMap, update, report, token);
+                await cdfWriter.assets.PushNodes(Extractor, assetsMap, nodeToAssetIds, update, report);
             }
             catch
             {
@@ -505,13 +498,12 @@ namespace Cognite.OpcUa.Pushers
             ConcurrentDictionary<string, UAVariable> timeseriesMap,
             TypeUpdateConfig update,
             BrowseReport report,
-            PushResult result,
-            CancellationToken token
+            PushResult result
         )
         {
             try
             {
-                await PushCleanTimeseries(timeseriesMap, update, report, token);
+                await cdfWriter.timeseries.PushVariables(Extractor, timeseriesMap, nodeToAssetIds, mismatchedTimeseries, update, report);
             }
             catch
             {
@@ -770,14 +762,11 @@ namespace Cognite.OpcUa.Pushers
 
             if (useRawRelationships)
             {
-                await PushRawReferences(relationships, report, token);
+                await cdfWriter.raw.PushReferences(config.RawMetadata!.Database!, config.RawMetadata!.RelationshipsTable!, relationships, report);
             }
             else
             {
-                var counts = await Task.WhenAll(
-                    relationships.ChunkBy(1000).Select(chunk => PushReferencesChunk(chunk, token))
-                );
-                report.RelationshipsCreated += counts.Sum();
+                await cdfWriter.relationships.PushReferences(relationships, report);
             }
 
             log.LogInformation("Sucessfully pushed relationships to CDF");
@@ -990,13 +979,21 @@ namespace Cognite.OpcUa.Pushers
             ConcurrentDictionary<string, BaseUANode> assetsMap,
             TypeUpdateConfig update,
             BrowseReport report,
-            PushResult result,
-            CancellationToken token
+            PushResult result
         )
         {
             try
             {
-                await PushRawAssets(assetsMap, update, report, token);
+                if (!pushCleanAssets) {
+                    await cdfWriter.raw.PushNodes(
+                        Extractor, 
+                        config.RawMetadata!.Database!,
+                        config.RawMetadata!.AssetsTable!,
+                        assetsMap,
+                        update.AnyUpdate,
+                        report
+                    );
+                }
             }
             catch (Exception e)
             {
@@ -1279,10 +1276,20 @@ namespace Cognite.OpcUa.Pushers
         {
             try
             {
-                await PushRawTimeseries(tsIds, update, report, token);
+                if (!pushCleanTimeseries) {
+                    await cdfWriter.raw.PushNodes(
+                        Extractor, 
+                        config.RawMetadata!.Database!,
+                        config.RawMetadata!.AssetsTable!,
+                        tsIds,
+                        update.AnyUpdate,
+                        report
+                    );
+                }
             }
-            catch
+            catch (Exception e)
             {
+                log.LogError(e, "Failed to ensure timeseries");
                 result.Variables = false;
             }
         }

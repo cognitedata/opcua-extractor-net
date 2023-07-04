@@ -19,6 +19,7 @@ namespace Cognite.OpcUa.Pushers.Writers.Interfaces
         );
 
         Task PushNodes<T>(
+            UAExtractor extractor,
             string database,
             string table,
             ConcurrentDictionary<string, T> rows,

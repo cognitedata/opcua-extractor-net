@@ -1,14 +1,14 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using Cognite.OpcUa.Config;
-using Cognite.OpcUa.Types;
+using CogniteSdk;
 
-namespace Cognite.OpcUa.Pushers.Destinations.Interfaces
+namespace Cognite.OpcUa.Pushers.Writers.Interfaces
 {
     public interface IRelationshipsWriter
     {
-        FullConfig config { get; }
-
-        Task PushReferences(IEnumerable<UAReference> references, BrowseReport report);
+        Task PushReferences(
+            IEnumerable<RelationshipCreate> relationships,
+            BrowseReport report
+        );
     }
 }

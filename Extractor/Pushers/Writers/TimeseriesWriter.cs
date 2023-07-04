@@ -22,7 +22,6 @@ namespace Cognite.OpcUa.Pushers.Writers
         private readonly FullConfig config;
         private readonly CogniteDestination destination;
         private readonly CancellationToken token;
-        private readonly UAExtractor extractor;
         private bool pushCleanTimeseries =>
             string.IsNullOrWhiteSpace(config.Cognite?.RawMetadata?.Database)
             && string.IsNullOrWhiteSpace(config.Cognite?.RawMetadata?.TimeseriesTable);
@@ -31,18 +30,16 @@ namespace Cognite.OpcUa.Pushers.Writers
             ILogger<TimeseriesWriter> logger,
             CancellationToken token,
             CogniteDestination destination,
-            FullConfig config,
-            UAExtractor extractor) 
+            FullConfig config) 
         {
             this.log = logger;
             this.config = config;
             this.destination = destination;
             this.token = token;
-            this.extractor = extractor;
         }
 
-
         public async Task PushVariables(
+            UAExtractor extractor,
             ConcurrentDictionary<string, UAVariable> timeseriesMap,
             IDictionary<NodeId, long> nodeToAssetIds,
             HashSet<string> mismatchedTimeseries,
@@ -52,6 +49,7 @@ namespace Cognite.OpcUa.Pushers.Writers
         {
             var skipMeta = config.Cognite?.SkipMetadata;
             var timeseries = await CreateTimeseries(
+                extractor,
                 timeseriesMap,
                 nodeToAssetIds,
                 mismatchedTimeseries,
@@ -65,11 +63,12 @@ namespace Cognite.OpcUa.Pushers.Writers
 
             if (update.AnyUpdate && toPushMeta.Any() && pushCleanTimeseries)
             {
-                await UpdateTimeseries(toPushMeta, timeseries, nodeToAssetIds, update, report);
+                await UpdateTimeseries(extractor, toPushMeta, timeseries, nodeToAssetIds, update, report);
             }
         }
         
         private async Task<IEnumerable<TimeSeries>> CreateTimeseries(
+            UAExtractor extractor,
             IDictionary<string, UAVariable> tsMap,
             IDictionary<NodeId, long> nodeToAssetIds,
             HashSet<string> mismatchedTimeseries,
@@ -143,6 +142,7 @@ namespace Cognite.OpcUa.Pushers.Writers
         }
 
         private async Task UpdateTimeseries(
+            UAExtractor extractor,
             IDictionary<string, UAVariable> tsMap,
             IEnumerable<TimeSeries> timeseries,
             IDictionary<NodeId, long> nodeToAssetIds,
