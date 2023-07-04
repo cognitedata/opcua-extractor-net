@@ -125,7 +125,6 @@ namespace Test.Integration
                 await extractor.Looper.WaitForNextPush();
 
                 handler.AllowPush = false;
-                handler.AllowConnectionTest = false;
 
                 tester.Server.UpdateNode(tester.Server.Ids.Base.IntVar, 1);
                 tester.Server.UpdateNode(tester.Server.Ids.Base.DoubleVar1, 1);
@@ -158,7 +157,6 @@ namespace Test.Integration
             using (var extractor = tester.BuildExtractor(true, stateStore, pusher, cdfPusher))
             {
                 handler.AllowPush = true;
-                handler.AllowConnectionTest = true;
 
                 var runTask = extractor.RunExtractor();
 
@@ -216,7 +214,6 @@ namespace Test.Integration
 
                 handler.AllowPush = false;
                 handler.AllowEvents = false;
-                handler.AllowConnectionTest = false;
 
                 tester.Server.TriggerEvents(1);
 
@@ -244,7 +241,6 @@ namespace Test.Integration
             {
                 handler.AllowPush = true;
                 handler.AllowEvents = true;
-                handler.AllowConnectionTest = true;
 
                 var runTask = extractor.RunExtractor();
 
@@ -289,7 +285,6 @@ namespace Test.Integration
 
             handler.AllowEvents = false;
             handler.AllowPush = false;
-            handler.AllowConnectionTest = false;
 
             await extractor.WaitForSubscriptions();
             await TestUtils.WaitForCondition(() => cdfPusher.EventsFailing, 10, "Expected pusher to start failing");
@@ -304,7 +299,6 @@ namespace Test.Integration
 
             handler.AllowEvents = true;
             handler.AllowPush = true;
-            handler.AllowConnectionTest = true;
             await TestUtils.WaitForCondition(() => !extractor.FailureBuffer.AnyEvents,
                 10, "Expected FailureBuffer to be emptied");
 

@@ -15,6 +15,12 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using Cognite.Extractor.Common;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.TypeCollectors;
@@ -22,12 +28,6 @@ using Cognite.OpcUa.Types;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using Prometheus;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace Cognite.OpcUa.History
 {
@@ -86,7 +86,8 @@ namespace Cognite.OpcUa.History
 
         private readonly TimeSpan? maxReadLength;
 
-        private readonly List<Exception> exceptions = new List<Exception>();
+        private readonly FailureThresholdManager<NodeId, Exception> thresholdManager;
+        private IReadOnlyDictionary<NodeId, Exception>? exceptions;
 
         public HistoryScheduler(
             ILogger log,
@@ -120,6 +121,12 @@ namespace Cognite.OpcUa.History
             if (maxReadLength == TimeSpan.Zero || maxReadLength == Timeout.InfiniteTimeSpan) maxReadLength = null;
 
             nodeCount = count;
+
+            thresholdManager = new FailureThresholdManager<NodeId, Exception>(config.ErrorThreshold, nodeCount, (x) =>
+            {
+                exceptions = x;
+                TokenSource.Cancel();
+            });
 
             historyStartTime = GetStartTime(config.StartTime);
             if (!string.IsNullOrWhiteSpace(config.EndTime)) historyEndTime = CogniteTime.ParseTimestampString(config.EndTime)!;
@@ -332,9 +339,9 @@ namespace Cognite.OpcUa.History
             {
                 log.LogWarning("ServiceLevel is low, so destination ranges are not currently beign updated. History will run again once ServiceLevel improves");
             }
-            if (exceptions.Any())
+            if (exceptions != null && exceptions.Any())
             {
-                throw new AggregateException(exceptions);
+                throw new AggregateException(exceptions.Select(x => x.Value));
             }
         }
 
@@ -392,13 +399,26 @@ namespace Cognite.OpcUa.History
             if (chunk.Exception != null)
             {
                 LogReadFailure(chunk);
-                exceptions.Add(chunk.Exception);
+                foreach (var node in chunk.Items)
+                {
+                    thresholdManager.Failed(node.Id, chunk.Exception);
+                }
                 AbortChunk(chunk, token);
                 return Enumerable.Empty<HistoryReadNode>();
             }
 
+            var failed = new List<(string id, string status)>();
             foreach (var node in chunk.Items)
             {
+                if (node.IsFailed)
+                {
+                    thresholdManager.Failed(node.Id, new ServiceResultException(node.LastStatus!.Value));
+                    var symbolicId = StatusCode.LookupSymbolicId((uint)node.LastStatus.Value);
+                    log.LogDebug("HistoryRead {Type} failed for node {Node}: {Status}", type, node.State.Id, symbolicId);
+                    failed.Add((node.State.Id, symbolicId));
+                    continue;
+                }
+
                 if (Data)
                 {
                     HistoryDataHandler(node);
@@ -416,7 +436,12 @@ namespace Cognite.OpcUa.History
                 metrics.NumItems.Inc(node.LastRead);
             }
 
-            var toTerminate = chunk.Items.Where(node => node.Completed).ToList();
+            if (failed.Any())
+            {
+                log.LogError("HistoryRead {Type} failed for {Nodes}", type, string.Join(", ", failed.Select(f => $"{f.id}: {f.status}")));
+            }
+
+            var toTerminate = chunk.Items.Where(node => node.Completed && !node.IsFailed).ToList();
             LogHistoryTermination(log, toTerminate, type);
 
             return Enumerable.Empty<HistoryReadNode>();
