@@ -34,28 +34,37 @@ namespace Cognite.OpcUa.Pushers.FDM.Types
             var properties = new Dictionary<string, IEnumerable<PropertyNode>>();
             foreach (var kvp in Properties)
             {
-                var collectedNodes = new List<BaseUANode>();
+                var collectedNodes = new List<(BaseUANode node, bool mandatory, UAReference reference)>();
                 var node = (BaseUANode)kvp.Value.Node;
+                var pathEnum = kvp.Value.Path.Reverse().GetEnumerator();
+                pathEnum.MoveNext();
                 while (node.Id != NodeId)
                 {
-                    collectedNodes.Add(node);
+                    var pair = pathEnum.Current;
+                    collectedNodes.Add((node, kvp.Value.ModellingRule == ModellingRule.Mandatory, pair.Reference));
+                    pathEnum.MoveNext();
                     node = node.Parent;
                     if (node == null) throw new InvalidOperationException("Expected property to be proper child of type, followed parents to nothing");
                 }
-                properties[kvp.Key] = collectedNodes.Select(k =>
+                properties[kvp.Key] = collectedNodes.Select(pair =>
                 {
                     var prop = new PropertyNode
                     {
-                        TypeDefinition = k.TypeDefinition?.ToString(),
-                        BrowseName = $"{k.Attributes.BrowseName?.NamespaceIndex ?? 0}:{k.Attributes.BrowseName?.Name ?? k.Name ?? ""}",
-                        NodeId = k.Id.ToString(),
+                        TypeDefinition = pair.node.TypeDefinition?.ToString(),
+                        BrowseName = $"{pair.node.Attributes.BrowseName?.NamespaceIndex ?? 0}:{pair.node.Attributes.BrowseName?.Name ?? pair.node.Name ?? ""}",
+                        NodeId = pair.node.Id.ToString(),
+                        NodeClass = (int)pair.node.NodeClass,
+                        IsMandatory = pair.mandatory,
+                        ReferenceType = pair.reference.Type.Id.ToString(),
+                        DisplayName = pair.node.Name ?? "",
+                        ExternalId = FDMUtils.SanitizeExternalId(pair.node.Name ?? "")
                     };
 
-                    if (k is UAVariable kVar)
+                    if (pair.node is UAVariable nVar)
                     {
-                        prop.ValueRank = kVar.ValueRank;
-                        prop.DataType = kVar.FullAttributes.DataType.Id.ToString();
-                        prop.ArrayDimensions = kVar.ArrayDimensions;
+                        prop.ValueRank = nVar.ValueRank;
+                        prop.DataType = nVar.FullAttributes.DataType.Id.ToString();
+                        prop.ArrayDimensions = nVar.ArrayDimensions;
                     }
                     return prop;
                 }).ToList();
