@@ -1,8 +1,9 @@
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Cognite.OpcUa.Nodes;
+using Cognite.OpcUa.Pushers.Writers.Dtos;
+using Cognite.OpcUa.Types;
 using CogniteSdk;
 
 namespace Cognite.OpcUa.Pushers.Writers.Interfaces
@@ -18,21 +19,20 @@ namespace Cognite.OpcUa.Pushers.Writers.Interfaces
             IEnumerable<string>? columns
         );
 
-        Task PushNodes<T>(
+        Task<Result>  PushNodes<T>(
             UAExtractor extractor,
             string database,
             string table,
-            ConcurrentDictionary<string, T> rows,
-            bool shouldUpdate,
-            BrowseReport report
+            IDictionary<string, T> rows,
+            ConverterType converter,
+            bool shouldUpdate
         )
             where T : BaseUANode;
 
-        Task PushReferences(
+        Task<Result> PushReferences(
             string database,
             string table,
-            IEnumerable<RelationshipCreate> relationships,
-            BrowseReport report
+            IEnumerable<RelationshipCreate> relationships
         );
     }
 }

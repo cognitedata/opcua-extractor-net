@@ -28,6 +28,8 @@ namespace Test.Integration
     public class NodeExtractionTests : IClassFixture<NodeExtractionTestFixture>
     {
         private readonly NodeExtractionTestFixture tester;
+        private readonly ITestOutputHelper _output;
+
         public NodeExtractionTests(ITestOutputHelper output, NodeExtractionTestFixture tester)
         {
             this.tester = tester ?? throw new ArgumentNullException(nameof(tester));
@@ -35,6 +37,7 @@ namespace Test.Integration
             tester.ResetConfig();
             tester.Config.History.Enabled = false;
             tester.Client.TypeManager.Reset();
+            _output = output;
         }
         #region datatypeconfig
         [Fact]
@@ -906,8 +909,7 @@ namespace Test.Integration
         [InlineData(true, false)]
         [InlineData(false, true)]
         [InlineData(true, true)]
-        public async Task TestUpdateFieldsRaw(
-            bool assets, bool timeseries)
+        public async Task TestUpdateFieldsRaw(bool assets, bool timeseries)
         {
             var (handler, pusher) = tester.GetCDFPusher();
             using var extractor = tester.BuildExtractor(true, null, pusher);

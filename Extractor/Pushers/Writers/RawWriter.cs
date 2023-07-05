@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
@@ -8,6 +7,7 @@ using System.Threading.Tasks;
 using Cognite.Extractor.Utils;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Nodes;
+using Cognite.OpcUa.Pushers.Writers.Dtos;
 using Cognite.OpcUa.Pushers.Writers.Interfaces;
 using Cognite.OpcUa.Types;
 using CogniteSdk;
@@ -75,38 +75,24 @@ namespace Cognite.OpcUa.Pushers.Writers
             return rows;
         }
 
-        public async Task PushNodes<T>(
-            UAExtractor extractor,
-            string database,
-            string table,
-            ConcurrentDictionary<string, T> rows,
-            bool shouldUpdate,
-            BrowseReport report
-        )
-            where T : BaseUANode
+        public async Task<Result> PushNodes<T>(UAExtractor extractor, string database, string table, IDictionary<string, T> rows, ConverterType converter, bool shouldUpdate) where T : BaseUANode
         {
+            var result = new Result { Created = 0, Updated = 0 };
+
             if (shouldUpdate)
             {
-                await UpdateRawAssets(extractor, database, table, rows, report);
+                await Update(extractor, database, table, rows, converter, result);
             }
             else
             {
-                await CreateRawAssets(extractor, database, table, rows, report);
+                await Create(extractor, database, table, rows, converter, result);
             }
+            return result;
         }
 
-        private async Task UpdateRawAssets<T>(
-            UAExtractor extractor,
-            string database,
-            string table,
-            IDictionary<string, T> dataSet,
-            BrowseReport report
-        )
-            where T : BaseUANode
+        private async Task Update<T>(UAExtractor extractor, string database, string table, IDictionary<string, T> dataSet, ConverterType converter, Result result) where T : BaseUANode
         {
-            if (database == null || table == null)
-                return;
-            await UpsertRawRows<JsonElement>(
+            await UpsertRows<JsonElement>(
                 database,
                 table,
                 rows =>
@@ -116,33 +102,20 @@ namespace Cognite.OpcUa.Pushers.Writers
                         return dataSet
                             .Select(
                                 kvp =>
-                                    (
-                                        kvp.Key,
-                                        update: PusherUtils.CreateRawUpdate(
-                                            log,
-                                            extractor.StringConverter,
-                                            kvp.Value,
-                                            null,
-                                            ConverterType.Node
-                                        )
-                                    )
+                                    (kvp.Key, update: PusherUtils.CreateRawUpdate(log, extractor.StringConverter, kvp.Value, null, converter))
                             )
                             .Where(elem => elem.update != null)
                             .ToDictionary(pair => pair.Key, pair => pair.update!.Value);
                     }
 
                     var toWrite =
-                        new List<(
-                            string key,
-                            RawRow<Dictionary<string, JsonElement>> row,
-                            T node
-                        )>();
+                        new List<(string key, RawRow<Dictionary<string, JsonElement>> row, T node)>();
 
                     foreach (var row in rows)
                     {
-                        if (dataSet.TryGetValue(row.Key, out var ts))
+                        if (dataSet.TryGetValue(row.Key, out var node))
                         {
-                            toWrite.Add((row.Key, row, ts));
+                            toWrite.Add((row.Key, row, node));
                             dataSet.Remove(row.Key);
                         }
                     }
@@ -151,24 +124,18 @@ namespace Cognite.OpcUa.Pushers.Writers
 
                     foreach (var (key, row, node) in toWrite)
                     {
-                        var update = PusherUtils.CreateRawUpdate(
-                            log,
-                            extractor.StringConverter,
-                            node,
-                            row,
-                            ConverterType.Node
-                        );
+                        var update = PusherUtils.CreateRawUpdate(log, extractor.StringConverter, node, row, converter);
 
                         if (update != null)
                         {
                             updates[key] = update.Value;
                             if (row == null)
                             {
-                                report.AssetsCreated++;
+                                result.Created++;
                             }
                             else
                             {
-                                report.AssetsUpdated++;
+                                result.Updated++;
                             }
                         }
                     }
@@ -180,47 +147,27 @@ namespace Cognite.OpcUa.Pushers.Writers
             );
         }
 
-        private async Task CreateRawAssets<T>(
-            UAExtractor extractor,
-            string database,
-            string table,
-            IDictionary<string, T> assetMap,
-            BrowseReport report
-        )
-            where T : BaseUANode
+        private async Task Create<T>(UAExtractor extractor, string database, string table, IDictionary<string, T> dataMap, ConverterType converter,  Result result) where T : BaseUANode
         {
-            if (database == null || table == null)
-                return;
-
-            await EnsureRawRows<JsonElement>(
+            await EnsureRows<JsonElement>(
                 database,
                 table,
-                assetMap.Keys,
+                dataMap.Keys,
                 ids =>
                 {
-                    var assets = ids.Select(id => (assetMap[id], id));
-                    var creates = assets
-                        .Select(
-                            pair =>
-                                (
-                                    pair.Item1.ToJson(
-                                        log,
-                                        extractor.StringConverter,
-                                        ConverterType.Node
-                                    ),
-                                    pair.id
-                                )
-                        )
+                    var rows = ids.Select(id => (dataMap[id], id));
+                    var creates = rows
+                        .Select(pair => (pair.Item1.ToJson(log, extractor.StringConverter, converter), pair.id))
                         .Where(pair => pair.Item1 != null)
                         .ToDictionary(pair => pair.id, pair => pair.Item1!.RootElement);
-                    report.AssetsCreated += creates.Count;
+                    result.Created += creates.Count;
                     return creates;
                 },
                 new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }
             );
         }
 
-        private async Task UpsertRawRows<T>(
+        private async Task UpsertRows<T>(
             string dbName,
             string tableName,
             Func<
@@ -269,13 +216,7 @@ namespace Cognite.OpcUa.Pushers.Writers
             log.LogInformation("Updated or created {Count} rows in CDF Raw", count);
         }
 
-        private async Task EnsureRawRows<T>(
-            string dbName,
-            string tableName,
-            IEnumerable<string> keys,
-            Func<IEnumerable<string>, IDictionary<string, T>> dtoBuilder,
-            JsonSerializerOptions options
-        )
+        private async Task EnsureRows<T>(string dbName, string tableName, IEnumerable<string> keys, Func<IEnumerable<string>, IDictionary<string, T>> dtoBuilder, JsonSerializerOptions options)
         {
             var rows = await GetRawRows(dbName, tableName, new[] { "," });
             var existing = rows.Select(row => row.Key);
@@ -290,14 +231,14 @@ namespace Cognite.OpcUa.Pushers.Writers
             await destination.InsertRawRowsAsync(dbName, tableName, createDtos, options, token);
         }
 
-        public async Task PushReferences(
+        public async Task<Result> PushReferences(
             string database,
             string table,
-            IEnumerable<RelationshipCreate> relationships,
-            BrowseReport report
+            IEnumerable<RelationshipCreate> relationships
         )
         {
-            await EnsureRawRows(
+            var result = new Result { Created = 0, Updated = 0 };
+            await EnsureRows(
                 database,
                 table,
                 relationships.Select(rel => rel.ExternalId),
@@ -307,11 +248,12 @@ namespace Cognite.OpcUa.Pushers.Writers
                     var creates = relationships
                         .Where(rel => idSet.Contains(rel.ExternalId))
                         .ToDictionary(rel => rel.ExternalId);
-                    report.RelationshipsCreated += creates.Count;
+                    result.Created += creates.Count;
                     return creates;
                 },
                 new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }
             );
+            return result;
         }
     }
 }

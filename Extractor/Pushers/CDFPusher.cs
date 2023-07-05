@@ -389,9 +389,9 @@ namespace Cognite.OpcUa.Pushers
                 tasks.Add(PushRawAssets(assetsMap, update.Objects, report, result));
             }
 
-            if (!pushCleanTimeseries)
+            if (!pushCleanTimeseries && timeseriesMap.Any())
             {
-                tasks.Add(PushRawTimeseries(timeseriesMap, update.Variables, report, result, token));
+                tasks.Add(PushRawTimeseries(timeseriesMap, update.Variables, report, result));
             }
 
             tasks.Add(PushReferences(references, report, result, token));
@@ -426,13 +426,7 @@ namespace Cognite.OpcUa.Pushers
             bool pushResult = true;
             try
             {
-                pushResult = await fdmDestination!.PushNodes(
-                    objects,
-                    variables,
-                    references,
-                    Extractor,
-                    token
-                );
+                pushResult = await fdmDestination!.PushNodes(objects, variables, references, Extractor, token);
             }
             catch
             {
@@ -503,7 +497,17 @@ namespace Cognite.OpcUa.Pushers
         {
             try
             {
-                await cdfWriter.timeseries.PushVariables(Extractor, timeseriesMap, nodeToAssetIds, mismatchedTimeseries, update, report);
+                var _result = await cdfWriter.timeseries.PushVariables(Extractor, timeseriesMap, nodeToAssetIds, mismatchedTimeseries, update);
+                var skipMetadata = config.SkipMetadata;
+                var createMinimal = !pushCleanTimeseries || skipMetadata; 
+                if (createMinimal)
+                {
+                    report.MinimalTimeSeriesCreated += _result.Created;
+                }
+                else
+                {
+                    report.TimeSeriesCreated += _result.Created;
+                }
             }
             catch
             {
@@ -762,7 +766,8 @@ namespace Cognite.OpcUa.Pushers
 
             if (useRawRelationships)
             {
-                await cdfWriter.raw.PushReferences(config.RawMetadata!.Database!, config.RawMetadata!.RelationshipsTable!, relationships, report);
+                var _result = await cdfWriter.raw.PushReferences(config.RawMetadata!.Database!, config.RawMetadata!.RelationshipsTable!, relationships);
+                report.RelationshipsCreated += _result.Created;
             }
             else
             {
@@ -984,16 +989,16 @@ namespace Cognite.OpcUa.Pushers
         {
             try
             {
-                if (!pushCleanAssets) {
-                    await cdfWriter.raw.PushNodes(
-                        Extractor, 
-                        config.RawMetadata!.Database!,
-                        config.RawMetadata!.AssetsTable!,
-                        assetsMap,
-                        update.AnyUpdate,
-                        report
-                    );
-                }
+                var _result = await cdfWriter.raw.PushNodes(
+                    Extractor, 
+                    config.RawMetadata!.Database!,
+                    config.RawMetadata!.AssetsTable!,
+                    assetsMap,
+                    ConverterType.Node,
+                    update.AnyUpdate
+                );
+                report.AssetsCreated += _result.Created;
+                report.AssetsUpdated += _result.Updated;
             }
             catch (Exception e)
             {
@@ -1266,26 +1271,24 @@ namespace Cognite.OpcUa.Pushers
         /// </summary>
         /// <param name="tsList">Timeseries to push</param>
         /// <param name="update">Configuration for which fields, if any, to update in CDF</param>
-        private async Task PushRawTimeseries(
-            ConcurrentDictionary<string, UAVariable> tsIds,
-            TypeUpdateConfig update,
-            BrowseReport report,
-            PushResult result,
-            CancellationToken token
-        )
+        private async Task PushRawTimeseries(ConcurrentDictionary<string, UAVariable> tsIds, TypeUpdateConfig update, BrowseReport report, PushResult result)
         {
             try
             {
-                if (!pushCleanTimeseries) {
-                    await cdfWriter.raw.PushNodes(
-                        Extractor, 
-                        config.RawMetadata!.Database!,
-                        config.RawMetadata!.AssetsTable!,
-                        tsIds,
-                        update.AnyUpdate,
-                        report
-                    );
-                }
+                var toPushMeta = tsIds
+                    .Where(kvp => kvp.Value.Source != NodeSource.CDF)
+                    .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+
+                var _result = await cdfWriter.raw.PushNodes(
+                    Extractor, 
+                    config.RawMetadata!.Database!,
+                    config.RawMetadata!.TimeseriesTable!,
+                    toPushMeta,
+                    ConverterType.Variable,
+                    update.AnyUpdate && !config.SkipMetadata
+                );
+                report.TimeSeriesCreated += _result.Created;
+                report.TimeSeriesUpdated += _result.Updated;
             }
             catch (Exception e)
             {

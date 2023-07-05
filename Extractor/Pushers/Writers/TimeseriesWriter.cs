@@ -9,6 +9,7 @@ using Cognite.Extractor.Utils;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.NodeSources;
+using Cognite.OpcUa.Pushers.Writers.Dtos;
 using Cognite.OpcUa.Pushers.Writers.Interfaces;
 using CogniteSdk;
 using Microsoft.Extensions.Logging;
@@ -38,23 +39,23 @@ namespace Cognite.OpcUa.Pushers.Writers
             this.token = token;
         }
 
-        public async Task PushVariables(
+        public async Task<Result> PushVariables(
             UAExtractor extractor,
             ConcurrentDictionary<string, UAVariable> timeseriesMap,
             IDictionary<NodeId, long> nodeToAssetIds,
             HashSet<string> mismatchedTimeseries,
-            TypeUpdateConfig update,
-            BrowseReport report
+            TypeUpdateConfig update
         )
         {
+            var result = new Result { Created = 0, Updated = 0 };
             var skipMeta = config.Cognite?.SkipMetadata;
             var timeseries = await CreateTimeseries(
                 extractor,
                 timeseriesMap,
                 nodeToAssetIds,
                 mismatchedTimeseries,
-                report,
-                !pushCleanTimeseries && skipMeta.HasValue ? skipMeta.Value : false
+                result,
+                !pushCleanTimeseries || (skipMeta.HasValue ? skipMeta.Value : false)
             );
 
             var toPushMeta = timeseriesMap
@@ -63,8 +64,9 @@ namespace Cognite.OpcUa.Pushers.Writers
 
             if (update.AnyUpdate && toPushMeta.Any() && pushCleanTimeseries)
             {
-                await UpdateTimeseries(extractor, toPushMeta, timeseries, nodeToAssetIds, update, report);
+                await UpdateTimeseries(extractor, toPushMeta, timeseries, nodeToAssetIds, update, result);
             }
+            return result;
         }
         
         private async Task<IEnumerable<TimeSeries>> CreateTimeseries(
@@ -72,7 +74,7 @@ namespace Cognite.OpcUa.Pushers.Writers
             IDictionary<string, UAVariable> tsMap,
             IDictionary<NodeId, long> nodeToAssetIds,
             HashSet<string> mismatchedTimeseries,
-            BrowseReport report,
+            Result result,
             bool createMinimalTimeseries
         )
         {
@@ -96,11 +98,11 @@ namespace Cognite.OpcUa.Pushers.Writers
                         .Where(ts => ts != null);
                     if (createMinimalTimeseries)
                     {
-                        report.MinimalTimeSeriesCreated += creates.Count();
+                        result.Created += creates.Count();
                     }
                     else
                     {
-                        report.TimeSeriesCreated += creates.Count();
+                        result.Created += creates.Count();
                     }
                     return creates;
                 },
@@ -147,7 +149,7 @@ namespace Cognite.OpcUa.Pushers.Writers
             IEnumerable<TimeSeries> timeseries,
             IDictionary<NodeId, long> nodeToAssetIds,
             TypeUpdateConfig update,
-            BrowseReport report)
+            Result result)
         {
             var updates = new List<TimeSeriesUpdateItem>();
             var existing = timeseries.ToDictionary(asset => asset.ExternalId);
@@ -172,7 +174,7 @@ namespace Cognite.OpcUa.Pushers.Writers
                 log.LogResult(res, RequestType.UpdateTimeSeries, false);
                 res.ThrowOnFatal();
 
-                report.TimeSeriesUpdated += res.Results?.Count() ?? 0;
+                result.Updated += res.Results?.Count() ?? 0;
             }
         }
     }
