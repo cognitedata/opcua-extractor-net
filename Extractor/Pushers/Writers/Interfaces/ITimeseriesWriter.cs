@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Nodes;
@@ -15,7 +16,8 @@ namespace Cognite.OpcUa.Pushers.Writers.Interfaces
             ConcurrentDictionary<string, UAVariable> timeseriesMap,
             IDictionary<NodeId, long> nodeToAssetIds,
             HashSet<string> mismatchedTimeseries,
-            TypeUpdateConfig update
+            TypeUpdateConfig update,
+            CancellationToken token
         );
     }
 }

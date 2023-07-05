@@ -339,13 +339,7 @@ namespace Cognite.OpcUa.Pushers
             {
                 if (fdmDestination != null)
                 {
-                    await fdmDestination.PushNodes(
-                        objects,
-                        variables,
-                        references,
-                        Extractor,
-                        token
-                    );
+                    await fdmDestination.PushNodes(objects, variables, references, Extractor, token);
                 }
                 return result;
             }
@@ -370,15 +364,10 @@ namespace Cognite.OpcUa.Pushers
 
             if (pushCleanAssets && assetsMap.Any())
             {
-                await PushCleanAssets(assetsMap, update.Objects, report, result);
+                await PushCleanAssets(assetsMap, update.Objects, report, result, token);
             }
 
-            isTimeseriesPushed = await PushCleanTimeseries(
-                timeseriesMap,
-                update.Variables,
-                report,
-                result
-            );
+            isTimeseriesPushed = await PushCleanTimeseries(timeseriesMap, update.Variables, report, result, token);
 
             var tasks = new List<Task>();
 
@@ -389,12 +378,12 @@ namespace Cognite.OpcUa.Pushers
 
             if (!pushCleanAssets && assetsMap.Any())
             {
-                tasks.Add(PushRawAssets(assetsMap, update.Objects, report, result));
+                tasks.Add(PushRawAssets(assetsMap, update.Objects, report, result, token));
             }
 
             if (!pushCleanTimeseries && timeseriesMap.Any())
             {
-                tasks.Add(PushRawTimeseries(timeseriesMap, update.Variables, report, result));
+                tasks.Add(PushRawTimeseries(timeseriesMap, update.Variables, report, result, token));
             }
 
             tasks.Add(PushReferences(references, report, result, token));
@@ -464,12 +453,15 @@ namespace Cognite.OpcUa.Pushers
             ConcurrentDictionary<string, BaseUANode> assetsMap,
             TypeUpdateConfig update,
             BrowseReport report,
-            PushResult result
+            PushResult result,
+            CancellationToken token
         )
         {
             try
             {
-                await cdfWriter.assets.PushNodes(Extractor, assetsMap, nodeToAssetIds, update, report);
+                var _result = await cdfWriter.assets.PushNodes(Extractor, assetsMap, nodeToAssetIds, update, token);
+                report.AssetsCreated += _result.Created;
+                report.AssetsUpdated += _result.Updated;
             }
             catch
             {
@@ -482,12 +474,13 @@ namespace Cognite.OpcUa.Pushers
             ConcurrentDictionary<string, UAVariable> timeseriesMap,
             TypeUpdateConfig update,
             BrowseReport report,
-            PushResult result
+            PushResult result,
+            CancellationToken token
         )
         {
             try
             {
-                var _result = await cdfWriter.timeseries.PushVariables(Extractor, timeseriesMap, nodeToAssetIds, mismatchedTimeseries, update);
+                var _result = await cdfWriter.timeseries.PushVariables(Extractor, timeseriesMap, nodeToAssetIds, mismatchedTimeseries, update, token);
                 var skipMetadata = config.SkipMetadata;
                 var createMinimal = !pushCleanTimeseries || skipMetadata; 
                 if (createMinimal)
@@ -763,7 +756,8 @@ namespace Cognite.OpcUa.Pushers
             ConcurrentDictionary<string, BaseUANode> assetsMap,
             TypeUpdateConfig update,
             BrowseReport report,
-            PushResult result
+            PushResult result,
+            CancellationToken token
         )
         {
             try
@@ -774,7 +768,8 @@ namespace Cognite.OpcUa.Pushers
                     config.RawMetadata!.AssetsTable!,
                     assetsMap,
                     ConverterType.Node,
-                    update.AnyUpdate
+                    update.AnyUpdate,
+                    token
                 );
                 report.AssetsCreated += _result.Created;
                 report.AssetsUpdated += _result.Updated;
@@ -842,7 +837,7 @@ namespace Cognite.OpcUa.Pushers
         /// </summary>
         /// <param name="tsList">Timeseries to push</param>
         /// <param name="update">Configuration for which fields, if any, to update in CDF</param>
-        private async Task PushRawTimeseries(ConcurrentDictionary<string, UAVariable> tsIds, TypeUpdateConfig update, BrowseReport report, PushResult result)
+        private async Task PushRawTimeseries(ConcurrentDictionary<string, UAVariable> tsIds, TypeUpdateConfig update, BrowseReport report, PushResult result, CancellationToken token)
         {
             try
             {
@@ -856,7 +851,8 @@ namespace Cognite.OpcUa.Pushers
                     config.RawMetadata!.TimeseriesTable!,
                     toPushMeta,
                     ConverterType.Variable,
-                    update.AnyUpdate && !config.SkipMetadata
+                    update.AnyUpdate && !config.SkipMetadata,
+                    token
                 );
                 report.TimeSeriesCreated += _result.Created;
                 report.TimeSeriesUpdated += _result.Updated;

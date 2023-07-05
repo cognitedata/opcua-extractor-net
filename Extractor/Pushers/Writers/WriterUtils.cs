@@ -18,19 +18,16 @@ namespace Cognite.OpcUa.Pushers.Writers
                 return new CDFWriter(
                     new RawWriter(
                         provider.GetRequiredService<ILogger<RawWriter>>(),
-                        token,
                         dest,
                         config
                     ),
                     new TimeseriesWriter(
                         provider.GetRequiredService<ILogger<TimeseriesWriter>>(),
-                        token,
                         dest,
                         config
                     ),
                     new AssetsWriter(
                         provider.GetRequiredService<ILogger<AssetsWriter>>(),
-                        token,
                         dest,
                         config
                     ),

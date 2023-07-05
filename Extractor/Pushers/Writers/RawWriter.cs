@@ -18,21 +18,12 @@ namespace Cognite.OpcUa.Pushers.Writers
     public class RawWriter : IRawWriter
     {
         private readonly ILogger<RawWriter> log;
-
-        private CancellationToken token { get; }
-
         private FullConfig config { get; }
         private CogniteDestination destination { get; }
 
-        public RawWriter(
-            ILogger<RawWriter> log,
-            CancellationToken token,
-            CogniteDestination destination,
-            FullConfig config
-        )
+        public RawWriter(ILogger<RawWriter> log, CogniteDestination destination, FullConfig config)
         {
             this.log = log;
-            this.token = token;
             this.config = config;
             this.destination = destination;
         }
@@ -40,7 +31,8 @@ namespace Cognite.OpcUa.Pushers.Writers
         public async Task<IEnumerable<RawRow<Dictionary<string, JsonElement>>>> GetRawRows(
             string dbName,
             string tableName,
-            IEnumerable<string>? columns
+            IEnumerable<string>? columns,
+            CancellationToken token
         )
         {
             string? cursor = null;
@@ -75,22 +67,22 @@ namespace Cognite.OpcUa.Pushers.Writers
             return rows;
         }
 
-        public async Task<Result> PushNodes<T>(UAExtractor extractor, string database, string table, IDictionary<string, T> rows, ConverterType converter, bool shouldUpdate) where T : BaseUANode
+        public async Task<Result> PushNodes<T>(UAExtractor extractor, string database, string table, IDictionary<string, T> rows, ConverterType converter, bool shouldUpdate, CancellationToken token) where T : BaseUANode
         {
             var result = new Result { Created = 0, Updated = 0 };
 
             if (shouldUpdate)
             {
-                await Update(extractor, database, table, rows, converter, result);
+                await Update(extractor, database, table, rows, converter, result, token);
             }
             else
             {
-                await Create(extractor, database, table, rows, converter, result);
+                await Create(extractor, database, table, rows, converter, result, token);
             }
             return result;
         }
 
-        private async Task Update<T>(UAExtractor extractor, string database, string table, IDictionary<string, T> dataSet, ConverterType converter, Result result) where T : BaseUANode
+        private async Task Update<T>(UAExtractor extractor, string database, string table, IDictionary<string, T> dataSet, ConverterType converter, Result result, CancellationToken token) where T : BaseUANode
         {
             await UpsertRows<JsonElement>(
                 database,
@@ -147,7 +139,7 @@ namespace Cognite.OpcUa.Pushers.Writers
             );
         }
 
-        private async Task Create<T>(UAExtractor extractor, string database, string table, IDictionary<string, T> dataMap, ConverterType converter,  Result result) where T : BaseUANode
+        private async Task Create<T>(UAExtractor extractor, string database, string table, IDictionary<string, T> dataMap, ConverterType converter,  Result result, CancellationToken token) where T : BaseUANode
         {
             await EnsureRows<JsonElement>(
                 database,
@@ -163,7 +155,8 @@ namespace Cognite.OpcUa.Pushers.Writers
                     result.Created += creates.Count;
                     return creates;
                 },
-                new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }
+                new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase },
+                token
             );
         }
 
@@ -216,9 +209,9 @@ namespace Cognite.OpcUa.Pushers.Writers
             log.LogInformation("Updated or created {Count} rows in CDF Raw", count);
         }
 
-        private async Task EnsureRows<T>(string dbName, string tableName, IEnumerable<string> keys, Func<IEnumerable<string>, IDictionary<string, T>> dtoBuilder, JsonSerializerOptions options)
+        private async Task EnsureRows<T>(string dbName, string tableName, IEnumerable<string> keys, Func<IEnumerable<string>, IDictionary<string, T>> dtoBuilder, JsonSerializerOptions options, CancellationToken token)
         {
-            var rows = await GetRawRows(dbName, tableName, new[] { "," });
+            var rows = await GetRawRows(dbName, tableName, new[] { "," }, token);
             var existing = rows.Select(row => row.Key);
 
             var toCreate = keys.Except(existing);
@@ -252,7 +245,8 @@ namespace Cognite.OpcUa.Pushers.Writers
                     result.Created += creates.Count;
                     return creates;
                 },
-                new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }
+                new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase },
+                token
             );
             return result;
         }

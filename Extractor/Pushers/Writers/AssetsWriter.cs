@@ -8,6 +8,7 @@ using Cognite.Extractor.Common;
 using Cognite.Extractor.Utils;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Nodes;
+using Cognite.OpcUa.Pushers.Writers.Dtos;
 using Cognite.OpcUa.Pushers.Writers.Interfaces;
 using CogniteSdk;
 using Microsoft.Extensions.Logging;
@@ -20,41 +21,27 @@ namespace Cognite.OpcUa.Pushers.Writers
         private readonly ILogger<AssetsWriter> log;
         private readonly FullConfig config;
         private readonly CogniteDestination destination;
-        private readonly CancellationToken token;
 
-        public AssetsWriter(
-            ILogger<AssetsWriter> logger,
-            CancellationToken token,
-            CogniteDestination destination,
-            FullConfig config)
+        public AssetsWriter(ILogger<AssetsWriter> logger, CogniteDestination destination, FullConfig config)
         {
             this.log = logger;
             this.config = config;
             this.destination = destination;
-            this.token = token;
         }
 
-        public async Task PushNodes(
-            UAExtractor extractor,
-            ConcurrentDictionary<string, BaseUANode> nodes,
-            IDictionary<NodeId, long> nodeToAssetIds,
-            TypeUpdateConfig update,
-            BrowseReport report
-        )
+        public async Task<Result>  PushNodes(UAExtractor extractor, ConcurrentDictionary<string, BaseUANode> nodes, IDictionary<NodeId, long> nodeToAssetIds, TypeUpdateConfig update, CancellationToken token)
         {
-            var assets = await CreateAssets(extractor, nodes, nodeToAssetIds, report);
+            var result = new Result { Created = 0, Updated = 0 };
+            var assets = await CreateAssets(extractor, nodes, nodeToAssetIds, result, token);
 
             if (update.AnyUpdate)
             {
-                await UpdateAssets(extractor, nodes, assets, update, report);
+                await UpdateAssets(extractor, nodes, assets, update, result, token);
             }
+            return result;
         }
         
-        private async Task<IEnumerable<Asset>> CreateAssets(
-            UAExtractor extractor,
-            IDictionary<string, BaseUANode> assetMap,
-            IDictionary<NodeId, long> nodeToAssetIds,
-            BrowseReport report)
+        private async Task<IEnumerable<Asset>> CreateAssets( UAExtractor extractor, IDictionary<string, BaseUANode> assetMap, IDictionary<NodeId, long> nodeToAssetIds, Result result, CancellationToken token)
         {
             var assets = new List<Asset>();
             var maxSize = config.Cognite?.CdfChunking.Assets ?? 1000;
@@ -70,7 +57,7 @@ namespace Cognite.OpcUa.Pushers.Writers
                             config.Cognite?.DataSet?.Id,
                             config.Cognite?.MetadataMapping?.Assets))
                         .Where(asset => asset != null);
-                    report.AssetsCreated += creates.Count();
+                    result.Created += creates.Count();
                     return creates;
                 }, RetryMode.None, SanitationMode.Clean, token);
 
@@ -89,13 +76,7 @@ namespace Cognite.OpcUa.Pushers.Writers
             return assets;
         }
 
-        private async Task UpdateAssets(
-            UAExtractor extractor,
-            IDictionary<string, BaseUANode> assetMap,
-            IEnumerable<Asset> assets,
-            TypeUpdateConfig update,
-            BrowseReport report
-        )
+        private async Task UpdateAssets(UAExtractor extractor, IDictionary<string, BaseUANode> assetMap, IEnumerable<Asset> assets, TypeUpdateConfig update, Result result, CancellationToken token)
         {
             var updates = new List<AssetUpdateItem>();
             var existing = assets.ToDictionary(asset => asset.ExternalId);
@@ -103,13 +84,7 @@ namespace Cognite.OpcUa.Pushers.Writers
             {
                 if (existing.TryGetValue(kvp.Key, out var asset))
                 {
-                    var assetUpdate = PusherUtils.GetAssetUpdate(
-                        config,
-                        asset,
-                        kvp.Value,
-                        extractor,
-                        update
-                    );
+                    var assetUpdate = PusherUtils.GetAssetUpdate(config, asset, kvp.Value, extractor, update);
 
                     if (assetUpdate == null)
                         continue;
@@ -126,18 +101,14 @@ namespace Cognite.OpcUa.Pushers.Writers
             }
             if (updates.Any())
             {
-                var res = await destination.UpdateAssetsAsync(
-                    updates,
-                    RetryMode.OnError,
-                    SanitationMode.Clean,
-                    token
-                );
+                var res = await destination.UpdateAssetsAsync(updates, RetryMode.OnError, SanitationMode.Clean, token);
 
                 log.LogResult(res, RequestType.UpdateAssets, false);
 
                 res.ThrowOnFatal();
 
-                report.AssetsUpdated += res.Results?.Count() ?? 0;
+                result.Updated += res.Results?.Count() ?? 0;
             }
-        }    }
+        }
+    }
 }

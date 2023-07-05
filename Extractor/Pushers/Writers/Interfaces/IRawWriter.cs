@@ -17,7 +17,8 @@ namespace Cognite.OpcUa.Pushers.Writers.Interfaces
         Task<IEnumerable<RawRow<Dictionary<string, JsonElement>>>> GetRawRows(
             string dbName,
             string tableName,
-            IEnumerable<string>? columns
+            IEnumerable<string>? columns,
+            CancellationToken token
         );
 
         Task<Result>  PushNodes<T>(
@@ -26,7 +27,8 @@ namespace Cognite.OpcUa.Pushers.Writers.Interfaces
             string table,
             IDictionary<string, T> rows,
             ConverterType converter,
-            bool shouldUpdate
+            bool shouldUpdate,
+            CancellationToken token
         )
             where T : BaseUANode;
 
