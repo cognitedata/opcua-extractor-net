@@ -41,7 +41,7 @@ namespace Cognite.OpcUa.Pushers.Writers
             return result;
         }
         
-        private async Task<IEnumerable<Asset>> CreateAssets( UAExtractor extractor, IDictionary<string, BaseUANode> assetMap, IDictionary<NodeId, long> nodeToAssetIds, Result result, CancellationToken token)
+        private async Task<IEnumerable<Asset>> CreateAssets(UAExtractor extractor, IDictionary<string, BaseUANode> assetMap, IDictionary<NodeId, long> nodeToAssetIds, Result result, CancellationToken token)
         {
             var assets = new List<Asset>();
             var maxSize = config.Cognite?.CdfChunking.Assets ?? 1000;
