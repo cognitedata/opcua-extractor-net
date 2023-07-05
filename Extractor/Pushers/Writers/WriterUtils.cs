@@ -36,7 +36,6 @@ namespace Cognite.OpcUa.Pushers.Writers
                     ),
                     new RelationshipsWriter(
                         provider.GetRequiredService<ILogger<RelationshipsWriter>>(),
-                        token,
                         dest,
                         config
                     )

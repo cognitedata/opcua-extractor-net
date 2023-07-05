@@ -143,13 +143,7 @@ namespace Cognite.OpcUa.Pushers.Writers
             return timeseries.Results;
         }
 
-        private async Task UpdateTimeseries(
-            UAExtractor extractor,
-            IDictionary<string, UAVariable> tsMap,
-            IEnumerable<TimeSeries> timeseries,
-            IDictionary<NodeId, long> nodeToAssetIds,
-            TypeUpdateConfig update,
-            Result result)
+        private async Task UpdateTimeseries(UAExtractor extractor, IDictionary<string, UAVariable> tsMap, IEnumerable<TimeSeries> timeseries, IDictionary<NodeId, long> nodeToAssetIds, TypeUpdateConfig update, Result result)
         {
             var updates = new List<TimeSeriesUpdateItem>();
             var existing = timeseries.ToDictionary(asset => asset.ExternalId);

@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Cognite.Extractor.Common;
 using Cognite.Extractor.Utils;
 using Cognite.OpcUa.Config;
+using Cognite.OpcUa.Pushers.Writers.Dtos;
 using Cognite.OpcUa.Pushers.Writers.Interfaces;
 using CogniteSdk;
 using Microsoft.Extensions.Logging;
@@ -14,13 +15,11 @@ namespace Cognite.OpcUa.Pushers.Writers
     public class RelationshipsWriter : IRelationshipsWriter
     {
         private readonly ILogger<RelationshipsWriter> log;
-        private FullConfig config;
+        private readonly FullConfig config;
         private readonly CogniteDestination destination;
-        private readonly CancellationToken token;
 
         public RelationshipsWriter(
             ILogger<RelationshipsWriter> logger,
-            CancellationToken token,
             CogniteDestination destination,
             FullConfig config
         )
@@ -28,24 +27,19 @@ namespace Cognite.OpcUa.Pushers.Writers
             this.log = logger;
             this.config = config;
             this.destination = destination;
-            this.token = token;
         }
 
-        public async Task PushReferences(
-            IEnumerable<RelationshipCreate> relationships,
-            BrowseReport report
-        )
+        public async Task<Result> PushReferences(IEnumerable<RelationshipCreate> relationships, CancellationToken token)
         {
+            var result = new Result{ Created = 0, Updated = 0 };
             var counts = await Task.WhenAll(
                 relationships.ChunkBy(1000).Select(chunk => PushReferencesChunk(chunk, token))
             );
-            report.RelationshipsCreated += counts.Sum();
+            result.Created += counts.Sum();
+            return result;
         }
 
-        private async Task<int> PushReferencesChunk(
-            IEnumerable<RelationshipCreate> relationships,
-            CancellationToken token
-        )
+        private async Task<int> PushReferencesChunk(IEnumerable<RelationshipCreate> relationships, CancellationToken token)
         {
             if (!relationships.Any())
                 return 0;

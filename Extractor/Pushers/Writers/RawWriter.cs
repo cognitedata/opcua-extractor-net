@@ -234,7 +234,8 @@ namespace Cognite.OpcUa.Pushers.Writers
         public async Task<Result> PushReferences(
             string database,
             string table,
-            IEnumerable<RelationshipCreate> relationships
+            IEnumerable<RelationshipCreate> relationships,
+            CancellationToken token
         )
         {
             var result = new Result { Created = 0, Updated = 0 };

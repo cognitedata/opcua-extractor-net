@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.Pushers.Writers.Dtos;
@@ -32,7 +33,8 @@ namespace Cognite.OpcUa.Pushers.Writers.Interfaces
         Task<Result> PushReferences(
             string database,
             string table,
-            IEnumerable<RelationshipCreate> relationships
+            IEnumerable<RelationshipCreate> relationships,
+            CancellationToken token
         );
     }
 }
