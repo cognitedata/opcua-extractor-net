@@ -4,22 +4,25 @@ namespace Cognite.OpcUa.Pushers.Writers
 {
     public class CDFWriter : ICDFWriter
     {
-        public IRawWriter raw { get; }
-        public ITimeseriesWriter timeseries { get; }
-        public IAssetsWriter assets { get; }
-        public IRelationshipsWriter relationships{ get; }
+        public IRawWriter Raw { get; }
+        public ITimeseriesWriter Timeseries { get; }
+        public IAssetsWriter Assets { get; }
+        public IRelationshipsWriter Relationships{ get; }
+        public ITimeseriesWriter MinimalTimeseries { get; }
 
         public CDFWriter(
             IRawWriter rawWriter,
             ITimeseriesWriter timeseriesWriter,
             IAssetsWriter assetsWriter,
-            IRelationshipsWriter relationshipsWriter
+            IRelationshipsWriter relationshipsWriter,
+            ITimeseriesWriter minimalTimeSeriesWriter
         )
         {
-            this.raw = rawWriter;
-            this.timeseries = timeseriesWriter;
-            this.assets = assetsWriter;
-            this.relationships = relationshipsWriter;
+            this.Raw = rawWriter;
+            this.Timeseries = timeseriesWriter;
+            this.Assets = assetsWriter;
+            this.Relationships = relationshipsWriter;
+            this.MinimalTimeseries = minimalTimeSeriesWriter;
         }
     }
 }

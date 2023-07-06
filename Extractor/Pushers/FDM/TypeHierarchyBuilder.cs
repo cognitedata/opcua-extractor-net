@@ -1,14 +1,7 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net;
-using System.Text.RegularExpressions;
-using System.Threading;
-using System.Threading.Tasks;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Pushers.FDM.Types;
-using Cognite.OpcUa.TypeCollectors;
-using Cognite.OpcUa.Types;
 using CogniteSdk.Beta.DataModels;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
@@ -230,9 +223,9 @@ namespace Cognite.OpcUa.Pushers.FDM
         {
             this.log = log;
             this.config = config;
-            nodeTypes = new NodeTypeCollector(log, config);
-            space = config.Cognite!.FlexibleDataModels!.Space!;
-            fdmConfig = config.Cognite.FlexibleDataModels!;
+            nodeTypes = new NodeTypeCollector(log);
+            space = config.Cognite!.MetadataTargets!.FlexibleDataModels!.Space!;
+            fdmConfig = config.Cognite!.MetadataTargets!.FlexibleDataModels!;
             this.converter = converter;
         }
 

@@ -1,6 +1,5 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
-using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.Pushers.FDM.Types;
 using Cognite.OpcUa.Types;
@@ -14,12 +13,10 @@ namespace Cognite.OpcUa.Pushers.FDM
         private readonly ILogger log;
         public Dictionary<NodeId, FullUANodeType> Types { get; }
         private readonly Dictionary<NodeId, ChildNode> properties;
-        private readonly FullConfig config;
         private readonly HashSet<NodeId> visitedIds = new();
-        public NodeTypeCollector(ILogger log, FullConfig config)
+        public NodeTypeCollector(ILogger log)
         {
             this.log = log;
-            this.config = config;
             Types = new();
             properties = new();
         }

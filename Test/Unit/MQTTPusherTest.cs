@@ -318,8 +318,8 @@ namespace Test.Unit
             var waitTask = bridge.WaitForNextMessage();
             Assert.True((await pusher.PushNodes(new[] { node }, tss, rels, update, tester.Source.Token)).Objects);
             await waitTask;
-            Assert.Single(handler.AssetRaw);
-            Assert.Equal("BaseRoot", handler.AssetRaw.First().Value.GetProperty("name").GetString());
+            Assert.Single(handler.AssetsRaw);
+            Assert.Equal("BaseRoot", handler.AssetsRaw.First().Value.GetProperty("name").GetString());
 
             // Create another, do not overwrite the existing one, due to no update settings
             var node2 = new UAObject(tester.Server.Ids.Custom.Root, "CustomRoot", null, null, NodeId.Null, null);
@@ -327,17 +327,17 @@ namespace Test.Unit
             waitTask = bridge.WaitForNextMessage();
             Assert.True((await pusher.PushNodes(new[] { node, node2 }, tss, rels, update, tester.Source.Token)).Objects);
             await waitTask;
-            Assert.Equal(2, handler.AssetRaw.Count);
-            Assert.Null(handler.AssetRaw.First().Value.GetProperty("description").GetString());
-            Assert.Null(handler.AssetRaw.Last().Value.GetProperty("description").GetString());
+            Assert.Equal(2, handler.AssetsRaw.Count);
+            Assert.Null(handler.AssetsRaw.First().Value.GetProperty("description").GetString());
+            Assert.Null(handler.AssetsRaw.Last().Value.GetProperty("description").GetString());
 
             // Try to create again, skip both
             waitTask = bridge.WaitForNextMessage(1);
             Assert.True((await pusher.PushNodes(new[] { node, node2 }, tss, rels, update, tester.Source.Token)).Objects);
             await Assert.ThrowsAsync<TimeoutException>(() => waitTask);
-            Assert.Equal(2, handler.AssetRaw.Count);
-            Assert.Null(handler.AssetRaw.First().Value.GetProperty("description").GetString());
-            Assert.Null(handler.AssetRaw.Last().Value.GetProperty("description").GetString());
+            Assert.Equal(2, handler.AssetsRaw.Count);
+            Assert.Null(handler.AssetsRaw.First().Value.GetProperty("description").GetString());
+            Assert.Null(handler.AssetsRaw.Last().Value.GetProperty("description").GetString());
 
             // Update due to update settings
             update.Objects.Description = true;
@@ -345,9 +345,9 @@ namespace Test.Unit
             waitTask = bridge.WaitForNextMessage();
             Assert.True((await pusher.PushNodes(new[] { node, node2 }, tss, rels, update, tester.Source.Token)).Objects);
             await waitTask;
-            Assert.Equal(2, handler.AssetRaw.Count);
-            Assert.Equal("description", handler.AssetRaw.First().Value.GetProperty("description").GetString());
-            Assert.Equal("description", handler.AssetRaw.Last().Value.GetProperty("description").GetString());
+            Assert.Equal(2, handler.AssetsRaw.Count);
+            Assert.Equal("description", handler.AssetsRaw.First().Value.GetProperty("description").GetString());
+            Assert.Equal("description", handler.AssetsRaw.Last().Value.GetProperty("description").GetString());
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_node_ensure_failures_mqtt", 0));
         }

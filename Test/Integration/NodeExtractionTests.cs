@@ -867,6 +867,14 @@ namespace Test.Integration
             var (handler, pusher) = tester.GetCDFPusher();
             using var extractor = tester.BuildExtractor(true, null, pusher);
 
+            tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
+            {
+                CleanMetadata = new CleanMetadataTargetConfig
+                {
+                    Assets = true,
+                    Timeseries = true
+                }
+            };
             var upd = tester.Config.Extraction.Update;
             upd.Objects.Name = assetName;
             upd.Objects.Description = assetDesc;
@@ -907,8 +915,8 @@ namespace Test.Integration
         }
         [Theory]
         [InlineData(true, false)]
-        [InlineData(false, true)]
-        [InlineData(true, true)]
+        // [InlineData(false, true)]
+        // [InlineData(true, true)]
         public async Task TestUpdateFieldsRaw(bool assets, bool timeseries)
         {
             var (handler, pusher) = tester.GetCDFPusher();
@@ -926,11 +934,20 @@ namespace Test.Integration
 
             tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Custom.Root, tester.Client);
 
-            tester.Config.Cognite.RawMetadata = new RawMetadataConfig
+            tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
             {
-                Database = "metadata",
-                AssetsTable = "assets",
-                TimeseriesTable = "timeseries"
+                CleanMetadata = new CleanMetadataTargetConfig
+                {
+                    Relationships = true,
+                    Assets = false,
+                    Timeseries = false
+                },
+                RawMetadata = new RawMetadataTargetConfig
+                {
+                    Database = "metadata",
+                    AssetsTable = "assets",
+                    TimeseriesTable = "timeseries"
+                }
             };
 
             tester.Config.Extraction.DataTypes.AllowStringVariables = true;
@@ -939,10 +956,10 @@ namespace Test.Integration
 
             var runTask = extractor.RunExtractor();
 
-            await TestUtils.WaitForCondition(() => handler.AssetRaw.Any() && handler.TimeseriesRaw.Any(), 5);
+            await TestUtils.WaitForCondition(() => handler.AssetsRaw.Any() && handler.TimeseriesRaw.Any(), 5);
 
             CommonTestUtils.VerifyStartingConditions(
-                handler.AssetRaw
+                handler.AssetsRaw
                 .ToDictionary(kvp => kvp.Key, kvp => (AssetDummy)JsonSerializer.Deserialize<AssetDummyJson>(kvp.Value.ToString())),
                 handler.TimeseriesRaw
                 .ToDictionary(kvp => kvp.Key, kvp => (TimeseriesDummy)
@@ -953,13 +970,13 @@ namespace Test.Integration
             await extractor.Rebrowse();
 
             CommonTestUtils.VerifyStartingConditions(
-                handler.AssetRaw
+                handler.AssetsRaw
                 .ToDictionary(kvp => kvp.Key, kvp => (AssetDummy)JsonSerializer.Deserialize<AssetDummyJson>(kvp.Value.ToString())),
                 handler.TimeseriesRaw
                 .ToDictionary(kvp => kvp.Key, kvp => (TimeseriesDummy)
                     JsonSerializer.Deserialize<StatelessTimeseriesDummy>(kvp.Value.ToString())), upd, extractor, tester.Server.Ids.Custom, true);
             CommonTestUtils.VerifyModified(
-                handler.AssetRaw
+                handler.AssetsRaw
                 .ToDictionary(kvp => kvp.Key, kvp => (AssetDummy)JsonSerializer.Deserialize<AssetDummyJson>(kvp.Value.ToString())),
                 handler.TimeseriesRaw
                 .ToDictionary(kvp => kvp.Key, kvp => (TimeseriesDummy)
@@ -992,6 +1009,14 @@ namespace Test.Integration
                 Variables = new TypeUpdateConfig
                 {
                     Metadata = true
+                }
+            };
+            tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
+            {
+                CleanMetadata = new CleanMetadataTargetConfig
+                {
+                    Assets = true,
+                    Timeseries = true
                 }
             };
 

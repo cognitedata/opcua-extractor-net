@@ -16,11 +16,7 @@ namespace Cognite.OpcUa.Pushers.Writers
                 var dest = provider.GetRequiredService<CogniteDestination>();
                 var config = provider.GetRequiredService<FullConfig>();
                 return new CDFWriter(
-                    new RawWriter(
-                        provider.GetRequiredService<ILogger<RawWriter>>(),
-                        dest,
-                        config
-                    ),
+                    new RawWriter(provider.GetRequiredService<ILogger<RawWriter>>(), dest, config),
                     new TimeseriesWriter(
                         provider.GetRequiredService<ILogger<TimeseriesWriter>>(),
                         dest,
@@ -33,6 +29,11 @@ namespace Cognite.OpcUa.Pushers.Writers
                     ),
                     new RelationshipsWriter(
                         provider.GetRequiredService<ILogger<RelationshipsWriter>>(),
+                        dest,
+                        config
+                    ),
+                    new MinimalTimeseriesWriter(
+                        provider.GetRequiredService<ILogger<MinimalTimeseriesWriter>>(),
                         dest,
                         config
                     )

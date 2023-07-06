@@ -277,6 +277,13 @@ namespace Test.Unit
             using var extractor = tester.BuildExtractor(true, null, pusher);
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_cdf");
             tester.Config.Cognite.RawMetadata = null;
+            tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
+            {
+                CleanMetadata = new CleanMetadataTargetConfig
+                {
+                    Assets = true
+                }
+            };
 
             var rels = Enumerable.Empty<UAReference>();
             var tss = Enumerable.Empty<UAVariable>();
@@ -342,28 +349,43 @@ namespace Test.Unit
                 AssetsTable = "assets",
                 Database = "metadata"
             };
+            tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
+            {
+                CleanMetadata = new CleanMetadataTargetConfig
+                {
+                    Relationships = true,
+                    Assets = false,
+                    Timeseries = true
+                },
+                RawMetadata = new RawMetadataTargetConfig
+                {
+                    Database = "metadata",
+                    AssetsTable = "assets"
+                }
+            };
+
             var node = new UAObject(tester.Server.Ids.Base.Root, "BaseRoot", null, null, NodeId.Null, null);
             var rels = Enumerable.Empty<UAReference>();
             var tss = Enumerable.Empty<UAVariable>();
             var update = new UpdateConfig();
             // Fail to create
             handler.FailedRoutes.Add("/raw/dbs/metadata/tables/assets/rows");
-            Assert.False((await pusher.PushNodes(new[] { node }, tss, rels, update, tester.Source.Token)).Objects);
-            Assert.Empty(handler.AssetRaw);
+            Assert.False((await pusher.PushNodes(new[] { node }, tss, rels, update, tester.Source.Token)).RawObjects);
+            Assert.Empty(handler.AssetsRaw);
 
             // Create one
             handler.FailedRoutes.Clear();
             Assert.True((await pusher.PushNodes(new[] { node }, tss, rels, update, tester.Source.Token)).Objects);
-            Assert.Single(handler.AssetRaw);
-            Assert.Equal("BaseRoot", handler.AssetRaw.First().Value.GetProperty("name").GetString());
+            Assert.Single(handler.AssetsRaw);
+            Assert.Equal("BaseRoot", handler.AssetsRaw.First().Value.GetProperty("name").GetString());
 
             // Create another, do not overwrite the existing one, due to no update settings
             var node2 = new UAObject(tester.Server.Ids.Custom.Root, "CustomRoot", null, null, NodeId.Null, null);
             node.Attributes.Description = "description";
             Assert.True((await pusher.PushNodes(new[] { node, node2 }, tss, rels, update, tester.Source.Token)).Objects);
-            Assert.Equal(2, handler.AssetRaw.Count);
-            Assert.Null(handler.AssetRaw.First().Value.GetProperty("description").GetString());
-            Assert.Null(handler.AssetRaw.Last().Value.GetProperty("description").GetString());
+            Assert.Equal(2, handler.AssetsRaw.Count);
+            Assert.Null(handler.AssetsRaw.First().Value.GetProperty("description").GetString());
+            Assert.Null(handler.AssetsRaw.Last().Value.GetProperty("description").GetString());
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_node_ensure_failures_cdf", 1));
         }
@@ -378,6 +400,21 @@ namespace Test.Unit
                 AssetsTable = "assets",
                 Database = "metadata"
             };
+            tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
+            {
+                CleanMetadata = new CleanMetadataTargetConfig
+                {
+                    Relationships = true,
+                    Assets = false,
+                    Timeseries = true
+                },
+                RawMetadata = new RawMetadataTargetConfig
+                {
+                    Database = "metadata",
+                    AssetsTable = "assets",
+                    TimeseriesTable = "timeseries"
+                }
+            };
             var node = new UAObject(tester.Server.Ids.Base.Root, "BaseRoot", null, null, NodeId.Null, null);
             var rels = Enumerable.Empty<UAReference>();
             var tss = Enumerable.Empty<UAVariable>();
@@ -389,21 +426,21 @@ namespace Test.Unit
 
             // Fail to upsert
             handler.FailedRoutes.Add("/raw/dbs/metadata/tables/assets/rows");
-            Assert.False((await pusher.PushNodes(new[] { node }, tss, rels, update, tester.Source.Token)).Objects);
-            Assert.Empty(handler.AssetRaw);
+            Assert.False((await pusher.PushNodes(new[] { node }, tss, rels, update, tester.Source.Token)).RawObjects);
+            Assert.Empty(handler.AssetsRaw);
 
             // Create one
             handler.FailedRoutes.Clear();
-            Assert.True((await pusher.PushNodes(new[] { node }, tss, rels, update, tester.Source.Token)).Objects);
-            Assert.Single(handler.AssetRaw);
-            Assert.Equal("BaseRoot", handler.AssetRaw.First().Value.GetProperty("name").GetString());
+            Assert.True((await pusher.PushNodes(new[] { node }, tss, rels, update, tester.Source.Token)).RawObjects);
+            Assert.Single(handler.AssetsRaw);
+            Assert.Equal("BaseRoot", handler.AssetsRaw.First().Value.GetProperty("name").GetString());
 
             // Create another, overwrite the existing one
             var node2 = new UAObject(tester.Server.Ids.Custom.Root, "CustomRoot", null, null, NodeId.Null, null);
             node.Attributes.Description = "description";
-            Assert.True((await pusher.PushNodes(new[] { node, node2 }, tss, rels, update, tester.Source.Token)).Objects);
-            Assert.Equal(2, handler.AssetRaw.Count);
-            Assert.Single(handler.AssetRaw, asset => asset.Value.GetProperty("description").GetString() == "description");
+            Assert.True((await pusher.PushNodes(new[] { node, node2 }, tss, rels, update, tester.Source.Token)).RawObjects);
+            Assert.Equal(2, handler.AssetsRaw.Count);
+            Assert.Single(handler.AssetsRaw, asset => asset.Value.GetProperty("description").GetString() == "description");
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_node_ensure_failures_cdf", 1));
         }
@@ -413,6 +450,15 @@ namespace Test.Unit
             using var extractor = tester.BuildExtractor(true, null, pusher);
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_cdf");
             tester.Config.Cognite.RawMetadata = null;
+            tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
+            {
+                CleanMetadata = new CleanMetadataTargetConfig
+                {
+                    Relationships = true,
+                    Assets = false,
+                    Timeseries = true
+                },
+            };
 
             var dt = new UADataType(DataTypeIds.Double);
 
@@ -489,6 +535,21 @@ namespace Test.Unit
                 TimeseriesTable = "timeseries",
                 Database = "metadata"
             };
+            tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
+            {
+                CleanMetadata = new CleanMetadataTargetConfig
+                {
+                    Relationships = true,
+                    Assets = false,
+                    Timeseries = false
+                },
+                RawMetadata = new RawMetadataTargetConfig
+                {
+                    Database = "metadata",
+                    AssetsTable = "assets",
+                    TimeseriesTable = "timeseries"
+                }
+            };
 
             var dt = new UADataType(DataTypeIds.Double);
 
@@ -500,12 +561,12 @@ namespace Test.Unit
 
             // Fail to create
             handler.FailedRoutes.Add("/raw/dbs/metadata/tables/timeseries/rows");
-            Assert.False((await pusher.PushNodes(assets, new[] { node }, rels, update, tester.Source.Token)).Variables);
+            Assert.False((await pusher.PushNodes(assets, new[] { node }, rels, update, tester.Source.Token)).RawVariables);
             Assert.Empty(handler.TimeseriesRaw);
 
             // Create one
             handler.FailedRoutes.Clear();
-            Assert.True((await pusher.PushNodes(assets, new[] { node }, rels, update, tester.Source.Token)).Variables);
+            Assert.True((await pusher.PushNodes(assets, new[] { node }, rels, update, tester.Source.Token)).RawVariables);
             Assert.Single(handler.TimeseriesRaw);
             Assert.Equal("Variable 1", handler.TimeseriesRaw.First().Value.GetProperty("name").GetString());
 
@@ -513,7 +574,7 @@ namespace Test.Unit
             var node2 = new UAVariable(tester.Server.Ids.Custom.MysteryVar, "MysteryVar", null, null, new NodeId("parent"), null);
             node2.FullAttributes.DataType = dt;
             node.Attributes.Description = "description";
-            Assert.True((await pusher.PushNodes(assets, new[] { node, node2 }, rels, update, tester.Source.Token)).Variables);
+            Assert.True((await pusher.PushNodes(assets, new[] { node, node2 }, rels, update, tester.Source.Token)).RawVariables);
             Assert.Equal(2, handler.TimeseriesRaw.Count);
             Assert.Null(handler.TimeseriesRaw.First().Value.GetProperty("description").GetString());
             Assert.Null(handler.TimeseriesRaw.Last().Value.GetProperty("description").GetString());
@@ -530,6 +591,21 @@ namespace Test.Unit
             {
                 TimeseriesTable = "timeseries",
                 Database = "metadata"
+            };
+            tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
+            {
+                CleanMetadata = new CleanMetadataTargetConfig
+                {
+                    Relationships = true,
+                    Assets = false,
+                    Timeseries = false
+                },
+                RawMetadata = new RawMetadataTargetConfig
+                {
+                    Database = "metadata",
+                    AssetsTable = "assets",
+                    TimeseriesTable = "timeseries"
+                }
             };
 
             var dt = new UADataType(DataTypeIds.Double);
@@ -551,12 +627,12 @@ namespace Test.Unit
 
             // Fail to upsert
             handler.FailedRoutes.Add("/raw/dbs/metadata/tables/timeseries/rows");
-            Assert.False((await pusher.PushNodes(assets, new[] { node }, rels, update, tester.Source.Token)).Variables);
+            Assert.False((await pusher.PushNodes(assets, new[] { node }, rels, update, tester.Source.Token)).RawVariables);
             Assert.Empty(handler.TimeseriesRaw);
 
             // Create one
             handler.FailedRoutes.Clear();
-            Assert.True((await pusher.PushNodes(assets, new[] { node }, rels, update, tester.Source.Token)).Variables);
+            Assert.True((await pusher.PushNodes(assets, new[] { node }, rels, update, tester.Source.Token)).RawVariables);
             Assert.Single(handler.TimeseriesRaw);
             Assert.Equal("Variable 1", handler.TimeseriesRaw.First().Value.GetProperty("name").GetString());
 
@@ -584,6 +660,16 @@ namespace Test.Unit
             using var extractor = tester.BuildExtractor(true, null, pusher);
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_cdf");
             tester.Config.Cognite.RawMetadata = null;
+            tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
+            {
+                CleanMetadata = new CleanMetadataTargetConfig
+                {
+                    Relationships = true,
+                    Assets = true,
+                    Timeseries = true
+                },
+            };
+
 
             var dt = new UADataType(DataTypes.Double);
 
@@ -676,6 +762,20 @@ namespace Test.Unit
                 AssetsTable = "assets",
                 Database = "metadata"
             };
+            tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
+            {
+                CleanMetadata = new CleanMetadataTargetConfig
+                {
+                    Timeseries = false,
+                },
+                RawMetadata = new RawMetadataTargetConfig
+                {
+                    Database = "metadata",
+                    AssetsTable = "assets",
+                    TimeseriesTable = "timeseries",
+                    RelationshipsTable = "relationships"
+                }
+            };
 
             (handler, pusher) = tester.GetCDFPusher();
             using var extractor = tester.BuildExtractor(true, null, pusher);
@@ -711,9 +811,9 @@ namespace Test.Unit
 
             Assert.Equal(2, handler.Callbacks.Count);
             res = handler.Callbacks[1];
-            Assert.Equal(1, res.AssetsCreated);
+            Assert.Equal(1, res.RawAssetsCreated);
             Assert.Equal(0, res.AssetsUpdated);
-            Assert.Equal(1, res.TimeSeriesCreated);
+            Assert.Equal(1, res.RawTimeseriesCreated);
             Assert.Equal(1, res.MinimalTimeSeriesCreated);
             Assert.Equal(0, res.TimeSeriesUpdated);
             Assert.Equal(1, res.RelationshipsCreated);
@@ -863,6 +963,14 @@ namespace Test.Unit
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_cdf");
 
             tester.Config.Extraction.Relationships.Enabled = true;
+            tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
+            {
+                CleanMetadata = new CleanMetadataTargetConfig
+                {
+                    Assets = false,
+                    Timeseries = false
+                }
+            };
 
             var assets = Enumerable.Empty<BaseUANode>();
             var tss = Enumerable.Empty<UAVariable>();
@@ -921,10 +1029,13 @@ namespace Test.Unit
             using var extractor = tester.BuildExtractor(true, null, pusher);
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_cdf");
 
-            tester.Config.Cognite.RawMetadata = new RawMetadataConfig
+            tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
             {
-                RelationshipsTable = "relationships",
-                Database = "metadata"
+                RawMetadata = new RawMetadataTargetConfig
+                {
+                    RelationshipsTable = "relationships",
+                    Database = "metadata"
+                }
             };
             tester.Config.Extraction.Relationships.Enabled = true;
 
@@ -943,12 +1054,12 @@ namespace Test.Unit
             };
             await extractor.TypeManager.LoadTypeData(tester.Source.Token);
             handler.FailedRoutes.Add("/raw/dbs/metadata/tables/relationships/rows");
-            Assert.False((await pusher.PushNodes(assets, tss, references, update, tester.Source.Token)).References);
+            Assert.False((await pusher.PushNodes(assets, tss, references, update, tester.Source.Token)).RawReferences);
             Assert.Empty(handler.RelationshipsRaw);
 
             // Push successful
             handler.FailedRoutes.Clear();
-            Assert.True((await pusher.PushNodes(assets, tss, references, update, tester.Source.Token)).References);
+            Assert.True((await pusher.PushNodes(assets, tss, references, update, tester.Source.Token)).RawReferences);
             Assert.Equal(2, handler.RelationshipsRaw.Count);
 
             // Push again, with duplicates
@@ -997,7 +1108,7 @@ namespace Test.Unit
             }
             else
             {
-                handler.AssetRaw[id] = val;
+                handler.AssetsRaw[id] = val;
             }
         }
 
@@ -1117,11 +1228,14 @@ namespace Test.Unit
                 Database = "metadata",
                 Enable = true
             };
-            tester.Config.Cognite.RawMetadata = new RawMetadataConfig
+            tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
             {
-                AssetsTable = "assets",
-                TimeseriesTable = "timeseries",
-                Database = "metadata"
+                RawMetadata = new RawMetadataTargetConfig
+                {
+                    AssetsTable = "assets",
+                    TimeseriesTable = "timeseries",
+                    Database = "metadata"
+                }
             };
             tester.Config.Extraction.DataTypes.ExpandNodeIds = true;
             tester.Config.Extraction.DataTypes.AppendInternalValues = true;
@@ -1140,7 +1254,7 @@ namespace Test.Unit
             tester.Config.Cognite.RawNodeBuffer.BrowseOnEmpty = true;
             await extractor.RunExtractor(true);
             Assert.True(extractor.State.NodeStates.Any());
-            Assert.True(handler.AssetRaw.Any());
+            Assert.True(handler.AssetsRaw.Any());
             Assert.True(handler.TimeseriesRaw.Any());
             Assert.True(handler.Timeseries.Any());
             Assert.Empty(handler.Assets);
@@ -1152,7 +1266,7 @@ namespace Test.Unit
 
             // Now there is something in CDF, read it back
             tester.Config.Cognite.RawNodeBuffer.BrowseOnEmpty = false;
-            string oldAssets = System.Text.Json.JsonSerializer.Serialize(handler.AssetRaw);
+            string oldAssets = System.Text.Json.JsonSerializer.Serialize(handler.AssetsRaw);
             string oldTimeseries = System.Text.Json.JsonSerializer.Serialize(handler.TimeseriesRaw);
             handler.Timeseries.Clear();
             extractor.GetType().GetField("subscribed", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(extractor, 0);
@@ -1160,7 +1274,7 @@ namespace Test.Unit
             await extractor.RunExtractor(true);
             Assert.True(extractor.State.NodeStates.Any());
 
-            string newAssets = System.Text.Json.JsonSerializer.Serialize(handler.AssetRaw);
+            string newAssets = System.Text.Json.JsonSerializer.Serialize(handler.AssetsRaw);
             string newTimeseries = System.Text.Json.JsonSerializer.Serialize(handler.TimeseriesRaw);
 
             // Ensure data in raw is untouched.
@@ -1192,11 +1306,14 @@ namespace Test.Unit
                 Database = "metadata",
                 Enable = true
             };
-            tester.Config.Cognite.RawMetadata = new RawMetadataConfig
+            tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
             {
-                AssetsTable = "assets",
-                TimeseriesTable = "timeseries",
-                Database = "metadata"
+                RawMetadata = new RawMetadataTargetConfig
+                {
+                    AssetsTable = "assets",
+                    TimeseriesTable = "timeseries",
+                    Database = "metadata"
+                }
             };
             tester.Config.Extraction.DataTypes.ExpandNodeIds = true;
             tester.Config.Extraction.DataTypes.AppendInternalValues = true;
@@ -1214,7 +1331,7 @@ namespace Test.Unit
             tester.Config.Cognite.RawNodeBuffer.BrowseOnEmpty = true;
             await extractor.RunExtractor(true);
             Assert.True(extractor.State.NodeStates.Any());
-            Assert.True(handler.AssetRaw.Any());
+            Assert.True(handler.AssetsRaw.Any());
             Assert.True(handler.TimeseriesRaw.Any());
             Assert.True(handler.Timeseries.Any());
             Assert.Empty(handler.Assets);
@@ -1226,7 +1343,7 @@ namespace Test.Unit
 
             // Now there is something in CDF, read it back
             tester.Config.Cognite.RawNodeBuffer.BrowseOnEmpty = false;
-            string oldAssets = System.Text.Json.JsonSerializer.Serialize(handler.AssetRaw);
+            string oldAssets = System.Text.Json.JsonSerializer.Serialize(handler.AssetsRaw);
             string oldTimeseries = System.Text.Json.JsonSerializer.Serialize(handler.TimeseriesRaw);
             handler.Timeseries.Clear();
             extractor.GetType().GetField("subscribed", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(extractor, 0);
@@ -1234,7 +1351,7 @@ namespace Test.Unit
             await extractor.RunExtractor(true);
             Assert.True(extractor.State.NodeStates.Any());
 
-            string newAssets = System.Text.Json.JsonSerializer.Serialize(handler.AssetRaw);
+            string newAssets = System.Text.Json.JsonSerializer.Serialize(handler.AssetsRaw);
             string newTimeseries = System.Text.Json.JsonSerializer.Serialize(handler.TimeseriesRaw);
 
             // Ensure data in raw is untouched.
@@ -1264,11 +1381,19 @@ namespace Test.Unit
                 Database = "metadata",
                 Enable = true
             };
-            tester.Config.Cognite.RawMetadata = new RawMetadataConfig
+            tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
             {
-                AssetsTable = "assets",
-                TimeseriesTable = "timeseries",
-                Database = "metadata"
+                CleanMetadata = new CleanMetadataTargetConfig
+                {
+                    Relationships = true,
+                    Assets = false,
+                },
+                RawMetadata = new RawMetadataTargetConfig
+                {
+                    Database = "metadata",
+                    TimeseriesTable = "timeseries",
+                    AssetsTable = "assets"
+                }
             };
             tester.Config.Extraction.DataTypes.ExpandNodeIds = true;
             tester.Config.Extraction.DataTypes.AppendInternalValues = true;
@@ -1284,7 +1409,7 @@ namespace Test.Unit
             tester.Config.Cognite.RawNodeBuffer.BrowseOnEmpty = true;
             await extractor.RunExtractor(true);
             Assert.True(extractor.State.NodeStates.Any());
-            Assert.True(handler.AssetRaw.Any());
+            Assert.True(handler.AssetsRaw.Any());
             Assert.True(handler.TimeseriesRaw.Any());
             Assert.True(handler.Timeseries.Any());
             Assert.Empty(handler.Assets);

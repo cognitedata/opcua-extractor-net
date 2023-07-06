@@ -115,6 +115,8 @@ namespace Cognite.OpcUa.Config
         /// Configuration for writing to a custom OPC-UA flexible data model.
         /// </summary>
         public FdmDestinationConfig? FlexibleDataModels { get; set; }
+
+        public MetadataTargetsConfig? MetadataTargets { get; set; }
     }
     public class RawMetadataConfig
     {
@@ -135,6 +137,25 @@ namespace Cognite.OpcUa.Config
         /// Table to store relationships in
         /// </summary>
         public string? RelationshipsTable { get; set; }
+    }
+    public class MetadataTargetsConfig 
+    {
+        public RawMetadataTargetConfig? RawMetadata { get; set; }
+        public CleanMetadataTargetConfig? CleanMetadata { get; set; }
+        public FdmDestinationConfig? FlexibleDataModels { get; set; }
+    }
+    public class RawMetadataTargetConfig
+    {
+        public string? Database { get; set; }
+        public string? AssetsTable { get; set; }
+        public string? TimeseriesTable { get; set; }
+        public string? RelationshipsTable { get; set; }
+    }
+    public class CleanMetadataTargetConfig
+    {
+        public bool Assets { get; set; } = true;
+        public bool Timeseries { get; set; } = true;
+        public bool Relationships { get; set; } = true;
     }
     public class MetadataMapConfig
     {

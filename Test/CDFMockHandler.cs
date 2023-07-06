@@ -49,7 +49,7 @@ namespace Test
         public Dictionary<string, (List<NumericDatapoint> NumericDatapoints, List<StringDatapoint> StringDatapoints)> Datapoints { get; } =
             new Dictionary<string, (List<NumericDatapoint> NumericDatapoints, List<StringDatapoint> StringDatapoints)>();
 
-        public Dictionary<string, JsonElement> AssetRaw { get; } = new Dictionary<string, JsonElement>();
+        public Dictionary<string, JsonElement> AssetsRaw { get; } = new Dictionary<string, JsonElement>();
         public Dictionary<string, JsonElement> TimeseriesRaw { get; } = new Dictionary<string, JsonElement>();
         public Dictionary<string, RelationshipDummy> Relationships { get; } = new Dictionary<string, RelationshipDummy>();
         public Dictionary<string, RelationshipDummy> RelationshipsRaw { get; } = new Dictionary<string, RelationshipDummy>();
@@ -726,7 +726,7 @@ namespace Test
         {
             var data = new RawListWrapper<JsonElement>
             {
-                items = AssetRaw.Select(kvp => new RawWrapper<JsonElement> { columns = kvp.Value, key = kvp.Key, lastUpdatedTime = 0 })
+                items = AssetsRaw.Select(kvp => new RawWrapper<JsonElement> { columns = kvp.Value, key = kvp.Key, lastUpdatedTime = 0 })
             };
             var content = System.Text.Json.JsonSerializer.Serialize(data);
             return new HttpResponseMessage(HttpStatusCode.OK)
@@ -764,7 +764,7 @@ namespace Test
             var toCreate = System.Text.Json.JsonSerializer.Deserialize<RawListWrapper<JsonElement>>(content);
             foreach (var item in toCreate.items)
             {
-                AssetRaw[item.key] = item.columns;
+                AssetsRaw[item.key] = item.columns;
             }
 
             return new HttpResponseMessage(HttpStatusCode.OK)

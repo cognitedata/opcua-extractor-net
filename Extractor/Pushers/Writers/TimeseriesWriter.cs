@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -22,9 +21,7 @@ namespace Cognite.OpcUa.Pushers.Writers
         private ILogger<TimeseriesWriter> log;
         private readonly FullConfig config;
         private readonly CogniteDestination destination;
-        private bool pushCleanTimeseries =>
-            string.IsNullOrWhiteSpace(config.Cognite?.RawMetadata?.Database)
-            && string.IsNullOrWhiteSpace(config.Cognite?.RawMetadata?.TimeseriesTable);
+        protected virtual bool createMinimalTimeseries => !(config.Cognite?.MetadataTargets?.CleanMetadata?.Timeseries ?? false);
 
         public TimeseriesWriter(ILogger<TimeseriesWriter> logger, CogniteDestination destination, FullConfig config) 
         {
@@ -33,9 +30,9 @@ namespace Cognite.OpcUa.Pushers.Writers
             this.destination = destination;
         }
 
-        public async Task<Result> PushVariables(
+        public virtual async Task<Result> PushVariables(
             UAExtractor extractor,
-            ConcurrentDictionary<string, UAVariable> timeseriesMap,
+            IDictionary<string, UAVariable> timeseriesMap,
             IDictionary<NodeId, long> nodeToAssetIds,
             HashSet<string> mismatchedTimeseries,
             TypeUpdateConfig update,
@@ -43,14 +40,13 @@ namespace Cognite.OpcUa.Pushers.Writers
         )
         {
             var result = new Result { Created = 0, Updated = 0 };
-            var skipMeta = config.Cognite?.SkipMetadata;
             var timeseries = await CreateTimeseries(
                 extractor,
                 timeseriesMap,
                 nodeToAssetIds,
                 mismatchedTimeseries,
                 result,
-                !pushCleanTimeseries || (skipMeta.HasValue ? skipMeta.Value : false),
+                createMinimalTimeseries,
                 token
             );
 
@@ -58,13 +54,13 @@ namespace Cognite.OpcUa.Pushers.Writers
                 .Where(kvp => kvp.Value.Source != NodeSource.CDF)
                 .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
 
-            if (update.AnyUpdate && toPushMeta.Any() && pushCleanTimeseries)
+            if (update.AnyUpdate && toPushMeta.Any())
             {
                 await UpdateTimeseries(extractor, toPushMeta, timeseries, nodeToAssetIds, update, result, token);
             }
             return result;
         }
-        
+
         private async Task<IEnumerable<TimeSeries>> CreateTimeseries(
             UAExtractor extractor,
             IDictionary<string, UAVariable> tsMap,

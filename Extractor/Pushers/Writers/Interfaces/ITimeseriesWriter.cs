@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -13,7 +12,7 @@ namespace Cognite.OpcUa.Pushers.Writers.Interfaces
     {
         Task<Result> PushVariables(
             UAExtractor extractor,
-            ConcurrentDictionary<string, UAVariable> timeseriesMap,
+            IDictionary<string, UAVariable> timeseriesMap,
             IDictionary<NodeId, long> nodeToAssetIds,
             HashSet<string> mismatchedTimeseries,
             TypeUpdateConfig update,

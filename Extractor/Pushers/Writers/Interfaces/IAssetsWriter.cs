@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -13,7 +12,7 @@ namespace Cognite.OpcUa.Pushers.Writers.Interfaces
     {
         Task<Result> PushNodes(
             UAExtractor extractor,
-            ConcurrentDictionary<string, BaseUANode> assetMap,
+            IDictionary<string, BaseUANode> assetMap,
             IDictionary<NodeId, long> nodeToAssetIds,
             TypeUpdateConfig config,
             CancellationToken token

@@ -125,6 +125,45 @@ namespace Cognite.OpcUa
             {
                 return "subscriptions.keep-alive-count must be greater than 0";
             }
+            if (config.Cognite?.RawMetadata != null)
+            {
+                log.LogWarning("cognite.raw-metadata is deprecated. Use cognite.metadata-targets instead");
+                if (config.Cognite.MetadataTargets != null)
+                {
+                    return "cognite.raw-metadata and cognite.metadata-targets cannot be set at the same time.";
+                }
+                if (config.Cognite == null) config.Cognite = new CognitePusherConfig();
+                var rawMetadata = config.Cognite.RawMetadata;
+                var useCleanAssets = (rawMetadata?.Database == null || rawMetadata?.AssetsTable == null) || config.Cognite.SkipMetadata;
+                var useCleanTimeseries = rawMetadata?.Database == null || rawMetadata?.TimeseriesTable == null;
+                var useCleanRelationships = rawMetadata?.Database == null || rawMetadata?.RelationshipsTable == null;
+                config.Cognite.MetadataTargets = new MetadataTargetsConfig
+                {
+                    CleanMetadata = new CleanMetadataTargetConfig
+                    {
+                        Assets = useCleanAssets,
+                        Timeseries = useCleanTimeseries,
+                        Relationships = useCleanRelationships
+                    },
+                    RawMetadata = new RawMetadataTargetConfig
+                    {
+                        Database = rawMetadata?.Database,
+                        AssetsTable = rawMetadata?.AssetsTable,
+                        TimeseriesTable = rawMetadata?.TimeseriesTable,
+                        RelationshipsTable = rawMetadata?.RelationshipsTable
+                    }
+                };
+            }
+            if (config.Cognite?.FlexibleDataModels != null)
+            {
+                log.LogWarning("cognite.flexible-data-models is deprecated. Use cognite.metadata-targets.flexible-data-models instead");
+                
+                if (config.Cognite == null) config.Cognite = new CognitePusherConfig();
+                if (config.Cognite.MetadataTargets == null) config.Cognite.MetadataTargets = new MetadataTargetsConfig();
+                if (config.Cognite.MetadataTargets.FlexibleDataModels == null) {
+                    config.Cognite.MetadataTargets.FlexibleDataModels = config.Cognite.FlexibleDataModels;
+                }
+            }
 
             return null;
         }

@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -29,7 +28,7 @@ namespace Cognite.OpcUa.Pushers.Writers
             this.destination = destination;
         }
 
-        public async Task<Result>  PushNodes(UAExtractor extractor, ConcurrentDictionary<string, BaseUANode> nodes, IDictionary<NodeId, long> nodeToAssetIds, TypeUpdateConfig update, CancellationToken token)
+        public async Task<Result> PushNodes(UAExtractor extractor, IDictionary<string, BaseUANode> nodes, IDictionary<NodeId, long> nodeToAssetIds, TypeUpdateConfig update, CancellationToken token)
         {
             var result = new Result { Created = 0, Updated = 0 };
             var assets = await CreateAssets(extractor, nodes, nodeToAssetIds, result, token);

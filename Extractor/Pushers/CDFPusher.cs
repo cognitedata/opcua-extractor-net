@@ -74,15 +74,8 @@ namespace Cognite.OpcUa.Pushers
 
         private readonly BrowseCallback? callback;
         private readonly FDMWriter? fdmDestination;
-        private bool pushCleanAssets =>
-            string.IsNullOrWhiteSpace(config.RawMetadata?.Database)
-            && string.IsNullOrWhiteSpace(config.RawMetadata?.AssetsTable);
-        private bool pushCleanTimeseries =>
-            string.IsNullOrWhiteSpace(config.RawMetadata?.Database)
-            && string.IsNullOrWhiteSpace(config.RawMetadata?.TimeseriesTable);
-        private bool pushCleanReferences => 
-            string.IsNullOrWhiteSpace(config.RawMetadata?.Database)
-            && string.IsNullOrWhiteSpace(config.RawMetadata?.RelationshipsTable);
+        private RawMetadataTargetConfig? RawMetadataTargetConfig => fullConfig.Cognite?.MetadataTargets?.RawMetadata;
+        private CleanMetadataTargetConfig? CleanMetadataTargetConfig => fullConfig.Cognite?.MetadataTargets?.CleanMetadata;
 
 
         public CDFPusher(
@@ -103,7 +96,7 @@ namespace Cognite.OpcUa.Pushers
             {
                 callback = new BrowseCallback(destination, config.BrowseCallback, log);
             }
-            if (config.FlexibleDataModels != null && config.FlexibleDataModels.Enabled)
+            if (config.MetadataTargets?.FlexibleDataModels != null && (config.MetadataTargets?.FlexibleDataModels.Enabled ?? false))
             {
                 fdmDestination = new FDMWriter(provider.GetRequiredService<FullConfig>(), destination,
                     provider.GetRequiredService<ILogger<FDMWriter>>());
@@ -209,8 +202,6 @@ namespace Cognite.OpcUa.Pushers
                     }
                 }
 
-                
-
                 result.ThrowOnFatal();
                 log.LogDebug("Successfully pushed {Real} / {Total} points to CDF", realCount, count);
 
@@ -302,22 +293,17 @@ namespace Cognite.OpcUa.Pushers
         /// <param name="variables">List of variables to be synchronized</param>
         /// <param name="update">Configuration of what fields, if any, should be updated.</param>
         /// <returns>True if no operation failed unexpectedly</returns>
-        public async Task<PushResult> PushNodes(
-            IEnumerable<BaseUANode> objects,
-            IEnumerable<UAVariable> variables,
-            IEnumerable<UAReference> references,
-            UpdateConfig update,
-            CancellationToken token
-        )
+        public async Task<PushResult> PushNodes(IEnumerable<BaseUANode> objects,
+                IEnumerable<UAVariable> variables, IEnumerable<UAReference> references, UpdateConfig update, CancellationToken token)
         {
             var result = new PushResult();
             var report = new BrowseReport
             {
                 IdPrefix = fullConfig.Extraction.IdPrefix,
-                RawDatabase = config.RawMetadata?.Database,
-                AssetsTable = config.RawMetadata?.AssetsTable,
-                TimeSeriesTable = config.RawMetadata?.TimeseriesTable,
-                RelationshipsTable = config.RawMetadata?.RelationshipsTable
+                RawDatabase = RawMetadataTargetConfig?.Database,
+                AssetsTable = RawMetadataTargetConfig?.AssetsTable,
+                TimeSeriesTable = RawMetadataTargetConfig?.TimeseriesTable,
+                RelationshipsTable = RawMetadataTargetConfig?.RelationshipsTable
             };
 
             if (!variables.Any() && !objects.Any() && !references.Any())
@@ -358,41 +344,21 @@ namespace Cognite.OpcUa.Pushers
                 return result;
             }
 
-            var assetsMap = MapAssets(objects);
-            var timeseriesMap = MapTimeseries(variables);
-            bool isTimeseriesPushed = true;
-
-            if (pushCleanAssets && assetsMap.Any())
-            {
-                await PushCleanAssets(assetsMap, update.Objects, report, result, token);
-            }
-
-            isTimeseriesPushed = await PushCleanTimeseries(timeseriesMap, update.Variables, report, result, token);
-
             var tasks = new List<Task>();
 
-            if (isTimeseriesPushed && fdmDestination != null)
+            tasks.Add(PushAssets(objects, update.Objects, report, result, token));
+            tasks.Add(PushTimeseries(variables, update.Variables, report, result, token));
+            tasks.Add(PushReferences(references, report, result, token));
+            if (fdmDestination != null)
             {
                 tasks.Add(PushFdm(objects, variables, references, result, token));
             }
-
-            if (!pushCleanAssets && assetsMap.Any())
-            {
-                tasks.Add(PushRawAssets(assetsMap, update.Objects, report, result, token));
-            }
-
-            if (!pushCleanTimeseries && timeseriesMap.Any())
-            {
-                tasks.Add(PushRawTimeseries(timeseriesMap, update.Variables, report, result, token));
-            }
-
-            tasks.Add(PushReferences(references, report, result, token));
 
             await Task.WhenAll(tasks);
 
             log.LogInformation("Finish pushing nodes to CDF");
 
-            if (result.Objects && result.References && result.Variables)
+            if (result.Objects && result.References && result.Variables && result.RawObjects && result.RawVariables && result.RawReferences)
             {
                 if (callback != null)
                 {
@@ -407,13 +373,7 @@ namespace Cognite.OpcUa.Pushers
             return result;
         }
 
-        private async Task PushFdm(
-            IEnumerable<BaseUANode> objects,
-            IEnumerable<UAVariable> variables,
-            IEnumerable<UAReference> references,
-            PushResult result,
-            CancellationToken token
-        )
+        private async Task PushFdm(IEnumerable<BaseUANode> objects, IEnumerable<UAVariable> variables, IEnumerable<UAReference> references, PushResult result, CancellationToken token)
         {
             bool pushResult = true;
             try
@@ -440,26 +400,64 @@ namespace Cognite.OpcUa.Pushers
                 );
         }
 
-        private ConcurrentDictionary<string, UAVariable> MapTimeseries(
-            IEnumerable<UAVariable> variables
-        )
+        private ConcurrentDictionary<string, UAVariable> MapTimeseries(IEnumerable<UAVariable> variables)
         {
             return new ConcurrentDictionary<string, UAVariable>(
                 variables.ToDictionary(ts => ts.GetUniqueId(Extractor)!)
             );
         }
 
-        private async Task<bool> PushCleanAssets(
-            ConcurrentDictionary<string, BaseUANode> assetsMap,
-            TypeUpdateConfig update,
-            BrowseReport report,
-            PushResult result,
-            CancellationToken token
-        )
+        private async Task PushAssets(IEnumerable<BaseUANode> objects, TypeUpdateConfig update, BrowseReport report, PushResult result, CancellationToken token)
+        {
+            if (!objects.Any()) return;
+
+            var assetsMap = MapAssets(objects);
+            if (CleanMetadataTargetConfig?.Assets ?? false)
+            {
+                await PushCleanAssets(assetsMap, update, report, result, token);
+            } 
+            if (RawMetadataTargetConfig?.Database != null && RawMetadataTargetConfig?.AssetsTable != null)
+            {
+                await PushRawAssets(assetsMap, update, report, result, token);
+            }
+        }
+
+        private async Task PushTimeseries(IEnumerable<UAVariable> variables, TypeUpdateConfig update, BrowseReport report, PushResult result, CancellationToken token)
+        {
+            if (!variables.Any()) return;
+
+            var timeseriesMap = MapTimeseries(variables);
+            await PushCleanTimeseries(timeseriesMap, update, report, result, token);
+            if ((RawMetadataTargetConfig?.Database != null) && (RawMetadataTargetConfig?.TimeseriesTable != null))
+            {
+                await PushRawTimeseries(timeseriesMap, update, report, result, token);
+            }
+        }
+
+        private async Task PushReferences(IEnumerable<UAReference> references, BrowseReport report, PushResult result, CancellationToken token)
+        {
+            if (!references.Any()) return;
+
+            var relationships = references
+                .Select(reference => reference.ToRelationship(config.DataSet?.Id, Extractor))
+                .DistinctBy(rel => rel.ExternalId);
+
+            if (CleanMetadataTargetConfig?.Relationships ?? false)
+            {
+                await PushCleanReferences(relationships, report, result, token);
+            }
+
+            if (RawMetadataTargetConfig?.Database != null && RawMetadataTargetConfig?.RelationshipsTable != null)
+            {
+                await PushRawReferences(relationships, report, result, token);
+            }
+        }
+
+        private async Task PushCleanAssets(IDictionary<string, BaseUANode> assetsMap, TypeUpdateConfig update, BrowseReport report, PushResult result, CancellationToken token)
         {
             try
             {
-                var _result = await cdfWriter.assets.PushNodes(Extractor, assetsMap, nodeToAssetIds, update, token);
+                var _result = await cdfWriter.Assets.PushNodes(Extractor, assetsMap, nodeToAssetIds, update, token);
                 report.AssetsCreated += _result.Created;
                 report.AssetsUpdated += _result.Updated;
             }
@@ -467,22 +465,15 @@ namespace Cognite.OpcUa.Pushers
             {
                 result.Objects = false;
             }
-            return result.Objects;
         }
 
-        private async Task<bool> PushCleanTimeseries(
-            ConcurrentDictionary<string, UAVariable> timeseriesMap,
-            TypeUpdateConfig update,
-            BrowseReport report,
-            PushResult result,
-            CancellationToken token
-        )
+        private async Task PushCleanTimeseries(IDictionary<string, UAVariable> timeseriesMap, TypeUpdateConfig update, BrowseReport report, PushResult result, CancellationToken token)
         {
             try
             {
-                var _result = await cdfWriter.timeseries.PushVariables(Extractor, timeseriesMap, nodeToAssetIds, mismatchedTimeseries, update, token);
-                var skipMetadata = config.SkipMetadata;
-                var createMinimal = !pushCleanTimeseries || skipMetadata; 
+                var createMinimal = !(CleanMetadataTargetConfig?.Timeseries ?? false); 
+                var writer = createMinimal ? cdfWriter.MinimalTimeseries : cdfWriter.Timeseries;
+                var _result = await writer.PushVariables(Extractor, timeseriesMap, nodeToAssetIds, mismatchedTimeseries, update, token);
                 if (createMinimal)
                 {
                     report.MinimalTimeSeriesCreated += _result.Created;
@@ -497,8 +488,33 @@ namespace Cognite.OpcUa.Pushers
             {
                 result.Variables = false;
             }
+        }
 
-            return result.Variables;
+        private async Task PushCleanReferences(IEnumerable<RelationshipCreate> relationships, BrowseReport report, PushResult result, CancellationToken token)
+        {
+            try
+            {
+                var _result =  await cdfWriter.Relationships.PushReferences(relationships, token);
+                report.RelationshipsCreated += _result.Created;
+            }
+            catch (Exception e)
+            {
+                log.LogError(e, "Failed to ensure relationships");
+                result.References = false;
+            }
+        }
+
+        private async Task PushRawReferences(IEnumerable<RelationshipCreate> relationships, BrowseReport report, PushResult result, CancellationToken token)
+        {
+            try
+            {
+                var _result = await cdfWriter.Raw.PushReferences(RawMetadataTargetConfig!.Database!, RawMetadataTargetConfig!.RelationshipsTable!, relationships, token);
+                report.RawRelationshipsCreated += _result.Created;
+            } catch (Exception e)
+            {
+                log.LogError(e, "Failed to ensure raw relationships");
+                result.RawReferences = false;
+            }
         }
 
         /// <summary>
@@ -681,39 +697,6 @@ namespace Cognite.OpcUa.Pushers
             return true;
         }
 
-        /// <summary>
-        /// Push list of references as relationships to CDF.
-        /// </summary>
-        /// <param name="references">List of references to push</param>
-        /// <returns>True if nothing failed unexpectedly</returns>
-        private async Task PushReferences(
-            IEnumerable<UAReference> references,
-            BrowseReport report,
-            PushResult result,
-            CancellationToken token
-        )
-        {
-            try
-            {
-                if (references == null || !references.Any())
-                    return;
-
-                var relationships = references
-                    .Select(reference => reference.ToRelationship(config.DataSet?.Id, Extractor))
-                    .DistinctBy(rel => rel.ExternalId);
-
-                var _result = pushCleanReferences ?
-                    await cdfWriter.relationships.PushReferences(relationships, token) :
-                    await cdfWriter.raw.PushReferences(config.RawMetadata!.Database!, config.RawMetadata!.RelationshipsTable!, relationships, token);
-                report.RelationshipsCreated += _result.Created;
-            }
-            catch (Exception e)
-            {
-                log.LogError(e, "Failed to ensure references");
-                result.References = false;
-            }
-        }
-
         public async Task<bool> ExecuteDeletes(DeletedNodes deletes, CancellationToken token)
         {
             if (fullConfig.DryRun)
@@ -762,22 +745,22 @@ namespace Cognite.OpcUa.Pushers
         {
             try
             {
-                var _result = await cdfWriter.raw.PushNodes(
+                var _result = await cdfWriter.Raw.PushNodes(
                     Extractor, 
-                    config.RawMetadata!.Database!,
-                    config.RawMetadata!.AssetsTable!,
+                    RawMetadataTargetConfig!.Database!,
+                    RawMetadataTargetConfig!.AssetsTable!,
                     assetsMap,
                     ConverterType.Node,
                     update.AnyUpdate,
                     token
                 );
-                report.AssetsCreated += _result.Created;
-                report.AssetsUpdated += _result.Updated;
+                report.RawAssetsCreated += _result.Created;
+                report.RawAssetsUpdated += _result.Updated;
             }
             catch (Exception e)
             {
                 log.LogError(e, "Failed to ensure assets");
-                result.Objects = false;
+                result.RawObjects = false;
             }
         }
 
@@ -787,15 +770,15 @@ namespace Cognite.OpcUa.Pushers
         )
         {
             bool useRawAssets =
-                config.RawMetadata != null
-                && !string.IsNullOrWhiteSpace(config.RawMetadata.Database)
-                && !string.IsNullOrWhiteSpace(config.RawMetadata.AssetsTable);
+                RawMetadataTargetConfig != null
+                && !string.IsNullOrWhiteSpace(RawMetadataTargetConfig.Database)
+                && !string.IsNullOrWhiteSpace(RawMetadataTargetConfig.AssetsTable);
 
             if (useRawAssets)
             {
                 await MarkRawRowsAsDeleted(
-                    config.RawMetadata!.Database!,
-                    config.RawMetadata!.AssetsTable!,
+                    RawMetadataTargetConfig!.Database!,
+                    RawMetadataTargetConfig!.AssetsTable!,
                     externalIds,
                     token
                 );
@@ -845,22 +828,22 @@ namespace Cognite.OpcUa.Pushers
                     .Where(kvp => kvp.Value.Source != NodeSource.CDF)
                     .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
 
-                var _result = await cdfWriter.raw.PushNodes(
+                var _result = await cdfWriter.Raw.PushNodes(
                     Extractor, 
-                    config.RawMetadata!.Database!,
-                    config.RawMetadata!.TimeseriesTable!,
+                    RawMetadataTargetConfig!.Database!,
+                    RawMetadataTargetConfig!.TimeseriesTable!,
                     toPushMeta,
                     ConverterType.Variable,
-                    update.AnyUpdate && !config.SkipMetadata,
+                    update.AnyUpdate,
                     token
                 );
-                report.TimeSeriesCreated += _result.Created;
-                report.TimeSeriesUpdated += _result.Updated;
+                report.RawTimeseriesCreated += _result.Created;
+                report.RawTimeseriesUpdated += _result.Updated;
             }
             catch (Exception e)
             {
                 log.LogError(e, "Failed to ensure timeseries");
-                result.Variables = false;
+                result.RawVariables = false;
             }
         }
 
@@ -870,15 +853,15 @@ namespace Cognite.OpcUa.Pushers
         )
         {
             bool useRawTss =
-                config.RawMetadata != null
-                && !string.IsNullOrWhiteSpace(config.RawMetadata.Database)
-                && !string.IsNullOrWhiteSpace(config.RawMetadata.TimeseriesTable);
+                RawMetadataTargetConfig != null
+                && !string.IsNullOrWhiteSpace(RawMetadataTargetConfig.Database)
+                && !string.IsNullOrWhiteSpace(RawMetadataTargetConfig.TimeseriesTable);
 
             if (useRawTss)
             {
                 await MarkRawRowsAsDeleted(
-                    config.RawMetadata!.Database!,
-                    config.RawMetadata!.TimeseriesTable!,
+                    RawMetadataTargetConfig!.Database!,
+                    RawMetadataTargetConfig!.TimeseriesTable!,
                     externalIds,
                     token
                 );
@@ -982,15 +965,15 @@ namespace Cognite.OpcUa.Pushers
         )
         {
             bool useRawRelationships =
-                config.RawMetadata != null
-                && !string.IsNullOrWhiteSpace(config.RawMetadata.Database)
-                && !string.IsNullOrWhiteSpace(config.RawMetadata.RelationshipsTable);
+                RawMetadataTargetConfig != null
+                && !string.IsNullOrWhiteSpace(RawMetadataTargetConfig.Database)
+                && !string.IsNullOrWhiteSpace(RawMetadataTargetConfig.RelationshipsTable);
 
             if (useRawRelationships)
             {
                 await MarkRawRowsAsDeleted(
-                    config.RawMetadata!.Database!,
-                    config.RawMetadata!.RelationshipsTable!,
+                    RawMetadataTargetConfig!.Database!,
+                    RawMetadataTargetConfig!.RelationshipsTable!,
                     externalIds,
                     token
                 );

@@ -46,7 +46,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             this.config = config;
             this.destination = destination;
             this.log = log;
-            instSpace = config.Cognite!.FlexibleDataModels!.Space!;
+            instSpace = config.Cognite!.MetadataTargets!.FlexibleDataModels!.Space!;
         }
 
         private async Task IngestInstances(IEnumerable<BaseInstanceWrite> instances, int chunkSize, CancellationToken token)
@@ -91,7 +91,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             var options = new JsonSerializerOptions(Oryx.Cognite.Common.jsonOptions) { WriteIndented = true };
 
             var viewsToInsert = types.Views.Values.ToList();
-            if (config.Cognite!.FlexibleDataModels!.SkipSimpleTypes)
+            if (config.Cognite!.MetadataTargets!.FlexibleDataModels!.SkipSimpleTypes)
             {
                 viewsToInsert = viewsToInsert.Where(v => v.Properties.Any() || types.ViewIsReferenced.GetValueOrDefault(v.ExternalId)).ToList();
             }
@@ -108,7 +108,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             if (config.DryRun) return;
 
             // Check if the data model exists
-            if (config.Cognite!.FlexibleDataModels!.SkipTypesOnEqualCount)
+            if (config.Cognite!.MetadataTargets!.FlexibleDataModels!.SkipTypesOnEqualCount)
             {
                 try
                 {
@@ -237,7 +237,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             log.LogInformation("Mapped out {Nodes} nodes and {Edges} edges to write to PG3", nodes.Count, finalReferences.Count);
 
             // Run the node filter unless we are writing everything.
-            if (config.Cognite!.FlexibleDataModels!.ExcludeNonReferenced)
+            if (config.Cognite!.MetadataTargets!.FlexibleDataModels!.ExcludeNonReferenced)
             {
                 var trimmer = new NodeTrimmer(nodeHierarchy, config, log);
                 nodeHierarchy = trimmer.Filter();
