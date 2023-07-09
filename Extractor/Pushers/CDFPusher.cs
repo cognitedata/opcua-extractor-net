@@ -620,13 +620,11 @@ namespace Cognite.OpcUa.Pushers
         /// <returns>A dictionary of mapping</returns>
         private ConcurrentDictionary<string, BaseUANode> MapAssets(IEnumerable<BaseUANode> objects)
         {
-            return config.SkipMetadata ?
-                new ConcurrentDictionary<string, BaseUANode>() :
-                new ConcurrentDictionary<string, BaseUANode>(
-                    objects
-                        .Where(node => node.Source != NodeSource.CDF)
-                        .ToDictionary(obj => Extractor.GetUniqueId(obj.Id)!)
-                );
+            return new ConcurrentDictionary<string, BaseUANode>(
+                objects
+                    .Where(node => node.Source != NodeSource.CDF)
+                    .ToDictionary(obj => Extractor.GetUniqueId(obj.Id)!)
+            );
         }
 
         /// <summary>

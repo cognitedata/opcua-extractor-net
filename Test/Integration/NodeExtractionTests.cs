@@ -984,7 +984,6 @@ namespace Test.Integration
 
             tester.Server.ResetCustomServer();
             tester.Config.Extraction.Update = new UpdateConfig();
-            tester.Config.Cognite.RawMetadata = null;
             tester.Config.Extraction.DataTypes.AllowStringVariables = false;
             tester.Config.Extraction.DataTypes.MaxArraySize = 0;
 

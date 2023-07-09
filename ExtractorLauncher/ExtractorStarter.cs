@@ -125,6 +125,7 @@ namespace Cognite.OpcUa
             {
                 return "subscriptions.keep-alive-count must be greater than 0";
             }
+#pragma warning disable 0618
             if (config.Cognite?.RawMetadata != null)
             {
                 log.LogWarning("cognite.raw-metadata is deprecated. Use cognite.metadata-targets instead");
@@ -164,6 +165,7 @@ namespace Cognite.OpcUa
                     config.Cognite.MetadataTargets.FlexibleDataModels = config.Cognite.FlexibleDataModels;
                 }
             }
+#pragma warning restore 0618
 
             return null;
         }

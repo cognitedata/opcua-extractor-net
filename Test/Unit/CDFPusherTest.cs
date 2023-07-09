@@ -276,7 +276,6 @@ namespace Test.Unit
         {
             using var extractor = tester.BuildExtractor(true, null, pusher);
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_cdf");
-            tester.Config.Cognite.RawMetadata = null;
             tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
             {
                 CleanMetadata = new CleanMetadataTargetConfig
@@ -344,11 +343,6 @@ namespace Test.Unit
             using var extractor = tester.BuildExtractor(true, null, pusher);
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_cdf");
 
-            tester.Config.Cognite.RawMetadata = new RawMetadataConfig
-            {
-                AssetsTable = "assets",
-                Database = "metadata"
-            };
             tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
             {
                 CleanMetadata = new CleanMetadataTargetConfig
@@ -395,11 +389,6 @@ namespace Test.Unit
             using var extractor = tester.BuildExtractor(true, null, pusher);
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_cdf");
 
-            tester.Config.Cognite.RawMetadata = new RawMetadataConfig
-            {
-                AssetsTable = "assets",
-                Database = "metadata"
-            };
             tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
             {
                 CleanMetadata = new CleanMetadataTargetConfig
@@ -449,7 +438,6 @@ namespace Test.Unit
         {
             using var extractor = tester.BuildExtractor(true, null, pusher);
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_cdf");
-            tester.Config.Cognite.RawMetadata = null;
             tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
             {
                 CleanMetadata = new CleanMetadataTargetConfig
@@ -530,11 +518,6 @@ namespace Test.Unit
             using var extractor = tester.BuildExtractor(true, null, pusher);
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_cdf");
 
-            tester.Config.Cognite.RawMetadata = new RawMetadataConfig
-            {
-                TimeseriesTable = "timeseries",
-                Database = "metadata"
-            };
             tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
             {
                 CleanMetadata = new CleanMetadataTargetConfig
@@ -587,11 +570,6 @@ namespace Test.Unit
             using var extractor = tester.BuildExtractor(true, null, pusher);
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_cdf");
 
-            tester.Config.Cognite.RawMetadata = new RawMetadataConfig
-            {
-                TimeseriesTable = "timeseries",
-                Database = "metadata"
-            };
             tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
             {
                 CleanMetadata = new CleanMetadataTargetConfig
@@ -659,7 +637,6 @@ namespace Test.Unit
             (handler, pusher) = tester.GetCDFPusher();
             using var extractor = tester.BuildExtractor(true, null, pusher);
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_cdf");
-            tester.Config.Cognite.RawMetadata = null;
             tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
             {
                 CleanMetadata = new CleanMetadataTargetConfig
@@ -755,13 +732,6 @@ namespace Test.Unit
                 ReportOnEmpty = true
             };
 
-            tester.Config.Cognite.RawMetadata = new RawMetadataConfig
-            {
-                TimeseriesTable = "timeseries",
-                RelationshipsTable = "relationships",
-                AssetsTable = "assets",
-                Database = "metadata"
-            };
             tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
             {
                 CleanMetadata = new CleanMetadataTargetConfig
