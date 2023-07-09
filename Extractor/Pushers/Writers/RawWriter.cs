@@ -1,3 +1,20 @@
+/* Cognite Extractor for OPC-UA
+Copyright (C) 2021 Cognite AS
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -28,7 +45,15 @@ namespace Cognite.OpcUa.Pushers.Writers
             this.destination = destination;
         }
 
-        public async Task<IEnumerable<RawRow<Dictionary<string, JsonElement>>>> GetRawRows(
+        /// <summary>
+        /// Get all rows from CDF
+        /// </summary>
+        /// <param name="dbName">Name of metadata database in CDF</param>
+        /// <param name="tableName"> Name of metadata table in CDF</param>
+        /// <param name="columns">Columns</param>
+        /// <param name="token">Cancellation token</param>
+        /// <returns>A dictionary of JsonElement</returns>
+        public async Task<IEnumerable<RawRow<Dictionary<string, JsonElement>>>> GetRows(
             string dbName,
             string tableName,
             IEnumerable<string>? columns,
@@ -46,12 +71,7 @@ namespace Cognite.OpcUa.Pushers.Writers
                     >(
                         dbName,
                         tableName,
-                        new RawRowQuery
-                        {
-                            Cursor = cursor,
-                            Limit = 10_000,
-                            Columns = columns
-                        },
+                        new RawRowQuery { Cursor = cursor, Limit = 10_000, Columns = columns },
                         null,
                         token
                     );
@@ -67,22 +87,47 @@ namespace Cognite.OpcUa.Pushers.Writers
             return rows;
         }
 
-        public async Task<Result> PushNodes<T>(UAExtractor extractor, string database, string table, IDictionary<string, T> rows, ConverterType converter, bool shouldUpdate, CancellationToken token) where T : BaseUANode
+        /// <summary>
+        /// Synchronizes all BaseUANode to CDF raw
+        /// </summary>
+        /// <param name="extractor">UAExtractor instance<param>
+        /// <param name="database">Name of metadata database in CDF</param>
+        /// <param name="table">Name of metadata table in CDF</param>
+        /// <param name="rows">Dictionary map of BaseUANode of their keys</param>
+        /// <param name="converter">Converter</param>
+        /// <param name="shouldUpdate">Indicates if it is an update operation</param>
+        /// <param name="token">Cancellation token</param>
+        /// <returns>Operation result</returns>
+        public async Task<Result> PushNodes<T>(UAExtractor extractor, string database, string table,
+                IDictionary<string, T> rows, ConverterType converter, bool shouldUpdate, CancellationToken token) where T : BaseUANode
         {
             var result = new Result { Created = 0, Updated = 0 };
 
             if (shouldUpdate)
             {
-                await Update(extractor, database, table, rows, converter, result, token);
+                await UpdateRows(extractor, database, table, rows, converter, result, token);
             }
             else
             {
-                await Create(extractor, database, table, rows, converter, result, token);
+                await CreateRows(extractor, database, table, rows, converter, result, token);
             }
             return result;
         }
 
-        private async Task Update<T>(UAExtractor extractor, string database, string table, IDictionary<string, T> dataSet, ConverterType converter, Result result, CancellationToken token) where T : BaseUANode
+        /// <summary>
+        /// Updates all BaseUANode to CDF raw
+        /// </summary>
+        /// <param name="extractor">UAExtractor instance<param>
+        /// <param name="database">Name of metadata database in CDF</param>
+        /// <param name="table">Name of metadata table in CDF</param>
+        /// <param name="dataSet">Dictionary map of BaseUANode of their keys</param>
+        /// <param name="converter">Converter</param>
+        /// <param name="result">Operation result</param>
+        /// <param name="shouldUpdate">Indicates if it is an update operation</param>
+        /// <param name="token">Cancellation token</param>
+        /// <returns>Task</returns>
+        private async Task UpdateRows<T>(UAExtractor extractor, string database, string table,
+                IDictionary<string, T> dataSet, ConverterType converter, Result result, CancellationToken token) where T : BaseUANode
         {
             await UpsertRows<JsonElement>(
                 database,
@@ -139,7 +184,20 @@ namespace Cognite.OpcUa.Pushers.Writers
             );
         }
 
-        private async Task Create<T>(UAExtractor extractor, string database, string table, IDictionary<string, T> dataMap, ConverterType converter,  Result result, CancellationToken token) where T : BaseUANode
+        /// <summary>
+        /// Creates all BaseUANode to CDF raw
+        /// </summary>
+        /// <param name="extractor">UAExtractor instance<param>
+        /// <param name="database">Name of metadata database in CDF</param>
+        /// <param name="table">Name of metadata table in CDF</param>
+        /// <param name="dataSet">Dictionary map of BaseUANode of their keys</param>
+        /// <param name="converter">Converter</param>
+        /// <param name="result">Operation result</param>
+        /// <param name="shouldUpdate">Indicates if it is an update operation</param>
+        /// <param name="token">Cancellation token</param>
+        /// <returns>Task</returns>
+        private async Task CreateRows<T>(UAExtractor extractor, string database, string table,
+                IDictionary<string, T> dataMap, ConverterType converter,  Result result, CancellationToken token) where T : BaseUANode
         {
             await EnsureRows<JsonElement>(
                 database,
@@ -160,6 +218,15 @@ namespace Cognite.OpcUa.Pushers.Writers
             );
         }
 
+        /// <summary>
+        /// Upserts all BaseUANode to CDF raw
+        /// </summary>
+        /// <param name="dbName">Name of metadata database in CDF</param>
+        /// <param name="tableName">Name of metadata table in CDF</param>
+        /// <param name="dtoBuilder">Callback to build the dto</param>
+        /// <param name="options">Json serialization options</param>
+        /// <param name="token">Cancellation token</param>
+        /// <returns>Task</returns>
         private async Task UpsertRows<T>(
             string dbName,
             string tableName,
@@ -209,9 +276,20 @@ namespace Cognite.OpcUa.Pushers.Writers
             log.LogInformation("Updated or created {Count} rows in CDF Raw", count);
         }
 
-        private async Task EnsureRows<T>(string dbName, string tableName, IEnumerable<string> keys, Func<IEnumerable<string>, IDictionary<string, T>> dtoBuilder, JsonSerializerOptions options, CancellationToken token)
+        /// <summary>
+        /// Ensure all rows in CDF
+        /// </summary>
+        /// <param name="dbName">Name of metadata database in CDF</param>
+        /// <param name="tableName">Name of metadata table in CDF</param>
+        /// <param name="keys">keys</param>
+        /// <param name="dtoBuilder">Callback to build the dto</param>
+        /// <param name="options">Json serialization options</param>
+        /// <param name="token">Cancellation token</param>
+        /// <returns>Task</returns>
+        private async Task EnsureRows<T>(string dbName, string tableName, IEnumerable<string> keys,
+                Func<IEnumerable<string>, IDictionary<string, T>> dtoBuilder, JsonSerializerOptions options, CancellationToken token)
         {
-            var rows = await GetRawRows(dbName, tableName, new[] { "," }, token);
+            var rows = await GetRows(dbName, tableName, new[] { "," }, token);
             var existing = rows.Select(row => row.Key);
 
             var toCreate = keys.Except(existing);
@@ -224,12 +302,7 @@ namespace Cognite.OpcUa.Pushers.Writers
             await destination.InsertRawRowsAsync(dbName, tableName, createDtos, options, token);
         }
 
-        public async Task<Result> PushReferences(
-            string database,
-            string table,
-            IEnumerable<RelationshipCreate> relationships,
-            CancellationToken token
-        )
+        public async Task<Result> PushReferences(string database, string table, IEnumerable<RelationshipCreate> relationships, CancellationToken token)
         {
             var result = new Result { Created = 0, Updated = 0 };
             await EnsureRows(

@@ -1,3 +1,20 @@
+/* Cognite Extractor for OPC-UA
+Copyright (C) 2021 Cognite AS
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -30,14 +47,18 @@ namespace Cognite.OpcUa.Pushers.Writers
             this.destination = destination;
         }
 
-        public virtual async Task<Result> PushVariables(
-            UAExtractor extractor,
-            IDictionary<string, UAVariable> timeseriesMap,
-            IDictionary<NodeId, long> nodeToAssetIds,
-            HashSet<string> mismatchedTimeseries,
-            TypeUpdateConfig update,
-            CancellationToken token
-        )
+        /// <summary>
+        /// Synchronizes all BaseUANode to CDF Timeseries
+        /// </summary>
+        /// <param name="extractor">UAExtractor instance<param>
+        /// <param name="timeseriesMap">Dictionary of mapping of variables to keys</param>
+        /// <param name="nodeToAssetIds">Node to assets to ids</param>
+        /// <param name="mismatchedTimeseries">Mismatched timeseries</param>
+        /// <param name="update">Type update configuration</param>
+        /// <param name="token">Cancellation token</param>
+        /// <returns>Operation result</returns>
+        public virtual async Task<Result> PushVariables(UAExtractor extractor, IDictionary<string, UAVariable> timeseriesMap,
+                IDictionary<NodeId, long> nodeToAssetIds, HashSet<string> mismatchedTimeseries, TypeUpdateConfig update, CancellationToken token)
         {
             var result = new Result { Created = 0, Updated = 0 };
             var timeseries = await CreateTimeseries(
@@ -61,15 +82,20 @@ namespace Cognite.OpcUa.Pushers.Writers
             return result;
         }
 
-        private async Task<IEnumerable<TimeSeries>> CreateTimeseries(
-            UAExtractor extractor,
-            IDictionary<string, UAVariable> tsMap,
-            IDictionary<NodeId, long> nodeToAssetIds,
-            HashSet<string> mismatchedTimeseries,
-            Result result,
-            bool createMinimalTimeseries,
-            CancellationToken token
-        )
+        /// <summary>
+        /// Create BaseUANode to CDF Timeseries
+        /// </summary>
+        /// <param name="extractor">UAExtractor instance<param>
+        /// <param name="tsMap">Dictionary of mapping of variables to keys</param>
+        /// <param name="nodeToAssetIds">Node to assets to ids</param>
+        /// <param name="mismatchedTimeseries">Mismatched timeseries</param>
+        /// <param name="result">Operation result</param>
+        /// <param name="update">Type update configuration</param>
+        /// <param name="createMinimalTimeseries">Indicate if to create minimal timeseries</param>
+        /// <param name="token">Cancellation token</param>
+        /// <returns>Operation result</returns>
+        private async Task<IEnumerable<TimeSeries>> CreateTimeseries(UAExtractor extractor, IDictionary<string, UAVariable> tsMap,
+                IDictionary<NodeId, long> nodeToAssetIds, HashSet<string> mismatchedTimeseries, Result result, bool createMinimalTimeseries, CancellationToken token)
         {
             var timeseries = await destination.GetOrCreateTimeSeriesAsync(
                 tsMap.Keys,
@@ -136,7 +162,18 @@ namespace Cognite.OpcUa.Pushers.Writers
             return timeseries.Results;
         }
 
-        private async Task UpdateTimeseries(UAExtractor extractor, IDictionary<string, UAVariable> tsMap, IEnumerable<TimeSeries> timeseries, IDictionary<NodeId, long> nodeToAssetIds, TypeUpdateConfig update, Result result, CancellationToken token)
+        /// <summary>
+        /// Update BaseUANode to CDF Timeseries
+        /// </summary>
+        /// <param name="extractor">UAExtractor instance<param>
+        /// <param name="tsMap">Dictionary of mapping of variables to keys</param>
+        /// <param name="nodeToAssetIds">Node to assets to ids</param>
+        /// <param name="update">Type update configuration</param>
+        /// <param name="result">Operation result</param>
+        /// <param name="token">Cancellation token</param>
+        /// <returns>Operation result</returns>
+        private async Task UpdateTimeseries(UAExtractor extractor, IDictionary<string, UAVariable> tsMap,
+                IEnumerable<TimeSeries> timeseries, IDictionary<NodeId, long> nodeToAssetIds, TypeUpdateConfig update, Result result, CancellationToken token)
         {
             var updates = new List<TimeSeriesUpdateItem>();
             var existing = timeseries.ToDictionary(asset => asset.ExternalId);
