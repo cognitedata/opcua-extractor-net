@@ -60,6 +60,8 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.20.2":
+    description: Improve error messages
   "2.20.0":
     description: Improve error handling during history read.
     changelog:
