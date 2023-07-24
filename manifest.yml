@@ -60,6 +60,11 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.20.3":
+    description: Fix issue causing the extractor to fail to push datapoints on windows.
+    changelog:
+      fixed:
+        - "Fix FileNotFound issue when pushing datapoints on windows"
   "2.20.2":
     description: Improve error messages
   "2.20.0":
