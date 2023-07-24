@@ -38,7 +38,7 @@ namespace Cognite.OpcUa.Pushers.Writers
         private ILogger<TimeseriesWriter> log;
         private readonly FullConfig config;
         private readonly CogniteDestination destination;
-        protected virtual bool createMinimalTimeseries => !(config.Cognite?.MetadataTargets?.CleanMetadata?.Timeseries ?? false);
+        protected virtual bool createMinimalTimeseries => !(config.Cognite?.MetadataTargets?.Clean?.Timeseries ?? false);
 
         public TimeseriesWriter(ILogger<TimeseriesWriter> logger, CogniteDestination destination, FullConfig config) 
         {

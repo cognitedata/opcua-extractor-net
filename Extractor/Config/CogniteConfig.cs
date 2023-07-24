@@ -150,15 +150,15 @@ namespace Cognite.OpcUa.Config
         /// <summary>
         /// Raw metadata targets config
         /// </summary>
-        public RawMetadataTargetConfig? RawMetadata { get; set; }
+        public RawMetadataTargetConfig? Raw { get; set; }
         /// <summary>
         /// Clean metadata targets config
         /// </summary>
-        public CleanMetadataTargetConfig? CleanMetadata { get; set; }
+        public CleanMetadataTargetConfig? Clean { get; set; }
         /// <summary>
         /// FDM destination config
         /// </summary>
-        public FdmDestinationConfig? FlexibleDataModels { get; set; }
+        public FdmDestinationConfig? DataModels { get; set; }
     }
     public class RawMetadataTargetConfig
     {

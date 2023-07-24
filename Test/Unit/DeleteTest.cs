@@ -393,7 +393,7 @@ namespace Test.Unit
 
             tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
             {
-                CleanMetadata = new CleanMetadataTargetConfig
+                Clean = new CleanMetadataTargetConfig
                 {
                     Assets = true,
                     // Timeseries = true
@@ -437,11 +437,11 @@ namespace Test.Unit
             tester.Config.Cognite.DeleteRelationships = true;
             tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig 
             {
-                CleanMetadata = new CleanMetadataTargetConfig
+                Clean = new CleanMetadataTargetConfig
                 {
                     Timeseries = true,
                 },
-                RawMetadata = new RawMetadataTargetConfig
+                Raw = new RawMetadataTargetConfig
                 {
                     Database = "metadata",
                     AssetsTable = "assets",

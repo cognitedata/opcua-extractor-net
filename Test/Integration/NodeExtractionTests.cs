@@ -869,7 +869,7 @@ namespace Test.Integration
 
             tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
             {
-                CleanMetadata = new CleanMetadataTargetConfig
+                Clean = new CleanMetadataTargetConfig
                 {
                     Assets = true,
                     Timeseries = true
@@ -936,13 +936,13 @@ namespace Test.Integration
 
             tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
             {
-                CleanMetadata = new CleanMetadataTargetConfig
+                Clean = new CleanMetadataTargetConfig
                 {
                     Relationships = true,
                     Assets = false,
                     Timeseries = false
                 },
-                RawMetadata = new RawMetadataTargetConfig
+                Raw = new RawMetadataTargetConfig
                 {
                     Database = "metadata",
                     AssetsTable = "assets",
@@ -1012,7 +1012,7 @@ namespace Test.Integration
             };
             tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
             {
-                CleanMetadata = new CleanMetadataTargetConfig
+                Clean = new CleanMetadataTargetConfig
                 {
                     Assets = true,
                     Timeseries = true

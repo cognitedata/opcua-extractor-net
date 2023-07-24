@@ -25,7 +25,7 @@ namespace Test.Unit
             tester.ResetConfig();
             tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
             {
-                FlexibleDataModels = new FdmDestinationConfig
+                DataModels = new FdmDestinationConfig
                 {
                     Enabled = true,
                     Space = "test",
@@ -46,8 +46,8 @@ namespace Test.Unit
         [Fact]
         public async Task TestMapCustomTypes()
         {
-            tester.Config.Cognite.MetadataTargets.FlexibleDataModels.ExcludeNonReferenced = true;
-            tester.Config.Cognite.MetadataTargets.FlexibleDataModels.TypesToMap = TypesToMap.Custom;
+            tester.Config.Cognite.MetadataTargets.DataModels.ExcludeNonReferenced = true;
+            tester.Config.Cognite.MetadataTargets.DataModels.TypesToMap = TypesToMap.Custom;
 
             var (handler, pusher) = tester.GetCDFPusher();
             using var extractor = tester.BuildExtractor(true, null, pusher);
@@ -72,8 +72,8 @@ namespace Test.Unit
         [Fact]
         public async Task TestMapReferencedTypes()
         {
-            tester.Config.Cognite.MetadataTargets.FlexibleDataModels.ExcludeNonReferenced = true;
-            tester.Config.Cognite.MetadataTargets.FlexibleDataModels.TypesToMap = TypesToMap.Referenced;
+            tester.Config.Cognite.MetadataTargets.DataModels.ExcludeNonReferenced = true;
+            tester.Config.Cognite.MetadataTargets.DataModels.TypesToMap = TypesToMap.Referenced;
 
             var (handler, pusher) = tester.GetCDFPusher();
             using var extractor = tester.BuildExtractor(true, null, pusher);
@@ -94,8 +94,8 @@ namespace Test.Unit
         [Fact]
         public async Task TestMapReferencedTypesNoTrim()
         {
-            tester.Config.Cognite.MetadataTargets.FlexibleDataModels.ExcludeNonReferenced = false;
-            tester.Config.Cognite.MetadataTargets.FlexibleDataModels.TypesToMap = TypesToMap.Referenced;
+            tester.Config.Cognite.MetadataTargets.DataModels.ExcludeNonReferenced = false;
+            tester.Config.Cognite.MetadataTargets.DataModels.TypesToMap = TypesToMap.Referenced;
 
             var (handler, pusher) = tester.GetCDFPusher();
             using var extractor = tester.BuildExtractor(true, null, pusher);
@@ -116,8 +116,8 @@ namespace Test.Unit
         [Fact]
         public async Task TestMapEverything()
         {
-            tester.Config.Cognite.MetadataTargets.FlexibleDataModels.ExcludeNonReferenced = false;
-            tester.Config.Cognite.MetadataTargets.FlexibleDataModels.TypesToMap = TypesToMap.All;
+            tester.Config.Cognite.MetadataTargets.DataModels.ExcludeNonReferenced = false;
+            tester.Config.Cognite.MetadataTargets.DataModels.TypesToMap = TypesToMap.All;
 
             var (handler, pusher) = tester.GetCDFPusher();
             using var extractor = tester.BuildExtractor(true, null, pusher);

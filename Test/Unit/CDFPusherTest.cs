@@ -278,7 +278,7 @@ namespace Test.Unit
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_cdf");
             tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
             {
-                CleanMetadata = new CleanMetadataTargetConfig
+                Clean = new CleanMetadataTargetConfig
                 {
                     Assets = true
                 }
@@ -345,13 +345,13 @@ namespace Test.Unit
 
             tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
             {
-                CleanMetadata = new CleanMetadataTargetConfig
+                Clean = new CleanMetadataTargetConfig
                 {
                     Relationships = true,
                     Assets = false,
                     Timeseries = true
                 },
-                RawMetadata = new RawMetadataTargetConfig
+                Raw = new RawMetadataTargetConfig
                 {
                     Database = "metadata",
                     AssetsTable = "assets"
@@ -391,13 +391,13 @@ namespace Test.Unit
 
             tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
             {
-                CleanMetadata = new CleanMetadataTargetConfig
+                Clean = new CleanMetadataTargetConfig
                 {
                     Relationships = true,
                     Assets = false,
                     Timeseries = true
                 },
-                RawMetadata = new RawMetadataTargetConfig
+                Raw = new RawMetadataTargetConfig
                 {
                     Database = "metadata",
                     AssetsTable = "assets",
@@ -440,7 +440,7 @@ namespace Test.Unit
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_cdf");
             tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
             {
-                CleanMetadata = new CleanMetadataTargetConfig
+                Clean = new CleanMetadataTargetConfig
                 {
                     Relationships = true,
                     Assets = false,
@@ -520,13 +520,13 @@ namespace Test.Unit
 
             tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
             {
-                CleanMetadata = new CleanMetadataTargetConfig
+                Clean = new CleanMetadataTargetConfig
                 {
                     Relationships = true,
                     Assets = false,
                     Timeseries = false
                 },
-                RawMetadata = new RawMetadataTargetConfig
+                Raw = new RawMetadataTargetConfig
                 {
                     Database = "metadata",
                     AssetsTable = "assets",
@@ -572,13 +572,13 @@ namespace Test.Unit
 
             tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
             {
-                CleanMetadata = new CleanMetadataTargetConfig
+                Clean = new CleanMetadataTargetConfig
                 {
                     Relationships = true,
                     Assets = false,
                     Timeseries = false
                 },
-                RawMetadata = new RawMetadataTargetConfig
+                Raw = new RawMetadataTargetConfig
                 {
                     Database = "metadata",
                     AssetsTable = "assets",
@@ -639,7 +639,7 @@ namespace Test.Unit
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_cdf");
             tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
             {
-                CleanMetadata = new CleanMetadataTargetConfig
+                Clean = new CleanMetadataTargetConfig
                 {
                     Relationships = true,
                     Assets = true,
@@ -734,11 +734,11 @@ namespace Test.Unit
 
             tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
             {
-                CleanMetadata = new CleanMetadataTargetConfig
+                Clean = new CleanMetadataTargetConfig
                 {
                     Timeseries = false,
                 },
-                RawMetadata = new RawMetadataTargetConfig
+                Raw = new RawMetadataTargetConfig
                 {
                     Database = "metadata",
                     AssetsTable = "assets",
@@ -935,7 +935,7 @@ namespace Test.Unit
             tester.Config.Extraction.Relationships.Enabled = true;
             tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
             {
-                CleanMetadata = new CleanMetadataTargetConfig
+                Clean = new CleanMetadataTargetConfig
                 {
                     Assets = false,
                     Timeseries = false
@@ -1001,7 +1001,7 @@ namespace Test.Unit
 
             tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
             {
-                RawMetadata = new RawMetadataTargetConfig
+                Raw = new RawMetadataTargetConfig
                 {
                     RelationshipsTable = "relationships",
                     Database = "metadata"
@@ -1200,7 +1200,7 @@ namespace Test.Unit
             };
             tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
             {
-                RawMetadata = new RawMetadataTargetConfig
+                Raw = new RawMetadataTargetConfig
                 {
                     AssetsTable = "assets",
                     TimeseriesTable = "timeseries",
@@ -1278,7 +1278,7 @@ namespace Test.Unit
             };
             tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
             {
-                RawMetadata = new RawMetadataTargetConfig
+                Raw = new RawMetadataTargetConfig
                 {
                     AssetsTable = "assets",
                     TimeseriesTable = "timeseries",
@@ -1353,12 +1353,12 @@ namespace Test.Unit
             };
             tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
             {
-                CleanMetadata = new CleanMetadataTargetConfig
+                Clean = new CleanMetadataTargetConfig
                 {
                     Relationships = true,
                     Assets = false,
                 },
-                RawMetadata = new RawMetadataTargetConfig
+                Raw = new RawMetadataTargetConfig
                 {
                     Database = "metadata",
                     TimeseriesTable = "timeseries",

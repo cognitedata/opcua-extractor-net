@@ -224,8 +224,8 @@ namespace Cognite.OpcUa.Pushers.FDM
             this.log = log;
             this.config = config;
             nodeTypes = new NodeTypeCollector(log);
-            space = config.Cognite!.MetadataTargets!.FlexibleDataModels!.Space!;
-            fdmConfig = config.Cognite!.MetadataTargets!.FlexibleDataModels!;
+            space = config.Cognite!.MetadataTargets!.DataModels!.Space!;
+            fdmConfig = config.Cognite!.MetadataTargets!.DataModels!;
             this.converter = converter;
         }
 

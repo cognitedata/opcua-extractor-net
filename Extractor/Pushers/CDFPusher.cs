@@ -74,8 +74,8 @@ namespace Cognite.OpcUa.Pushers
 
         private readonly BrowseCallback? callback;
         private readonly FDMWriter? fdmDestination;
-        private RawMetadataTargetConfig? RawMetadataTargetConfig => fullConfig.Cognite?.MetadataTargets?.RawMetadata;
-        private CleanMetadataTargetConfig? CleanMetadataTargetConfig => fullConfig.Cognite?.MetadataTargets?.CleanMetadata;
+        private RawMetadataTargetConfig? RawMetadataTargetConfig => fullConfig.Cognite?.MetadataTargets?.Raw;
+        private CleanMetadataTargetConfig? CleanMetadataTargetConfig => fullConfig.Cognite?.MetadataTargets?.Clean;
 
 
         public CDFPusher(
@@ -96,7 +96,7 @@ namespace Cognite.OpcUa.Pushers
             {
                 callback = new BrowseCallback(destination, config.BrowseCallback, log);
             }
-            if (config.MetadataTargets?.FlexibleDataModels != null && (config.MetadataTargets?.FlexibleDataModels.Enabled ?? false))
+            if (config.MetadataTargets?.DataModels != null && (config.MetadataTargets?.DataModels.Enabled ?? false))
             {
                 fdmDestination = new FDMWriter(provider.GetRequiredService<FullConfig>(), destination,
                     provider.GetRequiredService<ILogger<FDMWriter>>());

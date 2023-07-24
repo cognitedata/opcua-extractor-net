@@ -140,13 +140,13 @@ namespace Cognite.OpcUa
                 var useCleanRelationships = rawMetadata?.Database == null || rawMetadata?.RelationshipsTable == null;
                 config.Cognite.MetadataTargets = new MetadataTargetsConfig
                 {
-                    CleanMetadata = new CleanMetadataTargetConfig
+                    Clean = new CleanMetadataTargetConfig
                     {
                         Assets = useCleanAssets,
                         Timeseries = useCleanTimeseries,
                         Relationships = useCleanRelationships
                     },
-                    RawMetadata = new RawMetadataTargetConfig
+                    Raw = new RawMetadataTargetConfig
                     {
                         Database = rawMetadata?.Database,
                         AssetsTable = rawMetadata?.AssetsTable,
@@ -161,8 +161,8 @@ namespace Cognite.OpcUa
                 
                 if (config.Cognite == null) config.Cognite = new CognitePusherConfig();
                 if (config.Cognite.MetadataTargets == null) config.Cognite.MetadataTargets = new MetadataTargetsConfig();
-                if (config.Cognite.MetadataTargets.FlexibleDataModels == null) {
-                    config.Cognite.MetadataTargets.FlexibleDataModels = config.Cognite.FlexibleDataModels;
+                if (config.Cognite.MetadataTargets.DataModels == null) {
+                    config.Cognite.MetadataTargets.DataModels = config.Cognite.FlexibleDataModels;
                 }
             }
 #pragma warning restore 0618
