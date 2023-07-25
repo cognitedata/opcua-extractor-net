@@ -15,7 +15,6 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -24,142 +23,37 @@ using Cognite.Extensions;
 using Cognite.Extractor.Utils;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Nodes;
-using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.Pushers.Writers.Dtos;
-using Cognite.OpcUa.Pushers.Writers.Interfaces;
 using CogniteSdk;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 
 namespace Cognite.OpcUa.Pushers.Writers
 {
-    public class TimeseriesWriter : ITimeseriesWriter
+    public class TimeseriesWriter : BaseTimeseriesWriter<TimeseriesWriter>
     {
-        private ILogger<TimeseriesWriter> log;
-        private readonly FullConfig config;
-        private readonly CogniteDestination destination;
-        protected virtual bool createMinimalTimeseries => !(config.Cognite?.MetadataTargets?.Clean?.Timeseries ?? false);
+        public TimeseriesWriter(ILogger<TimeseriesWriter> logger, CogniteDestination destination, FullConfig config)
+            : base(logger, destination, config)
+        { }
 
-        public TimeseriesWriter(ILogger<TimeseriesWriter> logger, CogniteDestination destination, FullConfig config) 
+        protected override IEnumerable<TimeSeriesCreate> BuildTimeseries(IDictionary<string, UAVariable> tsMap,
+                IEnumerable<string> ids, UAExtractor extractor, IDictionary<NodeId, long> nodeToAssetIds, Result result)
         {
-            this.log = logger;
-            this.config = config;
-            this.destination = destination;
-        }
-
-        /// <summary>
-        /// Synchronizes all BaseUANode to CDF Timeseries
-        /// </summary>
-        /// <param name="extractor">UAExtractor instance<param>
-        /// <param name="timeseriesMap">Dictionary of mapping of variables to keys</param>
-        /// <param name="nodeToAssetIds">Node to assets to ids</param>
-        /// <param name="mismatchedTimeseries">Mismatched timeseries</param>
-        /// <param name="update">Type update configuration</param>
-        /// <param name="token">Cancellation token</param>
-        /// <returns>Operation result</returns>
-        public virtual async Task<Result> PushVariables(UAExtractor extractor, IDictionary<string, UAVariable> timeseriesMap,
-                IDictionary<NodeId, long> nodeToAssetIds, HashSet<string> mismatchedTimeseries, TypeUpdateConfig update, CancellationToken token)
-        {
-            var result = new Result { Created = 0, Updated = 0 };
-            var timeseries = await CreateTimeseries(
-                extractor,
-                timeseriesMap,
-                nodeToAssetIds,
-                mismatchedTimeseries,
-                result,
-                createMinimalTimeseries,
-                token
-            );
-
-            var toPushMeta = timeseriesMap
-                .Where(kvp => kvp.Value.Source != NodeSource.CDF)
-                .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
-
-            if (update.AnyUpdate && toPushMeta.Any())
-            {
-                await UpdateTimeseries(extractor, toPushMeta, timeseries, nodeToAssetIds, update, result, token);
-            }
-            return result;
-        }
-
-        /// <summary>
-        /// Create BaseUANode to CDF Timeseries
-        /// </summary>
-        /// <param name="extractor">UAExtractor instance<param>
-        /// <param name="tsMap">Dictionary of mapping of variables to keys</param>
-        /// <param name="nodeToAssetIds">Node to assets to ids</param>
-        /// <param name="mismatchedTimeseries">Mismatched timeseries</param>
-        /// <param name="result">Operation result</param>
-        /// <param name="update">Type update configuration</param>
-        /// <param name="createMinimalTimeseries">Indicate if to create minimal timeseries</param>
-        /// <param name="token">Cancellation token</param>
-        /// <returns>Operation result</returns>
-        private async Task<IEnumerable<TimeSeries>> CreateTimeseries(UAExtractor extractor, IDictionary<string, UAVariable> tsMap,
-                IDictionary<NodeId, long> nodeToAssetIds, HashSet<string> mismatchedTimeseries, Result result, bool createMinimalTimeseries, CancellationToken token)
-        {
-            var timeseries = await destination.GetOrCreateTimeSeriesAsync(
-                tsMap.Keys,
-                ids =>
-                {
-                    var tss = ids.Select(id => tsMap[id]);
-                    var creates = tss.Select(
-                            ts =>
-                                ts.ToTimeseries(
-                                    config,
-                                    extractor,
-                                    extractor,
-                                    config.Cognite?.DataSet?.Id,
-                                    nodeToAssetIds,
-                                    config.Cognite?.MetadataMapping?.Timeseries,
-                                    createMinimalTimeseries
-                                )
-                        )
-                        .Where(ts => ts != null);
-                    if (createMinimalTimeseries)
-                    {
-                        result.Created += creates.Count();
-                    }
-                    else
-                    {
-                        result.Created += creates.Count();
-                    }
-                    return creates;
-                },
-                RetryMode.None,
-                SanitationMode.Clean,
-                token
-            );
-
-            log.LogResult(timeseries, RequestType.CreateTimeSeries, true);
-
-            timeseries.ThrowOnFatal();
-
-            if (timeseries.Results == null)
-                return Array.Empty<TimeSeries>();
-
-            var foundBadTimeseries = new List<string>();
-            foreach (var ts in timeseries.Results)
-            {
-                var loc = tsMap[ts.ExternalId];
-                if (nodeToAssetIds.TryGetValue(loc.ParentId, out var parentId))
-                {
-                    nodeToAssetIds[loc.Id] = parentId;
-                }
-                if (ts.IsString != loc.FullAttributes.DataType.IsString)
-                {
-                    mismatchedTimeseries.Add(ts.ExternalId);
-                    foundBadTimeseries.Add(ts.ExternalId);
-                }
-            }
-            if (foundBadTimeseries.Any())
-            {
-                log.LogDebug(
-                    "Found mismatched timeseries when ensuring: {TimeSeries}",
-                    string.Join(", ", foundBadTimeseries)
-                );
-            }
-
-            return timeseries.Results;
+            var tss = ids.Select(id => tsMap[id]);
+                var creates = tss.Select(
+                        ts =>
+                            ts.ToTimeseries(
+                                config,
+                                extractor,
+                                extractor,
+                                config.Cognite?.DataSet?.Id,
+                                nodeToAssetIds,
+                                config.Cognite?.MetadataMapping?.Timeseries
+                            )
+                    )
+                    .Where(ts => ts != null);
+                result.Created += creates.Count();
+                return creates;
         }
 
         /// <summary>
@@ -172,7 +66,7 @@ namespace Cognite.OpcUa.Pushers.Writers
         /// <param name="result">Operation result</param>
         /// <param name="token">Cancellation token</param>
         /// <returns>Operation result</returns>
-        private async Task UpdateTimeseries(UAExtractor extractor, IDictionary<string, UAVariable> tsMap,
+        protected override async Task UpdateTimeseries(UAExtractor extractor, IDictionary<string, UAVariable> tsMap,
                 IEnumerable<TimeSeries> timeseries, IDictionary<NodeId, long> nodeToAssetIds, TypeUpdateConfig update, Result result, CancellationToken token)
         {
             var updates = new List<TimeSeriesUpdateItem>();
@@ -195,7 +89,7 @@ namespace Cognite.OpcUa.Pushers.Writers
             {
                 var res = await destination.UpdateTimeSeriesAsync(updates, RetryMode.OnError, SanitationMode.Clean, token);
 
-                log.LogResult(res, RequestType.UpdateTimeSeries, false);
+                logger.LogResult(res, RequestType.UpdateTimeSeries, false);
                 res.ThrowOnFatal();
 
                 result.Updated += res.Results?.Count() ?? 0;

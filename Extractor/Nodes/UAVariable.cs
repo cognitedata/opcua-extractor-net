@@ -457,22 +457,9 @@ namespace Cognite.OpcUa.Nodes
             UAExtractor extractor,
             long? dataSetId,
             IDictionary<NodeId, long>? nodeToAssetIds,
-            Dictionary<string, string>? metaMap,
-            bool minimal = false)
+            Dictionary<string, string>? metaMap)
         {
             string? externalId = GetUniqueId(client);
-
-            if (minimal)
-            {
-                return new TimeSeriesCreate
-                {
-                    ExternalId = externalId,
-                    IsString = FullAttributes.DataType.IsString,
-                    IsStep = FullAttributes.DataType.IsStep,
-                    DataSetId = dataSetId
-                };
-            }
-
             var writePoco = new TimeSeriesCreate
             {
                 Description = FullAttributes.Description,
@@ -501,6 +488,19 @@ namespace Cognite.OpcUa.Nodes
             }, extractor.StringConverter);
 
             return writePoco;
+        }
+
+        public TimeSeriesCreate ToMinimalTimeseries(IUAClientAccess client, long? dataSetId)
+        {
+            string? externalId = GetUniqueId(client);
+
+            return new TimeSeriesCreate
+            {
+                ExternalId = externalId,
+                IsString = FullAttributes.DataType.IsString,
+                IsStep = FullAttributes.DataType.IsStep,
+                DataSetId = dataSetId
+            };
         }
         #endregion
     }

@@ -15,21 +15,43 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Cognite.Extractor.Utils;
 using Cognite.OpcUa.Config;
-using Cognite.OpcUa.Pushers.Writers.Interfaces;
+using Cognite.OpcUa.Nodes;
+using Cognite.OpcUa.Pushers.Writers.Dtos;
+using CogniteSdk;
 using Microsoft.Extensions.Logging;
+using Opc.Ua;
 
 namespace Cognite.OpcUa.Pushers.Writers
 {
-    public class MinimalTimeseriesWriter : TimeseriesWriter, ITimeseriesWriter
+    public class MinimalTimeseriesWriter : BaseTimeseriesWriter<MinimalTimeseriesWriter>
     {
         public MinimalTimeseriesWriter(
-            ILogger<TimeseriesWriter> logger,
+            ILogger<MinimalTimeseriesWriter> logger,
             CogniteDestination destination,
             FullConfig config
         )
             : base(logger, destination, config) { }
-        protected override bool createMinimalTimeseries =>  true; 
+
+        protected override IEnumerable<TimeSeriesCreate> BuildTimeseries(IDictionary<string, UAVariable> tsMap,
+                IEnumerable<string> ids, UAExtractor extractor,  IDictionary<NodeId, long> nodeToAssetIds, Result result)
+        {
+            var tss = ids.Select(id => tsMap[id]);
+                var creates = tss.Select(ts => ts.ToMinimalTimeseries(extractor, config.Cognite?.DataSet?.Id))
+                    .Where(ts => ts != null);
+                result.Created += creates.Count();
+                return creates;
+        }
+
+        protected override Task UpdateTimeseries(UAExtractor extractor, IDictionary<string, UAVariable> tsMap,
+                IEnumerable<TimeSeries> timeseries, IDictionary<NodeId, long> nodeToAssetIds, TypeUpdateConfig update, Result result, CancellationToken token)
+        {
+            return Task.CompletedTask;
+        }
     }
 }
