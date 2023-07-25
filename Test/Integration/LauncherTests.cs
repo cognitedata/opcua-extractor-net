@@ -480,7 +480,7 @@ version: 1
             log.Events.Clear();
             config.Source.EndpointUrl = tester.EndpointUrl;
             method.Invoke(typeof(ExtractorStarter), new object[] { log, config, setup, options, "config" });
-            Assert.Equal(2, log.Events.Where(evt => evt.LogLevel == Microsoft.Extensions.Logging.LogLevel.Warning).Count());
+            Assert.Equal(3, log.Events.Where(evt => evt.LogLevel == Microsoft.Extensions.Logging.LogLevel.Warning).Count());
 
             // events idprefix
             config.Extraction.IdPrefix = "events.";

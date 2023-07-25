@@ -737,10 +737,6 @@ namespace Test.Unit
 
             tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
             {
-                Clean = new CleanMetadataTargetConfig
-                {
-                    Timeseries = false,
-                },
                 Raw = new RawMetadataTargetConfig
                 {
                     Database = "metadata",
@@ -762,12 +758,12 @@ namespace Test.Unit
 
             Assert.Single(handler.Callbacks);
             var res = handler.Callbacks[0];
-            Assert.Equal(0, res.AssetsCreated);
-            Assert.Equal(0, res.AssetsUpdated);
-            Assert.Equal(0, res.TimeSeriesCreated);
-            Assert.Equal(0, res.TimeSeriesUpdated);
+            Assert.Equal(0, res.RawAssetsCreated);
+            Assert.Equal(0, res.RawAssetsUpdated);
+            Assert.Equal(0, res.RawTimeseriesCreated);
+            Assert.Equal(0, res.RawTimeseriesUpdated);
             Assert.Equal(0, res.MinimalTimeSeriesCreated);
-            Assert.Equal(0, res.RelationshipsCreated);
+            Assert.Equal(0, res.RawRelationshipsCreated);
             Assert.Equal("metadata", res.RawDatabase);
             Assert.Equal("assets", res.AssetsTable);
             Assert.Equal("timeseries", res.TimeSeriesTable);
@@ -785,11 +781,11 @@ namespace Test.Unit
             Assert.Equal(2, handler.Callbacks.Count);
             res = handler.Callbacks[1];
             Assert.Equal(1, res.RawAssetsCreated);
-            Assert.Equal(0, res.AssetsUpdated);
+            Assert.Equal(0, res.RawAssetsUpdated);
             Assert.Equal(1, res.RawTimeseriesCreated);
             Assert.Equal(1, res.MinimalTimeSeriesCreated);
             Assert.Equal(0, res.TimeSeriesUpdated);
-            Assert.Equal(1, res.RelationshipsCreated);
+            Assert.Equal(1, res.RawRelationshipsCreated);
 
             // Update each without modifying "update"
             node.Attributes.Description = "Some description";
@@ -799,12 +795,12 @@ namespace Test.Unit
 
             Assert.Equal(3, handler.Callbacks.Count);
             res = handler.Callbacks[2];
-            Assert.Equal(0, res.AssetsCreated);
-            Assert.Equal(0, res.AssetsUpdated);
-            Assert.Equal(0, res.TimeSeriesCreated);
-            Assert.Equal(0, res.TimeSeriesUpdated);
+            Assert.Equal(0, res.RawAssetsCreated);
+            Assert.Equal(0, res.RawAssetsUpdated);
+            Assert.Equal(0, res.RawTimeseriesCreated);
+            Assert.Equal(0, res.RawTimeseriesUpdated);
             Assert.Equal(0, res.MinimalTimeSeriesCreated);
-            Assert.Equal(0, res.RelationshipsCreated);
+            Assert.Equal(0, res.RawRelationshipsCreated);
 
             // Modify "update", also add another reference.
             rel = new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source2"), new NodeId("target2"), true, false, false, extractor.TypeManager);
@@ -815,24 +811,24 @@ namespace Test.Unit
 
             Assert.Equal(4, handler.Callbacks.Count);
             res = handler.Callbacks[3];
-            Assert.Equal(0, res.AssetsCreated);
-            Assert.Equal(1, res.AssetsUpdated);
-            Assert.Equal(0, res.TimeSeriesCreated);
+            Assert.Equal(0, res.RawAssetsCreated);
+            Assert.Equal(1, res.RawAssetsUpdated);
+            Assert.Equal(0, res.RawTimeseriesCreated);
             Assert.Equal(1, res.RawTimeseriesUpdated);
             Assert.Equal(0, res.MinimalTimeSeriesCreated);
-            Assert.Equal(1, res.RelationshipsCreated);
+            Assert.Equal(1, res.RawRelationshipsCreated);
 
             // Again, this time nothing changes
             await pusher.PushNodes(new[] { node }, new[] { variable }, new[] { rel }, update, tester.Source.Token);
 
             Assert.Equal(5, handler.Callbacks.Count);
             res = handler.Callbacks[4];
-            Assert.Equal(0, res.AssetsCreated);
-            Assert.Equal(0, res.AssetsUpdated);
-            Assert.Equal(0, res.TimeSeriesCreated);
-            Assert.Equal(0, res.TimeSeriesUpdated);
+            Assert.Equal(0, res.RawAssetsCreated);
+            Assert.Equal(0, res.RawAssetsUpdated);
+            Assert.Equal(0, res.RawTimeseriesCreated);
+            Assert.Equal(0, res.RawTimeseriesUpdated);
             Assert.Equal(0, res.MinimalTimeSeriesCreated);
-            Assert.Equal(0, res.RelationshipsCreated);
+            Assert.Equal(0, res.RawRelationshipsCreated);
         }
         #endregion
 
@@ -932,7 +928,6 @@ namespace Test.Unit
         [Fact]
         public async Task TestCreateRelationships()
         {
-            using var extractor = tester.BuildExtractor(true, null, pusher);
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_cdf");
 
             tester.Config.Extraction.Relationships.Enabled = true;
@@ -941,9 +936,12 @@ namespace Test.Unit
                 Clean = new CleanMetadataTargetConfig
                 {
                     Assets = false,
-                    Timeseries = false
+                    Timeseries = false,
+                    Relationships = true,
                 }
             };
+            (handler, pusher) = tester.GetCDFPusher();
+            using var extractor = tester.BuildExtractor(true, null, pusher);
 
             var assets = Enumerable.Empty<BaseUANode>();
             var tss = Enumerable.Empty<UAVariable>();
@@ -962,9 +960,9 @@ namespace Test.Unit
             handler.FailedRoutes.Add("/relationships");
             Assert.False((await pusher.PushNodes(assets, tss, references, update, tester.Source.Token)).References);
             Assert.Empty(handler.Relationships);
+            handler.FailedRoutes.Clear();
 
             // Push successful
-            handler.FailedRoutes.Clear();
             Assert.True((await pusher.PushNodes(assets, tss, references, update, tester.Source.Token)).References);
             Assert.Equal(2, handler.Relationships.Count);
 

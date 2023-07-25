@@ -975,7 +975,7 @@ namespace Cognite.OpcUa.Pushers
         /// <returns>Task</returns>
         private async Task PushReferences(IEnumerable<UAReference> references, BrowseReport report, PushResult result, CancellationToken token)
         {
-            if (!references.Any() && cdfWriter.Timeseries == null && cdfWriter.Raw == null) return;
+            if (!references.Any() && cdfWriter.Relationships == null && cdfWriter.Raw == null) return;
 
             var relationships = references
                 .Select(reference => reference.ToRelationship(config.DataSet?.Id, Extractor))

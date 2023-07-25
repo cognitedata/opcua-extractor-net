@@ -30,7 +30,7 @@ namespace Cognite.OpcUa.Pushers.Writers
                     );
                 });
             }
-            if (config.Cognite?.MetadataTargets?.Clean?.Assets ?? false)
+            if (config.Cognite?.MetadataTargets?.Clean?.Relationships ?? false)
             {
                 services.AddSingleton<IRelationshipsWriter, RelationshipsWriter>(provider => {
                     var destination = provider.GetRequiredService<CogniteDestination>();
