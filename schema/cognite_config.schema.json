@@ -29,36 +29,6 @@
             "description": "Whether to read start/end-points on startup, where possible. At least one pusher should be able to do this, or `state-store` should be enabled, otherwise back/frontfill will run for the entire history every restart",
             "default": true
         },
-        "skip-metadata": {
-            "type": "boolean",
-            "deprecated": true,
-            "description": "Do not push any metadata at all. If this is `true`, plain timeseries without metadata will be created, similarly to `raw-metadata`, and datapoints will be pushed. Nothing will be written to raw, band no assets will be created. Events will be created, but without being contextualized to assets"
-        },
-        "raw-metadata": {
-            "type": "object",
-            "description": "Store assets/timeseries metadata and relationships in raw. Assets will not be created at all, timeseries will be created with just `externalId`, `isStep`, and `isString`. Both timeseries and assets will be persisted in their entirity to CDF Raw. Datapoints are not affected, events will be created but without being contextualized to assets. The externalId of the source node is added to metadata if applicable",
-            "unevaluatedProperties": false,
-            "deprecated": true,
-            "required": [ "database" ],
-            "properties": {
-                "database": {
-                    "type": "string",
-                    "description": "Raw database"
-                },
-                "assets-table": {
-                    "type": "string",
-                    "description": "Raw table to use for assets"
-                },
-                "timeseries-table": {
-                    "type": "string",
-                    "description": "Raw table to use for timeseries"
-                },
-                "relationships-table": {
-                    "type": "string",
-                    "description": "Raw table to use for relationships"
-                }
-            }
-        },
         "metadata-targets": {
             "type": "object",
             "description": "Metadata targets for objects, variable and references in CDF.",

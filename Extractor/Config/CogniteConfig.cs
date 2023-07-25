@@ -169,9 +169,9 @@ namespace Cognite.OpcUa.Config
     }
     public class CleanMetadataTargetConfig
     {
-        public bool Assets { get; set; } = true;
-        public bool Timeseries { get; set; } = true;
-        public bool Relationships { get; set; } = true;
+        public bool Assets { get; set; }
+        public bool Timeseries { get; set; }
+        public bool Relationships { get; set; }
     }
     public class MetadataMapConfig
     {

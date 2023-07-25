@@ -155,14 +155,19 @@ namespace Cognite.OpcUa
                     }
                 };
             }
-            if (config.Cognite?.FlexibleDataModels != null)
+            else if (config.Cognite?.MetadataTargets == null)
             {
-                log.LogWarning("cognite.flexible-data-models is deprecated. Use cognite.metadata-targets.flexible-data-models instead");
-                
-                if (config.Cognite == null) config.Cognite = new CognitePusherConfig();
-                if (config.Cognite.MetadataTargets == null) config.Cognite.MetadataTargets = new MetadataTargetsConfig();
-                if (config.Cognite.MetadataTargets.DataModels == null) {
-                    config.Cognite.MetadataTargets.DataModels = config.Cognite.FlexibleDataModels;
+                if (config.Cognite?.SkipMetadata ?? false)
+                {
+                    log.LogWarning("Use of skip-metadata has been deprecated. use cognite.metadata-targets instead");
+                }
+                else
+                {
+                    log.LogWarning("Default writing to clean is deprecated, in the future not setting a metadata target will not write metadata to CDF at all");
+                    if (config.Cognite == null) config.Cognite = new CognitePusherConfig();
+                    if (config.Cognite.MetadataTargets == null) config.Cognite.MetadataTargets = new MetadataTargetsConfig();
+                    if (config.Cognite.MetadataTargets.Clean == null) config.Cognite.MetadataTargets.Clean = new CleanMetadataTargetConfig();
+                    config.Cognite.MetadataTargets.Clean.Timeseries = true;
                 }
             }
 #pragma warning restore 0618
