@@ -274,15 +274,18 @@ namespace Test.Unit
         [Fact]
         public async Task TestCreateUpdateAssets()
         {
-            using var extractor = tester.BuildExtractor(true, null, pusher);
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_cdf");
             tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
             {
                 Clean = new CleanMetadataTargetConfig
                 {
-                    Assets = true
+                    Assets = true,
+                    Timeseries = false,
+                    Relationships = true,
                 }
             };
+            (handler, pusher) = tester.GetCDFPusher();
+            using var extractor = tester.BuildExtractor(true, null, pusher);
 
             var rels = Enumerable.Empty<UAReference>();
             var tss = Enumerable.Empty<UAVariable>();
@@ -340,23 +343,19 @@ namespace Test.Unit
         [Fact]
         public async Task TestCreateRawAssets()
         {
-            using var extractor = tester.BuildExtractor(true, null, pusher);
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_cdf");
 
             tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
             {
-                Clean = new CleanMetadataTargetConfig
-                {
-                    Relationships = true,
-                    Assets = false,
-                    Timeseries = true
-                },
+                Clean = new CleanMetadataTargetConfig(),
                 Raw = new RawMetadataTargetConfig
                 {
                     Database = "metadata",
                     AssetsTable = "assets"
                 }
             };
+            (handler, pusher) = tester.GetCDFPusher();
+            using var extractor = tester.BuildExtractor(true, null, pusher);
 
             var node = new UAObject(tester.Server.Ids.Base.Root, "BaseRoot", null, null, NodeId.Null, null);
             var rels = Enumerable.Empty<UAReference>();
@@ -366,17 +365,17 @@ namespace Test.Unit
             handler.FailedRoutes.Add("/raw/dbs/metadata/tables/assets/rows");
             Assert.False((await pusher.PushNodes(new[] { node }, tss, rels, update, tester.Source.Token)).RawObjects);
             Assert.Empty(handler.AssetsRaw);
+            handler.FailedRoutes.Clear();
 
             // Create one
-            handler.FailedRoutes.Clear();
-            Assert.True((await pusher.PushNodes(new[] { node }, tss, rels, update, tester.Source.Token)).Objects);
+            Assert.True((await pusher.PushNodes(new[] { node }, tss, rels, update, tester.Source.Token)).RawObjects);
             Assert.Single(handler.AssetsRaw);
             Assert.Equal("BaseRoot", handler.AssetsRaw.First().Value.GetProperty("name").GetString());
 
             // Create another, do not overwrite the existing one, due to no update settings
             var node2 = new UAObject(tester.Server.Ids.Custom.Root, "CustomRoot", null, null, NodeId.Null, null);
             node.Attributes.Description = "description";
-            Assert.True((await pusher.PushNodes(new[] { node, node2 }, tss, rels, update, tester.Source.Token)).Objects);
+            Assert.True((await pusher.PushNodes(new[] { node, node2 }, tss, rels, update, tester.Source.Token)).RawObjects);
             Assert.Equal(2, handler.AssetsRaw.Count);
             Assert.Null(handler.AssetsRaw.First().Value.GetProperty("description").GetString());
             Assert.Null(handler.AssetsRaw.Last().Value.GetProperty("description").GetString());
@@ -386,7 +385,6 @@ namespace Test.Unit
         [Fact]
         public async Task TestUpdateRawAssets()
         {
-            using var extractor = tester.BuildExtractor(true, null, pusher);
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_cdf");
 
             tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
@@ -404,6 +402,8 @@ namespace Test.Unit
                     TimeseriesTable = "timeseries"
                 }
             };
+            (handler, pusher) = tester.GetCDFPusher();
+            using var extractor = tester.BuildExtractor(true, null, pusher);
             var node = new UAObject(tester.Server.Ids.Base.Root, "BaseRoot", null, null, NodeId.Null, null);
             var rels = Enumerable.Empty<UAReference>();
             var tss = Enumerable.Empty<UAVariable>();
@@ -436,7 +436,6 @@ namespace Test.Unit
         [Fact]
         public async Task TestCreateUpdateTimeseries()
         {
-            using var extractor = tester.BuildExtractor(true, null, pusher);
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_cdf");
             tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
             {
@@ -447,6 +446,8 @@ namespace Test.Unit
                     Timeseries = true
                 },
             };
+            (handler, pusher) = tester.GetCDFPusher();
+            using var extractor = tester.BuildExtractor(true, null, pusher);
 
             var dt = new UADataType(DataTypeIds.Double);
 
@@ -515,7 +516,6 @@ namespace Test.Unit
         [Fact]
         public async Task TestCreateRawTimeseries()
         {
-            using var extractor = tester.BuildExtractor(true, null, pusher);
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_cdf");
 
             tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
@@ -533,6 +533,8 @@ namespace Test.Unit
                     TimeseriesTable = "timeseries"
                 }
             };
+            (handler, pusher) = tester.GetCDFPusher();
+            using var extractor = tester.BuildExtractor(true, null, pusher);
 
             var dt = new UADataType(DataTypeIds.Double);
 
@@ -567,7 +569,6 @@ namespace Test.Unit
         [Fact]
         public async Task TestUpdateRawTimeseries()
         {
-            using var extractor = tester.BuildExtractor(true, null, pusher);
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_cdf");
 
             tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
@@ -586,6 +587,8 @@ namespace Test.Unit
                 }
             };
 
+            (handler, pusher) = tester.GetCDFPusher();
+            using var extractor = tester.BuildExtractor(true, null, pusher);
             var dt = new UADataType(DataTypeIds.Double);
 
             var nodeToAssetIds = (Dictionary<NodeId, long>)pusher.GetType()
@@ -634,8 +637,6 @@ namespace Test.Unit
                 ReportOnEmpty = true
             };
 
-            (handler, pusher) = tester.GetCDFPusher();
-            using var extractor = tester.BuildExtractor(true, null, pusher);
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_cdf");
             tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
             {
@@ -647,6 +648,8 @@ namespace Test.Unit
                 },
             };
 
+            (handler, pusher) = tester.GetCDFPusher();
+            using var extractor = tester.BuildExtractor(true, null, pusher);
 
             var dt = new UADataType(DataTypes.Double);
 
@@ -1215,6 +1218,7 @@ namespace Test.Unit
             tester.Config.Extraction.RootNode = tester.Ids.Custom.Root.ToProtoNodeId(tester.Client);
             tester.Config.History.Enabled = true;
 
+            (handler, pusher) = tester.GetCDFPusher();
             using var extractor = tester.BuildExtractor(true, null, pusher);
 
             // Nothing in CDF
@@ -1292,6 +1296,7 @@ namespace Test.Unit
             tester.Config.Subscriptions.DataPoints = true;
             tester.Config.Extraction.RootNode = tester.Ids.Event.Root.ToProtoNodeId(tester.Client);
 
+            (handler, pusher) = tester.GetCDFPusher();
             using var extractor = tester.BuildExtractor(true, null, pusher);
 
             // Nothing in CDF
@@ -1357,6 +1362,7 @@ namespace Test.Unit
                 {
                     Relationships = true,
                     Assets = false,
+                    Timeseries = true,
                 },
                 Raw = new RawMetadataTargetConfig
                 {
@@ -1372,6 +1378,7 @@ namespace Test.Unit
             tester.Config.Subscriptions.DataPoints = true;
             tester.Config.Extraction.RootNode = tester.Ids.Event.Root.ToProtoNodeId(tester.Client);
             tester.Config.Source.AltSourceBackgroundBrowse = true;
+            (handler, pusher) = tester.GetCDFPusher();
 
             using var extractor = tester.BuildExtractor(true, null, pusher);
 

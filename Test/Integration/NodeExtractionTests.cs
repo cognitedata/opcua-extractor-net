@@ -864,9 +864,6 @@ namespace Test.Integration
             bool assetContext, bool variableContext,
             bool assetMeta, bool variableMeta)
         {
-            var (handler, pusher) = tester.GetCDFPusher();
-            using var extractor = tester.BuildExtractor(true, null, pusher);
-
             tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
             {
                 Clean = new CleanMetadataTargetConfig
@@ -875,6 +872,9 @@ namespace Test.Integration
                     Timeseries = true
                 }
             };
+            var (handler, pusher) = tester.GetCDFPusher();
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+
             var upd = tester.Config.Extraction.Update;
             upd.Objects.Name = assetName;
             upd.Objects.Description = assetDesc;
@@ -919,9 +919,6 @@ namespace Test.Integration
         // [InlineData(true, true)]
         public async Task TestUpdateFieldsRaw(bool assets, bool timeseries)
         {
-            var (handler, pusher) = tester.GetCDFPusher();
-            using var extractor = tester.BuildExtractor(true, null, pusher);
-
             var upd = tester.Config.Extraction.Update;
             upd.Objects.Name = assets;
             upd.Objects.Description = assets;
@@ -949,6 +946,8 @@ namespace Test.Integration
                     TimeseriesTable = "timeseries"
                 }
             };
+            var (handler, pusher) = tester.GetCDFPusher();
+            using var extractor = tester.BuildExtractor(true, null, pusher);
 
             tester.Config.Extraction.DataTypes.AllowStringVariables = true;
             tester.Config.Extraction.DataTypes.MaxArraySize = 4;
@@ -993,9 +992,6 @@ namespace Test.Integration
         [Fact]
         public async Task TestUpdateNullPropertyValue()
         {
-            var (handler, pusher) = tester.GetCDFPusher();
-            using var extractor = tester.BuildExtractor(true, null, pusher);
-
             tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Wrong.Root, tester.Client);
 
             tester.Config.Extraction.DataTypes.MaxArraySize = 4;
@@ -1018,6 +1014,9 @@ namespace Test.Integration
                     Timeseries = true
                 }
             };
+            var (handler, pusher) = tester.GetCDFPusher();
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+
 
             tester.Server.Server.MutateNode(tester.Server.Ids.Wrong.TooLargeProp, state =>
             {

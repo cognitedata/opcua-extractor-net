@@ -376,29 +376,29 @@ namespace Test.Unit
         [Fact]
         public async Task TestCDFDelete()
         {
-            var (handler, pusher) = tester.GetCDFPusher();
             tester.Config.Extraction.Deletes.Enabled = true;
             tester.Config.Extraction.RootNode = tester.Ids.Audit.Root.ToProtoNodeId(tester.Client);
             tester.Config.Extraction.Relationships.Enabled = true;
             tester.Config.Extraction.Relationships.Hierarchical = true;
             tester.Config.Cognite.DeleteRelationships = true;
+            tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
+            {
+                Clean = new CleanMetadataTargetConfig
+                {
+                    Assets = true,
+                    Timeseries = true,
+                    Relationships = true
+                }
+            };
             using var stateStore = new MockStateStore();
 
+            var (handler, pusher) = tester.GetCDFPusher();
             using var extractor = tester.BuildExtractor(pushers: pusher, stateStore: stateStore);
 
             var addedId = tester.Server.Server.AddObject(tester.Ids.Audit.Root, "NodeToDelete");
             var addedVarId = tester.Server.Server.AddVariable(tester.Ids.Audit.Root, "VariableToDelete", DataTypeIds.Double);
             var addedExtId = tester.Client.GetUniqueId(addedId);
             var addedVarExtId = tester.Client.GetUniqueId(addedVarId);
-
-            tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
-            {
-                Clean = new CleanMetadataTargetConfig
-                {
-                    Assets = true,
-                    // Timeseries = true
-                }
-            };
             // Run the extractor and verify that we got the node.
             await extractor.RunExtractor(true);
             Assert.True(handler.Assets.ContainsKey(addedExtId));
@@ -429,7 +429,6 @@ namespace Test.Unit
         [Fact]
         public async Task TestCDFDeleteRaw()
         {
-            var (handler, pusher) = tester.GetCDFPusher();
             tester.Config.Extraction.Deletes.Enabled = true;
             tester.Config.Extraction.RootNode = tester.Ids.Audit.Root.ToProtoNodeId(tester.Client);
             tester.Config.Extraction.Relationships.Enabled = true;
@@ -440,6 +439,8 @@ namespace Test.Unit
                 Clean = new CleanMetadataTargetConfig
                 {
                     Timeseries = true,
+                    Assets = true,
+                    Relationships = true
                 },
                 Raw = new RawMetadataTargetConfig
                 {
@@ -450,6 +451,7 @@ namespace Test.Unit
                 }
             };
             using var stateStore = new MockStateStore();
+            var (handler, pusher) = tester.GetCDFPusher();
 
             using var extractor = tester.BuildExtractor(pushers: pusher, stateStore: stateStore);
 

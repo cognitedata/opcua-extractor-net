@@ -341,22 +341,13 @@ namespace Cognite.OpcUa.Pushers
 
             var tasks = new List<Task>();
 
-            if (cdfWriter.Assets != null)
-            {
-                tasks.Add(PushAssets(objects, update.Objects, report, result, token));
-            }
+            tasks.Add(PushAssets(objects, update.Objects, report, result, token));
             
             tasks.Add(PushTimeseries(variables, update.Variables, report, result, token));
 
-            if (cdfWriter.Relationships != null)
-            {
-                tasks.Add(PushReferences(references, report, result, token));
-            }
+            tasks.Add(PushReferences(references, report, result, token));
 
-            if (cdfWriter.FDM != null)
-            {
-                tasks.Add(PushFdm(objects, variables, references, result, token));
-            }
+            tasks.Add(PushFdm(objects, variables, references, result, token));
 
             await Task.WhenAll(tasks);
 
@@ -388,6 +379,7 @@ namespace Cognite.OpcUa.Pushers
         /// <returns>Task</returns>
         private async Task PushFdm(IEnumerable<BaseUANode> objects, IEnumerable<UAVariable> variables, IEnumerable<UAReference> references, PushResult result, CancellationToken token)
         {
+            if (cdfWriter.FDM == null) return;
             bool pushResult = true;
             try
             {
@@ -640,10 +632,10 @@ namespace Cognite.OpcUa.Pushers
         /// <returns>Task</returns>
         private async Task PushAssets(IEnumerable<BaseUANode> objects, TypeUpdateConfig update, BrowseReport report, PushResult result, CancellationToken token)
         {
-            if (!objects.Any()) return;
+            if (!objects.Any() && cdfWriter.Assets == null && cdfWriter.Raw == null) return;
 
             var assetsMap = MapAssets(objects);
-            if (CleanMetadataTargetConfig?.Assets ?? false)
+            if (CleanMetadataTargetConfig?.Assets ?? false && cdfWriter.Assets != null)
             {
                 await PushCleanAssets(assetsMap, update, report, result, token);
             } 
@@ -675,7 +667,7 @@ namespace Cognite.OpcUa.Pushers
                 result.Objects = false;
             }
         }
-
+        
         /// <summary>
         /// Master method for pushing assets to CDF raw.
         /// </summary>
@@ -787,7 +779,7 @@ namespace Cognite.OpcUa.Pushers
 
             var timeseriesMap = MapTimeseries(variables);
             await PushCleanTimeseries(timeseriesMap, update, report, result, token);
-            if ((RawMetadataTargetConfig?.Database != null) && (RawMetadataTargetConfig?.TimeseriesTable != null))
+            if (cdfWriter.Raw != null && (RawMetadataTargetConfig?.TimeseriesTable != null))
             {
                 await PushRawTimeseries(timeseriesMap, update, report, result, token);
             }
@@ -983,18 +975,18 @@ namespace Cognite.OpcUa.Pushers
         /// <returns>Task</returns>
         private async Task PushReferences(IEnumerable<UAReference> references, BrowseReport report, PushResult result, CancellationToken token)
         {
-            if (!references.Any()) return;
+            if (!references.Any() && cdfWriter.Timeseries == null && cdfWriter.Raw == null) return;
 
             var relationships = references
                 .Select(reference => reference.ToRelationship(config.DataSet?.Id, Extractor))
                 .DistinctBy(rel => rel.ExternalId);
 
-            if (CleanMetadataTargetConfig?.Relationships ?? false)
+            if (cdfWriter.Relationships != null)
             {
                 await PushCleanReferences(relationships, report, result, token);
             }
 
-            if (RawMetadataTargetConfig?.Database != null && RawMetadataTargetConfig?.RelationshipsTable != null)
+            if (cdfWriter.Raw != null && RawMetadataTargetConfig?.RelationshipsTable != null)
             {
                 await PushRawReferences(relationships, report, result, token);
             }
@@ -1107,3 +1099,4 @@ namespace Cognite.OpcUa.Pushers
         public void Dispose() { }
     }
 }
+

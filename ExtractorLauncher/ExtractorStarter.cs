@@ -172,6 +172,19 @@ namespace Cognite.OpcUa
             }
 #pragma warning restore 0618
 
+            if (config.Cognite?.MetadataTargets?.Raw != null)
+            {
+                var rawMetaTarget = config.Cognite.MetadataTargets.Raw;
+                if (rawMetaTarget.Database == null)
+                {
+                    return "cognite.metadata-targets.raw.database is required when setting raw";
+                }
+                if (rawMetaTarget.AssetsTable == null || rawMetaTarget.RelationshipsTable == null || rawMetaTarget.TimeseriesTable == null)
+                {
+                    return "Atlease one of assets-table, relationships-table or timeseries-table is required when setting cognite.metadata-targets.raw";
+                }
+            }
+
             return null;
         }
 

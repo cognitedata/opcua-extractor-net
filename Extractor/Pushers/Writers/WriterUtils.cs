@@ -52,7 +52,7 @@ namespace Cognite.OpcUa.Pushers.Writers
                     );
                 });
             }
-            if (config.Cognite?.MetadataTargets?.DataModels != null && (config.Cognite?.MetadataTargets?.DataModels.Enabled ?? false))
+            if (config.Cognite?.MetadataTargets?.DataModels != null && config.Cognite.MetadataTargets.DataModels.Enabled)
             {
                 services.AddSingleton<FDMWriter>(provider => {
                     var destination = provider.GetRequiredService<CogniteDestination>();
