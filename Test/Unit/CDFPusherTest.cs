@@ -815,7 +815,7 @@ namespace Test.Unit
             Assert.Equal(0, res.AssetsCreated);
             Assert.Equal(1, res.AssetsUpdated);
             Assert.Equal(0, res.TimeSeriesCreated);
-            Assert.Equal(1, res.TimeSeriesUpdated);
+            Assert.Equal(1, res.RawTimeseriesUpdated);
             Assert.Equal(0, res.MinimalTimeSeriesCreated);
             Assert.Equal(1, res.RelationshipsCreated);
 

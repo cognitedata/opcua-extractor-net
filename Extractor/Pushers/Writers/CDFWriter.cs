@@ -1,28 +1,29 @@
+using Cognite.OpcUa.Pushers.FDM;
 using Cognite.OpcUa.Pushers.Writers.Interfaces;
 
 namespace Cognite.OpcUa.Pushers.Writers
 {
     public class CDFWriter : ICDFWriter
     {
-        public IRawWriter Raw { get; }
+        public IRawWriter? Raw { get; }
         public ITimeseriesWriter Timeseries { get; }
-        public IAssetsWriter Assets { get; }
-        public IRelationshipsWriter Relationships{ get; }
-        public ITimeseriesWriter MinimalTimeseries { get; }
+        public IAssetsWriter? Assets { get; }
+        public IRelationshipsWriter? Relationships { get; }
+        public FDMWriter? FDM { get; }
 
         public CDFWriter(
-            IRawWriter rawWriter,
             ITimeseriesWriter timeseriesWriter,
-            IAssetsWriter assetsWriter,
-            IRelationshipsWriter relationshipsWriter,
-            ITimeseriesWriter minimalTimeSeriesWriter
+            IRawWriter? rawWriter,
+            IAssetsWriter? assetsWriter,
+            IRelationshipsWriter? relationshipsWriter,
+            FDMWriter? fdmWriter
         )
         {
-            this.Raw = rawWriter;
-            this.Timeseries = timeseriesWriter;
-            this.Assets = assetsWriter;
-            this.Relationships = relationshipsWriter;
-            this.MinimalTimeseries = minimalTimeSeriesWriter;
+            Raw = rawWriter;
+            Timeseries = timeseriesWriter;
+            Assets = assetsWriter;
+            Relationships = relationshipsWriter;
+            FDM = fdmWriter;
         }
     }
 }

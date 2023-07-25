@@ -22,7 +22,6 @@ using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.NodeSources;
-using Cognite.OpcUa.Pushers.FDM;
 using Cognite.OpcUa.Pushers.Writers.Interfaces;
 using Cognite.OpcUa.Types;
 using CogniteSdk;
@@ -61,9 +60,9 @@ namespace Cognite.OpcUa.Pushers
         private UAExtractor extractor;
         public UAExtractor Extractor { get => extractor; set {
             extractor = value;
-            if (fdmDestination != null)
+            if (cdfWriter.FDM != null)
             {
-                fdmDestination.Extractor = value;
+                cdfWriter.FDM.Extractor = value;
             }
         } }
         public IPusherConfig BaseConfig { get; }
@@ -73,7 +72,6 @@ namespace Cognite.OpcUa.Pushers
         private readonly CogniteDestination destination;
 
         private readonly BrowseCallback? callback;
-        private readonly FDMWriter? fdmDestination;
         private RawMetadataTargetConfig? RawMetadataTargetConfig => fullConfig.Cognite?.MetadataTargets?.Raw;
         private CleanMetadataTargetConfig? CleanMetadataTargetConfig => fullConfig.Cognite?.MetadataTargets?.Clean;
 
@@ -95,11 +93,6 @@ namespace Cognite.OpcUa.Pushers
             if (config.BrowseCallback != null && (config.BrowseCallback.Id.HasValue || !string.IsNullOrEmpty(config.BrowseCallback.ExternalId)))
             {
                 callback = new BrowseCallback(destination, config.BrowseCallback, log);
-            }
-            if (config.MetadataTargets?.DataModels != null && (config.MetadataTargets?.DataModels.Enabled ?? false))
-            {
-                fdmDestination = new FDMWriter(provider.GetRequiredService<FullConfig>(), destination,
-                    provider.GetRequiredService<ILogger<FDMWriter>>());
             }
         }
 
@@ -325,9 +318,9 @@ namespace Cognite.OpcUa.Pushers
 
             if (fullConfig.DryRun)
             {
-                if (fdmDestination != null)
+                if (cdfWriter.FDM != null)
                 {
-                    await fdmDestination.PushNodes(objects, variables, references, Extractor, token);
+                    await cdfWriter.FDM.PushNodes(objects, variables, references, Extractor, token);
                 }
                 return result;
             }
@@ -348,10 +341,19 @@ namespace Cognite.OpcUa.Pushers
 
             var tasks = new List<Task>();
 
-            tasks.Add(PushAssets(objects, update.Objects, report, result, token));
+            if (cdfWriter.Assets != null)
+            {
+                tasks.Add(PushAssets(objects, update.Objects, report, result, token));
+            }
+            
             tasks.Add(PushTimeseries(variables, update.Variables, report, result, token));
-            tasks.Add(PushReferences(references, report, result, token));
-            if (fdmDestination != null)
+
+            if (cdfWriter.Relationships != null)
+            {
+                tasks.Add(PushReferences(references, report, result, token));
+            }
+
+            if (cdfWriter.FDM != null)
             {
                 tasks.Add(PushFdm(objects, variables, references, result, token));
             }
@@ -389,7 +391,7 @@ namespace Cognite.OpcUa.Pushers
             bool pushResult = true;
             try
             {
-                pushResult = await fdmDestination!.PushNodes(objects, variables, references, Extractor, token);
+                pushResult = await cdfWriter.FDM!.PushNodes(objects, variables, references, Extractor, token);
             }
             catch
             {
@@ -664,7 +666,7 @@ namespace Cognite.OpcUa.Pushers
         {
             try
             {
-                var _result = await cdfWriter.Assets.PushNodes(Extractor, assetsMap, nodeToAssetIds, update, token);
+                var _result = await cdfWriter.Assets!.PushNodes(Extractor, assetsMap, nodeToAssetIds, update, token);
                 report.AssetsCreated += _result.Created;
                 report.AssetsUpdated += _result.Updated;
             }
@@ -689,7 +691,7 @@ namespace Cognite.OpcUa.Pushers
         {
             try
             {
-                var _result = await cdfWriter.Raw.PushNodes(
+                var _result = await cdfWriter.Raw!.PushNodes(
                     Extractor, 
                     RawMetadataTargetConfig!.Database!,
                     RawMetadataTargetConfig!.AssetsTable!,
@@ -804,9 +806,8 @@ namespace Cognite.OpcUa.Pushers
         {
             try
             {
+                var _result = await cdfWriter.Timeseries!.PushVariables(Extractor, timeseriesMap, nodeToAssetIds, mismatchedTimeseries, update, token);
                 var createMinimal = !(CleanMetadataTargetConfig?.Timeseries ?? false); 
-                var writer = createMinimal ? cdfWriter.MinimalTimeseries : cdfWriter.Timeseries;
-                var _result = await writer.PushVariables(Extractor, timeseriesMap, nodeToAssetIds, mismatchedTimeseries, update, token);
                 if (createMinimal)
                 {
                     report.MinimalTimeSeriesCreated += _result.Created;
@@ -840,7 +841,7 @@ namespace Cognite.OpcUa.Pushers
                     .Where(kvp => kvp.Value.Source != NodeSource.CDF)
                     .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
 
-                var _result = await cdfWriter.Raw.PushNodes(
+                var _result = await cdfWriter.Raw!.PushNodes(
                     Extractor, 
                     RawMetadataTargetConfig!.Database!,
                     RawMetadataTargetConfig!.TimeseriesTable!,
@@ -1012,7 +1013,7 @@ namespace Cognite.OpcUa.Pushers
         {
             try
             {
-                var _result =  await cdfWriter.Relationships.PushReferences(relationships, token);
+                var _result =  await cdfWriter.Relationships!.PushReferences(relationships, token);
                 report.RelationshipsCreated += _result.Created;
             }
             catch (Exception e)
@@ -1035,7 +1036,7 @@ namespace Cognite.OpcUa.Pushers
         {
             try
             {
-                var _result = await cdfWriter.Raw.PushReferences(RawMetadataTargetConfig!.Database!, RawMetadataTargetConfig!.RelationshipsTable!, relationships, token);
+                var _result = await cdfWriter.Raw!.PushReferences(RawMetadataTargetConfig!.Database!, RawMetadataTargetConfig!.RelationshipsTable!, relationships, token);
                 report.RawRelationshipsCreated += _result.Created;
             } catch (Exception e)
             {

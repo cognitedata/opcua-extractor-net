@@ -365,7 +365,7 @@ namespace Cognite.OpcUa
             });
 
             services.AddSingleton<UAClient>();
-            services.AddWriters(token);
+            services.AddWriters(token, config!);
 
             var options = new ExtractorRunnerParams<FullConfig, UAExtractor>
             {

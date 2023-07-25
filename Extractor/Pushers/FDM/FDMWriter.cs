@@ -34,7 +34,7 @@ using System.Text.Json.Serialization;
 
 namespace Cognite.OpcUa.Pushers.FDM
 {
-    internal class FDMWriter
+    public class FDMWriter
     {
         private CogniteDestination destination;
         private FullConfig config;

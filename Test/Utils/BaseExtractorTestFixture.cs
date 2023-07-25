@@ -165,7 +165,7 @@ namespace Test.Utils
         {
             CommonTestUtils.AddDummyProvider("test", CDFMockHandler.MockMode.None, true, Services);
             Services.AddCogniteClient("appid", null, true, true, false);
-            Services.AddWriters(Source.Token);
+            Services.AddWriters(Source.Token, Config);
             var provider = Services.BuildServiceProvider();
             var destination = provider.GetRequiredService<CogniteDestination>();
             var pusher = new CDFPusher(Provider.GetRequiredService<ILogger<CDFPusher>>(),

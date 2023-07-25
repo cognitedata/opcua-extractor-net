@@ -30,7 +30,7 @@ using Opc.Ua;
 
 namespace Cognite.OpcUa.Pushers.Writers
 {
-    public class TimeseriesWriter : BaseTimeseriesWriter<TimeseriesWriter>
+    public class TimeseriesWriter : BaseTimeseriesWriter
     {
         public TimeseriesWriter(ILogger<TimeseriesWriter> logger, CogniteDestination destination, FullConfig config)
             : base(logger, destination, config)

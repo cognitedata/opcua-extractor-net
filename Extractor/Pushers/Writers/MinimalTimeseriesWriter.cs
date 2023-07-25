@@ -29,7 +29,7 @@ using Opc.Ua;
 
 namespace Cognite.OpcUa.Pushers.Writers
 {
-    public class MinimalTimeseriesWriter : BaseTimeseriesWriter<MinimalTimeseriesWriter>
+    public class MinimalTimeseriesWriter : BaseTimeseriesWriter
     {
         public MinimalTimeseriesWriter(
             ILogger<MinimalTimeseriesWriter> logger,
@@ -44,8 +44,8 @@ namespace Cognite.OpcUa.Pushers.Writers
             var tss = ids.Select(id => tsMap[id]);
                 var creates = tss.Select(ts => ts.ToMinimalTimeseries(extractor, config.Cognite?.DataSet?.Id))
                     .Where(ts => ts != null);
-                result.Created += creates.Count();
-                return creates;
+            result.Created += creates.Count();
+            return creates;
         }
 
         protected override Task UpdateTimeseries(UAExtractor extractor, IDictionary<string, UAVariable> tsMap,

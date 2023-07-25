@@ -16,13 +16,13 @@ using Opc.Ua;
 
 namespace Cognite.OpcUa.Pushers.Writers
 {
-    public abstract class BaseTimeseriesWriter<TSubTimeseriesWriter> : ITimeseriesWriter
+    public abstract class BaseTimeseriesWriter : ITimeseriesWriter
     {
-        protected readonly ILogger<TSubTimeseriesWriter> logger;
+        protected readonly ILogger logger;
         protected readonly FullConfig config;
         protected readonly CogniteDestination destination;
 
-        public BaseTimeseriesWriter(ILogger<TSubTimeseriesWriter> logger, CogniteDestination destination, FullConfig config)
+        public BaseTimeseriesWriter(ILogger logger, CogniteDestination destination, FullConfig config)
         {
             this.logger = logger;
             this.config = config;
