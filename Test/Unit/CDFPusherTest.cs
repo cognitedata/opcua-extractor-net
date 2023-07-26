@@ -1436,12 +1436,6 @@ namespace Test.Unit
             tester.Config.Extraction.DataTypes.AutoIdentifyTypes = true;
 
             (handler, pusher) = tester.GetCDFPusher();
-            handler.Assets.Clear();
-            handler.AssetsRaw.Clear();
-            handler.Timeseries.Clear();
-            handler.TimeseriesRaw.Clear();
-            handler.Relationships.Clear();
-            handler.RelationshipsRaw.Clear();
             var extractor = tester.BuildExtractor(clear: true, pushers: pusher);
  
             var update = new UpdateConfig();
