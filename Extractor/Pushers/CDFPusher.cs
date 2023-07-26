@@ -335,6 +335,9 @@ namespace Cognite.OpcUa.Pushers
                 result.Objects = false;
                 result.References = false;
                 result.Variables = false;
+                result.RawObjects = false;
+                result.RawReferences = false;
+                result.RawVariables = false;
                 nodeEnsuringFailures.Inc();
                 return result;
             }
@@ -353,7 +356,14 @@ namespace Cognite.OpcUa.Pushers
 
             log.LogInformation("Finish pushing nodes to CDF");
 
-            if (result.Objects && result.References && result.Variables && result.RawObjects && result.RawVariables && result.RawReferences)
+            if (
+                result.Objects 
+                && result.References
+                && result.Variables
+                && result.RawObjects
+                && result.RawVariables
+                && result.RawReferences
+            )
             {
                 if (callback != null)
                 {
@@ -377,13 +387,14 @@ namespace Cognite.OpcUa.Pushers
         /// <param name="result">Push result</param>
         /// <param name="token">Cancellation token</param>
         /// <returns>Task</returns>
-        private async Task PushFdm(IEnumerable<BaseUANode> objects, IEnumerable<UAVariable> variables, IEnumerable<UAReference> references, PushResult result, CancellationToken token)
+        private async Task PushFdm(IEnumerable<BaseUANode> objects,
+                IEnumerable<UAVariable> variables, IEnumerable<UAReference> references, PushResult result, CancellationToken token)
         {
             if (cdfWriter.FDM == null) return;
             bool pushResult = true;
             try
             {
-                pushResult = await cdfWriter.FDM!.PushNodes(objects, variables, references, Extractor, token);
+                pushResult = await cdfWriter.FDM.PushNodes(objects, variables, references, Extractor, token);
             }
             catch
             {
@@ -635,11 +646,11 @@ namespace Cognite.OpcUa.Pushers
             if (!objects.Any() && cdfWriter.Assets == null && cdfWriter.Raw == null) return;
 
             var assetsMap = MapAssets(objects);
-            if (CleanMetadataTargetConfig?.Assets ?? false && cdfWriter.Assets != null)
+            if (cdfWriter.Assets != null)
             {
                 await PushCleanAssets(assetsMap, update, report, result, token);
             } 
-            if (RawMetadataTargetConfig?.Database != null && RawMetadataTargetConfig?.AssetsTable != null)
+            if (cdfWriter.Raw != null && RawMetadataTargetConfig?.AssetsTable != null)
             {
                 await PushRawAssets(assetsMap, update, report, result, token);
             }

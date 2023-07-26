@@ -1405,6 +1405,72 @@ namespace Test.Unit
 
             await TestUtils.WaitForCondition(() => handler.TimeseriesRaw.Count > 0, 10);
         }
+
+        [Fact]
+        public async Task TestAllDestinationsActive()
+        {
+            tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
+            {
+                Clean = new CleanMetadataTargetConfig
+                {
+                    Relationships = true,
+                    Assets = true,
+                    Timeseries = true,
+                },
+                Raw = new RawMetadataTargetConfig
+                {
+                    Database = "metadata",
+                    TimeseriesTable = "timeseries",
+                    AssetsTable = "assets",
+                    RelationshipsTable = "relationships"
+                },
+            };
+            tester.Config.Extraction.RootNode = new ProtoNodeId
+            {
+                NamespaceUri = "http://opcfoundation.org/UA/",
+                NodeId = "i=86"
+            };
+            tester.Config.Extraction.NodeTypes.AsNodes = true;
+            tester.Config.Extraction.Relationships.Enabled = true;
+            tester.Config.Extraction.Relationships.Hierarchical = true;
+            tester.Config.Extraction.DataTypes.AutoIdentifyTypes = true;
+
+            (handler, pusher) = tester.GetCDFPusher();
+            handler.Assets.Clear();
+            handler.AssetsRaw.Clear();
+            handler.Timeseries.Clear();
+            handler.TimeseriesRaw.Clear();
+            handler.Relationships.Clear();
+            handler.RelationshipsRaw.Clear();
+            var extractor = tester.BuildExtractor(clear: true, pushers: pusher);
+ 
+            var update = new UpdateConfig();
+            var dt = new UADataType(DataTypeIds.Double);
+            var node = new UAObject(tester.Server.Ids.Base.Root, "BaseRoot", null, null, NodeId.Null, null);
+            var variable = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", null, null, new NodeId("parent"), null);
+            variable.FullAttributes.DataType = dt;
+            var rel = new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target2"), true, false, false, extractor.TypeManager);
+
+            var result = await pusher.PushNodes(new[] { node }, new [] { variable }, new[] { rel }, update, tester.Source.Token);
+
+            Assert.True(result.Objects);
+            Assert.True(result.RawObjects);
+
+            Assert.True(result.Variables);
+            Assert.True(result.RawVariables);
+ 
+            Assert.True(result.References);
+            Assert.True(result.RawReferences);
+
+            Assert.Single(handler.Assets);
+            Assert.Single(handler.AssetsRaw);
+
+            Assert.Single(handler.Timeseries);
+            Assert.Single(handler.TimeseriesRaw);
+
+            Assert.Single(handler.Relationships);
+            Assert.Single(handler.RelationshipsRaw);
+        }
         #endregion
     }
 }
