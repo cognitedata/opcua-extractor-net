@@ -997,7 +997,6 @@ namespace Test.Unit
         [Fact]
         public async Task TestCreateRawRelationships()
         {
-            using var extractor = tester.BuildExtractor(true, null, pusher);
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_cdf");
 
             tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
@@ -1009,13 +1008,15 @@ namespace Test.Unit
                 }
             };
             tester.Config.Extraction.Relationships.Enabled = true;
+            (handler, pusher) = tester.GetCDFPusher();
+            using var extractor = tester.BuildExtractor(true, null, pusher);
 
             var assets = Enumerable.Empty<BaseUANode>();
             var tss = Enumerable.Empty<UAVariable>();
             var update = new UpdateConfig();
 
             // Push none
-            Assert.True((await pusher.PushNodes(assets, tss, Enumerable.Empty<UAReference>(), update, tester.Source.Token)).References);
+            Assert.True((await pusher.PushNodes(assets, tss, Enumerable.Empty<UAReference>(), update, tester.Source.Token)).RawReferences);
 
             // Fail to push
             var references = new List<UAReference>
@@ -1027,9 +1028,9 @@ namespace Test.Unit
             handler.FailedRoutes.Add("/raw/dbs/metadata/tables/relationships/rows");
             Assert.False((await pusher.PushNodes(assets, tss, references, update, tester.Source.Token)).RawReferences);
             Assert.Empty(handler.RelationshipsRaw);
+            handler.FailedRoutes.Clear();
 
             // Push successful
-            handler.FailedRoutes.Clear();
             Assert.True((await pusher.PushNodes(assets, tss, references, update, tester.Source.Token)).RawReferences);
             Assert.Equal(2, handler.RelationshipsRaw.Count);
 
