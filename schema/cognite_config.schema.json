@@ -34,7 +34,7 @@
             "description": "Metadata targets for objects, variable and references in CDF.",
             "unevaluatedProperties": false,
             "properties": {
-                "raw-metadata": {
+                "raw": {
                     "type": "object",
                     "description": "Details of CDF raw (database and table).",
                     "unevaluatedProperties": false,
@@ -58,7 +58,7 @@
                         }
                     }
                 },
-                "clean-metadata": {
+                "clean": {
                     "unevaluatedProperties": false,
                     "description": "Enable or disable assets, timeseries and/or relationships",
                     "type": "object",
@@ -77,7 +77,7 @@
                         }
                     }
                 },
-                "flexible-data-models": {
+                "data-models": {
                     "unevaluatedProperties": false,
                     "description": "configuration for flexible data models in CDF",
                     "type": "object",

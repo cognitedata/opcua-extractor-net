@@ -257,6 +257,29 @@ cognite:
         # Table to store relationships in
         relationships-table:
 
+    # CDF target configurations. Regardless of the configuration here, a form of timeseries is always created (either full or minimal) for now.
+    # In the future however, users are expected to create target specific destinations.
+    metadata-targets:
+      # Configuration to enable some form of clean i.e. assets, timeseries or relationships.
+      clean:
+        # Toggle CDF assets destination as a target
+        assets: false
+        # Toggle CDF timeseries destination as a target
+        timeseries: false
+        # Toggle CDF relationships destination as a target
+        relationships: false
+      # Configuration for some form or CDF raw destination.
+      # When this is used, it is required that 'database' name and any of the other keys are provided
+      raw:
+        # Database name 
+        database:
+        # Assets table name
+        assets-table:
+        # Timeseries table name
+        timeseries-table:
+        # Relationships table name
+        relationships-table:
+
     # Read from CDF instead of OPC-UA when starting, to speed up start on slow servers.
     # Requires extraction.data-types.expand-node-ids and append-internal-values to be set to true.
 
