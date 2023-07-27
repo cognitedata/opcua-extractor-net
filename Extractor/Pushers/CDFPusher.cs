@@ -345,7 +345,7 @@ namespace Cognite.OpcUa.Pushers
             var tasks = new List<Task>();
 
             tasks.Add(PushAssets(objects, update.Objects, report, result, token));
-            
+ 
             tasks.Add(PushTimeseries(variables, update.Variables, report, result, token));
 
             tasks.Add(PushReferences(references, report, result, token));
@@ -786,7 +786,7 @@ namespace Cognite.OpcUa.Pushers
         /// <returns>Task</returns>
         private async Task PushTimeseries(IEnumerable<UAVariable> variables, TypeUpdateConfig update, BrowseReport report, PushResult result, CancellationToken token)
         {
-            if (!variables.Any()) return;
+            if (!variables.Any() && cdfWriter.Timeseries == null && cdfWriter.Raw == null) return;
 
             var timeseriesMap = MapTimeseries(variables);
             await PushCleanTimeseries(timeseriesMap, update, report, result, token);

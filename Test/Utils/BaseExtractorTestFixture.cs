@@ -16,6 +16,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Test.Utils
 {
@@ -163,10 +164,15 @@ namespace Test.Utils
 
         public (CDFMockHandler, CDFPusher) GetCDFPusher()
         {
-            CommonTestUtils.AddDummyProvider("test", CDFMockHandler.MockMode.None, true, Services);
-            Services.AddCogniteClient("appid", null, true, true, false);
-            Services.AddWriters(Source.Token, Config);
-            var provider = Services.BuildServiceProvider();
+            var newServices = new ServiceCollection();
+            foreach (var service in Services) {
+                
+                newServices.Add(service);
+            }
+            CommonTestUtils.AddDummyProvider("test", CDFMockHandler.MockMode.None, true, newServices);
+            newServices.AddCogniteClient("appid", null, true, true, false);
+            newServices.AddWriters(Source.Token, Config);
+            var provider = newServices.BuildServiceProvider();
             var destination = provider.GetRequiredService<CogniteDestination>();
             var pusher = new CDFPusher(Provider.GetRequiredService<ILogger<CDFPusher>>(),
                 Config, Config.Cognite, destination, provider);

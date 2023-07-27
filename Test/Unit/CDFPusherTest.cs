@@ -281,7 +281,7 @@ namespace Test.Unit
                 {
                     Assets = true,
                     Timeseries = false,
-                    Relationships = true,
+                    Relationships = false,
                 }
             };
             (handler, pusher) = tester.GetCDFPusher();
@@ -1356,12 +1356,6 @@ namespace Test.Unit
             };
             tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
             {
-                Clean = new CleanMetadataTargetConfig
-                {
-                    Relationships = true,
-                    Assets = false,
-                    Timeseries = true,
-                },
                 Raw = new RawMetadataTargetConfig
                 {
                     Database = "metadata",
@@ -1413,15 +1407,15 @@ namespace Test.Unit
             {
                 Clean = new CleanMetadataTargetConfig
                 {
-                    Relationships = true,
                     Assets = true,
                     Timeseries = true,
+                    Relationships = true,
                 },
                 Raw = new RawMetadataTargetConfig
                 {
                     Database = "metadata",
-                    TimeseriesTable = "timeseries",
                     AssetsTable = "assets",
+                    TimeseriesTable = "timeseries",
                     RelationshipsTable = "relationships"
                 },
             };
