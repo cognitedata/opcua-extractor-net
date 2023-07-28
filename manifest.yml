@@ -60,6 +60,13 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.21.0":
+    description: Supports writing to all CDF destinations
+    changelog:
+      added:
+        - Support writing to any/all CDF resource without dependents on one another
+      changed:
+        - Metadata configuration options
   "2.20.3":
     description: Fix issue causing the extractor to fail to push datapoints on windows.
     changelog:
