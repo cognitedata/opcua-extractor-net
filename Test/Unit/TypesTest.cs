@@ -707,7 +707,7 @@ namespace Test.Unit
             Assert.Null(ts.Unit);
             Assert.Equal("description", ts.Description);
 
-            ts = node.ToTimeseries(tester.Config, extractor, extractor, 123, nodeToAssetIds, null, true);
+            ts = node.ToMinimalTimeseries(extractor, 123);
             Assert.Null(ts.Name);
             Assert.Null(ts.Metadata);
             Assert.Null(ts.AssetId);

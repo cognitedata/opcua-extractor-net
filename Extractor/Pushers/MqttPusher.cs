@@ -697,7 +697,7 @@ namespace Cognite.OpcUa.Pushers
             {
                 var minimalTimeseries = variables
                     .Where(variable => !update.AnyUpdate || !variable.Changed)
-                    .Select(variable => variable.ToTimeseries(fullConfig, Extractor, Extractor, config.DataSetId, null, null, true))
+                    .Select(variable => variable.ToMinimalTimeseries(Extractor, config.DataSetId))
                     .Where(variable => variable != null)
                     .ToList();
 

@@ -21,6 +21,7 @@ using Cognite.Extractor.Logging;
 using Cognite.Extractor.Utils;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Pushers;
+using Cognite.OpcUa.Pushers.Writers;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Prometheus;
@@ -123,6 +124,65 @@ namespace Cognite.OpcUa
             if (config.Subscriptions.KeepAliveCount <= 0)
             {
                 return "subscriptions.keep-alive-count must be greater than 0";
+            }
+#pragma warning disable 0618
+            if (config.Cognite?.RawMetadata != null)
+            {
+                log.LogWarning("cognite.raw-metadata is deprecated. Use cognite.metadata-targets instead");
+                if (config.Cognite.MetadataTargets != null)
+                {
+                    return "cognite.raw-metadata and cognite.metadata-targets cannot be set at the same time.";
+                }
+                if (config.Cognite == null) config.Cognite = new CognitePusherConfig();
+                var rawMetadata = config.Cognite.RawMetadata;
+                var useCleanAssets = (rawMetadata?.Database == null || rawMetadata?.AssetsTable == null) || config.Cognite.SkipMetadata;
+                var useCleanTimeseries = rawMetadata?.Database == null || rawMetadata?.TimeseriesTable == null;
+                var useCleanRelationships = rawMetadata?.Database == null || rawMetadata?.RelationshipsTable == null;
+                config.Cognite.MetadataTargets = new MetadataTargetsConfig
+                {
+                    Clean = new CleanMetadataTargetConfig
+                    {
+                        Assets = useCleanAssets,
+                        Timeseries = useCleanTimeseries,
+                        Relationships = useCleanRelationships
+                    },
+                    Raw = new RawMetadataTargetConfig
+                    {
+                        Database = rawMetadata?.Database,
+                        AssetsTable = rawMetadata?.AssetsTable,
+                        TimeseriesTable = rawMetadata?.TimeseriesTable,
+                        RelationshipsTable = rawMetadata?.RelationshipsTable
+                    }
+                };
+            }
+            else if (config.Cognite?.MetadataTargets == null)
+            {
+                if (config.Cognite?.SkipMetadata ?? false)
+                {
+                    log.LogWarning("Use of skip-metadata has been deprecated. use cognite.metadata-targets instead");
+                }
+                else
+                {
+                    log.LogWarning("Default writing to clean is deprecated, in the future not setting a metadata target will not write metadata to CDF at all");
+                    if (config.Cognite == null) config.Cognite = new CognitePusherConfig();
+                    if (config.Cognite.MetadataTargets == null) config.Cognite.MetadataTargets = new MetadataTargetsConfig();
+                    if (config.Cognite.MetadataTargets.Clean == null) config.Cognite.MetadataTargets.Clean = new CleanMetadataTargetConfig();
+                    config.Cognite.MetadataTargets.Clean.Timeseries = true;
+                }
+            }
+#pragma warning restore 0618
+
+            if (config.Cognite?.MetadataTargets?.Raw != null)
+            {
+                var rawMetaTarget = config.Cognite.MetadataTargets.Raw;
+                if (rawMetaTarget.Database == null)
+                {
+                    return "cognite.metadata-targets.raw.database is required when setting raw";
+                }
+                if (rawMetaTarget.AssetsTable == null || rawMetaTarget.RelationshipsTable == null || rawMetaTarget.TimeseriesTable == null)
+                {
+                    return "Atlease one of assets-table, relationships-table or timeseries-table is required when setting cognite.metadata-targets.raw";
+                }
             }
 
             return null;
@@ -323,6 +383,7 @@ namespace Cognite.OpcUa
             });
 
             services.AddSingleton<UAClient>();
+            services.AddWriters(token, config!);
 
             var options = new ExtractorRunnerParams<FullConfig, UAExtractor>
             {

@@ -17,6 +17,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using Cognite.Extensions;
 using Cognite.Extractor.Utils;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
@@ -56,6 +57,7 @@ namespace Cognite.OpcUa.Config
         /// similarly to raw-metadata, and datapoints will be pushed. Nothing will be written to raw, and no assets will be created.
         /// Events will be created, but without asset context.
         /// </summary>
+        [Obsolete("Deprecated!")]
         public bool SkipMetadata { get; set; }
         /// <summary>
         /// Store assets and/or timeseries data in raw. Assets will not be created at all,
@@ -65,6 +67,7 @@ namespace Cognite.OpcUa.Config
         /// of the source node is added to metadata if applicable.
         /// Use different table names for assets and timeseries.
         /// </summary>
+        [Obsolete("Deprecated! Use MetadataTargetsConfig.RawMetadataTargetConfig instead.")]
         public RawMetadataConfig? RawMetadata { get; set; }
         /// <summary>
         /// Map metadata to asset/timeseries attributes. Each of "assets" and "timeseries" is a map from property DisplayName to
@@ -114,7 +117,13 @@ namespace Cognite.OpcUa.Config
         /// <summary>
         /// Configuration for writing to a custom OPC-UA flexible data model.
         /// </summary>
+        [Obsolete("Deprecated! Use MetadataTargetsConfig.FdmDestinationConfig instead.")]
         public FdmDestinationConfig? FlexibleDataModels { get; set; }
+
+        /// <summary>
+        /// This is the implementation of the metadata targets 
+        /// </summary>
+        public MetadataTargetsConfig? MetadataTargets { get; set; }
     }
     public class RawMetadataConfig
     {
@@ -135,6 +144,34 @@ namespace Cognite.OpcUa.Config
         /// Table to store relationships in
         /// </summary>
         public string? RelationshipsTable { get; set; }
+    }
+    public class MetadataTargetsConfig 
+    {
+        /// <summary>
+        /// Raw metadata targets config
+        /// </summary>
+        public RawMetadataTargetConfig? Raw { get; set; }
+        /// <summary>
+        /// Clean metadata targets config
+        /// </summary>
+        public CleanMetadataTargetConfig? Clean { get; set; }
+        /// <summary>
+        /// FDM destination config
+        /// </summary>
+        public FdmDestinationConfig? DataModels { get; set; }
+    }
+    public class RawMetadataTargetConfig
+    {
+        public string? Database { get; set; }
+        public string? AssetsTable { get; set; }
+        public string? TimeseriesTable { get; set; }
+        public string? RelationshipsTable { get; set; }
+    }
+    public class CleanMetadataTargetConfig
+    {
+        public bool Assets { get; set; }
+        public bool Timeseries { get; set; }
+        public bool Relationships { get; set; }
     }
     public class MetadataMapConfig
     {

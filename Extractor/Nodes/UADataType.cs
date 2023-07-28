@@ -38,7 +38,7 @@ namespace Cognite.OpcUa.Nodes
 
         public override IEnumerable<uint> GetAttributeSet(FullConfig config)
         {
-            if (config.Cognite?.FlexibleDataModels?.Enabled ?? false)
+            if (config.Cognite?.MetadataTargets?.DataModels?.Enabled ?? false)
             {
                 yield return Attributes.DataTypeDefinition;
             }

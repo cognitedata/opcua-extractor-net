@@ -103,12 +103,15 @@ namespace Test.Unit
     public class DeleteTest
     {
         private readonly StaticServerTestFixture tester;
+        private readonly ITestOutputHelper _output;
+
         public DeleteTest(ITestOutputHelper output, StaticServerTestFixture tester)
         {
             this.tester = tester ?? throw new ArgumentNullException(nameof(tester));
             tester.ResetConfig();
             tester.Init(output);
             tester.Client.TypeManager.Reset();
+            _output = output;
         }
 
         private static UAObject GetObject(string id)
@@ -373,21 +376,29 @@ namespace Test.Unit
         [Fact]
         public async Task TestCDFDelete()
         {
-            var (handler, pusher) = tester.GetCDFPusher();
             tester.Config.Extraction.Deletes.Enabled = true;
             tester.Config.Extraction.RootNode = tester.Ids.Audit.Root.ToProtoNodeId(tester.Client);
             tester.Config.Extraction.Relationships.Enabled = true;
             tester.Config.Extraction.Relationships.Hierarchical = true;
             tester.Config.Cognite.DeleteRelationships = true;
+            tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
+            {
+                Clean = new CleanMetadataTargetConfig
+                {
+                    Assets = true,
+                    Timeseries = true,
+                    Relationships = true
+                }
+            };
             using var stateStore = new MockStateStore();
 
+            var (handler, pusher) = tester.GetCDFPusher();
             using var extractor = tester.BuildExtractor(pushers: pusher, stateStore: stateStore);
 
             var addedId = tester.Server.Server.AddObject(tester.Ids.Audit.Root, "NodeToDelete");
             var addedVarId = tester.Server.Server.AddVariable(tester.Ids.Audit.Root, "VariableToDelete", DataTypeIds.Double);
             var addedExtId = tester.Client.GetUniqueId(addedId);
             var addedVarExtId = tester.Client.GetUniqueId(addedVarId);
-
             // Run the extractor and verify that we got the node.
             await extractor.RunExtractor(true);
             Assert.True(handler.Assets.ContainsKey(addedExtId));
@@ -418,20 +429,29 @@ namespace Test.Unit
         [Fact]
         public async Task TestCDFDeleteRaw()
         {
-            var (handler, pusher) = tester.GetCDFPusher();
             tester.Config.Extraction.Deletes.Enabled = true;
             tester.Config.Extraction.RootNode = tester.Ids.Audit.Root.ToProtoNodeId(tester.Client);
             tester.Config.Extraction.Relationships.Enabled = true;
             tester.Config.Extraction.Relationships.Hierarchical = true;
             tester.Config.Cognite.DeleteRelationships = true;
-            tester.Config.Cognite.RawMetadata = new RawMetadataConfig
+            tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig 
             {
-                AssetsTable = "assets",
-                TimeseriesTable = "timeseries",
-                Database = "metadata",
-                RelationshipsTable = "relationships"
+                Clean = new CleanMetadataTargetConfig
+                {
+                    Timeseries = true,
+                    Assets = true,
+                    Relationships = true
+                },
+                Raw = new RawMetadataTargetConfig
+                {
+                    Database = "metadata",
+                    AssetsTable = "assets",
+                    TimeseriesTable = "timeseries",
+                    RelationshipsTable = "relationships"
+                }
             };
             using var stateStore = new MockStateStore();
+            var (handler, pusher) = tester.GetCDFPusher();
 
             using var extractor = tester.BuildExtractor(pushers: pusher, stateStore: stateStore);
 
@@ -442,10 +462,11 @@ namespace Test.Unit
 
             // Run the extractor and verify that we got the node.
             await extractor.RunExtractor(true);
-            Assert.True(handler.AssetRaw.ContainsKey(addedExtId));
+            Assert.True(handler.AssetsRaw.ContainsKey(addedExtId));
             Assert.True(handler.TimeseriesRaw.ContainsKey(addedVarExtId));
+            handler.Timeseries.Values.ToList().ForEach(v => _output.WriteLine(v.ToString()));
             Assert.True(handler.Timeseries.ContainsKey(addedVarExtId));
-            Assert.False(handler.AssetRaw[addedExtId].TryGetProperty("deleted", out _));
+            Assert.False(handler.AssetsRaw[addedExtId].TryGetProperty("deleted", out _));
             Assert.False(handler.TimeseriesRaw[addedVarExtId].TryGetProperty("deleted", out _));
             Assert.False(handler.Timeseries[addedVarExtId].metadata?.ContainsKey("deleted") ?? false);
             // Need to build the reference externalId late, since it depends on the reference type manager being populated.
@@ -461,7 +482,7 @@ namespace Test.Unit
             tester.Server.Server.RemoveNode(addedId);
             tester.Server.Server.RemoveNode(addedVarId);
             await extractor.Rebrowse();
-            Assert.True(handler.AssetRaw[addedExtId].GetProperty("deleted").GetBoolean());
+            Assert.True(handler.AssetsRaw[addedExtId].GetProperty("deleted").GetBoolean());
             Assert.True(handler.TimeseriesRaw[addedVarExtId].GetProperty("deleted").GetBoolean());
             Assert.True(handler.RelationshipsRaw[refExtId].deleted);
 

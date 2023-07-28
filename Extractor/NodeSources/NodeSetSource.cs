@@ -349,7 +349,7 @@ namespace Cognite.OpcUa.NodeSources
 
             await InitNodes(NodeList, token);
 
-            var usesFdm = Config.Cognite?.FlexibleDataModels?.Enabled ?? false;
+            var usesFdm = Config.Cognite?.MetadataTargets?.DataModels?.Enabled ?? false;
 
             if (Config.Extraction.Relationships.Enabled)
             {

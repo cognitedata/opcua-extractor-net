@@ -30,8 +30,11 @@ namespace Cognite.OpcUa
     public class PushResult
     {
         public bool Objects { get; set; } = true;
+        public bool RawObjects { get; set; } = true;
         public bool Variables { get; set; } = true;
+        public bool RawVariables { get; set; } = true;
         public bool References { get; set; } = true;
+        public bool RawReferences { get; set; } = true;
     }
 
     public interface IPusher : IDisposable
