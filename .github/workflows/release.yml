@@ -237,7 +237,7 @@ jobs:
 
         - name: Build extractor image
           run: |
-            image=$(docker build --build-arg version='${{ needs.create-release.outputs.version }}' --build-arg description='${{ steps.image_tags.outputs.desc }}' -f dockerfile.build . | awk '/writing image/ {print $5}')
+            image=$(docker build --build-arg version='${{ needs.create-release.outputs.version }}' --build-arg description='${{ steps.image_tags.outputs.desc }}' -f dockerfile.build -q .)
             id=$(docker create $image)
             docker cp $id:/build/deploy .
             docker rm -v $id
@@ -246,7 +246,7 @@ jobs:
 
         - name: Build bridge image
           run: |
-            image=$(docker build --build-arg VERSION='${{ needs.create-release.outputs.version }}' --build-arg DESCRIPTION='${{ steps.image_tags.outputs.desc }}' -f Dockerfile.bridge.build . |  awk '/writing image/ {print $5}')
+            image=$(docker build --build-arg VERSION='${{ needs.create-release.outputs.version }}' --build-arg DESCRIPTION='${{ steps.image_tags.outputs.desc }}' -f Dockerfile.bridge.build -q .)
             id=$(docker create $image)
             docker cp $id:/build/deploy .
             docker rm -v $id
