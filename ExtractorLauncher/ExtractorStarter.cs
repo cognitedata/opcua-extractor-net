@@ -193,7 +193,8 @@ namespace Cognite.OpcUa
             FullConfig config,
             BaseExtractorParams setup,
             ExtractorRunnerParams<FullConfig, UAExtractor>? options,
-            string configRoot)
+            string configRoot,
+            ServiceCollection services)
         {
             config.Source.ConfigRoot = configRoot;
             if (!string.IsNullOrEmpty(setup.EndpointUrl)) config.Source.EndpointUrl = setup.EndpointUrl;
@@ -213,6 +214,7 @@ namespace Cognite.OpcUa
                     config.Logger.File.Path = setup.LogDir;
                 }
             }
+            services.AddWriters(config);
             config.Source.AutoAccept |= setup.AutoAccept;
             config.Source.ExitOnFailure |= setup is ExtractorParams p2 && p2.Exit;
             config.DryRun |= setup.DryRun;
@@ -282,7 +284,7 @@ namespace Cognite.OpcUa
                 setup.BaseConfig = ConfigurationUtils.TryReadConfigFromFile<FullConfig>(configFile, 1);
             }
 
-            VerifyAndBuildConfig(log, setup.Config, setup, null, configDir);
+            VerifyAndBuildConfig(log, setup.Config, setup, null, configDir, services);
 
             if (setup.NoConfig)
             {
@@ -334,29 +336,11 @@ namespace Cognite.OpcUa
             var ver = Extractor.Metrics.Version.GetVersion(Assembly.GetExecutingAssembly());
 
 
-            FullConfig? config;
+            FullConfig? config = null;
             if (setup.NoConfig)
             {
                 config = new FullConfig();
                 config.GenerateDefaults();
-            }
-            else
-            {
-                try
-                {
-                    string configFile = setup.ConfigFile ?? Path.Join(configDir, "config.yml");
-                    config = ConfigurationUtils.TryReadConfigFromFile<FullConfig>(configFile, 1);
-                    config.GenerateDefaults();
-                }
-                catch
-                {
-                    config = null;
-                }
-            }
-
-            if (config != null && config.Cognite == null)
-            {
-                config.Cognite = new CognitePusherConfig();
             }
 
             services.AddSingleton<IPusher, CDFPusher>(provider =>
@@ -383,7 +367,6 @@ namespace Cognite.OpcUa
             });
 
             services.AddSingleton<UAClient>();
-            services.AddWriters(token, config!);
 
             var options = new ExtractorRunnerParams<FullConfig, UAExtractor>
             {
@@ -395,7 +378,7 @@ namespace Cognite.OpcUa
                 AddLogger = true,
                 AddMetrics = true,
                 Restart = !setup.Exit,
-                ConfigCallback = (config, options, services) => VerifyAndBuildConfig(log, config, setup, options, configDir),
+                ConfigCallback = (config, options, services) => VerifyAndBuildConfig(log, config, setup, options, configDir, services),
                 ExtServices = services,
                 StartupLogger = log,
                 Config = config,
