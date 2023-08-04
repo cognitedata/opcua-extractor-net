@@ -51,7 +51,6 @@ source:
     # Paths are defined in opc.ua.net.extractor.Config.xml
     auto-accept: false
     # How often the client requests updates to subscribed variables.
-    # 0 updates at maximum rate set by server
     # This decides the maximum rate points are pushed to CDF. Higher reduces network and server load.
     publishing-interval: 500
     # OPC-UA username, leave blank for anonymous user. (no authentication)

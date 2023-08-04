@@ -10,7 +10,7 @@ namespace Cognite.OpcUa.Pushers.Writers
 {
     public static class WriterUtils
     {
-        public static void AddWriters(this IServiceCollection services, CancellationToken token, FullConfig config)
+        public static void AddWriters(this IServiceCollection services, FullConfig config)
         {
             services.AddSingleton<ITimeseriesWriter>(provider => {
                 var destination = provider.GetRequiredService<CogniteDestination>();
@@ -54,7 +54,7 @@ namespace Cognite.OpcUa.Pushers.Writers
             }
             if (config.Cognite?.MetadataTargets?.DataModels != null && config.Cognite.MetadataTargets.DataModels.Enabled)
             {
-                services.AddSingleton<FDMWriter>(provider => {
+                services.AddSingleton(provider => {
                     var destination = provider.GetRequiredService<CogniteDestination>();
                     return new FDMWriter(provider.GetRequiredService<FullConfig>(), destination,
                         provider.GetRequiredService<ILogger<FDMWriter>>());
