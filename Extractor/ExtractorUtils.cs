@@ -17,7 +17,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using Cognite.Extractor.Configuration;
 using Cognite.OpcUa.Config;
-using Cognite.OpcUa.Types;
+using Cognite.OpcUa.Nodes;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using System;
@@ -51,12 +51,12 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="nodes">Nodes to sort</param>
         /// <returns>Tuple of sorted objects and variables</returns>
-        public static (IEnumerable<UANode> objects, IEnumerable<UAVariable> variables) SortNodes(IEnumerable<UANode> nodes)
+        public static (IEnumerable<BaseUANode> objects, IEnumerable<UAVariable> variables) SortNodes(IEnumerable<BaseUANode> nodes)
         {
-            if (!nodes.Any()) return (Enumerable.Empty<UANode>(), Enumerable.Empty<UAVariable>());
+            if (!nodes.Any()) return (Enumerable.Empty<BaseUANode>(), Enumerable.Empty<UAVariable>());
 
             var timeseries = new List<UAVariable>();
-            var objects = new List<UANode>();
+            var objects = new List<BaseUANode>();
             foreach (var node in nodes)
             {
                 if (node is UAVariable variable)

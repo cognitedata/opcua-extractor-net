@@ -1,7 +1,7 @@
 ﻿using Cognite.Extractor.Testing;
 using Cognite.OpcUa;
 using Cognite.OpcUa.Config;
-using Cognite.OpcUa.History;
+using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.DependencyInjection;
@@ -26,6 +26,7 @@ namespace Test.Unit
             this.tester = tester ?? throw new ArgumentNullException(nameof(tester));
             tester.ResetConfig();
             tester.Init(output);
+            tester.Client.TypeManager.Reset();
         }
         [Fact]
         public async Task TestClientStartFailure()
@@ -57,8 +58,8 @@ namespace Test.Unit
             Assert.Equal(153, pusher.PushedNodes.Count);
             Assert.Equal(2000, pusher.PushedVariables.Count);
 
-            Assert.Contains(pusher.PushedNodes.Values, node => node.DisplayName == "DeepObject 4, 25");
-            Assert.Contains(pusher.PushedVariables.Values, node => node.DisplayName == "SubVariable 1234");
+            Assert.Contains(pusher.PushedNodes.Values, node => node.Name == "DeepObject 4, 25");
+            Assert.Contains(pusher.PushedVariables.Values, node => node.Name == "SubVariable 1234");
         }
 
         [Fact]
@@ -118,21 +119,19 @@ namespace Test.Unit
 
             var root = new NodeId(1);
             var ids = tester.Server.Ids.Base;
-            var nodes = new List<UANode>
+            var nodes = new List<BaseUANode>
             {
-                new UANode(new NodeId("object1"), "object1", root, NodeClass.Object),
-                new UANode(new NodeId("object2"), "object2", root, NodeClass.Object)
+                new UAObject(new NodeId("object1"), "object1", null, null, root, null),
+                new UAObject(new NodeId("object2"), "object2", null, null, root, null)
             };
             var variables = new List<UAVariable>
             {
-                new UAVariable(new NodeId("var1"), "var1", root),
-                new UAVariable(new NodeId("var2"), "var2", root)
+                new UAVariable(new NodeId("var1"), "var1", null, null, root, null),
+                new UAVariable(new NodeId("var2"), "var2", null, null, root, null)
             };
 
-            variables[0].VariableAttributes.ReadHistory = true;
-            variables[1].VariableAttributes.ReadHistory = false;
-
-            var refManager = extractor.ReferenceTypeManager;
+            variables[0].FullAttributes.ShouldReadHistoryOverride = true;
+            variables[1].FullAttributes.ShouldReadHistoryOverride = false;
 
             var references = new List<UAReference>
             {
@@ -144,7 +143,7 @@ namespace Test.Unit
                     false,
                     true,
                     false,
-                    refManager)
+                    extractor.TypeManager)
             };
 
             var input = new PusherInput(nodes, variables, references, null);
@@ -181,16 +180,16 @@ namespace Test.Unit
             using var extractor = tester.BuildExtractor();
 
             tester.Config.Extraction.DataTypes.DataTypeMetadata = true;
-            var variable = new UAVariable(new NodeId("test"), "test", NodeId.Null);
-            variable.VariableAttributes.DataType = new UADataType(DataTypeIds.Double);
-            var fields = variable.GetExtraMetadata(tester.Config.Extraction, extractor.DataTypeManager, extractor.StringConverter);
+            var variable = new UAVariable(new NodeId("test"), "test", null, null, NodeId.Null, null);
+            variable.FullAttributes.DataType = new UADataType(DataTypeIds.Double);
+            var fields = variable.GetExtraMetadata(tester.Config, extractor);
             Assert.Single(fields);
             Assert.Equal("Double", fields["dataType"]);
 
             tester.Config.Extraction.NodeTypes.Metadata = true;
-            var node = new UANode(new NodeId("test"), "test", NodeId.Null, NodeClass.Object);
-            node.Attributes.NodeType = new UANodeType(new NodeId("type"), false) { Name = "SomeType" };
-            fields = node.GetExtraMetadata(tester.Config.Extraction, extractor.DataTypeManager, extractor.StringConverter);
+            var node = new UAObject(new NodeId("test"), "test", null, null, NodeId.Null, new UAObjectType(new NodeId("type")));
+            node.FullAttributes.TypeDefinition.Attributes.DisplayName = "SomeType";
+            fields = node.GetExtraMetadata(tester.Config, extractor);
             Assert.Single(fields);
             Assert.Equal("SomeType", fields["TypeDefinition"]);
 
@@ -198,10 +197,10 @@ namespace Test.Unit
             tester.Config.Extraction.NodeTypes.Metadata = false;
 
             tester.Config.Extraction.NodeTypes.AsNodes = true;
-            var type = new UAVariable(new NodeId("test"), "test", NodeId.Null, NodeClass.VariableType);
-            type.VariableAttributes.DataType = new UADataType(DataTypeIds.String);
-            type.SetDataPoint(new Variant("value"));
-            fields = type.GetExtraMetadata(tester.Config.Extraction, extractor.DataTypeManager, extractor.StringConverter);
+            var type = new UAVariableType(new NodeId("test"), "test", null, null, NodeId.Null);
+            type.FullAttributes.DataType = new UADataType(DataTypeIds.String);
+            type.FullAttributes.Value = new Variant("value");
+            fields = type.GetExtraMetadata(tester.Config, extractor);
             Assert.Single(fields);
             Assert.Equal("value", fields["Value"]);
         }
@@ -246,5 +245,41 @@ namespace Test.Unit
             Assert.Equal(100, tester.Config.Source.BrowseNodesChunk);
         }
 
+        [Fact]
+        public async Task TestNoServerExtractor()
+        {
+            tester.Config.Source.EndpointUrl = null;
+            tester.Config.Source.NodeSetSource = new NodeSetSourceConfig
+            {
+                NodeSets = new[]
+                {
+                    new NodeSetConfig
+                    {
+                        Url = new Uri("https://files.opcfoundation.org/schemas/UA/1.04/Opc.Ua.NodeSet2.xml")
+                    },
+                    new NodeSetConfig
+                    {
+                        FileName = "TestServer.NodeSet2.xml"
+                    }
+                },
+                Instance = true,
+                Types = true
+            };
+            tester.Config.Extraction.DataTypes.AllowStringVariables = true;
+            tester.Config.Extraction.DataTypes.MaxArraySize = 10;
+            tester.Config.Extraction.DataTypes.AutoIdentifyTypes = true;
+            tester.Config.Extraction.Relationships.Enabled = true;
+            tester.Config.Extraction.DataTypes.EstimateArraySizes = true;
+            using var pusher = new DummyPusher(new DummyPusherConfig());
+            using var client = new UAClient(tester.Provider, tester.Config);
+            using var extractor = new UAExtractor(tester.Config, tester.Provider, new[] { pusher }, client, null);
+
+            extractor.InitExternal(tester.Source.Token);
+            await extractor.RunExtractor(true);
+
+            Assert.Equal(18, pusher.PushedNodes.Count);
+            Assert.Equal(38, pusher.PushedVariables.Count);
+            Assert.Equal(10, pusher.PushedReferences.Count);
+        }
     }
 }

@@ -60,6 +60,65 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.21.0":
+    description: Supports writing to all CDF destinations
+    changelog:
+      added:
+        - Support writing to any/all CDF resource without dependents on one another
+      changed:
+        - Metadata configuration options
+  "2.20.3":
+    description: Fix issue causing the extractor to fail to push datapoints on windows.
+    changelog:
+      fixed:
+        - "Fix FileNotFound issue when pushing datapoints on windows"
+  "2.20.2":
+    description: Improve error messages
+  "2.20.0":
+    description: Improve error handling during history read.
+    changelog:
+      added:
+        - "Added an `error-threshold` option which indicates the percent of history read requests that must fail before the entire read is considered failed."
+  "2.19.0":
+    description: Add extra metadata per type and remote support in docker container
+    changelog:
+      added:
+        - "Extra metadata per type"
+        - "Set the environment variable OPCUA_CONFIG_DIR=/config_remote to have the docker container use a remote config from env variable COGNITE_EXTRACTION_PIPELINE"
+  "2.18.0":
+    description: Options for configuring lifetime-count and keep-alive-count of subscriptions
+    changelog:
+      added:
+        - "subscriptions.lifetime-count setting maximum number of empty publish requests before subscription shutdown"
+        - "subscriptions.keep-alive-count setting maximum number of empty publish requests before a keep alive response is sent"
+      changed:
+        - "Delete subscriptions on session shutdown"
+  "2.17.0":
+    description: Various config changes and some internal changes
+    changelog:
+      deprecated:
+        - "Deprecated the debug option on cognite, influx, and mqtt."
+        - "Deprecated cognite.data-set-id, and cognite.data-set-external-id, in favor of cognite.data-set.id and cognite.data-set.external-id"
+      added:
+        - "Added a dry-run option, which serves the same purpose as debug but applies to the entire extractor."
+        - "Added --dry-run as a command line option."
+      changed:
+        - "Major internal changes. This should not be visible to users at all, except in some changed logs."
+  "2.16.1":
+    description: "Correctly restart history after reconnect due to service level threshold"
+    changelog:
+      fixed:
+        - "Fixed a bug causing the extractor to not properly detect that the server had changed when reconnecting due to service level change"
+  "2.16.0":
+    description: "Support for certificate authentication to CDF"
+    changelog:
+      added:
+        - "Support for using a private key and certificate when authenticating towards CDF"
+  "2.15.3":
+    description: Improve handling of incorrect proto node ids
+    changelog:
+      changed:
+        - "Incorrect proto node ids no longer default to anything, and are instead always skipped."
   "2.15.2":
     description: Add bill of materials
   "2.15.1":

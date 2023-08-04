@@ -87,6 +87,8 @@ namespace Cognite.OpcUa.History
         public IEncodeable? LastResult { get; set; }
         public DateTime EndTime { get; set; }
         public DateTime? StartTime { get; set; }
+        public StatusCode? LastStatus { get; set; }
+        public bool IsFailed => LastStatus != null && StatusCode.IsBad(LastStatus.Value);
     }
     /// <summary>
     /// Parameter class containing the state of a single history read operation.
@@ -107,7 +109,7 @@ namespace Cognite.OpcUa.History
 
         public bool Completed(HistoryReadNode item)
         {
-            return item.Completed || Exception != null;
+            return item.Completed || Exception != null || item.IsFailed;
         }
     }
 }

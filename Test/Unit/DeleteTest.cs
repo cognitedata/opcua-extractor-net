@@ -1,6 +1,7 @@
 ﻿using Cognite.Extractor.StateStorage;
 using Cognite.OpcUa;
 using Cognite.OpcUa.Config;
+using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
@@ -9,7 +10,6 @@ using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -103,24 +103,28 @@ namespace Test.Unit
     public class DeleteTest
     {
         private readonly StaticServerTestFixture tester;
+        private readonly ITestOutputHelper _output;
+
         public DeleteTest(ITestOutputHelper output, StaticServerTestFixture tester)
         {
             this.tester = tester ?? throw new ArgumentNullException(nameof(tester));
             tester.ResetConfig();
             tester.Init(output);
+            tester.Client.TypeManager.Reset();
+            _output = output;
         }
 
-        private static UANode GetObject(string id)
+        private static UAObject GetObject(string id)
         {
-            return new UANode(new NodeId(id), id, NodeId.Null, NodeClass.Object);
+            return new UAObject(new NodeId(id), id, null, null, NodeId.Null, null);
         }
 
         private static UAVariable GetVariable(string id)
         {
-            return new UAVariable(new NodeId(id), id, NodeId.Null);
+            return new UAVariable(new NodeId(id), id, null, null, NodeId.Null, null);
         }
 
-        private static UAReference GetReference(string source, string target, ReferenceTypeManager manager)
+        private static UAReference GetReference(string source, string target, TypeManager manager)
         {
             return new UAReference(new NodeId("type"), true, new NodeId(source), new NodeId(target), false, false, false, manager);
         }
@@ -135,7 +139,7 @@ namespace Test.Unit
             var manager = new DeletesManager(store, tester.Client, tester.Provider.GetRequiredService<ILogger<DeletesManager>>(), tester.Config);
 
             var result = new NodeSourceResult(
-                Enumerable.Empty<UANode>(),
+                Enumerable.Empty<BaseUANode>(),
                 Enumerable.Empty<UAVariable>(),
                 new[] { GetObject("obj1"), GetObject("obj2") },
                 new[] { GetVariable("var1"), GetVariable("var2") },
@@ -149,7 +153,7 @@ namespace Test.Unit
             Assert.Empty(store.States);
 
             result = new NodeSourceResult(
-                Enumerable.Empty<UANode>(),
+                Enumerable.Empty<BaseUANode>(),
                 Enumerable.Empty<UAVariable>(),
                 new[] { GetObject("obj1"), GetObject("obj2") },
                 new[] { GetVariable("var1"), GetVariable("var2") },
@@ -177,7 +181,7 @@ namespace Test.Unit
 
             // Remove one each of objects and variables, so we get a removed of each
             result = new NodeSourceResult(
-                Enumerable.Empty<UANode>(),
+                Enumerable.Empty<BaseUANode>(),
                 Enumerable.Empty<UAVariable>(),
                 new[] { GetObject("obj2") },
                 new[] { GetVariable("var2") },
@@ -196,17 +200,17 @@ namespace Test.Unit
         [InlineData(false)]
         public async Task TestDeleteManagerReferences(bool throwOnMissing)
         {
-            var refManager = new ReferenceTypeManager(tester.Config, tester.Provider.GetRequiredService<ILogger<ReferenceTypeManager>>(), tester.Client, null);
             using var store = new MockStateStore();
             store.ThrowOnMissingTable = throwOnMissing;
             var manager = new DeletesManager(store, tester.Client, tester.Provider.GetRequiredService<ILogger<DeletesManager>>(), tester.Config);
+            var typeManager = new TypeManager(tester.Config, tester.Client, tester.Log);
 
             var result = new NodeSourceResult(
-                Enumerable.Empty<UANode>(),
+                Enumerable.Empty<BaseUANode>(),
                 Enumerable.Empty<UAVariable>(),
                 new[] { GetObject("obj1"), GetObject("obj2") },
                 new[] { GetVariable("var1"), GetVariable("var2") },
-                new[] { GetReference("obj1", "obj2", refManager), GetReference("var1", "var2", refManager) }, true);
+                new[] { GetReference("obj1", "obj2", typeManager), GetReference("var1", "var2", typeManager) }, true);
 
             // No configured tables, and no references, so nothing happens
             tester.Config.StateStorage.KnownObjectsStore = null;
@@ -230,11 +234,11 @@ namespace Test.Unit
 
             // Remove one each of objects, variables, and references, so we get a removed of each
             result = new NodeSourceResult(
-                Enumerable.Empty<UANode>(),
+                Enumerable.Empty<BaseUANode>(),
                 Enumerable.Empty<UAVariable>(),
                 new[] { GetObject("obj2") },
                 new[] { GetVariable("var2") },
-                new[] { GetReference("var1", "var2", refManager) }, true);
+                new[] { GetReference("var1", "var2", typeManager) }, true);
 
             toDelete = await manager.GetDiffAndStoreIds(result, tester.Source.Token);
             Assert.Single(toDelete.Objects);
@@ -248,23 +252,23 @@ namespace Test.Unit
         {
             // Create some test data
             var root = new NodeId(1);
-            var nodes = Enumerable.Range(1, count).Select(i => new UANode(new NodeId($"object{i}"), $"object{i}", root, NodeClass.Object)).ToList();
+            var nodes = Enumerable.Range(1, count).Select(i => new UAObject(new NodeId($"object{i}"), $"object{i}", null, null, root, null)).ToList();
             var variables = Enumerable.Range(1, count).Select(i =>
             {
-                var v = new UAVariable(new NodeId($"var{i}"), $"var{i}", root);
+                var v = new UAVariable(new NodeId($"var{i}"), $"var{i}", null, null, root, null);
                 if (i % 2 == 0)
                 {
-                    v.VariableAttributes.ReadHistory = true;
+                    v.FullAttributes.ShouldReadHistoryOverride = true;
                 }
                 return v;
             }).ToList();
 
-            var refManager = extractor.ReferenceTypeManager;
+            var typeManager = extractor.TypeManager;
 
             var references = Enumerable.Range(1, count).Select(i => new UAReference(
-                ReferenceTypeIds.Organizes, true, new NodeId($"object{i}"), new NodeId($"var{i}"), false, true, false, refManager)).ToList();
+                ReferenceTypeIds.Organizes, true, new NodeId($"object{i}"), new NodeId($"var{i}"), false, true, false, typeManager)).ToList();
 
-            return new NodeSourceResult(Enumerable.Empty<UANode>(), Enumerable.Empty<UAVariable>(), nodes, variables, references, true);
+            return new NodeSourceResult(Enumerable.Empty<BaseUANode>(), Enumerable.Empty<UAVariable>(), nodes, variables, references, true);
         }
 
         [Fact]
@@ -372,21 +376,29 @@ namespace Test.Unit
         [Fact]
         public async Task TestCDFDelete()
         {
-            var (handler, pusher) = tester.GetCDFPusher();
             tester.Config.Extraction.Deletes.Enabled = true;
             tester.Config.Extraction.RootNode = tester.Ids.Audit.Root.ToProtoNodeId(tester.Client);
             tester.Config.Extraction.Relationships.Enabled = true;
             tester.Config.Extraction.Relationships.Hierarchical = true;
             tester.Config.Cognite.DeleteRelationships = true;
+            tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
+            {
+                Clean = new CleanMetadataTargetConfig
+                {
+                    Assets = true,
+                    Timeseries = true,
+                    Relationships = true
+                }
+            };
             using var stateStore = new MockStateStore();
 
+            var (handler, pusher) = tester.GetCDFPusher();
             using var extractor = tester.BuildExtractor(pushers: pusher, stateStore: stateStore);
 
             var addedId = tester.Server.Server.AddObject(tester.Ids.Audit.Root, "NodeToDelete");
             var addedVarId = tester.Server.Server.AddVariable(tester.Ids.Audit.Root, "VariableToDelete", DataTypeIds.Double);
             var addedExtId = tester.Client.GetUniqueId(addedId);
             var addedVarExtId = tester.Client.GetUniqueId(addedVarId);
-
             // Run the extractor and verify that we got the node.
             await extractor.RunExtractor(true);
             Assert.True(handler.Assets.ContainsKey(addedExtId));
@@ -394,7 +406,7 @@ namespace Test.Unit
             Assert.False(handler.Assets[addedExtId].metadata.ContainsKey("deleted"));
             Assert.False(handler.Timeseries[addedVarExtId].metadata.ContainsKey("deleted"));
             // Need to build the reference externalId late, since it depends on the reference type manager being populated.
-            var refExtId = tester.Client.GetRelationshipId(new UAReference(ReferenceTypeIds.Organizes, true, tester.Ids.Audit.Root, addedId, false, false, true, extractor.ReferenceTypeManager));
+            var refExtId = tester.Client.GetRelationshipId(new UAReference(ReferenceTypeIds.Organizes, true, tester.Ids.Audit.Root, addedId, false, false, true, extractor.TypeManager));
             tester.Log.LogInformation("RefExtId: {Id}", refExtId);
             Assert.True(handler.Relationships.ContainsKey(refExtId));
 
@@ -417,20 +429,29 @@ namespace Test.Unit
         [Fact]
         public async Task TestCDFDeleteRaw()
         {
-            var (handler, pusher) = tester.GetCDFPusher();
             tester.Config.Extraction.Deletes.Enabled = true;
             tester.Config.Extraction.RootNode = tester.Ids.Audit.Root.ToProtoNodeId(tester.Client);
             tester.Config.Extraction.Relationships.Enabled = true;
             tester.Config.Extraction.Relationships.Hierarchical = true;
             tester.Config.Cognite.DeleteRelationships = true;
-            tester.Config.Cognite.RawMetadata = new RawMetadataConfig
+            tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig 
             {
-                AssetsTable = "assets",
-                TimeseriesTable = "timeseries",
-                Database = "metadata",
-                RelationshipsTable = "relationships"
+                Clean = new CleanMetadataTargetConfig
+                {
+                    Timeseries = true,
+                    Assets = true,
+                    Relationships = true
+                },
+                Raw = new RawMetadataTargetConfig
+                {
+                    Database = "metadata",
+                    AssetsTable = "assets",
+                    TimeseriesTable = "timeseries",
+                    RelationshipsTable = "relationships"
+                }
             };
             using var stateStore = new MockStateStore();
+            var (handler, pusher) = tester.GetCDFPusher();
 
             using var extractor = tester.BuildExtractor(pushers: pusher, stateStore: stateStore);
 
@@ -441,14 +462,15 @@ namespace Test.Unit
 
             // Run the extractor and verify that we got the node.
             await extractor.RunExtractor(true);
-            Assert.True(handler.AssetRaw.ContainsKey(addedExtId));
+            Assert.True(handler.AssetsRaw.ContainsKey(addedExtId));
             Assert.True(handler.TimeseriesRaw.ContainsKey(addedVarExtId));
+            handler.Timeseries.Values.ToList().ForEach(v => _output.WriteLine(v.ToString()));
             Assert.True(handler.Timeseries.ContainsKey(addedVarExtId));
-            Assert.False(handler.AssetRaw[addedExtId].TryGetProperty("deleted", out _));
+            Assert.False(handler.AssetsRaw[addedExtId].TryGetProperty("deleted", out _));
             Assert.False(handler.TimeseriesRaw[addedVarExtId].TryGetProperty("deleted", out _));
             Assert.False(handler.Timeseries[addedVarExtId].metadata?.ContainsKey("deleted") ?? false);
             // Need to build the reference externalId late, since it depends on the reference type manager being populated.
-            var refExtId = tester.Client.GetRelationshipId(new UAReference(ReferenceTypeIds.Organizes, true, tester.Ids.Audit.Root, addedId, false, false, true, extractor.ReferenceTypeManager));
+            var refExtId = tester.Client.GetRelationshipId(new UAReference(ReferenceTypeIds.Organizes, true, tester.Ids.Audit.Root, addedId, false, false, true, extractor.TypeManager));
             tester.Log.LogInformation("RefExtId: {Id}", refExtId);
             Assert.True(handler.RelationshipsRaw.ContainsKey(refExtId));
 
@@ -460,7 +482,7 @@ namespace Test.Unit
             tester.Server.Server.RemoveNode(addedId);
             tester.Server.Server.RemoveNode(addedVarId);
             await extractor.Rebrowse();
-            Assert.True(handler.AssetRaw[addedExtId].GetProperty("deleted").GetBoolean());
+            Assert.True(handler.AssetsRaw[addedExtId].GetProperty("deleted").GetBoolean());
             Assert.True(handler.TimeseriesRaw[addedVarExtId].GetProperty("deleted").GetBoolean());
             Assert.True(handler.RelationshipsRaw[refExtId].deleted);
 

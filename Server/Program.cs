@@ -18,14 +18,12 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using Cognite.Extractor.Logging;
 using Cognite.Extractor.Utils.CommandLine;
 using Microsoft.Extensions.DependencyInjection;
-using Serilog;
-using Serilog.Events;
 using System;
 using System.Collections.Generic;
 using System.CommandLine;
 using System.CommandLine.Builder;
-using System.CommandLine.Invocation;
 using System.CommandLine.Parsing;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -62,6 +60,8 @@ namespace Server
         public bool LargeHierarchy { get; set; }
         [CommandLineOption("Create nodes from the very large 'VeryLarge' node hierarchy")]
         public bool VeryLargeHierarchy { get; set; }
+        [CommandLineOption("Create nodes with complex object and variable types")]
+        public bool Types { get; set; }
         [CommandLineOption("Create nodes for and load the 'PubSub' node hierarchy, and write to MQTT")]
         public bool Pubsub { get; set; }
         [CommandLineOption("Enable server diagnostics")]
@@ -104,6 +104,9 @@ namespace Server
         [CommandLineOption("Server issue: This is the denominator for a probability that an arbitrary browse operation will fail " +
             "I.e. 5 means that 1/5 browse ops will fail with BadNoCommunication")]
         public int RandomBrowseFail { get; set; }
+        [CommandLineOption("List of NodeSet2 XML schemas to load the node hierarchy from, the base node hierarchy will not be loaded if this is specified. " +
+            "May be specified more than once, the base OPC-UA nodeset should not be added.", true, "-s")]
+        public IEnumerable<string> NodeSetFiles { get; set; }
     }
 
 
@@ -116,17 +119,29 @@ namespace Server
 
         private static ServerController BuildServer(IServiceProvider provider, ServerOptions opt)
         {
-            var setups = new List<PredefinedSetup> { PredefinedSetup.Custom, PredefinedSetup.Base,
-                PredefinedSetup.Events, PredefinedSetup.Wrong, PredefinedSetup.Auditing };
+            List<PredefinedSetup> setups;
+            if (opt.NodeSetFiles != null && opt.NodeSetFiles.Any())
+            {
+                setups = new List<PredefinedSetup>();
+                if (opt.BaseHistory || opt.CoreProfile) setups.Add(PredefinedSetup.Base);
+                if (opt.CustomHistory || opt.CoreProfile) setups.Add(PredefinedSetup.Custom);
+                if (opt.EventHistory || opt.CoreProfile) setups.Add(PredefinedSetup.Events);
+                if (opt.GrowthPeriodic) setups.Add(PredefinedSetup.Auditing);
+            } else
+            {
+                setups = new List<PredefinedSetup> { PredefinedSetup.Custom, PredefinedSetup.Base,
+                    PredefinedSetup.Events, PredefinedSetup.Wrong, PredefinedSetup.Auditing };
+            }
             if (opt.Pubsub) setups.Add(PredefinedSetup.PubSub);
             if (opt.LargeHierarchy) setups.Add(PredefinedSetup.Full);
             if (opt.VeryLargeHierarchy) setups.Add(PredefinedSetup.VeryLarge);
+            if (opt.Types) setups.Add(PredefinedSetup.Types);
 
             int port = opt.Port ?? 62546;
             string endpointUrl = opt.EndpointUrl ?? "opc.tcp://localhost";
             string mqttUrl = opt.MqttUrl ?? "mqtt://localhost:4060";
 
-            var controller = new ServerController(setups, provider, port, mqttUrl, endpointUrl, opt.LogTrace);
+            var controller = new ServerController(setups, provider, port, mqttUrl, endpointUrl, opt.LogTrace, opt.NodeSetFiles);
 
             return controller;
         }
@@ -185,6 +200,34 @@ namespace Server
                 args.Cancel = true;
                 exitEvent.Set();
             };
+
+            var _ = Task.Run(() =>
+            {
+                int sl = opt.ServiceLevel;
+                while (true)
+                {
+                    var key = Console.ReadKey(true);
+                    if (key.Key == ConsoleKey.L && sl != 190)
+                    {
+                        server.SetServerRedundancyStatus(190, Opc.Ua.RedundancySupport.Hot);
+                        sl = 190;
+                        Console.WriteLine("Set service level to 190");
+                    }
+                    if (key.Key == ConsoleKey.H && sl != 255)
+                    {
+                        server.SetServerRedundancyStatus(255, Opc.Ua.RedundancySupport.Hot);
+                        sl = 255;
+                        Console.WriteLine("Set service level to 255");
+                    }
+                    if (key.Key == ConsoleKey.G && sl != 180)
+                    {
+                        server.SetServerRedundancyStatus(180, Opc.Ua.RedundancySupport.Hot);
+                        sl = 180;
+                        Console.WriteLine("Set service level to 180");
+                    }
+                }
+
+            });
 
             exitEvent.WaitOne();
         }

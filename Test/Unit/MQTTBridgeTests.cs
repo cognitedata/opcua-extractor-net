@@ -1,7 +1,6 @@
 ﻿using Cognite.Bridge;
 using Cognite.Extractor.Common;
 using Cognite.Extractor.Configuration;
-using Cognite.Extractor.Logging;
 using Cognite.Extractor.Testing;
 using Cognite.Extractor.Utils;
 using CogniteSdk;
@@ -773,14 +772,14 @@ namespace Test.Unit
             };
 
             await tester.PublishRawAssets(roundOne);
-            Assert.Equal(2, tester.Handler.AssetRaw.Count);
-            Assert.True(tester.Handler.AssetRaw.ContainsKey("test-asset-1"));
-            Assert.True(tester.Handler.AssetRaw.ContainsKey("test-asset-2"));
+            Assert.Equal(2, tester.Handler.AssetsRaw.Count);
+            Assert.True(tester.Handler.AssetsRaw.ContainsKey("test-asset-1"));
+            Assert.True(tester.Handler.AssetsRaw.ContainsKey("test-asset-2"));
             await tester.PublishRawAssets(roundTwo);
-            Assert.Equal(3, tester.Handler.AssetRaw.Count);
-            Assert.Contains(tester.Handler.AssetRaw, kvp => kvp.Value.GetProperty("name").GetString() == "test-asset-3");
-            Assert.True(tester.Handler.AssetRaw.ContainsKey("test-asset-1"));
-            var asset1 = tester.Handler.AssetRaw["test-asset-1"];
+            Assert.Equal(3, tester.Handler.AssetsRaw.Count);
+            Assert.Contains(tester.Handler.AssetsRaw, kvp => kvp.Value.GetProperty("name").GetString() == "test-asset-3");
+            Assert.True(tester.Handler.AssetsRaw.ContainsKey("test-asset-1"));
+            var asset1 = tester.Handler.AssetsRaw["test-asset-1"];
             Assert.Equal(@"{""test-prop"":""test-value""}", asset1.GetProperty("metadata").ToString());
         }
 

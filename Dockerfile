@@ -4,6 +4,8 @@ VOLUME /logs
 VOLUME /certificates
 COPY /deploy /extractor
 WORKDIR /extractor
+COPY /config/config.remote.yml /config_remote/config.yml
+COPY /config/opc.ua.net.extractor.Config.xml /config_remote
 
 ENV OPCUA_CONFIG_DIR="/config"
 ENV OPCUA_CERTIFICATE_DIR="/certificates"

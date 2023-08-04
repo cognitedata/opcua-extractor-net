@@ -92,6 +92,16 @@ namespace Cognite.OpcUa.Config
         /// </summary>
         public bool LogBadValues { get; set; } = true;
         /// <summary>
+        /// The number of empty publish requests before the server should remove the subscription entirely.
+        /// Note that the extractor will detect this and recreate the subscription.
+        /// This shall be at least 3 * KeepAliveCount.
+        /// </summary>
+        public uint LifetimeCount { get; set; } = 1000;
+        /// <summary>
+        /// The number of empty publish requests before a keep-alive message is sent from the server.
+        /// </summary>
+        public uint KeepAliveCount { get; set; } = 10;
+        /// <summary>
         /// List of alternative subscription configurations.
         /// The first match will be applied, or the top level if none match.
         /// </summary>

@@ -17,6 +17,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using Cognite.Extensions;
 using Cognite.Extractor.Utils;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
@@ -26,15 +27,19 @@ namespace Cognite.OpcUa.Config
     public class CognitePusherConfig : CogniteConfig, IPusherConfig
     {
         /// <summary>
-        /// Data set to use for new objects. Existing objects will not be updated.
+        /// DEPRECATED. Data set to use for new objects. Existing objects will not be updated.
         /// </summary>
         public long? DataSetId { get; set; }
         /// <summary>
-        /// Data set to use for new objects, overridden by data-set-id. Requires the capability datasets:read for the given data set.
+        /// DEPRECATED. Data set to use for new objects, overridden by data-set-id. Requires the capability datasets:read for the given data set.
         /// </summary>
         public string? DataSetExternalId { get; set; }
         /// <summary>
-        ///  Debug mode, if true, Extractor will not push to target
+        /// Data set to use for new objects. Requires the capability datasets:read if external-id is used.
+        /// </summary>
+        public DataSetConfig? DataSet { get; set; }
+        /// <summary>
+        /// DEPRECATED. Debug mode, if true, Extractor will not push to target
         /// </summary>
         public bool Debug { get; set; }
         /// <summary>
@@ -52,6 +57,7 @@ namespace Cognite.OpcUa.Config
         /// similarly to raw-metadata, and datapoints will be pushed. Nothing will be written to raw, and no assets will be created.
         /// Events will be created, but without asset context.
         /// </summary>
+        [Obsolete("Deprecated!")]
         public bool SkipMetadata { get; set; }
         /// <summary>
         /// Store assets and/or timeseries data in raw. Assets will not be created at all,
@@ -61,6 +67,7 @@ namespace Cognite.OpcUa.Config
         /// of the source node is added to metadata if applicable.
         /// Use different table names for assets and timeseries.
         /// </summary>
+        [Obsolete("Deprecated! Use MetadataTargetsConfig.RawMetadataTargetConfig instead.")]
         public RawMetadataConfig? RawMetadata { get; set; }
         /// <summary>
         /// Map metadata to asset/timeseries attributes. Each of "assets" and "timeseries" is a map from property DisplayName to
@@ -106,6 +113,17 @@ namespace Cognite.OpcUa.Config
         /// Alternatively, use Raw, where relationships can be marked as deleted.
         /// </summary>
         public bool DeleteRelationships { get; set; }
+
+        /// <summary>
+        /// Configuration for writing to a custom OPC-UA flexible data model.
+        /// </summary>
+        [Obsolete("Deprecated! Use MetadataTargetsConfig.FdmDestinationConfig instead.")]
+        public FdmDestinationConfig? FlexibleDataModels { get; set; }
+
+        /// <summary>
+        /// This is the implementation of the metadata targets 
+        /// </summary>
+        public MetadataTargetsConfig? MetadataTargets { get; set; }
     }
     public class RawMetadataConfig
     {
@@ -126,6 +144,34 @@ namespace Cognite.OpcUa.Config
         /// Table to store relationships in
         /// </summary>
         public string? RelationshipsTable { get; set; }
+    }
+    public class MetadataTargetsConfig 
+    {
+        /// <summary>
+        /// Raw metadata targets config
+        /// </summary>
+        public RawMetadataTargetConfig? Raw { get; set; }
+        /// <summary>
+        /// Clean metadata targets config
+        /// </summary>
+        public CleanMetadataTargetConfig? Clean { get; set; }
+        /// <summary>
+        /// FDM destination config
+        /// </summary>
+        public FdmDestinationConfig? DataModels { get; set; }
+    }
+    public class RawMetadataTargetConfig
+    {
+        public string? Database { get; set; }
+        public string? AssetsTable { get; set; }
+        public string? TimeseriesTable { get; set; }
+        public string? RelationshipsTable { get; set; }
+    }
+    public class CleanMetadataTargetConfig
+    {
+        public bool Assets { get; set; }
+        public bool Timeseries { get; set; }
+        public bool Relationships { get; set; }
     }
     public class MetadataMapConfig
     {
@@ -163,5 +209,70 @@ namespace Cognite.OpcUa.Config
         /// Call callback even if zero items are created or updated.
         /// </summary>
         public bool ReportOnEmpty { get; set; }
+    }
+
+    public enum TypesToMap
+    {
+        Referenced,
+        Custom,
+        All
+    }
+
+    public class FdmDestinationConfig
+    {
+        /// <summary>
+        /// Instance space to write to
+        /// </summary>
+        public string? Space { get; set; }
+        /// <summary>
+        /// True to enable. This will not produce meaningful results unless
+        /// extraction.types.as-nodes, extraction.relationships.enabled, extraction.relationships.hierarchical,
+        /// are all set to "true", and there is exactly one root node i=84
+        /// </summary>
+        public bool Enabled { get; set; }
+
+        /// <summary>
+        /// Exclude any nodes that are not somehow referenced by a custom node.
+        /// The following node types are included:
+        /// Custom nodes
+        /// Nodes referenced non-hierarchically by any other included node, recursively.
+        /// Ancestors of any included node.
+        /// 
+        /// This is all applied recursively meaning that the excluded nodes are generally:
+        /// Unused reference types
+        /// Unused object types
+        /// Unused variable types
+        /// Children of unused types
+        /// </summary>
+        public bool ExcludeNonReferenced { get; set; }
+
+        /// <summary>
+        /// Enum for which types to map to FDM
+        /// </summary>
+        public TypesToMap TypesToMap { get; set; } = TypesToMap.Custom;
+
+        /// <summary>
+        /// Do not create views without an associated container.
+        /// Simplifies the model greatly.
+        /// </summary>
+        public bool SkipSimpleTypes { get; set; }
+        
+        /// <summary>
+        /// Do not ingest views if the number of views in the data model is equal to the number of views in OPC-UA.
+        /// </summary>
+        public bool SkipTypesOnEqualCount { get; set; }
+
+        /// <summary>
+        /// Let mandatory options be nullable.
+        /// 
+        /// Lots of servers don't do this properly.
+        /// </summary>
+        public bool IgnoreMandatory { get; set; }
+
+        /// <summary>
+        /// Target connections on the form "Type"."Property": "Target"
+        /// Useful for certain schemas.
+        /// </summary>
+        public Dictionary<string, string>? ConnectionTargetMap { get; set; }
     }
 }

@@ -1,6 +1,6 @@
 ﻿# Template for the config file,
 # Defaults to config.yml in ./config.
-# The config tool defaults to config/config.config-tool.yml, and uses the same config 
+# The config tool defaults to config/config.config-tool.yml, and uses the same config
 # options, though only EndpointURL and if needed username/password/secure are required.
 # The values here are generally the default values, except for the contents of lists etc.
 # Your config file can contain only a subset of these config options. Any extra options will
@@ -8,6 +8,11 @@
 
 # Version of the config schema
 version: 1
+
+# Set this to true to run the extractor in dry-run mode.
+# In this mode, the extractor will read data from OPC-UA, but not push it to any destination.
+# The extractor will still read data from destinations, if configured.
+dry-run: false
 
 source:
     # The URL of the OPC-UA server to connect to.
@@ -46,7 +51,6 @@ source:
     # Paths are defined in opc.ua.net.extractor.Config.xml
     auto-accept: false
     # How often the client requests updates to subscribed variables.
-    # 0 updates at maximum rate set by server
     # This decides the maximum rate points are pushed to CDF. Higher reduces network and server load.
     publishing-interval: 500
     # OPC-UA username, leave blank for anonymous user. (no authentication)
@@ -205,17 +209,17 @@ history:
         max-node-parallelism: 0
     # Log bad history datapoints, count per read at debug and each datapoint at verbose
     log-bad-values: true
+    # Threshold in percent for a history run to be considered failed.
+    # Example: 10.0 -> History read operation would be considered failed if more than 10% of nodes fail to read at some point.
+    # Retries still apply, this only applies to nodes that fail even after retries.
+    error-threshold: 10.0
 
 # Configuration for the pusher to CDF.
 cognite:
     # The project to connect to in the API
     project:
-    # Cognite api key
-    api-key:
     # Cognite service url
     host: "https://api.cognitedata.com"
-    # Debug mode, if true, Extractor will not push to target
-    debug: false
     # Replace all instances of NaN with this floating point number. If left empty, ignore instead.
     nan-replacement:
     # Whether to read start/end-points on startup, where possible. At least one pusher should be able to do this,
@@ -226,9 +230,11 @@ cognite:
     # and need to be re-read from history.
     read-extracted-ranges: true
     # Data set to use for new objects. Existing objects will not be updated
-    data-set-id:
-    # Data set to use for new objects, overridden by data-set-id. Requires the capability datasets:read for the given data set.
-    data-set-external-id:
+    data-set:
+        # Data set internal id.
+        id:
+        # Data set external id. Requires the capability datasets:read for the given data set.
+        external-id:
     # Do not push any metadata at all. If this is true, plain timeseries without metadata will be created,
     # similarly to raw-metadata, and datapoints will be pushed. Nothing will be written to raw, and no assets will be created.
     # Events will be created, but without asset context.
@@ -248,6 +254,29 @@ cognite:
         # Table to store timeseries in.
         timeseries-table:
         # Table to store relationships in
+        relationships-table:
+
+    # CDF target configurations. Regardless of the configuration here, a form of timeseries is always created (either full or minimal) for now.
+    # In the future however, users are expected to create target specific destinations.
+    metadata-targets:
+      # Configuration to enable some form of clean i.e. assets, timeseries or relationships.
+      clean:
+        # Toggle CDF assets destination as a target
+        assets: false
+        # Toggle CDF timeseries destination as a target
+        timeseries: false
+        # Toggle CDF relationships destination as a target
+        relationships: false
+      # Configuration for some form or CDF raw destination.
+      # When this is used, it is required that 'database' name and any of the other keys are provided
+      raw:
+        # Database name 
+        database:
+        # Assets table name
+        assets-table:
+        # Timeseries table name
+        timeseries-table:
+        # Relationships table name
         relationships-table:
 
     # Read from CDF instead of OPC-UA when starting, to speed up start on slow servers.
@@ -299,6 +328,14 @@ cognite:
         # scopes:
         #   - scopeA
         #   - scopeB
+        # Certificate/key pair to authenticate to AAD with (alternative to secret)
+        certificate:
+            # Path to certificate file
+            path:
+            # Authority url, if tenant is not configured
+            authority-url:
+            # Password for certificate, if set
+            password:
         scopes:
         # Audience parameter
         audience:
@@ -400,8 +437,6 @@ influx:
     password:
     # Database to connect to, will not be created automatically
     database:
-    # Debug mode, if true, Extractor will not push to target
-    debug:
     # Replace all instances of NaN or Infinity with this floating point number. If left empty, ignore instead.
     non-finite-replacement:
     # Whether to read start/end-points on startup, where possible. At least one pusher should be able to do this,
@@ -453,8 +488,6 @@ mqtt:
     # On extractor restart, assets/timeseries created before this will be attempted re-created in CDF.
     # They will not be deleted or updated.
     invalidate-before: 0
-    # If true, pusher will not push to target
-    debug: false
     # Replace all instances of NaN, Infinity or values greater than 1E100 with this floating point number. If left empty, ignore instead.
     non-finite-replacement:
     # Do not push any metadata at all. If this is true, plain timeseries without metadata will be created,
@@ -557,7 +590,7 @@ logger:
     # WARNING: This produces an enormous amount of logs. Only use this when running against a small
     # number of nodes, producing a limited number of datapoints, and make sure it is not turned on in production.
     ua-session-tracing: false
-    
+
 metrics:
     # Start a metrics server in the extractor for Prometheus scrape
     server:
@@ -568,7 +601,7 @@ metrics:
         - host:
           job:
           username:
-          password: 
+          password:
     # Configuration to treat OPC-UA nodes as metrics.
     # Values will be mapped to opcua_nodes_NODE-DISPLAY-NAME in prometheus.
     nodes:
@@ -587,7 +620,7 @@ extraction:
     # Delay in ms between each push of data points to targets
     # Alternatively, use N[timeunit] where timeunit is w, d, h, m, s or ms.
     data-push-delay: 1000
-    
+
     # Source node in the OPC-UA server. Leave empty to use the top level Objects node.
     # If root-nodes is set, this is added to the list of root nodes.
     root-node:
@@ -601,15 +634,15 @@ extraction:
     # Specifying nodes connected with hierarchical references can result in some strange behavior:
     # generally, the node deeper in the hierarchy will be detached from its parent and excluded from the hierarchy of the other node.
     root-nodes:
-        # - namespace-uri: 
-        #   node-id: 
+        # - namespace-uri:
+        #   node-id:
 
     # Override mappings between OPC UA node id and externalId, allowing e.g. the RootNode to be mapped to
     # a particular asset in CDF. Applies to both assets and time series.
     # NodeMap:
     #   "externalId": { NamespaceUri: "uri", NodeId: "i=123" }
     node-map:
-  
+
     # Map OPC-UA namespaces to prefixes in CDF. If not mapped, the full namespace URI is used.
     # Saves space compared to using the full URL. Using the ns index is not safe as the order can change on the server.
     # For example:
@@ -624,10 +657,10 @@ extraction:
         # Add custom numeric types using their nodeId. is-step indicates whether the datatype is discrete,
         # enum indicates that it is an enumeration, which may be mapped to a string if enums-as-strings is true.
         # This also overwrite default behavior, so it is possible to make Integer discrete, etc.
-        # Note that the type in question needs to have a sensible numerical conversion in C#, unless it is an array type or similar, 
+        # Note that the type in question needs to have a sensible numerical conversion in C#, unless it is an array type or similar,
         # in which case each element needs a conversion
         custom-numeric-types:
-        #    - node-id: 
+        #    - node-id:
         #          namespace-uri:
         #          node-id:
         #      is-step: false
@@ -647,7 +680,7 @@ extraction:
         # Note that some server implementations have issues with the ArrayDimensions property, so it is not fetched at all if MaxArraySize is 0
         # -1 indicates that there is no limit to array length, though only 1-dimensional structures will be read either way.
         max-array-size: 0
-   
+
         # Set to true to allow fetching string variables. This means that all variables with non-numeric type is converted to string in some way.
         allow-string-variables: false
 
@@ -674,7 +707,7 @@ extraction:
         # Add attributes generally used internally like AccessLevel, Historizing, ArrayDimensions, ValueRank etc.
         # to data pushed to Raw.
         append-internal-values: false
-        
+
         # If max-array-size is set, this looks for the MaxArraySize property on each node with one-dimension ValueRank,
         # if it is not found, it tries to read the value as well, and look at the current size.
         # ArrayDimensions is still the prefered way to identify array sizes, this is not guaranteed to generate
@@ -728,7 +761,7 @@ extraction:
 
     # Config related to mapping object- and variable types to destinations.
     node-types:
-        # Add the TypeDefinition as a metadata field to all nodes 
+        # Add the TypeDefinition as a metadata field to all nodes
         metadata: false
         # Allow reading object- and vairable types as normal nodes and map them to destinations.
         # They will need to be in the mapped hierarchy.
@@ -824,6 +857,11 @@ subscriptions:
     sampling-interval: 100
     # Length of internal server queue for each subscribed item. < 2 means that any updates occuring between publish requests are lost.
     queue-length: 10
+    # The number of publish requests without a response before the server should send a keep alive message.
+    keep-alive-count: 10
+    # The number of publish requests without a response before the server should close the subscription.
+    # Must be at least 3 * keep-alive-count.
+    lifetime-count: 1000
     # List of alternative subscription configurations.
     # The first entry with a matching filter will be used for each node.
     alternative-configs:
@@ -874,7 +912,7 @@ events:
         #- Property1
         #- Property2
     # Map source browse names to other values in the destination. For CDF, internal properties may be overwritten, by default
-    # "Message" is mapped to description, "SourceNode" is used for context and "EventType" is used for type. These may also be excluded or replaced by 
+    # "Message" is mapped to description, "SourceNode" is used for context and "EventType" is used for type. These may also be excluded or replaced by
     # overrides in DestinationNameMap. If multiple properties are mapped to the same value, the first non-null is used.
 
     # If "StartTime", "EndTime" or "SubType" are specified, either directly or through the map, these are used as event properties instead of metadata.
@@ -893,7 +931,7 @@ events:
         #    node-id:
     # Id of nodes to be observed as event emitters. Empty Namespace/NodeId defaults to the server node.
     # This is used to add extra emitters that are not in the extracted node hierarchy, or that does not
-    # correctly specify the EventNotifier property. 
+    # correctly specify the EventNotifier property.
     emitter-ids:
         #-   namespace-uri:
         #    node-id:

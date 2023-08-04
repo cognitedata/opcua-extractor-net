@@ -18,6 +18,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using Cognite.Extractor.Common;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
+using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
@@ -34,10 +35,9 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Xml.Linq;
+using Browser = Cognite.OpcUa.Browse.Browser;
 
 namespace Cognite.OpcUa
 {
@@ -49,8 +49,7 @@ namespace Cognite.OpcUa
         protected FullConfig Config { get; set; }
         protected ISession? Session => SessionManager?.Session;
         protected ApplicationConfiguration? AppConfig { get; set; }
-        public DataTypeManager DataTypeManager { get; }
-        public NodeTypeManager ObjectTypeManager { get; }
+        public TypeManager TypeManager { get; }
 
         public IClientCallbacks Callbacks { get; set; } = null!;
 
@@ -58,7 +57,6 @@ namespace Cognite.OpcUa
         private readonly Dictionary<NodeId, string> nodeOverrides = new Dictionary<NodeId, string>();
         public bool Started { get; private set; }
         private CancellationToken liveToken;
-        private Dictionary<NodeId, UAEventType>? eventFields;
 
         private readonly Dictionary<ushort, string> nsPrefixMap = new Dictionary<ushort, string>();
 
@@ -97,15 +95,13 @@ namespace Cognite.OpcUa
             this.Config = config;
             log = provider.GetRequiredService<ILogger<UAClient>>();
             traceLog = provider.GetRequiredService<ILogger<Tracing>>();
-            DataTypeManager = new DataTypeManager(provider.GetRequiredService<ILogger<DataTypeManager>>(),
-                this, config.Extraction.DataTypes);
-            ObjectTypeManager = new NodeTypeManager(provider.GetRequiredService<ILogger<NodeTypeManager>>(), this);
             if (config.Metrics.Nodes != null)
             {
                 metricsManager = new NodeMetricsManager(this, config.Subscriptions, config.Metrics.Nodes);
             }
             StringConverter = new StringConverter(provider.GetRequiredService<ILogger<StringConverter>>(), this, config);
             Browser = new Browser(provider.GetRequiredService<ILogger<Browser>>(), this, config);
+            TypeManager = new TypeManager(config, this, provider.GetRequiredService<ILogger<TypeManager>>());
         }
         #region Session management
         /// <summary>
@@ -236,10 +232,8 @@ namespace Cognite.OpcUa
         {
             if (Callbacks == null) throw new InvalidOperationException("Attempted to start UAClient without setting callbacks");
 
-            Browser.ResetVisitedNodes();
             // A restarted Session might mean a restarted server, so all server-relevant data must be cleared.
             // This includes any stored NodeId, which may refer to an outdated namespaceIndex
-            eventFields?.Clear();
             nodeOverrides?.Clear();
 
             await LoadAppConfig();
@@ -332,7 +326,7 @@ namespace Cognite.OpcUa
         private async Task StartNodeMetrics()
         {
             if (metricsManager == null) return;
-            await metricsManager.StartNodeMetrics(liveToken);
+            await metricsManager.StartNodeMetrics(TypeManager, liveToken);
         }
         #endregion
 
@@ -341,13 +335,14 @@ namespace Cognite.OpcUa
         /// Retrieve a representation of the server node
         /// </summary>
         /// <returns></returns>
-        public async Task<UANode> GetServerNode(CancellationToken token)
+        public async Task<BaseUANode> GetServerNode(CancellationToken token)
         {
             var desc = (await Browser.GetRootNodes(new[] { ObjectIds.Server }, token)).FirstOrDefault();
             if (desc == null) throw new ExtractorFailureException("Server node is null. Invalid server configuration");
 
-            var node = new UANode(ObjectIds.Server, desc.DisplayName.Text, NodeId.Null, NodeClass.Object);
-            await ReadNodeData(new[] { node }, token);
+            var node = BaseUANode.Create(desc, NodeId.Null, null, this, TypeManager);
+            if (node == null) throw new ExtractorFailureException($"Root node {desc.NodeId} is unexpected node class: {desc.NodeClass}");
+            await ReadNodeData(new[] { node }, token, "the server node");
             return node;
         }
         /// <summary>
@@ -604,23 +599,22 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="nodes">Nodes to be updated with data from the opcua server</param>
         /// <param name="purpose">Purpose, for logging</param>
-        public async Task ReadNodeData(IEnumerable<UANode> nodes, CancellationToken token)
+        public async Task ReadNodeData(IEnumerable<BaseUANode> nodes, CancellationToken token, string purpose = "")
         {
-            nodes = nodes.Where(node => (node is not UAVariable variable || variable.Index == -1) && !node.DataRead).ToList();
-
+            nodes = nodes.DistinctBy(node => node.Attributes).Where(node => !node.Attributes.IsDataRead).ToList();
             if (!nodes.Any()) return;
 
             int expected = 0;
             var readValueIds = new ReadValueIdCollection();
             foreach (var node in nodes)
             {
-                var attributes = node.Attributes.GetAttributeIds(Config);
+                var attributes = node.Attributes.GetAttributeSet(Config);
                 readValueIds.AddRange(attributes.Select(attr => new ReadValueId { AttributeId = attr, NodeId = node.Id }));
                 expected += attributes.Count();
             }
 
             IList<DataValue> values;
-            values = await ReadAttributes(readValueIds, nodes.Count(), token, "node hierarchy information");
+            values = await ReadAttributes(readValueIds, nodes.Count(), token, purpose);
 
             int total = values.Count;
 
@@ -635,8 +629,23 @@ namespace Cognite.OpcUa
             int idx = 0;
             foreach (var node in nodes)
             {
-                var attributes = node.Attributes.GetAttributeIds(Config);
-                idx = node.Attributes.HandleAttributeRead(Config, values, attributes, idx, this);
+                var attributes = node.Attributes.GetAttributeSet(Config);
+                bool unknown = false;
+                foreach (var attr in attributes)
+                {
+                    var val = values[idx];
+
+                    if (val.StatusCode == StatusCodes.BadNodeIdUnknown && !unknown)
+                    {
+                        unknown = true;
+                        log.LogWarning("Node {Id} {Name} does not exist on the server", node.Id, node.Name);
+                        node.Ignore = true;
+                    }
+
+                    node.Attributes.LoadAttribute(values[idx], attr, TypeManager);
+                    idx++;
+                }
+                node.Attributes.IsDataRead = true;
             }
         }
 
@@ -662,26 +671,23 @@ namespace Cognite.OpcUa
         /// To avoid complications, avoid fetching data of unknown large size here.
         /// </remarks>
         /// <param name="nodes">List of variables to be updated</param>
-        public async Task ReadNodeValues(IEnumerable<UAVariable> nodes, CancellationToken token)
+        public async Task ReadNodeValues(IEnumerable<BaseUANode> nodes, CancellationToken token)
         {
-            nodes = nodes.Where(node => !node.ValueRead && node.Index == -1).ToList();
+            nodes = nodes.DistinctBy(node => node.Attributes).ToList();
             if (!nodes.Any()) return;
             log.LogInformation("Get the current values of {Count} variables", nodes.Count());
             var readValueIds = new ReadValueIdCollection(
                 nodes.Select(node => new ReadValueId { AttributeId = Attributes.Value, NodeId = node.Id }));
-            IEnumerable<DataValue> values;
 
             var attributes = new List<uint> { Attributes.Value };
-            values = await ReadAttributes(readValueIds, nodes.Count(), token, "node values");
+            var values = await ReadAttributes(readValueIds, nodes.Count(), token, "node values");
 
-            var enumerator = values.GetEnumerator();
+            var idx = 0;
             foreach (var node in nodes)
             {
-                node.ValueRead = true;
-                enumerator.MoveNext();
-                node.SetDataPoint(enumerator.Current?.WrappedValue ?? Variant.Null);
+                node.Attributes.LoadAttribute(values[idx], Attributes.Value, TypeManager);
+                idx++;
             }
-            enumerator.Dispose();
         }
         #endregion
 
@@ -780,6 +786,10 @@ namespace Cognite.OpcUa
             {
                 var data = results[i];
                 var node = readParams.Nodes[i];
+                node.LastStatus = data.StatusCode;
+
+                if (StatusCode.IsBad(data.StatusCode)) continue;
+
                 LogDump("HistoryRead node", node);
                 LogDump("HistoryRead data", data);
 
@@ -817,13 +827,6 @@ namespace Cognite.OpcUa
 
             numHistoryReads.Inc();
 
-            foreach (var result in results)
-            {
-                if (StatusCode.IsBad(result.StatusCode))
-                {
-                    throw new ServiceResultException(result.StatusCode);
-                }
-            }
             return results;
         }
 
@@ -911,7 +914,9 @@ namespace Cognite.OpcUa
                 subscription = new Subscription(Session.DefaultSubscription)
                 {
                     PublishingInterval = Config.Source.PublishingInterval,
-                    DisplayName = name
+                    DisplayName = name,
+                    KeepAliveCount = Config.Subscriptions.KeepAliveCount,
+                    LifetimeCount = Config.Subscriptions.LifetimeCount
                 };
                 subscription.PublishStatusChanged += OnSubscriptionPublishStatusChange;
             }
@@ -1038,7 +1043,13 @@ namespace Cognite.OpcUa
         {
             if (sender is not Subscription sub || !sub.PublishingStopped) return;
 
-            _ = RecreateSubscription(sub, liveToken);
+            if (Callbacks?.TaskScheduler == null)
+            {
+                log.LogWarning("Failed to recreate subscription, client callbacks are not set");
+                return;
+            }
+
+            Callbacks.TaskScheduler.ScheduleTask(null, t => RecreateSubscription(sub, t));
         }
 
         /// <summary>
@@ -1059,7 +1070,8 @@ namespace Cognite.OpcUa
                 nodeList,
                 "DataChangeListener",
                 subscriptionHandler,
-                node => {
+                node =>
+                {
                     var config = Config.Subscriptions.GetMatchingConfig(node);
                     return new MonitoredItem
                     {
@@ -1087,16 +1099,18 @@ namespace Cognite.OpcUa
             Justification = "Bad analysis")]
         public async Task SubscribeToEvents(IEnumerable<EventExtractionState> emitters,
             MonitoredItemNotificationEventHandler subscriptionHandler,
+            Dictionary<NodeId, UAObjectType> eventFields,
             CancellationToken token)
         {
-            var filter = BuildEventFilter();
+            var filter = BuildEventFilter(eventFields);
             LogDump("Event filter", filter);
 
             await AddSubscriptions(
                 emitters,
                 "EventListener",
                 subscriptionHandler,
-                node => {
+                node =>
+                {
                     var config = Config.Subscriptions.GetMatchingConfig(node);
                     return new MonitoredItem
                     {
@@ -1157,55 +1171,25 @@ namespace Cognite.OpcUa
         /// Return systemContext. Can be used by SDK-tools for converting events.
         /// </summary>
         public ISystemContext? SystemContext => Session?.SystemContext ?? dummyContext;
+
+        private IServiceMessageContext? dummyMessageContext;
         /// <summary>
         /// Return MessageContext, used for serialization
         /// </summary>
-        public IServiceMessageContext? MessageContext => Session?.MessageContext;
-        /// <summary>
-        /// Fetch event fields from the server and store them on the client
-        /// </summary>
-        /// <param name="token"></param>
-        /// <returns>The collected event fields</returns>
-        public async Task<Dictionary<NodeId, UAEventType>> GetEventFields(IEventFieldSource? source, CancellationToken token)
-        {
-            if (eventFields != null) return eventFields;
-            if (source == null)
-            {
-                source = new EventFieldCollector(log, this, Config.Events);
-            }
-            eventFields = await source.GetEventIdFields(token);
-            foreach (var pair in eventFields)
-            {
-                log.LogTrace("Collected event field: {Id}", pair.Key);
-                foreach (var fields in pair.Value.CollectedFields)
-                {
-                    log.LogTrace("    {Name}", fields.Name);
-                }
-            }
-            return eventFields;
-        }
-        /// <summary>
-        /// Remove collected event fields
-        /// </summary>
-        public void ClearEventFields()
-        {
-            eventFields = null;
-        }
+        public IServiceMessageContext? MessageContext => Session?.MessageContext ?? dummyMessageContext;
         /// <summary>
         /// Constructs a filter from the given list of permitted eventids, the already constructed field map and an optional receivedAfter property.
         /// </summary>
         /// <param name="nodeIds">Permitted SourceNode ids</param>
         /// <param name="receivedAfter">Optional, if defined, attempt to filter out events with [ReceiveTimeProperty] > receivedAfter</param>
         /// <returns>The final event filter</returns>
-        public EventFilter BuildEventFilter()
+        public EventFilter BuildEventFilter(Dictionary<NodeId, UAObjectType> eventFields)
         {
             /*
              * Essentially equivalent to SELECT Message, EventId, SourceNode, Time FROM [source] WHERE EventId IN eventIds;
              * using the internal query language in OPC-UA
              */
             var whereClause = new ContentFilter();
-
-            if (eventFields == null) eventFields = new Dictionary<NodeId, UAEventType>();
 
             if (eventFields.Keys.Any() && ((Config.Events.EventIds?.Any() ?? false) || !Config.Events.AllEvents))
             {
@@ -1227,7 +1211,7 @@ namespace Cognite.OpcUa
 
 
             var fieldList = eventFields
-                .Aggregate((IEnumerable<EventField>)new List<EventField>(), (agg, kvp) => agg.Concat(kvp.Value.CollectedFields))
+                .Aggregate((IEnumerable<TypeField>)new List<TypeField>(), (agg, kvp) => agg.Concat(kvp.Value.CollectedFields))
                 .Distinct();
 
             if (!fieldList.Any())
@@ -1369,6 +1353,7 @@ namespace Cognite.OpcUa
                     "http://opcfoundation.org/UA/"
                 });
                 dummyContext = new DummySystemContext(ExternalNamespaceUris);
+                dummyMessageContext = new DummyMessageContext(ExternalNamespaceUris);
             }
             if (table == null) return;
             foreach (var ns in table)
@@ -1430,8 +1415,11 @@ namespace Cognite.OpcUa
             if (datavalue is IEnumerable enumerable)
             {
                 var enumerator = enumerable.GetEnumerator();
-                enumerator.MoveNext();
-                return ConvertToDouble(enumerator.Current);
+                if (enumerator.MoveNext())
+                {
+                    return ConvertToDouble(enumerator.Current);
+                }
+                return 0;
             }
             // Give up if there is no clear way to convert it
             if (!typeof(IConvertible).IsAssignableFrom(datavalue.GetType())) return 0;

@@ -1,11 +1,12 @@
-﻿using Cognite.Extractor.Common;
+﻿using Cognite.Extensions;
+using Cognite.Extractor.Common;
 using Cognite.Extractor.Testing;
 using Cognite.OpcUa;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
+using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.Pushers;
-using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
 using CogniteSdk;
 using Com.Cognite.V1.Timeseries.Proto;
@@ -33,6 +34,7 @@ namespace Test.Unit
     public sealed class CDFPusherTest : IClassFixture<CDFPusherTestFixture>, IDisposable
     {
         private readonly CDFPusherTestFixture tester;
+        private readonly ITestOutputHelper _output;
         private CDFMockHandler handler;
         private CDFPusher pusher;
         public CDFPusherTest(ITestOutputHelper output, CDFPusherTestFixture tester)
@@ -41,6 +43,8 @@ namespace Test.Unit
             tester.Init(output);
             tester.ResetConfig();
             (handler, pusher) = tester.GetCDFPusher();
+            tester.Client.TypeManager.Reset();
+            _output = output;
         }
 
         public void Dispose()
@@ -52,17 +56,9 @@ namespace Test.Unit
         [Fact]
         public async Task TestTestConnection()
         {
-            handler.AllowConnectionTest = false;
-
-            tester.Config.Cognite.Debug = true;
+            tester.Config.DryRun = true;
             Assert.True(await pusher.TestConnection(tester.Config, tester.Source.Token));
-            tester.Config.Cognite.Debug = false;
-
-            Assert.False(await pusher.TestConnection(tester.Config, tester.Source.Token));
-
-            handler.AllowConnectionTest = true;
-
-            Assert.True(await pusher.TestConnection(tester.Config, tester.Source.Token));
+            tester.Config.DryRun = false;
 
             handler.FailedRoutes.Add("/timeseries/list");
 
@@ -82,7 +78,7 @@ namespace Test.Unit
 
             tester.Config.Events.Enabled = false;
 
-            Assert.Null(tester.Config.Cognite.DataSetId);
+            Assert.Null(tester.Config.Cognite.DataSet?.Id);
             handler.DataSets.Add("test-data-set", new DataSet
             {
                 ExternalId = "test-data-set",
@@ -90,18 +86,18 @@ namespace Test.Unit
                 CreatedTime = 1000,
                 LastUpdatedTime = 1000
             });
-            tester.Config.Cognite.DataSetExternalId = "test-data-set";
+            tester.Config.Cognite.DataSet = new DataSetConfig { ExternalId = "test-data-set" };
 
             Assert.True(await pusher.TestConnection(tester.Config, tester.Source.Token));
-            Assert.Equal(123, tester.Config.Cognite.DataSetId);
+            Assert.Equal(123, tester.Config.Cognite.DataSet?.Id);
 
             handler.FailedRoutes.Add("/datasets/byids");
             Assert.True(await pusher.TestConnection(tester.Config, tester.Source.Token));
 
-            tester.Config.Cognite.DataSetId = null;
+            tester.Config.Cognite.DataSet.Id = null;
 
             Assert.False(await pusher.TestConnection(tester.Config, tester.Source.Token));
-            Assert.Null(tester.Config.Cognite.DataSetId);
+            Assert.Null(tester.Config.Cognite.DataSet.Id);
         }
         [Fact]
         public async Task TestPushDatapoints()
@@ -117,7 +113,7 @@ namespace Test.Unit
             // Null input
             Assert.Null(await pusher.PushDataPoints(null, tester.Source.Token));
 
-            tester.Config.Cognite.Debug = true;
+            tester.Config.DryRun = true;
 
             var time = DateTime.UtcNow;
 
@@ -141,7 +137,7 @@ namespace Test.Unit
             // Debug true
             Assert.Null(await pusher.PushDataPoints(dps, tester.Source.Token));
 
-            tester.Config.Cognite.Debug = false;
+            tester.Config.DryRun = false;
 
             handler.FailedRoutes.Add("/timeseries/data");
 
@@ -233,7 +229,7 @@ namespace Test.Unit
                     Time = time,
                     EmittingNode = new NodeId("emitter"),
                     SourceNode = new NodeId("source"),
-                    EventType = new UAEventType(new NodeId("type"), "EventType"),
+                    EventType = new UAObjectType(new NodeId("type")),
                     EventId = "someid"
                 },
                 new UAEvent
@@ -241,14 +237,14 @@ namespace Test.Unit
                     Time = time,
                     EmittingNode = new NodeId("emitter"),
                     SourceNode = new NodeId("missingsource"),
-                    EventType = new UAEventType(new NodeId("type"), "EventType"),
+                    EventType = new UAObjectType(new NodeId("type")),
                     EventId = "someid2"
                 }
             };
 
-            tester.Config.Cognite.Debug = true;
+            tester.Config.DryRun = true;
             Assert.Null(await pusher.PushEvents(events, tester.Source.Token));
-            tester.Config.Cognite.Debug = false;
+            tester.Config.DryRun = false;
 
             handler.FailedRoutes.Add("/events");
             Assert.False(await pusher.PushEvents(events, tester.Source.Token));
@@ -265,7 +261,7 @@ namespace Test.Unit
                 Time = time,
                 EmittingNode = new NodeId("emitter"),
                 SourceNode = new NodeId("source"),
-                EventType = new UAEventType(new NodeId("type"), "EventType"),
+                EventType = new UAObjectType(new NodeId("type")),
                 EventId = "someid3"
             }).ToArray();
 
@@ -278,24 +274,33 @@ namespace Test.Unit
         [Fact]
         public async Task TestCreateUpdateAssets()
         {
-            using var extractor = tester.BuildExtractor(true, null, pusher);
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_cdf");
-            tester.Config.Cognite.RawMetadata = null;
+            tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
+            {
+                Clean = new CleanMetadataTargetConfig
+                {
+                    Assets = true,
+                    Timeseries = false,
+                    Relationships = false,
+                }
+            };
+            (handler, pusher) = tester.GetCDFPusher();
+            using var extractor = tester.BuildExtractor(true, null, pusher);
 
             var rels = Enumerable.Empty<UAReference>();
             var tss = Enumerable.Empty<UAVariable>();
             var update = new UpdateConfig();
-            Assert.True((await pusher.PushNodes(Enumerable.Empty<UANode>(), tss, rels, update, tester.Source.Token)).Objects);
+            Assert.True((await pusher.PushNodes(Enumerable.Empty<BaseUANode>(), tss, rels, update, tester.Source.Token)).Objects);
 
             // Test debug mode
-            var node = new UANode(tester.Server.Ids.Base.Root, "BaseRoot", NodeId.Null, NodeClass.Object);
-            tester.Config.Cognite.Debug = true;
+            var node = new UAObject(tester.Server.Ids.Base.Root, "BaseRoot", null, null, NodeId.Null, null);
+            tester.Config.DryRun = true;
             Assert.True((await pusher.PushNodes(new[] { node }, tss, rels, update, tester.Source.Token)).Objects);
-            tester.Config.Cognite.Debug = false;
+            tester.Config.DryRun = false;
             Assert.Empty(handler.Assets);
 
             // Fail to create assets
-            node = new UANode(tester.Server.Ids.Base.Root, "BaseRoot", NodeId.Null, NodeClass.Object);
+            node = new UAObject(tester.Server.Ids.Base.Root, "BaseRoot", null, null, NodeId.Null, null);
             handler.FailedRoutes.Add("/assets");
             Assert.False((await pusher.PushNodes(new[] { node }, tss, rels, update, tester.Source.Token)).Objects);
             handler.FailedRoutes.Clear();
@@ -318,7 +323,7 @@ namespace Test.Unit
             Assert.True((await pusher.PushNodes(new[] { node }, tss, rels, update, tester.Source.Token)).Objects);
 
             // Fail due to failed update, but the other will still be created
-            var node2 = new UANode(tester.Server.Ids.Custom.Root, "CustomRoot", NodeId.Null, NodeClass.Object);
+            var node2 = new UAObject(tester.Server.Ids.Custom.Root, "CustomRoot", null, null, NodeId.Null, null);
             node.Attributes.Description = "description";
             Assert.False((await pusher.PushNodes(new[] { node, node2 }, tss, rels, update, tester.Source.Token)).Objects);
             Assert.Equal(2, handler.Assets.Count);
@@ -338,51 +343,68 @@ namespace Test.Unit
         [Fact]
         public async Task TestCreateRawAssets()
         {
-            using var extractor = tester.BuildExtractor(true, null, pusher);
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_cdf");
 
-            tester.Config.Cognite.RawMetadata = new RawMetadataConfig
+            tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
             {
-                AssetsTable = "assets",
-                Database = "metadata"
+                Clean = new CleanMetadataTargetConfig(),
+                Raw = new RawMetadataTargetConfig
+                {
+                    Database = "metadata",
+                    AssetsTable = "assets"
+                }
             };
-            var node = new UANode(tester.Server.Ids.Base.Root, "BaseRoot", NodeId.Null, NodeClass.Object);
+            (handler, pusher) = tester.GetCDFPusher();
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+
+            var node = new UAObject(tester.Server.Ids.Base.Root, "BaseRoot", null, null, NodeId.Null, null);
             var rels = Enumerable.Empty<UAReference>();
             var tss = Enumerable.Empty<UAVariable>();
             var update = new UpdateConfig();
             // Fail to create
             handler.FailedRoutes.Add("/raw/dbs/metadata/tables/assets/rows");
-            Assert.False((await pusher.PushNodes(new[] { node }, tss, rels, update, tester.Source.Token)).Objects);
-            Assert.Empty(handler.AssetRaw);
+            Assert.False((await pusher.PushNodes(new[] { node }, tss, rels, update, tester.Source.Token)).RawObjects);
+            Assert.Empty(handler.AssetsRaw);
+            handler.FailedRoutes.Clear();
 
             // Create one
-            handler.FailedRoutes.Clear();
-            Assert.True((await pusher.PushNodes(new[] { node }, tss, rels, update, tester.Source.Token)).Objects);
-            Assert.Single(handler.AssetRaw);
-            Assert.Equal("BaseRoot", handler.AssetRaw.First().Value.GetProperty("name").GetString());
+            Assert.True((await pusher.PushNodes(new[] { node }, tss, rels, update, tester.Source.Token)).RawObjects);
+            Assert.Single(handler.AssetsRaw);
+            Assert.Equal("BaseRoot", handler.AssetsRaw.First().Value.GetProperty("name").GetString());
 
             // Create another, do not overwrite the existing one, due to no update settings
-            var node2 = new UANode(tester.Server.Ids.Custom.Root, "CustomRoot", NodeId.Null, NodeClass.Object);
+            var node2 = new UAObject(tester.Server.Ids.Custom.Root, "CustomRoot", null, null, NodeId.Null, null);
             node.Attributes.Description = "description";
-            Assert.True((await pusher.PushNodes(new[] { node, node2 }, tss, rels, update, tester.Source.Token)).Objects);
-            Assert.Equal(2, handler.AssetRaw.Count);
-            Assert.Null(handler.AssetRaw.First().Value.GetProperty("description").GetString());
-            Assert.Null(handler.AssetRaw.Last().Value.GetProperty("description").GetString());
+            Assert.True((await pusher.PushNodes(new[] { node, node2 }, tss, rels, update, tester.Source.Token)).RawObjects);
+            Assert.Equal(2, handler.AssetsRaw.Count);
+            Assert.Null(handler.AssetsRaw.First().Value.GetProperty("description").GetString());
+            Assert.Null(handler.AssetsRaw.Last().Value.GetProperty("description").GetString());
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_node_ensure_failures_cdf", 1));
         }
         [Fact]
         public async Task TestUpdateRawAssets()
         {
-            using var extractor = tester.BuildExtractor(true, null, pusher);
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_cdf");
 
-            tester.Config.Cognite.RawMetadata = new RawMetadataConfig
+            tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
             {
-                AssetsTable = "assets",
-                Database = "metadata"
+                Clean = new CleanMetadataTargetConfig
+                {
+                    Relationships = true,
+                    Assets = false,
+                    Timeseries = true
+                },
+                Raw = new RawMetadataTargetConfig
+                {
+                    Database = "metadata",
+                    AssetsTable = "assets",
+                    TimeseriesTable = "timeseries"
+                }
             };
-            var node = new UANode(tester.Server.Ids.Base.Root, "BaseRoot", NodeId.Null, NodeClass.Object);
+            (handler, pusher) = tester.GetCDFPusher();
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+            var node = new UAObject(tester.Server.Ids.Base.Root, "BaseRoot", null, null, NodeId.Null, null);
             var rels = Enumerable.Empty<UAReference>();
             var tss = Enumerable.Empty<UAVariable>();
             var update = new UpdateConfig();
@@ -393,30 +415,39 @@ namespace Test.Unit
 
             // Fail to upsert
             handler.FailedRoutes.Add("/raw/dbs/metadata/tables/assets/rows");
-            Assert.False((await pusher.PushNodes(new[] { node }, tss, rels, update, tester.Source.Token)).Objects);
-            Assert.Empty(handler.AssetRaw);
+            Assert.False((await pusher.PushNodes(new[] { node }, tss, rels, update, tester.Source.Token)).RawObjects);
+            Assert.Empty(handler.AssetsRaw);
 
             // Create one
             handler.FailedRoutes.Clear();
-            Assert.True((await pusher.PushNodes(new[] { node }, tss, rels, update, tester.Source.Token)).Objects);
-            Assert.Single(handler.AssetRaw);
-            Assert.Equal("BaseRoot", handler.AssetRaw.First().Value.GetProperty("name").GetString());
+            Assert.True((await pusher.PushNodes(new[] { node }, tss, rels, update, tester.Source.Token)).RawObjects);
+            Assert.Single(handler.AssetsRaw);
+            Assert.Equal("BaseRoot", handler.AssetsRaw.First().Value.GetProperty("name").GetString());
 
             // Create another, overwrite the existing one
-            var node2 = new UANode(tester.Server.Ids.Custom.Root, "CustomRoot", NodeId.Null, NodeClass.Object);
+            var node2 = new UAObject(tester.Server.Ids.Custom.Root, "CustomRoot", null, null, NodeId.Null, null);
             node.Attributes.Description = "description";
-            Assert.True((await pusher.PushNodes(new[] { node, node2 }, tss, rels, update, tester.Source.Token)).Objects);
-            Assert.Equal(2, handler.AssetRaw.Count);
-            Assert.Single(handler.AssetRaw, asset => asset.Value.GetProperty("description").GetString() == "description");
+            Assert.True((await pusher.PushNodes(new[] { node, node2 }, tss, rels, update, tester.Source.Token)).RawObjects);
+            Assert.Equal(2, handler.AssetsRaw.Count);
+            Assert.Single(handler.AssetsRaw, asset => asset.Value.GetProperty("description").GetString() == "description");
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_node_ensure_failures_cdf", 1));
         }
         [Fact]
         public async Task TestCreateUpdateTimeseries()
         {
-            using var extractor = tester.BuildExtractor(true, null, pusher);
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_cdf");
-            tester.Config.Cognite.RawMetadata = null;
+            tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
+            {
+                Clean = new CleanMetadataTargetConfig
+                {
+                    Relationships = true,
+                    Assets = false,
+                    Timeseries = true
+                },
+            };
+            (handler, pusher) = tester.GetCDFPusher();
+            using var extractor = tester.BuildExtractor(true, null, pusher);
 
             var dt = new UADataType(DataTypeIds.Double);
 
@@ -426,20 +457,20 @@ namespace Test.Unit
             nodeToAssetIds[new NodeId("parent")] = 123;
 
             var rels = Enumerable.Empty<UAReference>();
-            var assets = Enumerable.Empty<UANode>();
+            var assets = Enumerable.Empty<BaseUANode>();
             var update = new UpdateConfig();
 
             // Test debug mode
-            var node = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", new NodeId("parent"));
-            node.VariableAttributes.DataType = dt;
-            tester.Config.Cognite.Debug = true;
+            var node = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", null, null, new NodeId("parent"), null);
+            node.FullAttributes.DataType = dt;
+            tester.Config.DryRun = true;
             Assert.True((await pusher.PushNodes(assets, new[] { node }, rels, update, tester.Source.Token)).Variables);
-            tester.Config.Cognite.Debug = false;
+            tester.Config.DryRun = false;
             Assert.Empty(handler.Timeseries);
 
             // Fail to create timeseries
-            node = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", new NodeId("parent"));
-            node.VariableAttributes.DataType = dt;
+            node = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", null, null, new NodeId("parent"), null);
+            node.FullAttributes.DataType = dt;
             handler.FailedRoutes.Add("/timeseries");
             Assert.False((await pusher.PushNodes(assets, new[] { node }, rels, update, tester.Source.Token)).Variables);
             handler.FailedRoutes.Clear();
@@ -464,8 +495,8 @@ namespace Test.Unit
             Assert.True((await pusher.PushNodes(assets, new[] { node }, rels, update, tester.Source.Token)).Variables);
 
             // Create one, fail to update the other
-            var node2 = new UAVariable(tester.Server.Ids.Custom.MysteryVar, "MysteryVar", new NodeId("parent"));
-            node2.VariableAttributes.DataType = dt;
+            var node2 = new UAVariable(tester.Server.Ids.Custom.MysteryVar, "MysteryVar", null, null, new NodeId("parent"), null);
+            node2.FullAttributes.DataType = dt;
             node.Attributes.Description = "description";
             Assert.False((await pusher.PushNodes(assets, new[] { node, node2 }, rels, update, tester.Source.Token)).Variables);
             Assert.Equal(2, handler.Timeseries.Count);
@@ -485,39 +516,50 @@ namespace Test.Unit
         [Fact]
         public async Task TestCreateRawTimeseries()
         {
-            using var extractor = tester.BuildExtractor(true, null, pusher);
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_cdf");
 
-            tester.Config.Cognite.RawMetadata = new RawMetadataConfig
+            tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
             {
-                TimeseriesTable = "timeseries",
-                Database = "metadata"
+                Clean = new CleanMetadataTargetConfig
+                {
+                    Relationships = true,
+                    Assets = false,
+                    Timeseries = false
+                },
+                Raw = new RawMetadataTargetConfig
+                {
+                    Database = "metadata",
+                    AssetsTable = "assets",
+                    TimeseriesTable = "timeseries"
+                }
             };
+            (handler, pusher) = tester.GetCDFPusher();
+            using var extractor = tester.BuildExtractor(true, null, pusher);
 
             var dt = new UADataType(DataTypeIds.Double);
 
             var rels = Enumerable.Empty<UAReference>();
-            var assets = Enumerable.Empty<UANode>();
+            var assets = Enumerable.Empty<BaseUANode>();
             var update = new UpdateConfig();
-            var node = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", new NodeId("parent"));
-            node.VariableAttributes.DataType = dt;
+            var node = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", null, null, new NodeId("parent"), null);
+            node.FullAttributes.DataType = dt;
 
             // Fail to create
             handler.FailedRoutes.Add("/raw/dbs/metadata/tables/timeseries/rows");
-            Assert.False((await pusher.PushNodes(assets, new[] { node }, rels, update, tester.Source.Token)).Variables);
+            Assert.False((await pusher.PushNodes(assets, new[] { node }, rels, update, tester.Source.Token)).RawVariables);
             Assert.Empty(handler.TimeseriesRaw);
 
             // Create one
             handler.FailedRoutes.Clear();
-            Assert.True((await pusher.PushNodes(assets, new[] { node }, rels, update, tester.Source.Token)).Variables);
+            Assert.True((await pusher.PushNodes(assets, new[] { node }, rels, update, tester.Source.Token)).RawVariables);
             Assert.Single(handler.TimeseriesRaw);
             Assert.Equal("Variable 1", handler.TimeseriesRaw.First().Value.GetProperty("name").GetString());
 
             // Create another, do not overwrite the existing one, due to no update settings
-            var node2 = new UAVariable(tester.Server.Ids.Custom.MysteryVar, "MysteryVar", new NodeId("parent"));
-            node2.VariableAttributes.DataType = dt;
+            var node2 = new UAVariable(tester.Server.Ids.Custom.MysteryVar, "MysteryVar", null, null, new NodeId("parent"), null);
+            node2.FullAttributes.DataType = dt;
             node.Attributes.Description = "description";
-            Assert.True((await pusher.PushNodes(assets, new[] { node, node2 }, rels, update, tester.Source.Token)).Variables);
+            Assert.True((await pusher.PushNodes(assets, new[] { node, node2 }, rels, update, tester.Source.Token)).RawVariables);
             Assert.Equal(2, handler.TimeseriesRaw.Count);
             Assert.Null(handler.TimeseriesRaw.First().Value.GetProperty("description").GetString());
             Assert.Null(handler.TimeseriesRaw.Last().Value.GetProperty("description").GetString());
@@ -527,15 +569,26 @@ namespace Test.Unit
         [Fact]
         public async Task TestUpdateRawTimeseries()
         {
-            using var extractor = tester.BuildExtractor(true, null, pusher);
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_cdf");
 
-            tester.Config.Cognite.RawMetadata = new RawMetadataConfig
+            tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
             {
-                TimeseriesTable = "timeseries",
-                Database = "metadata"
+                Clean = new CleanMetadataTargetConfig
+                {
+                    Relationships = true,
+                    Assets = false,
+                    Timeseries = false
+                },
+                Raw = new RawMetadataTargetConfig
+                {
+                    Database = "metadata",
+                    AssetsTable = "assets",
+                    TimeseriesTable = "timeseries"
+                }
             };
 
+            (handler, pusher) = tester.GetCDFPusher();
+            using var extractor = tester.BuildExtractor(true, null, pusher);
             var dt = new UADataType(DataTypeIds.Double);
 
             var nodeToAssetIds = (Dictionary<NodeId, long>)pusher.GetType()
@@ -544,29 +597,29 @@ namespace Test.Unit
             nodeToAssetIds[new NodeId("parent")] = 123;
 
             var rels = Enumerable.Empty<UAReference>();
-            var assets = Enumerable.Empty<UANode>();
+            var assets = Enumerable.Empty<BaseUANode>();
             var update = new UpdateConfig();
             update.Variables.Context = true;
             update.Variables.Description = true;
             update.Variables.Metadata = true;
             update.Variables.Name = true;
-            var node = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", new NodeId("parent"));
-            node.VariableAttributes.DataType = dt;
+            var node = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", null, null, new NodeId("parent"), null);
+            node.FullAttributes.DataType = dt;
 
             // Fail to upsert
             handler.FailedRoutes.Add("/raw/dbs/metadata/tables/timeseries/rows");
-            Assert.False((await pusher.PushNodes(assets, new[] { node }, rels, update, tester.Source.Token)).Variables);
+            Assert.False((await pusher.PushNodes(assets, new[] { node }, rels, update, tester.Source.Token)).RawVariables);
             Assert.Empty(handler.TimeseriesRaw);
 
             // Create one
             handler.FailedRoutes.Clear();
-            Assert.True((await pusher.PushNodes(assets, new[] { node }, rels, update, tester.Source.Token)).Variables);
+            Assert.True((await pusher.PushNodes(assets, new[] { node }, rels, update, tester.Source.Token)).RawVariables);
             Assert.Single(handler.TimeseriesRaw);
             Assert.Equal("Variable 1", handler.TimeseriesRaw.First().Value.GetProperty("name").GetString());
 
             // Create another, overwrite the existing due to update settings
-            var node2 = new UAVariable(tester.Server.Ids.Custom.MysteryVar, "MysteryVar", new NodeId("parent"));
-            node2.VariableAttributes.DataType = dt;
+            var node2 = new UAVariable(tester.Server.Ids.Custom.MysteryVar, "MysteryVar", null, null, new NodeId("parent"), null);
+            node2.FullAttributes.DataType = dt;
             node.Attributes.Description = "description";
             Assert.True((await pusher.PushNodes(assets, new[] { node, node2 }, rels, update, tester.Source.Token)).Variables);
             Assert.Equal(2, handler.TimeseriesRaw.Count);
@@ -584,17 +637,24 @@ namespace Test.Unit
                 ReportOnEmpty = true
             };
 
+            CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_cdf");
+            tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
+            {
+                Clean = new CleanMetadataTargetConfig
+                {
+                    Relationships = true,
+                    Assets = true,
+                    Timeseries = true
+                },
+            };
+
             (handler, pusher) = tester.GetCDFPusher();
             using var extractor = tester.BuildExtractor(true, null, pusher);
-            var log = tester.Provider.GetRequiredService<ILogger<ReferenceTypeManager>>();
-            var mgr = new ReferenceTypeManager(tester.Config, log, tester.Client, extractor);
-            CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_cdf");
-            tester.Config.Cognite.RawMetadata = null;
 
             var dt = new UADataType(DataTypes.Double);
 
             var update = new UpdateConfig();
-            await pusher.PushNodes(Enumerable.Empty<UANode>(), Enumerable.Empty<UAVariable>(),
+            await pusher.PushNodes(Enumerable.Empty<BaseUANode>(), Enumerable.Empty<UAVariable>(),
                 Enumerable.Empty<UAReference>(), update, tester.Source.Token);
 
             Assert.Single(handler.Callbacks);
@@ -611,10 +671,10 @@ namespace Test.Unit
             Assert.Equal("gp.", res.IdPrefix);
 
             // Create one of each.
-            var node = new UANode(tester.Server.Ids.Base.Root, "BaseRoot", NodeId.Null, NodeClass.Object);
-            var variable = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", new NodeId("parent"));
-            variable.VariableAttributes.DataType = dt;
-            var rel = new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target2"), true, false, false, mgr);
+            var node = new UAObject(tester.Server.Ids.Base.Root, "BaseRoot", null, null, NodeId.Null, null);
+            var variable = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", null, null, new NodeId("parent"), null);
+            variable.FullAttributes.DataType = dt;
+            var rel = new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target2"), true, false, false, extractor.TypeManager);
 
             await pusher.PushNodes(new[] { node }, new[] { variable }, new[] { rel }, update, tester.Source.Token);
 
@@ -641,7 +701,7 @@ namespace Test.Unit
             Assert.Equal(0, res.RelationshipsCreated);
 
             // Modify "update", also add another reference.
-            rel = new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source2"), new NodeId("target2"), true, false, false, mgr);
+            rel = new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source2"), new NodeId("target2"), true, false, false, extractor.TypeManager);
             update.Variables.Description = true;
             update.Objects.Description = true;
 
@@ -675,34 +735,35 @@ namespace Test.Unit
                 ReportOnEmpty = true
             };
 
-            tester.Config.Cognite.RawMetadata = new RawMetadataConfig
+            tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
             {
-                TimeseriesTable = "timeseries",
-                RelationshipsTable = "relationships",
-                AssetsTable = "assets",
-                Database = "metadata"
+                Raw = new RawMetadataTargetConfig
+                {
+                    Database = "metadata",
+                    AssetsTable = "assets",
+                    TimeseriesTable = "timeseries",
+                    RelationshipsTable = "relationships"
+                }
             };
 
             (handler, pusher) = tester.GetCDFPusher();
             using var extractor = tester.BuildExtractor(true, null, pusher);
-            var log = tester.Provider.GetRequiredService<ILogger<ReferenceTypeManager>>();
-            var mgr = new ReferenceTypeManager(tester.Config, log, tester.Client, extractor);
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_cdf");
 
             var dt = new UADataType(DataTypes.Double);
 
             var update = new UpdateConfig();
-            await pusher.PushNodes(Enumerable.Empty<UANode>(), Enumerable.Empty<UAVariable>(),
+            await pusher.PushNodes(Enumerable.Empty<BaseUANode>(), Enumerable.Empty<UAVariable>(),
                 Enumerable.Empty<UAReference>(), update, tester.Source.Token);
 
             Assert.Single(handler.Callbacks);
             var res = handler.Callbacks[0];
-            Assert.Equal(0, res.AssetsCreated);
-            Assert.Equal(0, res.AssetsUpdated);
-            Assert.Equal(0, res.TimeSeriesCreated);
-            Assert.Equal(0, res.TimeSeriesUpdated);
+            Assert.Equal(0, res.RawAssetsCreated);
+            Assert.Equal(0, res.RawAssetsUpdated);
+            Assert.Equal(0, res.RawTimeseriesCreated);
+            Assert.Equal(0, res.RawTimeseriesUpdated);
             Assert.Equal(0, res.MinimalTimeSeriesCreated);
-            Assert.Equal(0, res.RelationshipsCreated);
+            Assert.Equal(0, res.RawRelationshipsCreated);
             Assert.Equal("metadata", res.RawDatabase);
             Assert.Equal("assets", res.AssetsTable);
             Assert.Equal("timeseries", res.TimeSeriesTable);
@@ -710,21 +771,21 @@ namespace Test.Unit
             Assert.Equal("gp.", res.IdPrefix);
 
             // Create one of each.
-            var node = new UANode(tester.Server.Ids.Base.Root, "BaseRoot", NodeId.Null, NodeClass.Object);
-            var variable = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", new NodeId("parent"));
-            variable.VariableAttributes.DataType = dt;
-            var rel = new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target2"), true, false, false, mgr);
+            var node = new UAObject(tester.Server.Ids.Base.Root, "BaseRoot", null, null, NodeId.Null, null);
+            var variable = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", null, null, new NodeId("parent"), null);
+            variable.FullAttributes.DataType = dt;
+            var rel = new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target2"), true, false, false, extractor.TypeManager);
 
             await pusher.PushNodes(new[] { node }, new[] { variable }, new[] { rel }, update, tester.Source.Token);
 
             Assert.Equal(2, handler.Callbacks.Count);
             res = handler.Callbacks[1];
-            Assert.Equal(1, res.AssetsCreated);
-            Assert.Equal(0, res.AssetsUpdated);
-            Assert.Equal(1, res.TimeSeriesCreated);
+            Assert.Equal(1, res.RawAssetsCreated);
+            Assert.Equal(0, res.RawAssetsUpdated);
+            Assert.Equal(1, res.RawTimeseriesCreated);
             Assert.Equal(1, res.MinimalTimeSeriesCreated);
             Assert.Equal(0, res.TimeSeriesUpdated);
-            Assert.Equal(1, res.RelationshipsCreated);
+            Assert.Equal(1, res.RawRelationshipsCreated);
 
             // Update each without modifying "update"
             node.Attributes.Description = "Some description";
@@ -734,15 +795,15 @@ namespace Test.Unit
 
             Assert.Equal(3, handler.Callbacks.Count);
             res = handler.Callbacks[2];
-            Assert.Equal(0, res.AssetsCreated);
-            Assert.Equal(0, res.AssetsUpdated);
-            Assert.Equal(0, res.TimeSeriesCreated);
-            Assert.Equal(0, res.TimeSeriesUpdated);
+            Assert.Equal(0, res.RawAssetsCreated);
+            Assert.Equal(0, res.RawAssetsUpdated);
+            Assert.Equal(0, res.RawTimeseriesCreated);
+            Assert.Equal(0, res.RawTimeseriesUpdated);
             Assert.Equal(0, res.MinimalTimeSeriesCreated);
-            Assert.Equal(0, res.RelationshipsCreated);
+            Assert.Equal(0, res.RawRelationshipsCreated);
 
             // Modify "update", also add another reference.
-            rel = new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source2"), new NodeId("target2"), true, false, false, mgr);
+            rel = new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source2"), new NodeId("target2"), true, false, false, extractor.TypeManager);
             update.Variables.Description = true;
             update.Objects.Description = true;
 
@@ -750,24 +811,24 @@ namespace Test.Unit
 
             Assert.Equal(4, handler.Callbacks.Count);
             res = handler.Callbacks[3];
-            Assert.Equal(0, res.AssetsCreated);
-            Assert.Equal(1, res.AssetsUpdated);
-            Assert.Equal(0, res.TimeSeriesCreated);
-            Assert.Equal(1, res.TimeSeriesUpdated);
+            Assert.Equal(0, res.RawAssetsCreated);
+            Assert.Equal(1, res.RawAssetsUpdated);
+            Assert.Equal(0, res.RawTimeseriesCreated);
+            Assert.Equal(1, res.RawTimeseriesUpdated);
             Assert.Equal(0, res.MinimalTimeSeriesCreated);
-            Assert.Equal(1, res.RelationshipsCreated);
+            Assert.Equal(1, res.RawRelationshipsCreated);
 
             // Again, this time nothing changes
             await pusher.PushNodes(new[] { node }, new[] { variable }, new[] { rel }, update, tester.Source.Token);
 
             Assert.Equal(5, handler.Callbacks.Count);
             res = handler.Callbacks[4];
-            Assert.Equal(0, res.AssetsCreated);
-            Assert.Equal(0, res.AssetsUpdated);
-            Assert.Equal(0, res.TimeSeriesCreated);
-            Assert.Equal(0, res.TimeSeriesUpdated);
+            Assert.Equal(0, res.RawAssetsCreated);
+            Assert.Equal(0, res.RawAssetsUpdated);
+            Assert.Equal(0, res.RawTimeseriesCreated);
+            Assert.Equal(0, res.RawTimeseriesUpdated);
             Assert.Equal(0, res.MinimalTimeSeriesCreated);
-            Assert.Equal(0, res.RelationshipsCreated);
+            Assert.Equal(0, res.RawRelationshipsCreated);
         }
         #endregion
 
@@ -780,11 +841,11 @@ namespace Test.Unit
             VariableExtractionState[] GetStates()
             {
                 var state1 = new VariableExtractionState(tester.Client,
-                    CommonTestUtils.GetSimpleVariable("double", new UADataType(DataTypeIds.Double)), true, true);
+                    CommonTestUtils.GetSimpleVariable("double", new UADataType(DataTypeIds.Double)), true, true, true);
                 var state2 = new VariableExtractionState(tester.Client,
-                    CommonTestUtils.GetSimpleVariable("string", new UADataType(DataTypeIds.String)), true, true);
+                    CommonTestUtils.GetSimpleVariable("string", new UADataType(DataTypeIds.String)), true, true, true);
                 var state3 = new VariableExtractionState(tester.Client,
-                    CommonTestUtils.GetSimpleVariable("array", new UADataType(DataTypeIds.Double), 3), true, true);
+                    CommonTestUtils.GetSimpleVariable("array", new UADataType(DataTypeIds.Double), 3), true, true, true);
                 return new[] { state1, state2, state3 };
             }
 
@@ -867,12 +928,22 @@ namespace Test.Unit
         [Fact]
         public async Task TestCreateRelationships()
         {
-            using var extractor = tester.BuildExtractor(true, null, pusher);
-            var log = tester.Provider.GetRequiredService<ILogger<ReferenceTypeManager>>();
-            var mgr = new ReferenceTypeManager(tester.Config, log, tester.Client, extractor);
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_cdf");
 
-            var assets = Enumerable.Empty<UANode>();
+            tester.Config.Extraction.Relationships.Enabled = true;
+            tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
+            {
+                Clean = new CleanMetadataTargetConfig
+                {
+                    Assets = false,
+                    Timeseries = false,
+                    Relationships = true,
+                }
+            };
+            (handler, pusher) = tester.GetCDFPusher();
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+
+            var assets = Enumerable.Empty<BaseUANode>();
             var tss = Enumerable.Empty<UAVariable>();
             var update = new UpdateConfig();
 
@@ -882,26 +953,26 @@ namespace Test.Unit
             // Fail to push
             var references = new List<UAReference>
             {
-                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target2"), true, false, true, mgr),
-                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target"), false, true, true, mgr),
+                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target2"), true, false, true, extractor.TypeManager),
+                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target"), false, true, true, extractor.TypeManager),
             };
-            await mgr.GetReferenceTypeDataAsync(tester.Source.Token);
+            await extractor.TypeManager.LoadTypeData(tester.Source.Token);
             handler.FailedRoutes.Add("/relationships");
             Assert.False((await pusher.PushNodes(assets, tss, references, update, tester.Source.Token)).References);
             Assert.Empty(handler.Relationships);
+            handler.FailedRoutes.Clear();
 
             // Push successful
-            handler.FailedRoutes.Clear();
             Assert.True((await pusher.PushNodes(assets, tss, references, update, tester.Source.Token)).References);
             Assert.Equal(2, handler.Relationships.Count);
 
             // Push again, with duplicates
             var references2 = new List<UAReference>
             {
-                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target"), true, true, true, mgr),
-                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target2"), false, false, true, mgr),
-                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target2"), true, false, true, mgr),
-                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target"), false, true, true, mgr)
+                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target"), true, true, true, extractor.TypeManager),
+                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target2"), false, false, true, extractor.TypeManager),
+                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target2"), true, false, true, extractor.TypeManager),
+                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target"), false, true, true, extractor.TypeManager)
             };
             Assert.True((await pusher.PushNodes(assets, tss, references2, update, tester.Source.Token)).References);
             Assert.Equal(4, handler.Relationships.Count);
@@ -912,7 +983,11 @@ namespace Test.Unit
                 "gp.Organizes;base:s=source;base:s=target2",
                 "gp.OrganizedBy;base:s=source2;base:s=target",
             };
-            Assert.All(ids, id => Assert.Contains(handler.Relationships, rel => rel.Key == id));
+            foreach (var rl in handler.Relationships)
+            {
+                tester.Log.LogInformation("{Key}", rl.Key);
+            }
+            Assert.All(ids, id => Assert.True(handler.Relationships.ContainsKey(id)));
 
             // Test pushing all duplicates
             Assert.True((await pusher.PushNodes(assets, tss, references, update, tester.Source.Token)).References);
@@ -922,47 +997,50 @@ namespace Test.Unit
         [Fact]
         public async Task TestCreateRawRelationships()
         {
-            using var extractor = tester.BuildExtractor(true, null, pusher);
-            var log = tester.Provider.GetRequiredService<ILogger<ReferenceTypeManager>>();
-            var mgr = new ReferenceTypeManager(tester.Config, log, tester.Client, extractor);
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_cdf");
 
-            tester.Config.Cognite.RawMetadata = new RawMetadataConfig
+            tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
             {
-                RelationshipsTable = "relationships",
-                Database = "metadata"
+                Raw = new RawMetadataTargetConfig
+                {
+                    RelationshipsTable = "relationships",
+                    Database = "metadata"
+                }
             };
+            tester.Config.Extraction.Relationships.Enabled = true;
+            (handler, pusher) = tester.GetCDFPusher();
+            using var extractor = tester.BuildExtractor(true, null, pusher);
 
-            var assets = Enumerable.Empty<UANode>();
+            var assets = Enumerable.Empty<BaseUANode>();
             var tss = Enumerable.Empty<UAVariable>();
             var update = new UpdateConfig();
 
             // Push none
-            Assert.True((await pusher.PushNodes(assets, tss, Enumerable.Empty<UAReference>(), update, tester.Source.Token)).References);
+            Assert.True((await pusher.PushNodes(assets, tss, Enumerable.Empty<UAReference>(), update, tester.Source.Token)).RawReferences);
 
             // Fail to push
             var references = new List<UAReference>
             {
-                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target2"), true, false, true, mgr),
-                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target"), false, true, true, mgr),
+                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target2"), true, false, true, extractor.TypeManager),
+                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target"), false, true, true, extractor.TypeManager),
             };
-            await mgr.GetReferenceTypeDataAsync(tester.Source.Token);
+            await extractor.TypeManager.LoadTypeData(tester.Source.Token);
             handler.FailedRoutes.Add("/raw/dbs/metadata/tables/relationships/rows");
-            Assert.False((await pusher.PushNodes(assets, tss, references, update, tester.Source.Token)).References);
+            Assert.False((await pusher.PushNodes(assets, tss, references, update, tester.Source.Token)).RawReferences);
             Assert.Empty(handler.RelationshipsRaw);
+            handler.FailedRoutes.Clear();
 
             // Push successful
-            handler.FailedRoutes.Clear();
-            Assert.True((await pusher.PushNodes(assets, tss, references, update, tester.Source.Token)).References);
+            Assert.True((await pusher.PushNodes(assets, tss, references, update, tester.Source.Token)).RawReferences);
             Assert.Equal(2, handler.RelationshipsRaw.Count);
 
             // Push again, with duplicates
             var references2 = new List<UAReference>
             {
-                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target"), true, true, true, mgr),
-                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target2"), false, false, true, mgr),
-                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target2"), true, false, true, mgr),
-                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target"), false, true, true, mgr)
+                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target"), true, true, true, extractor.TypeManager),
+                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target2"), false, false, true, extractor.TypeManager),
+                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target2"), true, false, true, extractor.TypeManager),
+                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target"), false, true, true, extractor.TypeManager)
             };
             Assert.True((await pusher.PushNodes(assets, tss, references2, update, tester.Source.Token)).References);
             Assert.Equal(4, handler.RelationshipsRaw.Count);
@@ -973,7 +1051,7 @@ namespace Test.Unit
                 "gp.Organizes;base:s=source;base:s=target2",
                 "gp.OrganizedBy;base:s=source2;base:s=target",
             };
-            Assert.All(ids, id => Assert.Contains(handler.RelationshipsRaw, rel => rel.Key == id));
+            Assert.All(ids, id => Assert.True(handler.RelationshipsRaw.ContainsKey(id)));
 
             // Test pushing all duplicates
             Assert.True((await pusher.PushNodes(assets, tss, references, update, tester.Source.Token)).References);
@@ -984,24 +1062,25 @@ namespace Test.Unit
 
         #region node-source
 
-        private void NodeToRaw(UAExtractor extractor, UANode node, ConverterType type, bool ts)
+        private void NodeToRaw(UAExtractor extractor, BaseUANode node, ConverterType type, bool ts)
         {
             var options = new JsonSerializerOptions();
             var converter = tester.Client.StringConverter;
             converter.AddConverters(options, type);
 
-            var id = extractor.GetUniqueId(node.Id, (node is UAVariable variable) ? variable.Index : -1);
+            var id = node.GetUniqueId(extractor);
 
             var json = JsonSerializer.Serialize(node, options);
 
             var val = JsonSerializer.Deserialize<JsonElement>(json, options);
+            tester.Log.LogInformation("{Node}", val);
             if (ts)
             {
                 handler.TimeseriesRaw[id] = val;
             }
             else
             {
-                handler.AssetRaw[id] = val;
+                handler.AssetsRaw[id] = val;
             }
         }
 
@@ -1021,9 +1100,10 @@ namespace Test.Unit
             tester.Config.Extraction.DataTypes.AppendInternalValues = true;
             tester.Config.Extraction.DataTypes.AllowStringVariables = true;
             tester.Config.Extraction.DataTypes.MaxArraySize = 10;
+            tester.Config.Subscriptions.IgnoreAccessLevel = true;
 
             var log = tester.Provider.GetRequiredService<ILogger<CDFNodeSource>>();
-            var source = new CDFNodeSource(log, tester.Config, extractor, tester.Client, pusher);
+            var source = new CDFNodeSource(log, tester.Config, extractor, tester.Client, pusher, extractor.TypeManager);
 
             // Nothing in CDF
             await source.ReadRawNodes(tester.Source.Token);
@@ -1032,35 +1112,34 @@ namespace Test.Unit
 
             // Datapoints
             // Not a variable
-            var node = new UANode(new NodeId("test"), "test", NodeId.Null, NodeClass.Object);
+            var node = new UAObject(new NodeId("test"), "test", null, null, NodeId.Null, null);
             NodeToRaw(extractor, node, ConverterType.Node, false);
             // Normal double
-            var variable = new UAVariable(new NodeId("test2"), "test2", NodeId.Null, NodeClass.Variable);
-            variable.VariableAttributes.DataType = new UADataType(DataTypeIds.Double);
-            variable.VariableAttributes.ValueRank = -1;
+            var variable = new UAVariable(new NodeId("test2"), "test2", null, null, NodeId.Null, null);
+            variable.FullAttributes.DataType = new UADataType(DataTypeIds.Double);
+            variable.FullAttributes.ValueRank = -1;
             NodeToRaw(extractor, variable, ConverterType.Variable, true);
             // Normal string
-            variable = new UAVariable(new NodeId("test3"), "test3", NodeId.Null, NodeClass.Variable);
-            variable.VariableAttributes.DataType = new UADataType(DataTypeIds.String);
-            variable.VariableAttributes.ValueRank = -1;
+            variable = new UAVariable(new NodeId("test3"), "test3", null, null, NodeId.Null, null);
+            variable.FullAttributes.DataType = new UADataType(DataTypeIds.String);
+            variable.FullAttributes.ValueRank = -1;
             NodeToRaw(extractor, variable, ConverterType.Variable, true);
             // Array
-            variable = new UAVariable(new NodeId("test4"), "test4", NodeId.Null, NodeClass.Variable);
-            variable.VariableAttributes.DataType = new UADataType(DataTypeIds.Double);
-            variable.VariableAttributes.ValueRank = 1;
-            variable.VariableAttributes.ArrayDimensions = new[] { 4 };
+            variable = new UAVariable(new NodeId("test4"), "test4", null, null, NodeId.Null, null);
+            variable.FullAttributes.DataType = new UADataType(DataTypeIds.Double);
+            variable.FullAttributes.ValueRank = 1;
+            variable.FullAttributes.ArrayDimensions = new[] { 4 };
             NodeToRaw(extractor, variable, ConverterType.Node, false);
             foreach (var child in variable.CreateTimeseries())
             {
                 NodeToRaw(extractor, child, ConverterType.Variable, true);
             }
 
-            source = new CDFNodeSource(log, tester.Config, extractor, tester.Client, pusher);
+            source = new CDFNodeSource(log, tester.Config, extractor, tester.Client, pusher, extractor.TypeManager);
             await source.ReadRawNodes(tester.Source.Token);
             result = await source.ParseResults(tester.Source.Token);
             Assert.Single(result.DestinationObjects);
-            Assert.Equal("test4", result.DestinationObjects.First().DisplayName);
-            Assert.Equal(-1, (result.DestinationObjects.First() as UAVariable).Index);
+            Assert.Equal("test4", result.DestinationObjects.First().Name);
             Assert.Equal(6, result.DestinationVariables.Count());
             Assert.Empty(result.SourceObjects);
             Assert.Equal(3, result.SourceVariables.Count());
@@ -1072,7 +1151,7 @@ namespace Test.Unit
             // First, try disabling timeseries subscriptions and seeing that no results are returned
             tester.Config.Subscriptions.DataPoints = false;
             tester.Config.History.Enabled = false;
-            source = new CDFNodeSource(log, tester.Config, extractor, tester.Client, pusher);
+            source = new CDFNodeSource(log, tester.Config, extractor, tester.Client, pusher, extractor.TypeManager);
             await source.ReadRawNodes(tester.Source.Token);
             result = await source.ParseResults(tester.Source.Token);
             Assert.Null(result);
@@ -1080,7 +1159,7 @@ namespace Test.Unit
 
             // Enable events, but no states should be created
             tester.Config.Events.Enabled = true;
-            source = new CDFNodeSource(log, tester.Config, extractor, tester.Client, pusher);
+            source = new CDFNodeSource(log, tester.Config, extractor, tester.Client, pusher, extractor.TypeManager);
             await source.ReadRawNodes(tester.Source.Token);
             result = await source.ParseResults(tester.Source.Token);
             Assert.Equal(2, result.DestinationObjects.Count());
@@ -1091,17 +1170,16 @@ namespace Test.Unit
             Assert.Empty(extractor.State.EmitterStates);
 
             // Add a couple emitters
-            node = new UANode(new NodeId("test5"), "test5", NodeId.Null, NodeClass.Object);
-            node.Attributes.EventNotifier = EventNotifiers.HistoryRead | EventNotifiers.SubscribeToEvents;
+            node = new UAObject(new NodeId("test5"), "test5", null, null, NodeId.Null, null);
+            node.FullAttributes.EventNotifier = EventNotifiers.HistoryRead | EventNotifiers.SubscribeToEvents;
             NodeToRaw(extractor, node, ConverterType.Node, false);
 
-            variable = new UAVariable(new NodeId("test6"), "test6", NodeId.Null, NodeClass.Variable);
-            variable.VariableAttributes.DataType = new UADataType(DataTypeIds.String);
-            variable.VariableAttributes.ValueRank = -1;
-            variable.VariableAttributes.EventNotifier = EventNotifiers.HistoryRead | EventNotifiers.SubscribeToEvents;
+            variable = new UAVariable(new NodeId("test6"), "test6", null, null, NodeId.Null, null);
+            variable.FullAttributes.DataType = new UADataType(DataTypeIds.String);
+            variable.FullAttributes.ValueRank = -1;
             NodeToRaw(extractor, variable, ConverterType.Variable, true);
 
-            source = new CDFNodeSource(log, tester.Config, extractor, tester.Client, pusher);
+            source = new CDFNodeSource(log, tester.Config, extractor, tester.Client, pusher, extractor.TypeManager);
             await source.ReadRawNodes(tester.Source.Token);
             result = await source.ParseResults(tester.Source.Token);
             Assert.Equal(3, result.DestinationObjects.Count());
@@ -1109,7 +1187,7 @@ namespace Test.Unit
             Assert.Equal(7, result.DestinationVariables.Count());
             Assert.Equal(4, result.SourceVariables.Count());
             Assert.Empty(extractor.State.NodeStates);
-            Assert.Equal(2, extractor.State.EmitterStates.Count());
+            Assert.Single(extractor.State.EmitterStates);
         }
 
         [Fact]
@@ -1122,11 +1200,14 @@ namespace Test.Unit
                 Database = "metadata",
                 Enable = true
             };
-            tester.Config.Cognite.RawMetadata = new RawMetadataConfig
+            tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
             {
-                AssetsTable = "assets",
-                TimeseriesTable = "timeseries",
-                Database = "metadata"
+                Raw = new RawMetadataTargetConfig
+                {
+                    AssetsTable = "assets",
+                    TimeseriesTable = "timeseries",
+                    Database = "metadata"
+                }
             };
             tester.Config.Extraction.DataTypes.ExpandNodeIds = true;
             tester.Config.Extraction.DataTypes.AppendInternalValues = true;
@@ -1136,6 +1217,7 @@ namespace Test.Unit
             tester.Config.Extraction.RootNode = tester.Ids.Custom.Root.ToProtoNodeId(tester.Client);
             tester.Config.History.Enabled = true;
 
+            (handler, pusher) = tester.GetCDFPusher();
             using var extractor = tester.BuildExtractor(true, null, pusher);
 
             // Nothing in CDF
@@ -1145,20 +1227,19 @@ namespace Test.Unit
             tester.Config.Cognite.RawNodeBuffer.BrowseOnEmpty = true;
             await extractor.RunExtractor(true);
             Assert.True(extractor.State.NodeStates.Any());
-            Assert.True(handler.AssetRaw.Any());
+            Assert.True(handler.AssetsRaw.Any());
             Assert.True(handler.TimeseriesRaw.Any());
             Assert.True(handler.Timeseries.Any());
             Assert.Empty(handler.Assets);
 
             await extractor.WaitForSubscriptions();
-            tester.Client.Browser.ResetVisitedNodes();
             await tester.Client.RemoveSubscription("DataChangeListener");
 
             extractor.State.Clear();
 
             // Now there is something in CDF, read it back
             tester.Config.Cognite.RawNodeBuffer.BrowseOnEmpty = false;
-            string oldAssets = System.Text.Json.JsonSerializer.Serialize(handler.AssetRaw);
+            string oldAssets = System.Text.Json.JsonSerializer.Serialize(handler.AssetsRaw);
             string oldTimeseries = System.Text.Json.JsonSerializer.Serialize(handler.TimeseriesRaw);
             handler.Timeseries.Clear();
             extractor.GetType().GetField("subscribed", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(extractor, 0);
@@ -1166,7 +1247,7 @@ namespace Test.Unit
             await extractor.RunExtractor(true);
             Assert.True(extractor.State.NodeStates.Any());
 
-            string newAssets = System.Text.Json.JsonSerializer.Serialize(handler.AssetRaw);
+            string newAssets = System.Text.Json.JsonSerializer.Serialize(handler.AssetsRaw);
             string newTimeseries = System.Text.Json.JsonSerializer.Serialize(handler.TimeseriesRaw);
 
             // Ensure data in raw is untouched.
@@ -1198,19 +1279,23 @@ namespace Test.Unit
                 Database = "metadata",
                 Enable = true
             };
-            tester.Config.Cognite.RawMetadata = new RawMetadataConfig
+            tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
             {
-                AssetsTable = "assets",
-                TimeseriesTable = "timeseries",
-                Database = "metadata"
+                Raw = new RawMetadataTargetConfig
+                {
+                    AssetsTable = "assets",
+                    TimeseriesTable = "timeseries",
+                    Database = "metadata"
+                }
             };
             tester.Config.Extraction.DataTypes.ExpandNodeIds = true;
             tester.Config.Extraction.DataTypes.AppendInternalValues = true;
             tester.Config.Events.Enabled = true;
             tester.Config.Events.ReadServer = false;
-            tester.Config.Subscriptions.DataPoints = false;
+            tester.Config.Subscriptions.DataPoints = true;
             tester.Config.Extraction.RootNode = tester.Ids.Event.Root.ToProtoNodeId(tester.Client);
 
+            (handler, pusher) = tester.GetCDFPusher();
             using var extractor = tester.BuildExtractor(true, null, pusher);
 
             // Nothing in CDF
@@ -1220,20 +1305,19 @@ namespace Test.Unit
             tester.Config.Cognite.RawNodeBuffer.BrowseOnEmpty = true;
             await extractor.RunExtractor(true);
             Assert.True(extractor.State.NodeStates.Any());
-            Assert.True(handler.AssetRaw.Any());
+            Assert.True(handler.AssetsRaw.Any());
             Assert.True(handler.TimeseriesRaw.Any());
             Assert.True(handler.Timeseries.Any());
             Assert.Empty(handler.Assets);
 
             await extractor.WaitForSubscriptions();
-            tester.Client.Browser.ResetVisitedNodes();
             await tester.Client.RemoveSubscription("EventListener");
 
             extractor.State.Clear();
 
             // Now there is something in CDF, read it back
             tester.Config.Cognite.RawNodeBuffer.BrowseOnEmpty = false;
-            string oldAssets = System.Text.Json.JsonSerializer.Serialize(handler.AssetRaw);
+            string oldAssets = System.Text.Json.JsonSerializer.Serialize(handler.AssetsRaw);
             string oldTimeseries = System.Text.Json.JsonSerializer.Serialize(handler.TimeseriesRaw);
             handler.Timeseries.Clear();
             extractor.GetType().GetField("subscribed", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(extractor, 0);
@@ -1241,7 +1325,7 @@ namespace Test.Unit
             await extractor.RunExtractor(true);
             Assert.True(extractor.State.NodeStates.Any());
 
-            string newAssets = System.Text.Json.JsonSerializer.Serialize(handler.AssetRaw);
+            string newAssets = System.Text.Json.JsonSerializer.Serialize(handler.AssetsRaw);
             string newTimeseries = System.Text.Json.JsonSerializer.Serialize(handler.TimeseriesRaw);
 
             // Ensure data in raw is untouched.
@@ -1271,19 +1355,23 @@ namespace Test.Unit
                 Database = "metadata",
                 Enable = true
             };
-            tester.Config.Cognite.RawMetadata = new RawMetadataConfig
+            tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
             {
-                AssetsTable = "assets",
-                TimeseriesTable = "timeseries",
-                Database = "metadata"
+                Raw = new RawMetadataTargetConfig
+                {
+                    Database = "metadata",
+                    TimeseriesTable = "timeseries",
+                    AssetsTable = "assets"
+                }
             };
             tester.Config.Extraction.DataTypes.ExpandNodeIds = true;
             tester.Config.Extraction.DataTypes.AppendInternalValues = true;
             tester.Config.Events.Enabled = true;
             tester.Config.Events.ReadServer = false;
-            tester.Config.Subscriptions.DataPoints = false;
+            tester.Config.Subscriptions.DataPoints = true;
             tester.Config.Extraction.RootNode = tester.Ids.Event.Root.ToProtoNodeId(tester.Client);
             tester.Config.Source.AltSourceBackgroundBrowse = true;
+            (handler, pusher) = tester.GetCDFPusher();
 
             using var extractor = tester.BuildExtractor(true, null, pusher);
 
@@ -1291,13 +1379,12 @@ namespace Test.Unit
             tester.Config.Cognite.RawNodeBuffer.BrowseOnEmpty = true;
             await extractor.RunExtractor(true);
             Assert.True(extractor.State.NodeStates.Any());
-            Assert.True(handler.AssetRaw.Any());
+            Assert.True(handler.AssetsRaw.Any());
             Assert.True(handler.TimeseriesRaw.Any());
             Assert.True(handler.Timeseries.Any());
             Assert.Empty(handler.Assets);
 
             await extractor.WaitForSubscriptions();
-            tester.Client.Browser.ResetVisitedNodes();
             await tester.Client.RemoveSubscription("EventListener");
 
             extractor.State.Clear();
@@ -1312,6 +1399,57 @@ namespace Test.Unit
             await extractor.RunExtractor(true);
 
             await TestUtils.WaitForCondition(() => handler.TimeseriesRaw.Count > 0, 10);
+        }
+
+        [Fact]
+        public async Task TestAllDestinationsActive()
+        {
+            tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
+            {
+                Clean = new CleanMetadataTargetConfig
+                {
+                    Assets = true,
+                    Timeseries = true,
+                    Relationships = true,
+                },
+                Raw = new RawMetadataTargetConfig
+                {
+                    Database = "metadata",
+                    AssetsTable = "assets",
+                    TimeseriesTable = "timeseries",
+                    RelationshipsTable = "relationships"
+                },
+            };
+
+            (handler, pusher) = tester.GetCDFPusher();
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+ 
+            var update = new UpdateConfig();
+            var dt = new UADataType(DataTypeIds.Double);
+            var node = new UAObject(tester.Server.Ids.Base.Root, "BaseRoot", null, null, NodeId.Null, null);
+            var variable = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", null, null, new NodeId("parent"), null);
+            variable.FullAttributes.DataType = dt;
+            var rel = new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target2"), true, false, false, extractor.TypeManager);
+
+            var result = await pusher.PushNodes(new[] { node }, new [] { variable }, new[] { rel }, update, tester.Source.Token);
+
+            Assert.True(result.Objects);
+            Assert.True(result.RawObjects);
+
+            Assert.True(result.Variables);
+            Assert.True(result.RawVariables);
+ 
+            Assert.True(result.References);
+            Assert.True(result.RawReferences);
+
+            Assert.Single(handler.Assets);
+            Assert.Single(handler.AssetsRaw);
+
+            Assert.Single(handler.Timeseries);
+            Assert.Single(handler.TimeseriesRaw);
+
+            Assert.Single(handler.Relationships);
+            Assert.Single(handler.RelationshipsRaw);
         }
         #endregion
     }

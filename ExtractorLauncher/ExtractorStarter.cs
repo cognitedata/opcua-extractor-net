@@ -21,6 +21,7 @@ using Cognite.Extractor.Logging;
 using Cognite.Extractor.Utils;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Pushers;
+using Cognite.OpcUa.Pushers.Writers;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Prometheus;
@@ -89,6 +90,100 @@ namespace Cognite.OpcUa
                 log.LogWarning("source.queue-length is deprecated. Use subscriptions.queue-length instead.");
                 config.Subscriptions.QueueLength = config.Source.QueueLength.Value;
             }
+            if (config.Cognite?.Debug ?? false)
+            {
+                log.LogWarning("cognite.debug is deprecated. Use dry-run instead.");
+                config.DryRun = true;
+            }
+            if (config.Mqtt?.Debug ?? false)
+            {
+                log.LogWarning("mqtt.debug is deprecated. Use dry-run instead.");
+                config.DryRun = true;
+            }
+            if (config.Influx?.Debug ?? false)
+            {
+                log.LogWarning("influx.debug is deprecated. Use dry-run instead.");
+                config.DryRun = true;
+            }
+            if (config.Cognite?.DataSetId != null)
+            {
+                log.LogWarning("cognite.data-set-id is deprecated. Use cognite.data-set.id instead");
+                if (config.Cognite.DataSet == null) config.Cognite.DataSet = new Extensions.DataSetConfig();
+                config.Cognite.DataSet.Id = config.Cognite.DataSetId.Value;
+            }
+            if (config.Cognite?.DataSetExternalId != null)
+            {
+                log.LogWarning("cognite.data-set-external-id is deprecated. Use cognite.data-set.external-id instead");
+                if (config.Cognite.DataSet == null) config.Cognite.DataSet = new Extensions.DataSetConfig();
+                config.Cognite.DataSet.ExternalId = config.Cognite.DataSetExternalId;
+            }
+            if (config.Subscriptions.LifetimeCount <= 0 || config.Subscriptions.LifetimeCount < 3 * config.Subscriptions.KeepAliveCount)
+            {
+                return "subscriptions.lifetime-count must be greater than 0 and at least 3 * subscriptions.keep-alive-count";
+            }
+            if (config.Subscriptions.KeepAliveCount <= 0)
+            {
+                return "subscriptions.keep-alive-count must be greater than 0";
+            }
+#pragma warning disable 0618
+            if (config.Cognite?.RawMetadata != null)
+            {
+                log.LogWarning("cognite.raw-metadata is deprecated. Use cognite.metadata-targets instead");
+                if (config.Cognite.MetadataTargets != null)
+                {
+                    return "cognite.raw-metadata and cognite.metadata-targets cannot be set at the same time.";
+                }
+                if (config.Cognite == null) config.Cognite = new CognitePusherConfig();
+                var rawMetadata = config.Cognite.RawMetadata;
+                var useCleanAssets = (rawMetadata?.Database == null || rawMetadata?.AssetsTable == null) || config.Cognite.SkipMetadata;
+                var useCleanTimeseries = rawMetadata?.Database == null || rawMetadata?.TimeseriesTable == null;
+                var useCleanRelationships = rawMetadata?.Database == null || rawMetadata?.RelationshipsTable == null;
+                config.Cognite.MetadataTargets = new MetadataTargetsConfig
+                {
+                    Clean = new CleanMetadataTargetConfig
+                    {
+                        Assets = useCleanAssets,
+                        Timeseries = useCleanTimeseries,
+                        Relationships = useCleanRelationships
+                    },
+                    Raw = new RawMetadataTargetConfig
+                    {
+                        Database = rawMetadata?.Database,
+                        AssetsTable = rawMetadata?.AssetsTable,
+                        TimeseriesTable = rawMetadata?.TimeseriesTable,
+                        RelationshipsTable = rawMetadata?.RelationshipsTable
+                    }
+                };
+            }
+            else if (config.Cognite?.MetadataTargets == null)
+            {
+                if (config.Cognite?.SkipMetadata ?? false)
+                {
+                    log.LogWarning("Use of skip-metadata has been deprecated. use cognite.metadata-targets instead");
+                }
+                else
+                {
+                    log.LogWarning("Default writing to clean is deprecated, in the future not setting a metadata target will not write metadata to CDF at all");
+                    if (config.Cognite == null) config.Cognite = new CognitePusherConfig();
+                    if (config.Cognite.MetadataTargets == null) config.Cognite.MetadataTargets = new MetadataTargetsConfig();
+                    if (config.Cognite.MetadataTargets.Clean == null) config.Cognite.MetadataTargets.Clean = new CleanMetadataTargetConfig();
+                    config.Cognite.MetadataTargets.Clean.Timeseries = true;
+                }
+            }
+#pragma warning restore 0618
+
+            if (config.Cognite?.MetadataTargets?.Raw != null)
+            {
+                var rawMetaTarget = config.Cognite.MetadataTargets.Raw;
+                if (rawMetaTarget.Database == null)
+                {
+                    return "cognite.metadata-targets.raw.database is required when setting raw";
+                }
+                if (rawMetaTarget.AssetsTable == null || rawMetaTarget.RelationshipsTable == null || rawMetaTarget.TimeseriesTable == null)
+                {
+                    return "Atlease one of assets-table, relationships-table or timeseries-table is required when setting cognite.metadata-targets.raw";
+                }
+            }
 
             return null;
         }
@@ -98,7 +193,8 @@ namespace Cognite.OpcUa
             FullConfig config,
             BaseExtractorParams setup,
             ExtractorRunnerParams<FullConfig, UAExtractor>? options,
-            string configRoot)
+            string configRoot,
+            ServiceCollection services)
         {
             config.Source.ConfigRoot = configRoot;
             if (!string.IsNullOrEmpty(setup.EndpointUrl)) config.Source.EndpointUrl = setup.EndpointUrl;
@@ -118,8 +214,10 @@ namespace Cognite.OpcUa
                     config.Logger.File.Path = setup.LogDir;
                 }
             }
+            services.AddWriters(config);
             config.Source.AutoAccept |= setup.AutoAccept;
             config.Source.ExitOnFailure |= setup is ExtractorParams p2 && p2.Exit;
+            config.DryRun |= setup.DryRun;
 
             if (options != null)
             {
@@ -186,7 +284,7 @@ namespace Cognite.OpcUa
                 setup.BaseConfig = ConfigurationUtils.TryReadConfigFromFile<FullConfig>(configFile, 1);
             }
 
-            VerifyAndBuildConfig(log, setup.Config, setup, null, configDir);
+            VerifyAndBuildConfig(log, setup.Config, setup, null, configDir, services);
 
             if (setup.NoConfig)
             {
@@ -238,29 +336,11 @@ namespace Cognite.OpcUa
             var ver = Extractor.Metrics.Version.GetVersion(Assembly.GetExecutingAssembly());
 
 
-            FullConfig? config;
+            FullConfig? config = null;
             if (setup.NoConfig)
             {
                 config = new FullConfig();
                 config.GenerateDefaults();
-            }
-            else
-            {
-                try
-                {
-                    string configFile = setup.ConfigFile ?? Path.Join(configDir, "config.yml");
-                    config = ConfigurationUtils.TryReadConfigFromFile<FullConfig>(configFile, 1);
-                    config.GenerateDefaults();
-                }
-                catch
-                {
-                    config = null;
-                }
-            }
-
-            if (config != null && config.Cognite == null)
-            {
-                config.Cognite = new CognitePusherConfig();
             }
 
             services.AddSingleton<IPusher, CDFPusher>(provider =>
@@ -269,14 +349,14 @@ namespace Cognite.OpcUa
                 var dest = provider.GetService<CogniteDestination>();
                 var log = provider.GetRequiredService<ILogger<CDFPusher>>();
                 if (conf.Cognite == null || dest == null || dest.CogniteClient == null) return null!;
-                return new CDFPusher(log, conf.Extraction, conf.Cognite, dest);
+                return new CDFPusher(log, conf, conf.Cognite, dest, provider);
             });
             services.AddSingleton<IPusher, InfluxPusher>(provider =>
             {
                 var conf = provider.GetService<FullConfig>();
                 var log = provider.GetRequiredService<ILogger<InfluxPusher>>();
                 if (conf?.Influx == null) return null!;
-                return new InfluxPusher(log, conf.Influx);
+                return new InfluxPusher(log, conf);
             });
             services.AddSingleton<IPusher, MQTTPusher>(provider =>
             {
@@ -298,7 +378,7 @@ namespace Cognite.OpcUa
                 AddLogger = true,
                 AddMetrics = true,
                 Restart = !setup.Exit,
-                ConfigCallback = (config, options, services) => VerifyAndBuildConfig(log, config, setup, options, configDir),
+                ConfigCallback = (config, options, services) => VerifyAndBuildConfig(log, config, setup, options, configDir, services),
                 ExtServices = services,
                 StartupLogger = log,
                 Config = config,

@@ -17,6 +17,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using Cognite.Extractor.Configuration;
 using Cognite.OpcUa.History;
+using Cognite.OpcUa.Nodes;
+using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
@@ -25,8 +27,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using YamlDotNet.Serialization;
-using YamlDotNet.Serialization.NamingConventions;
 
 namespace Cognite.OpcUa.Config
 {
@@ -86,7 +86,7 @@ namespace Cognite.OpcUa.Config
         /// <param name="child">Child to look for parents for</param>
         /// <param name="parent">Parent to look for</param>
         /// <returns>True if child is descendant of parent</returns>
-        public static bool IsChildOf(IEnumerable<UANode> nodes, UANode child, NodeId parent)
+        public static bool IsChildOf(IEnumerable<BaseUANode> nodes, BaseUANode child, NodeId parent)
         {
             var next = child ?? throw new ArgumentNullException(nameof(child));
 
@@ -96,7 +96,7 @@ namespace Cognite.OpcUa.Config
                 {
                     return true;
                 }
-                if (next.ParentId == null)
+                if (next.ParentId.IsNullNodeId)
                 {
                     break;
                 }
@@ -112,28 +112,15 @@ namespace Cognite.OpcUa.Config
         /// <param name="target">List to write to</param>
         /// <param name="client">UAClient instance for namespaces</param>
         /// <returns>Callback for Browse in UAClient</returns>
-        public static Action<ReferenceDescription, NodeId> GetSimpleListWriterCallback(ICollection<UANode> target, UAClient client, ILogger log)
+        public static Action<ReferenceDescription, NodeId, bool> GetSimpleListWriterCallback(ICollection<BaseUANode> target, UAClient client, TypeManager typeManager, ILogger log)
         {
-            return (node, parentId) =>
+            return (node, parentId, visited) =>
             {
-                if (node.NodeClass == NodeClass.Object || node.NodeClass == NodeClass.DataType || node.NodeClass == NodeClass.ObjectType)
-                {
-                    var bufferedNode = new UANode(client.ToNodeId(node.NodeId),
-                        node.DisplayName.Text, parentId, node.NodeClass);
-                    bufferedNode.SetNodeType(client, node.NodeId);
-
-                    log.LogTrace("HandleNode Object {Name}", bufferedNode.DisplayName);
-                    target.Add(bufferedNode);
-                }
-                else if (node.NodeClass == NodeClass.Variable || node.NodeClass == NodeClass.VariableType)
-                {
-                    var bufferedNode = new UAVariable(client.ToNodeId(node.NodeId),
-                        node.DisplayName.Text, parentId, node.NodeClass);
-                    bufferedNode.SetNodeType(client, node.NodeId);
-
-                    log.LogTrace("HandleNode Variable {Name}", bufferedNode.DisplayName);
-                    target.Add(bufferedNode);
-                }
+                if (visited) return;
+                var res = BaseUANode.Create(node, parentId, null, client, typeManager);
+                if (res == null) return;
+                log.LogTrace("HandleNode {NodeClass} {Name}", res.NodeClass, res.Name);
+                target.Add(res);
             };
         }
         /// <summary>
@@ -305,12 +292,12 @@ namespace Cognite.OpcUa.Config
         /// <param name="node">Node to test</param>
         /// <param name="str">String to check</param>
         /// <returns>True if the node name or identifier starts with the given string.</returns>
-        public static bool NodeNameStartsWith(UANode node, string str)
+        public static bool NodeNameStartsWith(BaseUANode node, string str)
         {
             if (node == null) return false;
             string? identifier = node.Id.IdType == IdType.String ? (string)node.Id.Identifier : null;
             return identifier != null && identifier.StartsWith(str, StringComparison.InvariantCultureIgnoreCase)
-                || node.DisplayName != null && node.DisplayName.StartsWith(str, StringComparison.InvariantCultureIgnoreCase);
+                || node.Name != null && node.Name.StartsWith(str, StringComparison.InvariantCultureIgnoreCase);
         }
         /// <summary>
         /// Method to check if a given UANode contains the given string,
@@ -319,12 +306,12 @@ namespace Cognite.OpcUa.Config
         /// <param name="node">Node to test</param>
         /// <param name="str">String to check</param>
         /// <returns>True if the node name or identifier contains the given string.</returns>
-        public static bool NodeNameContains(UANode node, string str)
+        public static bool NodeNameContains(BaseUANode node, string str)
         {
             if (node == null) return false;
             string? identifier = node.Id.IdType == IdType.String ? (string)node.Id.Identifier : null;
             return identifier != null && identifier.Contains(str, StringComparison.InvariantCultureIgnoreCase)
-                        || node.DisplayName != null && node.DisplayName.Contains(str, StringComparison.InvariantCultureIgnoreCase);
+                        || node.Name != null && node.Name.Contains(str, StringComparison.InvariantCultureIgnoreCase);
         }
     }
 }

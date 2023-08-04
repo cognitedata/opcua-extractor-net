@@ -34,6 +34,7 @@ extractorbuild/
 config/*
 !config.example.yml
 !config.minimal.yml
+!config.remote.yml
 !opc.ua.net.extractor.Config.xml
 !Server.Test.Config.xml
 !config.bridge.example.yml

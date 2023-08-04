@@ -19,6 +19,7 @@ using Cognite.Extensions;
 using Cognite.Extractor.Common;
 using Cognite.Extractor.StateStorage;
 using Cognite.OpcUa.Config;
+using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.Types;
 using CogniteSdk;
@@ -66,7 +67,7 @@ namespace Cognite.OpcUa.Pushers
 
         private readonly Dictionary<NodeId, string?> eventParents = new Dictionary<NodeId, string?>();
 
-        private readonly ExtractionConfig extractionConfig;
+        private readonly FullConfig fullConfig;
 
         private static readonly Counter createdAssets = Metrics
             .CreateCounter("opcua_created_assets_mqtt", "Number of assets pushed over mqtt");
@@ -95,7 +96,7 @@ namespace Cognite.OpcUa.Pushers
         {
             this.log = log;
             this.config = config;
-            extractionConfig = provider.GetRequiredService<FullConfig>().Extraction;
+            fullConfig = provider.GetRequiredService<FullConfig>();
             var builder = new MqttClientOptionsBuilder()
                 .WithClientId(config.ClientId)
                 .WithTcpServer(config.Host, config.Port)
@@ -150,7 +151,8 @@ namespace Cognite.OpcUa.Pushers
             client = new MqttFactory().CreateMqttClient();
             baseBuilder = new MqttApplicationMessageBuilder()
                 .WithAtLeastOnceQoS();
-            if (config.Debug) return;
+
+            if (fullConfig.DryRun) return;
 
             client.UseDisconnectedHandler(async e =>
             {
@@ -192,6 +194,7 @@ namespace Cognite.OpcUa.Pushers
                 log.LogWarning("Client is not connected");
                 return false;
             }
+
             int count = 0;
             var dataPointList = new Dictionary<string, List<UADataPoint>>();
 
@@ -232,7 +235,13 @@ namespace Cognite.OpcUa.Pushers
                 dataPointList[dp.Id].Add(dp);
             }
 
-            if (count == 0 || config.Debug) return null;
+            if (count == 0) return null;
+
+            if (fullConfig.DryRun)
+            {
+                log.LogInformation("Dry run enabled. Would insert {Count} datapoints over {C2} timeseries using MQTT", count, dataPointList.Count);
+                return null;
+            }
 
             var dpChunks = dataPointList.Select(kvp => (kvp.Key, (IEnumerable<UADataPoint>)kvp.Value)).ChunkBy(100000, 10000).ToArray();
             var pushTasks = dpChunks.Select(chunk => PushDataPointsChunk(chunk.ToDictionary(pair => pair.Key, pair => pair.Values), token)).ToList();
@@ -254,7 +263,7 @@ namespace Cognite.OpcUa.Pushers
         /// <returns>True if connected, false if not</returns>
         public async Task<bool?> TestConnection(FullConfig fullConfig, CancellationToken token)
         {
-            if (client.IsConnected) return true;
+            if (client.IsConnected || fullConfig.DryRun) return true;
             closed = false;
             try
             {
@@ -278,7 +287,7 @@ namespace Cognite.OpcUa.Pushers
         /// <param name="update">Configuration for how these should be updated, if enabled</param>
         /// <returns>True on success, false on failure</returns>
         public async Task<PushResult> PushNodes(
-            IEnumerable<UANode> objects,
+            IEnumerable<BaseUANode> objects,
             IEnumerable<UAVariable> variables,
             IEnumerable<UAReference> references,
             UpdateConfig update,
@@ -292,6 +301,8 @@ namespace Cognite.OpcUa.Pushers
             {
                 relationships = references.Select(rel => rel.ToRelationship(config.DataSetId, Extractor));
             }
+
+            if (fullConfig.DryRun) return new PushResult();
 
             if (!string.IsNullOrEmpty(config.LocalState) && Extractor.StateStorage != null)
             {
@@ -309,7 +320,7 @@ namespace Cognite.OpcUa.Pushers
                     states = objects
                        .SelectNonNull(node => Extractor.GetUniqueId(node.Id))
                        .Where(node => !existingNodes.Contains(node))
-                       .Concat(variables.SelectNonNull(variable => Extractor.GetUniqueId(variable.Id, variable.Index)))
+                       .Concat(variables.SelectNonNull(variable => variable.GetUniqueId(Extractor)))
                        .Concat(relationships.SelectNonNull(rel => rel.ExternalId))
                        .Select(id => new ExistingState(id))
                        .ToDictionary(state => state.Id);
@@ -349,13 +360,13 @@ namespace Cognite.OpcUa.Pushers
                 {
                     variables = variables
                         .Where(variable => !variable.Id.IsNullNodeId
-                            && !existingNodes.Contains(Extractor.GetUniqueId(variable.Id, variable.Index)!)).ToList();
+                            && !existingNodes.Contains(variable.GetUniqueId(Extractor)!)).ToList();
                 }
                 else
                 {
                     foreach (var node in variables)
                     {
-                        string? id = Extractor.GetUniqueId(node.Id, node.Index);
+                        string? id = node.GetUniqueId(Extractor);
                         node.Changed = id != null && existingNodes.Contains(id);
                     }
                 }
@@ -369,8 +380,6 @@ namespace Cognite.OpcUa.Pushers
 
             log.LogInformation("Pushing {ObjCount} assets and {VarCount} timeseries over MQTT", objects.Count(), variables.Count());
 
-            if (config.Debug) return result;
-
             if (objects.Any() && !config.SkipMetadata)
             {
                 var results = await Task.WhenAll(objects.ChunkBy(1000).Select(chunk => PushAssets(chunk, update.Objects, token)));
@@ -383,7 +392,7 @@ namespace Cognite.OpcUa.Pushers
                 if (!results.All(res => res)) result.Variables = false;
                 foreach (var ts in variables)
                 {
-                    if (ts.Index == -1) continue;
+                    if (ts is not UAVariableMember mb || mb.Index == -1) continue;
                     eventParents[ts.Id] = Extractor.GetUniqueId(ts.ParentId);
                 }
             }
@@ -398,7 +407,7 @@ namespace Cognite.OpcUa.Pushers
 
             var newStates = objects
                     .SelectNonNull(node => Extractor.GetUniqueId(node.Id))
-                    .Concat(variables.SelectNonNull(variable => Extractor.GetUniqueId(variable.Id, variable.Index)))
+                    .Concat(variables.SelectNonNull(variable => variable.GetUniqueId(Extractor)))
                     .Concat(relationships.SelectNonNull(rel => rel.ExternalId))
                     .Select(id => new ExistingState(id) { Existing = true, LastTimeModified = DateTime.UtcNow })
                     .ToList();
@@ -440,7 +449,12 @@ namespace Cognite.OpcUa.Pushers
                 count++;
             }
             if (count == 0) return null;
-            if (config.Debug) return null;
+
+            if (fullConfig.DryRun)
+            {
+                log.LogInformation("Dry run enabled. Would insert {Count} events using MQTT", count);
+                return null;
+            }
 
             var results = await Task.WhenAll(eventList.ChunkBy(1000).Select(chunk => PushEventsChunk(chunk, token)));
             if (!results.All(result => result))
@@ -538,7 +552,7 @@ namespace Cognite.OpcUa.Pushers
         /// <param name="objects">Assets to create or update</param>
         /// <param name="update">Configuration for how the assets should be updated.</param>
         /// <returns>True on success, false on failure.</returns>
-        private async Task<bool> PushAssets(IEnumerable<UANode> objects, TypeUpdateConfig update, CancellationToken token)
+        private async Task<bool> PushAssets(IEnumerable<BaseUANode> objects, TypeUpdateConfig update, CancellationToken token)
         {
             bool useRawStore = config.RawMetadata != null
                 && !string.IsNullOrWhiteSpace(config.RawMetadata.Database)
@@ -606,12 +620,11 @@ namespace Cognite.OpcUa.Pushers
         /// <param name="nodes">Nodes to create or update</param>
         /// <param name="update">Configuration for which fields should be updated.</param>
         /// <returns>List of assets to create</returns>
-        private IEnumerable<AssetCreate> ConvertNodes(IEnumerable<UANode> nodes, TypeUpdateConfig update)
+        private IEnumerable<AssetCreate> ConvertNodes(IEnumerable<BaseUANode> nodes, TypeUpdateConfig update)
         {
             foreach (var node in nodes)
             {
-                var create = node.ToCDFAsset(extractionConfig, Extractor,
-                    Extractor.StringConverter, Extractor.DataTypeManager, config.DataSetId, config.MetadataMapping?.Assets);
+                var create = node.ToCDFAsset(fullConfig, Extractor, config.DataSetId, config.MetadataMapping?.Assets);
                 if (create == null) continue;
                 if (!node.Changed)
                 {
@@ -630,7 +643,7 @@ namespace Cognite.OpcUa.Pushers
         /// </summary>
         /// <param name="nodes">Nodes to create or update</param>
         /// <returns>List of assets to create</returns>
-        private IEnumerable<(string id, JsonElement node)> ConvertNodesJson(IEnumerable<UANode> nodes, ConverterType type)
+        private IEnumerable<(string id, JsonElement node)> ConvertNodesJson(IEnumerable<BaseUANode> nodes, ConverterType type)
         {
             if (Extractor == null) throw new InvalidOperationException("Extractor must be set");
             foreach (var node in nodes)
@@ -652,8 +665,7 @@ namespace Cognite.OpcUa.Pushers
         {
             foreach (var variable in variables)
             {
-                var create = variable.ToStatelessTimeSeries(extractionConfig, Extractor,
-                    Extractor.DataTypeManager, Extractor.StringConverter, config.DataSetId, config.MetadataMapping?.Timeseries);
+                var create = variable.ToStatelessTimeSeries(fullConfig, Extractor, config.DataSetId, config.MetadataMapping?.Timeseries);
                 if (create == null) continue;
                 if (!variable.Changed)
                 {
@@ -685,8 +697,7 @@ namespace Cognite.OpcUa.Pushers
             {
                 var minimalTimeseries = variables
                     .Where(variable => !update.AnyUpdate || !variable.Changed)
-                    .Select(variable => variable.ToTimeseries(extractionConfig, Extractor,
-                        Extractor.DataTypeManager, Extractor.StringConverter, config.DataSetId, null, null, true))
+                    .Select(variable => variable.ToMinimalTimeseries(Extractor, config.DataSetId))
                     .Where(variable => variable != null)
                     .ToList();
 
@@ -772,7 +783,6 @@ namespace Cognite.OpcUa.Pushers
         /// <returns>True on success</returns>
         private async Task<bool> PushEventsChunk(IEnumerable<UAEvent> evts, CancellationToken token)
         {
-            if (config.Debug) return true;
             var events = evts
                 .Select(evt => evt.ToStatelessCDFEvent(Extractor, config.DataSetId, eventParents))
                 .Where(evt => evt != null);

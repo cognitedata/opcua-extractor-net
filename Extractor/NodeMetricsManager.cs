@@ -17,7 +17,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
-using Cognite.OpcUa.Types;
+using Cognite.OpcUa.Nodes;
+using Cognite.OpcUa.TypeCollectors;
 using Opc.Ua;
 using Opc.Ua.Client;
 using Prometheus;
@@ -103,7 +104,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="token"></param>
         /// <returns></returns>
-        public async Task StartNodeMetrics(CancellationToken token)
+        public async Task StartNodeMetrics(TypeManager typeManager, CancellationToken token)
         {
             await client.RemoveSubscription("NodeMetrics");
             metrics.Clear();
@@ -140,7 +141,7 @@ namespace Cognite.OpcUa
                 var nc = (NodeClass)results[i * attrPerNode + 2].Value;
                 if (nc != NodeClass.Variable) continue;
                 var rawDt = results[i * attrPerNode + 1].GetValue(NodeId.Null);
-                var dt = client.DataTypeManager.GetDataType(rawDt) ?? new UADataType(rawDt);
+                var dt = typeManager.GetDataType(rawDt);
                 var name = results[i * attrPerNode].GetValue<LocalizedText?>(null)?.Text;
                 if (name == null) continue;
 

@@ -1,4 +1,4 @@
-﻿/* Cognite Extractor for OPC-UA
+/* Cognite Extractor for OPC-UA
 Copyright (C) 2021 Cognite AS
 
 This program is free software; you can redistribute it and/or
@@ -15,23 +15,22 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
-using Opc.Ua;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
+using Cognite.OpcUa.Pushers.Writers.Dtos;
+using CogniteSdk;
 
-namespace Cognite.OpcUa.Types
+namespace Cognite.OpcUa.Pushers.Writers.Interfaces
 {
-    /// <summary>
-    /// Represents a node type in the OPC-UA type hierarchy.
-    /// </summary>
-    public class UANodeType
+    public interface IRelationshipsWriter
     {
-        public NodeId Id { get; }
-        public string? Name { get; set; }
-        public bool IsVariableType { get; }
-        public UANodeType(NodeId id, bool isVariableType)
-        {
-            Id = id;
-            IsVariableType = isVariableType;
-        }
-
+        /// <summary>
+        /// Push all refernces to CDF relationship
+        /// </summary>
+        /// <param name="relationships">List of sanitized references</param>
+        /// <param name="token">Cancellation token</param>
+        /// <returns>A result reporting items created/updated</returns>
+        Task<Result> PushReferences(IEnumerable<RelationshipCreate> relationships, CancellationToken token);
     }
 }

@@ -16,6 +16,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using Cognite.Extractor.Common;
+using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using System.Collections.Generic;
 using System.Linq;
@@ -144,17 +145,35 @@ namespace Cognite.OpcUa.Config
         /// It is possible to have multiple of each filter type.
         /// </summary>
         public IEnumerable<RawNodeTransformation>? Transformations { get; set; }
-        public IEnumerable<NodeId> GetRootNodes(UAClient client)
+        public IEnumerable<NodeId> GetRootNodes(UAClient client, ILogger logger)
         {
             var roots = new List<NodeId>();
             if (RootNode != null)
             {
-                roots.Add(RootNode.ToNodeId(client, ObjectIds.ObjectsFolder));
+                var id = RootNode.ToNodeId(client);
+                if (id.IsNullNodeId)
+                {
+                    logger.LogWarning("Failed to convert configured root node {Namespace} {Id} to NodeId", RootNode.NamespaceUri, RootNode.NodeId);
+                }
+                else
+                {
+                    roots.Add(id);
+                }
             }
             if (RootNodes != null)
             {
-                roots.AddRange(RootNodes.Select(proto =>
-                    proto.ToNodeId(client, ObjectIds.ObjectsFolder)));
+                foreach (var root in RootNodes)
+                {
+                    var id = root.ToNodeId(client);
+                    if (id.IsNullNodeId)
+                    {
+                        logger.LogWarning("Failed to convert configured root node {Namespace} {Id} to NodeId", root.NamespaceUri, root.NodeId);
+                    }
+                    else
+                    {
+                        roots.Add(id);
+                    }
+                }
             }
             if (!roots.Any())
             {
@@ -234,6 +253,11 @@ namespace Cognite.OpcUa.Config
         /// reasonable or useful values.
         /// </summary>
         public bool EstimateArraySizes { get; set; }
+
+        /// <summary>
+        /// If true, variables not mapped due to array dimensions or data type are all mapped to properties instead.
+        /// </summary>
+        public bool UnmappedAsProperties { get; set; }
     }
 
     public class RelationshipConfig
@@ -255,6 +279,10 @@ namespace Cognite.OpcUa.Config
         /// Does nothing if hierarchical is false.
         /// </summary>
         public bool InverseHierarchical { get; set; }
+        /// <summary>
+        /// Create any nodes that are found through non-hierarchical references but not in the hierarchy.
+        /// </summary>
+        public bool CreateReferencedNodes { get; set; }
     }
     public class NodeTypeConfig
     {

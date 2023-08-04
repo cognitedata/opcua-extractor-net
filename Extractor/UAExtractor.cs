@@ -20,6 +20,7 @@ using Cognite.Extractor.StateStorage;
 using Cognite.Extractor.Utils;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
+using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.PubSub;
 using Cognite.OpcUa.Pushers;
@@ -35,7 +36,6 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -54,18 +54,17 @@ namespace Cognite.OpcUa
         public IExtractionStateStore? StateStorage { get; }
         public State State { get; }
         public Streamer Streamer { get; }
-        public DataTypeManager DataTypeManager => uaClient.DataTypeManager;
-
         public PeriodicScheduler TaskScheduler => Scheduler;
-
         private HistoryReader historyReader = null!;
-        public ReferenceTypeManager? ReferenceTypeManager { get; private set; }
         public IEnumerable<NodeId> RootNodes { get; private set; } = null!;
         private readonly IEnumerable<IPusher> pushers;
         private readonly ConcurrentQueue<NodeId> extraNodesToBrowse = new ConcurrentQueue<NodeId>();
         public IEnumerable<NodeTransformation>? Transformations { get; private set; }
         public StringConverter StringConverter => uaClient.StringConverter;
         private readonly PubSubManager? pubSubManager;
+        public NamespaceTable? NamespaceTable => uaClient.NamespaceTable;
+
+        public TypeManager TypeManager => uaClient.TypeManager;
 
         private NodeSetSource? nodeSetSource;
 
@@ -74,7 +73,6 @@ namespace Cognite.OpcUa
         public bool ShouldStartLooping { get; set; } = true;
 
         public bool Started { get; private set; }
-        public bool Pushing { get; private set; }
 
         private int subscribed;
         private bool subscribeFlag;
@@ -132,10 +130,6 @@ namespace Cognite.OpcUa
             State = new State();
             Streamer = new Streamer(provider.GetRequiredService<ILogger<Streamer>>(), this, config);
             StateStorage = stateStore;
-            if (config.Extraction.Relationships.Enabled)
-            {
-                ReferenceTypeManager = new ReferenceTypeManager(Config, provider.GetRequiredService<ILogger<ReferenceTypeManager>>(), uaClient, this);
-            }
 
             if (config.FailureBuffer.Enabled)
             {
@@ -148,7 +142,7 @@ namespace Cognite.OpcUa
 
             if (Config.PubSub.Enabled)
             {
-                pubSubManager = new PubSubManager(provider.GetRequiredService<ILogger<PubSubManager>>(), uaClient, this, Config.PubSub);
+                pubSubManager = new PubSubManager(provider.GetRequiredService<ILogger<PubSubManager>>(), uaClient, this, Config);
             }
 
             foreach (var pusher in this.pushers)
@@ -256,10 +250,7 @@ namespace Cognite.OpcUa
             await EnsureSubscriptions();
             if (Config.Source.RestartOnReconnect)
             {
-                source.DataTypeManager.Configure();
                 source.ClearNodeOverrides();
-                source.ClearEventFields();
-                source.Browser.ResetVisitedNodes();
                 await RestartExtractor();
             }
             else
@@ -277,7 +268,7 @@ namespace Cognite.OpcUa
                         state.RestartHistory();
                     }
 
-                    Scheduler.ScheduleTask(null, async (_) => await RestartHistory());
+                    Scheduler.ScheduleTask(null, (_) => RestartHistory());
                 }
             }
         }
@@ -292,7 +283,7 @@ namespace Cognite.OpcUa
             }
             Looper = new Looper(Provider.GetRequiredService<ILogger<Looper>>(), Scheduler, this, Config, pushers);
             historyReader = new HistoryReader(Provider.GetRequiredService<ILogger<HistoryReader>>(),
-                uaClient, this, Config.History, Source.Token);
+                uaClient, this, TypeManager, Config.History, Source.Token);
         }
 
         public void InitExternal(CancellationToken token)
@@ -345,17 +336,11 @@ namespace Cognite.OpcUa
                 Config.Source.LimitToServerConfig = false;
                 Config.Source.NodeSetSource.Types = true;
                 Config.Source.NodeSetSource.Instance = true;
-                nodeSetSource = new NodeSetSource(Provider.GetRequiredService<ILogger<NodeSetSource>>(), Config, this, uaClient);
+                nodeSetSource = new NodeSetSource(Provider.GetRequiredService<ILogger<NodeSetSource>>(), Config, this, uaClient, TypeManager);
                 nodeSetSource.Build();
             }
 
             await ConfigureExtractor();
-            if (Config.Source.NodeSetSource == null
-                || (!Config.Source.NodeSetSource.NodeSets?.Any() ?? false)
-                || !Config.Source.NodeSetSource.Types)
-            {
-                await DataTypeManager.GetDataTypeStructureAsync(Source.Token);
-            }
 
             Started = true;
 
@@ -371,7 +356,7 @@ namespace Cognite.OpcUa
                 pusher.Reset();
             }
 
-            var synchTasks = await RunMapping(RootNodes, true, true, true);
+            var synchTasks = await RunMapping(RootNodes, initial: true, isFull: true);
 
             if (Config.FailureBuffer.Enabled && FailureBuffer != null)
             {
@@ -462,10 +447,9 @@ namespace Cognite.OpcUa
             await historyReader.Terminate(Source.Token, 30);
             await uaClient.WaitForOperations(Source.Token);
             await ConfigureExtractor();
+            TypeManager.Reset();
 
-            uaClient.Browser.ResetVisitedNodes();
-
-            var synchTasks = await RunMapping(RootNodes, true, false, true);
+            var synchTasks = await RunMapping(RootNodes, initial: false, isFull: true);
 
             foreach (var task in synchTasks)
             {
@@ -487,7 +471,7 @@ namespace Cognite.OpcUa
                 {
                     nodesToBrowse.Add(id);
                 }
-                var historyTasks = await RunMapping(nodesToBrowse.Distinct(), true, false, false);
+                var historyTasks = await RunMapping(nodesToBrowse.Distinct(), initial: false, isFull: false);
 
                 foreach (var task in historyTasks)
                 {
@@ -572,29 +556,15 @@ namespace Cognite.OpcUa
             }));
         }
 
-        private bool ShouldFullyRebrowse()
-        {
-            // If there are any updates, we need to do a full mapping
-            if (Config.Extraction.Update.AnyUpdate) return true;
-            // If relationships are enabled we need to fully map, other wise we won't be able to consistently discover new relationships.
-            if (Config.Extraction.Relationships.Enabled) return true;
-            // If deletes are enabled we want a full map as well, to discover deleted nodes.
-            if (deletesManager != null) return true;
-
-            return false;
-        }
-
         /// <summary>
         /// Redo browse, then schedule history on the looper.
         /// </summary>
         public async Task Rebrowse()
         {
-            var isFull = ShouldFullyRebrowse();
             // If we are updating we want to re-discover nodes in order to run them through mapping again.
             var historyTasks = await RunMapping(RootNodes,
-                ignoreVisited: !isFull,
                 initial: false,
-                isFull: isFull);
+                isFull: true);
 
             foreach (var task in historyTasks)
             {
@@ -620,17 +590,16 @@ namespace Cognite.OpcUa
 
         #region Mapping
 
-        private async Task<IEnumerable<Func<CancellationToken, Task>>> RunMapping(IEnumerable<NodeId> nodesToBrowse, bool ignoreVisited, bool initial, bool isFull)
+        private async Task<IEnumerable<Func<CancellationToken, Task>>> RunMapping(IEnumerable<NodeId> nodesToBrowse, bool initial, bool isFull)
         {
             bool readFromOpc = true;
 
             NodeSourceResult? result = null;
-            IEventFieldSource? eventSource = null;
             if ((Config.Cognite?.RawNodeBuffer?.Enable ?? false) && initial)
             {
                 log.LogDebug("Begin fetching data from CDF");
                 var handler = new CDFNodeSource(Provider.GetRequiredService<ILogger<CDFNodeSource>>(),
-                    Config, this, uaClient, pushers.OfType<CDFPusher>().First());
+                    Config, this, uaClient, pushers.OfType<CDFPusher>().First(), TypeManager);
                 await handler.ReadRawNodes(Source.Token);
 
                 result = await handler.ParseResults(Source.Token);
@@ -655,7 +624,12 @@ namespace Cognite.OpcUa
                 log.LogDebug("Begin fetching data from internal node set");
                 if (nodeSetSource == null)
                 {
-                    nodeSetSource = new NodeSetSource(Provider.GetRequiredService<ILogger<NodeSetSource>>(), Config, this, uaClient);
+                    nodeSetSource = new NodeSetSource(Provider.GetRequiredService<ILogger<NodeSetSource>>(), Config, this, uaClient, TypeManager);
+                }
+
+                if (!Config.Source.NodeSetSource.Types)
+                {
+                    await TypeManager.LoadTypeData(Source.Token);
                 }
 
                 var handler = nodeSetSource;
@@ -666,30 +640,16 @@ namespace Cognite.OpcUa
                     result = await handler.ParseResults(Source.Token);
                     readFromOpc = false;
                 }
-                if (Config.Source.NodeSetSource.Types)
-                {
-                    eventSource = handler;
-                }
                 nodeSetSource = null;
-            }
-
-            if (Config.Events.Enabled)
-            {
-                var eventFields = await uaClient.GetEventFields(eventSource, Source.Token);
-                foreach (var field in eventFields)
-                {
-                    State.ActiveEvents[field.Key] = field.Value;
-                    State.RegisterNode(field.Key, uaClient.GetUniqueId(field.Key));
-                }
             }
 
             if (readFromOpc)
             {
                 log.LogInformation("Begin mapping main directory");
-                var handler = new UANodeSource(Provider.GetRequiredService<ILogger<UANodeSource>>(), Config, this, uaClient, isFull);
+                var handler = new UANodeSource(Provider.GetRequiredService<ILogger<UANodeSource>>(), Config, this, uaClient, isFull, TypeManager);
                 try
                 {
-                    await uaClient.Browser.BrowseNodeHierarchy(nodesToBrowse, handler.Callback, Source.Token, ignoreVisited,
+                    await uaClient.Browser.BrowseNodeHierarchy(nodesToBrowse, handler.Callback, Source.Token,
                         "the main instance hierarchy");
                 }
                 catch (Exception ex)
@@ -702,6 +662,8 @@ namespace Cognite.OpcUa
                 log.LogInformation("End mapping main directory");
             }
 
+            State.PopulateActiveEventTypes(TypeManager.EventFields);
+
             try
             {
                 var tasks = await MapUAToDestinations(result);
@@ -709,7 +671,7 @@ namespace Cognite.OpcUa
                 {
                     tasks = tasks.Append(async token =>
                     {
-                        var tasks = await RunMapping(RootNodes, false, false, true);
+                        var tasks = await RunMapping(RootNodes, initial: false, isFull: true);
                         foreach (var task in tasks)
                         {
                             Looper.Scheduler.ScheduleTask(null, task);
@@ -752,7 +714,7 @@ namespace Cognite.OpcUa
             {
                 var subscribeStates = State.EmitterStates.Where(state => state.ShouldSubscribe);
 
-                await uaClient.SubscribeToEvents(subscribeStates, Streamer.EventSubscriptionHandler, Source.Token);
+                await uaClient.SubscribeToEvents(subscribeStates, Streamer.EventSubscriptionHandler, TypeManager.EventFields, Source.Token);
             }
 
             if (Config.Subscriptions.DataPoints)
@@ -853,9 +815,7 @@ namespace Cognite.OpcUa
         /// </summary>
         private async Task ConfigureExtractor()
         {
-            RootNodes = Config.Extraction.GetRootNodes(uaClient);
-
-            DataTypeManager.Configure();
+            RootNodes = Config.Extraction.GetRootNodes(uaClient, log);
 
             if (Config.Extraction.NodeMap != null)
             {
@@ -885,10 +845,8 @@ namespace Cognite.OpcUa
                 if (Config.Events.EmitterIds != null && Config.Events.EmitterIds.Any()
                     || Config.Events.HistorizingEmitterIds != null && Config.Events.HistorizingEmitterIds.Any())
                 {
-                    var histEmitterIds = new HashSet<NodeId>((Config.Events.HistorizingEmitterIds ?? Enumerable.Empty<ProtoNodeId>())
-                        .Select(proto => proto.ToNodeId(uaClient, ObjectIds.Server)));
-                    var emitterIds = new HashSet<NodeId>((Config.Events.EmitterIds ?? Enumerable.Empty<ProtoNodeId>())
-                        .Select(proto => proto.ToNodeId(uaClient, ObjectIds.Server)));
+                    var histEmitterIds = Config.Events.GetHistorizingEmitterIds(uaClient, log);
+                    var emitterIds = Config.Events.GetEmitterIds(uaClient, log);
                     var eventEmitterIds = new HashSet<NodeId>(histEmitterIds.Concat(emitterIds));
 
                     foreach (var id in eventEmitterIds)
@@ -901,11 +859,12 @@ namespace Cognite.OpcUa
                 }
                 if (Config.Events.ReadServer)
                 {
-                    var serverNode = await uaClient.GetServerNode(Source.Token);
-                    if (serverNode.EventNotifier != 0)
+                    var serverNode = await uaClient.GetServerNode(Source.Token) as UAObject;
+                    if (serverNode == null) throw new ExtractorFailureException("Server node is not an object, or does not exist");
+                    if (serverNode.FullAttributes.EventNotifier != 0)
                     {
-                        var history = (serverNode.EventNotifier & EventNotifiers.HistoryRead) != 0 && Config.Events.History;
-                        var subscription = (serverNode.EventNotifier & EventNotifiers.SubscribeToEvents) != 0 && Config.Subscriptions.Events;
+                        var history = serverNode.FullAttributes.ShouldReadEventHistory(Config);
+                        var subscription = serverNode.FullAttributes.ShouldSubscribeToEvents(Config);
                         State.SetEmitterState(new EventExtractionState(this, serverNode.Id, history, history && Config.History.Backfill, subscription));
                     }
                 }
@@ -922,7 +881,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="input">Nodes that failed to push</param>
         /// <param name="pusher">Pusher pushed to</param>
-        private static void PushNodesFailure(
+        private void PushNodesFailure(
             PusherInput input,
             FullPushResult result,
             IPusher pusher)
@@ -931,7 +890,7 @@ namespace Cognite.OpcUa
             pusher.DataFailing = true;
             pusher.EventsFailing = true;
 
-            pusher.AddPendingNodes(input, result);
+            pusher.AddPendingNodes(input, result, Config);
         }
         /// <summary>
         /// Push nodes to given pusher
@@ -1028,6 +987,42 @@ namespace Cognite.OpcUa
 
             var pushTasks = pushers.Select(pusher => PushNodes(input, pusher, initial));
 
+            if (Config.DryRun)
+            {
+                log.LogInformation("Dry run is enabled");
+                log.LogInformation("Would push {Count} nodes without dry run:", input.Variables.Count() + input.Objects.Count());
+                foreach (var node in input.Variables.Concat(input.Objects))
+                {
+                    if (Source.IsCancellationRequested) break;
+                    log.LogDebug("{Node}", node);
+                }
+                log.LogInformation("Would push {Count} references without dry run:", input.References.Count());
+                foreach (var rf in input.References)
+                {
+                    if (Source.IsCancellationRequested) break;
+                    log.LogDebug("{Ref}", rf);
+                }
+                if (input.Deletes != null)
+                {
+                    log.LogInformation("Would delete {Count} nodes and {Count} references without dry run:", input.Deletes.Variables.Count() + input.Deletes.Objects.Count(), input.Deletes.References.Count());
+                    foreach (var node in input.Deletes.Variables)
+                    {
+                        if (Source.IsCancellationRequested) break;
+                        log.LogDebug("Delete variable {Node}", node);
+                    }
+                    foreach (var node in input.Deletes.Objects)
+                    {
+                        if (Source.IsCancellationRequested) break;
+                        log.LogDebug("Delete object {Node}", node);
+                    }
+                    foreach (var rf in input.Deletes.References)
+                    {
+                        if (Source.IsCancellationRequested) break;
+                        log.LogDebug("Delete reference {Node}", rf);
+                    }
+                }
+            }
+
             if (StateStorage != null && Config.StateStorage.IntervalValue.Value != Timeout.InfiniteTimeSpan)
             {
                 if (Streamer.AllowEvents)
@@ -1079,13 +1074,13 @@ namespace Cognite.OpcUa
             {
                 var subscribeStates = State.EmitterStates.Where(state => state.ShouldSubscribe);
 
-                await uaClient.SubscribeToEvents(subscribeStates, Streamer.EventSubscriptionHandler, Source.Token);
+                await uaClient.SubscribeToEvents(subscribeStates, Streamer.EventSubscriptionHandler, TypeManager.EventFields, Source.Token);
             }
 
             Interlocked.Increment(ref subscribed);
             if (!State.NodeStates.Any() || subscribed > 1) subscribeFlag = true;
             if (!Config.Events.History) return;
-            if (pushers.Any(pusher => pusher.Initialized))
+            if (pushers.Any(pusher => pusher.Initialized) || Config.DryRun)
             {
                 await historyReader.FrontfillEvents(State.EmitterStates.Where(state => state.IsFrontfilling));
                 if (Config.History.Backfill)
@@ -1115,7 +1110,7 @@ namespace Cognite.OpcUa
             Interlocked.Increment(ref subscribed);
             if (!State.EmitterStates.Any() || subscribed > 1) subscribeFlag = true;
             if (!Config.History.Enabled) return;
-            if (pushers.Any(pusher => pusher.Initialized))
+            if (pushers.Any(pusher => pusher.Initialized) || Config.DryRun)
             {
                 await historyReader.FrontfillData(states.Where(state => state.IsFrontfilling));
                 if (Config.History.Backfill)
@@ -1293,5 +1288,6 @@ namespace Cognite.OpcUa
         string? GetUniqueId(ExpandedNodeId id, int index = -1);
         StringConverter StringConverter { get; }
         string GetRelationshipId(UAReference reference);
+        NamespaceTable? NamespaceTable { get; }
     }
 }

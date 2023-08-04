@@ -1,10 +1,10 @@
 ﻿using AdysTech.InfluxDB.Client.Net;
 using Cognite.Extractor.Common;
-using Cognite.Extractor.Configuration;
 using Cognite.Extractor.StateStorage;
 using Cognite.OpcUa;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
+using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -31,6 +31,7 @@ namespace Test.Unit
             this.tester = tester ?? throw new ArgumentNullException(nameof(tester));
             tester.ResetConfig();
             tester.Init(output);
+            tester.Client.TypeManager.Reset();
         }
 
         private FullConfig BuildConfig()
@@ -91,7 +92,7 @@ namespace Test.Unit
 
             cfg.FailureBuffer.Influx = true;
             var iflog = tester.Provider.GetRequiredService<ILogger<InfluxPusher>>();
-            using var pusher = new InfluxPusher(iflog, tester.Config.Influx);
+            using var pusher = new InfluxPusher(iflog, tester.Config);
             Assert.Throws<ConfigurationException>(() => new FailureBuffer(log, cfg, extractor, null));
 
             var fb3 = new FailureBuffer(log, cfg, extractor, pusher);
@@ -108,7 +109,7 @@ namespace Test.Unit
             var log = tester.Provider.GetRequiredService<ILogger<FailureBuffer>>();
             var iflog = tester.Provider.GetRequiredService<ILogger<InfluxPusher>>();
 
-            using var pusher = new InfluxPusher(iflog, tester.Config.Influx);
+            using var pusher = new InfluxPusher(iflog, tester.Config);
             var fb1 = new FailureBuffer(log, cfg, extractor, pusher);
 
             Assert.False(fb1.AnyPoints);
@@ -123,9 +124,9 @@ namespace Test.Unit
             // Test restore nonexisting states
             var dt = new UADataType(DataTypeIds.Double);
 
-            var state1 = new VariableExtractionState(extractor, CommonTestUtils.GetSimpleVariable("state1", dt), false, false);
-            var state2 = new VariableExtractionState(extractor, CommonTestUtils.GetSimpleVariable("state2", dt), false, false);
-            var state3 = new VariableExtractionState(extractor, CommonTestUtils.GetSimpleVariable("state3", dt), true, true);
+            var state1 = new VariableExtractionState(extractor, CommonTestUtils.GetSimpleVariable("state1", dt), false, false, true);
+            var state2 = new VariableExtractionState(extractor, CommonTestUtils.GetSimpleVariable("state2", dt), false, false, true);
+            var state3 = new VariableExtractionState(extractor, CommonTestUtils.GetSimpleVariable("state3", dt), true, true, true);
             var nodeStates = new[] { state1, state2, state3 };
 
             var nodeInfluxStates = nodeStates.Select(state => new InfluxBufferState(state)).ToList();
@@ -193,14 +194,14 @@ namespace Test.Unit
             var log = tester.Provider.GetRequiredService<ILogger<FailureBuffer>>();
             var iflog = tester.Provider.GetRequiredService<ILogger<InfluxPusher>>();
 
-            using var pusher = new InfluxPusher(iflog, tester.Config.Influx);
+            using var pusher = new InfluxPusher(iflog, tester.Config);
             var fb1 = new FailureBuffer(log, cfg, extractor, pusher);
 
             var dt = new UADataType(DataTypeIds.Double);
 
-            var state1 = new VariableExtractionState(extractor, CommonTestUtils.GetSimpleVariable("state1", dt), false, false);
-            var state2 = new VariableExtractionState(extractor, CommonTestUtils.GetSimpleVariable("state2", dt), false, false);
-            var state3 = new VariableExtractionState(extractor, CommonTestUtils.GetSimpleVariable("state3", dt), true, true);
+            var state1 = new VariableExtractionState(extractor, CommonTestUtils.GetSimpleVariable("state1", dt), false, false, true);
+            var state2 = new VariableExtractionState(extractor, CommonTestUtils.GetSimpleVariable("state2", dt), false, false, true);
+            var state3 = new VariableExtractionState(extractor, CommonTestUtils.GetSimpleVariable("state3", dt), true, true, true);
             var nodeStates = new[] { state1, state2, state3 };
 
             extractor.State.SetNodeState(state1, "state1");
@@ -281,7 +282,7 @@ namespace Test.Unit
             var log = tester.Provider.GetRequiredService<ILogger<FailureBuffer>>();
             var iflog = tester.Provider.GetRequiredService<ILogger<InfluxPusher>>();
 
-            using var pusher = new InfluxPusher(iflog, tester.Config.Influx);
+            using var pusher = new InfluxPusher(iflog, tester.Config);
             var fb1 = new FailureBuffer(log, cfg, extractor, pusher);
 
             var estate1 = new EventExtractionState(extractor, new NodeId("emitter1"), false, false, true);
@@ -363,9 +364,9 @@ namespace Test.Unit
 
             var dt = new UADataType(DataTypeIds.Double);
 
-            var state1 = new VariableExtractionState(extractor, CommonTestUtils.GetSimpleVariable("state1", dt), false, false);
-            var state2 = new VariableExtractionState(extractor, CommonTestUtils.GetSimpleVariable("state2", dt), false, false);
-            var state3 = new VariableExtractionState(extractor, CommonTestUtils.GetSimpleVariable("state3", dt), true, true);
+            var state1 = new VariableExtractionState(extractor, CommonTestUtils.GetSimpleVariable("state1", dt), false, false, true);
+            var state2 = new VariableExtractionState(extractor, CommonTestUtils.GetSimpleVariable("state2", dt), false, false, true);
+            var state3 = new VariableExtractionState(extractor, CommonTestUtils.GetSimpleVariable("state3", dt), true, true, true);
             var nodeStates = new[] { state1, state2, state3 };
 
             extractor.State.SetNodeState(state1, "state1");
@@ -558,9 +559,9 @@ namespace Test.Unit
             var dt = new UADataType(DataTypeIds.Double);
             var dt2 = new UADataType(DataTypeIds.String);
 
-            var state1 = new VariableExtractionState(extractor, CommonTestUtils.GetSimpleVariable("state1", dt), false, false);
-            var state2 = new VariableExtractionState(extractor, CommonTestUtils.GetSimpleVariable("state2", dt2), false, false);
-            var state3 = new VariableExtractionState(extractor, CommonTestUtils.GetSimpleVariable("state3", dt), false, false);
+            var state1 = new VariableExtractionState(extractor, CommonTestUtils.GetSimpleVariable("state1", dt), false, false, true);
+            var state2 = new VariableExtractionState(extractor, CommonTestUtils.GetSimpleVariable("state2", dt2), false, false, true);
+            var state3 = new VariableExtractionState(extractor, CommonTestUtils.GetSimpleVariable("state3", dt), false, false, true);
             var nodeStates = new[] { state1, state2, state3 };
 
             extractor.State.SetNodeState(state1, "state1");

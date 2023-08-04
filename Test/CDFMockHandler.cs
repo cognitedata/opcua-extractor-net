@@ -17,6 +17,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using Cognite.OpcUa;
 using CogniteSdk;
+using CogniteSdk.Beta.DataModels;
 using Com.Cognite.V1.Timeseries.Proto;
 using Google.Protobuf;
 using Microsoft.Extensions.Logging;
@@ -30,6 +31,7 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -47,11 +49,16 @@ namespace Test
         public Dictionary<string, (List<NumericDatapoint> NumericDatapoints, List<StringDatapoint> StringDatapoints)> Datapoints { get; } =
             new Dictionary<string, (List<NumericDatapoint> NumericDatapoints, List<StringDatapoint> StringDatapoints)>();
 
-        public Dictionary<string, JsonElement> AssetRaw { get; } = new Dictionary<string, JsonElement>();
+        public Dictionary<string, JsonElement> AssetsRaw { get; } = new Dictionary<string, JsonElement>();
         public Dictionary<string, JsonElement> TimeseriesRaw { get; } = new Dictionary<string, JsonElement>();
         public Dictionary<string, RelationshipDummy> Relationships { get; } = new Dictionary<string, RelationshipDummy>();
         public Dictionary<string, RelationshipDummy> RelationshipsRaw { get; } = new Dictionary<string, RelationshipDummy>();
         public Dictionary<string, DataSet> DataSets { get; } = new Dictionary<string, DataSet>();
+        public Dictionary<string, Space> Spaces { get; } = new();
+        public Dictionary<string, JsonObject> DataModels { get; } = new();
+        public Dictionary<string, JsonObject> Views { get; } = new();
+        public Dictionary<string, JsonObject> Containers { get; } = new();
+        public Dictionary<string, JsonObject> Instances { get; } = new();
         public List<BrowseReport> Callbacks { get; } = new List<BrowseReport>();
 
         private long assetIdCounter = 1;
@@ -62,7 +69,6 @@ namespace Test
         public bool BlockAllConnections { get; set; }
         public bool AllowPush { get; set; } = true;
         public bool AllowEvents { get; set; } = true;
-        public bool AllowConnectionTest { get; set; } = true;
         public bool StoreDatapoints { get; set; }
         public MockMode mode { get; set; }
         private HttpResponseMessage GetFailedRequest(HttpStatusCode code)
@@ -113,14 +119,6 @@ namespace Test
             if (BlockAllConnections)
             {
                 return GetFailedRequest(HttpStatusCode.InternalServerError);
-            }
-
-            if (req.RequestUri.AbsolutePath == "/login/status")
-            {
-                var res = HandleLoginStatus();
-                res.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
-                res.Headers.Add("x-request-id", (requestIdCounter++).ToString(CultureInfo.InvariantCulture));
-                return res;
             }
 
             if (req.RequestUri.AbsolutePath == $"/api/playground/projects/{project}/functions/1234/call")
@@ -231,6 +229,21 @@ namespace Test
                             break;
                         case "/datasets/byids":
                             res = HandleRetrieveDataSets(content);
+                            break;
+                        case "/models/spaces":
+                            res = HandleCreateSpaces(content);
+                            break;
+                        case "/models/containers":
+                            res = HandleCreateContainers(content);
+                            break;
+                        case "/models/views":
+                            res = HandleCreateViews(content);
+                            break;
+                        case "/models/datamodels":
+                            res = HandleCreateDataModels(content);
+                            break;
+                        case "/models/instances":
+                            res = HandleCreateInstances(content);
                             break;
                         default:
                             log.LogWarning("Unknown path: {DummyFactoryUnknownPath}", reqPath);
@@ -657,41 +670,6 @@ namespace Test
             };
         }
 
-        private HttpResponseMessage HandleLoginStatus()
-        {
-            if (!AllowConnectionTest)
-            {
-                return new HttpResponseMessage(HttpStatusCode.InternalServerError)
-                {
-                    Content = new StringContent(JsonConvert.SerializeObject(new ErrorWrapper
-                    {
-                        error = new ErrorContent
-                        {
-                            code = 501,
-                            message = "bad something or other"
-                        }
-                    }))
-                };
-            }
-            var status = new LoginInfo
-            {
-                apiKeyId = 1,
-                loggedIn = true,
-                project = project,
-                projectId = 1,
-                user = "user"
-            };
-            var result = new LoginInfoWrapper
-            {
-                data = status
-            };
-            var data = JsonConvert.SerializeObject(result);
-            return new HttpResponseMessage(HttpStatusCode.OK)
-            {
-                Content = new StringContent(data)
-            };
-        }
-
         private HttpResponseMessage HandleGetDatapoints(string content)
         {
             // Ignore query for now, this is only used to read the first point, so we just respond with that.
@@ -748,7 +726,7 @@ namespace Test
         {
             var data = new RawListWrapper<JsonElement>
             {
-                items = AssetRaw.Select(kvp => new RawWrapper<JsonElement> { columns = kvp.Value, key = kvp.Key, lastUpdatedTime = 0 })
+                items = AssetsRaw.Select(kvp => new RawWrapper<JsonElement> { columns = kvp.Value, key = kvp.Key, lastUpdatedTime = 0 })
             };
             var content = System.Text.Json.JsonSerializer.Serialize(data);
             return new HttpResponseMessage(HttpStatusCode.OK)
@@ -786,7 +764,7 @@ namespace Test
             var toCreate = System.Text.Json.JsonSerializer.Deserialize<RawListWrapper<JsonElement>>(content);
             foreach (var item in toCreate.items)
             {
-                AssetRaw[item.key] = item.columns;
+                AssetsRaw[item.key] = item.columns;
             }
 
             return new HttpResponseMessage(HttpStatusCode.OK)
@@ -1109,6 +1087,76 @@ namespace Test
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent(data)
+            };
+        }
+
+        private HttpResponseMessage HandleCreateSpaces(string content)
+        {
+            var data = System.Text.Json.JsonSerializer.Deserialize<ItemsWithoutCursor<Space>>(content,
+                Oryx.Cognite.Common.jsonOptions);
+            foreach (var dt in data.Items)
+            {
+                Spaces[dt.Space] = dt;
+            }
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(content)
+            };
+        }
+
+        private HttpResponseMessage HandleCreateViews(string content)
+        {
+            var data = System.Text.Json.JsonSerializer.Deserialize<ItemsWithoutCursor<JsonObject>>(content,
+                Oryx.Cognite.Common.jsonOptions);
+            foreach (var dt in data.Items)
+            {
+                Views[(string)dt["externalId"].AsValue()] = dt;
+            }
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(content)
+            };
+        }
+
+        private HttpResponseMessage HandleCreateContainers(string content)
+        {
+            var data = System.Text.Json.JsonSerializer.Deserialize<ItemsWithoutCursor<JsonObject>>(content,
+                Oryx.Cognite.Common.jsonOptions);
+            foreach (var dt in data.Items)
+            {
+                Containers[(string)dt["externalId"].AsValue()] = dt;
+            }
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(content)
+            };
+        }
+
+        private HttpResponseMessage HandleCreateDataModels(string content)
+        {
+            var data = System.Text.Json.JsonSerializer.Deserialize<ItemsWithoutCursor<JsonObject>>(content,
+                Oryx.Cognite.Common.jsonOptions);
+            foreach (var dt in data.Items)
+            {
+                DataModels[(string)dt["externalId"].AsValue()] = dt;
+            }
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(content)
+            };
+        }
+
+        private HttpResponseMessage HandleCreateInstances(string content)
+        {
+            var data = System.Text.Json.JsonSerializer.Deserialize<ItemsWithoutCursor<JsonObject>>(content,
+                Oryx.Cognite.Common.jsonOptions);
+            foreach (var dt in data.Items)
+            {
+                Instances[(string)dt["externalId"].AsValue()] = dt;
+            }
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(content)
             };
         }
     }

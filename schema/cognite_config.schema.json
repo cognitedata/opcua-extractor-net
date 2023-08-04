@@ -3,16 +3,22 @@
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
     "description": "Configuration for pushing data to Cognite Data Fusion (CDF)",
-    "allOf": [{ "$ref": "https://raw.githubusercontent.com/cognitedata/dotnet-extractor-utils/v1.4.2/schema/cognite_config.schema.json" }],
+    "allOf": [{ "$ref": "https://raw.githubusercontent.com/cognitedata/dotnet-extractor-utils/v1.12.2/schema/cognite_config.schema.json" }],
     "unevaluatedProperties": false,
     "properties": {
-        "data-set-id": {
-            "type": "integer",
-            "description": "Data set used for new objects. Existing objects will not be updated"
-        },
-        "data-set-external-id": {
-            "type": "string",
-            "description": "Data set used for new objects, overridden by `data-set-id`. Requires the capability `datasets:Read` for the given data set"
+        "data-set": {
+            "type": "object",
+            "unevaluatedProperties": false,
+            "properties": {
+                "id": {
+                    "type": "integer",
+                    "description": "Data set used for new objects. Existing objects will not be updated"
+                },
+                "external-id": {
+                    "type": "string",
+                    "description": "Data set used for new objects. Requires the capability `datasets:Read` for the given data set"
+                }
+            }
         },
         "debug": {
             "type": "boolean",
@@ -23,46 +29,114 @@
             "description": "Whether to read start/end-points on startup, where possible. At least one pusher should be able to do this, or `state-store` should be enabled, otherwise back/frontfill will run for the entire history every restart",
             "default": true
         },
-        "skip-metadata": {
-            "type": "boolean",
-            "description": "Do not push any metadata at all. If this is `true`, plain timeseries without metadata will be created, similarly to `raw-metadata`, and datapoints will be pushed. Nothing will be written to raw, band no assets will be created. Events will be created, but without being contextualized to assets"
-        },
-        "raw-metadata": {
+        "metadata-targets": {
             "type": "object",
-            "description": "Store assets/timeseries metadata and relationships in raw. Assets will not be created at all, timeseries will be created with just `externalId`, `isStep`, and `isString`. Both timeseries and assets will be persisted in their entirity to CDF Raw. Datapoints are not affected, events will be created but without being contextualized to assets. The externalId of the source node is added to metadata if applicable",
+            "description": "Metadata targets for objects, variable and references in CDF.",
             "unevaluatedProperties": false,
-            "required": ["database"],
             "properties": {
-                "database": {
-                    "type": "string",
-                    "description": "Raw database"
+                "raw": {
+                    "type": "object",
+                    "description": "Details of CDF raw (database and table).",
+                    "unevaluatedProperties": false,
+                    "required": ["database"],
+                    "properties": {
+                        "database": {
+                            "type": "string",
+                            "description": "Database in raw"
+                        },
+                        "assets-table": {
+                            "type": "string",
+                            "descripion": "Assets table in raw"
+                        },
+                        "timeseries-table": {
+                            "type": "string",
+                            "description": "Timeseries table in raw"
+                        },
+                        "relationships-table": {
+                            "type": "string",
+                            "description": "Relationships table in raw"
+                        }
+                    }
                 },
-                "assets-table": {
-                    "type": "string",
-                    "description": "Raw table to use for assets"
+                "clean": {
+                    "unevaluatedProperties": false,
+                    "description": "Enable or disable assets, timeseries and/or relationships",
+                    "type": "object",
+                    "properties": {
+                        "assets": {
+                            "type": "boolean",
+                            "description": "Indicates enabled or disabled"
+                        },
+                        "timeseries": {
+                            "type": "boolean",
+                            "description": "Indicates enabled or disabled"
+                        },
+                        "relationships": {
+                            "type": "boolean",
+                            "description": "Indicates enabled or disabled"
+                        }
+                    }
                 },
-                "timeseries-table": {
-                    "type": "string",
-                    "description": "Raw table to use for timeseries"
-                },
-                "relationships-table": {
-                    "type": "string",
-                    "description": "Raw table to use for relationships"
+                "data-models": {
+                    "unevaluatedProperties": false,
+                    "description": "configuration for flexible data models in CDF",
+                    "type": "object",
+                    "required": ["enabled", "exclude-no-referenced", "types-to-map", "skip-simple-types", "skip-types-on-equal-count", "ignore-mandatory"],
+                    "properties": {
+                        "space": {
+                            "type": "string",
+                            "description": "Space instance in CDF"
+                        },
+                        "enabled": {
+                            "type": "boolean",
+                            "description": "Should enable"
+                        },
+                        "exclude-no-referenced": {
+                            "type": "boolean",
+                            "description": "Exclude any node referenced by custom nodes"
+                        },
+                        "types-to-map": {
+                            "type": "string",
+                            "description": "Types to map to fdm",
+                            "enum": ["referenced", "custom", "all"]
+                        },
+                        "skip-simple-types": {
+                            "type": "boolean",
+                            "description": "Do not create views without an associated container"
+                        },
+                        "skip-types-on-equal-count": {
+                            "type": "boolean",
+                            "description": "Skip views if number of views in CDF is equal to number of views in server"
+                        },
+                        "ignore-mandatory": {
+                            "type": "boolean",
+                            "description": "Allow optional mandatory options"
+                        },
+                        "connection-target-map": {
+                            "type": "object",
+                            "description": "target connections",
+                            "[A-z0-9-_.]+": {
+                                "type": "string"
+                            }
+                        }
+                    }
                 }
             }
         },
         "metadata-mapping": {
             "type": "object",
             "description": "Map metadata to asset/timeseries attributes. This lets you assign properties in OPC-UA directly to fields like `description` and `unit` in CDF",
-            "examples": [{
-                "timeseries": {
-                    "EngineeringUnits": "unit",
-                    "EURange": "description"
-                },
-                "assets": {
-                    "Name": "name"
+            "examples": [
+                {
+                    "timeseries": {
+                        "EngineeringUnits": "unit",
+                        "EURange": "description"
+                    },
+                    "assets": {
+                        "Name": "name"
+                    }
                 }
-            }],
+            ],
             "unevaluatedProperties": false,
             "properties": {
                 "assets": {
@@ -71,7 +145,7 @@
                     "patternProperties": {
                         ".*": {
                             "type": "string",
-                            "enum": ["description", "name", "parentId"]
+                            "enum": [ "description", "name", "parentId" ]
                         }
                     }
                 },
@@ -81,7 +155,7 @@
                     "patternProperties": {
                         ".*": {
                             "type": "string",
-                            "enum": ["description", "name", "parentId", "unit"]
+                            "enum": [ "description", "name", "parentId", "unit" ]
                         }
                     }
                 }
@@ -91,7 +165,7 @@
             "type": "object",
             "description": "Read from CDF instead of OPC-UA when starting, to speed up start on slow servers. Requires `extraction-data-types.expand-node-ids` and `append-internal-values` to be set to `true`. This should generaly be enabled along with `skip-metadata` or `raw-metadata`. If `browse-on-empty` is set to `true` and `raw-metadata` is configured with the same database and tables the extractor will read into raw on first run, then use raw as source for later runs. The Raw database can be deleted to reset on next read.",
             "unevaluatedProperties": false,
-            "required": ["enable", "database"],
+            "required": [ "enable", "database" ],
             "properties": {
                 "enable": {
                     "type": "boolean",
@@ -116,7 +190,7 @@
             }
         },
         "non-finite-replacement": {
-            "type": ["number", "null"],
+            "type": [ "number", "null" ],
             "description": "Replacement for NaN values. Deprecated in favor of `nan-replacement`",
             "deprecated": true
         },

@@ -16,6 +16,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using Cognite.OpcUa.History;
+using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
@@ -71,7 +72,7 @@ namespace Cognite.OpcUa.Config
             var states = nodeList.Where(node =>
                     (node is UAVariable variable) && !variable.IsProperty
                     && AllowTSMap(variable))
-                .Select(node => new VariableExtractionState(this, (node as UAVariable)!, false, false)).ToList();
+                .Select(node => new VariableExtractionState(this, (node as UAVariable)!, false, false, true)).ToList();
 
             log.LogInformation("Get chunkSizes for subscribing to variables");
 

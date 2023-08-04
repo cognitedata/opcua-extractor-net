@@ -84,14 +84,14 @@ namespace Cognite.OpcUa
             if (deletedStates.Any())
             {
                 logger.LogInformation("Found {Del} stored nodes in {Tab} that no longer exist and will be marked as deleted", deletedStates.Count, tableName);
-                await stateStore.DeleteExtractionState(deletedStates.Select(d => new NodeExistsState(d.Id, time)), tableName, token);
+                if (!config.DryRun) await stateStore.DeleteExtractionState(deletedStates.Select(d => new NodeExistsState(d.Id, time)), tableName, token);
             }
 
             var newStates = states.Values.Where(s => !oldStates.ContainsKey(s.Id)).ToList();
             if (newStates.Any())
             {
                 logger.LogInformation("Found {New} new nodes in {Tab}, adding to state store...", newStates.Count, tableName);
-                await stateStore.StoreExtractionState(newStates, tableName, s => new BaseStorableState { Id = s.Id }, token);
+                if (!config.DryRun) await stateStore.StoreExtractionState(newStates, tableName, s => new BaseStorableState { Id = s.Id }, token);
             }
 
             return deletedStates.Select(d => d.Id);
@@ -102,9 +102,9 @@ namespace Cognite.OpcUa
             if (!result.CanBeUsedForDeletes) return new DeletedNodes();
 
             var time = DateTime.UtcNow.AddSeconds(-1);
-            var newVariables = result.DestinationVariables.Select(v => client.GetUniqueId(v.Id, v.Index)!).ToDictionary(
+            var newVariables = result.DestinationVariables.Select(v => v.GetUniqueId(client)!).ToDictionary(
                 i => i, i => new NodeExistsState(i, time));
-            var newObjects = result.DestinationObjects.Select(o => client.GetUniqueId(o.Id)!).ToDictionary(i => i, i => new NodeExistsState(i, time));
+            var newObjects = result.DestinationObjects.Select(o => o.GetUniqueId(client)!).ToDictionary(i => i, i => new NodeExistsState(i, time));
             var newReferences = result.DestinationReferences.Select(r => client.GetRelationshipId(r)!).ToDictionary(i => i, i => new NodeExistsState(i, time));
 
             var res = await Task.WhenAll(

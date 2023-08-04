@@ -53,6 +53,7 @@ namespace Cognite.OpcUa
 
         private readonly InfluxPusherConfig config;
         private InfluxDBClient client;
+        private readonly FullConfig fullConfig;
 
         private static readonly Counter dataPointsCounter = Metrics
             .CreateCounter("opcua_datapoints_pushed_influx", "Number of datapoints pushed to influxdb");
@@ -73,12 +74,13 @@ namespace Cognite.OpcUa
 
         private readonly ILogger<InfluxPusher> log;
 
-        public InfluxPusher(ILogger<InfluxPusher> log, InfluxPusherConfig config)
+        public InfluxPusher(ILogger<InfluxPusher> log, FullConfig config)
         {
             this.log = log;
-            this.config = config;
-            BaseConfig = config;
-            client = new InfluxDBClient(config.Host, config.Username, config.Password);
+            this.config = config.Influx!;
+            BaseConfig = config.Influx!;
+            fullConfig = config;
+            client = new InfluxDBClient(this.config.Host, this.config.Username, this.config.Password);
         }
         /// <summary>
         /// Push each datapoint to influxdb. The datapoint Id, which corresponds to timeseries externalId in CDF, is used as MeasurementName
@@ -120,14 +122,20 @@ namespace Cognite.OpcUa
 
             var ipoints = new List<IInfluxDatapoint>();
 
+            int groupCount = 0;
             foreach (var group in groups)
             {
                 var ts = Extractor?.State.GetNodeState(group.Key);
                 if (ts == null) continue;
                 ipoints.AddRange(group.Select(dp => UADataPointToInflux(ts, dp)));
+                groupCount++;
             }
 
-            if (config.Debug) return null;
+            if (fullConfig.DryRun)
+            {
+                log.LogInformation("Dry run enabled. Would insert {Count} datapoints over {C2} timeseries to influxdb", count, groupCount);
+                return null;
+            }
 
             try
             {
@@ -190,7 +198,13 @@ namespace Cognite.OpcUa
             if (count == 0) return null;
 
             var points = evts.Select(UAEventToInflux);
-            if (config.Debug) return null;
+
+            if (fullConfig.DryRun)
+            {
+                log.LogInformation("Dry run enabled. Would insert {Count} events to influxdb", count);
+                return null;
+            }
+
             try
             {
                 await client.PostPointsAsync(config.Database, points, config.PointChunkSize);
@@ -217,7 +231,7 @@ namespace Cognite.OpcUa
             bool backfillEnabled,
             CancellationToken token)
         {
-            if (states == null || !states.Any() || config.Debug || !config.ReadExtractedRanges) return true;
+            if (states == null || !states.Any() || !config.ReadExtractedRanges || fullConfig.DryRun) return true;
             if (Extractor == null) throw new InvalidOperationException("Extractor must be set");
             var ranges = new ConcurrentDictionary<string, TimeRange>();
 
@@ -383,7 +397,7 @@ namespace Cognite.OpcUa
             bool backfillEnabled,
             CancellationToken token)
         {
-            if (states == null || !states.Any() || config.Debug || !config.ReadExtractedEventRanges) return true;
+            if (states == null || !states.Any() || !config.ReadExtractedEventRanges || fullConfig.DryRun) return true;
             IEnumerable<string> eventSeries;
             try
             {
@@ -424,7 +438,8 @@ namespace Cognite.OpcUa
         /// <returns>True on success</returns>
         public async Task<bool?> TestConnection(FullConfig fullConfig, CancellationToken token)
         {
-            if (config.Debug) return true;
+            if (fullConfig.DryRun) return true;
+
             IEnumerable<string> dbs;
             try
             {
@@ -483,7 +498,8 @@ namespace Cognite.OpcUa
                 idp.Fields.Add("value", dp.StringValue ?? "");
                 return idp;
             }
-            if (state.DataType.Identifier == DataTypes.Boolean)
+            var uintIdentifier = state.DataType.Id.Identifier as uint? ?? 0;
+            if (uintIdentifier == DataTypes.Boolean)
             {
                 var idp = new InfluxDatapoint<bool>
                 {
@@ -493,7 +509,7 @@ namespace Cognite.OpcUa
                 idp.Fields.Add("value", Math.Abs(dp.DoubleValue ?? 0.0) < 0.1);
                 return idp;
             }
-            if (state.DataType.IsStep || IsInteger(state.DataType.Identifier))
+            if (state.DataType.IsStep || IsInteger(uintIdentifier))
             {
                 var idp = new InfluxDatapoint<long>
                 {
@@ -569,7 +585,6 @@ namespace Cognite.OpcUa
             IDictionary<string, InfluxBufferState> states,
             CancellationToken token)
         {
-            if (config.Debug) return Array.Empty<UADataPoint>();
             token.ThrowIfCancellationRequested();
 
             var fetchTasks = states.Select(state => client.QueryMultiSeriesAsync(config.Database,
@@ -681,7 +696,7 @@ namespace Cognite.OpcUa
             CancellationToken token)
         {
             if (Extractor == null) throw new InvalidOperationException("Extractor must be set");
-            if (config.Debug || states == null) return Array.Empty<UAEvent>();
+            if (states == null) return Array.Empty<UAEvent>();
             token.ThrowIfCancellationRequested();
 
             var fetchTasks = states.Select(state => client.QueryMultiSeriesAsync(config.Database,

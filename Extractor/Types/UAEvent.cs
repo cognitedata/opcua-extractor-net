@@ -17,8 +17,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using Cognite.Extensions;
 using Cognite.Extractor.Common;
+using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.Pushers;
-using Cognite.OpcUa.TypeCollectors;
 using CogniteSdk;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
@@ -58,7 +58,7 @@ namespace Cognite.OpcUa.Types
         /// <summary>
         /// NodeId of the eventType of this event.
         /// </summary>
-        public UAEventType? EventType { get; set; }
+        public UAObjectType? EventType { get; set; }
         /// <summary>
         /// Metadata fields
         /// </summary>
@@ -75,7 +75,7 @@ namespace Cognite.OpcUa.Types
             builder.AppendLine();
             builder.AppendFormat(CultureInfo.InvariantCulture, "Time: {0}", Time);
             builder.AppendLine();
-            builder.AppendFormat(CultureInfo.InvariantCulture, "Type: {0}", EventType?.DisplayName);
+            builder.AppendFormat(CultureInfo.InvariantCulture, "Type: {0}", EventType?.Name);
             builder.AppendLine();
             builder.AppendFormat(CultureInfo.InvariantCulture, "Emitter: {0}", EmittingNode);
             builder.AppendLine();
@@ -122,7 +122,7 @@ namespace Cognite.OpcUa.Types
                     {
                         next[field.Field.BrowsePath[i].Name] = current = new EventFieldNode();
                     }
-                    next = current.Children;
+                    next = current!.Children;
                 }
                 if (current != null)
                 {
@@ -239,7 +239,7 @@ namespace Cognite.OpcUa.Types
 
             var finalMetaData = new Dictionary<string, string>();
             finalMetaData["Emitter"] = client.GetUniqueId(EmittingNode) ?? "null";
-            finalMetaData["TypeName"] = EventType?.DisplayName?.Text ?? "null";
+            finalMetaData["TypeName"] = EventType?.Name ?? "null";
             if (MetaData == null)
             {
                 evt.Metadata = finalMetaData;
@@ -333,9 +333,9 @@ namespace Cognite.OpcUa.Types
     }
     public class EventFieldValue
     {
-        public EventField Field { get; }
+        public RawTypeField Field { get; }
         public Variant Value { get; }
-        public EventFieldValue(EventField field, Variant value)
+        public EventFieldValue(RawTypeField field, Variant value)
         {
             Field = field;
             Value = value;
@@ -364,7 +364,7 @@ namespace Cognite.OpcUa.Types
 
         private void WriteValueSafe(Utf8JsonWriter writer, EventFieldNode field)
         {
-            var value = converter.ConvertToString(field.Value, null, null, true);
+            var value = converter.ConvertToString(field.Value, null, null, StringConverterMode.Json);
             try
             {
                 writer.WriteRawValue(value);

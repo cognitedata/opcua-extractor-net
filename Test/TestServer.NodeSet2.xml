@@ -508,6 +508,15 @@
       <Reference ReferenceType="HasComponent" IsForward="false">ns=1;i=62</Reference>
       <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=63</Reference>
     </References>
+	<Value>
+       <ListOfInt32 xmlns="http://opcfoundation.org/UA/2008/02/Types.xsd">
+		 <Int32 xmlns="http://opcfoundation.org/UA/2008/02/Types.xsd">1</Int32>
+		 <Int32 xmlns="http://opcfoundation.org/UA/2008/02/Types.xsd">2</Int32>
+		 <Int32 xmlns="http://opcfoundation.org/UA/2008/02/Types.xsd">3</Int32>
+		 <Int32 xmlns="http://opcfoundation.org/UA/2008/02/Types.xsd">4</Int32>
+		 <Int32 xmlns="http://opcfoundation.org/UA/2008/02/Types.xsd">5</Int32>
+	   </ListOfInt32>
+	</Value>
   </UAVariable>
 
   <UAVariable NodeId="ns=1;i=69" BrowseName="1:DimInProp" DataType="i=11" AccessLevel="1" UserAccessLevel="1" ValueRank="1">
@@ -523,5 +532,8 @@
       <Reference ReferenceType="HasProperty" IsForward="false">ns=1;i=69</Reference>
       <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=68</Reference>
     </References>
+	<Value>
+      <Int32 xmlns="http://opcfoundation.org/UA/2008/02/Types.xsd">6</Int32>
+	</Value>
   </UAVariable>
 </UANodeSet>

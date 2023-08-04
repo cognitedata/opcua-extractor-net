@@ -16,7 +16,6 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using Cognite.Extractor.Common;
-using Cognite.Extractor.Configuration;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.Types;
@@ -194,7 +193,7 @@ namespace Cognite.OpcUa
                 }
                 if (extractor.AllowUpdateState) bufferState.UpdateDestinationRange(value.First, value.Last);
             }
-            if (config.InfluxStateStore && extractor.StateStorage != null)
+            if (config.InfluxStateStore && extractor.StateStorage != null && !fullConfig.DryRun)
             {
                 log.LogInformation("Try to write {Count} states to state store", nodeBufferStates.Count);
                 await extractor.StateStorage.StoreExtractionState(nodeBufferStates.Values,
@@ -212,7 +211,7 @@ namespace Cognite.OpcUa
         /// <returns>True on success</returns>
         public async Task<bool> WriteDatapoints(IEnumerable<UADataPoint> points, IDictionary<string, TimeRange> pointRanges, CancellationToken token)
         {
-            if (points == null || !points.Any() || pointRanges == null || !pointRanges.Any()) return true;
+            if (points == null || !points.Any() || pointRanges == null || !pointRanges.Any() || fullConfig.DryRun) return true;
 
             points = points.GroupBy(pt => pt.Id)
                 .Where(group => !extractor.State.GetNodeState(group.Key)?.FrontfillEnabled ?? false)
@@ -253,7 +252,7 @@ namespace Cognite.OpcUa
         {
             bool success = true;
 
-            if (UseInflux() && nodeBufferStates.Any())
+            if (UseInflux() && nodeBufferStates.Any() && !fullConfig.DryRun)
             {
                 try
                 {
@@ -317,7 +316,7 @@ namespace Cognite.OpcUa
                 if (extractor.AllowUpdateState) bufferState.UpdateDestinationRange(group.Range.Min, group.Range.Max);
             }
 
-            if (config.InfluxStateStore && extractor.StateStorage != null)
+            if (config.InfluxStateStore && extractor.StateStorage != null && !fullConfig.DryRun)
             {
                 await extractor.StateStorage.StoreExtractionState(eventBufferStates.Values,
                     fullConfig.StateStorage.InfluxEventStore, token);
@@ -333,7 +332,7 @@ namespace Cognite.OpcUa
         /// <returns>True on success</returns>
         public async Task<bool> WriteEvents(IEnumerable<UAEvent> events, CancellationToken token)
         {
-            if (events == null || !events.Any()) return true;
+            if (events == null || !events.Any() || fullConfig.DryRun) return true;
 
             events = events.GroupBy(evt => evt.EmittingNode)
                 .Where(group => !extractor.State.GetEmitterState(group.Key)?.FrontfillEnabled ?? false)
@@ -374,7 +373,7 @@ namespace Cognite.OpcUa
         {
             bool success = true;
 
-            if (UseInflux() && eventBufferStates.Any())
+            if (UseInflux() && eventBufferStates.Any() && !fullConfig.DryRun)
             {
                 try
                 {

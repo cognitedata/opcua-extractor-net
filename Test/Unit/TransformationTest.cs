@@ -1,10 +1,9 @@
 ﻿using Cognite.Extractor.Testing;
 using Cognite.OpcUa;
 using Cognite.OpcUa.Config;
-using Cognite.OpcUa.Types;
+using Cognite.OpcUa.Nodes;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 using Opc.Ua;
 using System.Collections.Generic;
 using System.Linq;
@@ -37,15 +36,15 @@ namespace Test.Unit
             };
             var nodes = new[]
             {
-                new UANode(new NodeId(1), null, new NodeId("parent"), NodeClass.Object),
-                new UANode(new NodeId(2), "OtherTest", new NodeId("parent"), NodeClass.Object),
-                new UANode(new NodeId(3), "Test", new NodeId("parent"), NodeClass.Object),
-                new UANode(new NodeId(4), "Other", new NodeId("parent"), NodeClass.Object),
+                new UAObject(new NodeId(1), null, null, null, new NodeId("parent"), null),
+                new UAObject(new NodeId(2), "OtherTest", null, null, new NodeId("parent"), null),
+                new UAObject(new NodeId(3), "Test", null, null, new NodeId("parent"), null),
+                new UAObject(new NodeId(4), "Other", null, null, new NodeId("parent"), null),
             };
             var filter = new NodeFilter(raw);
             var matched = nodes.Where(node => filter.IsMatch(node, nss)).ToList();
             var matchedBasic = nodes.Where(node =>
-                filter.IsBasicMatch(node.DisplayName, node.Id, node.NodeType?.Id, nss, node.NodeClass)).ToList();
+                filter.IsBasicMatch(node.Name, node.Id, node.FullAttributes.TypeDefinition?.Id, nss, node.NodeClass)).ToList();
 
             Assert.Equal(2, matched.Count);
             Assert.Equal(2, matchedBasic.Count);
@@ -62,10 +61,10 @@ namespace Test.Unit
             };
             var nodes = new[]
             {
-                new UANode(new NodeId(1), "TestTest", new NodeId("parent"), NodeClass.Object),
-                new UANode(new NodeId(2), "OtherTest", new NodeId("parent"), NodeClass.Object),
-                new UANode(new NodeId(3), "Test", new NodeId("parent"), NodeClass.Object),
-                new UANode(new NodeId(4), "Other", new NodeId("parent"), NodeClass.Object)
+                new UAObject(new NodeId(1), "TestTest", null, null, new NodeId("parent"), null),
+                new UAObject(new NodeId(2), "OtherTest", null, null, new NodeId("parent"), null),
+                new UAObject(new NodeId(3), "Test", null, null, new NodeId("parent"), null),
+                new UAObject(new NodeId(4), "Other", null, null, new NodeId("parent"), null)
             };
             nodes[0].Attributes.Description = "Some Test";
             nodes[1].Attributes.Description = "Some Other test";
@@ -74,7 +73,7 @@ namespace Test.Unit
             var filter = new NodeFilter(raw);
             var matched = nodes.Where(node => filter.IsMatch(node, nss)).ToList();
             var matchedBasic = nodes.Where(node =>
-                filter.IsBasicMatch(node.DisplayName, node.Id, node.NodeType?.Id, nss, node.NodeClass)).ToList();
+                filter.IsBasicMatch(node.Name, node.Id, node.FullAttributes.TypeDefinition?.Id, nss, node.NodeClass)).ToList();
 
             Assert.Single(matched);
             Assert.Empty(matchedBasic);
@@ -91,15 +90,15 @@ namespace Test.Unit
             };
             var nodes = new[]
             {
-                new UANode(new NodeId(1), "TestTest", new NodeId("parent"), NodeClass.Object),
-                new UANode(new NodeId("id"), "OtherTest", new NodeId("parent"), NodeClass.Object),
-                new UANode(new NodeId(3), "Test", new NodeId("parent"), NodeClass.Object),
-                new UANode(new NodeId(4), "Other", new NodeId("parent"), NodeClass.Object),
+                new UAObject(new NodeId(1), "TestTest", null, null, new NodeId("parent"), null),
+                new UAObject(new NodeId("id"), "OtherTest", null, null, new NodeId("parent"), null),
+                new UAObject(new NodeId(3), "Test", null, null, new NodeId("parent"), null),
+                new UAObject(new NodeId(4), "Other", null, null, new NodeId("parent"), null),
             };
             var filter = new NodeFilter(raw);
             var matched = nodes.Where(node => filter.IsMatch(node, nss)).ToList();
             var matchedBasic = nodes.Where(node =>
-                            filter.IsBasicMatch(node.DisplayName, node.Id, node.NodeType?.Id, nss, node.NodeClass)).ToList();
+                            filter.IsBasicMatch(node.Name, node.Id, node.FullAttributes.TypeDefinition?.Id, nss, node.NodeClass)).ToList();
 
             Assert.Equal(3, matched.Count);
             Assert.Equal(3, matchedBasic.Count);
@@ -115,15 +114,15 @@ namespace Test.Unit
             };
             var nodes = new[]
             {
-                new UANode(new NodeId(1, 1), "TestTest", new NodeId("parent"), NodeClass.Object),
-                new UANode(new NodeId(2, 2), "OtherTest", new NodeId("parent"), NodeClass.Object),
-                new UANode(new NodeId(3, 2), "Test", new NodeId("parent"), NodeClass.Object),
-                new UANode(new NodeId(4, 3), "Other", new NodeId("parent"), NodeClass.Object),
+                new UAObject(new NodeId(1, 1), "TestTest", null, null, new NodeId("parent"), null),
+                new UAObject(new NodeId(2, 2), "OtherTest", null, null, new NodeId("parent"), null),
+                new UAObject(new NodeId(3, 2), "Test", null, null, new NodeId("parent"), null),
+                new UAObject(new NodeId(4, 3), "Other", null, null, new NodeId("parent"), null),
             };
             var filter = new NodeFilter(raw);
             var matched = nodes.Where(node => filter.IsMatch(node, nss)).ToList();
             var matchedBasic = nodes.Where(node =>
-                filter.IsBasicMatch(node.DisplayName, node.Id, node.NodeType?.Id, nss, node.NodeClass)).ToList();
+                filter.IsBasicMatch(node.Name, node.Id, node.FullAttributes.TypeDefinition?.Id, nss, node.NodeClass)).ToList();
 
             Assert.Equal(2, matched.Count);
             Assert.Equal(2, matchedBasic.Count);
@@ -141,25 +140,28 @@ namespace Test.Unit
 
             var nodes = new[]
             {
-                new UANode(new NodeId(1), "TestTest", new NodeId("parent"), NodeClass.Object),
-                new UANode(new NodeId(2), "OtherTest", new NodeId("parent"), NodeClass.Object),
-                new UANode(new NodeId(3), "Test", new NodeId("parent"), NodeClass.Object),
-                new UANode(new NodeId(4), "Other", new NodeId("parent"), NodeClass.Object),
+                new UAObject(new NodeId(1), "TestTest", null, null, new NodeId("parent"), new UAObjectType(new NodeId(1))),
+                new UAObject(new NodeId(2), "OtherTest", null, null, new NodeId("parent"), new UAObjectType(new NodeId(2))),
+                new UAObject(new NodeId(3), "Test", null, null, new NodeId("parent"), null),
+                new UAObject(new NodeId(4), "Other", null, null, new NodeId("parent"), new UAObjectType(new NodeId("test"))),
             };
-            nodes[0].Attributes.NodeType = new UANodeType(new NodeId(1), false);
-            nodes[1].Attributes.NodeType = new UANodeType(new NodeId(2), false);
-            nodes[2].Attributes.NodeType = null;
-            nodes[3].Attributes.NodeType = new UANodeType(new NodeId("test"), false);
             var filter = new NodeFilter(raw);
             var matched = nodes.Where(node => filter.IsMatch(node, nss)).ToList();
             var matchedBasic = nodes.Where(node =>
-                filter.IsBasicMatch(node.DisplayName, node.Id, node.NodeType?.Id, nss, node.NodeClass)).ToList();
+                filter.IsBasicMatch(node.Name, node.Id, node.FullAttributes.TypeDefinition?.Id, nss, node.NodeClass)).ToList();
 
             Assert.Equal(2, matched.Count);
             Assert.Equal(2, matchedBasic.Count);
 
             Assert.Contains(matched, node => (uint)node.Id.Identifier == 1u);
             Assert.Contains(matched, node => (uint)node.Id.Identifier == 4u);
+        }
+
+        private static NodeId GetTypeDefinition(BaseUANode node)
+        {
+            if (node is UAObject obj) return obj.FullAttributes.TypeDefinition?.Id;
+            else if (node is UAVariable vr) return vr.FullAttributes.TypeDefinition?.Id;
+            return null;
         }
 
         [Theory]
@@ -172,21 +174,21 @@ namespace Test.Unit
                 IsArray = isArray
             };
 
-            var nodes = new[]
+            var nodes = new BaseUANode[]
             {
-                new UAVariable(new NodeId(1), "TestTest", new NodeId("parent")),
-                new UAVariable(new NodeId(2), "OtherTest", new NodeId("parent")),
-                new UAVariable(new NodeId(3), "Test", new NodeId("parent")),
-                new UANode(new NodeId(4), "Other", new NodeId("parent"), NodeClass.Object),
-                new UAVariable(new NodeId(5), "Test", new NodeId("parent"))
+                new UAVariable(new NodeId(1), "TestTest", null, null, new NodeId("parent"), null),
+                new UAVariable(new NodeId(2), "OtherTest", null, null, new NodeId("parent"), null),
+                new UAVariable(new NodeId(3), "Test", null, null, new NodeId("parent"), null),
+                new UAObject(new NodeId(4), "Other", null, null, new NodeId("parent"), null),
+                new UAVariable(new NodeId(5), "Test", null, null, new NodeId("parent"), null)
             };
-            (nodes[2].Attributes as Cognite.OpcUa.Types.VariableAttributes).ArrayDimensions = new[] { 4 };
-            (nodes[4].Attributes as Cognite.OpcUa.Types.VariableAttributes).ArrayDimensions = new[] { 4 };
+            (nodes[2].Attributes as Cognite.OpcUa.Nodes.VariableAttributes).ArrayDimensions = new[] { 4 };
+            (nodes[4].Attributes as Cognite.OpcUa.Nodes.VariableAttributes).ArrayDimensions = new[] { 4 };
 
             var filter = new NodeFilter(raw);
             var matched = nodes.Where(node => filter.IsMatch(node, nss)).ToList();
             var matchedBasic = nodes.Where(node =>
-                filter.IsBasicMatch(node.DisplayName, node.Id, node.NodeType?.Id, nss, node.NodeClass)).ToList();
+                filter.IsBasicMatch(node.Name, node.Id, GetTypeDefinition(node), nss, node.NodeClass)).ToList();
 
             Assert.Equal(2, matched.Count);
             Assert.Empty(matchedBasic);
@@ -213,20 +215,20 @@ namespace Test.Unit
                 }
             };
 
-            var parent1 = new UANode(new NodeId("parent1"), "parent1", NodeId.Null, NodeClass.Object);
-            var parent2 = new UANode(new NodeId("parent2"), "parent2", NodeId.Null, NodeClass.Object);
+            var parent1 = new UAObject(new NodeId("parent1"), "parent1", null, null, NodeId.Null, null);
+            var parent2 = new UAObject(new NodeId("parent2"), "parent2", null, null, NodeId.Null, null);
 
             var nodes = new[]
             {
-                new UANode(new NodeId(1, 1), "TestTest", new NodeId("parent1"), NodeClass.Object) { Parent = parent1 },
-                new UANode(new NodeId(2, 2), "OtherTest", new NodeId("parent1"), NodeClass.Object) { Parent = parent1 },
-                new UANode(new NodeId(3, 2), "Test", new NodeId("parent2"), NodeClass.Object) { Parent = parent2 },
-                new UANode(new NodeId(4, 3), "Other", new NodeId("parent2"), NodeClass.Object) { Parent = parent2 },
+                new UAObject(new NodeId(1, 1), "TestTest", null, parent1, new NodeId("parent1"), null) { Parent = parent1 },
+                new UAObject(new NodeId(2, 2), "OtherTest", null, parent1, new NodeId("parent1"), null) { Parent = parent1 },
+                new UAObject(new NodeId(3, 2), "Test", null, parent2, new NodeId("parent2"), null) { Parent = parent2 },
+                new UAObject(new NodeId(4, 3), "Other", null, parent2, new NodeId("parent2"), null) { Parent = parent2 },
             };
             var filter = new NodeFilter(raw);
             var matched = nodes.Where(node => filter.IsMatch(node, nss)).ToList();
             var matchedBasic = nodes.Where(node =>
-                filter.IsBasicMatch(node.DisplayName, node.Id, node.NodeType?.Id, nss, node.NodeClass)).ToList();
+                filter.IsBasicMatch(node.Name, node.Id, node.FullAttributes.TypeDefinition?.Id, nss, node.NodeClass)).ToList();
 
             Assert.Equal(2, matched.Count);
             Assert.Empty(matchedBasic);
@@ -242,17 +244,17 @@ namespace Test.Unit
                 NodeClass = NodeClass.Object
             };
 
-            var nodes = new[]
+            var nodes = new BaseUANode[]
             {
-                new UANode(new NodeId(1), "TestTest", new NodeId("parent"), NodeClass.VariableType),
-                new UANode(new NodeId(2), "OtherTest", new NodeId("parent"), NodeClass.Object),
-                new UANode(new NodeId(3), "Test", new NodeId("parent"), NodeClass.Object),
-                new UANode(new NodeId(4), "Other", new NodeId("parent"), NodeClass.Unspecified),
+                new UAVariableType(new NodeId(1), "TestTest", null, null, new NodeId("parent")),
+                new UAObject(new NodeId(2), "OtherTest", null, null, new NodeId("parent"), null),
+                new UAObject(new NodeId(3), "Test", null, null, new NodeId("parent"), null),
+                new UAObjectType(new NodeId(4), "Other", null, null, new NodeId("parent")),
             };
             var filter = new NodeFilter(raw);
             var matched = nodes.Where(node => filter.IsMatch(node, nss)).ToList();
             var matchedBasic = nodes.Where(node =>
-                filter.IsBasicMatch(node.DisplayName, node.Id, node.NodeType?.Id, nss, node.NodeClass)).ToList();
+                filter.IsBasicMatch(node.Name, node.Id, GetTypeDefinition(node), nss, node.NodeClass)).ToList();
 
             Assert.Equal(2, matched.Count);
             Assert.Equal(2, matchedBasic.Count);
@@ -270,21 +272,21 @@ namespace Test.Unit
                 Historizing = historizing
             };
 
-            var nodes = new[]
+            var nodes = new BaseUANode[]
             {
-                new UAVariable(new NodeId(1), "TestTest", new NodeId("parent")),
-                new UAVariable(new NodeId(2), "OtherTest", new NodeId("parent")),
-                new UAVariable(new NodeId(3), "Test", new NodeId("parent")),
-                new UANode(new NodeId(4), "Other", new NodeId("parent"), NodeClass.Object),
-                new UAVariable(new NodeId(5), "Test", new NodeId("parent"))
+                new UAVariable(new NodeId(1), "TestTest", null, null, new NodeId("parent"), null),
+                new UAVariable(new NodeId(2), "OtherTest", null, null, new NodeId("parent"), null),
+                new UAVariable(new NodeId(3), "Test", null, null, new NodeId("parent"), null),
+                new UAObject(new NodeId(4), "Other", null, null, new NodeId("parent"), null),
+                new UAVariable(new NodeId(5), "Test", null, null, new NodeId("parent"), null)
             };
-            (nodes[2].Attributes as Cognite.OpcUa.Types.VariableAttributes).Historizing = true;
-            (nodes[4].Attributes as Cognite.OpcUa.Types.VariableAttributes).Historizing = true;
+            (nodes[2].Attributes as Cognite.OpcUa.Nodes.VariableAttributes).Historizing = true;
+            (nodes[4].Attributes as Cognite.OpcUa.Nodes.VariableAttributes).Historizing = true;
 
             var filter = new NodeFilter(raw);
             var matched = nodes.Where(node => filter.IsMatch(node, nss)).ToList();
             var matchedBasic = nodes.Where(node =>
-                filter.IsBasicMatch(node.DisplayName, node.Id, node.NodeType?.Id, nss, node.NodeClass)).ToList();
+                filter.IsBasicMatch(node.Name, node.Id, GetTypeDefinition(node), nss, node.NodeClass)).ToList();
 
             Assert.Equal(2, matched.Count);
             Assert.Empty(matchedBasic);
@@ -318,10 +320,10 @@ namespace Test.Unit
                 Namespace = "test-",
                 NodeClass = NodeClass.Variable
             };
-            var parent1 = new UANode(new NodeId("parent1"), "parent1", NodeId.Null, NodeClass.Object);
-            var parent2 = new UANode(new NodeId("parent2"), "parent2", NodeId.Null, NodeClass.Object);
+            var parent1 = new UAObject(new NodeId("parent1"), "parent1", null, null, NodeId.Null, null);
+            var parent2 = new UAObject(new NodeId("parent2"), "parent2", null, null, NodeId.Null, null);
             // Each node deviates on only one point.
-            var nodes = new List<UANode>();
+            var nodes = new List<BaseUANode>();
             for (int i = 0; i < 10; i++)
             {
                 NodeClass nodeClass = i == 7 ? NodeClass.VariableType : NodeClass.Variable;
@@ -339,20 +341,27 @@ namespace Test.Unit
                 {
                     id = new NodeId(1, 1);
                 }
-                var node = new UAVariable(id, i == 4 ? "not" : "target", NodeId.Null, nodeClass);
-                node.Attributes.Description = i == 1 ? "not" : "target";
-                node.Attributes.NodeType = new UANodeType(i == 2 ? new NodeId(2) : new NodeId(1), true);
-                node.VariableAttributes.ArrayDimensions = i == 3 ? null : new[] { 4 };
-                node.Parent = i == 5 ? parent2 : parent1;
-                node.VariableAttributes.Historizing = i == 8 ? true : false;
 
+                BaseUANode node;
+                if (i != 7)
+                {
+                    node = new UAVariable(id, i == 4 ? "not" : "target", null, i == 5 ? parent2 : parent1, NodeId.Null, new UAVariableType(i == 2 ? new NodeId(2) : new NodeId(1)));
+                    (node as UAVariable).FullAttributes.ArrayDimensions = i == 3 ? null : new[] { 4 };
+                    (node as UAVariable).FullAttributes.Historizing = i == 8 ? true : false;
+                }
+                else
+                {
+                    node = new UAVariableType(id, "not", null, parent1, NodeId.Null);
+                }
+
+                node.Attributes.Description = i == 1 ? "not" : "target";
                 nodes.Add(node);
             }
 
             var filter = new NodeFilter(raw);
             var matched = nodes.Where(node => filter.IsMatch(node, nss)).ToList();
             var matchedBasic = nodes.Where(node =>
-                filter.IsBasicMatch(node.DisplayName, node.Id, node.NodeType?.Id, nss, node.NodeClass)).ToList();
+                filter.IsBasicMatch(node.Name, node.Id, GetTypeDefinition(node), nss, node.NodeClass)).ToList();
 
             Assert.Single(matched);
             Assert.Empty(matchedBasic);
@@ -370,15 +379,17 @@ namespace Test.Unit
             };
             var nodes = new[]
             {
-                new UANode(new NodeId(1), null, new NodeId("parent"), NodeClass.Object),
-                new UANode(new NodeId(2), "OtherTest", new NodeId("parent"), NodeClass.Object),
-                new UANode(new NodeId(3), "Test", new NodeId("parent"), NodeClass.Object),
-                new UANode(new NodeId(4), "Other", new NodeId("parent"), NodeClass.Object),
+                new UAObject(new NodeId(1), null, null, null, new NodeId("parent"), null),
+                new UAObject(new NodeId(2), "OtherTest", null, null, new NodeId("parent"), null),
+                new UAObject(new NodeId(3), "Test", null, null, new NodeId("parent"), null),
+                new UAObject(new NodeId(4), "Other", null, null, new NodeId("parent"), null),
             };
+            var cfg = new FullConfig();
+            cfg.GenerateDefaults();
             var trans = new NodeTransformation(raw, 0);
             foreach (var node in nodes)
             {
-                trans.ApplyTransformation(log, node, nss);
+                trans.ApplyTransformation(log, node, nss, cfg);
             }
             Assert.False(nodes[0].Ignore);
             Assert.True(nodes[1].Ignore);
@@ -399,15 +410,17 @@ namespace Test.Unit
             };
             var nodes = new[]
             {
-                new UANode(new NodeId(1), null, new NodeId("parent"), NodeClass.Object),
-                new UANode(new NodeId(2), "OtherTest", new NodeId("parent"), NodeClass.Object),
-                new UANode(new NodeId(3), "Test", new NodeId("parent"), NodeClass.Object),
-                new UANode(new NodeId(4), "Other", new NodeId("parent"), NodeClass.Object),
+                new UAObject(new NodeId(1), null, null, null, new NodeId("parent"), null),
+                new UAObject(new NodeId(2), "OtherTest", null, null, new NodeId("parent"), null),
+                new UAObject(new NodeId(3), "Test", null, null, new NodeId("parent"), null),
+                new UAObject(new NodeId(4), "Other", null, null, new NodeId("parent"), null),
             };
+            var cfg = new FullConfig();
+            cfg.GenerateDefaults();
             var trans = new NodeTransformation(raw, 0);
             foreach (var node in nodes)
             {
-                trans.ApplyTransformation(log, node, nss);
+                trans.ApplyTransformation(log, node, nss, cfg);
             }
             Assert.False(nodes[0].IsProperty);
             Assert.True(nodes[1].IsProperty);
@@ -433,22 +446,24 @@ namespace Test.Unit
                 },
                 Type = TransformationType.TimeSeries
             };
-            var nodes = new[]
+            var nodes = new BaseUANode[]
             {
-                new UANode(new NodeId(1), null, new NodeId("parent"), NodeClass.Variable),
-                new UANode(new NodeId(2), "OtherTest", new NodeId("parent"), NodeClass.Variable),
-                new UANode(new NodeId(3), "Test", new NodeId("parent"), NodeClass.Variable),
-                new UANode(new NodeId(4), "Other", new NodeId("parent"), NodeClass.Object),
+                new UAVariable(new NodeId(1), null, null, null, new NodeId("parent"), null),
+                new UAObject(new NodeId(2), "OtherTest", null, null, new NodeId("parent"), null),
+                new UAObject(new NodeId(3), "Test", null, null, new NodeId("parent"), null),
+                new UAObject(new NodeId(4), "Other", null, null, new NodeId("parent"), null),
             };
+            var cfg = new FullConfig();
+            cfg.GenerateDefaults();
             var trans = new NodeTransformation(raw, 0);
             var trans2 = new NodeTransformation(raw2, 0);
             foreach (var node in nodes)
             {
-                trans.ApplyTransformation(log, node, nss);
-                trans2.ApplyTransformation(log, node, nss);
+                trans.ApplyTransformation(log, node, nss, cfg);
+                trans2.ApplyTransformation(log, node, nss, cfg);
             }
             Assert.False(nodes[0].IsProperty);
-            Assert.False(nodes[1].IsProperty);
+            Assert.True(nodes[1].IsProperty);
             Assert.True(nodes[2].IsProperty);
             Assert.False(nodes[3].IsProperty);
         }
@@ -464,17 +479,19 @@ namespace Test.Unit
                 },
                 Type = TransformationType.AsEvents
             };
-            var nodes = new[]
+            var nodes = new BaseUANode[]
             {
-                new UAVariable(new NodeId(1), null, new NodeId("parent"), NodeClass.Variable),
-                new UAVariable(new NodeId(2), "OtherTest", new NodeId("parent"), NodeClass.Variable),
-                new UAVariable(new NodeId(3), "Test", new NodeId("parent"), NodeClass.Variable),
-                new UANode(new NodeId(4), "TestTest", new NodeId("parent"), NodeClass.Object),
+                new UAVariable(new NodeId(1), null, null, null, new NodeId("parent"), null),
+                new UAVariable(new NodeId(2), "OtherTest", null, null, new NodeId("parent"), null),
+                new UAVariable(new NodeId(3), "Test", null, null, new NodeId("parent"), null),
+                new UAObject(new NodeId(4), "TestTest", null, null, new NodeId("parent"), null),
             };
+            var cfg = new FullConfig();
+            cfg.GenerateDefaults();
             var trans = new NodeTransformation(raw, 0);
             foreach (var node in nodes)
             {
-                trans.ApplyTransformation(log, node, nss);
+                trans.ApplyTransformation(log, node, nss, cfg);
             }
             Assert.False((nodes[0] as UAVariable)?.AsEvents ?? false);
             Assert.True((nodes[1] as UAVariable)?.AsEvents ?? false);

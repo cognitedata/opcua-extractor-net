@@ -24,7 +24,6 @@ using Microsoft.Extensions.Logging;
 using System;
 using System.CommandLine;
 using System.CommandLine.Builder;
-using System.CommandLine.Invocation;
 using System.CommandLine.Parsing;
 using System.Threading;
 using System.Threading.Tasks;
@@ -59,6 +58,8 @@ namespace Cognite.OpcUa
         public string? WorkingDir { get; set; }
         [CommandLineOption("Run extractor without a yml config file. The .xml config file is still needed", true, "-n")]
         public bool NoConfig { get; set; }
+        [CommandLineOption("Run the extractor in dry-run mode. In this mode, it will not push anything to destinations")]
+        public bool DryRun { get; set; }
 
         public bool ConfigTool { get; set; }
         public FullConfig? Config { get; set; }

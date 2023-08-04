@@ -16,6 +16,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using Cognite.OpcUa.Config;
+using Cognite.OpcUa.Nodes;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using System;
@@ -30,6 +31,20 @@ using System.Text.Json.Serialization;
 
 namespace Cognite.OpcUa.Types
 {
+    public enum StringConverterMode
+    {
+        Simple,
+        Json,
+        ReversibleJson
+    }
+
+    class StringWrapper
+    {
+        [JsonPropertyName("value")]
+        public string? Value { get; set; }
+    }
+
+
     /// <summary>
     /// Class used for converting properties and property values to strings.
     /// Handles both conversion to metadata for Clean, and conversion to JSON for Raw.
@@ -58,49 +73,53 @@ namespace Cognite.OpcUa.Types
         /// <param name="value">Value to convert</param>
         /// <param name="enumValues">Map from numeric to string values</param>
         /// <param name="typeInfo">TypeInfo for <paramref name="value"/></param>
-        /// <param name="json">True to return valid JSON.</param>
+        /// <param name="mode">String converter mode.</param>
         /// <returns></returns>
         public string ConvertToString(
             object? value,
             IDictionary<long, string>? enumValues = null,
-            TypeInfo? typeInfo = null, bool json = false)
+            TypeInfo? typeInfo = null,
+            StringConverterMode mode = StringConverterMode.Simple)
         {
+            if (mode == StringConverterMode.ReversibleJson && uaClient != null && value is Variant variant)
+            {
+                using var encoder = new JsonEncoder(uaClient.MessageContext, true, null, false);
+                encoder.WriteVariant(null, variant, true);
+                var result = encoder.CloseAndReturnText();
+
+                return result[1..^1];
+            }
+
+            var jsonMode = mode == StringConverterMode.ReversibleJson ? StringConverterMode.ReversibleJson : StringConverterMode.Json;
             if (value == null)
             {
-                return json ? "null" : "";
-            }
-            if (value is Variant variantValue)
-            {
-                // This helps reduce code duplication, by making it possible to call ConvertToString with both variants and non-variants.
-                return ConvertToString(variantValue.Value, enumValues, variantValue.TypeInfo, json);
+                return mode != StringConverterMode.Simple ? "null" : "";
             }
             if (value is string strValue)
             {
-                return json ? JsonSerializer.Serialize(strValue) : strValue;
+                return mode != StringConverterMode.Simple ? JsonSerializer.Serialize(strValue) : strValue;
             }
             // If this is true, the value should be converted using the built-in JsonEncoder.
-            if (typeInfo != null && ShouldUseJson(value) && uaClient != null)
+            if (ShouldUseJson(value, mode) && uaClient != null && value is Variant variant2)
             {
                 try
                 {
-                    bool topLevelIsArray = typeInfo.ValueRank >= ValueRanks.OneDimension;
-
-                    using var encoder = new JsonEncoder(uaClient.MessageContext, false, null, topLevelIsArray);
-                    encoder.WriteVariantContents(value, typeInfo);
+                    using var encoder = new JsonEncoder(uaClient.MessageContext, mode == StringConverterMode.ReversibleJson, null, false);
+                    encoder.WriteVariant(null, variant2, false);
                     var result = encoder.CloseAndReturnText();
 
-                    // JsonEncoder for some reason spits out {{ ... }} from WriteVariantContents.
-                    if (topLevelIsArray)
-                    {
-                        return result[1..^1];
-                    }
-
-                    return result;
+                    return result[1..^1];
                 }
                 catch (Exception ex)
                 {
                     log.LogWarning("Failed to serialize built in type: {Message}", ex.Message);
                 }
+            }
+
+            if (value is Variant variantValue)
+            {
+                // This helps reduce code duplication, by making it possible to call ConvertToString with both variants and non-variants.
+                return ConvertToString(variantValue.Value, enumValues, variantValue.TypeInfo, mode);
             }
 
             // If the type is enumerable we can write it to a JSON array.
@@ -114,7 +133,7 @@ namespace Cognite.OpcUa.Types
                     {
                         builder.Append(',');
                     }
-                    builder.Append(ConvertToString(dvalue, enumValues, typeInfo, true));
+                    builder.Append(ConvertToString(dvalue, enumValues, typeInfo, jsonMode));
                 }
                 builder.Append(']');
                 return builder.ToString();
@@ -126,7 +145,7 @@ namespace Cognite.OpcUa.Types
                     var longVal = Convert.ToInt64(value, CultureInfo.InvariantCulture);
                     if (enumValues.TryGetValue(longVal, out string enumVal))
                     {
-                        if (json)
+                        if (mode != StringConverterMode.Simple)
                         {
                             return JsonSerializer.Serialize(enumVal);
                         }
@@ -141,7 +160,7 @@ namespace Cognite.OpcUa.Types
             string returnStr;
 
             if (value is NodeId nodeId) returnStr = uaClient?.GetUniqueId(nodeId) ?? nodeId.ToString();
-            else if (value is DataValue dv) return ConvertToString(dv.WrappedValue, enumValues, null, json);
+            else if (value is DataValue dv) return ConvertToString(dv.WrappedValue, enumValues, null, mode);
             else if (value is ExpandedNodeId expandedNodeId) returnStr = uaClient?.GetUniqueId(expandedNodeId) ?? expandedNodeId.ToString();
             else if (value is LocalizedText localizedText) returnStr = localizedText.Text;
             else if (value is QualifiedName qualifiedName) returnStr = qualifiedName.Name;
@@ -149,18 +168,30 @@ namespace Cognite.OpcUa.Types
             else if (value is EUInformation euInfo) returnStr = $"{euInfo.DisplayName?.Text}: {euInfo.Description?.Text}";
             else if (value is EnumValueType enumType)
             {
-                if (json) return $"{{{JsonSerializer.Serialize(enumType.DisplayName?.Text ?? "null")}:{enumType.Value}}}";
+                if (mode != StringConverterMode.Simple) return $"{{{JsonSerializer.Serialize(enumType.DisplayName?.Text ?? "null")}:{enumType.Value}}}";
                 return $"{enumType.DisplayName?.Text}: {enumType.Value}";
             }
             else if (value.GetType().IsEnum) returnStr = Enum.GetName(value.GetType(), value);
             else if (value is Opc.Ua.KeyValuePair kvp)
             {
-                if (json) return $"{{{JsonSerializer.Serialize(kvp.Key?.Name ?? "null")}:{ConvertToString(kvp.Value, enumValues, typeInfo, json)}}}";
-                return $"{kvp.Key?.Name}: {ConvertToString(kvp.Value, enumValues, typeInfo, json)}";
+                if (mode != StringConverterMode.Simple) return $"{{{JsonSerializer.Serialize(kvp.Key?.Name ?? "null")}:{ConvertToString(kvp.Value, enumValues, typeInfo, mode)}}}";
+                return $"{kvp.Key?.Name}: {ConvertToString(kvp.Value, enumValues, typeInfo, mode)}";
             }
             else if (typeInfo != null && typeInfo.BuiltInType == BuiltInType.StatusCode && value is uint uintVal)
             {
-                returnStr = StatusCode.LookupSymbolicId(uintVal);
+                if (mode == StringConverterMode.ReversibleJson)
+                {
+                    var builder = new StringBuilder();
+                    builder.Append("{");
+                    builder.Append(@"""value"":");
+                    builder.Append(uintVal);
+                    builder.Append("}");
+                    return builder.ToString();
+                }
+                else
+                {
+                    returnStr = StatusCode.LookupSymbolicId(uintVal);
+                }
             }
             else if (value is System.Xml.XmlElement xml) return Newtonsoft.Json.JsonConvert.SerializeXmlNode(xml);
             else if (value is Uuid uuid) returnStr = uuid.GuidString;
@@ -173,9 +204,9 @@ namespace Cognite.OpcUa.Types
                 builder.Append(@",""AdditionalInfo"":");
                 builder.Append(diagInfo.AdditionalInfo == null ? "null" : JsonSerializer.Serialize(diagInfo.AdditionalInfo));
                 builder.Append(@",""InnerStatusCode"":");
-                builder.Append(ConvertToString(diagInfo.InnerStatusCode, null, null, true));
+                builder.Append(ConvertToString(diagInfo.InnerStatusCode, null, null, jsonMode));
                 builder.Append(@",""InnerDiagnosticInfo"":");
-                builder.Append(ConvertToString(diagInfo.InnerDiagnosticInfo, null, null, true));
+                builder.Append(ConvertToString(diagInfo.InnerDiagnosticInfo, null, null, jsonMode));
                 builder.Append('}');
                 return builder.ToString();
             }
@@ -184,20 +215,37 @@ namespace Cognite.OpcUa.Types
                 var body = extensionObject.Body;
                 if (body == null)
                 {
-                    return json ? "null" : "";
+                    return mode != StringConverterMode.Simple ? "null" : "";
                 }
                 if (typeof(IEnumerable).IsAssignableFrom(body.GetType())
                     || customHandledTypes.Contains(body.GetType())
                     || typeInfo == null)
                 {
-                    return ConvertToString(extensionObject.Body, enumValues, null, json);
+                    return ConvertToString(extensionObject.Body, enumValues, null, mode);
                 }
                 returnStr = value.ToString();
             }
             else if (IsNumber(value)) return value.ToString();
             else returnStr = value.ToString();
 
-            return json ? JsonSerializer.Serialize(returnStr) : returnStr;
+            switch (mode) {
+                case StringConverterMode.Simple:
+                    return returnStr;
+                case StringConverterMode.Json:
+                    return JsonSerializer.Serialize(returnStr);
+                case StringConverterMode.ReversibleJson:
+                    if (returnStr.StartsWith("{"))
+                    {
+                        return JsonSerializer.Serialize(returnStr);
+                    }
+                    else
+                    {
+                        return JsonSerializer.Serialize(new StringWrapper { Value = returnStr });
+                    }
+                default:
+                    // Should be impossible, but C# doesn't seem to realize.
+                    return returnStr;
+            }
         }
 
         /// <summary>
@@ -224,7 +272,7 @@ namespace Cognite.OpcUa.Types
         {
             typeof(NodeId), typeof(DataValue), typeof(ExpandedNodeId), typeof(LocalizedText),
             typeof(QualifiedName), typeof(Opc.Ua.Range), typeof(Opc.Ua.KeyValuePair), typeof(System.Xml.XmlElement),
-            typeof(EUInformation), typeof(EnumValueType), typeof(Variant), typeof(Uuid), typeof(DiagnosticInfo)
+            typeof(EUInformation), typeof(EnumValueType), typeof(DiagnosticInfo), typeof(Variant), typeof(Uuid), typeof(StatusCode)
         };
 
         /// <summary>
@@ -232,9 +280,14 @@ namespace Cognite.OpcUa.Types
         /// </summary>
         /// <param name="value">Value to check</param>
         /// <returns>True if this type is best handled by Opc.Ua.JsonEncoder</returns>
-        private static bool ShouldUseJson(object value)
+        private static bool ShouldUseJson(object value, StringConverterMode mode)
         {
             if (value == null) return false;
+            if (value is Variant variantValue)
+            {
+                value = variantValue.Value;
+                if (value == null) return false;
+            }
             // Go through the value to check if we can parse it ourselves.
             // i.e. this is either an enumerable of a handled type, or an extensionobject
             // around a handled type.
@@ -245,16 +298,16 @@ namespace Cognite.OpcUa.Types
                 var enumerator = enumerable.GetEnumerator();
                 if (enumerator.MoveNext())
                 {
-                    return ShouldUseJson(enumerator.Current);
+                    return ShouldUseJson(enumerator.Current, mode);
                 }
                 return false;
             }
             if (value is ExtensionObject extensionObject)
             {
-                return ShouldUseJson(extensionObject.Body);
+                return ShouldUseJson(extensionObject.Body, mode);
             }
             if (!type.Namespace.StartsWith("Opc.Ua", StringComparison.InvariantCulture)) return false;
-            if (customHandledTypes.Contains(type)) return false;
+            if (mode != StringConverterMode.ReversibleJson && customHandledTypes.Contains(type)) return false;
             if (type.IsEnum) return false;
             return true;
         }
@@ -276,7 +329,7 @@ namespace Cognite.OpcUa.Types
         Variable
     }
 
-    internal class NodeSerializer : JsonConverter<UANode>
+    internal class NodeSerializer : JsonConverter<BaseUANode>
     {
         private readonly StringConverter converter;
         private readonly FullConfig config;
@@ -292,14 +345,14 @@ namespace Cognite.OpcUa.Types
             this.log = log;
         }
 
-        public override UANode? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        public override BaseUANode? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
         {
             throw new NotImplementedException();
         }
 
         private void WriteValueSafe(Utf8JsonWriter writer, UAVariable variable)
         {
-            var value = converter.ConvertToString(variable.Value, variable.DataType?.EnumValues, null, true);
+            var value = converter.ConvertToString(variable.Value, variable.FullAttributes.DataType?.EnumValues, null, StringConverterMode.Json);
             try
             {
                 writer.WriteRawValue(value);
@@ -307,18 +360,18 @@ namespace Cognite.OpcUa.Types
             catch (Exception ex)
             {
                 log.LogWarning("Serialization of value on variable: {Variable} resulted in invalid JSON: {Message}, {Json}",
-                    variable.DisplayName, ex.Message, value);
+                    variable.Name, ex.Message, value);
                 writer.WriteNullValue();
             }
         }
 
-        private void WriteProperties(Utf8JsonWriter writer, UANode node, bool getExtras, bool writeValue)
+        private void WriteProperties(Utf8JsonWriter writer, BaseUANode node, bool getExtras, bool writeValue)
         {
             Dictionary<string, string>? extras = null;
 
             if (getExtras)
             {
-                extras = node.GetExtraMetadata(config.Extraction, uaClient.DataTypeManager, uaClient.StringConverter);
+                extras = node.GetExtraMetadata(config, uaClient);
                 if (extras != null) extras.Remove("Value");
             }
             // If we should treat this as a key/value pair, or write it as an object
@@ -357,7 +410,7 @@ namespace Cognite.OpcUa.Types
             {
                 foreach (var child in node.Properties)
                 {
-                    var name = child.DisplayName;
+                    var name = child.Name;
                     if (name == null) continue;
                     string safeName = name;
                     int idx = 0;
@@ -373,68 +426,85 @@ namespace Cognite.OpcUa.Types
             writer.WriteEndObject();
         }
 
-        private void WriteBaseValues(Utf8JsonWriter writer, UANode node)
+        private void WriteBaseValues(Utf8JsonWriter writer, BaseUANode node)
         {
             var id = uaClient.GetUniqueId(node.Id);
             writer.WriteString("externalId", id);
-            writer.WriteString("name", string.IsNullOrEmpty(node.DisplayName) ? id : node.DisplayName);
-            writer.WriteString("description", node.Description);
+            writer.WriteString("name", string.IsNullOrEmpty(node.Name) ? id : node.Name);
+            writer.WriteString("description", node.Attributes.Description);
             writer.WritePropertyName("metadata");
             WriteProperties(writer, node, true, node.NodeClass == NodeClass.VariableType);
             if (Type == ConverterType.Variable && node is UAVariable variable)
             {
                 writer.WriteString("assetExternalId", uaClient.GetUniqueId(node.ParentId));
-                writer.WriteBoolean("isString", variable.DataType?.IsString ?? false);
-                writer.WriteBoolean("isStep", variable.DataType?.IsStep ?? false);
+                writer.WriteBoolean("isString", variable.FullAttributes.DataType?.IsString ?? false);
+                writer.WriteBoolean("isStep", variable.FullAttributes.DataType?.IsStep ?? false);
             }
             else
             {
                 writer.WriteString("parentExternalId", uaClient.GetUniqueId(node.ParentId));
             }
         }
-        private void WriteNodeIds(Utf8JsonWriter writer, UANode node, JsonSerializerOptions options)
+        private void WriteNodeIds(Utf8JsonWriter writer, BaseUANode node, JsonSerializerOptions options)
         {
             writer.WritePropertyName("NodeId");
             JsonSerializer.Serialize(writer, node.Id, options);
 
-            if (node.ParentId != null && !node.ParentId.IsNullNodeId)
+            if (!node.ParentId.IsNullNodeId)
             {
                 writer.WritePropertyName("ParentNodeId");
                 JsonSerializer.Serialize(writer, node.ParentId, options);
             }
-            if (node.NodeType != null && !node.NodeType.Id.IsNullNodeId)
+            if (node is UAObject obj)
             {
-                writer.WritePropertyName("TypeDefinitionId");
-                JsonSerializer.Serialize(writer, node.NodeType.Id, options);
-            }
-            if (Type == ConverterType.Variable && node is UAVariable variable)
-            {
-                if (variable.DataType != null && !variable.DataType.Raw.IsNullNodeId)
+                if (obj.FullAttributes.TypeDefinition != null && !obj.FullAttributes.TypeDefinition.Id.IsNullNodeId)
                 {
-                    writer.WritePropertyName("DataTypeId");
-                    JsonSerializer.Serialize(writer, variable.DataType.Raw, options);
+                    writer.WritePropertyName("TypeDefinitionId");
+                    JsonSerializer.Serialize(writer, obj.FullAttributes.TypeDefinition.Id, options);
+                }
+            }
+
+            if (node is UAVariable variable)
+            {
+                if (variable.FullAttributes.TypeDefinition != null && !variable.FullAttributes.TypeDefinition.Id.IsNullNodeId)
+                {
+                    writer.WritePropertyName("TypeDefinitionId");
+                    JsonSerializer.Serialize(writer, variable.FullAttributes.TypeDefinition.Id, options);
+                }
+                if (Type == ConverterType.Variable)
+                {
+                    if (variable.FullAttributes.DataType != null && !variable.FullAttributes.DataType.Id.IsNullNodeId)
+                    {
+                        writer.WritePropertyName("DataTypeId");
+                        JsonSerializer.Serialize(writer, variable.FullAttributes.DataType.Id, options);
+                    }
                 }
             }
         }
 
-        private void WriteInternalInfo(Utf8JsonWriter writer, UANode node, JsonSerializerOptions options)
+        private void WriteInternalInfo(Utf8JsonWriter writer, BaseUANode node, JsonSerializerOptions options)
         {
             writer.WriteStartObject("InternalInfo");
 
-            writer.WriteNumber("EventNotifier", node.EventNotifier);
-            writer.WriteBoolean("ShouldSubscribeEvents", node.ShouldSubscribeEvents);
+            if (node is UAObject obj)
+            {
+                writer.WriteNumber("EventNotifier", obj.FullAttributes.EventNotifier);
+                writer.WriteBoolean("ShouldSubscribeEvents", obj.FullAttributes.ShouldSubscribeToEvents(config));
+                writer.WriteBoolean("ShouldReadHistoryEvents", obj.FullAttributes.ShouldReadEventHistory(config));
+            }
             writer.WriteNumber("NodeClass", (int)node.NodeClass);
             if (Type == ConverterType.Variable && node is UAVariable variable)
             {
-                writer.WriteNumber("AccessLevel", variable.AccessLevel);
-                writer.WriteBoolean("Historizing", variable.VariableAttributes.Historizing);
+                writer.WriteNumber("AccessLevel", variable.FullAttributes.AccessLevel);
+                writer.WriteBoolean("Historizing", variable.FullAttributes.Historizing);
                 writer.WriteNumber("ValueRank", variable.ValueRank);
-                writer.WriteBoolean("ShouldSubscribeData", variable.ShouldSubscribeData);
+                writer.WriteBoolean("ShouldSubscribeData", variable.FullAttributes.ShouldSubscribe(config));
+                writer.WriteBoolean("ShouldReadHistoryData", variable.FullAttributes.ShouldReadHistory(config));
                 if (variable.ArrayDimensions != null)
                 {
                     writer.WritePropertyName("ArrayDimensions");
                     JsonSerializer.Serialize(writer, variable.ArrayDimensions, options);
-                    writer.WriteNumber("Index", variable.Index);
+                    writer.WriteNumber("Index", (variable as UAVariableMember)?.Index ?? -1);
                 }
                 if (variable.AsEvents)
                 {
@@ -445,7 +515,7 @@ namespace Cognite.OpcUa.Types
         }
 
 
-        public override void Write(Utf8JsonWriter writer, UANode value, JsonSerializerOptions options)
+        public override void Write(Utf8JsonWriter writer, BaseUANode value, JsonSerializerOptions options)
         {
             if (value == null)
             {

@@ -1,4 +1,5 @@
 ﻿using AdysTech.InfluxDB.Client.Net;
+using Cognite.OpcUa.Pushers.Writers;
 using Cognite.Extractor.Configuration;
 using Cognite.Extractor.StateStorage;
 using Cognite.Extractor.Testing;
@@ -15,6 +16,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Test.Utils
 {
@@ -116,15 +118,11 @@ namespace Test.Utils
             if (clear)
             {
                 Client.ClearNodeOverrides();
-                Client.ClearEventFields();
-                Client.Browser.ResetVisitedNodes();
-                Client.DataTypeManager.Reset();
                 Client.RemoveSubscription("EventListener").Wait();
                 Client.RemoveSubscription("DataChangeListener").Wait();
                 Client.RemoveSubscription("AuditListener").Wait();
                 Client.RemoveSubscription(RebrowseTriggerManager.SubscriptionName).Wait();
                 Client.Browser.IgnoreFilters = null;
-                Client.ObjectTypeManager.Reset();
             }
             var ext = new UAExtractor(Config, Provider, pushers, Client, stateStore);
             ext.InitExternal(Source.Token);
@@ -146,7 +144,7 @@ namespace Test.Utils
             {
                 ClearLiteDB(client).Wait();
             }
-            var pusher = new InfluxPusher(Provider.GetRequiredService<ILogger<InfluxPusher>>(), Config.Influx);
+            var pusher = new InfluxPusher(Provider.GetRequiredService<ILogger<InfluxPusher>>(), Config);
             return (pusher, client);
         }
 
@@ -166,12 +164,18 @@ namespace Test.Utils
 
         public (CDFMockHandler, CDFPusher) GetCDFPusher()
         {
-            CommonTestUtils.AddDummyProvider("test", CDFMockHandler.MockMode.None, true, Services);
-            Services.AddCogniteClient("appid", null, true, true, false);
-            var provider = Services.BuildServiceProvider();
+            var newServices = new ServiceCollection();
+            foreach (var service in Services) {
+                
+                newServices.Add(service);
+            }
+            CommonTestUtils.AddDummyProvider("test", CDFMockHandler.MockMode.None, true, newServices);
+            newServices.AddCogniteClient("appid", null, true, true, false);
+            newServices.AddWriters(Config);
+            var provider = newServices.BuildServiceProvider();
             var destination = provider.GetRequiredService<CogniteDestination>();
             var pusher = new CDFPusher(Provider.GetRequiredService<ILogger<CDFPusher>>(),
-                Config.Extraction, Config.Cognite, destination);
+                Config, Config.Cognite, destination, provider);
             var handler = provider.GetRequiredService<CDFMockHandler>();
             return (handler, pusher);
         }

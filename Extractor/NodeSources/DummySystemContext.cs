@@ -1,7 +1,5 @@
 ﻿using Opc.Ua;
-using System;
 using System.Collections.Generic;
-using System.Text;
 
 namespace Cognite.OpcUa.NodeSources
 {
