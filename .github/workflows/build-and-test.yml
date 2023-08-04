@@ -16,12 +16,6 @@ jobs:
           uses: actions/setup-dotnet@v3
           with:
               dotnet-version: 7.0.x
-        - name: Build bridge image
-          run: |
-            image=$(docker build --build-arg VERSION=2.21.0 --build-arg DESCRIPTION='Test description' -f Dockerfile.bridge.build -q .)
-            id=$(docker create $image)
-            docker cp $id:/build/deploy .
-            docker rm -v $id
         - name: Restore dependencies
           run: dotnet restore
         - name: Build
