@@ -1422,7 +1422,7 @@ namespace Test.Unit
             };
 
             (handler, pusher) = tester.GetCDFPusher();
-            var extractor = tester.BuildExtractor(true, null, pusher);
+            using var extractor = tester.BuildExtractor(true, null, pusher);
  
             var update = new UpdateConfig();
             var dt = new UADataType(DataTypeIds.Double);
