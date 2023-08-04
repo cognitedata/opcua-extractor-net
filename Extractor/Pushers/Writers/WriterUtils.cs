@@ -1,3 +1,4 @@
+using System;
 using System.Threading;
 using Cognite.Extractor.Utils;
 using Cognite.OpcUa.Config;

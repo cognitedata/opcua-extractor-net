@@ -39,6 +39,12 @@ namespace Cognite.OpcUa.Pushers.FDM
                         Type = BasePropertyType.Text(),
                         Name = "BrowseName",
                         Nullable = true
+                    } },
+                    { "NodeMeta", new ContainerPropertyDefinition
+                    {
+                        Type = BasePropertyType.Create(PropertyTypeVariant.json),
+                        Name = "NodeMeta",
+                        Nullable = true
                     } }
                 },
                 Indexes = new Dictionary<string, BaseIndex>
