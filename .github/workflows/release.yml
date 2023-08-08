@@ -114,7 +114,7 @@ jobs:
           env:
             CERTIFICATE: ${{ secrets.CODE_SIGNING_CERTIFICATE }}
             CERTIFICATE_PASSWORD: ${{ secrets.CODE_SIGNING_CERTIFICATE_PASSWORD }}
-          uses: cognitedata/code-sign-action/@v1
+          uses: cognitedata/code-sign-action/@v2
           with:
             path-to-binary: .\extractorbuild\OpcuaExtractor.exe
 
@@ -130,7 +130,7 @@ jobs:
           env:
             CERTIFICATE: ${{ secrets.CODE_SIGNING_CERTIFICATE }}
             CERTIFICATE_PASSWORD: ${{ secrets.CODE_SIGNING_CERTIFICATE_PASSWORD }}
-          uses: cognitedata/code-sign-action/@v1
+          uses: cognitedata/code-sign-action/@v2
           with:
             path-to-binary: .\managerbuild\OpcUaServiceManager.exe
 
@@ -145,7 +145,7 @@ jobs:
           env:
             CERTIFICATE: ${{ secrets.CODE_SIGNING_CERTIFICATE }}
             CERTIFICATE_PASSWORD: ${{ secrets.CODE_SIGNING_CERTIFICATE_PASSWORD }}
-          uses: cognitedata/code-sign-action/@v1
+          uses: cognitedata/code-sign-action/@v2
           with:
             path-to-binary: .\OpcUaExtractorSetup\bin\Release\OpcUaExtractorSetup.msi
 
