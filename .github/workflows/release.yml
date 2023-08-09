@@ -92,7 +92,7 @@ jobs:
             retention-days: 1
 
     build-installer:
-        runs-on: windows-2019
+        runs-on: windows-2022
         needs: create-release
 
         steps:
