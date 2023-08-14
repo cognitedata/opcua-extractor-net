@@ -114,7 +114,7 @@ jobs:
           env:
             CERTIFICATE: ${{ secrets.CODE_SIGNING_CERTIFICATE }}
             CERTIFICATE_PASSWORD: ${{ secrets.CODE_SIGNING_CERTIFICATE_PASSWORD }}
-          uses: cognitedata/code-sign-action/@v1
+          uses: cognitedata/code-sign-action/@v2
           with:
             path-to-binary: .\extractorbuild\OpcuaExtractor.exe
 
@@ -130,7 +130,7 @@ jobs:
           env:
             CERTIFICATE: ${{ secrets.CODE_SIGNING_CERTIFICATE }}
             CERTIFICATE_PASSWORD: ${{ secrets.CODE_SIGNING_CERTIFICATE_PASSWORD }}
-          uses: cognitedata/code-sign-action/@v1
+          uses: cognitedata/code-sign-action/@v2
           with:
             path-to-binary: .\managerbuild\OpcUaServiceManager.exe
 
@@ -145,7 +145,7 @@ jobs:
           env:
             CERTIFICATE: ${{ secrets.CODE_SIGNING_CERTIFICATE }}
             CERTIFICATE_PASSWORD: ${{ secrets.CODE_SIGNING_CERTIFICATE_PASSWORD }}
-          uses: cognitedata/code-sign-action/@v1
+          uses: cognitedata/code-sign-action/@v2
           with:
             path-to-binary: .\OpcUaExtractorSetup\bin\Release\OpcUaExtractorSetup.msi
 
@@ -237,7 +237,7 @@ jobs:
 
         - name: Build extractor image
           run: |
-            image=$(docker build --build-arg VERSION='${{ needs.create-release.outputs.version }}' --build-arg DESCRIPTION='${{ steps.image_tags.outputs.desc }}' -f Dockerfile.build . | awk '/Successfully built/ {print $3}')
+            image=$(docker build --build-arg version='${{ needs.create-release.outputs.version }}' --build-arg description='${{ steps.image_tags.outputs.desc }}' -f dockerfile.build -q .)
             id=$(docker create $image)
             docker cp $id:/build/deploy .
             docker rm -v $id
@@ -246,7 +246,7 @@ jobs:
 
         - name: Build bridge image
           run: |
-            image=$(docker build --build-arg VERSION='${{ needs.create-release.outputs.version }}' --build-arg DESCRIPTION='${{ steps.image_tags.outputs.desc }}' -f Dockerfile.bridge.build . | awk '/Successfully built/ {print $3}')
+            image=$(docker build --build-arg VERSION='${{ needs.create-release.outputs.version }}' --build-arg DESCRIPTION='${{ steps.image_tags.outputs.desc }}' -f Dockerfile.bridge.build -q .)
             id=$(docker create $image)
             docker cp $id:/build/deploy .
             docker rm -v $id
