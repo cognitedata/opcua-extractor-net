@@ -51,12 +51,12 @@ namespace Cognite.OpcUa.Pushers.FDM
             this.log = log;
         }
 
-        private InstanceData<BaseNodeData> GetBaseNodeData(BaseUANode node)
+        private InstanceData<BaseNodeData> GetBaseNodeData(BaseUANode node, Dictionary<string, string> knownProperties)
         {
             return new InstanceData<BaseNodeData>
             {
                 Source = new ContainerIdentifier(space, "BaseNode"),
-                Properties = new BaseNodeData(node)
+                Properties = new BaseNodeData(node, knownProperties)
             };
         }
 
@@ -129,9 +129,11 @@ namespace Cognite.OpcUa.Pushers.FDM
 
         private bool CollectProperties(
             BaseUANode node,
+            NodeId rootId,
             Dictionary<string, ChildNode> currentChildren,
             IEnumerable<string> path,
             Dictionary<string, IDMSValue?> properties,
+            Dictionary<string, string> knownPropertyIds,
             FullUANodeType type,
             bool first)
         {
@@ -162,6 +164,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                     }
                     properties[name] = value;
                     collected = true;
+                    knownPropertyIds[name] = node.Id.ToString();
                 }
             }
             else
@@ -190,7 +193,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                     }
                     if (currentChildren.TryGetValue(name, out var nextChild))
                     {
-                        collected |= CollectProperties(child, nextChild.Children, nextPath, properties, type, false);
+                        collected |= CollectProperties(child, rootId, nextChild.Children, nextPath, properties, knownPropertyIds, type, false);
                     }
                 }
             }
@@ -198,6 +201,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             if (collected && !first)
             {
                 MappedAsProperty.Add(node.Id);
+                knownPropertyIds[string.Join('_', nextPath)] = node.Id.ToString();
             }
 
             if (first)
@@ -215,7 +219,6 @@ namespace Cognite.OpcUa.Pushers.FDM
         public IEnumerable<InstanceData> BuildNode(BaseUANode node, FullUANodeType? type)
         {
             var data = new List<InstanceData>();
-            data.Add(GetBaseNodeData(node));
 
             if (node is UAObject obj)
             {
@@ -246,6 +249,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                 data.Add(GetDataTypeData(dtType));
             }
 
+            var knownProperties = new Dictionary<string, string>();
             var currentType = type;
             while (currentType != null)
             {
@@ -256,7 +260,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                 }
 
                 var props = new Dictionary<string, IDMSValue?>();
-                CollectProperties(node, currentType.Children, Enumerable.Empty<string>(), props, currentType, true);
+                CollectProperties(node, node.Id, currentType.Children, Enumerable.Empty<string>(), props, knownProperties, currentType, true);
                 if (props.Any())
                 {
                     data.Add(new InstanceData<Dictionary<string, IDMSValue?>>
@@ -268,6 +272,8 @@ namespace Cognite.OpcUa.Pushers.FDM
 
                 currentType = currentType.Parent;
             }
+
+            data.Add(GetBaseNodeData(node, knownProperties));
             return data;
         }
 
@@ -407,11 +413,17 @@ namespace Cognite.OpcUa.Pushers.FDM
         public string? Description { get; }
         [JsonPropertyName("BrowseName")]
         public string? BrowseName { get; }
-        public BaseNodeData(BaseUANode node)
+        [JsonPropertyName("NodeMeta")]
+        public Dictionary<string, string>? NodeMeta { get; }
+        public BaseNodeData(BaseUANode node, Dictionary<string, string> knownProperties)
         {
             NodeClass = (int)node.NodeClass;
             DisplayName = node.Attributes.DisplayName;
             Description = node.Attributes.Description;
+            if (knownProperties.Any())
+            {
+                NodeMeta = knownProperties;
+            }
             if (node.Attributes.BrowseName != null)
             {
                 BrowseName = $"{node.Attributes.BrowseName.NamespaceIndex}:{node.Attributes.BrowseName.Name}";

@@ -115,12 +115,6 @@ namespace Cognite.OpcUa.Config
         public bool DeleteRelationships { get; set; }
 
         /// <summary>
-        /// Configuration for writing to a custom OPC-UA flexible data model.
-        /// </summary>
-        [Obsolete("Deprecated! Use MetadataTargetsConfig.FdmDestinationConfig instead.")]
-        public FdmDestinationConfig? FlexibleDataModels { get; set; }
-
-        /// <summary>
         /// This is the implementation of the metadata targets 
         /// </summary>
         public MetadataTargetsConfig? MetadataTargets { get; set; }

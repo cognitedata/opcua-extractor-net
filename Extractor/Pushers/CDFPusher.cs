@@ -391,13 +391,14 @@ namespace Cognite.OpcUa.Pushers
                 IEnumerable<UAVariable> variables, IEnumerable<UAReference> references, PushResult result, CancellationToken token)
         {
             if (cdfWriter.FDM == null) return;
-            bool pushResult = true;
+            bool pushResult;
             try
             {
                 pushResult = await cdfWriter.FDM.PushNodes(objects, variables, references, Extractor, token);
             }
-            catch
+            catch (Exception ex)
             {
+                log.LogError(ex, "Failed to push nodes to CDF Data Models: {Message}", ex.Message);
                 pushResult = false;
             }
             result.Variables = pushResult;
@@ -643,7 +644,7 @@ namespace Cognite.OpcUa.Pushers
         /// <returns>Task</returns>
         private async Task PushAssets(IEnumerable<BaseUANode> objects, TypeUpdateConfig update, BrowseReport report, PushResult result, CancellationToken token)
         {
-            if (!objects.Any() && cdfWriter.Assets == null && cdfWriter.Raw == null) return;
+            if (!objects.Any() || cdfWriter.Assets == null && cdfWriter.Raw == null) return;
 
             var assetsMap = MapAssets(objects);
             if (cdfWriter.Assets != null)
@@ -786,7 +787,7 @@ namespace Cognite.OpcUa.Pushers
         /// <returns>Task</returns>
         private async Task PushTimeseries(IEnumerable<UAVariable> variables, TypeUpdateConfig update, BrowseReport report, PushResult result, CancellationToken token)
         {
-            if (!variables.Any() && cdfWriter.Timeseries == null && cdfWriter.Raw == null) return;
+            if (!variables.Any() || cdfWriter.Timeseries == null && cdfWriter.Raw == null) return;
 
             var timeseriesMap = MapTimeseries(variables);
             await PushCleanTimeseries(timeseriesMap, update, report, result, token);
@@ -986,7 +987,7 @@ namespace Cognite.OpcUa.Pushers
         /// <returns>Task</returns>
         private async Task PushReferences(IEnumerable<UAReference> references, BrowseReport report, PushResult result, CancellationToken token)
         {
-            if (!references.Any() && cdfWriter.Relationships == null && cdfWriter.Raw == null) return;
+            if (!references.Any() || cdfWriter.Relationships == null && cdfWriter.Raw == null) return;
 
             var relationships = references
                 .Select(reference => reference.ToRelationship(config.DataSet?.Id, Extractor))
