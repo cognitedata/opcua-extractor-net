@@ -22,7 +22,7 @@
     <PackageReference Include="MQTTnet" Version="3.1.2" />
     <PackageReference Include="CogniteSdk" Version="3.11.2" />
     <PackageReference Include="System.Text.Json" Version="7.0.3" />
-    <PackageReference Include="Google.Protobuf" Version="3.24.0" />
+    <PackageReference Include="Google.Protobuf" Version="3.24.1" />
   </ItemGroup>
   <!--ItemGroup>
     <None Include="$(SolutionDir)config\**" CopyToOutputDirectory="Always" LinkBase="config\" />
