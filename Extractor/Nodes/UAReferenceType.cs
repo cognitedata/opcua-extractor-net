@@ -27,6 +27,7 @@ namespace Cognite.OpcUa.Nodes
     public class ReferenceTypeAttributes : BaseNodeAttributes
     {
         public string? InverseName { get; set; }
+        public bool IsAbstract { get; set; }
         public ReferenceTypeAttributes() : base(NodeClass.ReferenceType)
         {
         }
@@ -34,6 +35,7 @@ namespace Cognite.OpcUa.Nodes
         public override IEnumerable<uint> GetAttributeSet(FullConfig config)
         {
             yield return Attributes.InverseName;
+            yield return Attributes.IsAbstract;
             foreach (var attr in base.GetAttributeSet(config)) yield return attr;
         }
 
@@ -44,6 +46,9 @@ namespace Cognite.OpcUa.Nodes
                 case Attributes.InverseName:
                     InverseName = value.GetValue<LocalizedText?>(null)?.Text;
                     break;
+                case Attributes.IsAbstract:
+                    IsAbstract = value.GetValue(false);
+                    break;
                 default:
                     base.LoadAttribute(value, attributeId, typeManager);
                     break;
@@ -53,6 +58,7 @@ namespace Cognite.OpcUa.Nodes
         public void LoadFromNodeState(ReferenceTypeState state)
         {
             InverseName = state.InverseName?.Text;
+            IsAbstract = state.IsAbstract;
             LoadFromBaseNodeState(state);
         }
     }

@@ -541,10 +541,13 @@ namespace Cognite.OpcUa.Pushers.FDM
         [JsonPropertyName("InverseName")]
         [JsonIgnore(Condition = JsonIgnoreCondition.Never)]
         public string? InverseName { get; }
+        [JsonPropertyName("IsAbstract")]
+        public bool IsAbstract { get; }
 
         public ReferenceTypeData(UAReferenceType node)
         {
             InverseName = node.FullAttributes.InverseName;
+            IsAbstract = node.FullAttributes.IsAbstract;
         }
     }
 
