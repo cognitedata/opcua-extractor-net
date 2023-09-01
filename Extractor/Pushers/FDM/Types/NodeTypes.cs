@@ -57,7 +57,9 @@ namespace Cognite.OpcUa.Pushers.FDM.Types
                         IsMandatory = pair.mandatory,
                         ReferenceType = pair.reference.Type.Id.ToString(),
                         DisplayName = pair.node.Name ?? "",
-                        ExternalId = FDMUtils.SanitizeExternalId(pair.node.Name ?? "")
+                        ExternalId = FDMUtils.SanitizeExternalId(pair.node.Name ?? ""),
+                        IsTimeseries = !pair.node.IsRawProperty && pair.node.NodeClass == NodeClass.Variable,
+                        Description = pair.node.Attributes.Description
                     };
 
                     if (pair.node is UAVariable nVar)
