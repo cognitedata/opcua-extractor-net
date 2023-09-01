@@ -18,6 +18,8 @@ namespace Cognite.OpcUa.Pushers.FDM
         public string? ReferenceType { get; set; }
         public string? DisplayName { get; set; }
         public string? ExternalId { get; set; }
+        public string? Description { get; set; }
+        public bool IsTimeseries { get; set; }
     }
 
 

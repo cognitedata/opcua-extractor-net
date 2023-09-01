@@ -279,6 +279,13 @@ namespace Cognite.OpcUa.Pushers.FDM
                 UsedFor = UsedFor.node,
                 Properties = new Dictionary<string, ContainerPropertyDefinition>
                 {
+                    { "IsAbstract", new ContainerPropertyDefinition
+                    {
+                        Type = BasePropertyType.Create(PropertyTypeVariant.boolean),
+                        Nullable = false,
+                        Name = "IsAbstract",
+                        DefaultValue = new RawPropertyValue<bool>(false)
+                    } },
                     { "InverseName", new ContainerPropertyDefinition
                     {
                         Type = BasePropertyType.Text(),
