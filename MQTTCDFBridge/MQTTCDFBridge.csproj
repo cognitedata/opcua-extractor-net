@@ -11,6 +11,6 @@
     <PackageReference Include="Cognite.ExtractorUtils" Version="1.13.1" />
     <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
     <PackageReference Include="MQTTnet" Version="3.1.2" />
-    <PackageReference Include="Google.Protobuf" Version="3.24.2" />
+    <PackageReference Include="Google.Protobuf" Version="3.24.3" />
   </ItemGroup>
 </Project>
