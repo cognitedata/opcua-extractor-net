@@ -262,7 +262,7 @@ jobs:
         
 
         - name: "Log in to the Dockerhub"
-          uses: docker/login-action@v2
+          uses: docker/login-action@v3
           with:
             username: ${{ secrets.DOCKERHUB_USER }}
             password: ${{ secrets.DOCKERHUB_ACCESS_TOKEN }}
