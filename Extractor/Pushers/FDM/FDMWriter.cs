@@ -102,7 +102,7 @@ namespace Cognite.OpcUa.Pushers.FDM
 
             var serverMetaContainer = BaseDataModelDefinitions.ServerMeta(instSpace);
             await destination.CogniteClient.Beta.DataModels.UpsertContainers(new[] { serverMetaContainer }, token);
-            await destination.CogniteClient.Beta.DataModels.UpsertViews(new[] { BaseDataModelDefinitions.ViewFromContainer(serverMetaContainer, "1", null) }, token);
+            await destination.CogniteClient.Beta.DataModels.UpsertViews(new[] { serverMetaContainer.ToView("1") }, token);
         }
 
         private async Task Initialize(FDMTypeBatch types, CancellationToken token)

@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using Cognite.Extensions.DataModels;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Pushers.FDM.Types;
 using CogniteSdk.Beta.DataModels;
@@ -30,7 +31,13 @@ namespace Cognite.OpcUa.Pushers.FDM
         public void Add(ContainerCreate container, string? baseView = null)
         {
             Containers.Add(container.Name, container);
-            Views.Add(container.Name, BaseDataModelDefinitions.ViewFromContainer(container, viewVersion, baseView));
+            Views.Add(container.Name,
+                container.ToView(viewVersion,
+                    baseView == null
+                    ? new ViewIdentifier[0] 
+                    : new[] { new ViewIdentifier(container.Space, baseView, viewVersion) }
+                )
+            );
         }
 
         public void Add(FullUANodeType type, DMSValueConverter converter, FdmDestinationConfig config)
@@ -69,7 +76,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                     Properties = GetContainerProperties(type, converter, config)
                 };
                 Containers.Add(ct.Name!, ct);
-                view = BaseDataModelDefinitions.ViewFromContainer(ct, viewVersion, type.Parent.ExternalId);
+                view = ct.ToView(viewVersion, new ViewIdentifier(space, type.Parent.ExternalId, viewVersion));
             }
             else
             {
