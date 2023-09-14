@@ -31,6 +31,8 @@ using System;
 using Cognite.OpcUa.Nodes;
 using CogniteSdk;
 using System.Text.Json.Serialization;
+using Cognite.Extensions.DataModels;
+using System.Text.Json.Nodes;
 
 namespace Cognite.OpcUa.Pushers.FDM
 {
@@ -76,7 +78,7 @@ namespace Cognite.OpcUa.Pushers.FDM
 
             int taskNum = 0;
             await generators.RunThrottled(
-                5,
+                4,
                 (_) =>
                 {
                     if (chunks.Count > 1)
@@ -84,6 +86,23 @@ namespace Cognite.OpcUa.Pushers.FDM
                             nameof(IngestInstances), ++taskNum, chunks.Count);
                 },
                 token);
+        }
+
+        private async Task InitializeSpaceAndServer(CancellationToken token)
+        {
+            if (config.DryRun) return;
+
+            await destination.CogniteClient.Beta.DataModels.UpsertSpaces(new[]
+            {
+                new SpaceCreate
+                {
+                    Space = instSpace
+                }
+            }, token);
+
+            var serverMetaContainer = BaseDataModelDefinitions.ServerMeta(instSpace);
+            await destination.CogniteClient.Beta.DataModels.UpsertContainers(new[] { serverMetaContainer }, token);
+            await destination.CogniteClient.Beta.DataModels.UpsertViews(new[] { BaseDataModelDefinitions.ViewFromContainer(serverMetaContainer, "1", null) }, token);
         }
 
         private async Task Initialize(FDMTypeBatch types, CancellationToken token)
@@ -127,15 +146,6 @@ namespace Cognite.OpcUa.Pushers.FDM
                 }
                 catch { }
             }
-            
-
-            await destination.CogniteClient.Beta.DataModels.UpsertSpaces(new[]
-            {
-                new SpaceCreate
-                {
-                    Space = instSpace
-                }
-            }, token);
 
             foreach (var chunk in types.Containers.Values.ChunkBy(100))
             {
@@ -158,7 +168,9 @@ namespace Cognite.OpcUa.Pushers.FDM
                 ExternalId = "OPC_UA",
                 Space = instSpace,
                 Version = "1",
-                Views = viewsToInsert.Select(v => new ViewIdentifier(instSpace, v.ExternalId, v.Version))
+                Views = viewsToInsert
+                    .Select(v => new ViewIdentifier(instSpace, v.ExternalId, v.Version))
+                    .Append(new ViewIdentifier(instSpace, "ServerMeta", "1"))
             };
             await destination.CogniteClient.Beta.DataModels.UpsertDataModels(new[] { model }, token);
         }
@@ -182,8 +194,11 @@ namespace Cognite.OpcUa.Pushers.FDM
             IUAClientAccess client,
             CancellationToken token)
         {
+            await InitializeSpaceAndServer(token);
+            var context = await SyncServerMeta(client.NamespaceTable!, token);
+
             var converter = new DMSValueConverter(client.StringConverter, instSpace);
-            var builder = new TypeHierarchyBuilder(log, converter, config);
+            var builder = new TypeHierarchyBuilder(log, converter, config, context);
             // First, collect all nodes, including properties.
             var nodes = objects
                 .SelectMany(obj => obj.GetAllProperties())
@@ -197,6 +212,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                 .DistinctBy(node => node.Id)
                 .Where(node => node.Id != null && !node.Id.IsNullNodeId)
                 .ToList();
+
 
             var nodeHierarchy = new NodeHierarchy(references, nodes);
 
@@ -249,7 +265,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             // Initialize if needed
             await Initialize(types, token);
 
-            var instanceBuilder = new InstanceBuilder(nodeHierarchy, types, converter, client, instSpace, log);
+            var instanceBuilder = new InstanceBuilder(nodeHierarchy, types, converter, context, client, instSpace, log);
             log.LogInformation("Begin building instances");
             instanceBuilder.Build();
             log.LogInformation("Finish building instances");
@@ -260,23 +276,6 @@ namespace Cognite.OpcUa.Pushers.FDM
                 return true;
             }
 
-            var serverMeta = new NodeWrite
-            {
-                ExternalId = $"{config.Extraction.IdPrefix}Server",
-                Sources = new[]
-                {
-                    new InstanceData<ServerMeta>
-                    {
-                        Source = new ContainerIdentifier(instSpace, "ServerMeta"),
-                        Properties = new ServerMeta
-                        {
-                            Namespaces = client.NamespaceTable!.ToArray()
-                        }
-                    }
-                },
-                Space = instSpace
-            };
-
             var typeMeta = types.Types.Values.Select(v => (BaseInstanceWrite)new NodeWrite
             {
                 ExternalId = $"{v.ExternalId}_TypeMetadata",
@@ -286,7 +285,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                     new InstanceData<TypeMetadata>
                     {
                         Source = new ContainerIdentifier(instSpace, "TypeMeta"),
-                        Properties = v.GetTypeMetadata()
+                        Properties = v.GetTypeMetadata(context)
                     }
                 }
             });
@@ -299,8 +298,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             await IngestInstances(instanceBuilder.ObjectTypes
                 .Concat(instanceBuilder.ReferenceTypes)
                 .Concat(instanceBuilder.DataTypes)
-                .Concat(typeMeta)
-                .Append(serverMeta), 1000, token);
+                .Concat(typeMeta), 1000, token);
 
             // Then ingest variable types
             log.LogInformation("Ingesting {Count} variable types", instanceBuilder.VariableTypes.Count);
@@ -315,6 +313,94 @@ namespace Cognite.OpcUa.Pushers.FDM
             await IngestInstances(instanceBuilder.References, 1000, token);
 
             return true;
+        }
+
+        private async Task<NodeIdContext> SyncServerMeta(NamespaceTable namespaces, CancellationToken token)
+        {
+            var nss = namespaces.ToArray();
+
+            var namespacesIfNew = new List<string>
+            {
+                Namespaces.OpcUa,
+                "RESERVED"
+            };
+            foreach (var ns in nss)
+            {
+                if (ns == Namespaces.OpcUa) continue;
+                namespacesIfNew.Add(ns);
+            }
+
+            if (config.DryRun)
+            {
+                return new NodeIdContext(namespacesIfNew, nss);
+            }
+
+            var externalId = "Server";
+
+            List<string>? finalNamespaces = null;
+
+            await destination.CogniteClient.Beta.DataModels.UpsertAtomic<Dictionary<string, Dictionary<string, ServerMeta>>>(
+                new[] { externalId },
+                instSpace,
+                InstanceType.node,
+                new[]
+                {
+                    new InstanceSource
+                    {
+                        Source = new ViewIdentifier(instSpace, "ServerMeta", "1")
+                    }
+                }, old =>
+                {
+                    ServerMeta meta;
+                    if (!old.Any())
+                    {
+                        finalNamespaces = namespacesIfNew;
+                    }
+                    else
+                    {
+                        var oldNamespaces = old.First().Properties
+                            .First()
+                            .Value
+                            .First()
+                            .Value
+                            .Namespaces;
+
+                        var newNamespaces = oldNamespaces.ToList();
+                        foreach (var ns in nss)
+                        {
+                            if (ns == Namespaces.OpcUa) continue;
+                            if (newNamespaces.Contains(ns)) continue;
+
+                            newNamespaces.Add(ns.ToString());
+                        }
+                        finalNamespaces = newNamespaces;
+                    }
+                    meta = new ServerMeta
+                    {
+                        Namespaces = finalNamespaces
+                    };
+                    return new[]
+                    {
+                        new NodeWrite
+                        {
+                            ExternalId = externalId,
+                            Space = instSpace,
+                            Sources = new[]
+                            {
+                                new InstanceData<ServerMeta>
+                                {
+                                    Source = new ContainerIdentifier(instSpace, "ServerMeta"),
+                                    Properties = meta,
+                                }
+                            }
+                        }
+                    };
+                },
+                token);
+
+            if (finalNamespaces == null) throw new InvalidOperationException("Namespaces were not successfully assigned");
+
+            return new NodeIdContext(finalNamespaces, nss);
         }
     }
 

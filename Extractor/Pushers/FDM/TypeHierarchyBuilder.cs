@@ -13,11 +13,13 @@ namespace Cognite.OpcUa.Pushers.FDM
         private readonly string viewVersion;
         private readonly string space;
         private readonly ILogger log;
-        public FDMTypeBatch(string viewVersion, string space, ILogger log)
+        private readonly NodeIdContext context;
+        public FDMTypeBatch(string viewVersion, string space, ILogger log, NodeIdContext context)
         {
             this.viewVersion = viewVersion;
             this.space = space;
             this.log = log;
+            this.context = context;
         }
 
         public Dictionary<string, ContainerCreate> Containers { get; } = new();
@@ -87,7 +89,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                         Filter = new ContainsAnyFilter
                         {
                             Property = new[] { space, "BaseType", "TypeHierarchy" },
-                            Values = new[] { new RawPropertyValue<string>(type.Node.Id.ToString()) }
+                            Values = new[] { new RawPropertyValue<string>(context.NodeIdToString(type.Node.Id)) }
                         }
                     }
                 };
@@ -105,7 +107,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                         Name = rf.BrowseName.Name,
                         Direction = ConnectionDirection.outwards,
                         Source = GetViewIdentifier(rf.ExternalId, type.ExternalId, rf, config),
-                        Type = new DirectRelationIdentifier(space, rf.Reference.Type.Id.ToString())
+                        Type = new DirectRelationIdentifier(space, context.NodeIdToString(rf.Reference.Type.Id))
                     });
                     ViewIsReferenced[rf.Type!.ExternalId] = true;
                 }
@@ -164,7 +166,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                     Type = typ,
                     Nullable = kvp.Value.ModellingRule != ModellingRule.Mandatory || (typ is DirectRelationPropertyType) || config.IgnoreMandatory,
                     DefaultValue = (typ.Type == PropertyTypeVariant.direct || kvp.Value.Node.IsArray && typ.Type != PropertyTypeVariant.json)
-                        ? null : converter.ConvertVariant(typ, kvp.Value.Node.Value)
+                        ? null : converter.ConvertVariant(typ, kvp.Value.Node.Value, context)
                 };
             }
             return res;
@@ -219,7 +221,8 @@ namespace Cognite.OpcUa.Pushers.FDM
         private readonly DMSValueConverter converter;
         private readonly string space;
         private readonly Dictionary<NodeId, FullUANodeType> typeMap = new();
-        public TypeHierarchyBuilder(ILogger log, DMSValueConverter converter, FullConfig config)
+        private readonly NodeIdContext context;
+        public TypeHierarchyBuilder(ILogger log, DMSValueConverter converter, FullConfig config, NodeIdContext context)
         {
             this.log = log;
             this.config = config;
@@ -227,11 +230,12 @@ namespace Cognite.OpcUa.Pushers.FDM
             space = config.Cognite!.MetadataTargets!.DataModels!.Space!;
             fdmConfig = config.Cognite!.MetadataTargets!.DataModels!;
             this.converter = converter;
+            this.context = context;
         }
 
         public FDMTypeBatch ConstructTypes(NodeHierarchy nodes)
         {
-            var batch = new FDMTypeBatch("1", space, log);
+            var batch = new FDMTypeBatch("1", space, log, context);
             // Add core containers and views
             batch.Add(BaseDataModelDefinitions.BaseNode(space));
             batch.Add(BaseDataModelDefinitions.BaseType(space), "BaseNode");
@@ -241,7 +245,6 @@ namespace Cognite.OpcUa.Pushers.FDM
             batch.Add(BaseDataModelDefinitions.VariableType(space), "BaseType");
             batch.Add(BaseDataModelDefinitions.ReferenceType(space), "BaseType");
             batch.Add(BaseDataModelDefinitions.DataType(space), "BaseType");
-            batch.Add(BaseDataModelDefinitions.ServerMeta(space));
             batch.Add(BaseDataModelDefinitions.TypeMeta(space));
 
             nodeTypes.MapNodeTypes(nodes);
