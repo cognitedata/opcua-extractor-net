@@ -35,10 +35,12 @@ namespace Cognite.OpcUa.Pushers.FDM
         private readonly DMSValueConverter converter;
         private readonly IUAClientAccess client;
         private readonly ILogger log;
+        private readonly NodeIdContext context;
         public InstanceBuilder(
             NodeHierarchy nodes,
             FDMTypeBatch types,
             DMSValueConverter converter,
+            NodeIdContext context,
             IUAClientAccess client,
             string space,
             ILogger log)
@@ -49,6 +51,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             this.converter = converter;
             this.client = client;
             this.log = log;
+            this.context = context;
         }
 
         private InstanceData<BaseNodeData> GetBaseNodeData(BaseUANode node, Dictionary<string, string> knownProperties)
@@ -67,7 +70,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             return new InstanceData<VariableData>
             {
                 Source = new ContainerIdentifier(space, "BaseVariableType"),
-                Properties = new VariableData(node, client, converter, space)
+                Properties = new VariableData(node, client, converter, space, context)
             };
         }
 
@@ -76,7 +79,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             return new InstanceData<ObjectData>
             {
                 Source = new ContainerIdentifier(space, "BaseObjectType"),
-                Properties = new ObjectData(node, space)
+                Properties = new ObjectData(node, space, context)
             };
         }
 
@@ -85,7 +88,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             return new InstanceData<TypeData>
             {
                 Source = new ContainerIdentifier(space, "BaseType"),
-                Properties = new TypeData(type)
+                Properties = new TypeData(type, context)
             };
         }
 
@@ -105,7 +108,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             return new InstanceData<VariableTypeData>
             {
                 Source = new ContainerIdentifier(space, "VariableType"),
-                Properties = new VariableTypeData(node, converter, space)
+                Properties = new VariableTypeData(node, converter, space, context)
             };
         }
 
@@ -129,7 +132,6 @@ namespace Cognite.OpcUa.Pushers.FDM
 
         private bool CollectProperties(
             BaseUANode node,
-            NodeId rootId,
             Dictionary<string, ChildNode> currentChildren,
             IEnumerable<string> path,
             Dictionary<string, IDMSValue?> properties,
@@ -149,7 +151,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                     IDMSValue? value;
                     if (variable.IsProperty)
                     {
-                        value = converter.ConvertVariant(property.DMSType, variable.Value);
+                        value = converter.ConvertVariant(property.DMSType, variable.Value, context);
                     }
                     else
                     {
@@ -164,7 +166,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                     }
                     properties[name] = value;
                     collected = true;
-                    knownPropertyIds[name] = node.Id.ToString();
+                    knownPropertyIds[name] = context.NodeIdToString(node.Id);
                 }
             }
             else
@@ -193,7 +195,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                     }
                     if (currentChildren.TryGetValue(name, out var nextChild))
                     {
-                        collected |= CollectProperties(child, rootId, nextChild.Children, nextPath, properties, knownPropertyIds, type, false);
+                        collected |= CollectProperties(child, nextChild.Children, nextPath, properties, knownPropertyIds, type, false);
                     }
                 }
             }
@@ -201,7 +203,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             if (collected && !first)
             {
                 MappedAsProperty.Add(node.Id);
-                knownPropertyIds[string.Join('_', nextPath)] = node.Id.ToString();
+                knownPropertyIds[string.Join('_', nextPath)] = context.NodeIdToString(node.Id);
             }
 
             if (first)
@@ -260,7 +262,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                 }
 
                 var props = new Dictionary<string, IDMSValue?>();
-                CollectProperties(node, node.Id, currentType.Children, Enumerable.Empty<string>(), props, knownProperties, currentType, true);
+                CollectProperties(node, currentType.Children, Enumerable.Empty<string>(), props, knownProperties, currentType, true);
                 if (props.Any())
                 {
                     data.Add(new InstanceData<Dictionary<string, IDMSValue?>>
@@ -281,7 +283,7 @@ namespace Cognite.OpcUa.Pushers.FDM
         {
             var instance = new NodeWrite
             {
-                ExternalId = node.Id.ToString(),
+                ExternalId = context.NodeIdToString(node.Id),
                 Sources = data,
                 Space = space,
             };
@@ -340,11 +342,11 @@ namespace Cognite.OpcUa.Pushers.FDM
 
                 var edge = new EdgeWrite
                 {
-                    StartNode = new DirectRelationIdentifier(space, rf.Source.Id.ToString()),
-                    EndNode = new DirectRelationIdentifier(space, rf.Target.Id.ToString()),
-                    ExternalId = $"{rf.Source.Id}{rf.Type.GetName(false)}{rf.Target.Id}",
+                    StartNode = new DirectRelationIdentifier(space, context.NodeIdToString(rf.Source.Id)),
+                    EndNode = new DirectRelationIdentifier(space, context.NodeIdToString(rf.Target.Id)),
+                    ExternalId = $"{context.NodeIdToString(rf.Source.Id)}{rf.Type.GetName(false)}{context.NodeIdToString(rf.Target.Id)}",
                     Space = space,
-                    Type = new DirectRelationIdentifier(space, rf.Type.Id.ToString())
+                    Type = new DirectRelationIdentifier(space, context.NodeIdToString(rf.Type.Id))
                 };
                 References.Add(edge);
             }
@@ -448,7 +450,7 @@ namespace Cognite.OpcUa.Pushers.FDM
         [JsonPropertyName("TypeDefinition")]
         public DirectRelationIdentifier? TypeDefinition { get; }
 
-        public VariableData(UAVariable variable, IUAClientAccess client, DMSValueConverter converter, string space)
+        public VariableData(UAVariable variable, IUAClientAccess client, DMSValueConverter converter, string space, NodeIdContext context)
         {
             if (variable.IsProperty)
             {
@@ -459,12 +461,12 @@ namespace Cognite.OpcUa.Pushers.FDM
             {
                 ValueTimeseries = client.GetUniqueId(variable.Id);
             }
-            if (!variable.FullAttributes.DataType.Id.IsNullNodeId) DataType = new DirectRelationIdentifier(space, variable.FullAttributes.DataType.Id.ToString());
+            if (!variable.FullAttributes.DataType.Id.IsNullNodeId) DataType = new DirectRelationIdentifier(space, context.NodeIdToString(variable.FullAttributes.DataType.Id));
             ArrayDimensions = variable.ArrayDimensions;
             ValueRank = variable.ValueRank;
             if (variable.TypeDefinition != null && !variable.TypeDefinition.IsNullNodeId)
             {
-                TypeDefinition = new DirectRelationIdentifier(space, variable.TypeDefinition.ToString());
+                TypeDefinition = new DirectRelationIdentifier(space, context.NodeIdToString(variable.TypeDefinition));
             }
         }
     }
@@ -475,12 +477,12 @@ namespace Cognite.OpcUa.Pushers.FDM
         public int EventNotifier { get; }
         [JsonPropertyName("TypeDefinition")]
         public DirectRelationIdentifier? TypeDefinition { get; }
-        public ObjectData(UAObject node, string space)
+        public ObjectData(UAObject node, string space, NodeIdContext context)
         {
             EventNotifier = node.FullAttributes.EventNotifier;
             if (node.TypeDefinition != null && !node.TypeDefinition.IsNullNodeId)
             {
-                TypeDefinition = new DirectRelationIdentifier(space, node.TypeDefinition.ToString());
+                TypeDefinition = new DirectRelationIdentifier(space, context.NodeIdToString(node.TypeDefinition));
             }
         }
     }
@@ -489,13 +491,13 @@ namespace Cognite.OpcUa.Pushers.FDM
     {
         [JsonPropertyName("TypeHierarchy")]
         public IEnumerable<string> TypeHierarchy { get; }
-        public TypeData(BaseUAType node)
+        public TypeData(BaseUAType node, NodeIdContext context)
         {
             var current = node;
             var items = new List<string>();
             while (current != null && !current.Id.IsNullNodeId)
             {
-                items.Add(current.Id.ToString());
+                items.Add(context.NodeIdToString(current.Id));
                 current = current.Parent as BaseUAType;
             }
             TypeHierarchy = items;
@@ -525,10 +527,10 @@ namespace Cognite.OpcUa.Pushers.FDM
         [JsonPropertyName("Value")]
         public JsonElement Value { get; }
 
-        public VariableTypeData(UAVariableType variable, DMSValueConverter converter, string space)
+        public VariableTypeData(UAVariableType variable, DMSValueConverter converter, string space, NodeIdContext context)
         {
             IsAbstract = variable.FullAttributes.IsAbstract;
-            if (!variable.FullAttributes.DataType.Id.IsNullNodeId) DataType = new DirectRelationIdentifier(space, variable.FullAttributes.DataType.Id.ToString());
+            if (!variable.FullAttributes.DataType.Id.IsNullNodeId) DataType = new DirectRelationIdentifier(space, context.NodeIdToString(variable.FullAttributes.DataType.Id));
             ArrayDimensions = variable.FullAttributes.ArrayDimensions;
             ValueRank = variable.FullAttributes.ValueRank;
             var json = converter.Converter.ConvertToString(variable.FullAttributes.Value, null, null, StringConverterMode.ReversibleJson);

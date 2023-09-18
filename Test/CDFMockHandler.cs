@@ -245,6 +245,12 @@ namespace Test
                         case "/models/instances":
                             res = HandleCreateInstances(content);
                             break;
+                        case "/models/instances/list":
+                            res = new HttpResponseMessage(HttpStatusCode.OK)
+                            {
+                                Content = new StringContent("{\"items\":[]}")
+                            };
+                            break;
                         default:
                             log.LogWarning("Unknown path: {DummyFactoryUnknownPath}", reqPath);
                             res = new HttpResponseMessage(HttpStatusCode.InternalServerError);
