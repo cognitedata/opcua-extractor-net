@@ -17,6 +17,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Nodes;
+using Cognite.OpcUa.Pushers.FDM;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using System;
@@ -79,7 +80,8 @@ namespace Cognite.OpcUa.Types
             object? value,
             IDictionary<long, string>? enumValues = null,
             TypeInfo? typeInfo = null,
-            StringConverterMode mode = StringConverterMode.Simple)
+            StringConverterMode mode = StringConverterMode.Simple,
+            NodeIdContext? context = null)
         {
             if (mode == StringConverterMode.ReversibleJson && uaClient != null && value is Variant variant)
             {
@@ -159,9 +161,29 @@ namespace Cognite.OpcUa.Types
             }
             string returnStr;
 
-            if (value is NodeId nodeId) returnStr = uaClient?.GetUniqueId(nodeId) ?? nodeId.ToString();
+            if (value is NodeId nodeId)
+            {
+                if (context != null)
+                {
+                    returnStr = context.NodeIdToString(nodeId);
+                }
+                else
+                {
+                    returnStr = uaClient?.GetUniqueId(nodeId) ?? nodeId.ToString();
+                }
+            }
             else if (value is DataValue dv) return ConvertToString(dv.WrappedValue, enumValues, null, mode);
-            else if (value is ExpandedNodeId expandedNodeId) returnStr = uaClient?.GetUniqueId(expandedNodeId) ?? expandedNodeId.ToString();
+            else if (value is ExpandedNodeId expandedNodeId)
+            {
+                if (context != null && uaClient != null)
+                {
+                    returnStr = context.NodeIdToString(uaClient.ToNodeId(expandedNodeId));
+                }
+                else
+                {
+                    returnStr = uaClient?.GetUniqueId(expandedNodeId) ?? expandedNodeId.ToString();
+                }
+            }
             else if (value is LocalizedText localizedText) returnStr = localizedText.Text;
             else if (value is QualifiedName qualifiedName) returnStr = qualifiedName.Name;
             else if (value is Opc.Ua.Range range) returnStr = $"({range.Low}, {range.High})";
