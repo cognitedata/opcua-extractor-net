@@ -29,7 +29,7 @@ namespace Cognite.OpcUa.Pushers.FDM.Types
                 && (Parent == null || Parent.IsSimple());
         }
 
-        public TypeMetadata GetTypeMetadata()
+        public TypeMetadata GetTypeMetadata(NodeIdContext context)
         {
             var properties = new Dictionary<string, IEnumerable<PropertyNode>>();
             foreach (var kvp in Properties)
@@ -52,10 +52,10 @@ namespace Cognite.OpcUa.Pushers.FDM.Types
                     {
                         TypeDefinition = pair.node.TypeDefinition?.ToString(),
                         BrowseName = $"{pair.node.Attributes.BrowseName?.NamespaceIndex ?? 0}:{pair.node.Attributes.BrowseName?.Name ?? pair.node.Name ?? ""}",
-                        NodeId = pair.node.Id.ToString(),
+                        NodeId = context.NodeIdToString(pair.node.Id),
                         NodeClass = (int)pair.node.NodeClass,
                         IsMandatory = pair.mandatory,
-                        ReferenceType = pair.reference.Type.Id.ToString(),
+                        ReferenceType = context.NodeIdToString(pair.reference.Type.Id),
                         DisplayName = pair.node.Name ?? "",
                         ExternalId = FDMUtils.SanitizeExternalId(pair.node.Name ?? ""),
                         IsTimeseries = !pair.node.IsRawProperty && pair.node.NodeClass == NodeClass.Variable,
@@ -65,7 +65,7 @@ namespace Cognite.OpcUa.Pushers.FDM.Types
                     if (pair.node is UAVariable nVar)
                     {
                         prop.ValueRank = nVar.ValueRank;
-                        prop.DataType = nVar.FullAttributes.DataType.Id.ToString();
+                        prop.DataType = context.NodeIdToString(nVar.FullAttributes.DataType.Id);
                         prop.ArrayDimensions = nVar.ArrayDimensions;
                     }
                     return prop;
@@ -75,7 +75,7 @@ namespace Cognite.OpcUa.Pushers.FDM.Types
             return new TypeMetadata
             {
                 IsSimple = IsSimple(),
-                NodeId = NodeId.ToString(),
+                NodeId = context.NodeIdToString(NodeId),
                 Parent = Parent?.ExternalId,
                 Properties = properties
             };
