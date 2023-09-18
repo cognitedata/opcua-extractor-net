@@ -20,7 +20,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             this.space = space;
         }
 
-        public IDMSValue? ConvertVariant(BasePropertyType? type, Variant? value)
+        public IDMSValue? ConvertVariant(BasePropertyType? type, Variant? value, NodeIdContext context)
         {
             if (value?.Value is null) return null;
 
@@ -29,15 +29,15 @@ namespace Cognite.OpcUa.Pushers.FDM
             
             if (isArray)
             {
-                return ConvertArrayVariant(variant, value.Value);
+                return ConvertArrayVariant(variant, value.Value, context);
             }
             else
             {
-                return ConvertScalarVariant(variant, value.Value);
+                return ConvertScalarVariant(variant, value.Value, context);
             }
         }
 
-        private IDMSValue? ConvertScalarVariant(PropertyTypeVariant variant, Variant value)
+        private IDMSValue? ConvertScalarVariant(PropertyTypeVariant variant, Variant value, NodeIdContext context)
         {
             switch (variant)
             {
@@ -53,16 +53,15 @@ namespace Cognite.OpcUa.Pushers.FDM
                 case PropertyTypeVariant.date:
                     return new RawPropertyValue<DateTime>(Convert.ToDateTime(value.Value));
                 case PropertyTypeVariant.text:
-                    return new RawPropertyValue<string>(converter.ConvertToString(value.Value, null, null, StringConverterMode.Simple));
+                    return new RawPropertyValue<string>(converter.ConvertToString(value.Value, null, null, StringConverterMode.Simple, context));
                 case PropertyTypeVariant.direct:
                     if (value.Value is NodeId id && !id.IsNullNodeId)
                     {
-                        return new RawPropertyValue<DirectRelationIdentifier>(new DirectRelationIdentifier(space, id.ToString()));
+                        return new RawPropertyValue<DirectRelationIdentifier>(new DirectRelationIdentifier(space, context.NodeIdToString(id)));
                     }
                     return null;
                 case PropertyTypeVariant.json:
                     var val = converter.ConvertToString(value, null, null, StringConverterMode.ReversibleJson);
-                    Console.WriteLine(val + ", " + value.TypeInfo);
                     var json = JsonDocument.Parse(val);
                     return new RawPropertyValue<JsonElement>(json.RootElement);
                 case PropertyTypeVariant.boolean:
@@ -71,9 +70,9 @@ namespace Cognite.OpcUa.Pushers.FDM
             return null;
         }
 
-        private IDMSValue? ConvertArrayVariant(PropertyTypeVariant variant, Variant value)
+        private IDMSValue? ConvertArrayVariant(PropertyTypeVariant variant, Variant value, NodeIdContext context)
         {
-            if (value.Value is not IEnumerable enm) return ConvertArrayVariant(variant, new Variant(new[] { value.Value }));
+            if (value.Value is not IEnumerable enm) return ConvertArrayVariant(variant, new Variant(new[] { value.Value }), context);
 
             switch (variant)
             {
@@ -90,7 +89,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                     return new RawPropertyValue<DateTime[]>(enm.Cast<object>().Select(v => Convert.ToDateTime(v)).ToArray());
                 case PropertyTypeVariant.text:
                     return new RawPropertyValue<string[]>(enm.Cast<object>()
-                        .Select(v => converter.ConvertToString(value.Value, null, null, StringConverterMode.Simple))
+                        .Select(v => converter.ConvertToString(value.Value, null, null, StringConverterMode.Simple, context))
                         .ToArray());
                 case PropertyTypeVariant.boolean:
                     return new RawPropertyValue<bool>(Convert.ToBoolean(value.Value));

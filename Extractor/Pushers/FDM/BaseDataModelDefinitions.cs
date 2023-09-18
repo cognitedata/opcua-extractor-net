@@ -58,37 +58,6 @@ namespace Cognite.OpcUa.Pushers.FDM
             };
         }
 
-        public static ViewCreate ViewFromContainer(ContainerCreate container, string version, string? baseView)
-        {
-            var properties = new Dictionary<string, ICreateViewProperty>();
-            foreach (var kvp in container.Properties)
-            {
-                properties[kvp.Key] = new ViewPropertyCreate
-                {
-                    Container = new ContainerIdentifier(container.Space, container.ExternalId),
-                    Description = kvp.Value.Description,
-                    Name = kvp.Value.Name,
-                    ContainerPropertyIdentifier = kvp.Key,
-                    Source = kvp.Value.Type is DirectRelationPropertyType dt ?
-                        new ViewIdentifier(container.Space, dt.Container.ExternalId, version) : null
-                };
-            }
-
-            return new ViewCreate
-            {
-                Description = container.Description,
-                ExternalId = container.ExternalId,
-                Name = container.Name,
-                Space = container.Space,
-                Version = version,
-                Properties = properties,
-                Implements = baseView is not null ? new[]
-                {
-                    new ViewIdentifier(container.Space, baseView, version)
-                } : null
-            };
-        }
-
         public static ContainerCreate BaseVariable(string space)
         {
             return new ContainerCreate
