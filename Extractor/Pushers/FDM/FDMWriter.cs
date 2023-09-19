@@ -322,6 +322,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             var namespacesIfNew = new List<string>
             {
                 Namespaces.OpcUa,
+                "RESERVED",
                 "RESERVED"
             };
             foreach (var ns in nss)
