@@ -1,4 +1,5 @@
-﻿using Cognite.Extractor.Testing;
+﻿using Cognite.Extractor.Common;
+using Cognite.Extractor.Testing;
 using Cognite.Extractor.Utils;
 using Cognite.OpcUa;
 using Cognite.OpcUa.Config;
@@ -1292,7 +1293,31 @@ namespace Test.Unit
             Assert.Equal("override", tester.Client.GetUniqueId(new NodeId(1234, 2)));
             Assert.Equal("override[123]", tester.Client.GetUniqueId(new NodeId(1234, 2), 123));
             tester.Client.ClearNodeOverrides();
+        }
 
+        [Fact]
+        public void TestRetryConfig()
+        {
+            var retryConfig = new UARetryConfig();
+            retryConfig.RetryStatusCodes = new[]
+            {
+                "BadNotConnected",
+                "BadWouldBlock",
+                0x80B60000.ToString(),
+                "0x80890000"
+            };
+
+            Assert.Contains(StatusCodes.BadNotConnected, retryConfig.FinalRetryStatusCodes);
+            Assert.Contains(StatusCodes.BadWouldBlock, retryConfig.FinalRetryStatusCodes);
+            Assert.Contains(StatusCodes.BadSyntaxError, retryConfig.FinalRetryStatusCodes);
+
+            Assert.Throws<ConfigurationException>(() =>
+            {
+                retryConfig.RetryStatusCodes = new[]
+                {
+                    "BadSomethingWeirdoHappened"
+                };
+            });
         }
 
         #endregion
