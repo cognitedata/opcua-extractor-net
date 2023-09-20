@@ -624,6 +624,7 @@ namespace Test.Unit
             CommonTestUtils.ResetMetricValues("opcua_browse_operations", "opcua_tree_depth");
             var (callback, nodes) = UAClientTestFixture.GetCallback();
 
+            tester.Config.Source.Retries.MaxTries = 1;
             tester.Server.Issues.RemainingBrowseCount = 5;
             var ex = await Assert.ThrowsAsync<AggregateException>(async () =>
                 await tester.Client.Browser.BrowseNodeHierarchy(tester.Server.Ids.Full.DeepRoot, callback, tester.Source.Token)

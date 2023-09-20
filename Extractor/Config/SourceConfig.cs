@@ -242,10 +242,10 @@ namespace Cognite.OpcUa.Config
         /// </summary>
         public IEnumerable<string>? RetryStatusCodes
         {
-            get => retryStatusCodes.Select(r => StatusCode.LookupSymbolicId(r)).ToList();
+            get => retryStatusCodes?.Select(r => StatusCode.LookupSymbolicId(r))?.ToList();
             set
             {
-                retryStatusCodes = value.Select(v => ResolveStatusCode(v)).ToList();
+                retryStatusCodes = value?.Select(v => ResolveStatusCode(v))?.ToList();
                 finalRetryStatusCodes = new HashSet<uint>((retryStatusCodes ?? Enumerable.Empty<uint>()).Concat(internalRetryStatusCodes));
             }
         }
