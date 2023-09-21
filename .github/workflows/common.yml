@@ -59,7 +59,7 @@ jobs:
 
           - name: Get RPM version
             id: rpmver
-            run: echo "rpmver=$(echo "${{ needs.prerequisites.outputs.version}}" | tr - _)" >> "$GITHUB_OUTPUT"
+            run: echo "rpmver=$(echo "${{ steps.get-version.outputs.version}}" | tr - _)" >> "$GITHUB_OUTPUT"
 
           - name: Message about build
             uses: actions/github-script@v6
@@ -238,7 +238,7 @@ jobs:
 
         - name: Build extractor image
           run: |
-            image=$(docker build --build-arg version='${{ needs.prerequisites.outputs.version }}' --build-arg description='${{ steps.image_tags.outputs.desc }}' -f dockerfile.build -q .)
+            image=$(docker build --build-arg version='${{ needs.prerequisites.outputs.version }}' --build-arg description='${{ steps.image_tags.outputs.desc }}' -f Dockerfile.build -q .)
             id=$(docker create $image)
             docker cp $id:/build/deploy .
             docker rm -v $id
