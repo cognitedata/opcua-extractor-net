@@ -1,0 +1,277 @@
+name: Build extractor and installer
+
+on:
+    workflow_call:
+        outputs:
+            version:
+                description: Release version
+                value: ${{ jobs.prerequisites.outputs.version }}
+            should-release:
+                description: Checks if release would occur
+                value: ${{ jobs.prerequisites.outputs.should-release }}
+            branch:
+                description: Branch
+                value: ${{ jobs.prerequisites.outputs.branch }}
+            args:
+                description: Build args
+                value: ${{ jobs.prerequisites.outputs.args }}
+            rpmver:
+                description: Version to tag RPM with
+                value: ${{ jobs.prerequisites.outputs.rpmver }}
+        secrets:
+            ARTIFACTORY_READONLY_TOKEN_USER_PUBLIC_REPOS:
+                required: true
+            ARTIFACTORY_READONLY_TOKEN_PUBLIC_REPOS:
+                required: true
+
+jobs:
+    prerequisites:
+        runs-on: ubuntu-latest
+        outputs:
+            should-release: ${{ steps.confirm-release.outputs.test }}
+            branch: ${{ steps.current-branch.outputs.branch }}
+            version: ${{ steps.get-version.outputs.version }}
+            args: ${{ steps.get-pub-args.outputs.args }}
+            rpmver: ${{ steps.rpmver.outputs.rpmver }}
+        steps:
+          - name: checkout master
+            uses: actions/checkout@v4
+            with:
+                fetch-depth: 0
+          - name: Install shyaml
+            run: pip install --upgrade pip && pip install shyaml
+
+          - name: Get version
+            id: get-version
+            run: echo "version=$(cat manifest.yml | shyaml keys-0 versions | xargs -0 | cut -d\  -f1)" >> "$GITHUB_OUTPUT"
+
+          - run: echo ${{ steps.get-version.outputs.version }}
+          - id: get-pub-args
+            run: echo "args=$(./get-build-args.sh ${{ steps.get-version.outputs.version }})" >> "$GITHUB_OUTPUT"
+
+          - name: Confirm release
+            id: confirm-release
+            run: echo "test=$(git tag --list 'v${{ steps.get-version.outputs.version }}' | wc -l | sed s/\ //g)" >> $GITHUB_OUTPUT
+
+          - name: Get branch name
+            id: current-branch
+            run: echo "branch=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> "$GITHUB_OUTPUT"
+
+          - name: Get RPM version
+            id: rpmver
+            run: echo "rpmver=$(echo "${{ needs.prerequisites.outputs.version}}" | tr - _)" >> "$GITHUB_OUTPUT"
+
+          - name: Message about build
+            uses: actions/github-script@v6
+            with:
+                script: |
+                    if (${{ steps.confirm-release.outputs.test }} == 0) {
+                        core.notice('Will release version ${{ steps.get-version.outputs.version }}...')
+                    } else {
+                        core.warning('Will not create release for version ${{ steps.get-version.outputs.version }} because it already exists.')
+                    }
+
+    build-windows-installer:
+        runs-on: windows-latest
+        environment: ${{ needs.prerequisites.outputs.branch == 'master' && 'CD' || 'CI' }}
+        needs: prerequisites
+
+        steps:
+          - uses: actions/checkout@v4
+          - name: Setup .NET
+            uses: actions/setup-dotnet@v3
+            with:
+                dotnet-version: 7.0.x
+          - name: Restore dependencies
+            run: dotnet restore
+
+          - name: Restore tools
+            run: dotnet tool restore
+          
+          - name: Build Executable
+            run: dotnet publish -c Release -r win-x64 ${{ needs.prerequisites.outputs.args }} .\ExtractorLauncher\ -o extractorbuild\
+
+          - name: Sign executable
+            if: ${{ needs.prerequisites.outputs.branch == 'master' }}
+            env:
+                CERTIFICATE_HOST: ${{ secrets.CODE_SIGNING_CERT_HOST }}
+                CERTIFICATE_HOST_API_KEY: ${{ secrets.CODE_SIGNING_CERT_HOST_API_KEY }}
+                CERTIFICATE_SHA1_HASH: ${{ secrets.CODE_SIGNING_CERT_SHA1_HASH }}
+                CLIENT_CERTIFICATE: ${{ secrets.CODE_SIGNING_CLIENT_CERT }}
+                CLIENT_CERTIFICATE_PASSWORD: ${{ secrets.CODE_SIGNING_CLIENT_CERT_PASSWORD }}
+            uses: cognitedata/code-sign-action/@v2
+            with:
+                path-to-binary: .\extractorbuild\OpcuaExtractor.exe
+
+          - name: Add msbuild to path
+            uses: microsoft/setup-msbuild@v1.3
+
+          - name: Build service manager
+            run: msbuild .\OpcUaServiceManager\OpcUaServiceManager.csproj /t:rebuild /p:Configuration=Release
+          - run: mkdir managerbuild
+          - run: xcopy OpcUaServiceManager\bin\Release managerbuild /S /Y
+
+          - name: Sign manager
+            if: ${{ needs.prerequisites.outputs.branch == 'master' }}
+            env:
+                CERTIFICATE_HOST: ${{ secrets.CODE_SIGNING_CERT_HOST }}
+                CERTIFICATE_HOST_API_KEY: ${{ secrets.CODE_SIGNING_CERT_HOST_API_KEY }}
+                CERTIFICATE_SHA1_HASH: ${{ secrets.CODE_SIGNING_CERT_SHA1_HASH }}
+                CLIENT_CERTIFICATE: ${{ secrets.CODE_SIGNING_CLIENT_CERT }}
+                CLIENT_CERTIFICATE_PASSWORD: ${{ secrets.CODE_SIGNING_CLIENT_CERT_PASSWORD }}
+            uses: cognitedata/code-sign-action/@v2
+            with:
+                path-to-binary: .\managerbuild\OpcUaServiceManager.exe
+
+          - name: Build SBOM
+            run: .\installer-sbom.ps1 ${{ needs.prerequisites.outputs.version }}
+
+          - name: Build MSI
+            working-directory: .\OpcUaExtractorSetup
+            run: .\build.ps1 -v ${{ needs.prerequisites.outputs.version }} -b msbuild -d "OPC-UA Extractor" -c .\setup-config.json
+
+          - name: Sign MSI
+            if: ${{ needs.prerequisites.outputs.branch == 'master' }}
+            env:
+                CERTIFICATE_HOST: ${{ secrets.CODE_SIGNING_CERT_HOST }}
+                CERTIFICATE_HOST_API_KEY: ${{ secrets.CODE_SIGNING_CERT_HOST_API_KEY }}
+                CERTIFICATE_SHA1_HASH: ${{ secrets.CODE_SIGNING_CERT_SHA1_HASH }}
+                CLIENT_CERTIFICATE: ${{ secrets.CODE_SIGNING_CLIENT_CERT }}
+                CLIENT_CERTIFICATE_PASSWORD: ${{ secrets.CODE_SIGNING_CLIENT_CERT_PASSWORD }}
+            uses: cognitedata/code-sign-action/@v2
+            with:
+                path-to-binary: .\OpcUaExtractorSetup\bin\Release\OpcUaExtractorSetup.msi
+
+          - run: mv .\OpcUaExtractorSetup\bin\Release\OpcUaExtractorSetup.msi .\OpcUaExtractorSetup-${{ needs.prerequisites.outputs.version }}.msi
+
+          - name: Upload artifacts
+            uses: actions/upload-artifact@v3
+            with:
+                name: installer
+                path: .\OpcUaExtractorSetup-${{ needs.prerequisites.outputs.version }}.msi
+                retention-days: 1
+
+    build-linux-installers:
+        runs-on: ubuntu-latest
+        needs: prerequisites
+        
+        steps:
+          - uses: actions/checkout@v4
+          - name: Setup .NET
+            uses: actions/setup-dotnet@v3
+            with:
+                dotnet-version: 7.0.x
+          - name: Restore dependencies
+            run: dotnet restore
+
+          - name: Restore tools
+            run: dotnet tool restore
+
+          - name: Build
+            run: dotnet build ExtractorLauncher/
+
+          - name: Install release dependencies
+            run: sudo apt-get install -y rpm build-essential sed
+          - name: Build release binary
+            run: dotnet publish -c Release -r linux-x64 ${{ needs.prerequisites.outputs.args }} ExtractorLauncher/ -o linux/publish/
+          - run: sh ./build-linux-installers.sh ${{ needs.prerequisites.outputs.version }}
+          
+          - name: Build windows release
+            run: dotnet publish -c Release -r win-x64 ${{ needs.prerequisites.outputs.args }} ExtractorLauncher/
+          - run: ./build-zip.sh win-x64 false ${{ needs.prerequisites.outputs.version }}
+
+          - name: Build linux release
+            run: dotnet publish -c Release -r linux-x64 ${{ needs.prerequisites.outputs.args }} ExtractorLauncher/
+          - run: ./build-zip.sh linux-x64 true ${{ needs.prerequisites.outputs.version }}
+
+          - name: Build windows bridge release
+            run: dotnet publish -c Release -r win-x64 ${{ needs.prerequisites.outputs.args }} MQTTCDFBridge/
+          - run: ./build-zip-bridge.sh win-x64 false ${{ needs.prerequisites.outputs.version }}
+
+          - name: Build linux bridge release
+            run: dotnet publish -c Release -r linux-x64 ${{ needs.prerequisites.outputs.args }} MQTTCDFBridge/
+          - run: ./build-zip-bridge.sh linux-x64 true ${{ needs.prerequisites.outputs.version }}
+
+          - name: Build windows server release
+            run: dotnet publish -c Release -r win-x64 ${{ needs.prerequisites.outputs.args }} Server/
+          - run: ./build-zip-server.sh win-x64 false ${{ needs.prerequisites.outputs.version }}
+
+          - name: Build linux server release
+            run: dotnet publish -c Release -r linux-x64 ${{ needs.prerequisites.outputs.args }} Server/
+          - run: ./build-zip-server.sh linux-x64 true ${{ needs.prerequisites.outputs.version }}
+
+          - name: Move artifacts to separate folder
+            run: |
+              mkdir artifacts
+              mv ./opcua-extractor.win-x64.${{ needs.prerequisites.outputs.version }}.zip artifacts/
+              mv ./opcua-extractor.linux-x64.${{ needs.prerequisites.outputs.version }}.zip artifacts/
+              mv ./mqtt-cdf-bridge.win-x64.${{ needs.prerequisites.outputs.version }}.zip artifacts/
+              mv ./mqtt-cdf-bridge.linux-x64.${{ needs.prerequisites.outputs.version }}.zip artifacts/
+              mv ./test-server.win-x64.${{ needs.prerequisites.outputs.version }}.zip artifacts/
+              mv ./test-server.linux-x64.${{ needs.prerequisites.outputs.version }}.zip artifacts/
+              mv ./opcua-extractor-${{ needs.prerequisites.outputs.rpmver }}-1.x86_64.rpm artifacts/
+              mv ./opcua-extractor_${{ needs.prerequisites.outputs.version }}_amd64.deb artifacts/
+
+          - name: Upload artifacts
+            uses: actions/upload-artifact@v3
+            with:
+              name: linux-artifacts
+              path: artifacts/
+              retention-days: 1
+
+    build-docker:
+        runs-on: ubuntu-latest
+        environment: ${{ needs.prerequisites.outputs.branch == 'master' && 'CD' || 'CI' }}
+        needs: prerequisites
+
+        steps:
+        - uses: actions/checkout@v4
+          name: Checkout
+
+        - id: image_tags
+          run: |
+            echo extractor="eu.gcr.io/cognite-registry/opcua-extractor-net:${{ needs.prerequisites.outputs.version }}" >> "$GITHUB_OUTPUT"
+            echo extractor_dockerhub="cognite/opcua-extractor-net:${{ needs.prerequisites.outputs.version }}" >> "$GITHUB_OUTPUT"
+            echo bridge="eu.gcr.io/cognite-registry/mqtt-cdf-bridge:${{ needs.prerequisites.outputs.version }}" >> "$GITHUB_OUTPUT"
+            echo bridge_dockerhub="cognite/mqtt-cdf-bridge:${{ needs.prerequisites.outputs.version }}" >> "$GITHUB_OUTPUT"
+            echo desc="$(git describe --tags --dirty) $(git log -1  --format=%ai)" >> "$GITHUB_OUTPUT"
+
+        - name: Build extractor image
+          run: |
+            image=$(docker build --build-arg version='${{ needs.prerequisites.outputs.version }}' --build-arg description='${{ steps.image_tags.outputs.desc }}' -f dockerfile.build -q .)
+            id=$(docker create $image)
+            docker cp $id:/build/deploy .
+            docker rm -v $id
+            docker build -t ${{ steps.image_tags.outputs.extractor }} .
+            docker tag ${{ steps.image_tags.outputs.extractor }} ${{ steps.image_tags.outputs.extractor_dockerhub }}
+
+        - name: Build bridge image
+          run: |
+            image=$(docker build --build-arg VERSION='${{ needs.prerequisites.outputs.version }}' --build-arg DESCRIPTION='${{ steps.image_tags.outputs.desc }}' -f Dockerfile.bridge.build -q .)
+            id=$(docker create $image)
+            docker cp $id:/build/deploy .
+            docker rm -v $id
+            docker build -f Dockerfile.bridge -t ${{ steps.image_tags.outputs.bridge }} .
+            docker tag ${{ steps.image_tags.outputs.bridge }} ${{ steps.image_tags.outputs.bridge_dockerhub }}
+
+        - name: Push images
+          if: ${{ needs.common.outputs.should-release == 0 && needs.prerequisites.outputs.branch == 'master' }}
+          run: |
+            echo "Images being pushed as ${{ steps.image_tags.outputs.extractor }}, ${{ steps.image_tags.outputs.bridge }}"
+            echo ${{ secrets.COGNITE_REGISTRY_KEY }} | base64 -d | docker login -u _json_key --password-stdin https://eu.gcr.io
+            docker push ${{ steps.image_tags.outputs.extractor }}
+            docker push ${{ steps.image_tags.outputs.bridge }}
+
+        - name: "Log in to the Dockerhub"
+          if: ${{ needs.common.outputs.should-release == 0 && needs.prerequisites.outputs.branch == 'master' }}
+          uses: docker/login-action@v3
+          with:
+            username: ${{ secrets.DOCKERHUB_USER }}
+            password: ${{ secrets.DOCKERHUB_ACCESS_TOKEN }}
+
+        - name: Push images dockerhub
+          if: ${{ needs.common.outputs.should-release == 0 && needs.prerequisites.outputs.branch == 'master' }}
+          run: |
+            echo "Images being pushed as ${{ steps.image_tags.outputs.extractor_dockerhub }}, ${{ steps.image_tags.outputs.bridge_dockerhub }}"
+            docker push ${{ steps.image_tags.outputs.extractor_dockerhub }}
+            docker push ${{ steps.image_tags.outputs.bridge_dockerhub }}
