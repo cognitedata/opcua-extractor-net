@@ -215,14 +215,37 @@ namespace Cognite.OpcUa.Config
 
     public class UARetryConfig : RetryUtilConfig
     {
+        private static uint ResolveStatusCode(string sc)
+        {
+            try
+            {
+                if (sc.StartsWith("0x"))
+                {
+                    return Convert.ToUInt32(sc, 16);
+                }
+                // If it's a number just use that
+                return Convert.ToUInt32(sc);
+            }
+            catch
+            {
+                var code = StatusCodes.GetIdentifier(sc);
+                if (code == 0)
+                {
+                    throw new ConfigurationException($"{sc} is not recognized as an OPC-UA status code. If it is a custom statuscode, use the numeric variant instead");
+                }
+                return code;
+            }
+        }
+
         /// <summary>
         /// List of numeric status codes to retry, in addition to a set of default codes.
         /// </summary>
-        public IEnumerable<uint>? RetryStatusCodes
+        public IEnumerable<string>? RetryStatusCodes
         {
-            get => retryStatusCodes; set
+            get => retryStatusCodes?.Select(r => StatusCode.LookupSymbolicId(r))?.ToList();
+            set
             {
-                retryStatusCodes = value;
+                retryStatusCodes = value?.Select(v => ResolveStatusCode(v))?.ToList();
                 finalRetryStatusCodes = new HashSet<uint>((retryStatusCodes ?? Enumerable.Empty<uint>()).Concat(internalRetryStatusCodes));
             }
         }
@@ -231,15 +254,47 @@ namespace Cognite.OpcUa.Config
 
         private readonly IEnumerable<uint> internalRetryStatusCodes = new[]
         {
-            StatusCodes.Bad,
-            StatusCodes.BadConnectionClosed,
-            StatusCodes.BadConnectionRejected,
-            StatusCodes.BadNotConnected,
-            StatusCodes.BadServerHalted,
-            StatusCodes.BadServerNotConnected,
+            StatusCodes.BadUnexpectedError,
+            StatusCodes.BadInternalError,
+            StatusCodes.BadOutOfMemory,
+            StatusCodes.BadResourceUnavailable,
+            StatusCodes.BadCommunicationError,
+            StatusCodes.BadEncodingError,
+            StatusCodes.BadDecodingError,
+            StatusCodes.BadUnknownResponse,
             StatusCodes.BadTimeout,
+            StatusCodes.BadShutdown,
+            StatusCodes.BadServerNotConnected,
+            StatusCodes.BadServerHalted,
+            StatusCodes.BadNothingToDo,
+            StatusCodes.BadTooManyOperations,
+            StatusCodes.BadSecureChannelIdInvalid,
+            StatusCodes.BadNonceInvalid,
+            StatusCodes.BadSessionIdInvalid,
+            StatusCodes.BadSessionClosed,
+            StatusCodes.BadSessionNotActivated,
+            StatusCodes.BadRequestCancelledByClient,
+            StatusCodes.BadNoCommunication,
+            StatusCodes.BadNoContinuationPoints,
+            StatusCodes.BadTooManySessions,
+            StatusCodes.BadTooManyPublishRequests,
+            StatusCodes.BadTcpServerTooBusy,
+            StatusCodes.BadTcpSecureChannelUnknown,
+            StatusCodes.BadTcpNotEnoughResources,
+            StatusCodes.BadTcpInternalError,
+            StatusCodes.BadRequestInterrupted,
+            StatusCodes.BadRequestTimeout,
             StatusCodes.BadSecureChannelClosed,
-            StatusCodes.BadNoCommunication
+            StatusCodes.BadDeviceFailure,
+            StatusCodes.BadNotConnected,
+            StatusCodes.BadSensorFailure,
+            StatusCodes.BadOutOfService,
+            StatusCodes.BadDisconnect,
+            StatusCodes.BadConnectionClosed,
+            StatusCodes.BadEndOfStream,
+            StatusCodes.BadInvalidState,
+            StatusCodes.BadMaxConnectionsReached,
+            StatusCodes.BadConnectionRejected,
         };
 
         private HashSet<uint>? finalRetryStatusCodes;
@@ -252,9 +307,9 @@ namespace Cognite.OpcUa.Config
                 if (finalRetryStatusCodes == null)
                 {
                     finalRetryStatusCodes = new HashSet<uint>((retryStatusCodes ?? Enumerable.Empty<uint>()).Concat(internalRetryStatusCodes));
-                    if (RetryStatusCodes != null)
+                    if (retryStatusCodes != null)
                     {
-                        foreach (var code in RetryStatusCodes) finalRetryStatusCodes.Add(code);
+                        foreach (var code in retryStatusCodes) finalRetryStatusCodes.Add(code);
                     }
                 }
                 return finalRetryStatusCodes;

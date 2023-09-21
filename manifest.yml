@@ -60,6 +60,13 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.21.1":
+    description: Retry on more status codes
+    changelog:
+      added:
+        - Retry on more status codes
+      changed:
+        - Allow configuring retry status codes using symbolic IDs and hex values.
   "2.21.0":
     description: Supports writing to all CDF destinations
     changelog:
