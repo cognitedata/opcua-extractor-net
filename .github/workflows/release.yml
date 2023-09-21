@@ -48,6 +48,10 @@ jobs:
                     artifacts/opcua-extractor-${{ needs.common.outputs.rpmver }}-1.x86_64.rpm
                     artifacts/opcua-extractor_${{ needs.common.outputs.version }}_amd64.deb
                     artifacts/OpcUaExtractorSetup-${{ needs.common.outputs.version }}.msi
+                tag_name: v${{ needs.common.outputs.version }}
+                name: Release version ${{ needs.common.outputs.version }}
+                draft: false
+                prerelease: false
           - name: Install python
             uses: actions/setup-python@v4
             with:
