@@ -145,9 +145,9 @@ source:
         # Initial delay between retries, basis for exponential backoff.
         # Syntax is N[timeunit] where timeunit is w, d, h, m, s or ms
         initial-delay: 500ms
-        # Additional list of numeric status codes to retry. In addition to default codes:
-        # Bad, BadConnectionClosed, BadConnectionRejected, BadNotConnected, BadServerHalted,
-        # BadServerNotConnected, BadTimeout, BadSecureChannelClosed, and generic loss of connection to the server.
+        # Additional list of status codes to retry. In addition to a long list of default codes.
+        # Can be either numeric status codes, or symbolic names.
+        # For example "BadNotConnected" or 0x808A0000
         retry-status-codes:
 
 # Config for reading of history from the server
