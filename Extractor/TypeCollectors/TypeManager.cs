@@ -23,6 +23,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Nodes;
+using Cognite.OpcUa.NodeSources;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 
@@ -39,11 +40,47 @@ namespace Cognite.OpcUa.TypeCollectors
 
         private bool eventTypesRead = false;
         private bool dataTypesRead = false;
+
+
+        private readonly HashSet<NodeId> ignoreDataTypes = new();
+        private readonly Dictionary<NodeId, ProtoDataType> customDataTypes = new();
+
+
         public TypeManager(FullConfig config, UAClient client, ILogger log)
         {
             this.log = log;
             this.config = config;
             this.client = client;
+
+            if (config.Extraction.DataTypes.IgnoreDataTypes != null)
+            {
+                foreach (var type in config.Extraction.DataTypes.IgnoreDataTypes)
+                {
+                    var id = type.ToNodeId(client);
+                    if (id == null || id.IsNullNodeId)
+                    {
+                        log.LogWarning("Invalid ignore datatype nodeId: {NameSpace}: {Identifier}", type.NamespaceUri, type.NodeId);
+                        continue;
+                    }
+                    ignoreDataTypes.Add(id);
+                }
+            }
+
+            if (config.Extraction.DataTypes.CustomNumericTypes != null)
+            {
+                foreach (var type in config.Extraction.DataTypes.CustomNumericTypes)
+                {
+                    if (type.NodeId == null) continue;
+                    var id = type.NodeId.ToNodeId(client);
+                    if (id == null || id.IsNullNodeId)
+                    {
+                        log.LogWarning("Invalid datatype nodeId: {NameSpace}: {Identifier}", type.NodeId.NamespaceUri, type.NodeId.NodeId);
+                        continue;
+                    }
+                    customDataTypes[id] = type;
+                    log.LogInformation("Add custom datatype: {Id}", id);
+                }
+            }
         }
 
         public bool IsTypeNodeClass(NodeClass nodeClass)
@@ -63,10 +100,9 @@ namespace Cognite.OpcUa.TypeCollectors
             EventFields.Clear();
         }
 
-        private async Task ReadTypeData(CancellationToken token)
+        private async Task ReadTypeData(ITypeAndNodeSource source, CancellationToken token)
         {
             var toRead = new List<BaseUANode>();
-            var toReadValues = new List<UAVariable>();
             foreach (var tp in NodeMap.Values)
             {
                 if (tp.Attributes.IsDataRead) continue;
@@ -78,13 +114,11 @@ namespace Cognite.OpcUa.TypeCollectors
                     && !config.Extraction.DataTypes.AutoIdentifyTypes) continue;
                 if (tp.NodeClass == NodeClass.ReferenceType && !config.Extraction.Relationships.Enabled) continue;
                 toRead.Add(tp);
-                if (tp.NodeClass == NodeClass.Variable && tp is UAVariable variable) toReadValues.Add(variable);
             }
-            await client.ReadNodeData(toRead, token, "the type hierarchy");
-            await client.ReadNodeValues(toReadValues, token);
+            await source.LoadTypeMetadata(toRead, config.Extraction.DataTypes, token);
         }
 
-        private async Task ReadTypeHiearchies(CancellationToken token)
+        private async Task ReadTypeHiearchies(ITypeAndNodeSource source, CancellationToken token)
         {
             var rootNodes = new List<NodeId>();
             var mask = (uint)NodeClass.Variable | (uint)NodeClass.Object;
@@ -101,15 +135,19 @@ namespace Cognite.OpcUa.TypeCollectors
                 eventTypesRead = true;
             }
             if (!rootNodes.Any()) return;
-            await client.Browser.GetRootNodes(rootNodes, HandleNode, token, "the type hierarchy");
-            await client.Browser.BrowseDirectory(rootNodes, HandleNode, token, ReferenceTypeIds.HierarchicalReferences,
-                mask, doFilter: false, purpose: "the type hierarchy");
+
+            var result = await source.LoadNodes(rootNodes, mask, HierarchicalReferenceMode.Disabled, token);
+            foreach (var kvp in result.Nodes)
+            {
+                NodeMap[kvp.Key] = kvp.Value;
+            }
         }
 
-        public async Task LoadTypeData(CancellationToken token)
+        public async Task LoadTypeData(ITypeAndNodeSource source, CancellationToken token)
         {
-            await ReadTypeHiearchies(token);
-            await ReadTypeData(token);
+            await ReadTypeHiearchies(source, token);
+            await ReadTypeData(source, token);
+            BuildTypeInfo();
         }
 
         public void BuildTypeInfo()
@@ -120,7 +158,7 @@ namespace Cognite.OpcUa.TypeCollectors
             BuildDataTypes();
         }
 
-        private void BuildNodeChildren()
+        public void BuildNodeChildren()
         {
             foreach (var node in NodeMap.Values)
             {
@@ -152,12 +190,6 @@ namespace Cognite.OpcUa.TypeCollectors
             NodeMap[node.Id] = node;
         }
 
-        public void SetTypesRead()
-        {
-            eventTypesRead = true;
-            dataTypesRead = true;
-        }
-
         private void HandleNode(ReferenceDescription node, NodeId parentId, bool visited)
         {
             if (visited) return;
@@ -179,49 +211,8 @@ namespace Cognite.OpcUa.TypeCollectors
         #region dataTypes
         private void BuildDataTypes()
         {
-            var ignoreDataTypes = new HashSet<NodeId>();
-            if (config.Extraction.DataTypes.IgnoreDataTypes != null)
-            {
-                foreach (var type in config.Extraction.DataTypes.IgnoreDataTypes)
-                {
-                    var id = type.ToNodeId(client);
-                    if (id == null || id.IsNullNodeId)
-                    {
-                        log.LogWarning("Invalid ignore datatype nodeId: {NameSpace}: {Identifier}", type.NamespaceUri, type.NodeId);
-                        continue;
-                    }
-                    ignoreDataTypes.Add(id);
-                }
-            }
-            var customDataTypes = new Dictionary<NodeId, ProtoDataType>();
-            if (config.Extraction.DataTypes.CustomNumericTypes != null)
-            {
-                foreach (var type in config.Extraction.DataTypes.CustomNumericTypes)
-                {
-                    if (type.NodeId == null) continue;
-                    var id = type.NodeId.ToNodeId(client);
-                    if (id == null || id.IsNullNodeId)
-                    {
-                        log.LogWarning("Invalid datatype nodeId: {NameSpace}: {Identifier}", type.NodeId.NamespaceUri, type.NodeId.NodeId);
-                        continue;
-                    }
-                    customDataTypes[id] = type;
-                    log.LogInformation("Add custom datatype: {Id}", id);
-                }
-            }
-
             foreach (var type in NodeMap.Values.OfType<UADataType>())
             {
-                type.ShouldIgnore = ignoreDataTypes.Contains(type.Id);
-                if (customDataTypes.TryGetValue(type.Id, out var protoType))
-                {
-                    type.Initialize(protoType, config.Extraction.DataTypes);
-                }
-                if (type.Id.IsNullNodeId)
-                {
-                    type.IsString = !config.Extraction.DataTypes.NullAsNumeric;
-                    continue;
-                }
                 if (!config.Extraction.DataTypes.AutoIdentifyTypes) continue;
                 type.UpdateFromParent(config.Extraction.DataTypes);
                 if (NodeChildren.TryGetValue(type.Id, out var children))
@@ -350,7 +341,23 @@ namespace Cognite.OpcUa.TypeCollectors
         }
         public UADataType GetDataType(NodeId nodeId)
         {
-            return GetType<UADataType>(nodeId, x => new UADataType(x), "data", true);
+            return GetType<UADataType>(nodeId, x => {
+                UADataType dt;
+                if (customDataTypes.TryGetValue(x, out var protoDataType))
+                {
+                    dt = new UADataType(protoDataType, nodeId, config.Extraction.DataTypes);
+                }
+                else
+                {
+                    dt = new UADataType(x);
+                }
+                if (ignoreDataTypes.Contains(x)) dt.ShouldIgnore = true;
+                if (dt.Id.IsNullNodeId)
+                {
+                    dt.IsString = !config.Extraction.DataTypes.NullAsNumeric;
+                }
+                return dt;
+            }, "data", true);
         }
 
         public UAReferenceType GetReferenceType(NodeId nodeId)

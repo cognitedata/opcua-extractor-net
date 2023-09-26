@@ -136,14 +136,10 @@ namespace Test.Unit
             var references = new List<UAReference>
             {
                 new UAReference(
-                    ReferenceTypeIds.Organizes,
+                    extractor.TypeManager.GetReferenceType(ReferenceTypeIds.Organizes),
                     true,
-                    new NodeId("object1"),
-                    new NodeId("var1"),
-                    false,
-                    true,
-                    false,
-                    extractor.TypeManager)
+                    nodes[0],
+                    variables[0])
             };
 
             var input = new PusherInput(nodes, variables, references, null);

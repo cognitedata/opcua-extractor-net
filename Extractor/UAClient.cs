@@ -1567,7 +1567,7 @@ namespace Cognite.OpcUa
         public string GetRelationshipId(UAReference reference)
         {
             var buffer = new StringBuilder(Config.Extraction.IdPrefix, 64);
-            buffer.Append(reference.GetName());
+            buffer.Append(reference.Type.GetName(!reference.IsForward));
             buffer.Append(';');
             AppendNodeId(buffer, reference.Source.Id);
             buffer.Append(';');
@@ -1581,7 +1581,7 @@ namespace Cognite.OpcUa
                 // so cutting from the start is less likely to cause conflicts
                 var overflow = (int)Math.Ceiling((buffer.Length - 255) / 2.0);
                 buffer = new StringBuilder(Config.Extraction.IdPrefix, 255);
-                buffer.Append(reference.GetName());
+                buffer.Append(reference.Type.GetName(!reference.IsForward));
                 buffer.Append(';');
                 buffer.Append(GetNodeIdString(reference.Source.Id).AsSpan(overflow));
                 buffer.Append(';');

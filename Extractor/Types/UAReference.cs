@@ -1,146 +1,76 @@
-﻿/* Cognite Extractor for OPC-UA
-Copyright (C) 2021 Cognite AS
-
-This program is free software; you can redistribute it and/or
-modify it under the terms of the GNU General Public License
-as published by the Free Software Foundation; either version 2
-of the License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with this program; if not, write to the Free Software
-Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
-
-using Cognite.OpcUa.Nodes;
-using Cognite.OpcUa.TypeCollectors;
+﻿using Cognite.OpcUa.Nodes;
 using CogniteSdk;
 using Opc.Ua;
 using System;
 
 namespace Cognite.OpcUa.Types
 {
-    /// <summary>
-    /// Represents a non-hierarchical reference between two nodes in the hierarchy
-    /// </summary>
     public class UAReference
     {
-        /// <summary>
-        /// True if this reference is hierarchical.
-        /// </summary>
-        public bool IsHierarchical { get; }
-        /// <summary>
-        /// NodeId of the OPC-UA reference type
-        /// </summary>
+        public bool IsHierarchical => Type.IsChildOf(ReferenceTypeIds.HierarchicalReferences);
         public UAReferenceType Type { get; }
-        /// <summary>
-        /// True if this is a forward reference, false otherwise
-        /// </summary>
+        public BaseUANode Source { get; }
+        public BaseUANode Target { get; }
         public bool IsForward { get; }
-        /// <summary>
-        /// NodeId of the source node
-        /// </summary>
-        public ReferenceVertex Source { get; }
-        /// <summary>
-        /// NodeId of the target node
-        /// </summary>
-        public ReferenceVertex Target { get; }
-        public UAReference(NodeId type, bool isForward, NodeId source, NodeId target,
-            bool sourceTs, bool targetTs, bool isHierarchical, TypeManager manager)
+
+
+        public UAReference(UAReferenceType referenceType, bool isForward, BaseUANode source, BaseUANode target)
         {
-            Type = manager.GetReferenceType(type);
+            Type = referenceType;
+            Source = source;
+            Target = target;
             IsForward = isForward;
-            Source = new ReferenceVertex(source, sourceTs);
-            Target = new ReferenceVertex(target, targetTs);
-            IsHierarchical = isHierarchical;
         }
+
+        public UAReference CreateInverse()
+        {
+            return new UAReference(Type, !IsForward, Source, Target);
+        }
+
         public override string ToString()
         {
-            string? refName = Type.GetName(!IsForward);
-            if (refName == null)
-            {
-                refName = $"{Type.Id} {(IsForward ? "Forward" : "Inverse")}";
-            }
+            string? refName = Type.GetName(!IsForward) ?? $"{Type.Id} {(IsForward ? "Forward" : "Inverse")}";
 
-            return $"Reference: {Source} {refName} {Target}";
+            return $"Reference {Source} {refName} {Target}";
         }
-        public string? GetName()
-        {
-            return Type.GetName(!IsForward);
-        }
+
         public override bool Equals(object obj)
         {
             if (obj is not UAReference other) return false;
-            return other.Source.Equals(Source)
-                && other.Target.Equals(Target)
+            return other.Source.Id == Source.Id
+                && other.Target.Id == Target.Id
                 && other.Type.Id == Type.Id
                 && other.IsForward == IsForward;
         }
 
         public override int GetHashCode()
         {
-            return HashCode.Combine(Source, Target, Type.Id, IsForward);
-        }
-        /// <summary>
-        /// Convert reference to a CDF relationship.
-        /// </summary>
-        /// <param name="dataSetId">Optional dataSetId</param>
-        /// <param name="client">Access to UAClient for creating Ids </param>
-        /// <returns>Created relationship</returns>
-        public RelationshipCreate ToRelationship(long? dataSetId, IUAClientAccess client)
-        {
-            var relationship = new RelationshipCreate
-            {
-                DataSetId = dataSetId,
-                SourceExternalId = client.GetUniqueId(Source.Id),
-                TargetExternalId = client.GetUniqueId(Target.Id),
-                SourceType = Source.VertexType,
-                TargetType = Target.VertexType,
-                ExternalId = client.GetRelationshipId(this)
-            };
-            return relationship;
-        }
-    }
-    /// <summary>
-    /// Class representing a vertex in an OPC-UA reference.
-    /// </summary>
-    public class ReferenceVertex
-    {
-        public NodeId Id { get; }
-        public bool IsTimeSeries { get; }
-        public ReferenceVertex(NodeId id, bool isTimeSeries)
-        {
-            Id = id;
-            IsTimeSeries = isTimeSeries;
-        }
-        public override string ToString()
-        {
-            return $"{(IsTimeSeries ? "TimeSeries" : "Asset")} {Id}";
-        }
-        public override bool Equals(object obj)
-        {
-            if (obj is not ReferenceVertex other) return false;
-            return other.Id == Id && other.IsTimeSeries == IsTimeSeries;
+            return HashCode.Combine(Source.Id, Target.Id, Type.Id, IsForward);
         }
 
-        public override int GetHashCode()
+        private static RelationshipVertexType VertexType(BaseUANode node)
         {
-            return HashCode.Combine(Id, IsTimeSeries);
-        }
-        /// <summary>
-        /// Get the CDF vertex type of this vertex.
-        /// </summary>
-        /// <returns></returns>
-        public RelationshipVertexType VertexType
-        {
-            get
+            if (node is UAVariable vb && !vb.IsProperty && !vb.IsObject)
             {
-                if (IsTimeSeries) return RelationshipVertexType.TimeSeries;
-                return RelationshipVertexType.Asset;
+                return RelationshipVertexType.TimeSeries;
             }
+            return RelationshipVertexType.Asset;
+        }
+
+        public RelationshipCreate ToRelationship(long? dataSetId, IUAClientAccess client)
+        {
+            var source = IsForward ? Source : Target;
+            var target = IsForward ? Target : Source;
+
+            return new RelationshipCreate
+            {
+                DataSetId = dataSetId,
+                SourceExternalId = client.GetUniqueId(source.Id),
+                TargetExternalId = client.GetUniqueId(target.Id),
+                SourceType = VertexType(source),
+                TargetType = VertexType(target),
+                ExternalId = client.GetRelationshipId(this)
+            };
         }
     }
 }

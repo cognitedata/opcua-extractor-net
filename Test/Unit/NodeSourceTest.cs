@@ -45,17 +45,26 @@ namespace Test.Unit
         [Fact]
         public async Task TestNodeSetSource()
         {
-            tester.Config.Extraction.Relationships.Enabled = true;
-            using var extractor = tester.BuildExtractor();
             tester.Config.Extraction.Relationships.Enabled = false;
             tester.Config.Extraction.DataTypes.AutoIdentifyTypes = true;
 
-            var log = tester.Provider.GetRequiredService<ILogger<NodeSetSource>>();
-            var source = new NodeSetSource(log, tester.Config, extractor, tester.Client, extractor.TypeManager);
+            var extractor = tester.BuildExtractor();
+
+            NodeHierarchyBuilder GetBuilder(params NodeId[] nodesToRead)
+            {
+                var log = tester.Provider.GetRequiredService<ILogger<NodeSetNodeSource>>();
+                var source = new NodeSetNodeSource(log, tester.Config, tester.Client, tester.Client.TypeManager);
+
+                return new NodeHierarchyBuilder(
+                    source, source, tester.Config, nodesToRead, tester.Client, extractor, extractor.Transformations, log);
+            }
+
+
+
 
             // Base, nothing enabled
-            source.BuildNodes(new[] { tester.Ids.Custom.Root }, true);
-            var result = await source.ParseResults(tester.Source.Token);
+            var builder = GetBuilder(tester.Ids.Custom.Root);
+            var result = await builder.LoadNodeHierarchy(true, tester.Source.Token);
             Assert.Equal(3, result.SourceVariables.Count());
             Assert.Equal(3, result.DestinationVariables.Count());
             Assert.Equal(3, result.DestinationObjects.Count());
@@ -66,8 +75,8 @@ namespace Test.Unit
             // Enable arrays
             extractor.State.Clear();
             tester.Config.Extraction.DataTypes.MaxArraySize = 4;
-            source.BuildNodes(new[] { tester.Ids.Custom.Root }, false);
-            result = await source.ParseResults(tester.Source.Token);
+            builder = GetBuilder(tester.Ids.Custom.Root);
+            result = await builder.LoadNodeHierarchy(true, tester.Source.Token);
             Assert.Equal(5, result.SourceVariables.Count());
             Assert.Equal(11, result.DestinationVariables.Count());
             Assert.Equal(5, result.DestinationObjects.Count());
@@ -78,8 +87,8 @@ namespace Test.Unit
             // Enable strings
             extractor.State.Clear();
             tester.Config.Extraction.DataTypes.AllowStringVariables = true;
-            source.BuildNodes(new[] { tester.Ids.Custom.Root }, true);
-            result = await source.ParseResults(tester.Source.Token);
+            builder = GetBuilder(tester.Ids.Custom.Root);
+            result = await builder.LoadNodeHierarchy(true, tester.Source.Token);
             Assert.Equal(9, result.SourceVariables.Count());
             Assert.Equal(16, result.DestinationVariables.Count());
             Assert.Equal(6, result.DestinationObjects.Count());
@@ -93,8 +102,8 @@ namespace Test.Unit
                 CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Custom.IgnoreType, tester.Client)
             };
             extractor.TypeManager.BuildTypeInfo();
-            source.BuildNodes(new[] { tester.Ids.Custom.Root }, true);
-            result = await source.ParseResults(tester.Source.Token);
+            builder = GetBuilder(tester.Ids.Custom.Root);
+            result = await builder.LoadNodeHierarchy(true, tester.Source.Token);
             Assert.Equal(8, result.SourceVariables.Count());
             Assert.Equal(15, result.DestinationVariables.Count());
             Assert.Equal(6, result.DestinationObjects.Count());
@@ -104,8 +113,8 @@ namespace Test.Unit
             // Map variable children to objects
             extractor.State.Clear();
             tester.Config.Extraction.MapVariableChildren = true;
-            source.BuildNodes(new[] { tester.Ids.Custom.Root }, true);
-            result = await source.ParseResults(tester.Source.Token);
+            builder = GetBuilder(tester.Ids.Custom.Root);
+            result = await builder.LoadNodeHierarchy(true, tester.Source.Token);
             Assert.Equal(8, result.SourceVariables.Count());
             Assert.Equal(15, result.DestinationVariables.Count());
             Assert.Equal(9, result.DestinationObjects.Count());
@@ -117,12 +126,8 @@ namespace Test.Unit
             // Enable non-hierarchical relations
             extractor.State.Clear();
             tester.Config.Extraction.Relationships.Enabled = true;
-            source.BuildNodes(new[] { tester.Ids.Custom.Root }, true);
-            result = await source.ParseResults(tester.Source.Token);
-            foreach (var rf in result.DestinationReferences)
-            {
-                log.LogDebug("Ref: {Source} {Target} {Type} {IsForward}", rf.Source.Id, rf.Target.Id, rf.Type.Id, rf.IsForward);
-            }
+            builder = GetBuilder(tester.Ids.Custom.Root);
+            result = await builder.LoadNodeHierarchy(true, tester.Source.Token);
             Assert.Equal(8, result.DestinationReferences.Count());
             Assert.Equal(4, result.DestinationReferences.Count(rel => rel.IsForward));
             Assert.All(result.DestinationReferences, rel =>
@@ -141,8 +146,8 @@ namespace Test.Unit
             // Enable forward hierarchical relations
             extractor.State.Clear();
             tester.Config.Extraction.Relationships.Hierarchical = true;
-            source.BuildNodes(new[] { tester.Ids.Custom.Root }, true);
-            result = await source.ParseResults(tester.Source.Token);
+            builder = GetBuilder(tester.Ids.Custom.Root);
+            result = await builder.LoadNodeHierarchy(true, tester.Source.Token);
             Assert.Equal(18, result.DestinationReferences.Count());
             Assert.Equal(14, result.DestinationReferences.Count(rel => rel.IsForward));
             Assert.All(result.DestinationReferences, rel =>
@@ -158,8 +163,8 @@ namespace Test.Unit
             // Enable inverse hierarchical relations
             extractor.State.Clear();
             tester.Config.Extraction.Relationships.InverseHierarchical = true;
-            source.BuildNodes(new[] { tester.Ids.Custom.Root }, true);
-            result = await source.ParseResults(tester.Source.Token);
+            builder = GetBuilder(tester.Ids.Custom.Root);
+            result = await builder.LoadNodeHierarchy(true, tester.Source.Token);
             Assert.Equal(28, result.DestinationReferences.Count());
             Assert.Equal(14, result.DestinationReferences.Count(rel => rel.IsForward));
             Assert.All(result.DestinationReferences, rel =>

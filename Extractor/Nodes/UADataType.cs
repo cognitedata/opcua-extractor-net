@@ -110,7 +110,13 @@ namespace Cognite.OpcUa.Nodes
         /// <param name="rawDataType">NodeId of the datatype to be transformed into a BufferedDataType</param>
         public UADataType(ProtoDataType protoDataType, NodeId id, DataTypeConfig config) : this(id)
         {
-            Initialize(protoDataType, config);
+            IsStep = protoDataType.IsStep;
+            IsString = config.EnumsAsStrings && protoDataType.Enum;
+            if (protoDataType.Enum)
+            {
+                EnumValues = new Dictionary<long, string>();
+                IsStep = !config.EnumsAsStrings;
+            }
         }
 
         /// <summary>
@@ -127,17 +133,6 @@ namespace Cognite.OpcUa.Nodes
 
         public override BaseNodeAttributes Attributes => FullAttributes;
         public DataTypeAttributes FullAttributes { get; }
-
-        public void Initialize(ProtoDataType protoDataType, DataTypeConfig config)
-        {
-            IsStep = protoDataType.IsStep;
-            IsString = config.EnumsAsStrings && protoDataType.Enum;
-            if (protoDataType.Enum)
-            {
-                EnumValues = new Dictionary<long, string>();
-                IsStep = !config.EnumsAsStrings;
-            }
-        }
 
         public void UpdateFromParent(DataTypeConfig config)
         {
@@ -212,19 +207,9 @@ namespace Cognite.OpcUa.Nodes
         public bool AllowTSMap(
             UAVariable node,
             ILogger log,
-            DataTypeConfig config,
-            int? arraySizeOverride = null,
-            bool overrideString = false)
+            DataTypeConfig config)
         {
-            // We don't care about the data type of variable types except for as metadata.
-            if (node.NodeClass == NodeClass.VariableType) return true;
-            if (node.FullAttributes.DataType == null)
-            {
-                log.LogWarning("Skipping variable {Name} {Id} due to missing datatype", node.Name, node.Id);
-                return false;
-            }
-
-            if (IsString && !config.AllowStringVariables && !overrideString)
+            if (IsString && !config.AllowStringVariables)
             {
                 log.LogDebug("Skipping variable {Name} {Id} due to string datatype and allow-string-variables being set to false",
                     node.Name, node.Id);
@@ -241,7 +226,7 @@ namespace Cognite.OpcUa.Nodes
             if (node.ArrayDimensions != null && node.ArrayDimensions.Length == 1)
             {
                 int length = node.ArrayDimensions.First();
-                int maxArraySize = arraySizeOverride.HasValue ? Math.Max(arraySizeOverride.Value, config.MaxArraySize) : config.MaxArraySize;
+                int maxArraySize = config.MaxArraySize;
                 if (config.MaxArraySize < 0 || length > 0 && length <= maxArraySize)
                 {
                     return true;
@@ -265,6 +250,56 @@ namespace Cognite.OpcUa.Nodes
             {
                 log.LogDebug("Skipping variable {Name} {Id} due to non-scalar ValueRank {Rank} and too high dimensionality {Dim}",
                     node.Name, node.Id, ExtractorUtils.GetValueRankString(node.ValueRank), node.ArrayDimensions.Length);
+                return false;
+            }
+        }
+
+        public bool AllowValueRead(BaseUANode node, ILogger log, DataTypeConfig config)
+        {
+            const int MAX_COMBINED_LENGTH = 100;
+            if (ShouldIgnore)
+            {
+                log.LogDebug("Skipping value read on {Name} {Id} due to datatype {Raw} being in list of ignored data types",
+                    node.Name, node.Id, Id);
+                return false;
+            }
+
+            int[]? arrayDimensions;
+            int valueRank;
+            if (node is UAVariableType varType)
+            {
+                valueRank = varType.FullAttributes.ValueRank;
+                arrayDimensions = varType.FullAttributes.ArrayDimensions;
+            }
+            else if (node is UAVariable variable)
+            {
+                valueRank = variable.FullAttributes.ValueRank;
+                arrayDimensions = variable.FullAttributes.ArrayDimensions;
+            }
+            else
+            {
+                return false;
+            }
+
+            if (valueRank == ValueRanks.Scalar) return true;
+            if (arrayDimensions != null)
+            {
+                var combinedSize = arrayDimensions.Aggregate(1, (seed, dim) => seed * dim);
+                var maxLength = Math.Max(config.MaxArraySize, MAX_COMBINED_LENGTH);
+
+                if (combinedSize > maxLength)
+                {
+                    log.LogDebug("Skipping value read on {Name} {Id} due to too large total size {Size}",
+                        node.Name, node.Id, combinedSize);
+                    return false;
+                }
+                return true;
+            }
+            else
+            {
+                if (config.UnknownAsScalar && (valueRank == ValueRanks.ScalarOrOneDimension || valueRank == ValueRanks.Any)) return true;
+                log.LogDebug("Skipping variable {Name} {Id} due to non-scalar ValueRank {Rank} and null ArrayDimensions",
+                    node.Name, node.Id, ExtractorUtils.GetValueRankString(valueRank));
                 return false;
             }
         }

@@ -246,11 +246,14 @@ namespace Cognite.OpcUa.Nodes
 
         public bool AllowTSMap(
             ILogger log,
-            DataTypeConfig config,
-            int? arraySizeOverride = null,
-            bool overrideString = false)
+            DataTypeConfig config)
         {
-            return FullAttributes.DataType.AllowTSMap(this, log, config, arraySizeOverride, overrideString);
+            return FullAttributes.DataType.AllowTSMap(this, log, config);
+        }
+
+        public override bool AllowValueRead(ILogger logger, DataTypeConfig config)
+        {
+            return FullAttributes.DataType.AllowValueRead(this, logger, config);
         }
 
         public VariableGroups GetVariableGroups(ILogger log, DataTypeConfig config)

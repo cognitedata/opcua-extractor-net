@@ -18,6 +18,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.TypeCollectors;
+using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
@@ -119,6 +120,11 @@ namespace Cognite.OpcUa.Nodes
 
         public override BaseNodeAttributes Attributes => FullAttributes;
         public VariableTypeAttributes FullAttributes { get; }
+
+        public override bool AllowValueRead(ILogger logger, DataTypeConfig config)
+        {
+            return FullAttributes.DataType.AllowValueRead(this, logger, config);
+        }
 
         public override Dictionary<string, string>? GetExtraMetadata(FullConfig config, IUAClientAccess client)
         {
