@@ -19,6 +19,7 @@ using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
+using CogniteSdk.Beta.DataModels;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using System.Collections.Generic;
@@ -41,6 +42,7 @@ namespace Cognite.OpcUa.NodeSources
     {
         private readonly ILogger logger;
         private readonly FullConfig config;
+        private readonly UAExtractor extractor;
         private readonly UAClient client;
         private readonly TypeManager typeManager;
 
@@ -49,15 +51,16 @@ namespace Cognite.OpcUa.NodeSources
         private readonly Dictionary<NodeId, Dictionary<(NodeId, NodeId, bool), IReference>> references = new Dictionary<NodeId, Dictionary<(NodeId, NodeId, bool), IReference>>();
         private readonly object buildLock = new object();
 
-        private Dictionary<NodeId, BaseUANode> nodeMap = new();
-        private List<UAReference> finalReferences = new();
+        private UANodeCollection nodeMap = new();
+        private HashSet<UAReference> finalReferences = new();
 
         private bool isInitialized;
 
-        public NodeSetNodeSource(ILogger logger, FullConfig config, UAClient client, TypeManager typeManager)
+        public NodeSetNodeSource(ILogger logger, FullConfig config, UAExtractor extractor, UAClient client, TypeManager typeManager)
         {
             this.logger = logger;
             this.config = config;
+            this.extractor = extractor;
             this.client = client;
             this.typeManager = typeManager;
         }
@@ -95,42 +98,60 @@ namespace Cognite.OpcUa.NodeSources
             {
                 LoadReferenceTypes();
 
-                BrowseHierarchy(nodesToBrowse);
+                logger.LogInformation("Browse nodeset node hierarchy for {Nodes}", nodesToBrowse);
+                BrowseHierarchy(nodesToBrowse, nodeClassMask);
 
                 return TakeResults(false);
             });
         }
 
         public Task<NodeLoadResult> LoadNonHierarchicalReferences(
-            IReadOnlyDictionary<NodeId, BaseUANode> parentNodes,
+            IReadOnlyDictionary<NodeId, BaseUANode> knownNodes,
             bool getTypeReferences,
             bool initUnknownNodes,
             CancellationToken token)
         {
             return Task.Run(() =>
             {
-                foreach (var node in parentNodes.Values)
+                logger.LogInformation("Loading references from nodeset files");
+
+                var classMask = NodeClass.Object | NodeClass.Variable;
+                if (getTypeReferences)
+                {
+                    classMask |= NodeClass.ObjectType | NodeClass.VariableType | NodeClass.DataType | NodeClass.ReferenceType;
+                }
+
+                foreach (var node in knownNodes.Values)
                 {
                     if (!references.TryGetValue(node.Id, out var outReferences)) continue;
                     foreach (var rf in outReferences.Values)
                     {
                         var childId = client.ToNodeId(rf.TargetId);
-                        var childNode = nodeMap.GetValueOrDefault(childId);
+                        var childNode = knownNodes.GetValueOrDefault(childId) ?? nodeMap.GetValueOrDefault(childId);
                         if (childNode == null)
                         {
-                            if (initUnknownNodes)
-                            {
-                                if (!nodeDict.ContainsKey(childId)) continue;
-                                BuildNode(childId, NodeId.Null);
-                                childNode = nodeMap.GetValueOrDefault(childId);
+                            if (!nodeDict.ContainsKey(childId)) continue;
 
-                                if (childNode == null) continue;
+                            if (extractor.State.IsMappedNode(childId))
+                            {
+                                // If the node is mapped, we just create a dummy node.
+                                // This is a corner case, when we are browsing a subset of the
+                                // node hierarchy.
+                                var nodeState = nodeDict[childId];
+                                childNode = BaseUANode.FromNodeState(nodeState, NodeId.Null, typeManager);
+                            }
+                            else if (initUnknownNodes)
+                            {
+                                BuildNode(childId, NodeId.Null, (uint)classMask);
+                                childNode = nodeMap.GetValueOrDefault(childId);
                             }
                             else
                             {
                                 logger.LogTrace("Skipping reference from {Parent} to {Child} due to missing child node", node.Id, rf.TargetId);
                                 continue;
                             }
+
+                            if (childNode == null) continue;
                         }
 
                         var reference = new UAReference(
@@ -163,7 +184,7 @@ namespace Cognite.OpcUa.NodeSources
 
             if (this.config.Source.EndpointUrl != null)
             {
-                await client.ReadNodeValues(nodes.Where(n => n.AllowValueRead(logger, config)), token);
+                await client.ReadNodeValues(nodes.Where(n => n.AllowValueRead(logger, config, true)), token);
             }
         }
 
@@ -304,7 +325,7 @@ namespace Cognite.OpcUa.NodeSources
                 yield return reference;
             }
         }
-        private void BrowseHierarchy(IEnumerable<NodeId> rootIds)
+        private void BrowseHierarchy(IEnumerable<NodeId> rootIds, uint nodeClassMask)
         {
             var visitedNodes = new HashSet<NodeId>();
             visitedNodes.Add(ObjectIds.Server);
@@ -313,7 +334,7 @@ namespace Cognite.OpcUa.NodeSources
             foreach (var id in rootIds)
             {
                 visitedNodes.Add(id);
-                if (BuildNode(id, NodeId.Null))
+                if (BuildNode(id, NodeId.Null, nodeClassMask))
                 {
                     nextIds.Add(id);
                 }
@@ -333,7 +354,7 @@ namespace Cognite.OpcUa.NodeSources
                 foreach (var (child, parent) in refs)
                 {
                     var childId = client.ToNodeId(child.TargetId);
-                    if (visitedNodes.Add(childId) && BuildNode(childId, parent))
+                    if (visitedNodes.Add(childId) && BuildNode(childId, parent, nodeClassMask))
                     {
                         nextIds.Add(childId);
                     }
@@ -341,31 +362,30 @@ namespace Cognite.OpcUa.NodeSources
             }
         }
 
-        private bool referenceTypesLoaded = false;
-
         private void LoadReferenceTypes()
         {
-            if (referenceTypesLoaded) return;
-            referenceTypesLoaded = true;
+            if (typeManager.ReferenceTypesLoadedExternally) return;
             foreach (var node in nodeDict.Values.OfType<ReferenceTypeState>())
             {
                 var res = BaseUANode.FromNodeState(node, node.SuperTypeId, typeManager);
                 if (res != null) typeManager.AddTypeHierarchyNode(res);
             }
 
+            typeManager.ReferenceTypesLoadedExternally = true;
             typeManager.BuildNodeChildren();
         }
 
-        private bool BuildNode(NodeId id, NodeId parentId)
+        private bool BuildNode(NodeId id, NodeId parentId, uint nodeClassMask)
         {
+            if (id == ObjectIds.Server || id == ObjectIds.Aliases) return false;
+
             var nodeState = nodeDict[id];
 
             var node = BaseUANode.FromNodeState(nodeState, parentId, typeManager);
             var added = false;
             if (node != null)
             {
-                added = TryAdd(node);
-
+                added = TryAdd(node, nodeClassMask);
                 if (node.Parent == null)
                 {
                     node.Parent = nodeMap.GetValueOrDefault(parentId);
@@ -375,11 +395,11 @@ namespace Cognite.OpcUa.NodeSources
             return added;
         }
 
-        private bool TryAdd(BaseUANode node)
+        private bool TryAdd(BaseUANode node, uint nodeClassMask)
         {
-            if (!config.Extraction.NodeTypes.AsNodes && node.IsType) return false;
+            if ((nodeClassMask & ((uint)node.NodeClass)) == 0) return false;
 
-            return nodeMap.TryAdd(node.Id, node);
+            return nodeMap.TryAdd(node);
         }
         #endregion
     }

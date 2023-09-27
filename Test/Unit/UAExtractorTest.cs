@@ -273,7 +273,12 @@ namespace Test.Unit
             extractor.InitExternal(tester.Source.Token);
             await extractor.RunExtractor(true);
 
-            Assert.Equal(18, pusher.PushedNodes.Count);
+            foreach (var node in pusher.PushedNodes)
+            {
+                tester.Log.LogDebug("{Name}", node.Value.Name);
+            }
+
+            Assert.Equal(16, pusher.PushedNodes.Count);
             Assert.Equal(38, pusher.PushedVariables.Count);
             Assert.Equal(10, pusher.PushedReferences.Count);
         }

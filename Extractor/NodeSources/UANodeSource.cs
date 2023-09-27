@@ -19,6 +19,7 @@ using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
+using CogniteSdk.Beta.DataModels;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using System.Collections.Generic;
@@ -31,17 +32,19 @@ namespace Cognite.OpcUa.NodeSources
     public class UANodeSource : ITypeAndNodeSource
     {
         private readonly ILogger logger;
+        private readonly UAExtractor extractor;
         private readonly UAClient client;
         private readonly TypeManager typeManager;
 
-        private Dictionary<NodeId, BaseUANode> nodeMap = new();
-        private List<UAReference> references = new();
+        private UANodeCollection nodeMap = new();
+        private HashSet<UAReference> references = new();
 
         private HierarchicalReferenceMode hierarchicalReferences = HierarchicalReferenceMode.Disabled;
 
-        public UANodeSource(ILogger logger, UAClient client, TypeManager typeManager)
+        public UANodeSource(ILogger logger, UAExtractor extractor, UAClient client, TypeManager typeManager)
         {
             this.logger = logger;
+            this.extractor = extractor;
             this.client = client;
             this.typeManager = typeManager;
         }
@@ -71,20 +74,20 @@ namespace Cognite.OpcUa.NodeSources
             await client.Browser.BrowseNodeHierarchy(nodesToBrowse, HandleNode, token,
                 "the main instance hierarchy", nodeClassMask);
 
-            if (nodeMap.Any()) await client.ReadNodeData(nodeMap.Values, token, "the main instance hierarchy");
+            if (nodeMap.Any()) await client.ReadNodeData(nodeMap, token, "the main instance hierarchy");
 
             return TakeResults(false);
         }
 
         public async Task<NodeLoadResult> LoadNonHierarchicalReferences(
-            IReadOnlyDictionary<NodeId, BaseUANode> parentNodes,
+            IReadOnlyDictionary<NodeId, BaseUANode> knownNodes,
             bool getTypeReferences,
             bool initUnknownNodes,
             CancellationToken token)
         {
-            await LoadNonHierarchicalReferencesInternal(parentNodes, getTypeReferences, initUnknownNodes, token);
+            await LoadNonHierarchicalReferencesInternal(knownNodes, getTypeReferences, initUnknownNodes, token);
 
-            if (nodeMap.Any()) await client.ReadNodeData(nodeMap.Values, token, "new non-hierarchical instances");
+            if (nodeMap.Any()) await client.ReadNodeData(nodeMap, token, "new non-hierarchical instances");
 
             return TakeResults(false);
         }
@@ -92,22 +95,20 @@ namespace Cognite.OpcUa.NodeSources
         public async Task LoadTypeMetadata(IEnumerable<BaseUANode> nodes, DataTypeConfig config, CancellationToken token)
         {
             await client.ReadNodeData(nodes, token, "the type hierarchy");
-            await client.ReadNodeValues(nodes.Where(n => n.AllowValueRead(logger, config)), token);
+            await client.ReadNodeValues(nodes.Where(n => n.AllowValueRead(logger, config, true)), token);
         }
 
         #region Support
 
         private async Task LoadNonHierarchicalReferencesInternal(
-            IReadOnlyDictionary<NodeId, BaseUANode> parentNodes,
+            IReadOnlyDictionary<NodeId, BaseUANode> knownNodes,
             bool getTypeReferences,
             bool initUnknownNodes,
             CancellationToken token)
         {
-            if (!parentNodes.Any()) return;
-            nodeMap.Clear();
-            references.Clear();
+            if (!knownNodes.Any()) return;
 
-            var nodesToQuery = parentNodes.Keys.Select(n => new BrowseNode(n)).ToDictionary(n => n.Id);
+            var nodesToQuery = knownNodes.Keys.Select(n => new BrowseNode(n)).ToDictionary(n => n.Id);
             var classMask = NodeClass.Object | NodeClass.Variable;
             if (getTypeReferences)
             {
@@ -127,19 +128,35 @@ namespace Cognite.OpcUa.NodeSources
             int count = 0;
             foreach (var (parentId, children) in foundReferences)
             {
-                var parentNode = parentNodes.GetValueOrDefault(parentId);
+                var parentNode = knownNodes.GetValueOrDefault(parentId);
                 if (parentNode == null) continue;
 
                 foreach (var child in children)
                 {
                     var childId = client.ToNodeId(child.NodeId);
-                    var childNode = nodeMap.GetValueOrDefault(childId);
-                    if (initUnknownNodes && childNode == null)
+                    var childNode = knownNodes.GetValueOrDefault(childId) ?? nodeMap.GetValueOrDefault(childId);
+
+                    if (childNode == null)
                     {
-                        childNode = BaseUANode.Create(child, parentId, parentNode, client, typeManager);
-                        if (childNode != null) nodeMap[childId] = childNode;
+                        if (extractor.State.IsMappedNode(childId))
+                        {
+                            // Corner case, this happens if we are browsing a subset of the node hierarchy
+                            // and find a reference to a node outside of the subset we're looking at.
+                            childNode = BaseUANode.Create(child, parentId, parentNode, client, typeManager);
+                        }
+                        else if (initUnknownNodes)
+                        {
+                            childNode = BaseUANode.Create(child, parentId, parentNode, client, typeManager);
+                            if (childNode != null) nodeMap.Add(childNode);
+                        }
+                        else
+                        {
+                            logger.LogTrace("Skipping reference from {Parent} to {Child} due to missing child node", parentId, childId);
+                            continue;
+                        }
+
+                        if (childNode == null) continue;
                     }
-                    if (childNode == null) continue;
 
                     references.Add(new UAReference(
                         typeManager.GetReferenceType(child.ReferenceTypeId),
@@ -169,12 +186,12 @@ namespace Cognite.OpcUa.NodeSources
                 mapped = result;
 
                 logger.LogTrace("Handle node {Name}, {Id}: {Class}", mapped.Name, mapped.Id, mapped.NodeClass);
-                nodeMap[mapped.Id] = mapped;
+                nodeMap.TryAdd(mapped);
             }
             else
             {
                 mapped = nodeMap.GetValueOrDefault(client.ToNodeId(node.NodeId));
-                if (mapped.ParentId.IsNullNodeId)
+                if (mapped != null && mapped.ParentId.IsNullNodeId)
                 {
                     mapped.Parent = nodeMap.GetValueOrDefault(parentId);
                 }

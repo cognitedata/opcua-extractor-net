@@ -1138,11 +1138,11 @@ namespace Test.Unit
                 count++;
             }
 
-            var uaNodeSource = new UANodeSource(tester.Logger, tester.Client, tester.Client.TypeManager);
+            var uaNodeSource = new UANodeSource(tester.Logger, null!, tester.Client, tester.Client.TypeManager);
 
             try
             {
-                await tester.Client.TypeManager.LoadTypeData(uaNodeSource, tester.Source.Token);
+                await tester.Client.TypeManager.Initialize(uaNodeSource, tester.Source.Token);
 
                 await tester.Client.SubscribeToEvents(emitters.Take(2), handler, tester.Client.TypeManager.EventFields, tester.Source.Token);
                 await tester.Client.SubscribeToEvents(emitters.Skip(2), handler, tester.Client.TypeManager.EventFields, tester.Source.Token);
@@ -1186,10 +1186,10 @@ namespace Test.Unit
             {
                 count++;
             }
-            var uaNodeSource = new UANodeSource(tester.Logger, tester.Client, tester.Client.TypeManager);
+            var uaNodeSource = new UANodeSource(tester.Logger, null!, tester.Client, tester.Client.TypeManager);
             try
             {
-                await tester.Client.TypeManager.LoadTypeData(uaNodeSource, tester.Source.Token);
+                await tester.Client.TypeManager.Initialize(uaNodeSource, tester.Source.Token);
                 await tester.Client.SubscribeToEvents(emitters, handler, tester.Client.TypeManager.EventFields, tester.Source.Token);
 
                 tester.Server.TriggerEvents(0);

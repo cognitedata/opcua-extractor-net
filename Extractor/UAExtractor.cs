@@ -338,7 +338,7 @@ namespace Cognite.OpcUa
                 Config.Source.NodeSetSource.Instance = true;
                 nodeSetSource = new NodeSetNodeSource(
                     Provider.GetRequiredService<ILogger<NodeSetNodeSource>>(),
-                    Config, uaClient, TypeManager);
+                    Config, this, uaClient, TypeManager);
                 await nodeSetSource.Initialize(Source.Token);
             }
 
@@ -617,10 +617,9 @@ namespace Cognite.OpcUa
             {
                 if (Config.Source.NodeSetSource.Instance || Config.Source.NodeSetSource.Types)
                 {
-                    if (nodeSetSource == null)
-                        nodeSetSource = new NodeSetNodeSource(
+                    nodeSetSource ??= new NodeSetNodeSource(
                             Provider.GetRequiredService<ILogger<NodeSetNodeSource>>(),
-                            Config, uaClient, TypeManager);
+                            Config, this, uaClient, TypeManager);
                 }
 
                 if (Config.Source.NodeSetSource.Instance)
@@ -642,7 +641,7 @@ namespace Cognite.OpcUa
         {
             UANodeSource uaSource = new UANodeSource(
                 Provider.GetRequiredService<ILogger<UANodeSource>>(),
-                uaClient, TypeManager);
+                this, uaClient, TypeManager);
             var (nodeSource, typeSource) = GetSources(initial, uaSource);
 
             NodeHierarchyBuilder MakeBuilder(INodeSource source)
@@ -663,7 +662,7 @@ namespace Cognite.OpcUa
                 tasks = tasks.Append(async token =>
                 {
                     builder = MakeBuilder(uaSource);
-                    await builder.LoadNodeHierarchy(true, token);
+                    result = await builder.LoadNodeHierarchy(true, token);
                     var nextTasks = await MapUAToDestinations(result);
                     foreach (var task in tasks)
                     {

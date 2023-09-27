@@ -254,30 +254,19 @@ namespace Cognite.OpcUa.Nodes
             }
         }
 
-        public bool AllowValueRead(BaseUANode node, ILogger log, DataTypeConfig config)
+        public bool AllowValueRead(
+            BaseUANode node,
+            int[]? arrayDimensions,
+            int valueRank,
+            ILogger log,
+            DataTypeConfig config,
+            bool ignoreDimension)
         {
             const int MAX_COMBINED_LENGTH = 100;
             if (ShouldIgnore)
             {
                 log.LogDebug("Skipping value read on {Name} {Id} due to datatype {Raw} being in list of ignored data types",
                     node.Name, node.Id, Id);
-                return false;
-            }
-
-            int[]? arrayDimensions;
-            int valueRank;
-            if (node is UAVariableType varType)
-            {
-                valueRank = varType.FullAttributes.ValueRank;
-                arrayDimensions = varType.FullAttributes.ArrayDimensions;
-            }
-            else if (node is UAVariable variable)
-            {
-                valueRank = variable.FullAttributes.ValueRank;
-                arrayDimensions = variable.FullAttributes.ArrayDimensions;
-            }
-            else
-            {
                 return false;
             }
 
@@ -297,8 +286,9 @@ namespace Cognite.OpcUa.Nodes
             }
             else
             {
+                if (ignoreDimension) return true;
                 if (config.UnknownAsScalar && (valueRank == ValueRanks.ScalarOrOneDimension || valueRank == ValueRanks.Any)) return true;
-                log.LogDebug("Skipping variable {Name} {Id} due to non-scalar ValueRank {Rank} and null ArrayDimensions",
+                log.LogDebug("Skipping value read on variable {Name} {Id} due to non-scalar ValueRank {Rank} and null ArrayDimensions",
                     node.Name, node.Id, ExtractorUtils.GetValueRankString(valueRank));
                 return false;
             }

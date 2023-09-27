@@ -1334,14 +1334,14 @@ namespace Test.Unit
             Assert.Equal("gp.base:s=target", rel.TargetExternalId);
             Assert.Equal("gp.Organizes;base:s=source;base:s=target", rel.ExternalId);
 
-            reference = new UAReference(organizes, false, target, source);
+            reference = new UAReference(organizes, false, source, target);
             rel = reference.ToRelationship(123, extractor);
             Assert.Equal(123, rel.DataSetId);
             Assert.Equal(RelationshipVertexType.TimeSeries, rel.SourceType);
             Assert.Equal(RelationshipVertexType.Asset, rel.TargetType);
             Assert.Equal("gp.base:s=target", rel.SourceExternalId);
             Assert.Equal("gp.base:s=source", rel.TargetExternalId);
-            Assert.Equal("gp.OrganizedBy;base:s=target;base:s=source", rel.ExternalId);
+            Assert.Equal("gp.OrganizedBy;base:s=source;base:s=target", rel.ExternalId);
         }
         #endregion
     }

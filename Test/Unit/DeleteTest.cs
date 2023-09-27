@@ -124,9 +124,10 @@ namespace Test.Unit
             return new UAVariable(new NodeId(id), id, null, null, NodeId.Null, null);
         }
 
-        private static UAReference GetReference(string source, string target, TypeManager manager)
+        private static UAReference GetReference(BaseUANode source, BaseUANode target, TypeManager manager)
         {
-            return new UAReference(new NodeId("type"), true, new NodeId(source), new NodeId(target), false, false, false, manager);
+            return new UAReference(manager.GetReferenceType(new NodeId("type")),
+                true, source, target);
         }
 
         [Theory]
@@ -143,7 +144,8 @@ namespace Test.Unit
                 Enumerable.Empty<UAVariable>(),
                 new[] { GetObject("obj1"), GetObject("obj2") },
                 new[] { GetVariable("var1"), GetVariable("var2") },
-                Enumerable.Empty<UAReference>(), false);
+                Enumerable.Empty<UAReference>(),
+                false, false);
 
             // Cannot be used for deletes, so nothing happens.
             var toDelete = await manager.GetDiffAndStoreIds(result, tester.Source.Token);
@@ -157,7 +159,7 @@ namespace Test.Unit
                 Enumerable.Empty<UAVariable>(),
                 new[] { GetObject("obj1"), GetObject("obj2") },
                 new[] { GetVariable("var1"), GetVariable("var2") },
-                Enumerable.Empty<UAReference>(), true);
+                Enumerable.Empty<UAReference>(), true, false);
 
             // No configured tables, and no references, so nothing happens
             tester.Config.StateStorage.KnownObjectsStore = null;
@@ -185,7 +187,7 @@ namespace Test.Unit
                 Enumerable.Empty<UAVariable>(),
                 new[] { GetObject("obj2") },
                 new[] { GetVariable("var2") },
-                Enumerable.Empty<UAReference>(), true);
+                Enumerable.Empty<UAReference>(), true, false);
 
             toDelete = await manager.GetDiffAndStoreIds(result, tester.Source.Token);
             Assert.Single(toDelete.Objects);
@@ -205,12 +207,16 @@ namespace Test.Unit
             var manager = new DeletesManager(store, tester.Client, tester.Provider.GetRequiredService<ILogger<DeletesManager>>(), tester.Config);
             var typeManager = new TypeManager(tester.Config, tester.Client, tester.Log);
 
+            var objects = new[] { GetObject("obj1"), GetObject("obj2") };
+            var variables = new[] { GetVariable("var1"), GetVariable("var2") };
+
             var result = new NodeSourceResult(
                 Enumerable.Empty<BaseUANode>(),
                 Enumerable.Empty<UAVariable>(),
-                new[] { GetObject("obj1"), GetObject("obj2") },
-                new[] { GetVariable("var1"), GetVariable("var2") },
-                new[] { GetReference("obj1", "obj2", typeManager), GetReference("var1", "var2", typeManager) }, true);
+                objects,
+                variables,
+                new[] { GetReference(objects[0], objects[1], typeManager),
+                    GetReference(variables[0], variables[1], typeManager) }, true, false);
 
             // No configured tables, and no references, so nothing happens
             tester.Config.StateStorage.KnownObjectsStore = null;
@@ -238,7 +244,7 @@ namespace Test.Unit
                 Enumerable.Empty<UAVariable>(),
                 new[] { GetObject("obj2") },
                 new[] { GetVariable("var2") },
-                new[] { GetReference("var1", "var2", typeManager) }, true);
+                new[] { GetReference(variables[0], variables[1], typeManager) }, true, false);
 
             toDelete = await manager.GetDiffAndStoreIds(result, tester.Source.Token);
             Assert.Single(toDelete.Objects);
@@ -266,9 +272,10 @@ namespace Test.Unit
             var typeManager = extractor.TypeManager;
 
             var references = Enumerable.Range(1, count).Select(i => new UAReference(
-                ReferenceTypeIds.Organizes, true, new NodeId($"object{i}"), new NodeId($"var{i}"), false, true, false, typeManager)).ToList();
+                typeManager.GetReferenceType(ReferenceTypeIds.Organizes), true, nodes[i - 1], variables[i - 1])).ToList();
 
-            return new NodeSourceResult(Enumerable.Empty<BaseUANode>(), Enumerable.Empty<UAVariable>(), nodes, variables, references, true);
+            return new NodeSourceResult(Enumerable.Empty<BaseUANode>(), Enumerable.Empty<UAVariable>(),
+                nodes, variables, references, true, false);
         }
 
         [Fact]
@@ -406,7 +413,13 @@ namespace Test.Unit
             Assert.False(handler.Assets[addedExtId].metadata.ContainsKey("deleted"));
             Assert.False(handler.Timeseries[addedVarExtId].metadata.ContainsKey("deleted"));
             // Need to build the reference externalId late, since it depends on the reference type manager being populated.
-            var refExtId = tester.Client.GetRelationshipId(new UAReference(ReferenceTypeIds.Organizes, true, tester.Ids.Audit.Root, addedId, false, false, true, extractor.TypeManager));
+            var refType = extractor.TypeManager.GetReferenceType(ReferenceTypeIds.Organizes);
+            var refExtId = tester.Client.GetRelationshipId(new UAReference(
+                refType,
+                true,
+                new UAObject(tester.Ids.Audit.Root, "AuditRoot", null, null, NodeId.Null, null),
+                new UAObject(addedId, "New", null, null, NodeId.Null, null)));
+
             tester.Log.LogInformation("RefExtId: {Id}", refExtId);
             Assert.True(handler.Relationships.ContainsKey(refExtId));
 
@@ -470,7 +483,12 @@ namespace Test.Unit
             Assert.False(handler.TimeseriesRaw[addedVarExtId].TryGetProperty("deleted", out _));
             Assert.False(handler.Timeseries[addedVarExtId].metadata?.ContainsKey("deleted") ?? false);
             // Need to build the reference externalId late, since it depends on the reference type manager being populated.
-            var refExtId = tester.Client.GetRelationshipId(new UAReference(ReferenceTypeIds.Organizes, true, tester.Ids.Audit.Root, addedId, false, false, true, extractor.TypeManager));
+            var refType = extractor.TypeManager.GetReferenceType(ReferenceTypeIds.Organizes);
+            var refExtId = tester.Client.GetRelationshipId(new UAReference(
+                refType,
+                true,
+                new UAObject(tester.Ids.Audit.Root, "AuditRoot", null, null, NodeId.Null, null),
+                new UAObject(addedId, "New", null, null, NodeId.Null, null)));
             tester.Log.LogInformation("RefExtId: {Id}", refExtId);
             Assert.True(handler.RelationshipsRaw.ContainsKey(refExtId));
 

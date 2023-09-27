@@ -40,7 +40,7 @@ namespace Cognite.OpcUa.NodeSources
         private readonly CDFNodeSourceConfig sourceConfig;
         private readonly string database;
 
-        private Dictionary<NodeId, BaseUANode> nodeMap = new();
+        private UANodeCollection nodeMap = new();
 
         private readonly TypeManager typeManager;
         private readonly ILogger logger;
@@ -111,7 +111,7 @@ namespace Cognite.OpcUa.NodeSources
                 {
                     logger.LogError("Failed to retrieve and deserialize raw timeseries from CDF: {Message}", ex.Message);
                     TakeResults();
-                    return new NodeLoadResult(new Dictionary<NodeId, BaseUANode>(), Enumerable.Empty<UAReference>(), true, true);
+                    return new NodeLoadResult(new UANodeCollection(), Enumerable.Empty<UAReference>(), true, true);
                 }
 
                 foreach (var node in nodes)
@@ -121,7 +121,7 @@ namespace Cognite.OpcUa.NodeSources
                     var res = BaseUANode.FromSavedNode(node, typeManager);
                     if (res is not UAVariable variable) continue;
 
-                    if (nodeMap.TryAdd(variable.Id, variable)) varCount++;
+                    if (nodeMap.TryAdd(variable)) varCount++;
 
                 }
             }
@@ -141,7 +141,7 @@ namespace Cognite.OpcUa.NodeSources
                 {
                     logger.LogError("Failed to retrieve and deserialize raw assets from CDF: {Message}", ex.Message);
                     TakeResults();
-                    return new NodeLoadResult(new Dictionary<NodeId, BaseUANode>(), Enumerable.Empty<UAReference>(), true, true);
+                    return new NodeLoadResult(new UANodeCollection(), Enumerable.Empty<UAReference>(), true, true);
                 }
 
                 foreach (var node in nodes)
@@ -151,7 +151,7 @@ namespace Cognite.OpcUa.NodeSources
                     var res = BaseUANode.FromSavedNode(node, typeManager);
                     if (res is not UAObject obj) continue;
 
-                    if (nodeMap.TryAdd(obj.Id, obj)) objCount++;
+                    if (nodeMap.TryAdd(obj)) objCount++;
                 }
             }
             logger.LogInformation("Retrieved {Obj} objects and {Var} variables from CDF Raw", objCount, varCount);
@@ -162,7 +162,7 @@ namespace Cognite.OpcUa.NodeSources
         public Task<NodeLoadResult> LoadNonHierarchicalReferences(IReadOnlyDictionary<NodeId, BaseUANode> parentNodes, bool getTypeReferences, bool initUnknownNodes, CancellationToken token)
         {
             return Task.FromResult(
-                new NodeLoadResult(new Dictionary<NodeId, BaseUANode>(), Enumerable.Empty<UAReference>(), true, true)
+                new NodeLoadResult(new UANodeCollection(), Enumerable.Empty<UAReference>(), true, true)
             );
         }
     }

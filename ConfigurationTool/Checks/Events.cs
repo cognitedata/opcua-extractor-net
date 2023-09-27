@@ -32,7 +32,7 @@ namespace Cognite.OpcUa.Config
                 Config.Events.AllEvents = true;
                 Config.Events.Enabled = true;
                 var source = new UANodeSource(
-                    provider.GetRequiredService<ILogger<UANodeSource>>(), this, TypeManager);
+                    provider.GetRequiredService<ILogger<UANodeSource>>(), null!, this, TypeManager);
                 await TypeManager.LoadTypeData(source, token);
             }
             catch (Exception ex)

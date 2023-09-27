@@ -670,11 +670,18 @@ namespace Test.Unit
             Assert.Null(res.RelationshipsTable);
             Assert.Equal("gp.", res.IdPrefix);
 
+            var organizes = tester.Client.TypeManager.GetReferenceType(ReferenceTypeIds.Organizes);
+
+            var source = new UAObject(new NodeId("source"), "Source", "Source", null, NodeId.Null, null);
+            var target = new UAObject(new NodeId("target"), "Target", "Target", null, NodeId.Null, null);
+            var sourceVar = new UAVariable(new NodeId("source2"), "Source", "Source", null, NodeId.Null, null);
+            var targetVar = new UAVariable(new NodeId("target2"), "Target", "Target", null, NodeId.Null, null);
+
             // Create one of each.
             var node = new UAObject(tester.Server.Ids.Base.Root, "BaseRoot", null, null, NodeId.Null, null);
             var variable = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", null, null, new NodeId("parent"), null);
             variable.FullAttributes.DataType = dt;
-            var rel = new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target2"), true, false, false, extractor.TypeManager);
+            var rel = new UAReference(organizes, true, source, target);
 
             await pusher.PushNodes(new[] { node }, new[] { variable }, new[] { rel }, update, tester.Source.Token);
 
@@ -701,7 +708,7 @@ namespace Test.Unit
             Assert.Equal(0, res.RelationshipsCreated);
 
             // Modify "update", also add another reference.
-            rel = new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source2"), new NodeId("target2"), true, false, false, extractor.TypeManager);
+            rel = new UAReference(organizes, true, sourceVar, targetVar);
             update.Variables.Description = true;
             update.Objects.Description = true;
 
@@ -746,6 +753,13 @@ namespace Test.Unit
                 }
             };
 
+            var organizes = tester.Client.TypeManager.GetReferenceType(ReferenceTypeIds.Organizes);
+
+            var source = new UAObject(new NodeId("source"), "Source", "Source", null, NodeId.Null, null);
+            var target = new UAObject(new NodeId("target"), "Target", "Target", null, NodeId.Null, null);
+            var sourceVar = new UAVariable(new NodeId("source2"), "Source", "Source", null, NodeId.Null, null);
+            var targetVar = new UAVariable(new NodeId("target2"), "Target", "Target", null, NodeId.Null, null);
+
             (handler, pusher) = tester.GetCDFPusher();
             using var extractor = tester.BuildExtractor(true, null, pusher);
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_cdf");
@@ -774,7 +788,7 @@ namespace Test.Unit
             var node = new UAObject(tester.Server.Ids.Base.Root, "BaseRoot", null, null, NodeId.Null, null);
             var variable = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", null, null, new NodeId("parent"), null);
             variable.FullAttributes.DataType = dt;
-            var rel = new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target2"), true, false, false, extractor.TypeManager);
+            var rel = new UAReference(organizes, true, source, targetVar);
 
             await pusher.PushNodes(new[] { node }, new[] { variable }, new[] { rel }, update, tester.Source.Token);
 
@@ -803,7 +817,7 @@ namespace Test.Unit
             Assert.Equal(0, res.RawRelationshipsCreated);
 
             // Modify "update", also add another reference.
-            rel = new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source2"), new NodeId("target2"), true, false, false, extractor.TypeManager);
+            rel = new UAReference(organizes, true, sourceVar, targetVar);
             update.Variables.Description = true;
             update.Objects.Description = true;
 
@@ -940,8 +954,18 @@ namespace Test.Unit
                     Relationships = true,
                 }
             };
+
+            var organizes = tester.Client.TypeManager.GetReferenceType(ReferenceTypeIds.Organizes);
+
+            var source = new UAObject(new NodeId("source"), "Source", "Source", null, NodeId.Null, null);
+            var target = new UAObject(new NodeId("target"), "Target", "Target", null, NodeId.Null, null);
+            var sourceVar = new UAVariable(new NodeId("source2"), "Source", "Source", null, NodeId.Null, null);
+            var targetVar = new UAVariable(new NodeId("target2"), "Target", "Target", null, NodeId.Null, null);
+
             (handler, pusher) = tester.GetCDFPusher();
             using var extractor = tester.BuildExtractor(true, null, pusher);
+
+            var uaSource = new UANodeSource(tester.Log, extractor, tester.Client, tester.Client.TypeManager);
 
             var assets = Enumerable.Empty<BaseUANode>();
             var tss = Enumerable.Empty<UAVariable>();
@@ -953,10 +977,10 @@ namespace Test.Unit
             // Fail to push
             var references = new List<UAReference>
             {
-                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target2"), true, false, true, extractor.TypeManager),
-                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target"), false, true, true, extractor.TypeManager),
+                new UAReference(organizes, true, source, targetVar),
+                new UAReference(organizes, false, sourceVar, target),
             };
-            await extractor.TypeManager.LoadTypeData(tester.Source.Token);
+            await extractor.TypeManager.LoadTypeData(uaSource, tester.Source.Token);
             handler.FailedRoutes.Add("/relationships");
             Assert.False((await pusher.PushNodes(assets, tss, references, update, tester.Source.Token)).References);
             Assert.Empty(handler.Relationships);
@@ -969,10 +993,10 @@ namespace Test.Unit
             // Push again, with duplicates
             var references2 = new List<UAReference>
             {
-                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target"), true, true, true, extractor.TypeManager),
-                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target2"), false, false, true, extractor.TypeManager),
-                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target2"), true, false, true, extractor.TypeManager),
-                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target"), false, true, true, extractor.TypeManager)
+                new UAReference(organizes, true, source, target),
+                new UAReference(organizes, false, sourceVar, targetVar),
+                new UAReference(organizes, true, source, targetVar),
+                new UAReference(organizes, false, sourceVar, target)
             };
             Assert.True((await pusher.PushNodes(assets, tss, references2, update, tester.Source.Token)).References);
             Assert.Equal(4, handler.Relationships.Count);
@@ -1007,9 +1031,19 @@ namespace Test.Unit
                     Database = "metadata"
                 }
             };
+
+            var organizes = tester.Client.TypeManager.GetReferenceType(ReferenceTypeIds.Organizes);
+
+            var source = new UAObject(new NodeId("source"), "Source", "Source", null, NodeId.Null, null);
+            var target = new UAObject(new NodeId("target"), "Target", "Target", null, NodeId.Null, null);
+            var sourceVar = new UAVariable(new NodeId("source2"), "Source", "Source", null, NodeId.Null, null);
+            var targetVar = new UAVariable(new NodeId("target2"), "Target", "Target", null, NodeId.Null, null);
+
             tester.Config.Extraction.Relationships.Enabled = true;
             (handler, pusher) = tester.GetCDFPusher();
             using var extractor = tester.BuildExtractor(true, null, pusher);
+
+            var uaSource = new UANodeSource(tester.Log, extractor, tester.Client, tester.Client.TypeManager);
 
             var assets = Enumerable.Empty<BaseUANode>();
             var tss = Enumerable.Empty<UAVariable>();
@@ -1021,10 +1055,10 @@ namespace Test.Unit
             // Fail to push
             var references = new List<UAReference>
             {
-                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target2"), true, false, true, extractor.TypeManager),
-                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target"), false, true, true, extractor.TypeManager),
+                new UAReference(organizes, true, source, targetVar),
+                new UAReference(organizes, false, sourceVar, target),
             };
-            await extractor.TypeManager.LoadTypeData(tester.Source.Token);
+            await extractor.TypeManager.LoadTypeData(uaSource, tester.Source.Token);
             handler.FailedRoutes.Add("/raw/dbs/metadata/tables/relationships/rows");
             Assert.False((await pusher.PushNodes(assets, tss, references, update, tester.Source.Token)).RawReferences);
             Assert.Empty(handler.RelationshipsRaw);
@@ -1037,10 +1071,10 @@ namespace Test.Unit
             // Push again, with duplicates
             var references2 = new List<UAReference>
             {
-                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target"), true, true, true, extractor.TypeManager),
-                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target2"), false, false, true, extractor.TypeManager),
-                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target2"), true, false, true, extractor.TypeManager),
-                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target"), false, true, true, extractor.TypeManager)
+                new UAReference(organizes, true, source, target),
+                new UAReference(organizes, false, sourceVar, targetVar),
+                new UAReference(organizes, true, source, targetVar),
+                new UAReference(organizes, false, sourceVar, target)
             };
             Assert.True((await pusher.PushNodes(assets, tss, references2, update, tester.Source.Token)).References);
             Assert.Equal(4, handler.RelationshipsRaw.Count);
@@ -1103,12 +1137,15 @@ namespace Test.Unit
             tester.Config.Subscriptions.IgnoreAccessLevel = true;
 
             var log = tester.Provider.GetRequiredService<ILogger<CDFNodeSource>>();
-            var source = new CDFNodeSource(log, tester.Config, extractor, tester.Client, pusher, extractor.TypeManager);
+            var source = new CDFNodeSource(log, tester.Config, extractor, pusher, extractor.TypeManager);
+            var uaSource = new UANodeSource(tester.Log, extractor, tester.Client, extractor.TypeManager);
+            var builder = new NodeHierarchyBuilder(source, uaSource, tester.Config, Enumerable.Empty<NodeId>(),
+                tester.Client, extractor, extractor.Transformations, log);
 
             // Nothing in CDF
-            await source.ReadRawNodes(tester.Source.Token);
-            var result = await source.ParseResults(tester.Source.Token);
-            Assert.Null(result);
+            var result = await builder.LoadNodeHierarchy(true, tester.Source.Token);
+            Assert.Empty(result.DestinationObjects);
+            Assert.Empty(result.DestinationVariables);
 
             // Datapoints
             // Not a variable
@@ -1135,9 +1172,9 @@ namespace Test.Unit
                 NodeToRaw(extractor, child, ConverterType.Variable, true);
             }
 
-            source = new CDFNodeSource(log, tester.Config, extractor, tester.Client, pusher, extractor.TypeManager);
-            await source.ReadRawNodes(tester.Source.Token);
-            result = await source.ParseResults(tester.Source.Token);
+            builder = new NodeHierarchyBuilder(source, uaSource, tester.Config, Enumerable.Empty<NodeId>(),
+                 tester.Client, extractor, extractor.Transformations, log);
+            result = await builder.LoadNodeHierarchy(true, tester.Source.Token);
             Assert.Single(result.DestinationObjects);
             Assert.Equal("test4", result.DestinationObjects.First().Name);
             Assert.Equal(6, result.DestinationVariables.Count());
@@ -1151,17 +1188,18 @@ namespace Test.Unit
             // First, try disabling timeseries subscriptions and seeing that no results are returned
             tester.Config.Subscriptions.DataPoints = false;
             tester.Config.History.Enabled = false;
-            source = new CDFNodeSource(log, tester.Config, extractor, tester.Client, pusher, extractor.TypeManager);
-            await source.ReadRawNodes(tester.Source.Token);
-            result = await source.ParseResults(tester.Source.Token);
-            Assert.Null(result);
+            builder = new NodeHierarchyBuilder(source, uaSource, tester.Config, Enumerable.Empty<NodeId>(),
+                 tester.Client, extractor, extractor.Transformations, log);
+            result = await builder.LoadNodeHierarchy(true, tester.Source.Token);
+            Assert.Empty(result.DestinationObjects);
+            Assert.Empty(result.DestinationVariables);
             Assert.Empty(extractor.State.NodeStates);
 
             // Enable events, but no states should be created
             tester.Config.Events.Enabled = true;
-            source = new CDFNodeSource(log, tester.Config, extractor, tester.Client, pusher, extractor.TypeManager);
-            await source.ReadRawNodes(tester.Source.Token);
-            result = await source.ParseResults(tester.Source.Token);
+            builder = new NodeHierarchyBuilder(source, uaSource, tester.Config, Enumerable.Empty<NodeId>(),
+                 tester.Client, extractor, extractor.Transformations, log);
+            result = await builder.LoadNodeHierarchy(true, tester.Source.Token);
             Assert.Equal(2, result.DestinationObjects.Count());
             Assert.Single(result.SourceObjects);
             Assert.Equal(6, result.DestinationVariables.Count());
@@ -1179,9 +1217,9 @@ namespace Test.Unit
             variable.FullAttributes.ValueRank = -1;
             NodeToRaw(extractor, variable, ConverterType.Variable, true);
 
-            source = new CDFNodeSource(log, tester.Config, extractor, tester.Client, pusher, extractor.TypeManager);
-            await source.ReadRawNodes(tester.Source.Token);
-            result = await source.ParseResults(tester.Source.Token);
+            builder = new NodeHierarchyBuilder(source, uaSource, tester.Config, Enumerable.Empty<NodeId>(),
+                 tester.Client, extractor, extractor.Transformations, log);
+            result = await builder.LoadNodeHierarchy(true, tester.Source.Token);
             Assert.Equal(3, result.DestinationObjects.Count());
             Assert.Equal(2, result.SourceObjects.Count());
             Assert.Equal(7, result.DestinationVariables.Count());
@@ -1221,7 +1259,7 @@ namespace Test.Unit
             using var extractor = tester.BuildExtractor(true, null, pusher);
 
             // Nothing in CDF
-            await Assert.ThrowsAsync<ExtractorFailureException>(async () => await extractor.RunExtractor(true));
+            await extractor.RunExtractor(true);
             Assert.Empty(extractor.State.EmitterStates);
             Assert.Empty(extractor.State.NodeStates);
             tester.Config.Cognite.RawNodeBuffer.BrowseOnEmpty = true;
@@ -1299,7 +1337,7 @@ namespace Test.Unit
             using var extractor = tester.BuildExtractor(true, null, pusher);
 
             // Nothing in CDF
-            await Assert.ThrowsAsync<ExtractorFailureException>(async () => await extractor.RunExtractor(true));
+            await extractor.RunExtractor(true);
             Assert.Empty(extractor.State.EmitterStates);
             Assert.Empty(extractor.State.NodeStates);
             tester.Config.Cognite.RawNodeBuffer.BrowseOnEmpty = true;
@@ -1317,16 +1355,16 @@ namespace Test.Unit
 
             // Now there is something in CDF, read it back
             tester.Config.Cognite.RawNodeBuffer.BrowseOnEmpty = false;
-            string oldAssets = System.Text.Json.JsonSerializer.Serialize(handler.AssetsRaw);
-            string oldTimeseries = System.Text.Json.JsonSerializer.Serialize(handler.TimeseriesRaw);
+            string oldAssets = JsonSerializer.Serialize(handler.AssetsRaw);
+            string oldTimeseries = JsonSerializer.Serialize(handler.TimeseriesRaw);
             handler.Timeseries.Clear();
             extractor.GetType().GetField("subscribed", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(extractor, 0);
             extractor.GetType().GetField("subscribeFlag", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(extractor, false);
             await extractor.RunExtractor(true);
             Assert.True(extractor.State.NodeStates.Any());
 
-            string newAssets = System.Text.Json.JsonSerializer.Serialize(handler.AssetsRaw);
-            string newTimeseries = System.Text.Json.JsonSerializer.Serialize(handler.TimeseriesRaw);
+            string newAssets = JsonSerializer.Serialize(handler.AssetsRaw);
+            string newTimeseries = JsonSerializer.Serialize(handler.TimeseriesRaw);
 
             // Ensure data in raw is untouched.
             Assert.Equal(oldAssets, newAssets);
@@ -1429,7 +1467,7 @@ namespace Test.Unit
             var node = new UAObject(tester.Server.Ids.Base.Root, "BaseRoot", null, null, NodeId.Null, null);
             var variable = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", null, null, new NodeId("parent"), null);
             variable.FullAttributes.DataType = dt;
-            var rel = new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target2"), true, false, false, extractor.TypeManager);
+            var rel = new UAReference(extractor.TypeManager.GetReferenceType(ReferenceTypeIds.Organizes), true, node, variable);
 
             var result = await pusher.PushNodes(new[] { node }, new [] { variable }, new[] { rel }, update, tester.Source.Token);
 

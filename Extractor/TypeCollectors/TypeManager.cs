@@ -45,13 +45,29 @@ namespace Cognite.OpcUa.TypeCollectors
         private readonly HashSet<NodeId> ignoreDataTypes = new();
         private readonly Dictionary<NodeId, ProtoDataType> customDataTypes = new();
 
+        public bool ReferenceTypesLoadedExternally { get; set; }
+
 
         public TypeManager(FullConfig config, UAClient client, ILogger log)
         {
             this.log = log;
             this.config = config;
             this.client = client;
+        }
 
+        public async Task Initialize(ITypeAndNodeSource source, CancellationToken token)
+        {
+            InitDataTypeConfig();
+            await source.Initialize(token);
+            await ReadTypeHiearchies(source, token);
+            BuildTypeInfo();
+            if (config.Events.Enabled) CollectEventTypes();
+        }
+
+        public void InitDataTypeConfig()
+        {
+            ignoreDataTypes.Clear();
+            customDataTypes.Clear();
             if (config.Extraction.DataTypes.IgnoreDataTypes != null)
             {
                 foreach (var type in config.Extraction.DataTypes.IgnoreDataTypes)
@@ -95,9 +111,12 @@ namespace Cognite.OpcUa.TypeCollectors
         {
             eventTypesRead = false;
             dataTypesRead = false;
+            ReferenceTypesLoadedExternally = false;
             NodeMap.Clear();
             NodeChildren.Clear();
             EventFields.Clear();
+            ignoreDataTypes.Clear();
+            customDataTypes.Clear();
         }
 
         private async Task ReadTypeData(ITypeAndNodeSource source, CancellationToken token)
@@ -105,7 +124,6 @@ namespace Cognite.OpcUa.TypeCollectors
             var toRead = new List<BaseUANode>();
             foreach (var tp in NodeMap.Values)
             {
-                if (tp.Attributes.IsDataRead) continue;
                 if (tp.Id.IsNullNodeId) continue;
                 if (tp.NodeClass == NodeClass.ObjectType && !config.Extraction.NodeTypes.Metadata
                     && (tp is not UAObjectType otp || !otp.IsEventType())) continue;
@@ -127,25 +145,26 @@ namespace Cognite.OpcUa.TypeCollectors
                 mask |= (uint)NodeClass.DataType;
                 rootNodes.Add(DataTypeIds.BaseDataType);
                 dataTypesRead = true;
+                log.LogInformation("Loading data type hierarchy to map out custom data types");
             }
             if (config.Events.Enabled && !eventTypesRead)
             {
                 mask |= (uint)NodeClass.ObjectType;
                 rootNodes.Add(ObjectTypeIds.BaseEventType);
                 eventTypesRead = true;
+                log.LogInformation("Loading event type hierarchy");
             }
             if (!rootNodes.Any()) return;
 
             var result = await source.LoadNodes(rootNodes, mask, HierarchicalReferenceMode.Disabled, token);
-            foreach (var kvp in result.Nodes)
+            foreach (var node in result.Nodes)
             {
-                NodeMap[kvp.Key] = kvp.Value;
+                NodeMap[node.Id] = node;
             }
         }
 
         public async Task LoadTypeData(ITypeAndNodeSource source, CancellationToken token)
         {
-            await ReadTypeHiearchies(source, token);
             await ReadTypeData(source, token);
             BuildTypeInfo();
         }
@@ -154,7 +173,6 @@ namespace Cognite.OpcUa.TypeCollectors
         {
             log.LogInformation("Building type information from nodes in memory");
             BuildNodeChildren();
-            if (config.Events.Enabled) CollectEventTypes();
             BuildDataTypes();
         }
 
@@ -190,30 +208,13 @@ namespace Cognite.OpcUa.TypeCollectors
             NodeMap[node.Id] = node;
         }
 
-        private void HandleNode(ReferenceDescription node, NodeId parentId, bool visited)
-        {
-            if (visited) return;
-
-            var parent = NodeMap.GetValueOrDefault(parentId);
-
-            var result = BaseUANode.Create(node, parentId, parent, client, this);
-
-            if (result == null)
-            {
-                log.LogWarning("Node of unexpected type received: {Type}, {Id}", node.NodeClass, node.NodeId);
-                return;
-            }
-
-            NodeMap[result.Id] = result;
-            log.LogTrace("Handle node {Name}, {Id}: {Class}", result.Name, result.Id, result.NodeClass);
-        }
-
         #region dataTypes
         private void BuildDataTypes()
         {
+            if (!config.Extraction.DataTypes.AutoIdentifyTypes) return;
+
             foreach (var type in NodeMap.Values.OfType<UADataType>())
             {
-                if (!config.Extraction.DataTypes.AutoIdentifyTypes) continue;
                 type.UpdateFromParent(config.Extraction.DataTypes);
                 if (NodeChildren.TryGetValue(type.Id, out var children))
                 {

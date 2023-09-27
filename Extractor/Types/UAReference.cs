@@ -24,14 +24,14 @@ namespace Cognite.OpcUa.Types
 
         public UAReference CreateInverse()
         {
-            return new UAReference(Type, !IsForward, Source, Target);
+            return new UAReference(Type, !IsForward, Target, Source);
         }
 
         public override string ToString()
         {
             string? refName = Type.GetName(!IsForward) ?? $"{Type.Id} {(IsForward ? "Forward" : "Inverse")}";
 
-            return $"Reference {Source} {refName} {Target}";
+            return $"Reference: {VertexType(Source)} {Source.Id} {refName} {VertexType(Target)} {Target.Id}";
         }
 
         public override bool Equals(object obj)

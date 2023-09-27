@@ -1,7 +1,9 @@
-﻿using Cognite.OpcUa.Config;
+﻿using Cognite.Extractor.Common;
+using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.Types;
+using CogniteSdk;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using System;
@@ -65,34 +67,43 @@ namespace Cognite.OpcUa.NodeSources
             if (hasRun) throw new InvalidOperationException("NodeHierarchyBuilder has already been started");
             hasRun = true;
 
+            // If enabled, load the type hierarchies, we do this early to handle custom data types
+            await client.TypeManager.Initialize(typeSource, token);
+            extractor.State.PopulateActiveEventTypes(client.TypeManager.EventFields);
+
             // Perform any pre-load initialization steps
             await nodeSource.Initialize(token);
+
 
             var classMask = (uint)NodeClass.Object | (uint)NodeClass.Variable;
             if (config.Extraction.NodeTypes.AsNodes)
             {
                 classMask |= (uint)NodeClass.ObjectType | (uint)NodeClass.VariableType | (uint)NodeClass.ReferenceType | (uint)NodeClass.DataType;
             }
+
             // Load nodes from the source, this is the main operation
             var initialNodes = await nodeSource.LoadNodes(nodesToRead, classMask, config.Extraction.Relationships.Mode, token);
+            // Refresh any newly loaded type data. Since TypeManager is lazy, we need to do this after loading nodes,
+            // but before processing them.
+            await client.TypeManager.LoadTypeData(typeSource, token);
             await ProcessNodeLoadResult(initialNodes, token);
 
             // If enabled, load non-hierarchical references from the source, this may
             // also load nodes.
             var usesFdm = config.Cognite?.MetadataTargets?.DataModels?.Enabled ?? false;
-            if (config.Extraction.Relationships.Mode != HierarchicalReferenceMode.Disabled)
+            if (config.Extraction.Relationships.Enabled)
             {
                 var referenceNodes = await nodeSource.LoadNonHierarchicalReferences(
-                    initialNodes.Nodes,
+                    FinalSourceObjects.Concat(FinalSourceVariables)
+                        .DistinctBy(d => d.Id)
+                        .ToDictionary(d => d.Id),
                     usesFdm || config.Extraction.NodeTypes.AsNodes,
                     usesFdm,
                     token);
+                // Refresh type data. This may have discovered new types.
+                await client.TypeManager.LoadTypeData(typeSource, token);
                 await ProcessNodeLoadResult(referenceNodes, token);
             }
-
-            // We have all the new nodes we need, we can now load type metadata, if needed.
-            await typeSource.Initialize(token);
-            await client.TypeManager.LoadTypeData(typeSource, token);
 
             // Finally, with all the type information in place, we can build node states
             foreach (var node in FinalSourceObjects.Concat(FinalSourceVariables))
@@ -116,8 +127,12 @@ namespace Cognite.OpcUa.NodeSources
             var rawVariables = new List<UAVariable>();
             var toReadValues = new List<BaseUANode>();
 
+            logger.LogInformation("Got {Count1} nodes and {Count2} references from source",
+                res.Nodes.Count, res.References.Count());
+
+            int propCount = 0;
             // First, build the nodes given the full context.
-            foreach (var node in res.Nodes.Values)
+            foreach (var node in res.Nodes)
             {
                 if (!res.AssumeFullyTransformed)
                 {
@@ -125,13 +140,17 @@ namespace Cognite.OpcUa.NodeSources
                     UpdateFromParent(res.Nodes, node);
                     // Apply transformations
                     ApplyTransformations(node);
+                    // Check if we should ignore it, need to do it here before we modify the parent.
+                    if (node.Ignore) continue;
                     // Check if the parent node should be converted to an object.
                     CheckParentShouldBeObject(node);
                 }
 
+
                 // Add to the intermediate lists.
                 if (node.IsProperty)
                 {
+                    propCount++;
                     node.Parent?.Attributes?.AddProperty(node);
                     if (node is UAVariable variable) toReadValues.Add(variable);
                 }
@@ -152,7 +171,7 @@ namespace Cognite.OpcUa.NodeSources
 
             // Read values of properties, this is added as metadata in CDF.
             if (config.Source.EndpointUrl != null) await client.ReadNodeValues(
-                toReadValues.Where(v => v.AllowValueRead(logger, config.Extraction.DataTypes)),
+                toReadValues.Where(v => v.AllowValueRead(logger, config.Extraction.DataTypes, false)),
                 token);
 
             // Estimate array sizes if enabled.
@@ -166,35 +185,30 @@ namespace Cognite.OpcUa.NodeSources
             // Add to final collections.
             var update = config.Extraction.Update;
 
-            var mappedObjects = rawObjects.Where(obj => FilterBaseNode(update.Objects, obj)).ToList();
-            FinalDestinationObjects.AddRange(mappedObjects);
-            FinalSourceObjects.AddRange(mappedObjects);
-
-            // Add variables to final collections as well.
-            foreach (var variable in rawVariables)
+            int objCount = 0, varCount = 0;
+            // Add variables and objects to final lists and cache
+            foreach (var obj in rawObjects)
             {
-                SortVariable(update.Variables, variable);
-            }
-
-            // We need to register the nodes in the cache before we map references, since that uses
-            // the stored states.
-            foreach (var node in FinalSourceObjects.Concat(FinalSourceVariables))
-            {
-                extractor.State.RegisterNode(node.Id, node.GetUniqueId(client));
-                extractor.State.AddActiveNode(
-                    node,
-                    config.Extraction.Update.Objects,
-                    config.Extraction.DataTypes.DataTypeMetadata,
-                    config.Extraction.NodeTypes.Metadata);
-                foreach (var prop in node.GetAllProperties())
+                if (FilterBaseNode(update.Objects, obj))
                 {
-                    extractor.State.AddActiveNode(
-                        prop,
-                        node is UAVariable ? update.Variables : update.Objects,
-                        config.Extraction.DataTypes.DataTypeMetadata,
-                        config.Extraction.NodeTypes.Metadata);
+                    FinalDestinationObjects.Add(obj);
+                    FinalSourceObjects.Add(obj);
+                    objCount++;
+                    AddManagedNode(update.Objects, obj);
                 }
             }
+
+            foreach (var variable in rawVariables)
+            {
+                if (FilterBaseNode(update.Variables, variable) && AddVariableToLists(variable))
+                {
+                    varCount++;
+                    AddManagedNode(update.Variables, variable);
+                }
+            }
+
+            logger.LogInformation("Mapped {Count1} nodes to objects, {Count2} to variables, and {Count3} to properties",
+                objCount, varCount, propCount);
 
             // Finally, filter references. This uses the knowledge of which nodes were added in the
             // end to avoid extracting references that point to an unmapped node.
@@ -206,9 +220,27 @@ namespace Cognite.OpcUa.NodeSources
             }
         }
 
+        private void AddManagedNode(TypeUpdateConfig update, BaseUANode node)
+        {
+            extractor.State.RegisterNode(node.Id, node.GetUniqueId(client));
+            extractor.State.AddActiveNode(
+                node,
+                config.Extraction.Update.Objects,
+                config.Extraction.DataTypes.DataTypeMetadata,
+                config.Extraction.NodeTypes.Metadata);
+            foreach (var prop in node.GetAllProperties())
+            {
+                extractor.State.AddActiveNode(
+                prop,
+                update,
+                config.Extraction.DataTypes.DataTypeMetadata,
+                config.Extraction.NodeTypes.Metadata);
+            }
+        }
+
 
         #region result-processing
-        private void UpdateFromParent(IReadOnlyDictionary<NodeId, BaseUANode> nodeMap, BaseUANode node)
+        private void UpdateFromParent(UANodeCollection nodeMap, BaseUANode node)
         {
             if (node.Parent == null && !node.ParentId.IsNullNodeId)
             {
@@ -377,24 +409,15 @@ namespace Cognite.OpcUa.NodeSources
         /// Write a variable to the correct output lists. This assumes the variable should be mapped.
         /// </summary>
         /// <param name="node">Variable to write</param>
-        private void AddVariableToLists(UAVariable node)
+        private bool AddVariableToLists(UAVariable node)
         {
             var map = node.GetVariableGroups(logger, config.Extraction.DataTypes);
             if (map.IsDestinationVariable) FinalDestinationVariables.AddRange(node.CreateTimeseries());
             if (map.IsDestinationObject) FinalDestinationObjects.Add(node);
             if (map.IsSourceVariable) FinalSourceVariables.Add(node);
             if (map.IsSourceObject) FinalSourceObjects.Add(node);
-            extractor.State.RegisterNode(node.Id, node.GetUniqueId(client));
-            extractor.State.AddActiveNode(
-                node,
-                config.Extraction.Update.Variables,
-                config.Extraction.DataTypes.DataTypeMetadata,
-                config.Extraction.NodeTypes.Metadata);
-        }
 
-        private void SortVariable(TypeUpdateConfig update, UAVariable node)
-        {
-            if (FilterBaseNode(update, node)) AddVariableToLists(node);
+            return map.Any();
         }
 
         private bool FilterReference(UAReference reference, bool mapProperties)

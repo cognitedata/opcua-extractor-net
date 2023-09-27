@@ -182,7 +182,7 @@ namespace Cognite.OpcUa.Nodes
             return client.GetUniqueId(Id);
         }
 
-        public virtual bool AllowValueRead(ILogger logger, DataTypeConfig config)
+        public virtual bool AllowValueRead(ILogger logger, DataTypeConfig config, bool ignoreDimension)
         {
             return false;
         }

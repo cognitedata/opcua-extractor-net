@@ -873,8 +873,8 @@ namespace Cognite.OpcUa
                             return monitor;
                         })
                     );
-                    log.LogDebug("Add {Purpose}subscriptions for {NumNodes} nodes, {Subscribed} / {Total} done.",
-                        purpose, lcount, count, total);
+                    log.LogDebug("Add {Purpose}subscriptions for {NumNodes} new nodes, {Subscribed} / {Total}.",
+                        purpose, lcount, count + lcount, total);
                     count += lcount;
 
                     if (lcount > 0)
