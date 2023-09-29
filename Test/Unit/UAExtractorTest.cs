@@ -278,7 +278,7 @@ namespace Test.Unit
                 tester.Log.LogDebug("{Name}", node.Value.Name);
             }
 
-            Assert.Equal(16, pusher.PushedNodes.Count);
+            Assert.Equal(15, pusher.PushedNodes.Count);
             Assert.Equal(38, pusher.PushedVariables.Count);
             Assert.Equal(10, pusher.PushedReferences.Count);
         }
