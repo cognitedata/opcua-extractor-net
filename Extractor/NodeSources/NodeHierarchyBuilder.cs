@@ -93,12 +93,16 @@ namespace Cognite.OpcUa.NodeSources
             var usesFdm = config.Cognite?.MetadataTargets?.DataModels?.Enabled ?? false;
             if (config.Extraction.Relationships.Enabled)
             {
+                IEnumerable<BaseUANode> knownNodes = FinalSourceObjects.Concat(FinalSourceVariables);
+                if (usesFdm)
+                {
+                    knownNodes = knownNodes.Concat(knownNodes.SelectMany(n => n.GetAllProperties()));
+                }
+
                 var referenceNodes = await nodeSource.LoadNonHierarchicalReferences(
-                    FinalSourceObjects.Concat(FinalSourceVariables)
-                        .DistinctBy(d => d.Id)
-                        .ToDictionary(d => d.Id),
+                    knownNodes.DistinctBy(n => n.Id).ToDictionary(n => n.Id),
                     usesFdm || config.Extraction.NodeTypes.AsNodes,
-                    usesFdm,
+                    usesFdm || config.Extraction.Relationships.CreateReferencedNodes,
                     token);
                 // Refresh type data. This may have discovered new types.
                 await client.TypeManager.LoadTypeData(typeSource, token);
@@ -195,6 +199,10 @@ namespace Cognite.OpcUa.NodeSources
                     FinalSourceObjects.Add(obj);
                     objCount++;
                     AddManagedNode(update.Objects, obj);
+                    if (obj.Id == ObjectIds.ModellingRule_Mandatory)
+                    {
+                        logger.LogDebug("Add managed object mandatory");
+                    }
                 }
             }
 
@@ -217,6 +225,11 @@ namespace Cognite.OpcUa.NodeSources
             {
                 if (!FilterReference(reference, usesFdm)) continue;
                 FinalReferences.Add(reference);
+            }
+
+            if (FinalReferences.Any())
+            {
+                logger.LogInformation("Mapped {Count} references", FinalReferences.Count);
             }
         }
 
@@ -368,7 +381,7 @@ namespace Cognite.OpcUa.NodeSources
 
             if (config.Source.EndpointUrl == null)
             {
-                logger.LogDebug("Unable to estimate array length for {Count} nodes, since the server no server is configured", toReadValues.Count);
+                logger.LogDebug("Unable to estimate array length for {Count} nodes, since no server is configured", toReadValues.Count);
                 return;
             }
 

@@ -1,5 +1,6 @@
 ﻿using Cognite.OpcUa.Config;
 using Microsoft.Extensions.Logging;
+using Opc.Ua;
 using Server;
 using System;
 using System.Linq;
@@ -35,11 +36,12 @@ namespace Test.Unit
             tester.Config.Extraction.RootNode = new ProtoNodeId
             {
                 NamespaceUri = "http://opcfoundation.org/UA/",
-                NodeId = "i=86"
+                NodeId = "i=84"
             };
             tester.Config.Extraction.NodeTypes.AsNodes = true;
             tester.Config.Extraction.Relationships.Enabled = true;
             tester.Config.Extraction.Relationships.Hierarchical = true;
+            tester.Config.Extraction.Relationships.CreateReferencedNodes = true;
             tester.Config.Extraction.DataTypes.AutoIdentifyTypes = true;
         }
 
@@ -56,17 +58,24 @@ namespace Test.Unit
 
             Assert.Single(handler.Spaces);
             // FolderType, BaseObjectType, BaseVariableType, BaseDataVariableType, PropertyType,
-            // 3 custom object types, 2 custom variable types
+            // 4 custom object types, 1 custom variable types
             // BaseNode, BaseType, +4 type types, and ModellingRuleType
+
+            foreach (var view in handler.Views)
+            {
+                tester.Log.LogDebug("{Key}", view.Key);
+            }
             Assert.Equal(19, handler.Views.Count);
             // 8 base types, 2 custom object types, 1 custom variable type have container data
             Assert.Equal(13, handler.Containers.Count);
-            foreach (var inst in handler.Instances)
+            /* foreach (var inst in handler.Instances)
             {
-                tester.Log.LogInformation("{Key}", inst.Key);
-            }
-            Assert.Equal(63, handler.Instances.Count(inst => inst.Value["instanceType"].ToString() == "node"));
-            Assert.Equal(71, handler.Instances.Count(inst => inst.Value["instanceType"].ToString() == "edge"));
+                tester.Log.LogDebug("{Id}: {Name}", inst.Key, inst.Value
+                    ?["sources"]?.AsArray()?.FirstOrDefault(r => r["source"]["externalId"].GetValue<string>() == "BaseNode")
+                        ?["properties"]?["DisplayName"]);
+            } */
+            Assert.Equal(80, handler.Instances.Count(inst => inst.Value["instanceType"].ToString() == "node"));
+            Assert.Equal(105, handler.Instances.Count(inst => inst.Value["instanceType"].ToString() == "edge"));
         }
 
         [Fact]
@@ -82,13 +91,23 @@ namespace Test.Unit
 
             Assert.Single(handler.Spaces);
             // FolderType, BaseObjectType, BaseVariableType, BaseDataVariableType, PropertyType,
-            // 3 custom object types, 1 custom variable type
+            // 4 custom object types, 1 custom variable type
             // BaseNode, BaseType, +4 type types, and ModellingRuleType
-            Assert.Equal(18, handler.Views.Count);
+            /* foreach (var inst in handler.Instances)
+            {
+                tester.Log.LogDebug("{Id}: {Name}", inst.Key, inst.Value
+                    ?["sources"]?.AsArray()?.FirstOrDefault(r => r["source"]["externalId"].GetValue<string>() == "BaseNode")
+                        ?["properties"]?["DisplayName"]);
+            } */
+            foreach (var view in handler.Views)
+            {
+                tester.Log.LogDebug("{Key}", view.Key);
+            }
+            Assert.Equal(19, handler.Views.Count);
             // 8 base types, 2 custom object types, 1 custom variable type have container data
             Assert.Equal(13, handler.Containers.Count);
-            Assert.Equal(62, handler.Instances.Count(inst => inst.Value["instanceType"].ToString() == "node"));
-            Assert.Equal(71, handler.Instances.Count(inst => inst.Value["instanceType"].ToString() == "edge"));
+            Assert.Equal(80, handler.Instances.Count(inst => inst.Value["instanceType"].ToString() == "node"));
+            Assert.Equal(105, handler.Instances.Count(inst => inst.Value["instanceType"].ToString() == "edge"));
         }
 
         [Fact]
@@ -104,13 +123,18 @@ namespace Test.Unit
 
             Assert.Single(handler.Spaces);
             // FolderType, BaseObjectType, BaseVariableType, BaseDataVariableType, PropertyType,
-            // 3 custom object types, 1 custom variable type
+            // 4 custom object types, 1 custom variable type
             // BaseNode, BaseType, +4 type types, ModellingRuleType, and DataTypeSystemType
-            Assert.Equal(19, handler.Views.Count);
+            foreach (var view in handler.Views)
+            {
+                tester.Log.LogDebug("{Key}", view.Key);
+            }
+            Assert.Equal(21, handler.Views.Count);
+            
             // 8 base types, 2 custom object types, 1 custom variable type have container data
             Assert.Equal(13, handler.Containers.Count);
-            Assert.Equal(2155, handler.Instances.Count(inst => inst.Value["instanceType"].ToString() == "node"));
-            Assert.Equal(6137, handler.Instances.Count(inst => inst.Value["instanceType"].ToString() == "edge"));
+            Assert.Equal(2570, handler.Instances.Count(inst => inst.Value["instanceType"].ToString() == "node"));
+            Assert.Equal(6567, handler.Instances.Count(inst => inst.Value["instanceType"].ToString() == "edge"));
         }
 
         [Fact]
@@ -129,8 +153,8 @@ namespace Test.Unit
             Assert.Equal(133, handler.Containers.Count);
             // Numbers are lower because more types are mapped, so more nodes are mapped as metadata.
             // This isn't always desired. You may want the entire type hierarchy without the types for all nodes.
-            Assert.Equal(1874, handler.Instances.Count(inst => inst.Value["instanceType"].ToString() == "node"));
-            Assert.Equal(3824, handler.Instances.Count(inst => inst.Value["instanceType"].ToString() == "edge"));
+            Assert.Equal(2287, handler.Instances.Count(inst => inst.Value["instanceType"].ToString() == "node"));
+            Assert.Equal(4254, handler.Instances.Count(inst => inst.Value["instanceType"].ToString() == "edge"));
         }
     }
 }

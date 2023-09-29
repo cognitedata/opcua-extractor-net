@@ -22,6 +22,7 @@ using Cognite.OpcUa.Types;
 using CogniteSdk.Beta.DataModels;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
+using Serilog.Core;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -111,6 +112,7 @@ namespace Cognite.OpcUa.NodeSources
             bool initUnknownNodes,
             CancellationToken token)
         {
+            var mode = config.Extraction.Relationships.Mode;
             return Task.Run(() =>
             {
                 logger.LogInformation("Loading references from nodeset files");
@@ -126,6 +128,13 @@ namespace Cognite.OpcUa.NodeSources
                     if (!references.TryGetValue(node.Id, out var outReferences)) continue;
                     foreach (var rf in outReferences.Values)
                     {
+                        var typ = typeManager.GetReferenceType(rf.ReferenceTypeId);
+                        if (typ.IsChildOf(ReferenceTypeIds.HierarchicalReferences))
+                        {
+                            if (mode == HierarchicalReferenceMode.Disabled) continue;
+                            if (mode == HierarchicalReferenceMode.Forward && rf.IsInverse) continue;
+                        }
+
                         var childId = client.ToNodeId(rf.TargetId);
                         var childNode = knownNodes.GetValueOrDefault(childId) ?? nodeMap.GetValueOrDefault(childId);
                         if (childNode == null)
@@ -142,6 +151,9 @@ namespace Cognite.OpcUa.NodeSources
                             }
                             else if (initUnknownNodes)
                             {
+                                // Do not create nodes from inverse references.
+                                if (rf.IsInverse) continue;
+
                                 BuildNode(childId, NodeId.Null, (uint)classMask);
                                 childNode = nodeMap.GetValueOrDefault(childId);
                             }
@@ -155,7 +167,7 @@ namespace Cognite.OpcUa.NodeSources
                         }
 
                         var reference = new UAReference(
-                            typeManager.GetReferenceType(rf.ReferenceTypeId),
+                            typ,
                             !rf.IsInverse,
                             node,
                             childNode);
@@ -312,6 +324,7 @@ namespace Cognite.OpcUa.NodeSources
         private IEnumerable<IReference> Browse(NodeId node, NodeId referenceTypeId, BrowseDirection direction, bool allowSubTypes)
         {
             var refs = references[node].Values;
+            // logger.LogDebug("Browse node {Id}. Got {Count} references", node, refs.Count);
             foreach (var reference in refs)
             {
                 if (!allowSubTypes && referenceTypeId != reference.ReferenceTypeId) continue;
@@ -386,7 +399,7 @@ namespace Cognite.OpcUa.NodeSources
             if (node != null)
             {
                 added = TryAdd(node, nodeClassMask);
-                if (node.Parent == null)
+                if (node.Parent == null && !parentId.IsNullNodeId)
                 {
                     node.Parent = nodeMap.GetValueOrDefault(parentId);
                 }

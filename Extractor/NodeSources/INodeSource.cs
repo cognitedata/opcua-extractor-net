@@ -3,7 +3,6 @@ using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.Types;
 using Opc.Ua;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -13,35 +12,6 @@ namespace Cognite.OpcUa.NodeSources
     {
         CDF,
         OPCUA
-    }
-    /// <summary>
-    /// A map from a node ID to its node. Notably, this
-    /// collection preserves insertion order, which is important when browsing, as the
-    /// node hierarchy builder assumes that parents appear before children when iterating.
-    /// 
-    /// Performance concerns:
-    /// Roughly equivalent to dictionary, but may be faster when iterating.
-    /// Removal is very inefficient, and should be avoided.
-    /// </summary>
-    public class UANodeCollection : KeyedCollection<NodeId, BaseUANode>
-    {
-        protected override NodeId GetKeyForItem(BaseUANode item)
-        {
-            return item.Id;
-        }
-
-        public BaseUANode? GetValueOrDefault(NodeId nodeId)
-        {
-            if (TryGetValue(nodeId, out var node)) return node;
-            return null;
-        }
-
-        public bool TryAdd(BaseUANode node)
-        {
-            if (Contains(node)) return false;
-            Add(node);
-            return true;
-        }
     }
 
 

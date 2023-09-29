@@ -89,6 +89,8 @@ namespace Cognite.OpcUa.NodeSources
 
             if (nodeMap.Any()) await client.ReadNodeData(nodeMap, token, "new non-hierarchical instances");
 
+            logger.LogDebug("Is mandatory in nodemap? {Yes}", nodeMap.FirstOrDefault(n => n.Id == ObjectIds.ModellingRule_Mandatory));
+
             return TakeResults(false);
         }
 
@@ -129,7 +131,12 @@ namespace Cognite.OpcUa.NodeSources
             foreach (var (parentId, children) in foundReferences)
             {
                 var parentNode = knownNodes.GetValueOrDefault(parentId);
-                if (parentNode == null) continue;
+                
+                if (parentNode == null)
+                {
+                    logger.LogWarning("Got reference from unknown node: {Id}", parentId);
+                    continue;
+                }
 
                 foreach (var child in children)
                 {
@@ -142,11 +149,16 @@ namespace Cognite.OpcUa.NodeSources
                         {
                             // Corner case, this happens if we are browsing a subset of the node hierarchy
                             // and find a reference to a node outside of the subset we're looking at.
-                            childNode = BaseUANode.Create(child, parentId, parentNode, client, typeManager);
+                            logger.LogTrace("Found reference to previously mapped node: {Id}, {Name}", childId, child.DisplayName);
+                            childNode = BaseUANode.Create(child, NodeId.Null, null, client, typeManager);
                         }
                         else if (initUnknownNodes)
                         {
-                            childNode = BaseUANode.Create(child, parentId, parentNode, client, typeManager);
+                            // Do not create nodes from inverse references.
+                            if (!child.IsForward) continue;
+
+                            logger.LogTrace("Found reference to unknown node, adding: {Id}, {Name}", childId, child.DisplayName);
+                            childNode = BaseUANode.Create(child, NodeId.Null, null, client, typeManager);
                             if (childNode != null) nodeMap.Add(childNode);
                         }
                         else
@@ -158,11 +170,13 @@ namespace Cognite.OpcUa.NodeSources
                         if (childNode == null) continue;
                     }
 
-                    references.Add(new UAReference(
+                    var rf = new UAReference(
                         typeManager.GetReferenceType(child.ReferenceTypeId),
                         child.IsForward,
                         parentNode,
-                        childNode));
+                        childNode);
+
+                    references.Add(rf);
                     count++;
                 }
             }

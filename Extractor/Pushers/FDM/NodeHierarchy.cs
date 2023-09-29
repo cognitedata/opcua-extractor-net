@@ -20,7 +20,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             ReferencesByTargetId = references.Where(rf => rf.IsForward).GroupBy(rf => rf.Target.Id).ToDictionary(group => group.Key, group => (IEnumerable<UAReference>)group);
             ReferencesBySourceId = references.Where(rf => rf.IsForward).GroupBy(rf => rf.Source.Id).ToDictionary(group => group.Key, group => (IEnumerable<UAReference>)group);
             NodeMap = nodes.ToDictionary(node => node.Id);
-            KnownTypeDefinitions = new HashSet<NodeId>(nodes.Where(node => node.Id.NamespaceIndex > 0 || !IsChildOfType(node)).SelectNonNull(s => s.TypeDefinition));
+            KnownTypeDefinitions = new HashSet<NodeId>(nodes.Where(node => node.Id.NamespaceIndex > 0 || !node.IsChildOfType).SelectNonNull(s => s.TypeDefinition));
         }
 
         private bool IsChildOfType(BaseUANode node)
