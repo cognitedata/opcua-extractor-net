@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using Opc.Ua.Client;
 using Prometheus;
+using Serilog.Core;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -29,38 +30,49 @@ namespace Cognite.OpcUa.Subscriptions
         protected abstract MonitoredItem CreateMonitoredItem(T item, FullConfig config);
 
 
+        private async Task CreateItemsWithRetry(ILogger logger, UARetryConfig retries, Subscription subscription, CancellationToken token)
+        {
+            var numToCreate = subscription.MonitoredItems.Count(m => !m.Created);
+            if (numToCreate == 0) return;
+
+            await RetryUtil.RetryAsync("create monitored items", async () =>
+            {
+                try
+                {
+                    await subscription.CreateItemsAsync(token);
+                    numSubscriptions.Inc(numToCreate);
+                }
+                catch (Exception ex)
+                {
+                    throw ExtractorUtils.HandleServiceResult(logger, ex, ExtractorUtils.SourceOp.CreateMonitoredItems);
+                }
+            }, retries, retries.ShouldRetryException, logger, token);
+        }
+
         private async Task CreateMonitoredItems(ILogger logger, FullConfig config, Subscription subscription, CancellationToken token)
         {
             var hasSubscription = subscription.MonitoredItems.Select(s => s.ResolvedNodeId).ToHashSet();
             var toAdd = Items.Where(i => !hasSubscription.Contains(i.Key)).ToList();
-            if (!toAdd.Any()) return;
-
-            logger.LogInformation("Adding {Count} new monitored items to subscription {Name}", toAdd.Count, SubscriptionName);
-
-            int count = 0;
-            foreach (var chunk in toAdd.ChunkBy(config.Source.SubscriptionChunk))
+            if (toAdd.Any())
             {
-                token.ThrowIfCancellationRequested();
+                logger.LogInformation("Adding {Count} new monitored items to subscription {Name}", toAdd.Count, SubscriptionName);
 
-                var items = chunk.Select(c => CreateMonitoredItem(c.Value, config)).ToList();
-                count += items.Count;
-                logger.LogDebug("Add {Count} new monitored items to {Name}, {Subscribed} / {Total}",
-                    items.Count, SubscriptionName, count, toAdd.Count);
-                subscription.AddItems(items);
-
-                await RetryUtil.RetryAsync("create monitored items", async () =>
+                int count = 0;
+                foreach (var chunk in toAdd.ChunkBy(config.Source.SubscriptionChunk))
                 {
-                    try
-                    {
-                        await subscription.CreateItemsAsync(token);
-                        numSubscriptions.Inc(items.Count);
-                    }
-                    catch (Exception ex)
-                    {
-                        throw ExtractorUtils.HandleServiceResult(logger, ex, ExtractorUtils.SourceOp.CreateMonitoredItems);
-                    }
-                }, config.Source.Retries, config.Source.Retries.ShouldRetryException, logger, token);
+                    token.ThrowIfCancellationRequested();
+
+                    var items = chunk.Select(c => CreateMonitoredItem(c.Value, config)).ToList();
+                    count += items.Count;
+                    logger.LogDebug("Add {Count} new monitored items to {Name}, {Subscribed} / {Total}",
+                        items.Count, SubscriptionName, count, toAdd.Count);
+                    subscription.AddItems(items);
+
+                    await CreateItemsWithRetry(logger, config.Source.Retries, subscription, token);
+                }
             }
+
+            await CreateItemsWithRetry(logger, config.Source.Retries, subscription, token);
         }
 
         private async Task<Subscription> EnsureSubscriptionExists(ILogger logger, ISession session, FullConfig config, SubscriptionManager subManager, CancellationToken token)
@@ -118,7 +130,9 @@ namespace Cognite.OpcUa.Subscriptions
             await CreateMonitoredItems(logger, config, subscription, token);
         }
 
-        private static readonly uint[] extraOuterStatusCodes = new[]
+        // Only retry a few status codes in the outer scope. If inner retries are exhausted
+        // there are only a few cases where we actually want to retry everything again.
+        private static readonly uint[] outerStatusCodes = new[]
         {
             StatusCodes.BadSubscriptionIdInvalid,
             StatusCodes.BadNoSubscription
@@ -130,9 +144,10 @@ namespace Cognite.OpcUa.Subscriptions
                 "create subscription",
                 () => RunInternal(logger, sessionManager, config, subManager, token),
                 config.Source.Retries,
-                ex => config.Source.Retries.ShouldRetryExceptionExtraCodes(ex, extraOuterStatusCodes),
+                ex => config.Source.Retries.ShouldRetryException(ex, outerStatusCodes),
                 logger,
                 token);
+            logger.LogDebug("Finished creating subscription");
         }
     }
 }

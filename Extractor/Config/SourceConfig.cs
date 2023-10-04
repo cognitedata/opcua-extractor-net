@@ -316,12 +316,12 @@ namespace Cognite.OpcUa.Config
             }
         }
 
-        public bool ShouldRetryExceptionExtraCodes(Exception ex, IEnumerable<uint> extraStatusCodes)
+        public bool ShouldRetryException(Exception ex, IEnumerable<uint> statusCodes)
         {
             if (ex is ServiceResultException serviceExc)
             {
                 var code = serviceExc.StatusCode;
-                return FinalRetryStatusCodes.Contains(code) || extraStatusCodes.Contains(serviceExc.StatusCode);
+                return statusCodes.Contains(serviceExc.StatusCode);
             }
             else if (ex is ServiceCallFailureException failureExc)
             {
@@ -331,22 +331,21 @@ namespace Cognite.OpcUa.Config
             {
                 if (silentExc.InnerServiceException != null)
                 {
-                    return FinalRetryStatusCodes.Contains(silentExc.InnerServiceException.StatusCode)
-                        || extraStatusCodes.Contains(silentExc.InnerServiceException.StatusCode);
+                    return statusCodes.Contains(silentExc.InnerServiceException.StatusCode);
                 }
             }
             else if (ex is AggregateException aex)
             {
                 // Only retry aggregate exceptions if one of the inner exceptions should be retried...
                 var flat = aex.Flatten();
-                return aex.InnerExceptions.Any(e => ShouldRetryExceptionExtraCodes(e, extraStatusCodes));
+                return aex.InnerExceptions.Any(e => ShouldRetryException(e, statusCodes));
             }
             return false;
         }
 
         public bool ShouldRetryException(Exception ex)
         {
-            return ShouldRetryExceptionExtraCodes(ex, Enumerable.Empty<uint>());
+            return ShouldRetryException(ex, FinalRetryStatusCodes);
         }
     }
 

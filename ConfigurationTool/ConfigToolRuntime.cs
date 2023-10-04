@@ -43,6 +43,14 @@ namespace Cognite.OpcUa.Config
             this.baseConfig = baseConfig;
             this.output = output;
             log = provider.GetRequiredService<ILogger<UAServerExplorer>>();
+
+            // Set retry config lower here, otherwise this might take a really, really long time.
+            // We do a few retries, just to avoid the worst flakyness on the server.
+            config.Source.Retries = new UARetryConfig
+            {
+                MaxTries = 2,
+                MaxDelay = "100ms"
+            };
         }
         /// <summary>
         /// Start the config tool, then sequentially run the tests.
