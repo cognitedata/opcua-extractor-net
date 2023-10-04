@@ -48,8 +48,7 @@ namespace Cognite.OpcUa.Config
             // We do a few retries, just to avoid the worst flakyness on the server.
             config.Source.Retries = new UARetryConfig
             {
-                MaxTries = 2,
-                MaxDelay = "100ms"
+                MaxTries = 2
             };
         }
         /// <summary>
