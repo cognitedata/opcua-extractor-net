@@ -1233,7 +1233,7 @@ namespace Test.Unit
             Assert.Empty(handler.Assets);
 
             await extractor.WaitForSubscriptions();
-            await tester.Client.RemoveSubscription("DataChangeListener");
+            await tester.RemoveSubscription("DataChangeListener");
 
             extractor.State.Clear();
 
@@ -1311,7 +1311,7 @@ namespace Test.Unit
             Assert.Empty(handler.Assets);
 
             await extractor.WaitForSubscriptions();
-            await tester.Client.RemoveSubscription("EventListener");
+            await tester.RemoveSubscription("EventListener");
 
             extractor.State.Clear();
 
@@ -1385,7 +1385,7 @@ namespace Test.Unit
             Assert.Empty(handler.Assets);
 
             await extractor.WaitForSubscriptions();
-            await tester.Client.RemoveSubscription("EventListener");
+            await tester.RemoveSubscription("EventListener");
 
             extractor.State.Clear();
 

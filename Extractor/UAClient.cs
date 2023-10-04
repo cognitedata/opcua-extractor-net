@@ -20,6 +20,7 @@ using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.NodeSources;
+using Cognite.OpcUa.Subscriptions;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.DependencyInjection;
@@ -50,6 +51,7 @@ namespace Cognite.OpcUa
         protected ISession? Session => SessionManager?.Session;
         protected ApplicationConfiguration? AppConfig { get; set; }
         public TypeManager TypeManager { get; }
+        public SubscriptionManager? SubscriptionManager { get; private set; }
 
         public IClientCallbacks Callbacks { get; set; } = null!;
 
@@ -62,8 +64,6 @@ namespace Cognite.OpcUa
 
         private static readonly Counter attributeRequests = Metrics
             .CreateCounter("opcua_attribute_requests", "Number of attributes fetched from the server");
-        private static readonly Gauge numSubscriptions = Metrics
-            .CreateGauge("opcua_subscriptions", "Number of variables with an active subscription");
         private static readonly Counter numHistoryReads = Metrics
             .CreateCounter("opcua_history_reads", "Number of historyread operations performed");
         private static readonly Counter numBrowse = Metrics
@@ -97,7 +97,7 @@ namespace Cognite.OpcUa
             traceLog = provider.GetRequiredService<ILogger<Tracing>>();
             if (config.Metrics.Nodes != null)
             {
-                metricsManager = new NodeMetricsManager(this, config.Subscriptions, config.Metrics.Nodes);
+                metricsManager = new NodeMetricsManager(this, config.Metrics.Nodes);
             }
             StringConverter = new StringConverter(provider.GetRequiredService<ILogger<StringConverter>>(), this, config);
             Browser = new Browser(provider.GetRequiredService<ILogger<Browser>>(), this, config);
@@ -247,39 +247,18 @@ namespace Cognite.OpcUa
                 SessionManager.Timeout = timeout;
             }
 
+            if (SubscriptionManager == null)
+            {
+                SubscriptionManager = new SubscriptionManager(SessionManager, Config, log);
+                Callbacks.TaskScheduler.ScheduleTask("SubscriptionManager", SubscriptionManager.RunTaskLoop);
+            }
+
             await SessionManager.Connect();
 
             liveToken.ThrowIfCancellationRequested();
 
             Started = true;
             log.LogInformation("Successfully connected to server at {EndpointURL}", SessionManager.EndpointUrl);
-        }
-
-        private bool ShouldRetryException(Exception ex)
-        {
-            if (ex is ServiceResultException serviceExc)
-            {
-                var code = serviceExc.StatusCode;
-                return Config.Source.Retries.FinalRetryStatusCodes.Contains(code);
-            }
-            else if (ex is ServiceCallFailureException failureExc)
-            {
-                return failureExc.Cause == ServiceCallFailure.SessionMissing;
-            }
-            else if (ex is SilentServiceException silentExc)
-            {
-                if (silentExc.InnerServiceException != null)
-                {
-                    return Config.Source.Retries.FinalRetryStatusCodes.Contains(silentExc.InnerServiceException.StatusCode);
-                }
-            }
-            else if (ex is AggregateException aex)
-            {
-                // Only retry aggregate exceptions if one of the inner exceptions should be retried...
-                var flat = aex.Flatten();
-                return aex.InnerExceptions.Any(e => ShouldRetryException(e));
-            }
-            return false;
         }
 
         /// <summary>
@@ -398,7 +377,7 @@ namespace Cognite.OpcUa
 
         public async Task GetReferences(BrowseParams browseParams, bool readToCompletion, CancellationToken token)
         {
-            await RetryUtil.RetryAsync("browse", async () => await GetReferencesInternal(browseParams, readToCompletion, token), Config.Source.Retries, ShouldRetryException, log, token);
+            await RetryUtil.RetryAsync("browse", async () => await GetReferencesInternal(browseParams, readToCompletion, token), Config.Source.Retries, Config.Source.Retries.ShouldRetryException, log, token);
         }
 
         private async Task GetReferencesInternal(BrowseParams browseParams, bool readToCompletion, CancellationToken token)
@@ -417,7 +396,7 @@ namespace Cognite.OpcUa
 
             if (toBrowse.Any())
             {
-                var results = await RetryUtil.RetryResultAsync("browse", async () => await GetReferencesChunk(browseParams, toBrowse, token), Config.Source.Retries, ShouldRetryException, log, token);
+                var results = await RetryUtil.RetryResultAsync("browse", async () => await GetReferencesChunk(browseParams, toBrowse, token), Config.Source.Retries, Config.Source.Retries.ShouldRetryException, log, token);
 
                 var next = HandleBrowseResult(toBrowse, results, ExtractorUtils.SourceOp.Browse);
                 if (readToCompletion) toBrowseNext.AddRange(next);
@@ -425,7 +404,7 @@ namespace Cognite.OpcUa
 
             while (toBrowseNext.Any())
             {
-                var results = await RetryUtil.RetryResultAsync("browse next", async () => await GetNextReferencesChunk(toBrowseNext, token), Config.Source.Retries, ShouldRetryException, log, token);
+                var results = await RetryUtil.RetryResultAsync("browse next", async () => await GetNextReferencesChunk(toBrowseNext, token), Config.Source.Retries, Config.Source.Retries.ShouldRetryException, log, token);
 
                 var next = HandleBrowseResult(toBrowseNext, results, ExtractorUtils.SourceOp.BrowseNext);
                 if (readToCompletion) toBrowseNext = next;
@@ -558,7 +537,7 @@ namespace Cognite.OpcUa
                 if (token.IsCancellationRequested) break;
 
                 count++;
-                var chunk = await RetryUtil.RetryResultAsync($"read for {purpose}", async () => await ReadAttributesChunk(nextValues, token), Config.Source.Retries, ShouldRetryException, log, token);
+                var chunk = await RetryUtil.RetryResultAsync($"read for {purpose}", async () => await ReadAttributesChunk(nextValues, token), Config.Source.Retries, Config.Source.Retries.ShouldRetryException, log, token);
                 values.AddRange(chunk);
                 attrCount += chunk.Count();
                 log.LogDebug("Read {NumAttributesRead} / {Total} attributes{Purpose}", attrCount, total, purpose);
@@ -778,7 +757,7 @@ namespace Cognite.OpcUa
                 readParams.Details is ReadEventDetails ? "read history events" : "read history datapoints",
                 () => ReadHistoryChunk(readParams, ids, token),
                 Config.Source.Retries,
-                ShouldRetryException,
+                Config.Source.Retries.ShouldRetryException,
                 log,
                 token);
 
@@ -829,339 +808,6 @@ namespace Cognite.OpcUa
 
             return results;
         }
-
-        /// <summary>
-        /// Add MonitoredItems to the given list of states.
-        /// </summary>
-        /// <param name="nodeList">States to subscribe to</param>
-        /// <param name="subName">Name of subscription</param>
-        /// <param name="handler">Callback for the items</param>
-        /// <param name="builder">Method to build monitoredItems from states</param>
-        /// <returns>Constructed subscription</returns>
-        [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
-            Justification = "Bad analysis")]
-        public async Task<Subscription> AddSubscriptions(
-            IEnumerable<UAHistoryExtractionState> nodeList,
-            string subName,
-            MonitoredItemNotificationEventHandler handler,
-            Func<UAHistoryExtractionState, MonitoredItem> builder,
-            CancellationToken token,
-            string purpose = "")
-        {
-            if (!string.IsNullOrEmpty(purpose)) purpose = $"{purpose} ";
-            await subscriptionSem.WaitAsync(token);
-
-            using var operation = waiter.GetInstance();
-            try
-            {
-                var subscription = await RetryUtil.RetryResultAsync("create subscription", () => CreateSubscription(subName, token), Config.Source.Retries, ShouldRetryException, log, token);
-
-                int count = 0;
-                var hasSubscription = subscription.MonitoredItems.Select(sub => sub.ResolvedNodeId).ToHashSet();
-                int total = nodeList.Count();
-                foreach (var chunk in nodeList.ChunkBy(Config.Source.SubscriptionChunk))
-                {
-                    if (token.IsCancellationRequested) break;
-                    int lcount = 0;
-                    subscription.AddItems(chunk
-                        .Where(node => !hasSubscription.Contains(node.SourceId))
-                        .Select(node =>
-                        {
-                            var monitor = builder(node);
-                            monitor.Notification += handler;
-                            lcount++;
-                            return monitor;
-                        })
-                    );
-                    log.LogDebug("Add {Purpose}subscriptions for {NumNodes} nodes, {Subscribed} / {Total} done.",
-                        purpose, lcount, count, total);
-                    count += lcount;
-
-                    if (lcount > 0)
-                    {
-                        await RetryUtil.RetryAsync("create monitored items", () => CreateMonitoredItemsChunk(subscription, token), Config.Source.Retries, ShouldRetryException, log, token);
-                    }
-                }
-                return subscription;
-            }
-            finally
-            {
-                subscriptionSem.Release();
-            }
-        }
-
-        private async Task CreateMonitoredItemsChunk(Subscription subscription, CancellationToken token)
-        {
-            if (Session == null) throw new ServiceCallFailureException("Session is not connected", ServiceCallFailure.SessionMissing);
-            try
-            {
-                await subscription.CreateItemsAsync(token);
-            }
-            catch (Exception ex)
-            {
-                throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.CreateMonitoredItems);
-            }
-        }
-
-        private async Task<Subscription> CreateSubscription(string name, CancellationToken token)
-        {
-            if (Session == null) throw new ServiceCallFailureException("Session is not connected", ServiceCallFailure.SessionMissing);
-            var subscription = Session.Subscriptions
-                .FirstOrDefault(sub => sub.DisplayName.StartsWith(name, StringComparison.InvariantCulture));
-
-            if (subscription == null)
-            {
-                subscription = new Subscription(Session.DefaultSubscription)
-                {
-                    PublishingInterval = Config.Source.PublishingInterval,
-                    DisplayName = name,
-                    KeepAliveCount = Config.Subscriptions.KeepAliveCount,
-                    LifetimeCount = Config.Subscriptions.LifetimeCount
-                };
-                subscription.PublishStatusChanged += OnSubscriptionPublishStatusChange;
-            }
-            if (!subscription.Created)
-            {
-                try
-                {
-                    Session.AddSubscription(subscription);
-                    await subscription.CreateAsync(token);
-                }
-                catch (Exception ex)
-                {
-                    try
-                    {
-                        await Session.RemoveSubscriptionAsync(subscription);
-                    }
-                    finally
-                    {
-                        subscription.PublishStatusChanged -= OnSubscriptionPublishStatusChange;
-                        subscription.Dispose();
-                    }
-                    throw ExtractorUtils.HandleServiceResult(log, ex,
-                        ExtractorUtils.SourceOp.CreateSubscription);
-                }
-            }
-
-            return subscription;
-        }
-
-        private readonly HashSet<uint> pendingRecreates = new HashSet<uint>();
-
-        private async Task RecreateSubscription(Subscription sub, CancellationToken token)
-        {
-            if (Session == null || !Session.Connected || token.IsCancellationRequested) return;
-
-            if (!sub.PublishingStopped) return;
-
-            log.LogWarning("Subscription no longer responding: {Name}. Trying to re-enable.", sub.DisplayName);
-            try
-            {
-                using var operation = waiter.GetInstance();
-                // To avoid creating tons of blocking threads if this is very slow.
-                lock (pendingRecreates)
-                {
-                    if (!pendingRecreates.Add(sub.Id)) return;
-                }
-
-                await subscriptionSem.WaitAsync(token);
-                // The subscription might already have been deleted, best to check after receiving the lock.
-                if (!Session.Subscriptions.Any(s => s.Id == sub.Id)) return;
-
-                // Send keep-alive message to make sure the session isn't just down.
-                try
-                {
-                    var result = await Session.ReadAsync(null, 0, TimestampsToReturn.Neither, new ReadValueIdCollection {
-                        new ReadValueId {
-                            NodeId = Variables.Server_ServerStatus_State,
-                            AttributeId = Attributes.Value
-                        }
-                    }, token);
-                    var dv = result.Results.First();
-                    var state = (ServerState)(int)dv.Value;
-                    // If the server is in a bad state that is why the subscription is failing
-                    if (state != ServerState.Running) return;
-                }
-                catch (Exception ex)
-                {
-                    log.LogError("Failed to obtain server state. Server is likely down: ", ex.Message);
-                    return;
-                }
-
-                // Try to modify the subscription
-                try
-                {
-                    log.LogWarning("Server is available, but subscription is not responding to notifications. Attempting to recreate.");
-                    await Session.RemoveSubscriptionAsync(sub);
-                }
-                catch (ServiceResultException serviceEx)
-                {
-                    var symId = StatusCode.LookupSymbolicId(serviceEx.StatusCode);
-                    log.LogWarning("Error attempting to remove subscription from the server: {Err}. It has most likely been dropped. " +
-                        "This is not legal behavior and likely to be a bug in the server. Attempting to recreate...", symId);
-                }
-                finally
-                {
-                    sub.Dispose();
-                }
-
-                // Create a new subscription with the same name and monitored items
-                var name = sub.DisplayName.Split(' ').First();
-                var newSub = await RetryUtil.RetryResultAsync("create subscription", () => CreateSubscription(name, token), Config.Source.Retries, ShouldRetryException, log, token);
-
-                int count = 0;
-                uint total = sub.MonitoredItemCount;
-
-                foreach (var chunk in sub.MonitoredItems.ChunkBy(Config.Source.SubscriptionChunk))
-                {
-                    if (token.IsCancellationRequested) return;
-                    var lcount = chunk.Count();
-                    log.LogDebug("Recreate subscriptions for {Name} for {NumNodes} nodes, {Subscribed} / {Total} done.",
-                        name, lcount, count, total);
-                    count += lcount;
-                    newSub.AddItems(chunk);
-
-                    await RetryUtil.RetryAsync("create monitored items", () => CreateMonitoredItemsChunk(newSub, token), Config.Source.Retries, ShouldRetryException, log, token);
-                }
-            }
-            catch (Exception ex)
-            {
-                ExtractorUtils.LogException(log, ex, "Failed to recreate subscription");
-            }
-            finally
-            {
-                subscriptionSem.Release();
-                lock (pendingRecreates)
-                {
-                    pendingRecreates.Remove(sub.Id);
-                }
-            }
-        }
-
-
-        private void OnSubscriptionPublishStatusChange(object sender, EventArgs e)
-        {
-            if (sender is not Subscription sub || !sub.PublishingStopped) return;
-
-            if (Callbacks?.TaskScheduler == null)
-            {
-                log.LogWarning("Failed to recreate subscription, client callbacks are not set");
-                return;
-            }
-
-            Callbacks.TaskScheduler.ScheduleTask(null, t => RecreateSubscription(sub, t));
-        }
-
-        /// <summary>
-        /// Create datapoint subscriptions for given list of nodes
-        /// </summary>
-        /// <param name="nodeList">List of buffered variables to synchronize</param>
-        /// <param name="subscriptionHandler">Subscription handler, should be a function returning void that takes a
-        /// <see cref="MonitoredItem"/> and <see cref="MonitoredItemNotificationEventArgs"/></param>
-        [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
-            Justification = "Bad analysis")]
-        public async Task SubscribeToNodes(IEnumerable<VariableExtractionState> nodeList,
-            MonitoredItemNotificationEventHandler subscriptionHandler,
-            CancellationToken token)
-        {
-            if (!nodeList.Any()) return;
-
-            var sub = await AddSubscriptions(
-                nodeList,
-                "DataChangeListener",
-                subscriptionHandler,
-                node =>
-                {
-                    var config = Config.Subscriptions.GetMatchingConfig(node);
-                    return new MonitoredItem
-                    {
-                        StartNodeId = node.SourceId,
-                        DisplayName = "Value: " + (node as VariableExtractionState)?.DisplayName,
-                        SamplingInterval = config.SamplingInterval,
-                        QueueSize = (uint)Math.Max(0, config.QueueLength),
-                        AttributeId = Attributes.Value,
-                        NodeClass = NodeClass.Variable,
-                        CacheQueueSize = Math.Max(0, config.QueueLength),
-                        Filter = config.DataChangeFilter?.Filter
-                    };
-                }, token, "datapoint");
-
-            numSubscriptions.Set(sub.MonitoredItemCount);
-        }
-        /// <summary>
-        /// Subscribe to events from the given list of emitters.
-        /// </summary>
-        /// <param name="emitters">List of emitters. These are the actual targets of the subscription.</param>
-        /// <param name="subscriptionHandler">Subscription handler, should be a function returning void that takes a
-        /// <see cref="MonitoredItem"/> and <see cref="MonitoredItemNotificationEventArgs"/></param>
-        /// <returns>Map of fields, EventTypeId->(SourceTypeId, BrowseName)</returns>
-        [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
-            Justification = "Bad analysis")]
-        public async Task SubscribeToEvents(IEnumerable<EventExtractionState> emitters,
-            MonitoredItemNotificationEventHandler subscriptionHandler,
-            Dictionary<NodeId, UAObjectType> eventFields,
-            CancellationToken token)
-        {
-            var filter = BuildEventFilter(eventFields);
-            LogDump("Event filter", filter);
-
-            await AddSubscriptions(
-                emitters,
-                "EventListener",
-                subscriptionHandler,
-                node =>
-                {
-                    var config = Config.Subscriptions.GetMatchingConfig(node);
-                    return new MonitoredItem
-                    {
-                        StartNodeId = node.SourceId,
-                        AttributeId = Attributes.EventNotifier,
-                        DisplayName = "Events: " + node.Id,
-                        SamplingInterval = config.SamplingInterval,
-                        QueueSize = (uint)Math.Max(0, config.QueueLength),
-                        Filter = filter,
-                        NodeClass = NodeClass.Object
-                    };
-                },
-                token, "event");
-        }
-
-        /// <summary>
-        /// Deletes a subscription starting with the given name.
-        /// The client manages three subscriptions: EventListener, DataChangeListener and AuditListener,
-        /// if the subscription does not exist, nothing happens.
-        /// </summary>
-        /// <param name="name"></param>
-        public async Task RemoveSubscription(string name)
-        {
-            if (TryGetSubscription(name, out var subscription) && subscription!.Created)
-            {
-                try
-                {
-                    await Session!.RemoveSubscriptionAsync(subscription);
-                }
-                catch
-                {
-                    // A failure to delete the subscription generally means it just doesn't exist.
-                }
-                finally
-                {
-                    subscription!.Dispose();
-                }
-            }
-        }
-
-        /// <summary>
-        /// Tries to get an existing subscription from a list of session subscriptions.
-        /// </summary>
-        /// <param name="name"></param>
-        /// <param name="subscription"></param>
-        public bool TryGetSubscription(string name, out Subscription? subscription)
-        {
-            subscription = Session?.Subscriptions?.FirstOrDefault(sub =>
-                sub.DisplayName.StartsWith(name, StringComparison.InvariantCulture));
-            return subscription != null;
-        }
         #endregion
 
         #region Events
@@ -1180,8 +826,6 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Constructs a filter from the given list of permitted eventids, the already constructed field map and an optional receivedAfter property.
         /// </summary>
-        /// <param name="nodeIds">Permitted SourceNode ids</param>
-        /// <param name="receivedAfter">Optional, if defined, attempt to filter out events with [ReceiveTimeProperty] > receivedAfter</param>
         /// <returns>The final event filter</returns>
         public EventFilter BuildEventFilter(Dictionary<NodeId, UAObjectType> eventFields)
         {
@@ -1237,105 +881,6 @@ namespace Cognite.OpcUa
                 WhereClause = whereClause,
                 SelectClauses = selectClauses
             };
-        }
-        /// <summary>
-        /// Build ContentFilter to be used when subscribing to audit events.
-        /// </summary>
-        /// <returns>Final EventFilter</returns>
-        private static EventFilter BuildAuditFilter()
-        {
-            var whereClause = new ContentFilter();
-            var eventTypeOperand = new SimpleAttributeOperand
-            {
-                TypeDefinitionId = ObjectTypeIds.BaseEventType,
-                AttributeId = Attributes.Value
-            };
-            eventTypeOperand.BrowsePath.Add(BrowseNames.EventType);
-            var op1 = new LiteralOperand
-            {
-                Value = ObjectTypeIds.AuditAddNodesEventType
-            };
-            var op2 = new LiteralOperand
-            {
-                Value = ObjectTypeIds.AuditAddReferencesEventType
-            };
-            var elem1 = whereClause.Push(FilterOperator.Equals, eventTypeOperand, op1);
-            var elem2 = whereClause.Push(FilterOperator.Equals, eventTypeOperand, op2);
-            whereClause.Push(FilterOperator.Or, elem1, elem2);
-            var selectClauses = new SimpleAttributeOperandCollection();
-            foreach (string path in new[]
-            {
-                BrowseNames.EventType,
-                BrowseNames.NodesToAdd,
-                BrowseNames.ReferencesToAdd,
-                BrowseNames.EventId
-            })
-            {
-                var op = new SimpleAttributeOperand
-                {
-                    AttributeId = Attributes.Value,
-                    TypeDefinitionId = ObjectTypeIds.BaseEventType
-                };
-                op.BrowsePath.Add(path);
-                selectClauses.Add(op);
-            }
-            return new EventFilter
-            {
-                WhereClause = whereClause,
-                SelectClauses = selectClauses
-            };
-        }
-        /// <summary>
-        /// Subscribe to audit events on the server node
-        /// </summary>
-        /// <param name="callback">Callback to use for subscriptions</param>
-        [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
-            Justification = "Bad analysis")]
-        public async Task SubscribeToAuditEvents(MonitoredItemNotificationEventHandler callback, CancellationToken token)
-        {
-            if (Session == null) throw new ServiceCallFailureException("Session is not connected", ServiceCallFailure.SessionMissing);
-            var filter = BuildAuditFilter();
-            LogDump("Audit filter", filter);
-            await subscriptionSem.WaitAsync(token);
-
-            using var operation = waiter.GetInstance();
-
-            Subscription? subscription = null;
-            try
-            {
-                subscription = await RetryUtil.RetryResultAsync("create subscription", () => CreateSubscription("AuditListener", token), Config.Source.Retries, ShouldRetryException, log, token);
-
-                if (subscription.MonitoredItemCount != 0) return;
-
-                var item = new MonitoredItem
-                {
-                    StartNodeId = ObjectIds.Server,
-                    Filter = filter,
-                    AttributeId = Attributes.EventNotifier,
-                    SamplingInterval = Config.Subscriptions.SamplingInterval,
-                    QueueSize = (uint)Math.Max(0, Config.Subscriptions.QueueLength),
-                    NodeClass = NodeClass.Object,
-                    DisplayName = "Audit: Server"
-                };
-                item.Notification += callback;
-                subscription.AddItem(item);
-                log.LogInformation("Subscribe to auditing events on the server node");
-
-                await RetryUtil.RetryAsync("create monitored items", () => CreateMonitoredItemsChunk(subscription, token), Config.Source.Retries, ShouldRetryException, log, token);
-            }
-            catch (Exception)
-            {
-                log.LogError("Failed to create audit subscription");
-                throw;
-            }
-            finally
-            {
-                if (subscription != null && !subscription.Created)
-                {
-                    subscription.Dispose();
-                }
-                subscriptionSem.Release();
-            }
         }
 
         #endregion

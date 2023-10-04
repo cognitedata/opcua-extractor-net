@@ -315,6 +315,39 @@ namespace Cognite.OpcUa.Config
                 return finalRetryStatusCodes;
             }
         }
+
+        public bool ShouldRetryExceptionExtraCodes(Exception ex, IEnumerable<uint> extraStatusCodes)
+        {
+            if (ex is ServiceResultException serviceExc)
+            {
+                var code = serviceExc.StatusCode;
+                return FinalRetryStatusCodes.Contains(code) || extraStatusCodes.Contains(serviceExc.StatusCode);
+            }
+            else if (ex is ServiceCallFailureException failureExc)
+            {
+                return failureExc.Cause == ServiceCallFailure.SessionMissing;
+            }
+            else if (ex is SilentServiceException silentExc)
+            {
+                if (silentExc.InnerServiceException != null)
+                {
+                    return FinalRetryStatusCodes.Contains(silentExc.InnerServiceException.StatusCode)
+                        || extraStatusCodes.Contains(silentExc.InnerServiceException.StatusCode);
+                }
+            }
+            else if (ex is AggregateException aex)
+            {
+                // Only retry aggregate exceptions if one of the inner exceptions should be retried...
+                var flat = aex.Flatten();
+                return aex.InnerExceptions.Any(e => ShouldRetryExceptionExtraCodes(e, extraStatusCodes));
+            }
+            return false;
+        }
+
+        public bool ShouldRetryException(Exception ex)
+        {
+            return ShouldRetryExceptionExtraCodes(ex, Enumerable.Empty<uint>());
+        }
     }
 
     public class RedundancyConfig

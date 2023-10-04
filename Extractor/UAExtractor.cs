@@ -24,6 +24,7 @@ using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.PubSub;
 using Cognite.OpcUa.Pushers;
+using Cognite.OpcUa.Subscriptions;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.DependencyInjection;
@@ -710,18 +711,25 @@ namespace Cognite.OpcUa
 
         private async Task EnsureSubscriptions()
         {
+            if (uaClient.SubscriptionManager == null) throw new InvalidOperationException("Client not yet initialized");
+
             if (Config.Subscriptions.Events)
             {
                 var subscribeStates = State.EmitterStates.Where(state => state.ShouldSubscribe);
 
-                await uaClient.SubscribeToEvents(subscribeStates, Streamer.EventSubscriptionHandler, TypeManager.EventFields, Source.Token);
+                uaClient.SubscriptionManager.EnqueueTask(new EventSubscriptionTask(
+                    Streamer.EventSubscriptionHandler,
+                    subscribeStates,
+                    uaClient.BuildEventFilter(TypeManager.EventFields)));
             }
 
             if (Config.Subscriptions.DataPoints)
             {
                 var subscribeStates = State.NodeStates.Where(state => state.ShouldSubscribe);
 
-                await uaClient.SubscribeToNodes(subscribeStates, Streamer.DataSubscriptionHandler, Source.Token);
+                uaClient.SubscriptionManager.EnqueueTask(new DataPointSubscriptionTask(
+                    Streamer.DataSubscriptionHandler,
+                    subscribeStates));
             }
 
             if (rebrowseTriggerManager is not null)
@@ -731,8 +739,10 @@ namespace Cognite.OpcUa
 
             if (Config.Source.Redundancy.MonitorServiceLevel && uaClient.SessionManager != null)
             {
-                await uaClient.SessionManager.EnsureServiceLevelSubscription();
+                uaClient.SessionManager.EnsureServiceLevelSubscription();
             }
+
+            await uaClient.SubscriptionManager.WaitForAllCurrentlyPendingTasks(Source.Token);
         }
 
         /// <summary>
@@ -1072,9 +1082,15 @@ namespace Cognite.OpcUa
         {
             if (Config.Subscriptions.Events)
             {
+                if (uaClient.SubscriptionManager == null) throw new InvalidOperationException("Client not initialized");
+
                 var subscribeStates = State.EmitterStates.Where(state => state.ShouldSubscribe);
 
-                await uaClient.SubscribeToEvents(subscribeStates, Streamer.EventSubscriptionHandler, TypeManager.EventFields, Source.Token);
+                await uaClient.SubscriptionManager.EnqueueTaskAndWait(new EventSubscriptionTask(
+                    Streamer.EventSubscriptionHandler,
+                    subscribeStates,
+                    uaClient.BuildEventFilter(TypeManager.EventFields)),
+                    Source.Token);
             }
 
             Interlocked.Increment(ref subscribed);
@@ -1102,9 +1118,14 @@ namespace Cognite.OpcUa
         {
             if (Config.Subscriptions.DataPoints)
             {
+                if (uaClient.SubscriptionManager == null) throw new InvalidOperationException("Client not initialized");
+
                 var subscribeStates = states.Where(state => state.ShouldSubscribe);
 
-                await uaClient.SubscribeToNodes(subscribeStates, Streamer.DataSubscriptionHandler, token);
+                await uaClient.SubscriptionManager.EnqueueTaskAndWait(new DataPointSubscriptionTask(
+                    Streamer.DataSubscriptionHandler,
+                    subscribeStates),
+                    Source.Token);
             }
 
             Interlocked.Increment(ref subscribed);
@@ -1147,7 +1168,9 @@ namespace Cognite.OpcUa
 
             if (Config.Extraction.EnableAuditDiscovery)
             {
-                tasks.Add(token => uaClient.SubscribeToAuditEvents(AuditEventSubscriptionHandler, token));
+                if (uaClient.SubscriptionManager == null) throw new InvalidOperationException("Client not initialized");
+
+                tasks.Add(token => uaClient.SubscriptionManager.EnqueueTaskAndWait(new AuditSubscriptionTask(AuditEventSubscriptionHandler), token));
             }
             return tasks;
         }

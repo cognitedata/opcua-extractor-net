@@ -17,6 +17,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.Nodes;
+using Cognite.OpcUa.Subscriptions;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
@@ -101,10 +102,11 @@ namespace Cognite.OpcUa.Config
                 Config.Source.SubscriptionChunk = chunkSize;
                 try
                 {
-                    await ToolUtil.RunWithTimeout(SubscribeToNodes(
-                        states.Take(chunkSize),
+                    var task = new DataPointSubscriptionTask(
                         ToolUtil.GetSimpleListWriterHandler(dps, states.ToDictionary(state => state.SourceId), this, log, true),
-                        token), 120);
+                        states.Take(chunkSize));
+
+                    await ToolUtil.RunWithTimeout(task.Run(log, SessionManager!, Config, SubscriptionManager!, token), 120);
                     baseConfig.Source.SubscriptionChunk = chunkSize;
                     failed = false;
                     break;

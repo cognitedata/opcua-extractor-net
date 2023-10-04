@@ -1,5 +1,6 @@
 ﻿using Cognite.OpcUa.History;
 using Cognite.OpcUa.Nodes;
+using Cognite.OpcUa.Subscriptions;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using System;
@@ -140,7 +141,12 @@ namespace Cognite.OpcUa.Config
 
             try
             {
-                await ToolUtil.RunWithTimeout(SubscribeToEvents(states.Take(baseConfig.Source.SubscriptionChunk), (item, args) => { }, TypeManager.EventFields, token), 120);
+                var task = new EventSubscriptionTask(
+                        (item, args) => { },
+                        states.Take(baseConfig.Source.SubscriptionChunk),
+                        BuildEventFilter(TypeManager.EventFields));
+
+                await ToolUtil.RunWithTimeout(task.Run(log, SessionManager!, Config, SubscriptionManager!, token), 120);
             }
             catch (Exception ex)
             {
