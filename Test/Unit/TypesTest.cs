@@ -1255,48 +1255,63 @@ namespace Test.Unit
         public void TestReferenceDebugDescription()
         {
             using var extractor = tester.BuildExtractor();
+            var organizes = tester.Client.TypeManager.GetReferenceType(ReferenceTypeIds.Organizes);
+            var hasComponent = tester.Client.TypeManager.GetReferenceType(ReferenceTypeIds.HasComponent);
+
+            var source = new UAObject(new NodeId("source"), "Source", "Source", null, NodeId.Null, null);
+            var target = new UAObject(new NodeId("target"), "Target", "Target", null, NodeId.Null, null);
+            var sourceVar = new UAVariable(new NodeId("source"), "Source", "Source", null, NodeId.Null, null);
+            var targetVar = new UAVariable(new NodeId("target"), "Target", "Target", null, NodeId.Null, null);
             // asset - asset
-            var reference = new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target"), false, false, true, extractor.TypeManager);
+            var reference = new UAReference(organizes, true, source, target);
             reference.Type.Attributes.DisplayName = "Organizes";
             reference.Type.FullAttributes.InverseName = "OrganizedBy";
             Assert.Equal("Reference: Asset s=source Organizes Asset s=target", reference.ToString());
             // inverse
-            reference = new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source"), new NodeId("target"), false, false, true, extractor.TypeManager);
+            reference = new UAReference(organizes, false, source, target);
             Assert.Equal("Reference: Asset s=source OrganizedBy Asset s=target", reference.ToString());
 
             // ts - asset
-            reference = new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target"), true, false, true, extractor.TypeManager);
+            reference = new UAReference(organizes, true, sourceVar, target);
             Assert.Equal("Reference: TimeSeries s=source Organizes Asset s=target", reference.ToString());
 
-            reference = new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source"), new NodeId("target"), false, true, true, extractor.TypeManager);
+            reference = new UAReference(organizes, false, source, targetVar);
             Assert.Equal("Reference: Asset s=source OrganizedBy TimeSeries s=target", reference.ToString());
 
-            reference = new UAReference(ReferenceTypeIds.HasComponent, true, new NodeId("source"), new NodeId("target"), false, false, true, extractor.TypeManager);
+            reference = new UAReference(hasComponent, true, source, target);
             Assert.Equal("Reference: Asset s=source i=47 Forward Asset s=target", reference.ToString());
 
-            reference = new UAReference(ReferenceTypeIds.HasComponent, false, new NodeId("source"), new NodeId("target"), false, false, true, extractor.TypeManager);
+            reference = new UAReference(hasComponent, false, source, target);
             Assert.Equal("Reference: Asset s=source i=47 Inverse Asset s=target", reference.ToString());
         }
         [Fact]
         public void TestReferenceEquality()
         {
             using var extractor = tester.BuildExtractor();
-            var reference = new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target"), false, false, true, extractor.TypeManager);
+            var organizes = tester.Client.TypeManager.GetReferenceType(ReferenceTypeIds.Organizes);
+            var hasComponent = tester.Client.TypeManager.GetReferenceType(ReferenceTypeIds.HasComponent);
+
+            var source = new UAObject(new NodeId("source"), "Source", "Source", null, NodeId.Null, null);
+            var target = new UAObject(new NodeId("target"), "Target", "Target", null, NodeId.Null, null);
+            var sourceVar = new UAVariable(new NodeId("source2"), "Source", "Source", null, NodeId.Null, null);
+            var targetVar = new UAVariable(new NodeId("target2"), "Target", "Target", null, NodeId.Null, null);
+
+            var reference = new UAReference(organizes, true, source, target);
             Assert.Equal(reference, reference);
             // Different due to different type only
-            var reference2 = new UAReference(ReferenceTypeIds.HasComponent, true, new NodeId("source"), new NodeId("target"), false, false, true, extractor.TypeManager);
+            var reference2 = new UAReference(hasComponent, true, source, target);
             Assert.NotEqual(reference, reference2);
             // Different due to different source vertex type
-            reference2 = new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target"), true, false, true, extractor.TypeManager);
+            reference2 = new UAReference(organizes, true, sourceVar, target);
             Assert.NotEqual(reference, reference2);
             // Different due to different target vertex type
-            reference2 = new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target"), false, true, true, extractor.TypeManager);
+            reference2 = new UAReference(organizes, true, source, targetVar);
             Assert.NotEqual(reference, reference2);
             // Different due to different direction
-            reference2 = new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source"), new NodeId("target"), false, false, true, extractor.TypeManager);
+            reference2 = new UAReference(organizes, false, source, target);
             Assert.NotEqual(reference, reference2);
             // Equal
-            reference2 = new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target"), false, false, true, extractor.TypeManager);
+            reference2 = new UAReference(organizes, true, source, target);
             Assert.Equal(reference, reference2);
             Assert.Equal(reference.GetHashCode(), reference2.GetHashCode());
         }
@@ -1304,7 +1319,11 @@ namespace Test.Unit
         public void TestToRelationship()
         {
             using var extractor = tester.BuildExtractor();
-            var reference = new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target"), false, true, true, extractor.TypeManager);
+            var organizes = tester.Client.TypeManager.GetReferenceType(ReferenceTypeIds.Organizes);
+            var source = new UAObject(new NodeId("source"), "Source", "Source", null, NodeId.Null, null);
+            var target = new UAVariable(new NodeId("target"), "Target", "Target", null, NodeId.Null, null);
+
+            var reference = new UAReference(organizes, true, source, target);
             reference.Type.Attributes.DisplayName = "Organizes";
             reference.Type.FullAttributes.InverseName = "OrganizedBy";
             var rel = reference.ToRelationship(123, extractor);
@@ -1315,14 +1334,14 @@ namespace Test.Unit
             Assert.Equal("gp.base:s=target", rel.TargetExternalId);
             Assert.Equal("gp.Organizes;base:s=source;base:s=target", rel.ExternalId);
 
-            reference = new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("target"), new NodeId("source"), true, false, true, extractor.TypeManager);
+            reference = new UAReference(organizes, false, source, target);
             rel = reference.ToRelationship(123, extractor);
             Assert.Equal(123, rel.DataSetId);
             Assert.Equal(RelationshipVertexType.TimeSeries, rel.SourceType);
             Assert.Equal(RelationshipVertexType.Asset, rel.TargetType);
             Assert.Equal("gp.base:s=target", rel.SourceExternalId);
             Assert.Equal("gp.base:s=source", rel.TargetExternalId);
-            Assert.Equal("gp.OrganizedBy;base:s=target;base:s=source", rel.ExternalId);
+            Assert.Equal("gp.OrganizedBy;base:s=source;base:s=target", rel.ExternalId);
         }
         #endregion
     }

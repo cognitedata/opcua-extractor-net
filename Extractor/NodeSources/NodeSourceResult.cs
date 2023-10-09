@@ -1,5 +1,5 @@
 ﻿/* Cognite Extractor for OPC-UA
-Copyright (C) 2021 Cognite AS
+Copyright (C) 2023 Cognite AS
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -37,7 +37,8 @@ namespace Cognite.OpcUa.NodeSources
             IEnumerable<BaseUANode> destinationObjects,
             IEnumerable<UAVariable> destinationVariables,
             IEnumerable<UAReference> destinationReferences,
-            bool canBeUsedForDeletes)
+            bool canBeUsedForDeletes,
+            bool shouldBackgroundBrowse)
         {
             SourceObjects = sourceObjects;
             SourceVariables = sourceVariables;
@@ -45,6 +46,7 @@ namespace Cognite.OpcUa.NodeSources
             DestinationVariables = destinationVariables;
             DestinationReferences = destinationReferences;
             CanBeUsedForDeletes = canBeUsedForDeletes;
+            ShouldBackgroundBrowse = shouldBackgroundBrowse;
         }
         public IEnumerable<BaseUANode> SourceObjects { get; }
         public IEnumerable<UAVariable> SourceVariables { get; }
@@ -53,6 +55,7 @@ namespace Cognite.OpcUa.NodeSources
         public IEnumerable<UAReference> DestinationReferences { get; }
 
         public bool CanBeUsedForDeletes { get; }
+        public bool ShouldBackgroundBrowse { get; }
     }
 
     /// <summary>

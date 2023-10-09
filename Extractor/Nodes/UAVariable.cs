@@ -154,7 +154,13 @@ namespace Cognite.OpcUa.Nodes
                 ArrayDimensions = null;
             }
             AccessLevel = state.AccessLevel;
-            Value = state.WrappedValue;
+            // Only assign non-null values here. There is no real way at this stage to
+            // distinguish between no value being set, and the value being null.
+            // Leaving it out means that we can load it later.
+            if (state.WrappedValue != Variant.Null && state.WrappedValue.Value != null)
+            {
+                Value = state.WrappedValue;
+            }
             LoadFromBaseNodeState(state);
         }
     }
@@ -242,15 +248,24 @@ namespace Cognite.OpcUa.Nodes
             public bool IsSourceVariable;
             public bool IsDestinationObject;
             public bool IsDestinationVariable;
+
+            public bool Any()
+            {
+                return IsSourceObject || IsSourceVariable || IsDestinationObject || IsDestinationVariable;
+            }
         }
 
         public bool AllowTSMap(
             ILogger log,
-            DataTypeConfig config,
-            int? arraySizeOverride = null,
-            bool overrideString = false)
+            DataTypeConfig config)
         {
-            return FullAttributes.DataType.AllowTSMap(this, log, config, arraySizeOverride, overrideString);
+            return FullAttributes.DataType.AllowTSMap(this, log, config);
+        }
+
+        public override bool AllowValueRead(ILogger logger, DataTypeConfig config, bool ignoreDimension)
+        {
+            return FullAttributes.Value == null
+                   && FullAttributes.DataType.AllowValueRead(this, ArrayDimensions, ValueRank, logger, config, ignoreDimension);
         }
 
         public VariableGroups GetVariableGroups(ILogger log, DataTypeConfig config)

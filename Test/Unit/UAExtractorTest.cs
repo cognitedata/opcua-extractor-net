@@ -136,14 +136,10 @@ namespace Test.Unit
             var references = new List<UAReference>
             {
                 new UAReference(
-                    ReferenceTypeIds.Organizes,
+                    extractor.TypeManager.GetReferenceType(ReferenceTypeIds.Organizes),
                     true,
-                    new NodeId("object1"),
-                    new NodeId("var1"),
-                    false,
-                    true,
-                    false,
-                    extractor.TypeManager)
+                    nodes[0],
+                    variables[0])
             };
 
             var input = new PusherInput(nodes, variables, references, null);
@@ -277,7 +273,12 @@ namespace Test.Unit
             extractor.InitExternal(tester.Source.Token);
             await extractor.RunExtractor(true);
 
-            Assert.Equal(18, pusher.PushedNodes.Count);
+            foreach (var node in pusher.PushedNodes)
+            {
+                tester.Log.LogDebug("{Name}", node.Value.Name);
+            }
+
+            Assert.Equal(15, pusher.PushedNodes.Count);
             Assert.Equal(38, pusher.PushedVariables.Count);
             Assert.Equal(10, pusher.PushedReferences.Count);
         }

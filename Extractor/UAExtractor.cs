@@ -66,7 +66,7 @@ namespace Cognite.OpcUa
 
         public TypeManager TypeManager => uaClient.TypeManager;
 
-        private NodeSetSource? nodeSetSource;
+        private NodeSetNodeSource? nodeSetSource;
 
         private readonly DeletesManager? deletesManager;
 
@@ -336,8 +336,10 @@ namespace Cognite.OpcUa
                 Config.Source.LimitToServerConfig = false;
                 Config.Source.NodeSetSource.Types = true;
                 Config.Source.NodeSetSource.Instance = true;
-                nodeSetSource = new NodeSetSource(Provider.GetRequiredService<ILogger<NodeSetSource>>(), Config, this, uaClient, TypeManager);
-                nodeSetSource.Build();
+                nodeSetSource = new NodeSetNodeSource(
+                    Provider.GetRequiredService<ILogger<NodeSetNodeSource>>(),
+                    Config, this, uaClient, TypeManager);
+                await nodeSetSource.Initialize(Source.Token);
             }
 
             await ConfigureExtractor();
@@ -590,102 +592,86 @@ namespace Cognite.OpcUa
 
         #region Mapping
 
-        private async Task<IEnumerable<Func<CancellationToken, Task>>> RunMapping(IEnumerable<NodeId> nodesToBrowse, bool initial, bool isFull)
+        private (INodeSource nodeSource, ITypeAndNodeSource typeSource) GetSources(
+            bool initial,
+            UANodeSource uaNodeSource)
         {
-            bool readFromOpc = true;
+            INodeSource? nodeSource = null;
+            ITypeAndNodeSource? typeSource = null;
 
-            NodeSourceResult? result = null;
             if ((Config.Cognite?.RawNodeBuffer?.Enable ?? false) && initial)
             {
-                log.LogDebug("Begin fetching data from CDF");
-                var handler = new CDFNodeSource(Provider.GetRequiredService<ILogger<CDFNodeSource>>(),
-                    Config, this, uaClient, pushers.OfType<CDFPusher>().First(), TypeManager);
-                await handler.ReadRawNodes(Source.Token);
-
-                result = await handler.ParseResults(Source.Token);
-
-                if (result == null || !result.DestinationObjects.Any() && !result.DestinationVariables.Any())
+                var cdfSource = new CDFNodeSource(Provider.GetRequiredService<ILogger<CDFNodeSource>>(),
+                    Config, this, pushers.OfType<CDFPusher>().First(), TypeManager);
+                if (Config.Cognite.RawNodeBuffer.BrowseOnEmpty)
                 {
-                    if (!Config.Cognite.RawNodeBuffer.BrowseOnEmpty)
-                    {
-                        throw new ExtractorFailureException("Found no nodes in CDF, restarting");
-                    }
-                    log.LogInformation("Found no nodes in CDF, reading from OPC-UA server");
+                    nodeSource = new CDFNodeSourceWithFallback(cdfSource, uaNodeSource);
                 }
                 else
                 {
-                    readFromOpc = false;
+                    nodeSource = cdfSource;
                 }
             }
 
-            if ((Config.Source.NodeSetSource?.NodeSets?.Any() ?? false) && initial
-                && (Config.Source.NodeSetSource.Instance || Config.Source.NodeSetSource.Types))
+            if ((Config.Source.NodeSetSource?.NodeSets?.Any() ?? false) && initial)
             {
-                log.LogDebug("Begin fetching data from internal node set");
-                if (nodeSetSource == null)
+                if (Config.Source.NodeSetSource.Instance || Config.Source.NodeSetSource.Types)
                 {
-                    nodeSetSource = new NodeSetSource(Provider.GetRequiredService<ILogger<NodeSetSource>>(), Config, this, uaClient, TypeManager);
+                    nodeSetSource ??= new NodeSetNodeSource(
+                            Provider.GetRequiredService<ILogger<NodeSetNodeSource>>(),
+                            Config, this, uaClient, TypeManager);
                 }
-
-                if (!Config.Source.NodeSetSource.Types)
-                {
-                    await TypeManager.LoadTypeData(Source.Token);
-                }
-
-                var handler = nodeSetSource;
-                handler.BuildNodes(nodesToBrowse, isFull);
 
                 if (Config.Source.NodeSetSource.Instance)
                 {
-                    result = await handler.ParseResults(Source.Token);
-                    readFromOpc = false;
+                    if (nodeSource != null) throw new ConfigurationException(
+                        "Combining node-set-source.instance with cognite.raw-node-buffer is not allowed");
+                    nodeSource = nodeSetSource;
                 }
-                nodeSetSource = null;
+                if (Config.Source.NodeSetSource.Types)
+                {
+                    typeSource = nodeSetSource;
+                }
             }
 
-            if (readFromOpc)
+            return (nodeSource ?? uaNodeSource, typeSource ?? uaNodeSource);
+        }
+
+        private async Task<IEnumerable<Func<CancellationToken, Task>>> RunMapping(IEnumerable<NodeId> nodesToBrowse, bool initial, bool isFull)
+        {
+            UANodeSource uaSource = new UANodeSource(
+                Provider.GetRequiredService<ILogger<UANodeSource>>(),
+                this, uaClient, TypeManager);
+            var (nodeSource, typeSource) = GetSources(initial, uaSource);
+
+            NodeHierarchyBuilder MakeBuilder(INodeSource source)
             {
-                log.LogInformation("Begin mapping main directory");
-                var handler = new UANodeSource(Provider.GetRequiredService<ILogger<UANodeSource>>(), Config, this, uaClient, isFull, TypeManager);
-                try
-                {
-                    await uaClient.Browser.BrowseNodeHierarchy(nodesToBrowse, handler.Callback, Source.Token,
-                        "the main instance hierarchy");
-                }
-                catch (Exception ex)
-                {
-                    ExtractorUtils.LogException(log, ex, "Unexpected error browsing node hierarchy",
-                        "Handled service result exception browsing node hierarchy");
-                    throw;
-                }
-                result = await handler.ParseResults(Source.Token);
-                log.LogInformation("End mapping main directory");
+                return new NodeHierarchyBuilder(source, typeSource, Config, nodesToBrowse, uaClient, this, Transformations,
+                    Provider.GetRequiredService<ILogger<NodeHierarchyBuilder>>());
             }
 
-            State.PopulateActiveEventTypes(TypeManager.EventFields);
+            var builder = MakeBuilder(nodeSource);
 
-            try
+            var result = await builder.LoadNodeHierarchy(isFull, Source.Token);
+            builder = null;
+
+            var tasks = await MapUAToDestinations(result);
+
+            if (result.ShouldBackgroundBrowse && initial)
             {
-                var tasks = await MapUAToDestinations(result);
-                if (initial && !readFromOpc && Config.Source.AltSourceBackgroundBrowse)
+                tasks = tasks.Append(async token =>
                 {
-                    tasks = tasks.Append(async token =>
+                    builder = MakeBuilder(uaSource);
+                    result = await builder.LoadNodeHierarchy(true, token);
+                    var nextTasks = await MapUAToDestinations(result);
+                    foreach (var task in nextTasks)
                     {
-                        var tasks = await RunMapping(RootNodes, initial: false, isFull: true);
-                        foreach (var task in tasks)
-                        {
-                            Looper.Scheduler.ScheduleTask(null, task);
-                        }
-                    });
-                }
-                return tasks;
+                        Looper.Scheduler.ScheduleTask(null, task);
+                    }
+                });
             }
-            catch (Exception ex)
-            {
-                ExtractorUtils.LogException(log, ex, "Unexpected error in MapUAToDestinations",
-                    "Handled service result exception in MapUAToDestinations");
-                throw;
-            }
+
+            return tasks;
         }
 
         /// <summary>

@@ -73,7 +73,8 @@ namespace Cognite.OpcUa.Browse
         public async Task BrowseNodeHierarchy(IEnumerable<NodeId> roots,
             Action<ReferenceDescription, NodeId, bool> callback,
             CancellationToken token,
-            string purpose = "")
+            string purpose = "",
+            uint? nodeClassMask = null)
         {
             if (roots == null) throw new ArgumentNullException(nameof(roots));
 
@@ -84,13 +85,17 @@ namespace Cognite.OpcUa.Browse
             {
                 callback?.Invoke(root, NodeId.Null, false);
             }
-            uint classMask = (uint)NodeClass.Variable | (uint)NodeClass.Object;
-            if (config.Extraction.NodeTypes.AsNodes)
+
+            if (nodeClassMask == null)
             {
-                classMask |= (uint)NodeClass.VariableType | (uint)NodeClass.ObjectType | (uint)NodeClass.ReferenceType | (uint)NodeClass.DataType;
+                nodeClassMask = (uint)NodeClass.Variable | (uint)NodeClass.Object;
+                if (config.Extraction.NodeTypes.AsNodes)
+                {
+                    nodeClassMask |= (uint)NodeClass.VariableType | (uint)NodeClass.ObjectType | (uint)NodeClass.ReferenceType | (uint)NodeClass.DataType;
+                }
             }
 
-            await BrowseDirectory(roots, callback, token, null, classMask, true, purpose: purpose);
+            await BrowseDirectory(roots, callback, token, null, nodeClassMask.Value, true, purpose: purpose);
         }
 
         /// <summary>

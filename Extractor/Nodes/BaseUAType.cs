@@ -46,6 +46,7 @@ namespace Cognite.OpcUa.Nodes
 
         public bool IsChildOf(NodeId id)
         {
+            System.Diagnostics.Debug.Assert(Id != ParentId);
             return Id == id || Parent is BaseUAType parentType && parentType.IsChildOf(id);
         }
     }

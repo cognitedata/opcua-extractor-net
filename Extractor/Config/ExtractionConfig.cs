@@ -16,10 +16,12 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using Cognite.Extractor.Common;
+using Cognite.OpcUa.NodeSources;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using System.Collections.Generic;
 using System.Linq;
+using YamlDotNet.Serialization;
 
 namespace Cognite.OpcUa.Config
 {
@@ -283,6 +285,14 @@ namespace Cognite.OpcUa.Config
         /// Create any nodes that are found through non-hierarchical references but not in the hierarchy.
         /// </summary>
         public bool CreateReferencedNodes { get; set; }
+
+        [YamlIgnore]
+        public HierarchicalReferenceMode Mode { get
+            {
+                if (!Enabled || !Hierarchical) return HierarchicalReferenceMode.Disabled;
+                if (!InverseHierarchical) return HierarchicalReferenceMode.Forward;
+                return HierarchicalReferenceMode.Both;
+            } }
     }
     public class NodeTypeConfig
     {
