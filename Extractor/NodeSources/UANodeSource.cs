@@ -67,14 +67,14 @@ namespace Cognite.OpcUa.NodeSources
             IEnumerable<NodeId> nodesToBrowse,
             uint nodeClassMask,
             HierarchicalReferenceMode hierarchicalReferences,
+            string purpose,
             CancellationToken token)
         {
             this.hierarchicalReferences = hierarchicalReferences;
 
-            await client.Browser.BrowseNodeHierarchy(nodesToBrowse, HandleNode, token,
-                "the main instance hierarchy", nodeClassMask);
+            await client.Browser.BrowseNodeHierarchy(nodesToBrowse, HandleNode, token, purpose, nodeClassMask);
 
-            if (nodeMap.Any()) await client.ReadNodeData(nodeMap, token, "the main instance hierarchy");
+            if (nodeMap.Any()) await client.ReadNodeData(nodeMap, token, purpose);
 
             return TakeResults(false);
         }
@@ -83,9 +83,10 @@ namespace Cognite.OpcUa.NodeSources
             IReadOnlyDictionary<NodeId, BaseUANode> knownNodes,
             bool getTypeReferences,
             bool initUnknownNodes,
+            string purpose,
             CancellationToken token)
         {
-            await LoadNonHierarchicalReferencesInternal(knownNodes, getTypeReferences, initUnknownNodes, token);
+            await LoadNonHierarchicalReferencesInternal(knownNodes, getTypeReferences, initUnknownNodes, purpose, token);
 
             if (nodeMap.Any()) await client.ReadNodeData(nodeMap, token, "new non-hierarchical instances");
 
@@ -106,6 +107,7 @@ namespace Cognite.OpcUa.NodeSources
             IReadOnlyDictionary<NodeId, BaseUANode> knownNodes,
             bool getTypeReferences,
             bool initUnknownNodes,
+            string purpose,
             CancellationToken token)
         {
             if (!knownNodes.Any()) return;
@@ -125,7 +127,7 @@ namespace Cognite.OpcUa.NodeSources
                 Nodes = nodesToQuery
             };
 
-            var foundReferences = await client.Browser.BrowseLevel(baseParams, token, purpose: "non-hierarchical references");
+            var foundReferences = await client.Browser.BrowseLevel(baseParams, token, purpose: purpose);
 
             int count = 0;
             foreach (var (parentId, children) in foundReferences)

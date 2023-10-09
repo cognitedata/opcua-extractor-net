@@ -90,7 +90,7 @@ namespace Cognite.OpcUa.NodeSources
             });
         }
 
-        public Task<NodeLoadResult> LoadNodes(IEnumerable<NodeId> nodesToBrowse, uint nodeClassMask, HierarchicalReferenceMode hierarchicalReferences, CancellationToken token)
+        public Task<NodeLoadResult> LoadNodes(IEnumerable<NodeId> nodesToBrowse, uint nodeClassMask, HierarchicalReferenceMode hierarchicalReferences, string purpose, CancellationToken token)
         {
             // First we need to build reference types, otherwise we can't browse.
             // Under normal browse the server keeps track of all the reference types, but in this case we
@@ -99,23 +99,24 @@ namespace Cognite.OpcUa.NodeSources
             {
                 LoadReferenceTypes();
 
-                logger.LogInformation("Browse nodeset node hierarchy for {Nodes}", nodesToBrowse);
+                logger.LogInformation("Browse nodeset node hierarchy for {Purpose}. Starting from {Nodes}.", purpose, nodesToBrowse);
                 BrowseHierarchy(nodesToBrowse, nodeClassMask);
 
                 return TakeResults(false);
-            });
+            }, token);
         }
 
         public Task<NodeLoadResult> LoadNonHierarchicalReferences(
             IReadOnlyDictionary<NodeId, BaseUANode> knownNodes,
             bool getTypeReferences,
             bool initUnknownNodes,
+            string purpose,
             CancellationToken token)
         {
             var mode = config.Extraction.Relationships.Mode;
             return Task.Run(() =>
             {
-                logger.LogInformation("Loading references from nodeset files");
+                logger.LogInformation("Loading references for {Purpose} from nodeset files", purpose);
 
                 var classMask = NodeClass.Object | NodeClass.Variable;
                 if (getTypeReferences)
@@ -177,7 +178,7 @@ namespace Cognite.OpcUa.NodeSources
                 }
 
                 return TakeResults(false);
-            });
+            }, token);
         }
 
         public async Task LoadTypeMetadata(IEnumerable<BaseUANode> nodes, DataTypeConfig config, CancellationToken token)
