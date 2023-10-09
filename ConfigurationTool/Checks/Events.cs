@@ -1,6 +1,8 @@
 ﻿using Cognite.OpcUa.History;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.Subscriptions;
+using Cognite.OpcUa.NodeSources;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using System;
@@ -30,8 +32,9 @@ namespace Cognite.OpcUa.Config
             {
                 Config.Events.AllEvents = true;
                 Config.Events.Enabled = true;
-                await TypeManager.LoadTypeData(token);
-                TypeManager.BuildTypeInfo();
+                var source = new UANodeSource(
+                    provider.GetRequiredService<ILogger<UANodeSource>>(), null!, this, TypeManager);
+                await TypeManager.LoadTypeData(source, token);
             }
             catch (Exception ex)
             {

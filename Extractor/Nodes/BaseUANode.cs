@@ -182,6 +182,11 @@ namespace Cognite.OpcUa.Nodes
             return client.GetUniqueId(Id);
         }
 
+        public virtual bool AllowValueRead(ILogger logger, DataTypeConfig config, bool ignoreDimension)
+        {
+            return false;
+        }
+
         public virtual void Format(StringBuilder builder, int indent, bool writeParent = true, bool writeProperties = true)
         {
             var indt = new string(' ', indent);
@@ -354,6 +359,44 @@ namespace Cognite.OpcUa.Nodes
             }
 
             return null;
+        }
+
+        public bool UpdateFromNodeState(NodeState state, TypeManager typeManager)
+        {
+            if (Attributes.IsDataRead) return true;
+
+            if (state is BaseObjectState objState)
+            {
+                if (this is not UAObject obj) return false;
+                obj.FullAttributes.LoadFromNodeState(objState);
+            }
+            else if (state is BaseVariableState varState)
+            {
+                if (this is not UAVariable vr) return false;
+                vr.FullAttributes.LoadFromNodeState(varState, typeManager);
+            }
+            else if (state is BaseObjectTypeState objTState)
+            {
+                if (this is not UAObjectType objType) return false;
+                objType.FullAttributes.LoadFromNodeState(objTState);
+            }
+            else if (state is BaseVariableTypeState varTState)
+            {
+                if (this is not UAVariableType varType) return false;
+                varType.FullAttributes.LoadFromNodeState(varTState, typeManager);
+            }
+            else if (state is DataTypeState dataTState)
+            {
+                if (this is not UADataType dataType) return false;
+                dataType.FullAttributes.LoadFromNodeState(dataTState);
+            }
+            else if (state is ReferenceTypeState refTState)
+            {
+                if (this is not UAReferenceType refType) return false;
+                refType.FullAttributes.LoadFromNodeState(refTState);
+            }
+
+            return true;
         }
 
         public virtual Dictionary<string, string>? GetExtraMetadata(FullConfig config, IUAClientAccess client)

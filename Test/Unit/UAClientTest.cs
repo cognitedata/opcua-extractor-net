@@ -6,6 +6,7 @@ using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.Subscriptions;
+using Cognite.OpcUa.NodeSources;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
@@ -1167,10 +1168,11 @@ namespace Test.Unit
                 count++;
             }
 
+            var uaNodeSource = new UANodeSource(tester.Logger, null!, tester.Client, tester.Client.TypeManager);
+
             try
             {
-                await tester.Client.TypeManager.LoadTypeData(tester.Source.Token);
-                tester.Client.TypeManager.BuildTypeInfo();
+                await tester.Client.TypeManager.Initialize(uaNodeSource, tester.Source.Token);
 
                 await new EventSubscriptionTask(handler, emitters.Take(2), tester.Client.BuildEventFilter(tester.Client.TypeManager.EventFields))
                     .Run(tester.Logger, tester.Client.SessionManager, tester.Config, tester.Client.SubscriptionManager, tester.Source.Token);
@@ -1216,10 +1218,10 @@ namespace Test.Unit
             {
                 count++;
             }
+            var uaNodeSource = new UANodeSource(tester.Logger, null!, tester.Client, tester.Client.TypeManager);
             try
             {
-                await tester.Client.TypeManager.LoadTypeData(tester.Source.Token);
-                tester.Client.TypeManager.BuildTypeInfo();
+                await tester.Client.TypeManager.Initialize(uaNodeSource, tester.Source.Token);
                 await new EventSubscriptionTask(handler, emitters, tester.Client.BuildEventFilter(tester.Client.TypeManager.EventFields))
                     .Run(tester.Logger, tester.Client.SessionManager, tester.Config, tester.Client.SubscriptionManager, tester.Source.Token);
 

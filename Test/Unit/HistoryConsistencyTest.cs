@@ -2,6 +2,7 @@
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.Nodes;
+using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -217,11 +218,14 @@ namespace Test.Unit
                 extractor.State.SetEmitterState(state);
             }
 
+            var uaSource = new UANodeSource(tester.Log, extractor, tester.Client, tester.Client.TypeManager);
+
             var queue = (Queue<UAEvent>)extractor.Streamer.GetType()
                 .GetField("eventQueue", BindingFlags.NonPublic | BindingFlags.Instance)
                 .GetValue(extractor.Streamer);
 
-            await extractor.TypeManager.LoadTypeData(tester.Source.Token);
+            await extractor.TypeManager.Initialize(uaSource, tester.Source.Token);
+            await extractor.TypeManager.LoadTypeData(uaSource, tester.Source.Token);
             extractor.TypeManager.BuildTypeInfo();
             var fields = extractor.TypeManager.EventFields;
             extractor.State.PopulateActiveEventTypes(fields);

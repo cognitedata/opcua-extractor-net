@@ -1,5 +1,5 @@
 ﻿/* Cognite Extractor for OPC-UA
-Copyright (C) 2021 Cognite AS
+Copyright (C) 2023 Cognite AS
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -15,14 +15,13 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
-using Cognite.Extractor.Common;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
+using CogniteSdk.Beta.DataModels;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -30,248 +29,90 @@ using System.Threading.Tasks;
 
 namespace Cognite.OpcUa.NodeSources
 {
-    /// <summary>
-    /// Contains the results of a browse operation, and parses the nodes to produce
-    /// lists of nodes that should be mapped to destinations.
-    /// </summary>
-    public class UANodeSource : BaseNodeSource
+    public class UANodeSource : ITypeAndNodeSource
     {
-        private bool parsed;
+        private readonly ILogger logger;
+        private readonly UAExtractor extractor;
+        private readonly UAClient client;
+        private readonly TypeManager typeManager;
 
-        private readonly List<(ReferenceDescription Node, NodeId ParentId)> references = new List<(ReferenceDescription, NodeId)>();
-        public Action<ReferenceDescription, NodeId, bool> Callback => HandleNode;
-        private readonly bool isFullBrowse;
+        private UANodeCollection nodeMap = new();
+        private HashSet<UAReference> references = new();
 
-        public UANodeSource(ILogger<UANodeSource> log, FullConfig config, UAExtractor extractor, UAClient client, bool isFullBrowse, TypeManager typeManager)
-            : base(log, config, extractor, client, typeManager)
+        private HierarchicalReferenceMode hierarchicalReferences = HierarchicalReferenceMode.Disabled;
+
+        public UANodeSource(ILogger logger, UAExtractor extractor, UAClient client, TypeManager typeManager)
         {
-            this.isFullBrowse = isFullBrowse;
+            this.logger = logger;
+            this.extractor = extractor;
+            this.client = client;
+            this.typeManager = typeManager;
         }
 
-        private async Task InitNodes(IEnumerable<BaseUANode> nodes, CancellationToken token)
+        private NodeLoadResult TakeResults(bool assumeFullyTransformed)
         {
-            var rawObjects = new List<BaseUANode>();
-            var rawVariables = new List<UAVariable>();
-
-            await Client.ReadNodeData(nodes, token, "node hierarchy information");
-
-            var properties = new HashSet<UAVariable>();
-            foreach (var node in nodes)
-            {
-                SortNode(node, rawObjects, rawVariables);
-                if ((node.IsProperty || Config.Extraction.NodeTypes.AsNodes && node.NodeClass == NodeClass.VariableType)
-                    && (node is UAVariable variable))
-                {
-                    properties.Add(variable);
-                }
-            }
-            parsed = true;
-            ClearRaw();
-
-            await TypeManager.LoadTypeData(token);
-            TypeManager.BuildTypeInfo();
-
-            var propsToReadValues = properties.Where(prop => prop.AllowTSMap(Log, Config.Extraction.DataTypes, 10, true)).ToList();
-            await Client.ReadNodeValues(propsToReadValues, token);
-
-            if (Config.Extraction.DataTypes.MaxArraySize != 0 && Config.Extraction.DataTypes.EstimateArraySizes == true)
-            {
-                await EstimateArraySizes(rawVariables, token);
-            }
-
-            var update = Config.Extraction.Update;
-
-            var mappedObjects = rawObjects.Where(obj => FilterObject(update.Objects, obj)).ToList();
-            FinalDestinationObjects.AddRange(mappedObjects);
-            FinalSourceObjects.AddRange(mappedObjects);
-            foreach (var variable in rawVariables)
-            {
-                SortVariable(update.Variables, variable);
-            }
-
-            foreach (var node in FinalSourceObjects.Concat(FinalSourceVariables))
-            {
-                InitNodeState(update, node);
-            }
+            var ret = new NodeLoadResult(nodeMap, references, assumeFullyTransformed, false);
+            nodeMap = new();
+            references = new();
+            return ret;
         }
 
-        /// <summary>
-        /// Called after mapping has completed.
-        /// Transforms the list of raw nodes into five collections:
-        /// Source variables, source objects,
-        /// destination variables, destination objects, and references.
-        /// This reads necessary information from the state and the server.
-        /// </summary>
-        /// <returns>Resulting lists of populated and sorted nodes.</returns>
-        public override async Task<NodeSourceResult?> ParseResults(CancellationToken token)
+        public Task Initialize(CancellationToken token)
         {
-            if (parsed) throw new InvalidOperationException("Browse result has already been parsed");
-            if (!NodeMap.Any()) return null;
-
-            await InitNodes(NodeList, token);
-
-            var usesFdm = Config.Cognite?.MetadataTargets?.DataModels?.Enabled ?? false;
-
-            if (Config.Extraction.Relationships.Enabled)
-            {
-                await GetRelationshipData(usesFdm, usesFdm, usesFdm ? ModellingRules : new HashSet<NodeId>(), token);
-            }
-
-            if (!FinalDestinationObjects.Any() && !FinalDestinationVariables.Any() && !FinalSourceVariables.Any() && !FinalReferences.Any())
-            {
-                Log.LogInformation("Mapping resulted in no new nodes");
-                return null;
-            }
-
-            Log.LogInformation("Mapping resulted in {ObjCount} destination objects and {TsCount} destination timeseries," +
-                " {SourceObj} objects and {SourceVar} variables.",
-                FinalDestinationObjects.Count, FinalDestinationVariables.Count,
-                FinalSourceObjects.Count, FinalSourceVariables.Count);
-            if (FinalReferences.Any())
-            {
-                Log.LogInformation("Found a total of {Count} references", FinalReferences.Count);
-            }
-
-            return new NodeSourceResult(
-                FinalSourceObjects,
-                FinalSourceVariables,
-                FinalDestinationObjects,
-                FinalDestinationVariables,
-                FinalReferences,
-                isFullBrowse);
+            return Task.CompletedTask;
         }
 
-        /// <summary>
-        /// Get references for the mapped nodes.
-        /// </summary>
-        /// <returns>A list of references.</returns>
-        private async Task GetRelationshipData(bool getPropertyReferences, bool getTypeReferences, HashSet<NodeId> additionalKnownNodes, CancellationToken token)
+
+        public async Task<NodeLoadResult> LoadNodes(
+            IEnumerable<NodeId> nodesToBrowse,
+            uint nodeClassMask,
+            HierarchicalReferenceMode hierarchicalReferences,
+            CancellationToken token)
         {
-            var nodes = FinalSourceObjects.Concat(FinalSourceVariables);
+            this.hierarchicalReferences = hierarchicalReferences;
 
-            if (!getPropertyReferences)
-            {
-                nodes = nodes.Where(node => !node.IsProperty);
-            }
-            else
-            {
-                nodes = nodes.Concat(nodes.SelectMany(node => node.GetAllProperties())).DistinctBy(node => node.Id);
-            }
+            await client.Browser.BrowseNodeHierarchy(nodesToBrowse, HandleNode, token,
+                "the main instance hierarchy", nodeClassMask);
 
-            var nonHierarchicalReferences = await GetReferencesAsync(
-                nodes.Select(node => node.Id).ToList(),
-                ReferenceTypeIds.NonHierarchicalReferences,
-                token,
-                getTypeReferences);
+            if (nodeMap.Any()) await client.ReadNodeData(nodeMap, token, "the main instance hierarchy");
 
-            Log.LogInformation("Found {Count} non-hierarchical references", nonHierarchicalReferences.Count());
-
-            var hierarchicalReferences = new List<UAReference>();
-
-            if (Config.Extraction.Relationships.Hierarchical)
-            {
-                Log.LogInformation("Mapping {Count} hierarchical references", references.Count);
-
-                foreach (var pair in references)
-                {
-                    // The child should always be in the list of mapped nodes here
-                    var nodeId = Client.ToNodeId(pair.Node.NodeId);
-                    var childNode = Extractor.State.GetMappedNode(nodeId);
-                    if (childNode == null) continue;
-                    var parentNode = Extractor.State.GetMappedNode(pair.ParentId);
-                    if (parentNode == null) continue;
-
-                    hierarchicalReferences.Add(new UAReference(
-                        type: pair.Node.ReferenceTypeId,
-                        isForward: true,
-                        source: pair.ParentId,
-                        target: childNode.Id,
-                        sourceTs: !parentNode.IsObject,
-                        targetTs: !childNode.IsObject,
-                        isHierarchical: true,
-                        manager: TypeManager));
-
-                    if (Config.Extraction.Relationships.InverseHierarchical)
-                    {
-                        hierarchicalReferences.Add(new UAReference(
-                            type: pair.Node.ReferenceTypeId,
-                            isForward: false,
-                            source: childNode.Id,
-                            target: pair.ParentId,
-                            sourceTs: !childNode.IsObject,
-                            targetTs: !parentNode.IsObject,
-                            isHierarchical: true,
-                            manager: TypeManager));
-                    }
-                }
-                Log.LogInformation("Found {Count} hierarchical references", hierarchicalReferences.Count);
-            }
-
-            foreach (var reference in nonHierarchicalReferences.Concat(hierarchicalReferences))
-            {
-                if (!FilterReference(reference, getPropertyReferences, additionalKnownNodes)) continue;
-                FinalReferences.Add(reference);
-            }
+            return TakeResults(false);
         }
 
-        /// <summary>
-        /// Callback for the browse operation, creates <see cref="UANode"/>s and adds them to stored nodes.
-        /// </summary>
-        /// <param name="node">Description of the node to be handled</param>
-        /// <param name="parentId">Id of the parent node</param>
-        private void HandleNode(ReferenceDescription node, NodeId parentId, bool visited)
+        public async Task<NodeLoadResult> LoadNonHierarchicalReferences(
+            IReadOnlyDictionary<NodeId, BaseUANode> knownNodes,
+            bool getTypeReferences,
+            bool initUnknownNodes,
+            CancellationToken token)
         {
-            bool mapped;
+            await LoadNonHierarchicalReferencesInternal(knownNodes, getTypeReferences, initUnknownNodes, token);
 
-            if (!visited)
-            {
-                var parent = NodeMap.GetValueOrDefault(parentId);
+            if (nodeMap.Any()) await client.ReadNodeData(nodeMap, token, "new non-hierarchical instances");
 
-                var result = BaseUANode.Create(node, parentId, parent, Client, TypeManager);
+            logger.LogDebug("Is mandatory in nodemap? {Yes}", nodeMap.FirstOrDefault(n => n.Id == ObjectIds.ModellingRule_Mandatory));
 
-                if (result == null)
-                {
-                    Log.LogWarning("Node of unexpected type received: {Type}, {Id}", node.NodeClass, node.NodeId);
-                    return;
-                }
-
-                Log.LogTrace("Handle node {Name}, {Id}: {Class}", result.Name, result.Id, result.NodeClass);
-                Extractor.State.RegisterNode(result.Id, result.GetUniqueId(Extractor));
-                mapped = TryAdd(result);
-            }
-            else
-            {
-                mapped = NodeMap.ContainsKey(Client.ToNodeId(node.NodeId));
-            }
-            
-            if (mapped && Config.Extraction.Relationships.Enabled && Config.Extraction.Relationships.Hierarchical)
-            {
-                if (parentId == null || parentId.IsNullNodeId) return;
-                references.Add((node, parentId));
-            }
+            return TakeResults(false);
         }
 
-        /// <summary>
-        /// Get all references between nodes in <paramref name="nodes"/> with reference type as subtype of
-        /// <paramref name="referenceTypes"/>.
-        /// </summary>
-        /// <param name="nodes">Nodes to fetch references for</param>
-        /// <param name="referenceTypes">ReferenceType filter</param>
-        /// <returns>List of found references</returns>
-        private async Task<IEnumerable<UAReference>> GetReferencesAsync(
-            IEnumerable<NodeId> nodes,
-            NodeId referenceTypes,
-            CancellationToken token,
-            bool getTypeReferences = false)
+        public async Task LoadTypeMetadata(IEnumerable<BaseUANode> nodes, DataTypeConfig config, CancellationToken token)
         {
-            if (!nodes.Any()) return Enumerable.Empty<UAReference>();
+            await client.ReadNodeData(nodes, token, "the type hierarchy");
+            await client.ReadNodeValues(nodes.Where(n => n.AllowValueRead(logger, config, true)), token);
+        }
 
-            Log.LogInformation("Get extra references from the server for {Count} nodes", nodes.Count());
+        #region Support
 
-            var browseNodes = nodes.Select(node => new BrowseNode(node)).ToDictionary(node => node.Id);
+        private async Task LoadNonHierarchicalReferencesInternal(
+            IReadOnlyDictionary<NodeId, BaseUANode> knownNodes,
+            bool getTypeReferences,
+            bool initUnknownNodes,
+            CancellationToken token)
+        {
+            if (!knownNodes.Any()) return;
 
+            var nodesToQuery = knownNodes.Keys.Select(n => new BrowseNode(n)).ToDictionary(n => n.Id);
             var classMask = NodeClass.Object | NodeClass.Variable;
-            if (Config.Extraction.NodeTypes?.AsNodes ?? false || getTypeReferences)
+            if (getTypeReferences)
             {
                 classMask |= NodeClass.ObjectType | NodeClass.VariableType | NodeClass.DataType | NodeClass.ReferenceType;
             }
@@ -280,37 +121,111 @@ namespace Cognite.OpcUa.NodeSources
             {
                 BrowseDirection = BrowseDirection.Both,
                 NodeClassMask = (uint)classMask,
-                ReferenceTypeId = referenceTypes,
-                Nodes = browseNodes
+                ReferenceTypeId = ReferenceTypeIds.NonHierarchicalReferences,
+                Nodes = nodesToQuery
             };
 
-            var references = await Client.Browser.BrowseLevel(baseParams, token, purpose: "references");
+            var foundReferences = await client.Browser.BrowseLevel(baseParams, token, purpose: "non-hierarchical references");
 
-            var results = new List<UAReference>();
-            foreach (var (parentId, children) in references)
+            int count = 0;
+            foreach (var (parentId, children) in foundReferences)
             {
-                var parentNode = Extractor.State.GetMappedNode(parentId);
-                if (parentNode == null) continue;
+                var parentNode = knownNodes.GetValueOrDefault(parentId);
+                
+                if (parentNode == null)
+                {
+                    logger.LogWarning("Got reference from unknown node: {Id}", parentId);
+                    continue;
+                }
+
                 foreach (var child in children)
                 {
-                    var childId = Client.ToNodeId(child.NodeId);
-                    var childNode = Extractor.State.GetMappedNode(childId);
+                    var childId = client.ToNodeId(child.NodeId);
+                    var childNode = knownNodes.GetValueOrDefault(childId) ?? nodeMap.GetValueOrDefault(childId);
 
-                    results.Add(new UAReference(
-                        type: child.ReferenceTypeId,
-                        isForward: child.IsForward,
-                        source: parentId,
-                        target: childId,
-                        sourceTs: !parentNode.IsObject,
-                        targetTs: childNode != null && !childNode.IsObject,
-                        isHierarchical: false,
-                        manager: TypeManager));
+                    if (childNode == null)
+                    {
+                        if (extractor.State.IsMappedNode(childId))
+                        {
+                            // Corner case, this happens if we are browsing a subset of the node hierarchy
+                            // and find a reference to a node outside of the subset we're looking at.
+                            logger.LogTrace("Found reference to previously mapped node: {Id}, {Name}", childId, child.DisplayName);
+                            childNode = BaseUANode.Create(child, NodeId.Null, null, client, typeManager);
+                        }
+                        else if (initUnknownNodes)
+                        {
+                            // Do not create nodes from inverse references.
+                            if (!child.IsForward) continue;
+
+                            logger.LogTrace("Found reference to unknown node, adding: {Id}, {Name}", childId, child.DisplayName);
+                            childNode = BaseUANode.Create(child, NodeId.Null, null, client, typeManager);
+                            if (childNode != null) nodeMap.Add(childNode);
+                        }
+                        else
+                        {
+                            logger.LogTrace("Skipping reference from {Parent} to {Child} due to missing child node", parentId, childId);
+                            continue;
+                        }
+
+                        if (childNode == null) continue;
+                    }
+
+                    var rf = new UAReference(
+                        typeManager.GetReferenceType(child.ReferenceTypeId),
+                        child.IsForward,
+                        parentNode,
+                        childNode);
+
+                    references.Add(rf);
+                    count++;
                 }
             }
 
-            Log.LogInformation("Found {Count} extra references", results.Count);
-
-            return results;
+            logger.LogInformation("Found {Count} non-hierarchical references", count);
         }
+
+        private void HandleNode(ReferenceDescription node, NodeId parentId, bool visited)
+        {
+            BaseUANode? mapped;
+
+            if (!visited)
+            {
+                var parent = nodeMap.GetValueOrDefault(parentId);
+                var result = BaseUANode.Create(node, parentId, parent, client, typeManager);
+                if (result == null)
+                {
+                    logger.LogWarning("Node of unexpected type received: {Type}, {Id}", node.NodeClass, node.NodeId);
+                    return;
+                }
+                mapped = result;
+
+                logger.LogTrace("Handle node {Name}, {Id}: {Class}", mapped.Name, mapped.Id, mapped.NodeClass);
+                nodeMap.TryAdd(mapped);
+            }
+            else
+            {
+                mapped = nodeMap.GetValueOrDefault(client.ToNodeId(node.NodeId));
+                if (mapped != null && mapped.ParentId.IsNullNodeId)
+                {
+                    mapped.Parent = nodeMap.GetValueOrDefault(parentId);
+                }
+            }
+
+            if (mapped != null && (
+                hierarchicalReferences == HierarchicalReferenceMode.Forward
+                || hierarchicalReferences == HierarchicalReferenceMode.Both))
+            {
+                if (parentId == null || parentId.IsNullNodeId || !nodeMap.TryGetValue(parentId, out var parent)) return;
+
+                var rf = new UAReference(typeManager.GetReferenceType(node.ReferenceTypeId), true, parent, mapped);
+
+                references.Add(rf);
+                if (hierarchicalReferences == HierarchicalReferenceMode.Both)
+                {
+                    references.Add(rf.CreateInverse());
+                }
+            }
+        }
+        #endregion
     }
 }

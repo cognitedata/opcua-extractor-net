@@ -272,7 +272,6 @@ namespace Test.Integration
         public async Task TestIgnoreDataType()
         {
             var pusher = new DummyPusher(new DummyPusherConfig());
-            using var extractor = tester.BuildExtractor(true, null, pusher);
 
             var ids = tester.Server.Ids.Custom;
             tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(ids.Root, tester.Client);
@@ -282,6 +281,7 @@ namespace Test.Integration
             dataTypes.MaxArraySize = -1;
             dataTypes.AutoIdentifyTypes = true;
             dataTypes.IgnoreDataTypes = new List<ProtoNodeId> { CommonTestUtils.ToProtoNodeId(ids.IgnoreType, tester.Client) };
+            using var extractor = tester.BuildExtractor(true, null, pusher);
             await extractor.RunExtractor(true);
 
             Assert.Equal(6, pusher.PushedNodes.Count);
@@ -1340,6 +1340,8 @@ namespace Test.Integration
             pusher.Wipe();
 
             // Enable types only
+            tester.Log.LogInformation("BEGIN TYPE RUN");
+            tester.Client.TypeManager.Reset();
             tester.Config.Source.NodeSetSource.Types = true;
             await extractor.RunExtractor(true);
             Compare(pusher.PushedNodes.Values, pusher.PushedVariables.Values, pusher.PushedReferences);
@@ -1347,7 +1349,8 @@ namespace Test.Integration
             // Enable instance as well
 
             pusher.Wipe();
-
+            tester.Log.LogInformation("BEGIN INSTANCE RUN");
+            tester.Client.TypeManager.Reset();
             tester.Config.Source.NodeSetSource.Instance = true;
             await extractor.RunExtractor(true);
             foreach (var node in pusher.PushedNodes.Values)

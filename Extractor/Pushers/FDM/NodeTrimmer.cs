@@ -21,6 +21,7 @@ using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -47,7 +48,7 @@ namespace Cognite.OpcUa.Pushers.FDM
 
             // Is the type defintion of the node from the type system?
             if (node.TypeDefinition == ObjectTypeIds.DataTypeSystemType || node.TypeDefinition == VariableTypeIds.DataTypeDescriptionType
-                || node.TypeDefinition == VariableTypeIds.DataTypeDictionaryType) return true;
+                || node.TypeDefinition == VariableTypeIds.DataTypeDictionaryType || node.TypeDefinition == ObjectTypeIds.DataTypeEncodingType) return true;
             return false;
         }
 
@@ -62,7 +63,7 @@ namespace Cognite.OpcUa.Pushers.FDM
 
             if (!bySource.Any() && !byTarget.Any())
             {
-                log.LogWarning("Orphaned node: {Name} {Id}", node.Name, node.Id);
+                throw new InvalidOperationException($"Orphaned node: {node.Name} {node.Id}");
             }
 
             NodeId? dataTypeId = null;
@@ -75,6 +76,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                 dataTypeId = varType.FullAttributes.DataType.Id;
             }
             if (dataTypeId != null && !dataTypeId.IsNullNodeId) TraverseNode(result, refResult, null, nodes.Get(dataTypeId));
+            
             if (node.TypeDefinition != null && !node.TypeDefinition.IsNullNodeId)
             {
                 TraverseNode(result, refResult, null, nodes.Get(node.TypeDefinition));
