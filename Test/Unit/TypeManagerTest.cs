@@ -1,5 +1,6 @@
 ﻿using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Nodes;
+using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.TypeCollectors;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
@@ -26,12 +27,37 @@ namespace Test.Unit
         }
         #region datatypemanager
         [Fact]
-        public void TestDataTypeManagerConfigure()
+        public void TestDataTypeManagerConfigureIgnoreTypes()
         {
             var mgr = new TypeManager(tester.Config, tester.Client, tester.Log);
-            // basic
+            mgr.InitDataTypeConfig();
+
+            var config = tester.Config.Extraction.DataTypes;
+            config.IgnoreDataTypes = new List<ProtoNodeId>
+            {
+                new NodeId("enum").ToProtoNodeId(tester.Client),
+                new NodeId("test").ToProtoNodeId(tester.Client),
+                new ProtoNodeId { NamespaceUri = "some.missing.uri", NodeId = "i=123" }
+            };
+            mgr = new TypeManager(tester.Config, tester.Client, tester.Log);
+            mgr.InitDataTypeConfig();
+            mgr.GetDataType(new NodeId("enum"));
+            mgr.GetDataType(new NodeId("test"));
+            // with ignore data types
             mgr.BuildTypeInfo();
-            Assert.Empty(mgr.NodeMap.Values.OfType<UADataType>());
+            Assert.Equal(2, mgr.NodeMap.Values.OfType<UADataType>().Count());
+
+            var dt1 = mgr.NodeMap[new NodeId("enum")] as UADataType;
+            Assert.True(dt1.ShouldIgnore);
+            var dt2 = mgr.NodeMap[new NodeId("test")] as UADataType;
+            Assert.True(dt2.ShouldIgnore);
+        }
+
+        [Fact]
+        public void TestDataTypeManagerConfigureCustomTypes()
+        {
+            var mgr = new TypeManager(tester.Config, tester.Client, tester.Log);
+            mgr.InitDataTypeConfig();
 
             var config = tester.Config.Extraction.DataTypes;
             config.CustomNumericTypes = new List<ProtoDataType>
@@ -40,8 +66,11 @@ namespace Test.Unit
                 new ProtoDataType { NodeId = new NodeId("test").ToProtoNodeId(tester.Client) },
                 new ProtoDataType { NodeId = new ProtoNodeId { NamespaceUri = "some.missing.uri", NodeId = "i=123" } }
             };
+            mgr = new TypeManager(tester.Config, tester.Client, tester.Log);
+            mgr.InitDataTypeConfig();
             mgr.GetDataType(new NodeId("enum"));
             mgr.GetDataType(new NodeId("test"));
+
             // with custom numeric types
             mgr.BuildTypeInfo();
             Assert.Equal(2, mgr.NodeMap.Values.OfType<UADataType>().Count());
@@ -51,28 +80,18 @@ namespace Test.Unit
             Assert.False(dt1.IsString);
             var dt2 = mgr.NodeMap[new NodeId("test")] as UADataType;
             Assert.False(dt2.IsString);
-
-            config.IgnoreDataTypes = new List<ProtoNodeId>
-            {
-                new NodeId("enum").ToProtoNodeId(tester.Client),
-                new NodeId("test").ToProtoNodeId(tester.Client),
-                new ProtoNodeId { NamespaceUri = "some.missing.uri", NodeId = "i=123" }
-            };
-            mgr.Reset();
-            mgr.GetDataType(new NodeId("enum"));
-            mgr.GetDataType(new NodeId("test"));
-            // with ignore data types
-            mgr.BuildTypeInfo();
-            Assert.Equal(2, mgr.NodeMap.Values.OfType<UADataType>().Count());
-
-            dt1 = mgr.NodeMap[new NodeId("enum")] as UADataType;
-            Assert.NotNull(dt1.EnumValues);
-            Assert.False(dt1.IsString);
-            Assert.True(dt1.ShouldIgnore);
-            dt2 = mgr.NodeMap[new NodeId("test")] as UADataType;
-            Assert.False(dt2.IsString);
-            Assert.True(dt1.ShouldIgnore);
         }
+
+        [Fact]
+        public void TestDataTypeManagerConfigureEmpty()
+        {
+            var mgr = new TypeManager(tester.Config, tester.Client, tester.Log);
+            mgr.InitDataTypeConfig();
+            // basic
+            mgr.BuildTypeInfo();
+            Assert.Empty(mgr.NodeMap.Values.OfType<UADataType>());
+        }
+
         [Fact]
         public void TestGetDataType()
         {
@@ -166,9 +185,6 @@ namespace Test.Unit
             node.FullAttributes.DataType = new UADataType(DataTypeIds.String);
             Assert.False(node.AllowTSMap(tester.Log, config));
 
-            // Override string
-            Assert.True(node.AllowTSMap(tester.Log, config, null, true));
-
             // Allow strings
             config.AllowStringVariables = true;
             Assert.True(node.AllowTSMap(tester.Log, config));
@@ -199,9 +215,6 @@ namespace Test.Unit
             node.FullAttributes.ArrayDimensions = new[] { 4 };
             Assert.False(node.AllowTSMap(tester.Log, config));
 
-            // Override size
-            Assert.True(node.AllowTSMap(tester.Log, config, 10));
-
             // Set max size to infinite
             config.MaxArraySize = -1;
             Assert.True(node.AllowTSMap(tester.Log, config));
@@ -224,8 +237,11 @@ namespace Test.Unit
             };
             var mgr = new TypeManager(tester.Config, tester.Client, tester.Log);
 
+            var source = new UANodeSource(tester.Log, null!, tester.Client, mgr);
+
             config.AutoIdentifyTypes = true;
-            await mgr.LoadTypeData(tester.Source.Token);
+            await mgr.Initialize(source, tester.Source.Token);
+            await mgr.LoadTypeData(source, tester.Source.Token);
 
             var type = mgr.GetDataType(tester.Server.Ids.Custom.IgnoreType);
             mgr.BuildTypeInfo();
@@ -306,8 +322,8 @@ namespace Test.Unit
             config.Enabled = true;
             config.AllEvents = false;
             var mgr = new TypeManager(tester.Config, tester.Client, tester.Log);
-            await mgr.LoadTypeData(tester.Source.Token);
-            mgr.BuildTypeInfo();
+            var source = new UANodeSource(tester.Log, null!, tester.Client, mgr);
+            await mgr.Initialize(source, tester.Source.Token);
 
             var fields = mgr.EventFields;
             Assert.Equal(5, fields.Count);
@@ -349,8 +365,8 @@ namespace Test.Unit
             config.Enabled = true;
             config.AllEvents = true;
             var mgr = new TypeManager(tester.Config, tester.Client, tester.Log);
-            await mgr.LoadTypeData(tester.Source.Token);
-            mgr.BuildTypeInfo();
+            var source = new UANodeSource(tester.Log, null!, tester.Client, mgr);
+            await mgr.Initialize(source, tester.Source.Token);
 
             var fields = mgr.EventFields;
 
@@ -384,8 +400,8 @@ namespace Test.Unit
             config.AllEvents = true;
             config.ExcludeEventFilter = "Audit|Condition|Alarm|SystemEventType";
             var mgr = new TypeManager(tester.Config, tester.Client, tester.Log);
-            await mgr.LoadTypeData(tester.Source.Token);
-            mgr.BuildTypeInfo();
+            var source = new UANodeSource(tester.Log, null!, tester.Client, mgr);
+            await mgr.Initialize(source, tester.Source.Token);
 
             var fields = mgr.EventFields;
 
@@ -402,8 +418,8 @@ namespace Test.Unit
             config.AllEvents = false;
             config.ExcludeProperties = new[] { "SubType" };
             var mgr = new TypeManager(tester.Config, tester.Client, tester.Log);
-            await mgr.LoadTypeData(tester.Source.Token);
-            mgr.BuildTypeInfo();
+            var source = new UANodeSource(tester.Log, null!, tester.Client, mgr);
+            await mgr.Initialize(source, tester.Source.Token);
 
             var fields = mgr.EventFields;
 
@@ -429,8 +445,8 @@ namespace Test.Unit
                 ObjectTypeIds.AuditHistoryAtTimeDeleteEventType.ToProtoNodeId(tester.Client)
             };
             var mgr = new TypeManager(tester.Config, tester.Client, tester.Log);
-            await mgr.LoadTypeData(tester.Source.Token);
-            mgr.BuildTypeInfo();
+            var source = new UANodeSource(tester.Log, null!, tester.Client, mgr);
+            await mgr.Initialize(source, tester.Source.Token);
 
             var fields = mgr.EventFields;
 
@@ -452,7 +468,8 @@ namespace Test.Unit
             var type4 = mgr.GetObjectType(tester.Server.Ids.Custom.ObjectType);
             var type5 = mgr.GetVariableType(tester.Server.Ids.Custom.VariableType);
 
-            await mgr.LoadTypeData(tester.Source.Token);
+            var source = new UANodeSource(tester.Log, null!, tester.Client, mgr);
+            await mgr.LoadTypeData(source, tester.Source.Token);
 
             Assert.Equal("BaseObjectType", type1.Name);
             Assert.Equal("FolderType", type2.Name);
@@ -472,7 +489,8 @@ namespace Test.Unit
             var type3 = mgr.GetReferenceType(tester.Server.Ids.Custom.RefType1);
             var type4 = mgr.GetReferenceType(tester.Server.Ids.Custom.RefType2);
 
-            await mgr.LoadTypeData(tester.Source.Token);
+            var source = new UANodeSource(tester.Log, null!, tester.Client, mgr);
+            await mgr.LoadTypeData(source, tester.Source.Token);
 
             Assert.Equal("Organizes", type1.GetName(false));
             Assert.Equal("OrganizedBy", type1.GetName(true));

@@ -45,17 +45,24 @@ namespace Test.Unit
         [Fact]
         public async Task TestNodeSetSource()
         {
-            tester.Config.Extraction.Relationships.Enabled = true;
-            using var extractor = tester.BuildExtractor();
             tester.Config.Extraction.Relationships.Enabled = false;
             tester.Config.Extraction.DataTypes.AutoIdentifyTypes = true;
 
-            var log = tester.Provider.GetRequiredService<ILogger<NodeSetSource>>();
-            var source = new NodeSetSource(log, tester.Config, extractor, tester.Client, extractor.TypeManager);
+            using var extractor = tester.BuildExtractor();
+
+            NodeHierarchyBuilder GetBuilder(params NodeId[] nodesToRead)
+            {
+                var log = tester.Provider.GetRequiredService<ILogger<NodeSetNodeSource>>();
+                var source = new NodeSetNodeSource(log, tester.Config, extractor, tester.Client, tester.Client.TypeManager);
+
+                return new NodeHierarchyBuilder(
+                    source, source, tester.Config, nodesToRead, tester.Client,
+                    extractor, extractor.Transformations, log);
+            }
 
             // Base, nothing enabled
-            source.BuildNodes(new[] { tester.Ids.Custom.Root }, true);
-            var result = await source.ParseResults(tester.Source.Token);
+            var builder = GetBuilder(tester.Ids.Custom.Root);
+            var result = await builder.LoadNodeHierarchy(true, tester.Source.Token);
             Assert.Equal(3, result.SourceVariables.Count());
             Assert.Equal(3, result.DestinationVariables.Count());
             Assert.Equal(3, result.DestinationObjects.Count());
@@ -66,8 +73,8 @@ namespace Test.Unit
             // Enable arrays
             extractor.State.Clear();
             tester.Config.Extraction.DataTypes.MaxArraySize = 4;
-            source.BuildNodes(new[] { tester.Ids.Custom.Root }, false);
-            result = await source.ParseResults(tester.Source.Token);
+            builder = GetBuilder(tester.Ids.Custom.Root);
+            result = await builder.LoadNodeHierarchy(false, tester.Source.Token);
             Assert.Equal(5, result.SourceVariables.Count());
             Assert.Equal(11, result.DestinationVariables.Count());
             Assert.Equal(5, result.DestinationObjects.Count());
@@ -78,8 +85,8 @@ namespace Test.Unit
             // Enable strings
             extractor.State.Clear();
             tester.Config.Extraction.DataTypes.AllowStringVariables = true;
-            source.BuildNodes(new[] { tester.Ids.Custom.Root }, true);
-            result = await source.ParseResults(tester.Source.Token);
+            builder = GetBuilder(tester.Ids.Custom.Root);
+            result = await builder.LoadNodeHierarchy(true, tester.Source.Token);
             Assert.Equal(9, result.SourceVariables.Count());
             Assert.Equal(16, result.DestinationVariables.Count());
             Assert.Equal(6, result.DestinationObjects.Count());
@@ -88,13 +95,10 @@ namespace Test.Unit
 
             // Enable ignore
             extractor.State.Clear();
-            tester.Config.Extraction.DataTypes.IgnoreDataTypes = new[]
-            {
-                CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Custom.IgnoreType, tester.Client)
-            };
-            extractor.TypeManager.BuildTypeInfo();
-            source.BuildNodes(new[] { tester.Ids.Custom.Root }, true);
-            result = await source.ParseResults(tester.Source.Token);
+            extractor.TypeManager.GetDataType(tester.Server.Ids.Custom.IgnoreType)
+                .ShouldIgnore = true;
+            builder = GetBuilder(tester.Ids.Custom.Root);
+            result = await builder.LoadNodeHierarchy(true, tester.Source.Token);
             Assert.Equal(8, result.SourceVariables.Count());
             Assert.Equal(15, result.DestinationVariables.Count());
             Assert.Equal(6, result.DestinationObjects.Count());
@@ -104,8 +108,8 @@ namespace Test.Unit
             // Map variable children to objects
             extractor.State.Clear();
             tester.Config.Extraction.MapVariableChildren = true;
-            source.BuildNodes(new[] { tester.Ids.Custom.Root }, true);
-            result = await source.ParseResults(tester.Source.Token);
+            builder = GetBuilder(tester.Ids.Custom.Root);
+            result = await builder.LoadNodeHierarchy(true, tester.Source.Token);
             Assert.Equal(8, result.SourceVariables.Count());
             Assert.Equal(15, result.DestinationVariables.Count());
             Assert.Equal(9, result.DestinationObjects.Count());
@@ -117,11 +121,11 @@ namespace Test.Unit
             // Enable non-hierarchical relations
             extractor.State.Clear();
             tester.Config.Extraction.Relationships.Enabled = true;
-            source.BuildNodes(new[] { tester.Ids.Custom.Root }, true);
-            result = await source.ParseResults(tester.Source.Token);
+            builder = GetBuilder(tester.Ids.Custom.Root);
+            result = await builder.LoadNodeHierarchy(true, tester.Source.Token);
             foreach (var rf in result.DestinationReferences)
             {
-                log.LogDebug("Ref: {Source} {Target} {Type} {IsForward}", rf.Source.Id, rf.Target.Id, rf.Type.Id, rf.IsForward);
+                tester.Log.LogDebug("{X}", rf);
             }
             Assert.Equal(8, result.DestinationReferences.Count());
             Assert.Equal(4, result.DestinationReferences.Count(rel => rel.IsForward));
@@ -141,8 +145,8 @@ namespace Test.Unit
             // Enable forward hierarchical relations
             extractor.State.Clear();
             tester.Config.Extraction.Relationships.Hierarchical = true;
-            source.BuildNodes(new[] { tester.Ids.Custom.Root }, true);
-            result = await source.ParseResults(tester.Source.Token);
+            builder = GetBuilder(tester.Ids.Custom.Root);
+            result = await builder.LoadNodeHierarchy(true, tester.Source.Token);
             Assert.Equal(18, result.DestinationReferences.Count());
             Assert.Equal(14, result.DestinationReferences.Count(rel => rel.IsForward));
             Assert.All(result.DestinationReferences, rel =>
@@ -158,8 +162,8 @@ namespace Test.Unit
             // Enable inverse hierarchical relations
             extractor.State.Clear();
             tester.Config.Extraction.Relationships.InverseHierarchical = true;
-            source.BuildNodes(new[] { tester.Ids.Custom.Root }, true);
-            result = await source.ParseResults(tester.Source.Token);
+            builder = GetBuilder(tester.Ids.Custom.Root);
+            result = await builder.LoadNodeHierarchy(true, tester.Source.Token);
             Assert.Equal(28, result.DestinationReferences.Count());
             Assert.Equal(14, result.DestinationReferences.Count(rel => rel.IsForward));
             Assert.All(result.DestinationReferences, rel =>
@@ -184,8 +188,13 @@ namespace Test.Unit
             tester.Config.Extraction.Relationships.Enabled = false;
             tester.Config.Source.EndpointUrl = null;
 
-            var log = tester.Provider.GetRequiredService<ILogger<NodeSetSource>>();
-            var source = new NodeSetSource(log, tester.Config, extractor, tester.Client, extractor.TypeManager);
+            var log = tester.Provider.GetRequiredService<ILogger<NodeSetNodeSource>>();
+            var source = new NodeSetNodeSource(log, tester.Config, extractor, tester.Client, tester.Client.TypeManager);
+
+            var builder = new NodeHierarchyBuilder(
+                source, source, tester.Config, new[] { tester.Ids.Custom.Root, ObjectIds.TypesFolder },
+                tester.Client, extractor, extractor.Transformations, log);
+
 
             tester.Config.Extraction.DataTypes.MaxArraySize = 4;
             tester.Config.Extraction.NodeTypes.AsNodes = true;
@@ -195,8 +204,7 @@ namespace Test.Unit
             tester.Config.Extraction.Relationships.InverseHierarchical = true;
             tester.Config.Extraction.Relationships.Enabled = true;
 
-            source.BuildNodes(new[] { tester.Ids.Custom.Root, ObjectIds.TypesFolder }, true);
-            var result = await source.ParseResults(tester.Source.Token);
+            var result = await builder.LoadNodeHierarchy(true, tester.Source.Token);
 
             Assert.Equal(275, result.SourceVariables.Count());
             Assert.Equal(282, result.DestinationVariables.Count());
@@ -223,15 +231,13 @@ namespace Test.Unit
         public async Task TestNodeSetSourceEvents()
         {
             using var extractor = tester.BuildExtractor();
-            var log = tester.Provider.GetRequiredService<ILogger<NodeSetSource>>();
-            var source = new NodeSetSource(log, tester.Config, extractor, tester.Client, extractor.TypeManager);
-
-            source.BuildNodes(new[] { ObjectIds.ObjectsFolder }, true);
+            var log = tester.Provider.GetRequiredService<ILogger<NodeSetNodeSource>>();
+            var source = new NodeSetNodeSource(log, tester.Config, extractor, tester.Client, tester.Client.TypeManager);
 
             tester.Config.Events.AllEvents = true;
             tester.Config.Events.Enabled = true;
-            await extractor.TypeManager.LoadTypeData(tester.Source.Token);
-            extractor.TypeManager.BuildTypeInfo();
+            await extractor.TypeManager.Initialize(source, tester.Source.Token);
+            await extractor.TypeManager.LoadTypeData(source, tester.Source.Token);
             var fields = extractor.TypeManager.EventFields;
 
             Assert.Equal(96, fields.Count);
@@ -254,7 +260,10 @@ namespace Test.Unit
             Assert.DoesNotContain(new RawTypeField(new QualifiedName("OldValues")),
                 fields[ObjectTypeIds.AuditHistoryUpdateEventType].CollectedFields);
 
-            var result = await source.ParseResults(tester.Source.Token);
+            var builder = new NodeHierarchyBuilder(
+                source, source, tester.Config, new[] { tester.Ids.Event.Root, ObjectIds.TypesFolder },
+                tester.Client, extractor, extractor.Transformations, log);
+            var result = await builder.LoadNodeHierarchy(true, tester.Source.Token);
             var nodeDict = result.DestinationObjects.ToDictionary(obj => obj.Id);
 
             Assert.True(nodeDict.TryGetValue(tester.Ids.Event.Root, out var root));
@@ -294,20 +303,26 @@ namespace Test.Unit
         public async Task TestNodeSetEstimateArraySize()
         {
             using var extractor = tester.BuildExtractor();
-            var log = tester.Provider.GetRequiredService<ILogger<NodeSetSource>>();
-            var source = new NodeSetSource(log, tester.Config, extractor, tester.Client, extractor.TypeManager);
+            var log = tester.Provider.GetRequiredService<ILogger<NodeSetNodeSource>>();
+            var source = new NodeSetNodeSource(log, tester.Config, extractor, tester.Client, tester.Client.TypeManager);
 
-            source.BuildNodes(new[] { tester.Ids.Wrong.Root }, true);
+            var builder = new NodeHierarchyBuilder(
+                source, source, tester.Config, new[] { tester.Ids.Wrong.Root },
+                tester.Client, extractor, extractor.Transformations, log);
+
             var extConfig = tester.Config.Extraction;
             extConfig.DataTypes.MaxArraySize = 6;
             extConfig.DataTypes.EstimateArraySizes = true;
 
             tester.Server.UpdateNode(tester.Ids.Wrong.RankImpreciseNoDim, new double[] { 1.0, 2.0, 3.0, 4.0 });
 
-            var result = await source.ParseResults(tester.Source.Token);
+            var result = await builder.LoadNodeHierarchy(true, tester.Source.Token);
+
             Assert.Equal(6, result.DestinationObjects.Count());
             Assert.Equal(5, result.DestinationObjects.Count(node => node is UAVariable variable && variable.IsArray));
-            Assert.Equal(21, result.DestinationVariables.Count());
+
+            // RankImprecise: 4, RankImpreciseNoDim: 4 (above), WrongDim: 4, NoDim: 5, DimInProp: 6
+            Assert.Equal(23, result.DestinationVariables.Count());
             Assert.Single(result.SourceObjects);
             Assert.Equal(5, result.SourceVariables.Count());
         }

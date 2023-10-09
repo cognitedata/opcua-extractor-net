@@ -277,18 +277,16 @@ namespace Test.Unit
             // Add some missing nodes to each of the pushers, and verify that they are pushed on recovery
             var refManager = extractor.TypeManager;
 
-            var reference = new UAReference(
-                ReferenceTypeIds.Organizes,
-                true, new NodeId("object1"),
-                new NodeId("var1"),
-                false,
-                true,
-                false,
-                refManager);
-
             var objects = new[] { new UAObject(new NodeId("missing1"), "missing1", null, null, new NodeId("test"), null) };
             var variables = new[] { new UAVariable(new NodeId("missing2"), "missing2", null, null, new NodeId("test"), null) };
 
+            var reference = new UAReference(
+                refManager.GetReferenceType(ReferenceTypeIds.Organizes),
+                true,
+                objects[0],
+                variables[0]);
+
+            
             var input = new PusherInput(
                 objects,
                 variables,

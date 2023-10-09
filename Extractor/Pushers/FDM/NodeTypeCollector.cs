@@ -125,10 +125,7 @@ namespace Cognite.OpcUa.Pushers.FDM
 
                         properties[nodeId].Reference.ModellingRule = modellingRule;
                     }
-                    else
-                    {
-                        knownNonHierarchical.Add(subRef);
-                    }
+                    knownNonHierarchical.Add(subRef);
                 }
             }
         }
