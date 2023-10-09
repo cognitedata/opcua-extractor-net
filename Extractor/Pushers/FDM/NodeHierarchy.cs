@@ -23,16 +23,6 @@ namespace Cognite.OpcUa.Pushers.FDM
             KnownTypeDefinitions = new HashSet<NodeId>(nodes.Where(node => node.Id.NamespaceIndex > 0 || !node.IsChildOfType).SelectNonNull(s => s.TypeDefinition));
         }
 
-        private bool IsChildOfType(BaseUANode node)
-        {
-            if (node.NodeClass == NodeClass.ObjectType || node.NodeClass == NodeClass.VariableType)
-            {
-                return true;
-            }
-            if (node.Parent == null) return false;
-            return IsChildOfType(node.Parent);
-        }
-
         public IEnumerable<UAReference> BySource(NodeId id)
         {
             return ReferencesBySourceId.GetValueOrDefault(id) ?? Enumerable.Empty<UAReference>();

@@ -27,35 +27,12 @@ namespace Test.Unit
         }
         #region datatypemanager
         [Fact]
-        public void TestDataTypeManagerConfigure()
+        public void TestDataTypeManagerConfigureIgnoreTypes()
         {
             var mgr = new TypeManager(tester.Config, tester.Client, tester.Log);
             mgr.InitDataTypeConfig();
-            // basic
-            mgr.BuildTypeInfo();
-            Assert.Empty(mgr.NodeMap.Values.OfType<UADataType>());
 
             var config = tester.Config.Extraction.DataTypes;
-            config.CustomNumericTypes = new List<ProtoDataType>
-            {
-                new ProtoDataType { Enum = true, NodeId = new NodeId("enum").ToProtoNodeId(tester.Client) },
-                new ProtoDataType { NodeId = new NodeId("test").ToProtoNodeId(tester.Client) },
-                new ProtoDataType { NodeId = new ProtoNodeId { NamespaceUri = "some.missing.uri", NodeId = "i=123" } }
-            };
-            mgr = new TypeManager(tester.Config, tester.Client, tester.Log);
-            mgr.InitDataTypeConfig();
-            mgr.GetDataType(new NodeId("enum"));
-            mgr.GetDataType(new NodeId("test"));
-            // with custom numeric types
-            mgr.BuildTypeInfo();
-            Assert.Equal(2, mgr.NodeMap.Values.OfType<UADataType>().Count());
-
-            var dt1 = mgr.NodeMap[new NodeId("enum")] as UADataType;
-            Assert.NotNull(dt1.EnumValues);
-            Assert.False(dt1.IsString);
-            var dt2 = mgr.NodeMap[new NodeId("test")] as UADataType;
-            Assert.False(dt2.IsString);
-
             config.IgnoreDataTypes = new List<ProtoNodeId>
             {
                 new NodeId("enum").ToProtoNodeId(tester.Client),
@@ -70,14 +47,51 @@ namespace Test.Unit
             mgr.BuildTypeInfo();
             Assert.Equal(2, mgr.NodeMap.Values.OfType<UADataType>().Count());
 
-            dt1 = mgr.NodeMap[new NodeId("enum")] as UADataType;
+            var dt1 = mgr.NodeMap[new NodeId("enum")] as UADataType;
+            Assert.True(dt1.ShouldIgnore);
+            var dt2 = mgr.NodeMap[new NodeId("test")] as UADataType;
+            Assert.True(dt2.ShouldIgnore);
+        }
+
+        [Fact]
+        public void TestDataTypeManagerConfigureCustomTypes()
+        {
+            var mgr = new TypeManager(tester.Config, tester.Client, tester.Log);
+            mgr.InitDataTypeConfig();
+
+            var config = tester.Config.Extraction.DataTypes;
+            config.CustomNumericTypes = new List<ProtoDataType>
+            {
+                new ProtoDataType { Enum = true, NodeId = new NodeId("enum").ToProtoNodeId(tester.Client) },
+                new ProtoDataType { NodeId = new NodeId("test").ToProtoNodeId(tester.Client) },
+                new ProtoDataType { NodeId = new ProtoNodeId { NamespaceUri = "some.missing.uri", NodeId = "i=123" } }
+            };
+            mgr = new TypeManager(tester.Config, tester.Client, tester.Log);
+            mgr.InitDataTypeConfig();
+            mgr.GetDataType(new NodeId("enum"));
+            mgr.GetDataType(new NodeId("test"));
+
+            // with custom numeric types
+            mgr.BuildTypeInfo();
+            Assert.Equal(2, mgr.NodeMap.Values.OfType<UADataType>().Count());
+
+            var dt1 = mgr.NodeMap[new NodeId("enum")] as UADataType;
             Assert.NotNull(dt1.EnumValues);
             Assert.False(dt1.IsString);
-            Assert.True(dt1.ShouldIgnore);
-            dt2 = mgr.NodeMap[new NodeId("test")] as UADataType;
+            var dt2 = mgr.NodeMap[new NodeId("test")] as UADataType;
             Assert.False(dt2.IsString);
-            Assert.True(dt1.ShouldIgnore);
         }
+
+        [Fact]
+        public void TestDataTypeManagerConfigureEmpty()
+        {
+            var mgr = new TypeManager(tester.Config, tester.Client, tester.Log);
+            mgr.InitDataTypeConfig();
+            // basic
+            mgr.BuildTypeInfo();
+            Assert.Empty(mgr.NodeMap.Values.OfType<UADataType>());
+        }
+
         [Fact]
         public void TestGetDataType()
         {

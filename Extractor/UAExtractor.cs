@@ -664,7 +664,7 @@ namespace Cognite.OpcUa
                     builder = MakeBuilder(uaSource);
                     result = await builder.LoadNodeHierarchy(true, token);
                     var nextTasks = await MapUAToDestinations(result);
-                    foreach (var task in tasks)
+                    foreach (var task in nextTasks)
                     {
                         Looper.Scheduler.ScheduleTask(null, task);
                     }
