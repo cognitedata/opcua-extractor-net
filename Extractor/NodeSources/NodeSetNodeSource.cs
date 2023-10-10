@@ -378,14 +378,12 @@ namespace Cognite.OpcUa.NodeSources
 
         private void LoadReferenceTypes()
         {
-            if (typeManager.ReferenceTypesRead) return;
             foreach (var node in nodeDict.Values.OfType<ReferenceTypeState>())
             {
                 var res = BaseUANode.FromNodeState(node, node.SuperTypeId, typeManager);
                 if (res != null) typeManager.AddTypeHierarchyNode(res);
             }
 
-            typeManager.ReferenceTypesRead = true;
             typeManager.BuildNodeChildren();
         }
 

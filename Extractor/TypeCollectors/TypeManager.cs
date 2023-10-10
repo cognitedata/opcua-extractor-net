@@ -44,12 +44,10 @@ namespace Cognite.OpcUa.TypeCollectors
         private bool eventTypesRead = false;
         private bool dataTypesRead = false;
         private bool typeDefsRead = false;
+        private bool referenceTypesRead = false;
 
         private readonly HashSet<NodeId> ignoreDataTypes = new();
         private readonly Dictionary<NodeId, ProtoDataType> customDataTypes = new();
-
-        public bool ReferenceTypesRead { get; set; }
-
 
         public TypeManager(FullConfig config, UAClient client, ILogger log)
         {
@@ -115,7 +113,7 @@ namespace Cognite.OpcUa.TypeCollectors
             eventTypesRead = false;
             dataTypesRead = false;
             typeDefsRead = false;
-            ReferenceTypesRead = false;
+            referenceTypesRead = false;
             NodeMap.Clear();
             NodeChildren.Clear();
             EventFields.Clear();
@@ -164,11 +162,11 @@ namespace Cognite.OpcUa.TypeCollectors
                 eventTypesRead = true;
                 log.LogInformation("Loading event type hierarchy");
             }
-            if ((fdmEnabled || config.Extraction.Relationships.Enabled) && !ReferenceTypesRead)
+            if ((fdmEnabled || config.Extraction.Relationships.Enabled) && !referenceTypesRead)
             {
                 mask |= (uint)NodeClass.ReferenceType;
                 rootNodes.Add(ReferenceTypeIds.References);
-                ReferenceTypesRead = true;
+                referenceTypesRead = true;
                 log.LogInformation("Loading reference type hierarchy");
             }
             if (fdmEnabled && !typeDefsRead)

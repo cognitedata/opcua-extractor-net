@@ -148,22 +148,30 @@ namespace Cognite.OpcUa.Browse
 
             try
             {
-                var nodes = ids.Select(id => new BrowseNode(id)).ToDictionary(node => node.Id);
+                var toBrowseForTypeDef = roots.Values
+                    .Where(r => r.NodeClass == NodeClass.Object || r.NodeClass == NodeClass.Variable)
+                    .Select(r => uaClient.ToNodeId(r.NodeId))
+                    .ToList();
 
-                await uaClient.GetReferences(new BrowseParams
+                if (toBrowseForTypeDef.Any())
                 {
-                    NodeClassMask = (uint)NodeClass.ObjectType | (uint)NodeClass.VariableType,
-                    ReferenceTypeId = ReferenceTypeIds.HasTypeDefinition,
-                    IncludeSubTypes = false,
-                    Nodes = nodes,
-                    MaxPerNode = 1
-                }, true, token);
-                foreach (var node in nodes.Values)
-                {
-                    var result = node.Result;
-                    if (result != null && result.References.Any())
+                    var nodes = toBrowseForTypeDef.Select(id => new BrowseNode(id)).ToDictionary(node => node.Id);
+
+                    await uaClient.GetReferences(new BrowseParams
                     {
-                        roots[node.Id].TypeDefinition = result.References.First().NodeId;
+                        NodeClassMask = (uint)NodeClass.ObjectType | (uint)NodeClass.VariableType,
+                        ReferenceTypeId = ReferenceTypeIds.HasTypeDefinition,
+                        IncludeSubTypes = false,
+                        Nodes = nodes,
+                        MaxPerNode = 1
+                    }, true, token);
+                    foreach (var node in nodes.Values)
+                    {
+                        var result = node.Result;
+                        if (result != null && result.References.Any())
+                        {
+                            roots[node.Id].TypeDefinition = result.References.First().NodeId;
+                        }
                     }
                 }
             }
