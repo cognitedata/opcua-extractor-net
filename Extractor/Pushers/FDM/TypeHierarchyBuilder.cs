@@ -222,8 +222,6 @@ namespace Cognite.OpcUa.Pushers.FDM
     public class TypeHierarchyBuilder
     {
         private readonly ILogger log;
-        private readonly FullConfig config;
-        private readonly NodeTypeCollector nodeTypes;
         private readonly FdmDestinationConfig fdmConfig;
         private readonly DMSValueConverter converter;
         private readonly string space;
@@ -232,15 +230,13 @@ namespace Cognite.OpcUa.Pushers.FDM
         public TypeHierarchyBuilder(ILogger log, DMSValueConverter converter, FullConfig config, NodeIdContext context)
         {
             this.log = log;
-            this.config = config;
-            nodeTypes = new NodeTypeCollector(log);
             space = config.Cognite!.MetadataTargets!.DataModels!.Space!;
             fdmConfig = config.Cognite!.MetadataTargets!.DataModels!;
             this.converter = converter;
             this.context = context;
         }
 
-        public FDMTypeBatch ConstructTypes(NodeHierarchy nodes)
+        public FDMTypeBatch ConstructTypes(IReadOnlyDictionary<NodeId, FullUANodeType> types)
         {
             var batch = new FDMTypeBatch("1", space, log, context);
             // Add core containers and views
@@ -254,17 +250,10 @@ namespace Cognite.OpcUa.Pushers.FDM
             batch.Add(BaseDataModelDefinitions.DataType(space), "BaseType");
             batch.Add(BaseDataModelDefinitions.TypeMeta(space));
 
-            nodeTypes.MapNodeTypes(nodes);
-
-            foreach (var kvp in nodeTypes.Types)
+            foreach (var type in types.Values)
             {
-                if (nodes.KnownTypeDefinitions.Contains(kvp.Key)
-                    || fdmConfig.TypesToMap == TypesToMap.All
-                    || fdmConfig.TypesToMap == TypesToMap.Custom
-                    && kvp.Key.NamespaceIndex > 0)
-                {
-                    AddType(batch, kvp.Value);
-                }
+                type.Build(types);
+                AddType(batch, type);
             }
 
             return batch;
@@ -287,17 +276,6 @@ namespace Cognite.OpcUa.Pushers.FDM
             if (typeMap.ContainsKey(node.Node.Id)) return;
             typeMap.Add(node.Node.Id, node);
             batch.Add(node, converter, fdmConfig);
-            if (node.Parent != null)
-            {
-                AddType(batch, node.Parent);
-            }
-            foreach (var child in node.GetAllChildren())
-            {
-                if (child.Node.TypeDefinition != null && !child.Node.TypeDefinition.IsNullNodeId && nodeTypes.Types.TryGetValue(child.Node.TypeDefinition, out var childTypeDef))
-                {
-                    AddType(batch, childTypeDef);
-                }
-            }
         }
     }
 }

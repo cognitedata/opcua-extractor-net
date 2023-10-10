@@ -146,33 +146,30 @@ namespace Cognite.OpcUa.Browse
                 roots[id] = refd;
             }
 
-            if (config.Extraction.NodeTypes.Metadata)
+            try
             {
-                try
-                {
-                    var nodes = ids.Select(id => new BrowseNode(id)).ToDictionary(node => node.Id);
+                var nodes = ids.Select(id => new BrowseNode(id)).ToDictionary(node => node.Id);
 
-                    await uaClient.GetReferences(new BrowseParams
+                await uaClient.GetReferences(new BrowseParams
+                {
+                    NodeClassMask = (uint)NodeClass.ObjectType | (uint)NodeClass.VariableType,
+                    ReferenceTypeId = ReferenceTypeIds.HasTypeDefinition,
+                    IncludeSubTypes = false,
+                    Nodes = nodes,
+                    MaxPerNode = 1
+                }, true, token);
+                foreach (var node in nodes.Values)
+                {
+                    var result = node.Result;
+                    if (result != null && result.References.Any())
                     {
-                        NodeClassMask = (uint)NodeClass.ObjectType | (uint)NodeClass.VariableType,
-                        ReferenceTypeId = ReferenceTypeIds.HasTypeDefinition,
-                        IncludeSubTypes = false,
-                        Nodes = nodes,
-                        MaxPerNode = 1
-                    }, true, token);
-                    foreach (var node in nodes.Values)
-                    {
-                        var result = node.Result;
-                        if (result != null && result.References.Any())
-                        {
-                            roots[node.Id].TypeDefinition = result.References.First().NodeId;
-                        }
+                        roots[node.Id].TypeDefinition = result.References.First().NodeId;
                     }
                 }
-                catch (Exception ex)
-                {
-                    throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.ReadRootNode);
-                }
+            }
+            catch (Exception ex)
+            {
+                throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.ReadRootNode);
             }
 
             return roots.Values;

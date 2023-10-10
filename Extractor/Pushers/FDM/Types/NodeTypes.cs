@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Xml.Linq;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.Types;
 using Opc.Ua;
@@ -79,6 +80,63 @@ namespace Cognite.OpcUa.Pushers.FDM.Types
                 Parent = Parent?.ExternalId,
                 Properties = properties
             };
+        }
+
+        public void Build(IReadOnlyDictionary<NodeId, FullUANodeType> types)
+        {
+            foreach (var child in Children.Values)
+            {
+                CollectChild(child, Enumerable.Empty<(UAReference, QualifiedName)>(), types);
+            }
+        }
+
+        private string GetPath(IEnumerable<(UAReference Reference, QualifiedName Name)> path, string name)
+        {
+            if (path.Any())
+            {
+                return $"{string.Join('_', path.Select(p => p.Name.Name))}_{name}";
+            }
+            return name;
+        }
+
+        private void CollectChild(ChildNode node, IEnumerable<(UAReference, QualifiedName Name)> path, IReadOnlyDictionary<NodeId, FullUANodeType> types)
+        {
+            var name = node.Reference.BrowseName;
+
+            FullUANodeType? nodeType = null;
+            if (node.Node.TypeDefinition != null)
+            {
+                nodeType = types.GetValueOrDefault(node.Node.TypeDefinition);
+            }
+
+            var isSimple = nodeType != null && nodeType.IsSimple();
+            var fullName = GetPath(path, name.Name);
+            if (!isSimple
+                || node.Reference.ModellingRule != ModellingRule.Optional
+                    && node.Reference.ModellingRule != ModellingRule.Mandatory
+                || !node.Reference.Reference.IsHierarchical)
+            {
+                References[fullName] = new NodeTypeReference(node.Reference.NodeClass, node.Reference.BrowseName, fullName, node.Reference.Reference)
+                {
+                    Type = nodeType,
+                    ModellingRule = node.Reference.ModellingRule
+                };
+                return;
+            }
+
+            var nextPath = path.Append((node.Reference.Reference, name));
+            if (node.Node is UAVariable variable)
+            {
+                Properties[fullName] = new DMSReferenceNode(variable, node.Reference.Reference, fullName, nextPath)
+                {
+                    ModellingRule = node.Reference.ModellingRule
+                };
+            }
+
+            foreach (var child in node.Children.Values)
+            {
+                CollectChild(child, nextPath, types);
+            }
         }
     }
 

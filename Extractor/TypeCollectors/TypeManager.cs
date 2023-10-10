@@ -18,12 +18,14 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.NodeSources;
+using Cognite.OpcUa.Types;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 
@@ -33,6 +35,7 @@ namespace Cognite.OpcUa.TypeCollectors
     {
         public Dictionary<NodeId, BaseUANode> NodeMap { get; } = new();
         public Dictionary<NodeId, HashSet<NodeId>> NodeChildren { get; } = new();
+        public HashSet<UAReference> References { get; } = new();
 
         private readonly ILogger log;
         private readonly FullConfig config;
@@ -40,12 +43,12 @@ namespace Cognite.OpcUa.TypeCollectors
 
         private bool eventTypesRead = false;
         private bool dataTypesRead = false;
-
+        private bool typeDefsRead = false;
 
         private readonly HashSet<NodeId> ignoreDataTypes = new();
         private readonly Dictionary<NodeId, ProtoDataType> customDataTypes = new();
 
-        public bool ReferenceTypesLoadedExternally { get; set; }
+        public bool ReferenceTypesRead { get; set; }
 
 
         public TypeManager(FullConfig config, UAClient client, ILogger log)
@@ -111,7 +114,8 @@ namespace Cognite.OpcUa.TypeCollectors
         {
             eventTypesRead = false;
             dataTypesRead = false;
-            ReferenceTypesLoadedExternally = false;
+            typeDefsRead = false;
+            ReferenceTypesRead = false;
             NodeMap.Clear();
             NodeChildren.Clear();
             EventFields.Clear();
@@ -138,6 +142,10 @@ namespace Cognite.OpcUa.TypeCollectors
 
         private async Task ReadTypeHiearchies(ITypeAndNodeSource source, CancellationToken token)
         {
+            var fdmEnabled = config.Cognite?.MetadataTargets?.DataModels?.Enabled ?? false;
+
+            var referenceMode = HierarchicalReferenceMode.Disabled;
+            bool loadReferences = false;
             var rootNodes = new List<NodeId>();
             var mask = (uint)NodeClass.Variable | (uint)NodeClass.Object;
             if (config.Extraction.DataTypes.AutoIdentifyTypes && !dataTypesRead)
@@ -150,16 +158,61 @@ namespace Cognite.OpcUa.TypeCollectors
             if (config.Events.Enabled && !eventTypesRead)
             {
                 mask |= (uint)NodeClass.ObjectType;
-                rootNodes.Add(ObjectTypeIds.BaseEventType);
+                // Avoid adding the BaseEventType node if we are also adding the BaseObjectType node, since
+                // it's a parent. The browser doesn't really like if you have loops, though it will work.
+                if (!fdmEnabled) rootNodes.Add(ObjectTypeIds.BaseEventType);
                 eventTypesRead = true;
                 log.LogInformation("Loading event type hierarchy");
             }
+            if ((fdmEnabled || config.Extraction.Relationships.Enabled) && !ReferenceTypesRead)
+            {
+                mask |= (uint)NodeClass.ReferenceType;
+                rootNodes.Add(ReferenceTypeIds.References);
+                ReferenceTypesRead = true;
+                log.LogInformation("Loading reference type hierarchy");
+            }
+            if (fdmEnabled && !typeDefsRead)
+            {
+                mask |= (uint)NodeClass.VariableType | (uint)NodeClass.ObjectType;
+                rootNodes.Add(ObjectTypeIds.BaseObjectType);
+                rootNodes.Add(VariableTypeIds.BaseVariableType);
+                typeDefsRead = true;
+                log.LogInformation("Loading object type and variable type hierarchies");
+            }
+            if (fdmEnabled)
+            {
+                referenceMode = HierarchicalReferenceMode.Forward;
+                loadReferences = true;
+            }
+
             if (!rootNodes.Any()) return;
 
-            var result = await source.LoadNodes(rootNodes, mask, HierarchicalReferenceMode.Disabled, "the type hierarchy", token);
+
+            var result = await source.LoadNodes(rootNodes, mask, referenceMode, "the type hierarchy", token);
+
             foreach (var node in result.Nodes)
             {
-                NodeMap[node.Id] = node;
+                NodeMap.TryAdd(node.Id, node);
+                // Any nodes discovered here will be in the type hierarchy.
+                node.IsChildOfType = true;
+            }
+
+            if (loadReferences)
+            {
+                foreach (var rf in result.References) References.Add(rf);
+
+                var refResult = await source.LoadNonHierarchicalReferences(result.Nodes.ToDictionary(n => n.Id), true, true, "the type hierarchy", token);
+
+                log.LogInformation("Found {Count} hierarchical and {Count2} non-hierarchical references in the type hierarchy",
+                    result.References.Count(), refResult.References.Count());
+
+                foreach (var node in refResult.Nodes)
+                {
+                    // These might not be in the type hierarchy. Still map them out here,
+                    // but don't set IsChildOfType
+                    NodeMap.TryAdd(node.Id, node);
+                }
+                foreach (var rf in refResult.References) References.Add(rf);
             }
         }
 
@@ -194,11 +247,6 @@ namespace Cognite.OpcUa.TypeCollectors
                 if (node.Parent == null && NodeMap.TryGetValue(node.ParentId, out var parent))
                 {
                     node.Parent = parent;
-                    log.LogTrace("Add parent to node {Id}: {P}", node.Id, node.ParentId);
-                    if (node is BaseUAType t)
-                    {
-                        log.LogTrace("Node is hierarchical: {T}", t.IsChildOf(ReferenceTypeIds.HierarchicalReferences));
-                    }
                 }
             }
         }
@@ -342,7 +390,7 @@ namespace Cognite.OpcUa.TypeCollectors
         }
         public UADataType GetDataType(NodeId nodeId)
         {
-            return GetType<UADataType>(nodeId, x => {
+            return GetType(nodeId, x => {
                 UADataType dt;
                 if (customDataTypes.TryGetValue(x, out var protoDataType))
                 {
@@ -363,17 +411,33 @@ namespace Cognite.OpcUa.TypeCollectors
 
         public UAReferenceType GetReferenceType(NodeId nodeId)
         {
-            return GetType<UAReferenceType>(nodeId, x => new UAReferenceType(x), "reference");
+            return GetType(nodeId, x => new UAReferenceType(x), "reference");
         }
 
         public UAObjectType GetObjectType(NodeId nodeId)
         {
-            return GetType<UAObjectType>(nodeId, x => new UAObjectType(x), "object");
+            return GetType(nodeId, x => new UAObjectType(x), "object");
         }
 
         public UAVariableType GetVariableType(NodeId nodeId)
         {
-            return GetType<UAVariableType>(nodeId, x => new UAVariableType(x), "variable");
+            return GetType(nodeId, x => new UAVariableType(x), "variable");
+        }
+
+        public UAObject GetModellingRule(NodeId nodeId, string name)
+        {
+            if (NodeMap.TryGetValue(nodeId, out var rule))
+            {
+                // This really shouldn't happen, we don't really know what to do if it does.
+                if (rule is not UAObject obj) throw new ExtractorFailureException(
+                    "Modelling rule is not an object. This is likely caused by an invalid server or incorrect NodeSet file"
+                );
+                return obj;
+            }
+
+            var res = new UAObject(nodeId, name, name, null, NodeId.Null, GetObjectType(ObjectTypeIds.ModellingRuleType));
+            NodeMap.Add(nodeId, res);
+            return res;
         }
         #endregion
     }
