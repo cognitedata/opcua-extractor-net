@@ -156,7 +156,7 @@ namespace Cognite.OpcUa.TypeCollectors
             }
             if (!rootNodes.Any()) return;
 
-            var result = await source.LoadNodes(rootNodes, mask, HierarchicalReferenceMode.Disabled, token);
+            var result = await source.LoadNodes(rootNodes, mask, HierarchicalReferenceMode.Disabled, "the type hierarchy", token);
             foreach (var node in result.Nodes)
             {
                 NodeMap[node.Id] = node;

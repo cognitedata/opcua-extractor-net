@@ -84,7 +84,7 @@ namespace Cognite.OpcUa.NodeSources
             return Task.CompletedTask;
         }
 
-        public async Task<NodeLoadResult> LoadNodes(IEnumerable<NodeId> nodesToBrowse, uint nodeClassMask, HierarchicalReferenceMode hierarchicalReferences, CancellationToken token)
+        public async Task<NodeLoadResult> LoadNodes(IEnumerable<NodeId> nodesToBrowse, uint nodeClassMask, HierarchicalReferenceMode hierarchicalReferences, string purpose, CancellationToken token)
         {
             // Ignores nodesToBrowse, nothing really to do with that here
             var options = new JsonSerializerOptions();
@@ -109,7 +109,7 @@ namespace Cognite.OpcUa.NodeSources
                 }
                 catch (Exception ex)
                 {
-                    logger.LogError("Failed to retrieve and deserialize raw timeseries from CDF: {Message}", ex.Message);
+                    logger.LogError(ex, "Failed to retrieve and deserialize raw timeseries from CDF: {Message}", ex.Message);
                     TakeResults();
                     return new NodeLoadResult(new UANodeCollection(), Enumerable.Empty<UAReference>(), true, true);
                 }
@@ -139,7 +139,7 @@ namespace Cognite.OpcUa.NodeSources
                 }
                 catch (Exception ex)
                 {
-                    logger.LogError("Failed to retrieve and deserialize raw assets from CDF: {Message}", ex.Message);
+                    logger.LogError(ex, "Failed to retrieve and deserialize raw assets from CDF: {Message}", ex.Message);
                     TakeResults();
                     return new NodeLoadResult(new UANodeCollection(), Enumerable.Empty<UAReference>(), true, true);
                 }
@@ -159,7 +159,7 @@ namespace Cognite.OpcUa.NodeSources
             return TakeResults();
         }
 
-        public Task<NodeLoadResult> LoadNonHierarchicalReferences(IReadOnlyDictionary<NodeId, BaseUANode> parentNodes, bool getTypeReferences, bool initUnknownNodes, CancellationToken token)
+        public Task<NodeLoadResult> LoadNonHierarchicalReferences(IReadOnlyDictionary<NodeId, BaseUANode> parentNodes, bool getTypeReferences, bool initUnknownNodes, string purpose, CancellationToken token)
         {
             return Task.FromResult(
                 new NodeLoadResult(new UANodeCollection(), Enumerable.Empty<UAReference>(), true, true)

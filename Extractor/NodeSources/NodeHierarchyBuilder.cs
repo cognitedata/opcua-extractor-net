@@ -82,7 +82,7 @@ namespace Cognite.OpcUa.NodeSources
             }
 
             // Load nodes from the source, this is the main operation
-            var initialNodes = await nodeSource.LoadNodes(nodesToRead, classMask, config.Extraction.Relationships.Mode, token);
+            var initialNodes = await nodeSource.LoadNodes(nodesToRead, classMask, config.Extraction.Relationships.Mode, "the main instance hierarchy", token);
             // Refresh any newly loaded type data. Since TypeManager is lazy, we need to do this after loading nodes,
             // but before processing them.
             await client.TypeManager.LoadTypeData(typeSource, token);
@@ -103,6 +103,7 @@ namespace Cognite.OpcUa.NodeSources
                     knownNodes.DistinctBy(n => n.Id).ToDictionary(n => n.Id),
                     usesFdm || config.Extraction.NodeTypes.AsNodes,
                     usesFdm || config.Extraction.Relationships.CreateReferencedNodes,
+                    "non-hierarchical relationships in the main instance hierarchy",
                     token);
                 // Refresh type data. This may have discovered new types.
                 await client.TypeManager.LoadTypeData(typeSource, token);
