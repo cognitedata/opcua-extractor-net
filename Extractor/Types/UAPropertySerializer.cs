@@ -568,6 +568,8 @@ namespace Cognite.OpcUa.Types
 
         public override NodeId? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
         {
+            if (uaClient.NamespaceTable == null) throw new InvalidOperationException("Attempted to deserialize NodeId without initialized client");
+
             if (reader.TokenType != JsonTokenType.StartObject) return NodeId.Null;
             var obj = JsonElement.ParseValue(ref reader);
             if (obj.ValueKind != JsonValueKind.Object) return NodeId.Null;
@@ -581,7 +583,7 @@ namespace Cognite.OpcUa.Types
             int nsIdx = 0;
             if (ns != null)
             {
-                nsIdx = uaClient.NamespaceTable!.GetIndex(ns);
+                nsIdx = uaClient.NamespaceTable.GetIndex(ns);
                 if (nsIdx < 0) return NodeId.Null;
             }
 
@@ -612,6 +614,7 @@ namespace Cognite.OpcUa.Types
 
         public override void Write(Utf8JsonWriter writer, NodeId value, JsonSerializerOptions options)
         {
+            if (uaClient.NamespaceTable == null) throw new InvalidOperationException("Attempted to serialize NodeId without initialized client");
             if (value == null)
             {
                 writer.WriteNullValue();
@@ -620,7 +623,7 @@ namespace Cognite.OpcUa.Types
             writer.WriteStartObject();
             if (value.NamespaceIndex != 0)
             {
-                var ns = uaClient.NamespaceTable!.GetString(value.NamespaceIndex);
+                var ns = uaClient.NamespaceTable.GetString(value.NamespaceIndex);
                 writer.WriteString("namespace", ns);
             }
 
