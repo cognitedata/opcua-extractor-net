@@ -13,7 +13,7 @@ namespace Cognite.OpcUa.Subscriptions
     {
         private readonly MonitoredItemNotificationEventHandler handler;
         public AuditSubscriptionTask(MonitoredItemNotificationEventHandler handler)
-            : base("AuditListener", new Dictionary<NodeId, string>
+            : base(SubscriptionName.Audit, new Dictionary<NodeId, string>
             {
                 { ObjectIds.Server, "Audit: Server" }
             })

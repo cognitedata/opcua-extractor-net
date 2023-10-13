@@ -16,14 +16,14 @@ namespace Cognite.OpcUa.Subscriptions
 {
     public abstract class BaseCreateSubscriptionTask<T> : PendingSubscriptionTask
     {
-        protected string SubscriptionName { get; }
+        protected SubscriptionName SubscriptionName { get; }
         protected Dictionary<NodeId, T> Items { get; }
         private static readonly Gauge numSubscriptions = Metrics
             .CreateGauge("opcua_subscriptions", "Number of active monitored items");
 
-        protected BaseCreateSubscriptionTask(string subscriptionName, Dictionary<NodeId, T> items)
+        protected BaseCreateSubscriptionTask(SubscriptionName name, Dictionary<NodeId, T> items)
         {
-            SubscriptionName = subscriptionName;
+            SubscriptionName = name;
             Items = items;
         }
 
@@ -35,7 +35,7 @@ namespace Cognite.OpcUa.Subscriptions
             var numToCreate = subscription.MonitoredItems.Count(m => !m.Created);
             if (numToCreate == 0) return;
 
-            await RetryUtil.RetryAsync("create monitored items", async () =>
+            await RetryUtil.RetryAsync($"create monitored items for {SubscriptionName}", async () =>
             {
                 try
                 {
@@ -49,7 +49,7 @@ namespace Cognite.OpcUa.Subscriptions
             }, retries, retries.ShouldRetryException, logger, token);
         }
 
-        private async Task CreateMonitoredItems(ILogger logger, FullConfig config, Subscription subscription, CancellationToken token)
+        private async Task CreateMonitoredItems(ILogger logger, FullConfig config, Subscription subscription, SubscriptionManager manager, CancellationToken token)
         {
             var hasSubscription = subscription.MonitoredItems.Select(s => s.ResolvedNodeId).ToHashSet();
             var toAdd = Items.Where(i => !hasSubscription.Contains(i.Key)).ToList();
@@ -69,6 +69,8 @@ namespace Cognite.OpcUa.Subscriptions
                     subscription.AddItems(items);
 
                     await CreateItemsWithRetry(logger, config.Source.Retries, subscription, token);
+
+                    manager.Cache.IncrementMonitoredItems(SubscriptionName, items.Count);
                 }
             }
 
@@ -77,7 +79,7 @@ namespace Cognite.OpcUa.Subscriptions
 
         private async Task<Subscription> EnsureSubscriptionExists(ILogger logger, ISession session, FullConfig config, SubscriptionManager subManager, CancellationToken token)
         {
-            var subscription = session.Subscriptions.FirstOrDefault(sub => sub.DisplayName.StartsWith(SubscriptionName, StringComparison.InvariantCulture));
+            var subscription = session.Subscriptions.FirstOrDefault(sub => sub.DisplayName.StartsWith(SubscriptionName.ToString(), StringComparison.InvariantCulture));
 
             if (subscription == null)
             {
@@ -85,7 +87,7 @@ namespace Cognite.OpcUa.Subscriptions
                 subscription = new Subscription(session.DefaultSubscription)
                 {
                     PublishingInterval = config.Source.PublishingInterval,
-                    DisplayName = SubscriptionName,
+                    DisplayName = SubscriptionName.ToString(),
                     KeepAliveCount = config.Subscriptions.KeepAliveCount,
                     LifetimeCount = config.Subscriptions.LifetimeCount
                 };
@@ -97,6 +99,7 @@ namespace Cognite.OpcUa.Subscriptions
                 {
                     session.AddSubscription(subscription);
                     await subscription.CreateAsync(token);
+                    subManager.Cache.InitSubscription(SubscriptionName, subscription.Id);
                 }
                 catch (Exception ex)
                 {
@@ -120,14 +123,14 @@ namespace Cognite.OpcUa.Subscriptions
             var session = await sessionManager.WaitForSession();
 
             var subscription = await RetryUtil.RetryResultAsync(
-                "ensure subscription",
+                $"ensure subscription {SubscriptionName}",
                 () => EnsureSubscriptionExists(logger, session, config, subManager, token),
                 config.Source.Retries,
                 config.Source.Retries.ShouldRetryException,
                 logger,
                 token);
 
-            await CreateMonitoredItems(logger, config, subscription, token);
+            await CreateMonitoredItems(logger, config, subscription, subManager, token);
         }
 
         // Only retry a few status codes in the outer scope. If inner retries are exhausted
@@ -141,13 +144,13 @@ namespace Cognite.OpcUa.Subscriptions
         public override async Task Run(ILogger logger, SessionManager sessionManager, FullConfig config, SubscriptionManager subManager, CancellationToken token)
         {
             await RetryUtil.RetryAsync(
-                "create subscription",
+                $"create subscription {SubscriptionName}",
                 () => RunInternal(logger, sessionManager, config, subManager, token),
                 config.Source.Retries,
                 ex => config.Source.Retries.ShouldRetryException(ex, outerStatusCodes),
                 logger,
                 token);
-            logger.LogDebug("Finished creating subscription");
+            logger.LogDebug("Finished creating subscription {Name}", SubscriptionName);
         }
     }
 }

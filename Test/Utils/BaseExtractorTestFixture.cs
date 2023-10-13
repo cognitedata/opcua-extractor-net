@@ -251,6 +251,9 @@ namespace Test.Utils
             var startTask = Start();
             var resultTask = await Task.WhenAny(startTask, Task.Delay(20000));
             Assert.Equal(startTask, resultTask);
+            if (startTask.Exception != null) {
+                throw startTask.Exception;
+            }
         }
 
         public virtual async Task DisposeAsync()

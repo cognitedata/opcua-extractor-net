@@ -18,7 +18,7 @@
     <ProjectReference Include="..\Extractor\Extractor.csproj" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="$(SolutionDir)config\**" CopyToOutputDirectory="Always" LinkBase="config\" />
+    <None Include="$(SolutionDir)config\**" CopyToOutputDirectory="Always" LinkBase="config" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="7.0.1" />
