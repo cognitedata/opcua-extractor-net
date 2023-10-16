@@ -18,6 +18,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.Nodes;
+using Cognite.OpcUa.Subscriptions;
 using Cognite.OpcUa.TypeCollectors;
 using Opc.Ua;
 using Opc.Ua.Client;
@@ -66,14 +67,12 @@ namespace Cognite.OpcUa
     public class NodeMetricsManager
     {
         private readonly NodeMetricsConfig config;
-        private readonly SubscriptionConfig subscriptionConfig;
         private readonly UAClient client;
         private readonly Dictionary<NodeId, NodeMetricState> metrics = new Dictionary<NodeId, NodeMetricState>();
 
-        public NodeMetricsManager(UAClient client, SubscriptionConfig subscriptionConfig, NodeMetricsConfig config)
+        public NodeMetricsManager(UAClient client, NodeMetricsConfig config)
         {
             this.config = config;
-            this.subscriptionConfig = subscriptionConfig;
             this.client = client;
         }
 
@@ -106,7 +105,6 @@ namespace Cognite.OpcUa
         /// <returns></returns>
         public async Task StartNodeMetrics(TypeManager typeManager, CancellationToken token)
         {
-            await client.RemoveSubscription("NodeMetrics");
             metrics.Clear();
 
             var nodes = new List<NodeId>();
@@ -155,20 +153,11 @@ namespace Cognite.OpcUa
 
             if (!metrics.Any()) return;
 
-#pragma warning disable CA2000 // Dispose objects before losing scope
-            await client.AddSubscriptions(metrics.Values, "NodeMetrics", SubscriptionHandler,
-                state => new MonitoredItem
-                {
-                    StartNodeId = state.SourceId,
-                    SamplingInterval = subscriptionConfig.SamplingInterval,
-                    DisplayName = "Value " + state.Id,
-                    QueueSize = 1,
-                    DiscardOldest = true,
-                    AttributeId = Attributes.Value,
-                    NodeClass = NodeClass.Variable,
-                    CacheQueueSize = 1
-                }, token, "metric");
-#pragma warning restore CA2000 // Dispose objects before losing scope
+            if (client.SubscriptionManager == null) throw new InvalidOperationException("Client not initialized");
+
+            client.SubscriptionManager.EnqueueTask(new NodeMetricsSubscriptionTask(
+                SubscriptionHandler,
+                metrics));
         }
         /// <summary>
         /// Converts datapoint callback to metric value

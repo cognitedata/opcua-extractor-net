@@ -37,7 +37,7 @@ namespace Test.Integration
             await extractor.WaitForSubscriptions();
 
             // Assert
-            Assert.True(tester.Client.TryGetSubscription(RebrowseTriggerManager.SubscriptionName, out var _));
+            Assert.True(tester.TryGetSubscription(RebrowseTriggerManager.SubscriptionName, out var _));
 
             await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
         }
@@ -56,7 +56,7 @@ namespace Test.Integration
             await extractor.WaitForSubscriptions();
 
             // Assert
-            Assert.False(tester.Client.TryGetSubscription(RebrowseTriggerManager.SubscriptionName, out var _));
+            Assert.False(tester.TryGetSubscription(RebrowseTriggerManager.SubscriptionName, out var _));
 
             await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
         }

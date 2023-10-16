@@ -27,7 +27,11 @@ namespace Test.Unit
         {
             var services = new ServiceCollection();
             Config = services.AddConfig<FullConfig>("config.test.yml", 1);
-
+            Config.Source.Retries = new UARetryConfig
+            {
+                MaxTries = 1,
+                MaxDelay = "100ms"
+            };
             int port = CommonTestUtils.NextPort;
             Config.Source.EndpointUrl = $"opc.tcp://localhost:{port}";
             BaseConfig = ConfigurationUtils.Read<FullConfig>("config.test.yml");
@@ -105,7 +109,7 @@ namespace Test.Unit
             Assert.True(summary.Session.Secure);
             Assert.Equal(7, summary.Session.Endpoints.Count);
         }
-        [Fact]
+        [Fact(Timeout = 30000)]
         public async Task TestGetBrowseChunkSizes()
         {
             // Test normal run
@@ -172,7 +176,7 @@ namespace Test.Unit
             tester.BaseConfig.Source.BrowseChunk = 1000;
             tester.Server.Issues.MaxBrowseNodes = 0;
         }
-        [Fact]
+        [Fact(Timeout = 30000)]
         public async Task TestGetCustomDataTypes()
         {
             // Config doesn't really impact this
@@ -183,7 +187,7 @@ namespace Test.Unit
             Assert.True(summary.DataTypes.Enums);
             Assert.Single(tester.BaseConfig.Extraction.DataTypes.CustomNumericTypes);
         }
-        [Fact]
+        [Fact(Timeout = 30000)]
         public async Task TestAttributeChunkSizes()
         {
             tester.Config.Extraction.RootNode = null;
@@ -218,7 +222,7 @@ namespace Test.Unit
             tester.Server.Issues.MaxAttributes = 0;
             tester.Config.Source.AttributesChunk = 1000;
         }
-        [Fact]
+        [Fact(Timeout = 30000)]
         public async Task TestGetDataTypeSettings()
         {
             // First for all nodes
@@ -269,7 +273,7 @@ namespace Test.Unit
             tester.Config.Extraction.RootNode = null;
         }
 
-        [Fact]
+        [Fact(Timeout = 30000)]
         public async Task TestGetSubscriptionChunkSizes()
         {
             bool generate = true;
@@ -327,7 +331,7 @@ namespace Test.Unit
             tester.Config.Source.SubscriptionChunk = 1000;
             tester.Server.Issues.MaxSubscriptions = 0;
         }
-        [Fact]
+        [Fact(Timeout = 30000)]
         public async Task TestGetHistoryChunkSizes()
         {
             tester.Explorer.ResetNodes();
@@ -388,7 +392,7 @@ namespace Test.Unit
             tester.Server.WipeHistory(tester.Server.Ids.Base.DoubleVar1, 0.0);
 
         }
-        [Fact]
+        [Fact(Timeout = 30000)]
         public async Task TestGetEventConfig()
         {
             tester.Explorer.ResetNodes();
@@ -440,7 +444,7 @@ namespace Test.Unit
             Assert.Equal(2, summary.Events.NumEmitters);
             Assert.Equal(1, summary.Events.NumHistEmitters);
         }
-        [Fact]
+        [Fact(Timeout = 30000)]
         public void TestNamespaceMapping()
         {
             var namespaces = new List<string>
@@ -474,7 +478,7 @@ namespace Test.Unit
                 Assert.Equal(expectedKeys[i], keys[i]);
             }
         }
-        [Fact]
+        [Fact(Timeout = 30000)]
         public async Task TestConfigToolRuntime()
         {
             var fullConfig = ConfigurationUtils.Read<FullConfig>("config.config-tool-test.yml");

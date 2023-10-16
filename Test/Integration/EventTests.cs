@@ -189,12 +189,12 @@ namespace Test.Integration
             tester.Config.History.Backfill = true;
             tester.Config.Events.History = true;
 
-            void Reset()
+            async Task Reset()
             {
                 extractor.State.Clear();
                 extractor.GetType().GetField("subscribed", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(extractor, 0);
                 extractor.GetType().GetField("subscribeFlag", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(extractor, false);
-                tester.Client.RemoveSubscription("EventListener").Wait();
+                await tester.RemoveSubscription("EventListener");
             }
 
             tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(ids.Root, tester.Client);
@@ -214,7 +214,7 @@ namespace Test.Integration
             await TestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 1), 5);
 
             // Test disable subscriptions
-            Reset();
+            await Reset();
             tester.Config.Subscriptions.Events = false;
             await extractor.RunExtractor(true);
             var state = extractor.State.GetEmitterState(ids.Obj1);
@@ -226,7 +226,7 @@ namespace Test.Integration
             await TestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 2), 5);
 
             // Test disable specific subscriptions
-            Reset();
+            await Reset();
             var oldTransforms = tester.Config.Extraction.Transformations;
             tester.Config.Extraction.Transformations = new List<RawNodeTransformation>
             {
