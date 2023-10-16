@@ -49,11 +49,13 @@ namespace Cognite.OpcUa.NodeSources
             IEnumerable<NodeId> nodesToBrowse,
             uint nodeClassMask,
             HierarchicalReferenceMode hierarchicalReferences,
+            string purpose,
             CancellationToken token);
         Task<NodeLoadResult> LoadNonHierarchicalReferences(
             IReadOnlyDictionary<NodeId, BaseUANode> parentNodes,
             bool getTypeReferences,
             bool initUnknownNodes,
+            string purpose,
             CancellationToken token);
     }
 
