@@ -198,6 +198,8 @@ namespace Cognite.OpcUa.Config
         public ushort CertificateExpiry { get; set; } = 60;
         /// <summary>
         /// Configuration for retrying operations against the OPC-UA server.
+        /// 
+        /// This is overridden for the config tool.
         /// </summary>
         public UARetryConfig Retries { get => retries; set => retries = value ?? retries; }
         private UARetryConfig retries = new UARetryConfig();
@@ -314,6 +316,38 @@ namespace Cognite.OpcUa.Config
                 }
                 return finalRetryStatusCodes;
             }
+        }
+
+        public bool ShouldRetryException(Exception ex, IEnumerable<uint> statusCodes)
+        {
+            if (ex is ServiceResultException serviceExc)
+            {
+                var code = serviceExc.StatusCode;
+                return statusCodes.Contains(serviceExc.StatusCode);
+            }
+            else if (ex is ServiceCallFailureException failureExc)
+            {
+                return failureExc.Cause == ServiceCallFailure.SessionMissing;
+            }
+            else if (ex is SilentServiceException silentExc)
+            {
+                if (silentExc.InnerServiceException != null)
+                {
+                    return statusCodes.Contains(silentExc.InnerServiceException.StatusCode);
+                }
+            }
+            else if (ex is AggregateException aex)
+            {
+                // Only retry aggregate exceptions if one of the inner exceptions should be retried...
+                var flat = aex.Flatten();
+                return flat.InnerExceptions.Any(e => ShouldRetryException(e, statusCodes));
+            }
+            return false;
+        }
+
+        public bool ShouldRetryException(Exception ex)
+        {
+            return ShouldRetryException(ex, FinalRetryStatusCodes);
         }
     }
 
