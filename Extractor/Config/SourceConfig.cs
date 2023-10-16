@@ -338,7 +338,7 @@ namespace Cognite.OpcUa.Config
             {
                 // Only retry aggregate exceptions if one of the inner exceptions should be retried...
                 var flat = aex.Flatten();
-                return aex.InnerExceptions.Any(e => ShouldRetryException(e, statusCodes));
+                return flat.InnerExceptions.Any(e => ShouldRetryException(e, statusCodes));
             }
             return false;
         }
