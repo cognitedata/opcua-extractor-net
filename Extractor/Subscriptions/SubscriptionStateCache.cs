@@ -13,6 +13,23 @@ namespace Cognite.OpcUa.Subscriptions
         RebrowseTriggers,
     }
 
+    public static class SubscriptionNameMethods
+    {
+        public static string Name(this SubscriptionName name)
+        {
+            return name switch
+            {
+                SubscriptionName.Audit => "Audit",
+                SubscriptionName.DataPoints => "DataPoints",
+                SubscriptionName.Events => "Events",
+                SubscriptionName.ServiceLevel => "ServiceLevel",
+                SubscriptionName.NodeMetrics => "NodeMetrics",
+                SubscriptionName.RebrowseTriggers => "RebrowseTriggers",
+                _ => throw new ArgumentException("Subscription name is not valid")
+            };
+        }
+    }
+
     public interface ISubscriptionState
     {
         public uint SubscriptionId { get; }
