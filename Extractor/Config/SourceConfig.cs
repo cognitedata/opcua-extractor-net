@@ -198,6 +198,8 @@ namespace Cognite.OpcUa.Config
         public ushort CertificateExpiry { get; set; } = 60;
         /// <summary>
         /// Configuration for retrying operations against the OPC-UA server.
+        /// 
+        /// This is overridden for the config tool.
         /// </summary>
         public UARetryConfig Retries { get => retries; set => retries = value ?? retries; }
         private UARetryConfig retries = new UARetryConfig();
