@@ -211,7 +211,7 @@ namespace Test.Integration
             await extractor.RunExtractor(true);
             Assert.All(extractor.State.EmitterStates, state => { Assert.True(state.ShouldSubscribe); });
             await extractor.WaitForSubscriptions();
-            Assert.Equal(3u, session.Subscriptions.First(sub => sub.DisplayName.StartsWith(SubscriptionName.Events.ToString(), StringComparison.InvariantCulture)).MonitoredItemCount);
+            Assert.Equal(3u, session.Subscriptions.First(sub => sub.DisplayName.StartsWith(SubscriptionName.Events.Name(), StringComparison.InvariantCulture)).MonitoredItemCount);
             await TestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 1), 5);
 
             // Test disable subscriptions
@@ -223,7 +223,7 @@ namespace Test.Integration
             state = extractor.State.GetEmitterState(ObjectIds.Server);
             Assert.False(state.ShouldSubscribe);
             await extractor.WaitForSubscriptions();
-            Assert.DoesNotContain(session.Subscriptions, sub => sub.DisplayName.StartsWith(SubscriptionName.Events.ToString(), StringComparison.InvariantCulture));
+            Assert.DoesNotContain(session.Subscriptions, sub => sub.DisplayName.StartsWith(SubscriptionName.Events.Name(), StringComparison.InvariantCulture));
             await TestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 2), 5);
 
             // Test disable specific subscriptions
@@ -248,7 +248,7 @@ namespace Test.Integration
             state = extractor.State.GetEmitterState(ObjectIds.Server);
             Assert.True(state.ShouldSubscribe);
             await extractor.WaitForSubscriptions();
-            Assert.Equal(2u, session.Subscriptions.First(sub => sub.DisplayName.StartsWith(SubscriptionName.Events.ToString(), StringComparison.InvariantCulture)).MonitoredItemCount);
+            Assert.Equal(2u, session.Subscriptions.First(sub => sub.DisplayName.StartsWith(SubscriptionName.Events.Name(), StringComparison.InvariantCulture)).MonitoredItemCount);
             await TestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 3), 5);
         }
         #endregion

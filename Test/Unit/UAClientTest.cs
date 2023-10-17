@@ -112,7 +112,7 @@ namespace Test.Unit
         public bool TryGetSubscription(SubscriptionName name, out Subscription subscription)
         {
             subscription = Client.SessionManager?.Session?.Subscriptions?.FirstOrDefault(sub =>
-                sub.DisplayName.StartsWith(name.ToString(), StringComparison.InvariantCulture));
+                sub.DisplayName.StartsWith(name.Name(), StringComparison.InvariantCulture));
             return subscription != null;
         }
     }

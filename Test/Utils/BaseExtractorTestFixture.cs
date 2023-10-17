@@ -170,7 +170,6 @@ namespace Test.Utils
             var newServices = new ServiceCollection();
             foreach (var service in Services)
             {
-
                 newServices.Add(service);
             }
             CommonTestUtils.AddDummyProvider("test", CDFMockHandler.MockMode.None, true, newServices);
@@ -300,7 +299,7 @@ namespace Test.Utils
         public bool TryGetSubscription(SubscriptionName name, out Subscription subscription)
         {
             subscription = Client.SessionManager?.Session?.Subscriptions?.FirstOrDefault(sub =>
-                sub.DisplayName.StartsWith(name.ToString(), StringComparison.InvariantCulture));
+                sub.DisplayName.StartsWith(name.Name(), StringComparison.InvariantCulture));
             return subscription != null;
         }
     }
