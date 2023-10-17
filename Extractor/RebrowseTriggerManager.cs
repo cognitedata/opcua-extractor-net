@@ -19,8 +19,6 @@ namespace Cognite.OpcUa
         private readonly RebrowseTriggersConfig _config;
         private readonly UAExtractor _extractor;
 
-        public readonly static string SubscriptionName = "TriggerRebrowse";
-
         public RebrowseTriggerManager(
             ILogger<RebrowseTriggerManager> logger,
             UAClient uaClient,

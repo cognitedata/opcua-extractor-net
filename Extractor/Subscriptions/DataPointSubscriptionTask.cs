@@ -18,7 +18,7 @@ namespace Cognite.OpcUa.Subscriptions
     {
         private readonly MonitoredItemNotificationEventHandler handler;
         public DataPointSubscriptionTask(MonitoredItemNotificationEventHandler handler, IEnumerable<VariableExtractionState> states)
-            : base("DataChangeListener", states.ToDictionary(s => s.SourceId))
+            : base(SubscriptionName.DataPoints, states.ToDictionary(s => s.SourceId))
         {
             this.handler = handler;
         }
