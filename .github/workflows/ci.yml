@@ -8,9 +8,15 @@ jobs:
     common:
         uses: ./.github/workflows/common.yml
         secrets: inherit
-    build:
+    test:
         uses: ./.github/workflows/test.yml
         secrets: inherit
+    build:
+        runs-on: ubuntu-latest
+        needs:
+            - test
+        steps:
+          - run: echo "Yep, this sure is built"
     verify-schema:
         runs-on: ubuntu-latest
 
