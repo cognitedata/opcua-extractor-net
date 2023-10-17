@@ -8,7 +8,9 @@ jobs:
     common:
         uses: ./.github/workflows/common.yml
         secrets: inherit
-
+    build:
+        uses: ./.github/workflows/test.yml
+        secrets: inherit
     publish-binaries:
         runs-on: ubuntu-latest
         needs: common
