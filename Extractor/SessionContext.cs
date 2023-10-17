@@ -33,17 +33,12 @@ namespace Cognite.OpcUa
         {
             MessageContext = session.MessageContext;
             SystemContext = session.SystemContext;
-            NamespaceTable = session.NamespaceUris;
+            NamespaceTable = session.NamespaceUris ?? new NamespaceTable(new[] {
+                "http://opcfoundation.org/UA/"
+            });
             this.config = config;
             this.log = log;
-
-            if (config.Extraction.NodeMap != null)
-            {
-                foreach (var kvp in config.Extraction.NodeMap)
-                {
-                    nodeOverrides[kvp.Value.ToNodeId(this)] = kvp.Key;
-                }
-            }
+            InitNodeOverrides();
         }
 
         public SessionContext(FullConfig config, ILogger log)
@@ -55,10 +50,23 @@ namespace Cognite.OpcUa
             SystemContext = new DummySystemContext(NamespaceTable);
             this.config = config;
             this.log = log;
+            InitNodeOverrides();
+        }
+
+        private void InitNodeOverrides()
+        {
+            if (config.Extraction.NodeMap != null)
+            {
+                foreach (var kvp in config.Extraction.NodeMap)
+                {
+                    nodeOverrides[kvp.Value.ToNodeId(this)] = kvp.Key;
+                }
+            }
         }
 
         public void AddExternalNamespaces(string[] table)
         {
+            if (table == null) return;
             foreach (var ns in table)
             {
                 NamespaceTable.GetIndexOrAppend(ns);

@@ -83,7 +83,8 @@ namespace Cognite.OpcUa
         public StringConverter StringConverter { get; }
         public Browser Browser { get; }
 
-        public SessionContext? Context => SessionManager?.Context;
+        private SessionContext? overrideContext;
+        public SessionContext? Context => SessionManager?.Context ?? overrideContext;
 
         /// <summary>
         /// Constructor, does not start the client.
@@ -795,14 +796,14 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Return systemContext. Can be used by SDK-tools for converting events.
         /// </summary>
-        public ISystemContext? SystemContext => SessionManager?.Context?.SystemContext;
+        public ISystemContext? SystemContext => Context?.SystemContext;
 
-        public NamespaceTable? NamespaceTable => SessionManager?.Context?.NamespaceTable;
+        public NamespaceTable? NamespaceTable => Context?.NamespaceTable;
 
         /// <summary>
         /// Return MessageContext, used for serialization
         /// </summary>
-        public IServiceMessageContext? MessageContext => SessionManager?.Context?.MessageContext;
+        public IServiceMessageContext? MessageContext => Context?.MessageContext;
         /// <summary>
         /// Constructs a filter from the given list of permitted eventids, the already constructed field map and an optional receivedAfter property.
         /// </summary>
@@ -869,9 +870,15 @@ namespace Cognite.OpcUa
 
         public void AddExternalNamespaces(string[] table)
         {
-            if (SessionManager == null) throw new InvalidOperationException("External namespaces must be added to initialized client");
-
-            SessionManager.RegisterExternalNamespaces(table);
+            if (SessionManager == null)
+            {
+                overrideContext = new SessionContext(Config, log);
+                overrideContext.AddExternalNamespaces(table);
+            }
+            else
+            {
+                SessionManager.RegisterExternalNamespaces(table);
+            }
         }
 
         /// <summary>
@@ -907,23 +914,23 @@ namespace Cognite.OpcUa
 
         public string? GetUniqueId(ExpandedNodeId id, int index = -1)
         {
-            if (SessionManager?.Context == null) throw new InvalidOperationException("Attempt to get unique ID without session context");
+            if (Context == null) throw new InvalidOperationException("Attempt to get unique ID without session context");
 
-            return SessionManager.Context.GetUniqueId(id, index);
+            return Context.GetUniqueId(id, index);
         }
 
         public string GetRelationshipId(UAReference reference)
         {
-            if (SessionManager?.Context == null) throw new InvalidOperationException("Attempt to get relationship ID without session context");
+            if (Context == null) throw new InvalidOperationException("Attempt to get relationship ID without session context");
 
-            return SessionManager.Context.GetRelationshipId(reference);
+            return Context.GetRelationshipId(reference);
         }
 
         public NodeId ToNodeId(ExpandedNodeId id)
         {
-            if (SessionManager?.Context == null) throw new InvalidOperationException("Attempt to convert node ID without session context");
+            if (Context == null) throw new InvalidOperationException("Attempt to convert node ID without session context");
 
-            return SessionManager.Context.ToNodeId(id);
+            return Context.ToNodeId(id);
         }
 
         public void Dispose()

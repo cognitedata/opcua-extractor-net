@@ -201,21 +201,18 @@ namespace Test.Unit
             Assert.Equal("value", fields["Value"]);
         }
         [Fact]
-        public async Task TestNodeMapping()
+        public void TestNodeMapping()
         {
             tester.Config.Extraction.NodeMap = new Dictionary<string, ProtoNodeId>
             {
                 { "Test1", new NodeId("test").ToProtoNodeId(tester.Client) },
                 { "Test2", new NodeId("test2", 2).ToProtoNodeId(tester.Client) }
             };
-            using var extractor = tester.BuildExtractor();
+            var ctx = new SessionContext(tester.Client.SessionManager.Session, tester.Config, tester.Log);
 
-            // Run the configure extractor method...
-            await extractor.RunExtractor(true);
-
-            Assert.Equal("Test1", extractor.GetUniqueId(new NodeId("test")));
-            Assert.Equal("Test2", tester.Client.GetUniqueId(new NodeId("test2", 2)));
-            Assert.Equal("Test1[0]", extractor.GetUniqueId(new NodeId("test"), 0));
+            Assert.Equal("Test1", ctx.GetUniqueId(new NodeId("test")));
+            Assert.Equal("Test2", ctx.GetUniqueId(new NodeId("test2", 2)));
+            Assert.Equal("Test1[0]", ctx.GetUniqueId(new NodeId("test"), 0));
         }
 
         [Fact]
