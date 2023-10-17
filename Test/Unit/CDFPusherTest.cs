@@ -1103,7 +1103,7 @@ namespace Test.Unit
             var converter = tester.Client.StringConverter;
             converter.AddConverters(options, type);
 
-            var id = node.GetUniqueId(extractor);
+            var id = node.GetUniqueId(extractor.Context);
 
             var json = JsonSerializer.Serialize(node, options);
 

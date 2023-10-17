@@ -56,11 +56,8 @@ namespace Cognite.OpcUa
         public IClientCallbacks Callbacks { get; set; } = null!;
 
         private readonly SemaphoreSlim subscriptionSem = new SemaphoreSlim(1);
-        private readonly Dictionary<NodeId, string> nodeOverrides = new Dictionary<NodeId, string>();
         public bool Started { get; private set; }
         private CancellationToken liveToken;
-
-        private readonly Dictionary<ushort, string> nsPrefixMap = new Dictionary<ushort, string>();
 
         private static readonly Counter attributeRequests = Metrics
             .CreateCounter("opcua_attribute_requests", "Number of attributes fetched from the server");
@@ -85,6 +82,8 @@ namespace Cognite.OpcUa
 
         public StringConverter StringConverter { get; }
         public Browser Browser { get; }
+
+        public SessionContext? Context => SessionManager?.Context;
 
         /// <summary>
         /// Constructor, does not start the client.
@@ -234,13 +233,11 @@ namespace Cognite.OpcUa
 
             // A restarted Session might mean a restarted server, so all server-relevant data must be cleared.
             // This includes any stored NodeId, which may refer to an outdated namespaceIndex
-            nodeOverrides?.Clear();
-
             await LoadAppConfig();
 
             if (SessionManager == null)
             {
-                SessionManager = new SessionManager(Config.Source, this, AppConfig!, log, liveToken, timeout);
+                SessionManager = new SessionManager(Config, this, AppConfig!, log, liveToken, timeout);
             }
             else
             {
@@ -323,23 +320,6 @@ namespace Cognite.OpcUa
             if (node == null) throw new ExtractorFailureException($"Root node {desc.NodeId} is unexpected node class: {desc.NodeClass}");
             await ReadNodeData(new[] { node }, token, "the server node");
             return node;
-        }
-        /// <summary>
-        /// Add externalId override for a single node
-        /// </summary>
-        /// <param name="nodeId">Id of node to be overridden</param>
-        /// <param name="externalId">ExternalId to be used</param>
-        public void AddNodeOverride(NodeId nodeId, string externalId)
-        {
-            if (nodeId == null || nodeId == NodeId.Null) return;
-            nodeOverrides[nodeId] = externalId;
-        }
-        /// <summary>
-        /// Remove all externalId overrides
-        /// </summary>
-        public void ClearNodeOverrides()
-        {
-            nodeOverrides.Clear();
         }
 
         private List<BrowseNode> HandleBrowseResult(List<BrowseNode> nodes, BrowseResultCollection results,
@@ -812,17 +792,17 @@ namespace Cognite.OpcUa
 
         #region Events
 
-        private ISystemContext? dummyContext;
         /// <summary>
         /// Return systemContext. Can be used by SDK-tools for converting events.
         /// </summary>
-        public ISystemContext? SystemContext => Session?.SystemContext ?? dummyContext;
+        public ISystemContext? SystemContext => SessionManager?.Context?.SystemContext;
 
-        private IServiceMessageContext? dummyMessageContext;
+        public NamespaceTable? NamespaceTable => SessionManager?.Context?.NamespaceTable;
+
         /// <summary>
         /// Return MessageContext, used for serialization
         /// </summary>
-        public IServiceMessageContext? MessageContext => Session?.MessageContext ?? dummyMessageContext;
+        public IServiceMessageContext? MessageContext => SessionManager?.Context?.MessageContext;
         /// <summary>
         /// Constructs a filter from the given list of permitted eventids, the already constructed field map and an optional receivedAfter property.
         /// </summary>
@@ -887,66 +867,13 @@ namespace Cognite.OpcUa
 
         #region Utils
 
-        public NamespaceTable? ExternalNamespaceUris { get; set; }
-
         public void AddExternalNamespaces(string[] table)
         {
-            if (ExternalNamespaceUris == null)
-            {
-                ExternalNamespaceUris = new NamespaceTable(new[]
-                {
-                    "http://opcfoundation.org/UA/"
-                });
-                dummyContext = new DummySystemContext(ExternalNamespaceUris);
-                dummyMessageContext = new DummyMessageContext(ExternalNamespaceUris);
-            }
-            if (table == null) return;
-            foreach (var ns in table)
-            {
-                ExternalNamespaceUris.GetIndexOrAppend(ns);
-            }
+            if (SessionManager == null) throw new InvalidOperationException("External namespaces must be added to initialized client");
+
+            SessionManager.RegisterExternalNamespaces(table);
         }
 
-
-        public NamespaceTable? NamespaceTable => Session?.NamespaceUris ?? ExternalNamespaceUris;
-        /// <summary>
-        /// Converts an ExpandedNodeId into a NodeId using the Session
-        /// </summary>
-        /// <param name="nodeid"></param>
-        /// <returns>Resulting NodeId</returns>
-        public NodeId ToNodeId(ExpandedNodeId nodeid)
-        {
-            if (nodeid == null || nodeid.IsNull || NamespaceTable == null) return NodeId.Null;
-            return ExpandedNodeId.ToNodeId(nodeid, NamespaceTable);
-        }
-        /// <summary>
-        /// Converts identifier string and namespaceUri into NodeId. Identifier will be on form i=123 or s=abc etc.
-        /// </summary>
-        /// <param name="identifier">Full identifier on form i=123 or s=abc etc.</param>
-        /// <param name="namespaceUri">Full namespaceUri</param>
-        /// <returns>Resulting NodeId</returns>
-        public NodeId ToNodeId(string? identifier, string? namespaceUri)
-        {
-            if (identifier == null || namespaceUri == null || NamespaceTable == null) return NodeId.Null;
-            int idx = NamespaceTable.GetIndex(namespaceUri);
-            if (idx < 0)
-            {
-                log.LogInformation("Namespace {NS} not found in {Table}", namespaceUri, NamespaceTable.ToArray());
-                if (Config.Extraction.NamespaceMap.ContainsValue(namespaceUri))
-                {
-                    string readNs = Config.Extraction.NamespaceMap.First(kvp => kvp.Value == namespaceUri).Key;
-                    idx = NamespaceTable.GetIndex(readNs);
-                    if (idx < 0) return NodeId.Null;
-                }
-                else
-                {
-                    return NodeId.Null;
-                }
-            }
-
-            string nsString = "ns=" + idx;
-            return new NodeId(nsString + ";" + identifier);
-        }
         /// <summary>
         /// Convert a datavalue into a double representation, testing for edge cases.
         /// </summary>
@@ -978,161 +905,25 @@ namespace Cognite.OpcUa
             }
         }
 
-        /// <summary>
-        /// Returns consistent unique string representation of a <see cref="NodeId"/> given its namespaceUri
-        /// </summary>
-        /// <remarks>
-        /// NodeId is, according to spec, unique in combination with its namespaceUri. We use this to generate a consistent, unique string
-        /// to be used for mapping assets and timeseries in CDF to opcua nodes.
-        /// To avoid having to send the entire namespaceUri to CDF, we allow mapping Uris to prefixes in the config file.
-        /// </remarks>
-        /// <param name="id">Nodeid to be converted</param>
-        /// <returns>Unique string representation</returns>
         public string? GetUniqueId(ExpandedNodeId id, int index = -1)
         {
-            var nodeId = ToNodeId(id);
-            if (nodeId.IsNullNodeId) return null;
-            if (nodeOverrides.TryGetValue(nodeId, out var nodeOverride))
-            {
-                if (index <= -1) return nodeOverride;
-                return $"{nodeOverride}[{index}]";
-            }
+            if (SessionManager?.Context == null) throw new InvalidOperationException("Attempt to get unique ID without session context");
 
-            // ExternalIds shorter than 32 chars are unlikely, this will generally avoid at least 1 re-allocation of the buffer,
-            // and usually boost performance.
-            var buffer = new StringBuilder(Config.Extraction.IdPrefix, 32);
-
-            if (!nsPrefixMap.TryGetValue(nodeId.NamespaceIndex, out var prefix))
-            {
-                var namespaceUri = id.NamespaceUri ?? NamespaceTable!.GetString(nodeId.NamespaceIndex);
-                string newPrefix;
-                if (namespaceUri is not null)
-                {
-                    if (Config.Extraction.NamespaceMap.TryGetValue(namespaceUri, out string prefixNode))
-                    {
-                        newPrefix = prefixNode;
-                    }
-                    else
-                    {
-                        newPrefix = namespaceUri + ":";
-                    }
-                }
-                else
-                {
-                    log.LogWarning("NodeID received with null NamespaceUri, and index not in NamespaceTable. This is likely a bug in the server. {Id}, {Index}",
-                        nodeId, nodeId.NamespaceIndex);
-                    newPrefix = $"UNKNOWN_NS_{nodeId.NamespaceIndex}";
-                }
-                nsPrefixMap[nodeId.NamespaceIndex] = prefix = newPrefix;
-            }
-
-            buffer.Append(prefix);
-            // Use 0 as namespace-index. This means that the namespace is not appended, as the string representation
-            // of a base namespace nodeId does not include the namespace-index, which fits our use-case.
-            NodeId.Format(buffer, nodeId.Identifier, nodeId.IdType, 0);
-
-            TrimEnd(buffer);
-
-            if (index > -1)
-            {
-                // Modifying buffer.Length effectively removes the last few elements, but more efficiently than modifying strings,
-                // StringBuilder is just a char array.
-                // 255 is max length, Log10(Max(1, index)) + 3 is the length of the index suffix ("[123]").
-                buffer.Length = Math.Min(buffer.Length, 255 - ((int)Math.Log10(Math.Max(1, index)) + 3));
-                buffer.AppendFormat(CultureInfo.InvariantCulture, "[{0}]", index);
-            }
-            else
-            {
-                buffer.Length = Math.Min(buffer.Length, 255);
-            }
-            return buffer.ToString();
-        }
-        /// <summary>
-        /// Used to trim the whitespace off the end of a StringBuilder
-        /// </summary> 
-        private static void TrimEnd(StringBuilder sb)
-        {
-            if (sb == null || sb.Length == 0) return;
-
-            int i = sb.Length - 1;
-            for (; i >= 0; i--)
-                if (!char.IsWhiteSpace(sb[i]))
-                    break;
-
-            if (i < sb.Length - 1)
-                sb.Length = i + 1;
-
-            return;
+            return SessionManager.Context.GetUniqueId(id, index);
         }
 
-        /// <summary>
-        /// Append NodeId and namespace to the given StringBuilder.
-        /// </summary>
-        /// <param name="buffer">Builder to append to</param>
-        /// <param name="nodeId">NodeId to append</param>
-        private void AppendNodeId(StringBuilder buffer, NodeId nodeId)
-        {
-            if (nodeOverrides.TryGetValue(nodeId, out var nodeOverride))
-            {
-                buffer.Append(nodeOverride);
-                return;
-            }
-
-            if (!nsPrefixMap.TryGetValue(nodeId.NamespaceIndex, out var prefix))
-            {
-                var namespaceUri = NamespaceTable!.GetString(nodeId.NamespaceIndex);
-                string newPrefix = Config.Extraction.NamespaceMap.TryGetValue(namespaceUri, out string prefixNode) ? prefixNode : (namespaceUri + ":");
-                nsPrefixMap[nodeId.NamespaceIndex] = prefix = newPrefix;
-            }
-
-            buffer.Append(prefix);
-
-            NodeId.Format(buffer, nodeId.Identifier, nodeId.IdType, 0);
-
-            TrimEnd(buffer);
-        }
-
-        /// <summary>
-        /// Get string representation of NodeId on the form i=123 or s=string, etc.
-        /// </summary>
-        /// <param name="id"></param>
-        /// <returns></returns>
-        private string GetNodeIdString(NodeId id)
-        {
-            var buffer = new StringBuilder();
-            AppendNodeId(buffer, id);
-            return buffer.ToString();
-        }
-
-        /// <summary>
-        /// Get the unique reference id, on the form [prefix][reference-name];[sourceId];[targetId]
-        /// </summary>
-        /// <param name="reference">Reference to get id for</param>
-        /// <returns>String reference id</returns>
         public string GetRelationshipId(UAReference reference)
         {
-            var buffer = new StringBuilder(Config.Extraction.IdPrefix, 64);
-            buffer.Append(reference.Type.GetName(!reference.IsForward));
-            buffer.Append(';');
-            AppendNodeId(buffer, reference.Source.Id);
-            buffer.Append(';');
-            AppendNodeId(buffer, reference.Target.Id);
+            if (SessionManager?.Context == null) throw new InvalidOperationException("Attempt to get relationship ID without session context");
 
-            if (buffer.Length > 255)
-            {
-                // This is an edge-case. If the id overflows, it is most sensible to cut from the
-                // start of the id, as long ids are likely (from experience) to be similar to
-                // system.subsystem.sensor.measurement...
-                // so cutting from the start is less likely to cause conflicts
-                var overflow = (int)Math.Ceiling((buffer.Length - 255) / 2.0);
-                buffer = new StringBuilder(Config.Extraction.IdPrefix, 255);
-                buffer.Append(reference.Type.GetName(!reference.IsForward));
-                buffer.Append(';');
-                buffer.Append(GetNodeIdString(reference.Source.Id).AsSpan(overflow));
-                buffer.Append(';');
-                buffer.Append(GetNodeIdString(reference.Target.Id).AsSpan(overflow));
-            }
-            return buffer.ToString();
+            return SessionManager.Context.GetRelationshipId(reference);
+        }
+
+        public NodeId ToNodeId(ExpandedNodeId id)
+        {
+            if (SessionManager?.Context == null) throw new InvalidOperationException("Attempt to convert node ID without session context");
+
+            return SessionManager.Context.ToNodeId(id);
         }
 
         public void Dispose()

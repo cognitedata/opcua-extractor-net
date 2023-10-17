@@ -290,7 +290,7 @@ namespace Cognite.OpcUa.Nodes
             return (Id, -1);
         }
 
-        public override Dictionary<string, string>? GetExtraMetadata(FullConfig config, IUAClientAccess client)
+        public override Dictionary<string, string>? GetExtraMetadata(FullConfig config, SessionContext context, StringConverter converter)
         {
             Dictionary<string, string>? fields = null;
             if (config.Extraction.NodeTypes.Metadata && FullAttributes.TypeDefinition?.Name != null)
@@ -317,7 +317,7 @@ namespace Cognite.OpcUa.Nodes
                 }
                 else
                 {
-                    fields["dataType"] = dt.Name ?? dt.GetUniqueId(client) ?? "null";
+                    fields["dataType"] = dt.Name ?? dt.GetUniqueId(context) ?? "null";
                 }
             }
             return fields;
@@ -439,7 +439,7 @@ namespace Cognite.OpcUa.Nodes
             long? dataSetId,
             Dictionary<string, string>? metaMap)
         {
-            string? externalId = GetUniqueId(client);
+            string? externalId = GetUniqueId(client.Context);
             var writePoco = new StatelessTimeSeriesCreate
             {
                 Description = FullAttributes.Description,
@@ -474,7 +474,7 @@ namespace Cognite.OpcUa.Nodes
             IDictionary<NodeId, long>? nodeToAssetIds,
             Dictionary<string, string>? metaMap)
         {
-            string? externalId = GetUniqueId(client);
+            string? externalId = GetUniqueId(client.Context);
             var writePoco = new TimeSeriesCreate
             {
                 Description = FullAttributes.Description,
@@ -507,7 +507,7 @@ namespace Cognite.OpcUa.Nodes
 
         public TimeSeriesCreate ToMinimalTimeseries(IUAClientAccess client, long? dataSetId)
         {
-            string? externalId = GetUniqueId(client);
+            string? externalId = GetUniqueId(client.Context);
 
             return new TimeSeriesCreate
             {
@@ -532,9 +532,11 @@ namespace Cognite.OpcUa.Nodes
             TSParent = parent;
         }
 
-        public override string? GetUniqueId(IUAClientAccess client)
+        public override string? GetUniqueId(SessionContext? context)
         {
-            return client.GetUniqueId(Id, Index);
+            if (context == null) throw new InvalidOperationException("Attempt to get unique ID without initialized client");
+
+            return context.GetUniqueId(Id, Index);
         }
 
         public override (NodeId, int) DestinationId()

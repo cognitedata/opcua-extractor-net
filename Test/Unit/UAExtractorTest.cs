@@ -178,14 +178,14 @@ namespace Test.Unit
             tester.Config.Extraction.DataTypes.DataTypeMetadata = true;
             var variable = new UAVariable(new NodeId("test"), "test", null, null, NodeId.Null, null);
             variable.FullAttributes.DataType = new UADataType(DataTypeIds.Double);
-            var fields = variable.GetExtraMetadata(tester.Config, extractor);
+            var fields = variable.GetExtraMetadata(tester.Config, extractor.Context, extractor.StringConverter);
             Assert.Single(fields);
             Assert.Equal("Double", fields["dataType"]);
 
             tester.Config.Extraction.NodeTypes.Metadata = true;
             var node = new UAObject(new NodeId("test"), "test", null, null, NodeId.Null, new UAObjectType(new NodeId("type")));
             node.FullAttributes.TypeDefinition.Attributes.DisplayName = "SomeType";
-            fields = node.GetExtraMetadata(tester.Config, extractor);
+            fields = node.GetExtraMetadata(tester.Config, extractor.Context, extractor.StringConverter);
             Assert.Single(fields);
             Assert.Equal("SomeType", fields["TypeDefinition"]);
 
@@ -196,7 +196,7 @@ namespace Test.Unit
             var type = new UAVariableType(new NodeId("test"), "test", null, null, NodeId.Null);
             type.FullAttributes.DataType = new UADataType(DataTypeIds.String);
             type.FullAttributes.Value = new Variant("value");
-            fields = type.GetExtraMetadata(tester.Config, extractor);
+            fields = type.GetExtraMetadata(tester.Config, extractor.Context, extractor.StringConverter);
             Assert.Single(fields);
             Assert.Equal("value", fields["Value"]);
         }

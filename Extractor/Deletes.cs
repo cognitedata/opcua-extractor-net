@@ -102,9 +102,9 @@ namespace Cognite.OpcUa
             if (!result.CanBeUsedForDeletes) return new DeletedNodes();
 
             var time = DateTime.UtcNow.AddSeconds(-1);
-            var newVariables = result.DestinationVariables.Select(v => v.GetUniqueId(client)!).ToDictionary(
+            var newVariables = result.DestinationVariables.Select(v => v.GetUniqueId(client.Context!)!).ToDictionary(
                 i => i, i => new NodeExistsState(i, time));
-            var newObjects = result.DestinationObjects.Select(o => o.GetUniqueId(client)!).ToDictionary(i => i, i => new NodeExistsState(i, time));
+            var newObjects = result.DestinationObjects.Select(o => o.GetUniqueId(client.Context!)!).ToDictionary(i => i, i => new NodeExistsState(i, time));
             var newReferences = result.DestinationReferences.Select(r => client.GetRelationshipId(r)!).ToDictionary(i => i, i => new NodeExistsState(i, time));
 
             var res = await Task.WhenAll(

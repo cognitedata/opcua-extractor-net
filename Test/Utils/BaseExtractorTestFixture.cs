@@ -120,7 +120,6 @@ namespace Test.Utils
         {
             if (clear)
             {
-                Client.ClearNodeOverrides();
                 RemoveSubscription(SubscriptionName.Events).Wait();
                 RemoveSubscription(SubscriptionName.DataPoints).Wait();
                 RemoveSubscription(SubscriptionName.Audit).Wait();

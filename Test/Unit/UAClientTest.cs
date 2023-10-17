@@ -1281,24 +1281,24 @@ namespace Test.Unit
         public void TestExpandedNodeIdConversion()
         {
             var nodeId = new ExpandedNodeId("string-ns", tester.Client.NamespaceTable.GetString(2));
-            Assert.Equal(new NodeId("string-ns", 2), tester.Client.ToNodeId(nodeId));
+            Assert.Equal(new NodeId("string-ns", 2), tester.Client.Context.ToNodeId(nodeId));
             nodeId = new ExpandedNodeId(new byte[] { 12, 12, 6 }, 1);
-            Assert.Equal(new NodeId(new byte[] { 12, 12, 6 }, 1), tester.Client.ToNodeId(nodeId));
+            Assert.Equal(new NodeId(new byte[] { 12, 12, 6 }, 1), tester.Client.Context.ToNodeId(nodeId));
             nodeId = new ExpandedNodeId("other-server", "opc.tcp://some-other-server.test", 1);
-            Assert.Null(tester.Client.ToNodeId(nodeId));
+            Assert.Null(tester.Client.Context.ToNodeId(nodeId));
         }
         [Fact]
         public void TestNodeIdConversion()
         {
-            var nodeId = tester.Client.ToNodeId("i=123", tester.Client.NamespaceTable.GetString(2));
+            var nodeId = tester.Client.Context.ToNodeId("i=123", tester.Client.NamespaceTable.GetString(2));
             Assert.Equal(new NodeId(123u, 2), nodeId);
-            nodeId = tester.Client.ToNodeId("s=abc", tester.Client.NamespaceTable.GetString(1));
+            nodeId = tester.Client.Context.ToNodeId("s=abc", tester.Client.NamespaceTable.GetString(1));
             Assert.Equal(new NodeId("abc", 1), nodeId);
-            nodeId = tester.Client.ToNodeId("s=abcd", "some-namespaces-that-doesnt-exist");
+            nodeId = tester.Client.Context.ToNodeId("s=abcd", "some-namespaces-that-doesnt-exist");
             Assert.Equal(NodeId.Null, nodeId);
-            nodeId = tester.Client.ToNodeId("s=bcd", "tl:");
+            nodeId = tester.Client.Context.ToNodeId("s=bcd", "tl:");
             Assert.Equal(new NodeId("bcd", 2), nodeId);
-            Assert.Equal(NodeId.Null, tester.Client.ToNodeId("i=123", null));
+            Assert.Equal(NodeId.Null, tester.Client.Context.ToNodeId("i=123", null));
         }
         [Fact]
         public static void TestConvertToDouble()
@@ -1326,10 +1326,14 @@ namespace Test.Unit
             Assert.Equal("gp.tl:s=", tester.Client.GetUniqueId(new NodeId(new string(' ', 400), 2)));
             Assert.Equal("gp.tl:s=[123]", tester.Client.GetUniqueId(new NodeId(new string(' ', 400), 2), 123));
 
-            tester.Client.AddNodeOverride(new NodeId(1234, 2), "override");
+
+            var overrides = tester.Client.Context.GetType().GetField("nodeOverrides",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                .GetValue(tester.Client.Context) as Dictionary<NodeId, string>;
+            overrides.Add(new NodeId(1234, 2), "override");
             Assert.Equal("override", tester.Client.GetUniqueId(new NodeId(1234, 2)));
             Assert.Equal("override[123]", tester.Client.GetUniqueId(new NodeId(1234, 2), 123));
-            tester.Client.ClearNodeOverrides();
+            overrides.Clear();
         }
 
         [Fact]

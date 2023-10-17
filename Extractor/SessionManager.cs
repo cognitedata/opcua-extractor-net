@@ -14,10 +14,12 @@ using Metrics = Prometheus.Metrics;
 
 namespace Cognite.OpcUa
 {
+
     public class SessionManager : IDisposable
     {
-        private SourceConfig config;
-        private UAClient client;
+        private readonly SourceConfig config;
+        private readonly FullConfig fullConfig;
+        private readonly UAClient client;
         private ReverseConnectManager? reverseConnectManager;
         private SessionReconnectHandler? reconnectHandler;
         private ApplicationConfiguration appConfig;
@@ -44,11 +46,14 @@ namespace Cognite.OpcUa
         private int sessionWaiters = 0;
         private readonly object sessionWaitExtLock = new();
 
+        public SessionContext? Context { get; private set; }
 
-        public SessionManager(SourceConfig config, UAClient parent, ApplicationConfiguration appConfig, ILogger log, CancellationToken token, int timeout = -1)
+
+        public SessionManager(FullConfig config, UAClient parent, ApplicationConfiguration appConfig, ILogger log, CancellationToken token, int timeout = -1)
         {
             client = parent;
-            this.config = config;
+            this.config = config.Source;
+            fullConfig = config;
             this.appConfig = appConfig;
             this.log = log;
             liveToken = token;
@@ -68,6 +73,15 @@ namespace Cognite.OpcUa
                 throw new ExtractorFailureException("Session does not exist after waiting, extractor is unable to continue");
             }
             return session;
+        }
+
+        public void RegisterExternalNamespaces(string[] table)
+        {
+            lock (sessionWaitExtLock)
+            {
+                Context ??= new SessionContext(fullConfig, log);
+                Context.AddExternalNamespaces(table);
+            }
         }
 
         private async Task TryWithBackoff(Func<Task> method, int maxBackoff, CancellationToken token)
@@ -109,7 +123,8 @@ namespace Cognite.OpcUa
             lock (sessionWaitExtLock)
             {
                 this.session = session;
-                for (;sessionWaiters > 0; sessionWaiters--)
+                Context = new SessionContext(session, fullConfig, log);
+                for (; sessionWaiters > 0; sessionWaiters--)
                 {
                     sessionWaitLock.Release();
                 }

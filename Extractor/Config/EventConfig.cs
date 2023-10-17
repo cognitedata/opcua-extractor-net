@@ -96,13 +96,13 @@ namespace Cognite.OpcUa.Config
         public Dictionary<string, string> DestinationNameMap { get => destinationNameMap; set => destinationNameMap = value ?? destinationNameMap; }
         private Dictionary<string, string> destinationNameMap = new Dictionary<string, string>();
 
-        public HashSet<NodeId>? GetWhitelist(UAClient client, ILogger logger)
+        public HashSet<NodeId>? GetWhitelist(SessionContext context, ILogger logger)
         {
             if (EventIds == null || !EventIds.Any()) return null;
             var whitelist = new HashSet<NodeId>();
             foreach (var proto in EventIds)
             {
-                var id = proto.ToNodeId(client);
+                var id = proto.ToNodeId(context!);
                 if (id.IsNullNodeId)
                 {
                     logger.LogWarning("Failed to convert event id {Namespace} {Id} to NodeId", proto.NamespaceUri, proto.NodeId);
@@ -115,13 +115,13 @@ namespace Cognite.OpcUa.Config
             return whitelist;
         }
 
-        public HashSet<NodeId> GetEmitterIds(UAClient client, ILogger logger)
+        public HashSet<NodeId> GetEmitterIds(SessionContext context, ILogger logger)
         {
             if (EmitterIds == null || !EmitterIds.Any()) return new HashSet<NodeId>();
             var ids = new HashSet<NodeId>();
             foreach (var proto in EmitterIds)
             {
-                var id = proto.ToNodeId(client);
+                var id = proto.ToNodeId(context!);
                 if (id.IsNullNodeId)
                 {
                     logger.LogWarning("Failed to convert emitter id {Namespace} {Id} to NodeId", proto.NamespaceUri, proto.NodeId);
@@ -134,13 +134,13 @@ namespace Cognite.OpcUa.Config
             return ids;
         }
 
-        public HashSet<NodeId> GetHistorizingEmitterIds(UAClient client, ILogger logger)
+        public HashSet<NodeId> GetHistorizingEmitterIds(SessionContext context, ILogger logger)
         {
             if (HistorizingEmitterIds == null || !HistorizingEmitterIds.Any()) return new HashSet<NodeId>();
             var ids = new HashSet<NodeId>();
             foreach (var proto in HistorizingEmitterIds)
             {
-                var id = proto.ToNodeId(client);
+                var id = proto.ToNodeId(context);
                 if (id.IsNullNodeId)
                 {
                     logger.LogWarning("Failed to convert historizing emitter id {Namespace} {Id} to NodeId", proto.NamespaceUri, proto.NodeId);
