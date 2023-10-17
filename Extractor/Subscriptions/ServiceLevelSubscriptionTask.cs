@@ -14,7 +14,7 @@ namespace Cognite.OpcUa.Subscriptions
     {
         private MonitoredItemNotificationEventHandler handler;
         public ServiceLevelSubscriptionTask(MonitoredItemNotificationEventHandler handler)
-            : base("ServiceLevel", new Dictionary<NodeId, NodeId> { { VariableIds.Server_ServiceLevel, VariableIds.Server_ServiceLevel } })
+            : base(SubscriptionName.ServiceLevel, new Dictionary<NodeId, NodeId> { { VariableIds.Server_ServiceLevel, VariableIds.Server_ServiceLevel } })
         {
             this.handler = handler;
         }

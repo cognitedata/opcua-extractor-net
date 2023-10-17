@@ -19,6 +19,7 @@ using Xunit;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using System.Linq;
 using Opc.Ua.Client;
+using Cognite.OpcUa.Subscriptions;
 
 namespace Test.Utils
 {
@@ -120,10 +121,10 @@ namespace Test.Utils
             if (clear)
             {
                 Client.ClearNodeOverrides();
-                RemoveSubscription("EventListener").Wait();
-                RemoveSubscription("DataChangeListener").Wait();
-                RemoveSubscription("AuditListener").Wait();
-                RemoveSubscription(RebrowseTriggerManager.SubscriptionName).Wait();
+                RemoveSubscription(SubscriptionName.Events).Wait();
+                RemoveSubscription(SubscriptionName.DataPoints).Wait();
+                RemoveSubscription(SubscriptionName.Audit).Wait();
+                RemoveSubscription(SubscriptionName.RebrowseTriggers).Wait();
                 Client.Browser.IgnoreFilters = null;
             }
             var ext = new UAExtractor(Config, Provider, pushers, Client, stateStore);
@@ -167,8 +168,8 @@ namespace Test.Utils
         public (CDFMockHandler, CDFPusher) GetCDFPusher()
         {
             var newServices = new ServiceCollection();
-            foreach (var service in Services) {
-                
+            foreach (var service in Services)
+            {
                 newServices.Add(service);
             }
             CommonTestUtils.AddDummyProvider("test", CDFMockHandler.MockMode.None, true, newServices);
@@ -251,6 +252,10 @@ namespace Test.Utils
             var startTask = Start();
             var resultTask = await Task.WhenAny(startTask, Task.Delay(20000));
             Assert.Equal(startTask, resultTask);
+            if (startTask.Exception != null)
+            {
+                throw startTask.Exception;
+            }
         }
 
         public virtual async Task DisposeAsync()
@@ -272,7 +277,7 @@ namespace Test.Utils
             }
         }
 
-        public async Task RemoveSubscription(string name)
+        public async Task RemoveSubscription(SubscriptionName name)
         {
             if (TryGetSubscription(name, out var subscription) && subscription!.Created)
             {
@@ -291,10 +296,10 @@ namespace Test.Utils
             }
         }
 
-        public bool TryGetSubscription(string name, out Subscription subscription)
+        public bool TryGetSubscription(SubscriptionName name, out Subscription subscription)
         {
             subscription = Client.SessionManager?.Session?.Subscriptions?.FirstOrDefault(sub =>
-                sub.DisplayName.StartsWith(name, StringComparison.InvariantCulture));
+                sub.DisplayName.StartsWith(name.Name(), StringComparison.InvariantCulture));
             return subscription != null;
         }
     }

@@ -32,6 +32,8 @@ namespace Cognite.OpcUa.Subscriptions
         private readonly Queue<PendingSubscriptionTask> taskQueue = new();
         private readonly AutoResetEvent taskQueueEvent = new AutoResetEvent(false);
 
+        public SubscriptionStateCache Cache { get; } = new();
+
         public SubscriptionManager(SessionManager sessionManager, FullConfig config, ILogger logger)
         {
             this.sessionManager = sessionManager;
@@ -123,7 +125,7 @@ namespace Cognite.OpcUa.Subscriptions
                     {
                         ExtractorUtils.LogException(logger, ex, $"Failed subscription task: {task.TaskName}");
                     }
-                } 
+                }
             }
         }
     }

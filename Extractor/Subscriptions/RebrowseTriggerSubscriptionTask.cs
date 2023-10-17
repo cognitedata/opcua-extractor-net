@@ -14,7 +14,7 @@ namespace Cognite.OpcUa.Subscriptions
     {
         private MonitoredItemNotificationEventHandler handler;
         public RebrowseTriggerSubscriptionTask(MonitoredItemNotificationEventHandler handler,
-            Dictionary<NodeId, (NodeId, string)> ids) : base("TriggerRebrowse", ids)
+            Dictionary<NodeId, (NodeId, string)> ids) : base(SubscriptionName.RebrowseTriggers, ids)
         {
             this.handler = handler;
         }
