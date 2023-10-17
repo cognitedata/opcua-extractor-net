@@ -1,6 +1,7 @@
 using Cognite.Extractor.Testing;
 using Cognite.OpcUa;
 using Cognite.OpcUa.Config;
+using Cognite.OpcUa.Subscriptions;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -37,7 +38,7 @@ namespace Test.Integration
             await extractor.WaitForSubscriptions();
 
             // Assert
-            Assert.True(tester.TryGetSubscription(RebrowseTriggerManager.SubscriptionName, out var _));
+            Assert.True(tester.TryGetSubscription(SubscriptionName.RebrowseTriggers, out var _));
 
             await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
         }
@@ -56,7 +57,7 @@ namespace Test.Integration
             await extractor.WaitForSubscriptions();
 
             // Assert
-            Assert.False(tester.TryGetSubscription(RebrowseTriggerManager.SubscriptionName, out var _));
+            Assert.False(tester.TryGetSubscription(SubscriptionName.RebrowseTriggers, out var _));
 
             await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
         }

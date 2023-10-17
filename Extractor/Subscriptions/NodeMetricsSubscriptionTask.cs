@@ -15,7 +15,7 @@ namespace Cognite.OpcUa.Subscriptions
     {
         private readonly MonitoredItemNotificationEventHandler handler;
         public NodeMetricsSubscriptionTask(MonitoredItemNotificationEventHandler handler, Dictionary<NodeId, NodeMetricState> states)
-            : base("NodeMetrics", states)
+            : base(SubscriptionName.NodeMetrics, states)
         {
             this.handler = handler;
         }

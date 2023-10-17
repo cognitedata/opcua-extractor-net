@@ -17,7 +17,7 @@ namespace Cognite.OpcUa.Subscriptions
         public override string TaskName => $"Recreate subscription {oldSubscription.Id}";
 
         public RecreateSubscriptionTask(Subscription oldSubscription)
-            : base(oldSubscription.DisplayName.Split(' ').First(), new Dictionary<Opc.Ua.NodeId, MonitoredItem>())
+            : base(Enum.Parse<SubscriptionName>(oldSubscription.DisplayName.Split(' ').First()), new Dictionary<Opc.Ua.NodeId, MonitoredItem>())
         {
             this.oldSubscription = oldSubscription;
         }
@@ -29,6 +29,7 @@ namespace Cognite.OpcUa.Subscriptions
             // If the session is currently unset, we will recreate all subscriptions eventually,
             // so no point to doing it now.
             if (session == null) return false;
+            if (!oldSubscription.PublishingStopped) return false;
             if (!session.Subscriptions.Any(s => s.Id == oldSubscription.Id)) return false;
             try
             {
@@ -51,8 +52,6 @@ namespace Cognite.OpcUa.Subscriptions
                 return false;
             }
 
-            if (!oldSubscription.PublishingStopped) return false;
-
             return true;
         }
 
@@ -62,6 +61,18 @@ namespace Cognite.OpcUa.Subscriptions
 
             // Should never be the case, but if it is we should just skip doing this.
             if (session == null) return;
+
+            var subState = subManager.Cache.GetSubscriptionState(SubscriptionName);
+            if (subState == null) return;
+            var diff = DateTime.UtcNow - subState.LastModifiedTime;
+            if (diff < TimeSpan.FromMilliseconds(oldSubscription.CurrentPublishingInterval * 4))
+            {
+                logger.LogWarning("Subscription was updated {Time} ago. Waiting until 4 * publishing interval has passed before recreating",
+                    diff);
+                await Task.Delay(diff, token);
+            }
+
+            if (!oldSubscription.PublishingStopped) return;
 
             try
             {

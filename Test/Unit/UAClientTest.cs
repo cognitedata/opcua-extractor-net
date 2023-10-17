@@ -90,7 +90,7 @@ namespace Test.Unit
             await Provider.DisposeAsync();
         }
 
-        public async Task RemoveSubscription(string name)
+        public async Task RemoveSubscription(SubscriptionName name)
         {
             if (TryGetSubscription(name, out var subscription) && subscription!.Created)
             {
@@ -109,10 +109,10 @@ namespace Test.Unit
             }
         }
 
-        public bool TryGetSubscription(string name, out Subscription subscription)
+        public bool TryGetSubscription(SubscriptionName name, out Subscription subscription)
         {
             subscription = Client.SessionManager?.Session?.Subscriptions?.FirstOrDefault(sub =>
-                sub.DisplayName.StartsWith(name, StringComparison.InvariantCulture));
+                sub.DisplayName.StartsWith(name.Name(), StringComparison.InvariantCulture));
             return subscription != null;
         }
     }
@@ -1032,7 +1032,7 @@ namespace Test.Unit
             }
             finally
             {
-                await tester.RemoveSubscription("DataChangeListener");
+                await tester.RemoveSubscription(SubscriptionName.DataPoints);
                 foreach (var node in nodes)
                 {
                     tester.Server.UpdateNode(node.SourceId, null);
@@ -1136,7 +1136,7 @@ namespace Test.Unit
             }
             finally
             {
-                await tester.RemoveSubscription("DataChangeListener");
+                await tester.RemoveSubscription(SubscriptionName.DataPoints);
                 tester.Server.WipeHistory(tester.Server.Ids.Custom.Array, new double[] { 0, 0, 0, 0 });
                 tester.Server.WipeHistory(tester.Server.Ids.Custom.MysteryVar, null);
                 tester.Server.WipeHistory(tester.Server.Ids.Base.StringVar, null);
@@ -1193,7 +1193,7 @@ namespace Test.Unit
             {
                 tester.Config.Source.SubscriptionChunk = 1000;
                 tester.Config.Events.Enabled = false;
-                await tester.RemoveSubscription("EventListener");
+                await tester.RemoveSubscription(SubscriptionName.Events);
                 tester.Server.WipeEventHistory();
             }
         }
@@ -1235,7 +1235,7 @@ namespace Test.Unit
                 tester.Config.Source.SubscriptionChunk = 1000;
                 tester.Config.Events.Enabled = false;
                 tester.Config.Events.EventIds = null;
-                await tester.RemoveSubscription("EventListener");
+                await tester.RemoveSubscription(SubscriptionName.Events);
                 tester.Server.WipeEventHistory();
             }
 
@@ -1272,7 +1272,7 @@ namespace Test.Unit
             finally
             {
                 tester.Server.SetEventConfig(false, true, false);
-                await tester.RemoveSubscription("AuditListener");
+                await tester.RemoveSubscription(SubscriptionName.Audit);
             }
         }
         #endregion
@@ -1379,7 +1379,7 @@ namespace Test.Unit
 
             await TestUtils.WaitForCondition(() => CommonTestUtils.GetMetricValue("opcua_node_CurrentSessionCount") >= 1, 20);
 
-            await tester.RemoveSubscription("NodeMetrics");
+            await tester.RemoveSubscription(SubscriptionName.NodeMetrics);
             tester.Server.SetDiagnosticsEnabled(false);
             tester.Config.Metrics.Nodes = null;
         }
@@ -1413,7 +1413,7 @@ namespace Test.Unit
 
             tester.Server.UpdateNode(ids.DoubleVar1, 0);
             tester.Server.UpdateNode(ids.DoubleVar2, 0);
-            await tester.RemoveSubscription("NodeMetrics");
+            await tester.RemoveSubscription(SubscriptionName.NodeMetrics);
             tester.Config.Metrics.Nodes = null;
         }
         #endregion
