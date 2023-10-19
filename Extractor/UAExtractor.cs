@@ -162,6 +162,7 @@ namespace Cognite.OpcUa
                 rebrowseTriggerManager = new RebrowseTriggerManager(
                     provider.GetRequiredService<ILogger<RebrowseTriggerManager>>(),
                     uaClient, config.Extraction.RebrowseTriggers,
+                    config.StateStorage.NamespacePublicationDateStore,
                     this
                 );
             }
