@@ -105,7 +105,7 @@ namespace Cognite.OpcUa
 
         public bool AllowUpdateState =>
             !Config.Source.Redundancy.MonitorServiceLevel
-            && uaClient.SessionManager.CurrentServiceLevel >= Config.Source.Redundancy.ServiceLevelThreshold;
+            || uaClient.SessionManager.CurrentServiceLevel >= Config.Source.Redundancy.ServiceLevelThreshold;
 
         /// <summary>
         /// Construct extractor with list of pushers

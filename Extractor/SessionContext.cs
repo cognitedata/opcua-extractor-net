@@ -38,7 +38,6 @@ namespace Cognite.OpcUa
             SystemContext = new DummySystemContext(NamespaceTable);
             this.config = config;
             this.log = log;
-            InitNodeOverrides();
         }
 
         private void InitNodeOverrides()
@@ -59,6 +58,7 @@ namespace Cognite.OpcUa
             {
                 NamespaceTable.GetIndexOrAppend(ns);
             }
+            InitNodeOverrides();
         }
 
         public void UpdateFromSession(ISession session)
@@ -66,6 +66,7 @@ namespace Cognite.OpcUa
             MessageContext = session.MessageContext;
             SystemContext = session.SystemContext;
             NamespaceTable = session.NamespaceUris;
+            InitNodeOverrides();
         }
 
         /// <summary>
