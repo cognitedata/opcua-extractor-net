@@ -106,7 +106,7 @@ namespace Cognite.OpcUa.Config
                         ToolUtil.GetSimpleListWriterHandler(dps, states.ToDictionary(state => state.SourceId), this, log, true),
                         states.Take(chunkSize));
 
-                    await ToolUtil.RunWithTimeout(task.Run(log, SessionManager!, Config, SubscriptionManager!, token), 120);
+                    await ToolUtil.RunWithTimeout(task.Run(log, SessionManager, Config, SubscriptionManager!, token), 120);
                     baseConfig.Source.SubscriptionChunk = chunkSize;
                     failed = false;
                     break;

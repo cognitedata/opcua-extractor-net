@@ -208,7 +208,8 @@ namespace Test.Unit
                 { "Test1", new NodeId("test").ToProtoNodeId(tester.Client) },
                 { "Test2", new NodeId("test2", 2).ToProtoNodeId(tester.Client) }
             };
-            var ctx = new SessionContext(tester.Client.SessionManager.Session, tester.Config, tester.Log);
+            var ctx = new SessionContext(tester.Config, tester.Log);
+            ctx.UpdateFromSession(tester.Client.SessionManager.Session);
 
             Assert.Equal("Test1", ctx.GetUniqueId(new NodeId("test")));
             Assert.Equal("Test2", ctx.GetUniqueId(new NodeId("test2", 2)));

@@ -19,7 +19,6 @@ using Cognite.Extractor.Common;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.Nodes;
-using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.Subscriptions;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
@@ -35,7 +34,6 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Browser = Cognite.OpcUa.Browse.Browser;
@@ -48,7 +46,7 @@ namespace Cognite.OpcUa
     public class UAClient : IDisposable, IUAClientAccess
     {
         protected FullConfig Config { get; set; }
-        protected ISession? Session => SessionManager?.Session;
+        protected ISession? Session => SessionManager.Session;
         protected ApplicationConfiguration? AppConfig { get; set; }
         public TypeManager TypeManager { get; }
         public SubscriptionManager? SubscriptionManager { get; private set; }
@@ -74,7 +72,7 @@ namespace Cognite.OpcUa
 
         private readonly NodeMetricsManager? metricsManager;
 
-        public SessionManager? SessionManager { get; private set; }
+        public SessionManager SessionManager { get; }
 
         private readonly ILogger<UAClient> log;
         private readonly ILogger<Tracing> traceLog;
@@ -83,8 +81,7 @@ namespace Cognite.OpcUa
         public StringConverter StringConverter { get; }
         public Browser Browser { get; }
 
-        private SessionContext? overrideContext;
-        public SessionContext? Context => SessionManager?.Context ?? overrideContext;
+        public SessionContext Context => SessionManager.Context;
 
         /// <summary>
         /// Constructor, does not start the client.
@@ -102,6 +99,7 @@ namespace Cognite.OpcUa
             StringConverter = new StringConverter(provider.GetRequiredService<ILogger<StringConverter>>(), this, config);
             Browser = new Browser(provider.GetRequiredService<ILogger<Browser>>(), this, config);
             TypeManager = new TypeManager(config, this, provider.GetRequiredService<ILogger<TypeManager>>());
+            SessionManager = new SessionManager(Config, this, provider.GetRequiredService<ILogger<SessionManager>>());
         }
         #region Session management
         /// <summary>
@@ -121,10 +119,7 @@ namespace Cognite.OpcUa
         {
             try
             {
-                if (SessionManager != null)
-                {
-                    await SessionManager.Close(token);
-                }
+                await SessionManager.Close(token);
             }
             finally
             {
@@ -159,7 +154,7 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Load XML configuration file, override certain fields with environment variables if set.
         /// </summary>
-        protected async Task LoadAppConfig()
+        protected async Task<ApplicationConfiguration> LoadAppConfig()
         {
             var application = new ApplicationInstance
             {
@@ -223,6 +218,8 @@ namespace Cognite.OpcUa
             LogDump("Configuration", AppConfig);
 
             ConfigureUtilsTrace();
+
+            return AppConfig;
         }
 
         /// <summary>
@@ -234,16 +231,9 @@ namespace Cognite.OpcUa
 
             // A restarted Session might mean a restarted server, so all server-relevant data must be cleared.
             // This includes any stored NodeId, which may refer to an outdated namespaceIndex
-            await LoadAppConfig();
+            var appConfig = await LoadAppConfig();
 
-            if (SessionManager == null)
-            {
-                SessionManager = new SessionManager(Config, this, AppConfig!, log, liveToken, timeout);
-            }
-            else
-            {
-                SessionManager.Timeout = timeout;
-            }
+            SessionManager.Initialize(appConfig, liveToken, timeout);
 
             if (SubscriptionManager == null)
             {
@@ -796,14 +786,14 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Return systemContext. Can be used by SDK-tools for converting events.
         /// </summary>
-        public ISystemContext? SystemContext => Context?.SystemContext;
+        public ISystemContext SystemContext => Context.SystemContext;
 
-        public NamespaceTable? NamespaceTable => Context?.NamespaceTable;
+        public NamespaceTable NamespaceTable => Context.NamespaceTable;
 
         /// <summary>
         /// Return MessageContext, used for serialization
         /// </summary>
-        public IServiceMessageContext? MessageContext => Context?.MessageContext;
+        public IServiceMessageContext MessageContext => Context.MessageContext;
         /// <summary>
         /// Constructs a filter from the given list of permitted eventids, the already constructed field map and an optional receivedAfter property.
         /// </summary>
@@ -870,15 +860,7 @@ namespace Cognite.OpcUa
 
         public void AddExternalNamespaces(string[] table)
         {
-            if (SessionManager == null)
-            {
-                overrideContext = new SessionContext(Config, log);
-                overrideContext.AddExternalNamespaces(table);
-            }
-            else
-            {
-                SessionManager.RegisterExternalNamespaces(table);
-            }
+            SessionManager.RegisterExternalNamespaces(table);
         }
 
         /// <summary>
@@ -914,22 +896,16 @@ namespace Cognite.OpcUa
 
         public string? GetUniqueId(ExpandedNodeId id, int index = -1)
         {
-            if (Context == null) throw new InvalidOperationException("Attempt to get unique ID without session context");
-
             return Context.GetUniqueId(id, index);
         }
 
         public string GetRelationshipId(UAReference reference)
         {
-            if (Context == null) throw new InvalidOperationException("Attempt to get relationship ID without session context");
-
             return Context.GetRelationshipId(reference);
         }
 
         public NodeId ToNodeId(ExpandedNodeId id)
         {
-            if (Context == null) throw new InvalidOperationException("Attempt to convert node ID without session context");
-
             return Context.ToNodeId(id);
         }
 
@@ -955,7 +931,7 @@ namespace Cognite.OpcUa
                 AppConfig.CertificateValidator.CertificateValidation -= CertificateValidationHandler;
             }
             subscriptionSem.Dispose();
-            SessionManager?.Dispose();
+            SessionManager.Dispose();
         }
         #endregion
     }

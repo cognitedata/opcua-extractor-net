@@ -102,7 +102,7 @@ namespace Cognite.OpcUa.Config
             var whitelist = new HashSet<NodeId>();
             foreach (var proto in EventIds)
             {
-                var id = proto.ToNodeId(context!);
+                var id = proto.ToNodeId(context);
                 if (id.IsNullNodeId)
                 {
                     logger.LogWarning("Failed to convert event id {Namespace} {Id} to NodeId", proto.NamespaceUri, proto.NodeId);
@@ -121,7 +121,7 @@ namespace Cognite.OpcUa.Config
             var ids = new HashSet<NodeId>();
             foreach (var proto in EmitterIds)
             {
-                var id = proto.ToNodeId(context!);
+                var id = proto.ToNodeId(context);
                 if (id.IsNullNodeId)
                 {
                     logger.LogWarning("Failed to convert emitter id {Namespace} {Id} to NodeId", proto.NamespaceUri, proto.NodeId);

@@ -175,7 +175,7 @@ namespace Cognite.OpcUa.Types
             else if (value is DataValue dv) return ConvertToString(dv.WrappedValue, enumValues, null, mode);
             else if (value is ExpandedNodeId expandedNodeId)
             {
-                if (context != null && uaClient != null && uaClient.Context != null)
+                if (context != null && uaClient != null)
                 {
                     returnStr = context.NodeIdToString(uaClient.Context.ToNodeId(expandedNodeId));
                 }
@@ -339,7 +339,7 @@ namespace Cognite.OpcUa.Types
         private readonly NodeIdConverter? nodeIdConverter;
         public void AddConverters(JsonSerializerOptions options, ConverterType type)
         {
-            if (config == null || uaClient == null || nodeIdConverter == null || uaClient.Context == null)
+            if (config == null || uaClient == null || nodeIdConverter == null)
                 throw new InvalidOperationException("Config and UAClient must be supplied to create converters");
             options.Converters.Add(converters.GetOrAdd(type, key => new NodeSerializer(this, config, uaClient.Context, key, log)));
             options.Converters.Add(nodeIdConverter);

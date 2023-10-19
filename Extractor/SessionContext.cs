@@ -29,18 +29,6 @@ namespace Cognite.OpcUa
         private readonly Dictionary<NodeId, string> nodeOverrides = new();
         private readonly Dictionary<ushort, string> nsPrefixMap = new();
 
-        public SessionContext(ISession session, FullConfig config, ILogger log)
-        {
-            MessageContext = session.MessageContext;
-            SystemContext = session.SystemContext;
-            NamespaceTable = session.NamespaceUris ?? new NamespaceTable(new[] {
-                "http://opcfoundation.org/UA/"
-            });
-            this.config = config;
-            this.log = log;
-            InitNodeOverrides();
-        }
-
         public SessionContext(FullConfig config, ILogger log)
         {
             NamespaceTable = new NamespaceTable(new[] {
@@ -73,6 +61,13 @@ namespace Cognite.OpcUa
             }
         }
 
+        public void UpdateFromSession(ISession session)
+        {
+            MessageContext = session.MessageContext;
+            SystemContext = session.SystemContext;
+            NamespaceTable = session.NamespaceUris;
+        }
+
         /// <summary>
         /// Converts an ExpandedNodeId into a NodeId using the Session
         /// </summary>
@@ -82,16 +77,6 @@ namespace Cognite.OpcUa
         {
             if (nodeid == null || nodeid.IsNull || NamespaceTable == null) return NodeId.Null;
             return ExpandedNodeId.ToNodeId(nodeid, NamespaceTable);
-        }
-
-        public void OverrideMessageContext(IServiceMessageContext context)
-        {
-            MessageContext = context;
-        }
-
-        public void OverrideNamespaceTable(NamespaceTable namespaceTable)
-        {
-            NamespaceTable = namespaceTable;
         }
 
         public NodeId ToNodeId(string? identifier, string? namespaceUri)

@@ -177,10 +177,8 @@ namespace Cognite.OpcUa.Nodes
             }
         }
 
-        public virtual string? GetUniqueId(SessionContext? context)
+        public virtual string? GetUniqueId(SessionContext context)
         {
-            if (context == null) throw new InvalidOperationException("Attempt to get unique ID without initialized client");
-
             return context.GetUniqueId(Id);
         }
 
@@ -477,7 +475,7 @@ namespace Cognite.OpcUa.Nodes
             Dictionary<string, string>? metaMap,
             AssetCreate asset)
         {
-            var id = GetUniqueId(client.Context!);
+            var id = GetUniqueId(client.Context);
             asset.Description = Attributes.Description;
             asset.ExternalId = id;
             asset.Name = string.IsNullOrEmpty(Name) ? id : Name;
@@ -570,7 +568,7 @@ namespace Cognite.OpcUa.Nodes
             Dictionary<string, string>? extras = null;
             if (getExtras)
             {
-                extras = GetExtraMetadata(config, client.Context!, client.StringConverter);
+                extras = GetExtraMetadata(config, client.Context, client.StringConverter);
             }
             return BuildMetadataBase(extras, client);
         }

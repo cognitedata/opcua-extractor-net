@@ -112,7 +112,7 @@ namespace Cognite.OpcUa
             {
                 foreach (var proto in config.OtherMetrics)
                 {
-                    nodes.Add(proto.ToNodeId(client.Context!));
+                    nodes.Add(proto.ToNodeId(client.Context));
                 }
             }
 

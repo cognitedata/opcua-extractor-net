@@ -66,7 +66,7 @@ namespace Cognite.OpcUa
         public NamespaceTable? NamespaceTable => uaClient.NamespaceTable;
 
         public TypeManager TypeManager => uaClient.TypeManager;
-        public SessionContext? Context => uaClient.Context;
+        public SessionContext Context => uaClient.Context;
 
         private NodeSetNodeSource? nodeSetSource;
 
@@ -105,7 +105,6 @@ namespace Cognite.OpcUa
 
         public bool AllowUpdateState =>
             !Config.Source.Redundancy.MonitorServiceLevel
-            || uaClient.SessionManager != null
             && uaClient.SessionManager.CurrentServiceLevel >= Config.Source.Redundancy.ServiceLevelThreshold;
 
         /// <summary>
@@ -723,7 +722,7 @@ namespace Cognite.OpcUa
                 await rebrowseTriggerManager.EnableCustomServerSubscriptions(Source.Token);
             }
 
-            if (Config.Source.Redundancy.MonitorServiceLevel && uaClient.SessionManager != null)
+            if (Config.Source.Redundancy.MonitorServiceLevel)
             {
                 uaClient.SessionManager.EnsureServiceLevelSubscription();
             }
@@ -811,8 +810,6 @@ namespace Cognite.OpcUa
         /// </summary>
         private async Task ConfigureExtractor()
         {
-            if (uaClient.Context == null) throw new InvalidOperationException("Missing client context");
-
             RootNodes = Config.Extraction.GetRootNodes(uaClient.Context, log);
 
             foreach (var state in State.NodeStates)
@@ -1292,6 +1289,6 @@ namespace Cognite.OpcUa
         StringConverter StringConverter { get; }
         string GetRelationshipId(UAReference reference);
         NamespaceTable? NamespaceTable { get; }
-        public SessionContext? Context { get; }
+        public SessionContext Context { get; }
     }
 }
