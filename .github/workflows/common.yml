@@ -146,6 +146,7 @@ jobs:
 
           - name: Upload artifacts
             uses: actions/upload-artifact@v3
+            if: ${{ needs.prerequisites.outputs.should-release == 0 && needs.prerequisites.outputs.branch == 'master' }}
             with:
                 name: installer
                 path: .\OpcUaExtractorSetup-${{ needs.prerequisites.outputs.version }}.msi
@@ -201,6 +202,7 @@ jobs:
           - run: ./build-zip-server.sh linux-x64 true ${{ needs.prerequisites.outputs.version }}
 
           - name: Move artifacts to separate folder
+            if: ${{ needs.prerequisites.outputs.should-release == 0 && needs.prerequisites.outputs.branch == 'master' }}
             run: |
               mkdir artifacts
               mv ./opcua-extractor.win-x64.${{ needs.prerequisites.outputs.version }}.zip artifacts/
@@ -214,6 +216,7 @@ jobs:
 
           - name: Upload artifacts
             uses: actions/upload-artifact@v3
+            if: ${{ needs.prerequisites.outputs.should-release == 0 && needs.prerequisites.outputs.branch == 'master' }}
             with:
               name: linux-artifacts
               path: artifacts/
@@ -255,7 +258,7 @@ jobs:
             docker tag ${{ steps.image_tags.outputs.bridge }} ${{ steps.image_tags.outputs.bridge_dockerhub }}
 
         - name: Push images
-          if: ${{ needs.common.outputs.should-release == 0 && needs.prerequisites.outputs.branch == 'master' }}
+          if: ${{ needs.prerequisites.outputs.should-release == 0 && needs.prerequisites.outputs.branch == 'master' }}
           run: |
             echo "Images being pushed as ${{ steps.image_tags.outputs.extractor }}, ${{ steps.image_tags.outputs.bridge }}"
             echo ${{ secrets.COGNITE_REGISTRY_KEY }} | base64 -d | docker login -u _json_key --password-stdin https://eu.gcr.io
@@ -263,14 +266,14 @@ jobs:
             docker push ${{ steps.image_tags.outputs.bridge }}
 
         - name: "Log in to the Dockerhub"
-          if: ${{ needs.common.outputs.should-release == 0 && needs.prerequisites.outputs.branch == 'master' }}
+          if: ${{ needs.prerequisites.outputs.should-release == 0 && needs.prerequisites.outputs.branch == 'master' }}
           uses: docker/login-action@v3
           with:
             username: ${{ secrets.DOCKERHUB_USER }}
             password: ${{ secrets.DOCKERHUB_ACCESS_TOKEN }}
 
         - name: Push images dockerhub
-          if: ${{ needs.common.outputs.should-release == 0 && needs.prerequisites.outputs.branch == 'master' }}
+          if: ${{ needs.prerequisites.outputs.should-release == 0 && needs.prerequisites.outputs.branch == 'master' }}
           run: |
             echo "Images being pushed as ${{ steps.image_tags.outputs.extractor_dockerhub }}, ${{ steps.image_tags.outputs.bridge_dockerhub }}"
             docker push ${{ steps.image_tags.outputs.extractor_dockerhub }}
