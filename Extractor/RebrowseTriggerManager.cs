@@ -45,7 +45,7 @@ namespace Cognite.OpcUa
             ILogger<RebrowseTriggerManager> logger,
             UAClient uaClient,
             RebrowseTriggersConfig config,
-            string variableStore,
+            string namespacePublicationDateStore,
             UAExtractor extractor
         )
         {
@@ -53,7 +53,7 @@ namespace Cognite.OpcUa
             _uaClient = uaClient;
             _config = config;
             _extractor = extractor;
-            _npdStore = variableStore;
+            _npdStore = namespacePublicationDateStore;
         }
 
         public async Task EnableCustomServerSubscriptions(CancellationToken token)
@@ -165,13 +165,13 @@ namespace Cognite.OpcUa
                     var shouldRebrowse = EvaluateTimestampFor(item.DisplayName, valueTime);
                     if (shouldRebrowse)
                     {
-                        Task.Run(async () => await UpdateTimestampFor(item.DisplayName, valueTime, token));
                         logger.LogInformation(
                             "Triggering a rebrowse due to a change in the value of {NodeId} to {Value}",
                             item.ResolvedNodeId,
                             valueTime
                         );
                         _extractor.Looper.QueueRebrowse();
+                        Task.Run(async () => await UpdateTimestampFor(item.DisplayName, valueTime, token));
                     }
                     else
                     {
