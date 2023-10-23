@@ -33,6 +33,7 @@ using CogniteSdk;
 using System.Text.Json.Serialization;
 using Cognite.Extensions.DataModels;
 using System.Text.Json.Nodes;
+using System.ComponentModel.Design;
 
 namespace Cognite.OpcUa.Pushers.FDM
 {
@@ -177,13 +178,13 @@ namespace Cognite.OpcUa.Pushers.FDM
 
         private IEnumerable<BaseUANode> GetModellingRules()
         {
-            var typeDef = Extractor.TypeManager.GetObjectType(ObjectTypeIds.ModellingRuleType);
+            var mgr = Extractor.TypeManager;
             return new BaseUANode[] {
-                new UAObject(ObjectIds.ModellingRule_Mandatory, "Mandatory", "Mandatory", null, NodeId.Null, typeDef),
-                new UAObject(ObjectIds.ModellingRule_Optional, "Optional", "Optional", null, NodeId.Null, typeDef),
-                new UAObject(ObjectIds.ModellingRule_MandatoryPlaceholder, "MandatoryPlaceholder", "MandatoryPlaceholder", null, NodeId.Null, typeDef),
-                new UAObject(ObjectIds.ModellingRule_OptionalPlaceholder, "OptionalPlaceholder", "OptionalPlaceholder", null, NodeId.Null, typeDef),
-                new UAObject(ObjectIds.ModellingRule_ExposesItsArray, "ExposesItsArray", "ExposesItsArray", null, NodeId.Null, typeDef),
+                mgr.GetModellingRule(ObjectIds.ModellingRule_Mandatory, "Mandatory"),
+                mgr.GetModellingRule(ObjectIds.ModellingRule_Optional, "Optional"),
+                mgr.GetModellingRule(ObjectIds.ModellingRule_MandatoryPlaceholder, "MandatoryPlaceholder"),
+                mgr.GetModellingRule(ObjectIds.ModellingRule_OptionalPlaceholder, "OptionalPlaceholder"),
+                mgr.GetModellingRule(ObjectIds.ModellingRule_ExposesItsArray, "ExposesItsArray")
             };
         }
 
@@ -199,68 +200,91 @@ namespace Cognite.OpcUa.Pushers.FDM
 
             var converter = new DMSValueConverter(client.StringConverter, instSpace);
             var builder = new TypeHierarchyBuilder(log, converter, config, context);
+
             // First, collect all nodes, including properties.
             var nodes = objects
                 .SelectMany(obj => obj.GetAllProperties())
                 .Concat(objects)
                 .Concat(variables.SelectMany(variable => variable.GetAllProperties()))
                 .Concat(variables)
-                .Concat(GetModellingRules())
-                // This has the additional effect of deduplicating array variables
-                // Which means we get a single node referencing a non-existing timeseries (missing array indexer)
-                // which is currently fine, but might be problematic in the future.
-                .DistinctBy(node => node.Id)
-                .Where(node => node.Id != null && !node.Id.IsNullNodeId)
                 .ToList();
 
+            // Hierarchy of all known type-hierarchy nodes
+            var typeHierarchy = new NodeHierarchy(Extractor.TypeManager.References, Extractor.TypeManager.NodeMap);
 
-            var nodeHierarchy = new NodeHierarchy(references, nodes);
+            // We also need to collect any types, and any nodes referenced by those types.
+            var typeCollector = new NodeTypeCollector(log,
+                nodes.SelectNonNull(n => n.TypeDefinition).Where(id => !id.IsNullNodeId).ToHashSet(),
+                typeHierarchy);
+
+            var typeResult = typeCollector.MapTypes();
+
+            nodes.AddRange(typeResult.MappedNodes.Values);
+            references = references.Concat(typeResult.MappedReferences);
+
+            // Collect any data types and reference types
+            var simpleTypeCollector = new SimpleTypeCollector(log, nodes, references, typeHierarchy);
+            var simpleTypeResult = simpleTypeCollector.CollectReferencedTypes();
+
+            nodes.AddRange(simpleTypeResult.MappedNodes.Values);
+            references = references.Concat(simpleTypeResult.MappedReferences).ToList();
+
+            nodes = nodes.DistinctBy(n => n.Id).Where(node => node.Id != null && !node.Id.IsNullNodeId).ToList();
 
             var finalReferences = new List<UAReference>();
             var nodeIds = nodes.Select(node => node.Id).ToHashSet();
 
             // Iterate over references and identify any that are missing source or target nodes
-            // Some servers are not in the node hierarchy, we currently don't map those, but we might in the future.
+            // Some servers have nodes that are not in the node hierarchy, we currently don't map those,
+            // but we might in the future.
             var skipped = new HashSet<NodeId>();
+            int skippedCount = 0;
+            log.LogInformation("Filtering {Count} references, removing any non-referenced", references.Count());
             foreach (var refr in references)
             {
-                if (!refr.IsForward) continue;
+                if (!refr.IsForward)
+                {
+                    log.LogTrace("Reference from {S} to {T} is inverse",
+                        refr.Source.Id, refr.Target.Id);
+                    skippedCount++;
+                    continue;
+                }
 
                 if (!nodeIds.Contains(refr.Source.Id))
                 {
                     log.LogTrace("Missing source node {Node} ({Target})", refr.Source.Id, refr.Target.Id);
                     skipped.Add(refr.Source.Id);
+                    skippedCount++;
                     continue;
                 }
                 if (!nodeIds.Contains(refr.Target.Id))
                 {
                     log.LogTrace("Missing target node {Node} ({Source})", refr.Target.Id, refr.Source.Id);
                     skipped.Add(refr.Target.Id);
+                    skippedCount++;
                     continue;
                 }
                 if (!nodeIds.Contains(refr.Type?.Id ?? NodeId.Null))
                 {
                     log.LogTrace("Missing type {Node} ({Source}, {Target})", refr.Type?.Id ?? NodeId.Null, refr.Source.Id, refr.Target.Id);
                     skipped.Add(refr.Type?.Id ?? NodeId.Null);
+                    skippedCount++;
                     continue;
                 }
 
                 finalReferences.Add(refr);
             }
 
-            if (skipped.Count > 0) log.LogWarning("Skipped {Count} references due to missing type, source, or target. This may not be an issue, as servers often have nodes outside the main hierarchy", skipped.Count);
+            var nodeHierarchy = new NodeHierarchy(finalReferences, nodes);
+
+
+            if (skipped.Count > 0) log.LogWarning("Skipped {Count} references due to missing type, source, or target. " +
+                "This may not be an issue, as servers often have nodes outside the main hierarchy. " +
+                "{Count2} distinct nodes were missing.", skippedCount, skipped.Count);
 
             log.LogInformation("Mapped out {Nodes} nodes and {Edges} edges to write to PG3", nodes.Count, finalReferences.Count);
 
-            // Run the node filter unless we are writing everything.
-            if (config.Cognite!.MetadataTargets!.DataModels!.ExcludeNonReferenced)
-            {
-                var trimmer = new NodeTrimmer(nodeHierarchy, config, log);
-                nodeHierarchy = trimmer.Filter();
-                log.LogInformation("After filtering {Nodes} nodes are left", nodeHierarchy.NodeMap.Count);
-            }
-
-            var types = builder.ConstructTypes(nodeHierarchy);
+            var types = builder.ConstructTypes(typeResult.Types);
 
             // Initialize if needed
             await Initialize(types, token);

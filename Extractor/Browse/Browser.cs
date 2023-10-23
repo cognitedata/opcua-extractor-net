@@ -146,11 +146,16 @@ namespace Cognite.OpcUa.Browse
                 roots[id] = refd;
             }
 
-            if (config.Extraction.NodeTypes.Metadata)
+            try
             {
-                try
+                var toBrowseForTypeDef = roots.Values
+                    .Where(r => r.NodeClass == NodeClass.Object || r.NodeClass == NodeClass.Variable)
+                    .Select(r => uaClient.ToNodeId(r.NodeId))
+                    .ToList();
+
+                if (toBrowseForTypeDef.Any())
                 {
-                    var nodes = ids.Select(id => new BrowseNode(id)).ToDictionary(node => node.Id);
+                    var nodes = toBrowseForTypeDef.Select(id => new BrowseNode(id)).ToDictionary(node => node.Id);
 
                     await uaClient.GetReferences(new BrowseParams
                     {
@@ -169,10 +174,10 @@ namespace Cognite.OpcUa.Browse
                         }
                     }
                 }
-                catch (Exception ex)
-                {
-                    throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.ReadRootNode);
-                }
+            }
+            catch (Exception ex)
+            {
+                throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.ReadRootNode);
             }
 
             return roots.Values;

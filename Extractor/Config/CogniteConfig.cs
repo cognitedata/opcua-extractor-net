@@ -226,22 +226,9 @@ namespace Cognite.OpcUa.Config
         public bool Enabled { get; set; }
 
         /// <summary>
-        /// Exclude any nodes that are not somehow referenced by a custom node.
-        /// The following node types are included:
-        /// Custom nodes
-        /// Nodes referenced non-hierarchically by any other included node, recursively.
-        /// Ancestors of any included node.
-        /// 
-        /// This is all applied recursively meaning that the excluded nodes are generally:
-        /// Unused reference types
-        /// Unused object types
-        /// Unused variable types
-        /// Children of unused types
-        /// </summary>
-        public bool ExcludeNonReferenced { get; set; }
-
-        /// <summary>
         /// Enum for which types to map to FDM
+        /// 
+        /// TODO: Currently does nothing
         /// </summary>
         public TypesToMap TypesToMap { get; set; } = TypesToMap.Custom;
 
