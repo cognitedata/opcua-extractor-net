@@ -60,6 +60,12 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.21.2":
+    description: Reliability improvements
+    changelog:
+      fixed:
+        - Fixed bug causing extractor to crash if connection failed while creating extractor.
+        - Fixed issue causing extractor to fail to load data from CDF if connection to the server was lost.
   "2.21.1":
     description: Retry on more status codes
     changelog:

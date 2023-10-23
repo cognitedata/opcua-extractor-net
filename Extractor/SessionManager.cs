@@ -14,13 +14,16 @@ using Metrics = Prometheus.Metrics;
 
 namespace Cognite.OpcUa
 {
+
     public class SessionManager : IDisposable
     {
-        private SourceConfig config;
-        private UAClient client;
+        private readonly SourceConfig config;
+        private readonly FullConfig fullConfig;
+        private readonly UAClient client;
         private ReverseConnectManager? reverseConnectManager;
         private SessionReconnectHandler? reconnectHandler;
-        private ApplicationConfiguration appConfig;
+        // Initialized late, will be non-null after Initialize is called.
+        private ApplicationConfiguration appConfig = null!;
         private ILogger log;
 
         public byte CurrentServiceLevel { get; private set; } = 255;
@@ -28,9 +31,9 @@ namespace Cognite.OpcUa
         private readonly SemaphoreSlim redundancyReconnectLock = new SemaphoreSlim(1);
 
         private ISession? session;
-        private readonly CancellationToken liveToken;
+        private CancellationToken liveToken;
         private bool disposedValue;
-        public int Timeout { get; set; }
+        private int timeout;
 
         private static readonly Counter connects = Metrics
             .CreateCounter("opcua_connects", "Number of times the client has connected to and mapped the opcua server");
@@ -44,15 +47,16 @@ namespace Cognite.OpcUa
         private int sessionWaiters = 0;
         private readonly object sessionWaitExtLock = new();
 
+        public SessionContext Context { get; }
 
-        public SessionManager(SourceConfig config, UAClient parent, ApplicationConfiguration appConfig, ILogger log, CancellationToken token, int timeout = -1)
+
+        public SessionManager(FullConfig config, UAClient parent, ILogger log)
         {
             client = parent;
-            this.config = config;
-            this.appConfig = appConfig;
+            this.config = config.Source;
+            fullConfig = config;
             this.log = log;
-            liveToken = token;
-            Timeout = timeout;
+            Context = new SessionContext(config, log);
         }
 
         public async Task<ISession> WaitForSession()
@@ -68,6 +72,14 @@ namespace Cognite.OpcUa
                 throw new ExtractorFailureException("Session does not exist after waiting, extractor is unable to continue");
             }
             return session;
+        }
+
+        public void RegisterExternalNamespaces(string[] table)
+        {
+            lock (sessionWaitExtLock)
+            {
+                Context.AddExternalNamespaces(table);
+            }
         }
 
         private async Task TryWithBackoff(Func<Task> method, int maxBackoff, CancellationToken token)
@@ -88,7 +100,7 @@ namespace Cognite.OpcUa
                     iter = Math.Min(iter, maxBackoff);
                     backoff = TimeSpan.FromSeconds(Math.Pow(2, iter));
 
-                    if (Timeout >= 0 && (DateTime.UtcNow - start).TotalSeconds > Timeout)
+                    if (timeout >= 0 && (DateTime.UtcNow - start).TotalSeconds > timeout)
                     {
                         throw;
                     }
@@ -109,11 +121,19 @@ namespace Cognite.OpcUa
             lock (sessionWaitExtLock)
             {
                 this.session = session;
-                for (;sessionWaiters > 0; sessionWaiters--)
+                Context.UpdateFromSession(session);
+                for (; sessionWaiters > 0; sessionWaiters--)
                 {
                     sessionWaitLock.Release();
                 }
             }
+        }
+
+        public void Initialize(ApplicationConfiguration appConfig, CancellationToken token, int timeout)
+        {
+            liveToken = token;
+            this.timeout = timeout;
+            this.appConfig = appConfig;
         }
 
         public async Task Connect()

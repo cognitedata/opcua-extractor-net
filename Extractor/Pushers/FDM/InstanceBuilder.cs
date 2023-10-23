@@ -157,7 +157,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                     {
                         if (variable.IsArray)
                         {
-                            value = new RawPropertyValue<string[]>(variable.ArrayChildren.Select(v => v.GetUniqueId(client)!).ToArray());
+                            value = new RawPropertyValue<string[]>(variable.ArrayChildren.Select(v => v.GetUniqueId(client.Context)!).ToArray());
                         }
                         else
                         {

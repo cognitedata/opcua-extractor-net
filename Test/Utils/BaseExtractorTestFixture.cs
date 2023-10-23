@@ -120,7 +120,6 @@ namespace Test.Utils
         {
             if (clear)
             {
-                Client.ClearNodeOverrides();
                 RemoveSubscription(SubscriptionName.Events).Wait();
                 RemoveSubscription(SubscriptionName.DataPoints).Wait();
                 RemoveSubscription(SubscriptionName.Audit).Wait();
@@ -298,7 +297,7 @@ namespace Test.Utils
 
         public bool TryGetSubscription(SubscriptionName name, out Subscription subscription)
         {
-            subscription = Client.SessionManager?.Session?.Subscriptions?.FirstOrDefault(sub =>
+            subscription = Client.SessionManager.Session?.Subscriptions?.FirstOrDefault(sub =>
                 sub.DisplayName.StartsWith(name.Name(), StringComparison.InvariantCulture));
             return subscription != null;
         }
