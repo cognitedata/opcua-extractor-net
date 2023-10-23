@@ -229,8 +229,6 @@ namespace Cognite.OpcUa
         {
             if (Callbacks == null) throw new InvalidOperationException("Attempted to start UAClient without setting callbacks");
 
-            // A restarted Session might mean a restarted server, so all server-relevant data must be cleared.
-            // This includes any stored NodeId, which may refer to an outdated namespaceIndex
             var appConfig = await LoadAppConfig();
 
             SessionManager.Initialize(appConfig, liveToken, timeout);

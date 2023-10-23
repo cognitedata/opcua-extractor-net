@@ -532,10 +532,8 @@ namespace Cognite.OpcUa.Nodes
             TSParent = parent;
         }
 
-        public override string? GetUniqueId(SessionContext? context)
+        public override string? GetUniqueId(SessionContext context)
         {
-            if (context == null) throw new InvalidOperationException("Attempt to get unique ID without initialized client");
-
             return context.GetUniqueId(Id, Index);
         }
 
