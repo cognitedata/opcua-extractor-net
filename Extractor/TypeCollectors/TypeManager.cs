@@ -41,10 +41,10 @@ namespace Cognite.OpcUa.TypeCollectors
         private readonly FullConfig config;
         private readonly UAClient client;
 
-        private bool eventTypesRead = false;
-        private bool dataTypesRead = false;
-        private bool typeDefsRead = false;
-        private bool referenceTypesRead = false;
+        private bool eventTypesLoaded = false;
+        private bool dataTypesLoaded = false;
+        private bool typeDefsLoaded = false;
+        private bool referenceTypesLoaded = false;
 
         private readonly HashSet<NodeId> ignoreDataTypes = new();
         private readonly Dictionary<NodeId, ProtoDataType> customDataTypes = new();
@@ -110,10 +110,10 @@ namespace Cognite.OpcUa.TypeCollectors
 
         public void Reset()
         {
-            eventTypesRead = false;
-            dataTypesRead = false;
-            typeDefsRead = false;
-            referenceTypesRead = false;
+            eventTypesLoaded = false;
+            dataTypesLoaded = false;
+            typeDefsLoaded = false;
+            referenceTypesLoaded = false;
             NodeMap.Clear();
             NodeChildren.Clear();
             EventFields.Clear();
@@ -146,35 +146,35 @@ namespace Cognite.OpcUa.TypeCollectors
             bool loadReferences = false;
             var rootNodes = new List<NodeId>();
             var mask = (uint)NodeClass.Variable | (uint)NodeClass.Object;
-            if (config.Extraction.DataTypes.AutoIdentifyTypes && !dataTypesRead)
+            if (config.Extraction.DataTypes.AutoIdentifyTypes && !dataTypesLoaded)
             {
                 mask |= (uint)NodeClass.DataType;
                 rootNodes.Add(DataTypeIds.BaseDataType);
-                dataTypesRead = true;
+                dataTypesLoaded = true;
                 log.LogInformation("Loading data type hierarchy to map out custom data types");
             }
-            if (config.Events.Enabled && !eventTypesRead)
+            if (config.Events.Enabled && !eventTypesLoaded)
             {
                 mask |= (uint)NodeClass.ObjectType;
                 // Avoid adding the BaseEventType node if we are also adding the BaseObjectType node, since
                 // it's a parent. The browser doesn't really like if you have loops, though it will work.
                 if (!fdmEnabled) rootNodes.Add(ObjectTypeIds.BaseEventType);
-                eventTypesRead = true;
+                eventTypesLoaded = true;
                 log.LogInformation("Loading event type hierarchy");
             }
-            if ((fdmEnabled || config.Extraction.Relationships.Enabled) && !referenceTypesRead)
+            if ((fdmEnabled || config.Extraction.Relationships.Enabled) && !referenceTypesLoaded)
             {
                 mask |= (uint)NodeClass.ReferenceType;
                 rootNodes.Add(ReferenceTypeIds.References);
-                referenceTypesRead = true;
+                referenceTypesLoaded = true;
                 log.LogInformation("Loading reference type hierarchy");
             }
-            if (fdmEnabled && !typeDefsRead)
+            if (fdmEnabled && !typeDefsLoaded)
             {
                 mask |= (uint)NodeClass.VariableType | (uint)NodeClass.ObjectType;
                 rootNodes.Add(ObjectTypeIds.BaseObjectType);
                 rootNodes.Add(VariableTypeIds.BaseVariableType);
-                typeDefsRead = true;
+                typeDefsLoaded = true;
                 log.LogInformation("Loading object type and variable type hierarchies");
             }
             if (fdmEnabled)
@@ -388,7 +388,8 @@ namespace Cognite.OpcUa.TypeCollectors
         }
         public UADataType GetDataType(NodeId nodeId)
         {
-            return GetType(nodeId, x => {
+            return GetType(nodeId, x =>
+            {
                 UADataType dt;
                 if (customDataTypes.TryGetValue(x, out var protoDataType))
                 {

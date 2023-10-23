@@ -111,31 +111,34 @@ namespace Cognite.OpcUa.Pushers.FDM.Types
 
             var isSimple = nodeType != null && nodeType.IsSimple();
             var fullName = GetPath(path, name.Name);
-            if (!isSimple
-                || node.Reference.ModellingRule != ModellingRule.Optional
-                    && node.Reference.ModellingRule != ModellingRule.Mandatory
-                || !node.Reference.Reference.IsHierarchical)
+            if (
+                isSimple
+                && (node.Reference.ModellingRule == ModellingRule.Optional
+                    || node.Reference.ModellingRule == ModellingRule.Mandatory)
+                && node.Reference.Reference.IsHierarchical
+            )
+            {
+                var nextPath = path.Append((node.Reference.Reference, name));
+                if (node.Node is UAVariable variable)
+                {
+                    Properties[fullName] = new DMSReferenceNode(variable, node.Reference.Reference, fullName, nextPath)
+                    {
+                        ModellingRule = node.Reference.ModellingRule
+                    };
+                }
+
+                foreach (var child in node.Children.Values)
+                {
+                    CollectChild(child, nextPath, types);
+                }
+            }
+            else
             {
                 References[fullName] = new NodeTypeReference(node.Reference.NodeClass, node.Reference.BrowseName, fullName, node.Reference.Reference)
                 {
                     Type = nodeType,
                     ModellingRule = node.Reference.ModellingRule
                 };
-                return;
-            }
-
-            var nextPath = path.Append((node.Reference.Reference, name));
-            if (node.Node is UAVariable variable)
-            {
-                Properties[fullName] = new DMSReferenceNode(variable, node.Reference.Reference, fullName, nextPath)
-                {
-                    ModellingRule = node.Reference.ModellingRule
-                };
-            }
-
-            foreach (var child in node.Children.Values)
-            {
-                CollectChild(child, nextPath, types);
             }
         }
     }
