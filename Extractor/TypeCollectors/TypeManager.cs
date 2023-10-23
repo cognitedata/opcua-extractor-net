@@ -140,36 +140,34 @@ namespace Cognite.OpcUa.TypeCollectors
 
         private async Task ReadTypeHiearchies(ITypeAndNodeSource source, CancellationToken token)
         {
-            var fdmEnabled = config.Cognite?.MetadataTargets?.DataModels?.Enabled ?? false;
-
             var referenceMode = HierarchicalReferenceMode.Disabled;
             bool loadReferences = false;
             var rootNodes = new List<NodeId>();
             var mask = (uint)NodeClass.Variable | (uint)NodeClass.Object;
-            if (config.Extraction.DataTypes.AutoIdentifyTypes && !dataTypesLoaded)
+            if (config.Toggles.LoadDataTypes && !dataTypesLoaded)
             {
                 mask |= (uint)NodeClass.DataType;
                 rootNodes.Add(DataTypeIds.BaseDataType);
                 dataTypesLoaded = true;
                 log.LogInformation("Loading data type hierarchy to map out custom data types");
             }
-            if (config.Events.Enabled && !eventTypesLoaded)
+            if (config.Toggles.LoadEventTypes && !eventTypesLoaded)
             {
                 mask |= (uint)NodeClass.ObjectType;
                 // Avoid adding the BaseEventType node if we are also adding the BaseObjectType node, since
                 // it's a parent. The browser doesn't really like if you have loops, though it will work.
-                if (!fdmEnabled) rootNodes.Add(ObjectTypeIds.BaseEventType);
+                if (!config.Toggles.LoadTypeDefinitions) rootNodes.Add(ObjectTypeIds.BaseEventType);
                 eventTypesLoaded = true;
                 log.LogInformation("Loading event type hierarchy");
             }
-            if ((fdmEnabled || config.Extraction.Relationships.Enabled) && !referenceTypesLoaded)
+            if (config.Toggles.LoadReferenceTypes && !referenceTypesLoaded)
             {
                 mask |= (uint)NodeClass.ReferenceType;
                 rootNodes.Add(ReferenceTypeIds.References);
                 referenceTypesLoaded = true;
                 log.LogInformation("Loading reference type hierarchy");
             }
-            if (fdmEnabled && !typeDefsLoaded)
+            if (config.Toggles.LoadTypeDefinitions && !typeDefsLoaded)
             {
                 mask |= (uint)NodeClass.VariableType | (uint)NodeClass.ObjectType;
                 rootNodes.Add(ObjectTypeIds.BaseObjectType);
@@ -177,7 +175,7 @@ namespace Cognite.OpcUa.TypeCollectors
                 typeDefsLoaded = true;
                 log.LogInformation("Loading object type and variable type hierarchies");
             }
-            if (fdmEnabled)
+            if (config.Toggles.LoadTypeReferences)
             {
                 referenceMode = HierarchicalReferenceMode.Forward;
                 loadReferences = true;
@@ -257,8 +255,6 @@ namespace Cognite.OpcUa.TypeCollectors
         #region dataTypes
         private void BuildDataTypes()
         {
-            if (!config.Extraction.DataTypes.AutoIdentifyTypes) return;
-
             foreach (var type in NodeMap.Values.OfType<UADataType>())
             {
                 type.UpdateFromParent(config.Extraction.DataTypes);

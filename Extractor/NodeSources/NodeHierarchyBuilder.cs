@@ -76,7 +76,7 @@ namespace Cognite.OpcUa.NodeSources
 
 
             var classMask = (uint)NodeClass.Object | (uint)NodeClass.Variable;
-            if (config.Extraction.NodeTypes.AsNodes)
+            if (config.Toggles.LoadTypesAsNodes)
             {
                 classMask |= (uint)NodeClass.ObjectType | (uint)NodeClass.VariableType | (uint)NodeClass.ReferenceType | (uint)NodeClass.DataType;
             }
@@ -90,19 +90,18 @@ namespace Cognite.OpcUa.NodeSources
 
             // If enabled, load non-hierarchical references from the source, this may
             // also load nodes.
-            var usesFdm = config.Cognite?.MetadataTargets?.DataModels?.Enabled ?? false;
             if (config.Extraction.Relationships.Enabled)
             {
                 IEnumerable<BaseUANode> knownNodes = FinalSourceObjects.Concat(FinalSourceVariables);
-                if (usesFdm)
+                if (config.Toggles.MapPropertyReferences)
                 {
                     knownNodes = knownNodes.Concat(knownNodes.SelectMany(n => n.GetAllProperties()));
                 }
 
                 var referenceNodes = await nodeSource.LoadNonHierarchicalReferences(
                     knownNodes.DistinctBy(n => n.Id).ToDictionary(n => n.Id),
-                    usesFdm || config.Extraction.NodeTypes.AsNodes,
-                    usesFdm || config.Extraction.Relationships.CreateReferencedNodes,
+                    config.Toggles.GetNonHierarchicalTypeReferences,
+                    config.Toggles.CreateUnknownReferencedNodes,
                     "non-hierarchical relationships in the main instance hierarchy",
                     token);
                 // Refresh type data. This may have discovered new types.
@@ -163,7 +162,7 @@ namespace Cognite.OpcUa.NodeSources
                 {
                     rawVariables.Add(variable);
                 }
-                else if (config.Extraction.NodeTypes.AsNodes && node is UAVariableType variableType)
+                else if (config.Toggles.LoadTypesAsNodes && node is UAVariableType variableType)
                 {
                     rawObjects.Add(variableType);
                     toReadValues.Add(variableType);
@@ -221,10 +220,9 @@ namespace Cognite.OpcUa.NodeSources
 
             // Finally, filter references. This uses the knowledge of which nodes were added in the
             // end to avoid extracting references that point to an unmapped node.
-            var usesFdm = config.Cognite?.MetadataTargets?.DataModels?.Enabled ?? false;
             foreach (var reference in res.References)
             {
-                if (!FilterReference(reference, usesFdm)) continue;
+                if (!FilterReference(reference, config.Toggles.MapPropertyReferences)) continue;
                 FinalReferences.Add(reference);
             }
 
@@ -327,7 +325,6 @@ namespace Cognite.OpcUa.NodeSources
 
         private async Task EstimateArraySizes(IEnumerable<UAVariable> nodes, CancellationToken token)
         {
-            if (!config.Extraction.DataTypes.EstimateArraySizes) return;
             nodes = nodes.Where(node =>
                 (node.ArrayDimensions == null || !node.ArrayDimensions.Any() || node.ArrayDimensions[0] == 0)
                 && (node.ValueRank == ValueRanks.OneDimension

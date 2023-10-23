@@ -19,7 +19,6 @@ using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
-using CogniteSdk.Beta.DataModels;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using System.Collections.Generic;
@@ -133,7 +132,7 @@ namespace Cognite.OpcUa.NodeSources
             foreach (var (parentId, children) in foundReferences)
             {
                 var parentNode = knownNodes.GetValueOrDefault(parentId);
-                
+
                 if (parentNode == null)
                 {
                     logger.LogWarning("Got reference from unknown node: {Id}", parentId);
