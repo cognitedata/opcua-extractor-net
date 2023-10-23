@@ -72,6 +72,7 @@ namespace Server
         private readonly string mqttUrl;
         private readonly bool logTrace;
         private readonly ILogger traceLog;
+        private readonly ILogger logger;
         private readonly IServiceProvider provider;
         private readonly IEnumerable<string> nodeSetFiles;
 
@@ -80,8 +81,9 @@ namespace Server
             this.setups = setups;
             this.mqttUrl = mqttUrl;
             this.logTrace = logTrace;
+            logger = provider.GetRequiredService<ILogger<TestServer>>();
             this.provider = provider;
-            this.traceLog = provider.GetRequiredService<ILogger<Tracing>>();
+            traceLog = provider.GetRequiredService<ILogger<Tracing>>();
             this.nodeSetFiles = nodeSetFiles;
         }
 
@@ -344,7 +346,7 @@ namespace Server
             }
             if (cnt > 0)
             {
-                Console.WriteLine($"Deleted {cnt} subscriptions manually");
+                logger.LogDebug("Deleted {Cnt} subscriptions manually", cnt);
             }
         }
     }

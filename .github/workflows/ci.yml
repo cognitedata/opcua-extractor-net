@@ -3,36 +3,20 @@ name: Build and test extractor
 on:
     pull_request:
         branches: [ master ]
-    
+
 jobs:
     common:
         uses: ./.github/workflows/common.yml
         secrets: inherit
+    test:
+        uses: ./.github/workflows/test.yml
+        secrets: inherit
     build:
         runs-on: ubuntu-latest
-        
+        needs:
+            - test
         steps:
-        - uses: actions/checkout@v4
-        - name: Setup .NET
-          uses: actions/setup-dotnet@v3
-          with:
-              dotnet-version: 7.0.x
-        - name: Restore dependencies
-          run: dotnet restore
-        - name: Build
-          run: dotnet build ExtractorLauncher/
-        - name: Install test dependencies
-          run: "sudo apt-get update && sudo apt-get -y install gnupg curl procps && curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | sudo apt-key add - && sudo apt-get install -y mosquitto"
-        - name: Setup mosquitto
-          run: mosquitto -p 4060 &
-        - name: Setup influxdb
-          run: sh setup-influxdb.sh
-        - name: Run tests
-          run: sh test.sh
-        - name: Upload coverage to Codecov
-          uses: codecov/codecov-action@v3
-          with:
-            token: ${{ secrets.CODECOV_TOKEN }}
+          - run: echo "Yep, this sure is built"
     verify-schema:
         runs-on: ubuntu-latest
 
@@ -50,7 +34,7 @@ jobs:
           run: |
             python -m pip install --upgrade pip
             pip install cognite-extractor-publisher --extra-index-url "https://${PYPI_ARTIFACTORY_USERNAME}:${PYPI_ARTIFACTORY_PASSWORD}@cognite.jfrog.io/cognite/api/pypi/snakepit/simple"
-
+  
         - name: Verify manifest
           run: |
             publish-extractor validate --manifest manifest.yml --config-files Test/config.test.yml

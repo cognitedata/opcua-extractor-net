@@ -70,7 +70,7 @@ namespace Test.Integration
         public void Dispose()
         {
             pusher?.Dispose();
-            extractor?.Dispose();
+            extractor?.Close().Wait();
         }
 
         private void CommonBuild(ServiceCollection services)
@@ -115,7 +115,7 @@ version: 1
 ";
         }
 
-        [Fact]
+        [Fact(Timeout = 30000)]
         public async Task TestRunToolNoConfig()
         {
             var args = new[]
@@ -166,7 +166,7 @@ version: 1
             }
         }
 
-        [Fact]
+        [Fact(Timeout = 30000)]
         public async Task TestRunExtractorToolConfig()
         {
             var args = new[]
@@ -197,7 +197,7 @@ version: 1
             }
         }
 
-        [Fact]
+        [Fact(Timeout = 30000)]
         public async Task TestRunExtractorService()
         {
             var args = new[]
@@ -233,7 +233,7 @@ version: 1
             }
         }
 
-        [Fact]
+        [Fact(Timeout = 30000)]
         public async Task TestExtractorCLI()
         {
             BaseExtractorParams setup = null;
@@ -408,7 +408,7 @@ version: 1
             Assert.Equal("working dir", tSetup.WorkingDir);
         }
 
-        [Fact]
+        [Fact(Timeout = 30000)]
         public void TestVerifyAndBuildConfig()
         {
             var log = new DummyLogger();

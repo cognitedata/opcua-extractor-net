@@ -614,18 +614,18 @@ namespace Test.Integration
             Assert.Equal(16, pusher.PushedVariables.Count);
 
             var node = pusher.PushedNodes[ids.Root];
-            var metadata = node.GetExtraMetadata(tester.Config, extractor);
+            var metadata = node.GetExtraMetadata(tester.Config, extractor.Context, extractor.StringConverter);
             Assert.Single(metadata);
             Assert.Equal("BaseObjectType", metadata["TypeDefinition"]);
 
             node = pusher.PushedNodes[ids.Array];
-            metadata = node.GetExtraMetadata(tester.Config, extractor);
+            metadata = node.GetExtraMetadata(tester.Config, extractor.Context, extractor.StringConverter);
             Assert.Equal(2, metadata.Count);
             Assert.Equal("BaseDataVariableType", metadata["TypeDefinition"]);
             Assert.Equal("Double", metadata["dataType"]);
 
             node = pusher.PushedNodes[ids.EnumVar3];
-            metadata = node.GetExtraMetadata(tester.Config, extractor);
+            metadata = node.GetExtraMetadata(tester.Config, extractor.Context, extractor.StringConverter);
             Assert.Equal(4, metadata.Count);
             Assert.Equal("BaseDataVariableType", metadata["TypeDefinition"]);
             Assert.Equal("CustomEnumType2", metadata["dataType"]);
@@ -633,7 +633,7 @@ namespace Test.Integration
             Assert.Equal("VEnum2", metadata["123"]);
 
             var vb = pusher.PushedVariables[(ids.EnumVar3, 1)];
-            metadata = node.GetExtraMetadata(tester.Config, extractor);
+            metadata = node.GetExtraMetadata(tester.Config, extractor.Context, extractor.StringConverter);
             Assert.Equal(4, metadata.Count);
             Assert.Equal("BaseDataVariableType", metadata["TypeDefinition"]);
             Assert.Equal("CustomEnumType2", metadata["dataType"]);
@@ -641,7 +641,7 @@ namespace Test.Integration
             Assert.Equal("VEnum2", metadata["123"]);
 
             vb = pusher.PushedVariables[(ids.MysteryVar, -1)];
-            metadata = vb.GetExtraMetadata(tester.Config, extractor);
+            metadata = vb.GetExtraMetadata(tester.Config, extractor.Context, extractor.StringConverter);
             Assert.Equal(2, metadata.Count);
             Assert.Equal("BaseDataVariableType", metadata["TypeDefinition"]);
             Assert.Equal("MysteryType", metadata["dataType"]);

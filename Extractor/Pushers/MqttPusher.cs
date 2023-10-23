@@ -320,7 +320,7 @@ namespace Cognite.OpcUa.Pushers
                     states = objects
                        .SelectNonNull(node => Extractor.GetUniqueId(node.Id))
                        .Where(node => !existingNodes.Contains(node))
-                       .Concat(variables.SelectNonNull(variable => variable.GetUniqueId(Extractor)))
+                       .Concat(variables.SelectNonNull(variable => variable.GetUniqueId(Extractor.Context)))
                        .Concat(relationships.SelectNonNull(rel => rel.ExternalId))
                        .Select(id => new ExistingState(id))
                        .ToDictionary(state => state.Id);
@@ -360,13 +360,13 @@ namespace Cognite.OpcUa.Pushers
                 {
                     variables = variables
                         .Where(variable => !variable.Id.IsNullNodeId
-                            && !existingNodes.Contains(variable.GetUniqueId(Extractor)!)).ToList();
+                            && !existingNodes.Contains(variable.GetUniqueId(Extractor.Context)!)).ToList();
                 }
                 else
                 {
                     foreach (var node in variables)
                     {
-                        string? id = node.GetUniqueId(Extractor);
+                        string? id = node.GetUniqueId(Extractor.Context);
                         node.Changed = id != null && existingNodes.Contains(id);
                     }
                 }
@@ -407,7 +407,7 @@ namespace Cognite.OpcUa.Pushers
 
             var newStates = objects
                     .SelectNonNull(node => Extractor.GetUniqueId(node.Id))
-                    .Concat(variables.SelectNonNull(variable => variable.GetUniqueId(Extractor)))
+                    .Concat(variables.SelectNonNull(variable => variable.GetUniqueId(Extractor.Context)))
                     .Concat(relationships.SelectNonNull(rel => rel.ExternalId))
                     .Select(id => new ExistingState(id) { Existing = true, LastTimeModified = DateTime.UtcNow })
                     .ToList();

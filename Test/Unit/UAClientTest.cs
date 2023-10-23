@@ -5,6 +5,7 @@ using Cognite.OpcUa;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.Nodes;
+using Cognite.OpcUa.Subscriptions;
 using Cognite.OpcUa.NodeSources;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -87,6 +88,32 @@ namespace Test.Unit
             Source.Dispose();
             Server.Stop();
             await Provider.DisposeAsync();
+        }
+
+        public async Task RemoveSubscription(SubscriptionName name)
+        {
+            if (TryGetSubscription(name, out var subscription) && subscription!.Created)
+            {
+                try
+                {
+                    await Client.SessionManager.Session!.RemoveSubscriptionAsync(subscription);
+                }
+                catch
+                {
+                    // A failure to delete the subscription generally means it just doesn't exist.
+                }
+                finally
+                {
+                    subscription!.Dispose();
+                }
+            }
+        }
+
+        public bool TryGetSubscription(SubscriptionName name, out Subscription subscription)
+        {
+            subscription = Client.SessionManager.Session?.Subscriptions?.FirstOrDefault(sub =>
+                sub.DisplayName.StartsWith(name.Name(), StringComparison.InvariantCulture));
+            return subscription != null;
         }
     }
     public class UAClientTest : IClassFixture<UAClientTestFixture>
@@ -358,7 +385,7 @@ namespace Test.Unit
                 // There is technically a tiny race condition here. If we connect to a new server, then that server immediately changes
                 // its service level, we _may_ not be able to pick up the change until it changes again.
                 // Some servers also send value updates on subscription creation, in which case this will not happen.
-                await sm.EnsureServiceLevelSubscription();
+                sm.EnsureServiceLevelSubscription();
                 // Should trigger a reconnect attempt, but it will not find a better alternative.
                 tester.Server.SetServerRedundancyStatus(190, RedundancySupport.Hot);
                 await TestUtils.WaitForCondition(() => sm.CurrentServiceLevel == 190, 10, "Expected service level to drop");
@@ -987,8 +1014,10 @@ namespace Test.Unit
 
             try
             {
-                await tester.Client.SubscribeToNodes(nodes.Take(1000), handler, tester.Source.Token);
-                await tester.Client.SubscribeToNodes(nodes.Skip(1000), handler, tester.Source.Token);
+                await new DataPointSubscriptionTask(handler, nodes.Take(1000)).Run(tester.Logger,
+                    tester.Client.SessionManager, tester.Config, tester.Client.SubscriptionManager, tester.Source.Token);
+                await new DataPointSubscriptionTask(handler, nodes.Skip(1000)).Run(tester.Logger,
+                    tester.Client.SessionManager, tester.Config, tester.Client.SubscriptionManager, tester.Source.Token);
 
                 await TestUtils.WaitForCondition(() => dps.Count == 2000, 5,
                     () => $"Expected to get 2000 datapoints, but got {dps.Count}");
@@ -1003,7 +1032,7 @@ namespace Test.Unit
             }
             finally
             {
-                await tester.Client.RemoveSubscription("DataChangeListener");
+                await tester.RemoveSubscription(SubscriptionName.DataPoints);
                 foreach (var node in nodes)
                 {
                     tester.Server.UpdateNode(node.SourceId, null);
@@ -1084,7 +1113,8 @@ namespace Test.Unit
 
             try
             {
-                await tester.Client.SubscribeToNodes(nodes, handler, tester.Source.Token);
+                await new DataPointSubscriptionTask(handler, nodes).Run(tester.Logger,
+                    tester.Client.SessionManager, tester.Config, tester.Client.SubscriptionManager, tester.Source.Token);
 
                 await TestUtils.WaitForCondition(() => dps.Count == 3, 5,
                     () => $"Expected to get 3 datapoints, but got {dps.Count}");
@@ -1106,7 +1136,7 @@ namespace Test.Unit
             }
             finally
             {
-                await tester.Client.RemoveSubscription("DataChangeListener");
+                await tester.RemoveSubscription(SubscriptionName.DataPoints);
                 tester.Server.WipeHistory(tester.Server.Ids.Custom.Array, new double[] { 0, 0, 0, 0 });
                 tester.Server.WipeHistory(tester.Server.Ids.Custom.MysteryVar, null);
                 tester.Server.WipeHistory(tester.Server.Ids.Base.StringVar, null);
@@ -1144,8 +1174,10 @@ namespace Test.Unit
             {
                 await tester.Client.TypeManager.Initialize(uaNodeSource, tester.Source.Token);
 
-                await tester.Client.SubscribeToEvents(emitters.Take(2), handler, tester.Client.TypeManager.EventFields, tester.Source.Token);
-                await tester.Client.SubscribeToEvents(emitters.Skip(2), handler, tester.Client.TypeManager.EventFields, tester.Source.Token);
+                await new EventSubscriptionTask(handler, emitters.Take(2), tester.Client.BuildEventFilter(tester.Client.TypeManager.EventFields))
+                    .Run(tester.Logger, tester.Client.SessionManager, tester.Config, tester.Client.SubscriptionManager, tester.Source.Token);
+                await new EventSubscriptionTask(handler, emitters.Skip(2), tester.Client.BuildEventFilter(tester.Client.TypeManager.EventFields))
+                    .Run(tester.Logger, tester.Client.SessionManager, tester.Config, tester.Client.SubscriptionManager, tester.Source.Token);
 
                 tester.Server.TriggerEvents(0);
 
@@ -1161,7 +1193,7 @@ namespace Test.Unit
             {
                 tester.Config.Source.SubscriptionChunk = 1000;
                 tester.Config.Events.Enabled = false;
-                await tester.Client.RemoveSubscription("EventListener");
+                await tester.RemoveSubscription(SubscriptionName.Events);
                 tester.Server.WipeEventHistory();
             }
         }
@@ -1190,7 +1222,8 @@ namespace Test.Unit
             try
             {
                 await tester.Client.TypeManager.Initialize(uaNodeSource, tester.Source.Token);
-                await tester.Client.SubscribeToEvents(emitters, handler, tester.Client.TypeManager.EventFields, tester.Source.Token);
+                await new EventSubscriptionTask(handler, emitters, tester.Client.BuildEventFilter(tester.Client.TypeManager.EventFields))
+                    .Run(tester.Logger, tester.Client.SessionManager, tester.Config, tester.Client.SubscriptionManager, tester.Source.Token);
 
                 tester.Server.TriggerEvents(0);
 
@@ -1202,7 +1235,7 @@ namespace Test.Unit
                 tester.Config.Source.SubscriptionChunk = 1000;
                 tester.Config.Events.Enabled = false;
                 tester.Config.Events.EventIds = null;
-                await tester.Client.RemoveSubscription("EventListener");
+                await tester.RemoveSubscription(SubscriptionName.Events);
                 tester.Server.WipeEventHistory();
             }
 
@@ -1223,7 +1256,8 @@ namespace Test.Unit
 
             try
             {
-                await tester.Client.SubscribeToAuditEvents(handler, tester.Source.Token);
+                await new AuditSubscriptionTask(handler)
+                    .Run(tester.Logger, tester.Client.SessionManager, tester.Config, tester.Client.SubscriptionManager, tester.Source.Token);
 
                 tester.Server.DirectGrowth();
 
@@ -1238,7 +1272,7 @@ namespace Test.Unit
             finally
             {
                 tester.Server.SetEventConfig(false, true, false);
-                await tester.Client.RemoveSubscription("AuditListener");
+                await tester.RemoveSubscription(SubscriptionName.Audit);
             }
         }
         #endregion
@@ -1247,24 +1281,24 @@ namespace Test.Unit
         public void TestExpandedNodeIdConversion()
         {
             var nodeId = new ExpandedNodeId("string-ns", tester.Client.NamespaceTable.GetString(2));
-            Assert.Equal(new NodeId("string-ns", 2), tester.Client.ToNodeId(nodeId));
+            Assert.Equal(new NodeId("string-ns", 2), tester.Client.Context.ToNodeId(nodeId));
             nodeId = new ExpandedNodeId(new byte[] { 12, 12, 6 }, 1);
-            Assert.Equal(new NodeId(new byte[] { 12, 12, 6 }, 1), tester.Client.ToNodeId(nodeId));
+            Assert.Equal(new NodeId(new byte[] { 12, 12, 6 }, 1), tester.Client.Context.ToNodeId(nodeId));
             nodeId = new ExpandedNodeId("other-server", "opc.tcp://some-other-server.test", 1);
-            Assert.Null(tester.Client.ToNodeId(nodeId));
+            Assert.Null(tester.Client.Context.ToNodeId(nodeId));
         }
         [Fact]
         public void TestNodeIdConversion()
         {
-            var nodeId = tester.Client.ToNodeId("i=123", tester.Client.NamespaceTable.GetString(2));
+            var nodeId = tester.Client.Context.ToNodeId("i=123", tester.Client.NamespaceTable.GetString(2));
             Assert.Equal(new NodeId(123u, 2), nodeId);
-            nodeId = tester.Client.ToNodeId("s=abc", tester.Client.NamespaceTable.GetString(1));
+            nodeId = tester.Client.Context.ToNodeId("s=abc", tester.Client.NamespaceTable.GetString(1));
             Assert.Equal(new NodeId("abc", 1), nodeId);
-            nodeId = tester.Client.ToNodeId("s=abcd", "some-namespaces-that-doesnt-exist");
+            nodeId = tester.Client.Context.ToNodeId("s=abcd", "some-namespaces-that-doesnt-exist");
             Assert.Equal(NodeId.Null, nodeId);
-            nodeId = tester.Client.ToNodeId("s=bcd", "tl:");
+            nodeId = tester.Client.Context.ToNodeId("s=bcd", "tl:");
             Assert.Equal(new NodeId("bcd", 2), nodeId);
-            Assert.Equal(NodeId.Null, tester.Client.ToNodeId("i=123", null));
+            Assert.Equal(NodeId.Null, tester.Client.Context.ToNodeId("i=123", null));
         }
         [Fact]
         public static void TestConvertToDouble()
@@ -1292,10 +1326,14 @@ namespace Test.Unit
             Assert.Equal("gp.tl:s=", tester.Client.GetUniqueId(new NodeId(new string(' ', 400), 2)));
             Assert.Equal("gp.tl:s=[123]", tester.Client.GetUniqueId(new NodeId(new string(' ', 400), 2), 123));
 
-            tester.Client.AddNodeOverride(new NodeId(1234, 2), "override");
+
+            var overrides = tester.Client.Context.GetType().GetField("nodeOverrides",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                .GetValue(tester.Client.Context) as Dictionary<NodeId, string>;
+            overrides.Add(new NodeId(1234, 2), "override");
             Assert.Equal("override", tester.Client.GetUniqueId(new NodeId(1234, 2)));
             Assert.Equal("override[123]", tester.Client.GetUniqueId(new NodeId(1234, 2), 123));
-            tester.Client.ClearNodeOverrides();
+            overrides.Clear();
         }
 
         [Fact]
@@ -1336,14 +1374,16 @@ namespace Test.Unit
             {
                 ServerMetrics = true
             };
-            var mgr = new NodeMetricsManager(tester.Client, tester.Config.Subscriptions, tester.Config.Metrics.Nodes);
+            var mgr = new NodeMetricsManager(tester.Client, tester.Config.Metrics.Nodes);
             await mgr.StartNodeMetrics(tester.Client.TypeManager, tester.Source.Token);
+
+            await tester.Client.SubscriptionManager.WaitForAllCurrentlyPendingTasks(tester.Source.Token);
 
             tester.Server.SetDiagnosticsEnabled(true);
 
             await TestUtils.WaitForCondition(() => CommonTestUtils.GetMetricValue("opcua_node_CurrentSessionCount") >= 1, 20);
 
-            await tester.Client.RemoveSubscription("NodeMetrics");
+            await tester.RemoveSubscription(SubscriptionName.NodeMetrics);
             tester.Server.SetDiagnosticsEnabled(false);
             tester.Config.Metrics.Nodes = null;
         }
@@ -1362,8 +1402,10 @@ namespace Test.Unit
             };
             tester.Server.UpdateNode(ids.DoubleVar1, 0);
             tester.Server.UpdateNode(ids.DoubleVar2, 0);
-            var mgr = new NodeMetricsManager(tester.Client, tester.Config.Subscriptions, tester.Config.Metrics.Nodes);
+            var mgr = new NodeMetricsManager(tester.Client, tester.Config.Metrics.Nodes);
             await mgr.StartNodeMetrics(tester.Client.TypeManager, tester.Source.Token);
+
+            await tester.Client.SubscriptionManager.WaitForAllCurrentlyPendingTasks(tester.Source.Token);
 
             tester.Server.UpdateNode(ids.DoubleVar1, 15);
             await TestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_node_Variable_1", 15), 5);
@@ -1375,7 +1417,7 @@ namespace Test.Unit
 
             tester.Server.UpdateNode(ids.DoubleVar1, 0);
             tester.Server.UpdateNode(ids.DoubleVar2, 0);
-            await tester.Client.RemoveSubscription("NodeMetrics");
+            await tester.RemoveSubscription(SubscriptionName.NodeMetrics);
             tester.Config.Metrics.Nodes = null;
         }
         #endregion

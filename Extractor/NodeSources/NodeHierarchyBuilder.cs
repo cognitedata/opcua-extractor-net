@@ -236,7 +236,7 @@ namespace Cognite.OpcUa.NodeSources
 
         private void AddManagedNode(TypeUpdateConfig update, BaseUANode node)
         {
-            extractor.State.RegisterNode(node.Id, node.GetUniqueId(client));
+            extractor.State.RegisterNode(node.Id, node.GetUniqueId(client.Context));
             extractor.State.AddActiveNode(
                 node,
                 config.Extraction.Update.Objects,
@@ -512,7 +512,7 @@ namespace Cognite.OpcUa.NodeSources
                 {
                     foreach (var child in variable.CreateTimeseries())
                     {
-                        var uniqueId = child.GetUniqueId(extractor);
+                        var uniqueId = child.GetUniqueId(extractor.Context);
                         if (state != null) extractor.State.SetNodeState(state, uniqueId);
                         extractor.State.RegisterNode(node.Id, uniqueId);
                     }

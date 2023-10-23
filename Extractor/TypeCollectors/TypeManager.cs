@@ -73,7 +73,7 @@ namespace Cognite.OpcUa.TypeCollectors
             {
                 foreach (var type in config.Extraction.DataTypes.IgnoreDataTypes)
                 {
-                    var id = type.ToNodeId(client);
+                    var id = type.ToNodeId(client.Context);
                     if (id == null || id.IsNullNodeId)
                     {
                         log.LogWarning("Invalid ignore datatype nodeId: {NameSpace}: {Identifier}", type.NamespaceUri, type.NodeId);
@@ -88,7 +88,7 @@ namespace Cognite.OpcUa.TypeCollectors
                 foreach (var type in config.Extraction.DataTypes.CustomNumericTypes)
                 {
                     if (type.NodeId == null) continue;
-                    var id = type.NodeId.ToNodeId(client);
+                    var id = type.NodeId.ToNodeId(client.Context);
                     if (id == null || id.IsNullNodeId)
                     {
                         log.LogWarning("Invalid datatype nodeId: {NameSpace}: {Identifier}", type.NodeId.NamespaceUri, type.NodeId.NodeId);
@@ -291,7 +291,7 @@ namespace Cognite.OpcUa.TypeCollectors
             }
             var excludeProperties = new HashSet<string>(config.Events.ExcludeProperties);
             var baseExcludeProperties = new HashSet<string>(config.Events.BaseExcludeProperties);
-            var whitelist = config.Events.GetWhitelist(client, log);
+            var whitelist = config.Events.GetWhitelist(client.Context, log);
 
             foreach (var type in NodeMap.Values.OfType<UAObjectType>())
             {

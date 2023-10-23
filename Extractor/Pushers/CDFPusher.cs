@@ -58,13 +58,17 @@ namespace Cognite.OpcUa.Pushers
         public PusherInput? PendingNodes { get; set; }
 
         private UAExtractor extractor;
-        public UAExtractor Extractor { get => extractor; set {
-            extractor = value;
-            if (cdfWriter.FDM != null)
+        public UAExtractor Extractor
+        {
+            get => extractor; set
             {
-                cdfWriter.FDM.Extractor = value;
+                extractor = value;
+                if (cdfWriter.FDM != null)
+                {
+                    cdfWriter.FDM.Extractor = value;
+                }
             }
-        } }
+        }
         public IPusherConfig BaseConfig { get; }
 
         private readonly HashSet<string> mismatchedTimeseries = new HashSet<string>();
@@ -89,7 +93,7 @@ namespace Cognite.OpcUa.Pushers
             BaseConfig = config;
             this.destination = destination;
             this.fullConfig = fullConfig;
-            cdfWriter =  provider.GetRequiredService<ICDFWriter>();
+            cdfWriter = provider.GetRequiredService<ICDFWriter>();
             if (config.BrowseCallback != null && (config.BrowseCallback.Id.HasValue || !string.IsNullOrEmpty(config.BrowseCallback.ExternalId)))
             {
                 callback = new BrowseCallback(destination, config.BrowseCallback, log);
@@ -345,7 +349,7 @@ namespace Cognite.OpcUa.Pushers
             var tasks = new List<Task>();
 
             tasks.Add(PushAssets(objects, update.Objects, report, result, token));
- 
+
             tasks.Add(PushTimeseries(variables, update.Variables, report, result, token));
 
             tasks.Add(PushReferences(references, report, result, token));
@@ -357,7 +361,7 @@ namespace Cognite.OpcUa.Pushers
             log.LogInformation("Finish pushing nodes to CDF");
 
             if (
-                result.Objects 
+                result.Objects
                 && result.References
                 && result.Variables
                 && result.RawObjects
@@ -650,7 +654,7 @@ namespace Cognite.OpcUa.Pushers
             if (cdfWriter.Assets != null)
             {
                 await PushCleanAssets(assetsMap, update, report, result, token);
-            } 
+            }
             if (cdfWriter.Raw != null && RawMetadataTargetConfig?.AssetsTable != null)
             {
                 await PushRawAssets(assetsMap, update, report, result, token);
@@ -679,7 +683,7 @@ namespace Cognite.OpcUa.Pushers
                 result.Objects = false;
             }
         }
-        
+
         /// <summary>
         /// Master method for pushing assets to CDF raw.
         /// </summary>
@@ -696,7 +700,7 @@ namespace Cognite.OpcUa.Pushers
             try
             {
                 var _result = await cdfWriter.Raw!.PushNodes(
-                    Extractor, 
+                    Extractor,
                     RawMetadataTargetConfig!.Database!,
                     RawMetadataTargetConfig!.AssetsTable!,
                     assetsMap,
@@ -772,7 +776,7 @@ namespace Cognite.OpcUa.Pushers
         private ConcurrentDictionary<string, UAVariable> MapTimeseries(IEnumerable<UAVariable> variables)
         {
             return new ConcurrentDictionary<string, UAVariable>(
-                variables.ToDictionary(ts => ts.GetUniqueId(Extractor)!)
+                variables.ToDictionary(ts => ts.GetUniqueId(Extractor.Context)!)
             );
         }
 
@@ -811,7 +815,7 @@ namespace Cognite.OpcUa.Pushers
             try
             {
                 var _result = await cdfWriter.Timeseries!.PushVariables(Extractor, timeseriesMap, nodeToAssetIds, mismatchedTimeseries, update, token);
-                var createMinimal = !(CleanMetadataTargetConfig?.Timeseries ?? false); 
+                var createMinimal = !(CleanMetadataTargetConfig?.Timeseries ?? false);
                 if (createMinimal)
                 {
                     report.MinimalTimeSeriesCreated += _result.Created;
@@ -828,7 +832,7 @@ namespace Cognite.OpcUa.Pushers
             }
         }
 
-       /// <summary>
+        /// <summary>
         /// Synchronize all variables to CDF raw
         /// </summary>
         /// <param name="tsIds">Synchronizes all variables maps to CDF raw</param>
@@ -846,7 +850,7 @@ namespace Cognite.OpcUa.Pushers
                     .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
 
                 var _result = await cdfWriter.Raw!.PushNodes(
-                    Extractor, 
+                    Extractor,
                     RawMetadataTargetConfig!.Database!,
                     RawMetadataTargetConfig!.TimeseriesTable!,
                     toPushMeta,
@@ -1017,7 +1021,7 @@ namespace Cognite.OpcUa.Pushers
         {
             try
             {
-                var _result =  await cdfWriter.Relationships!.PushReferences(relationships, token);
+                var _result = await cdfWriter.Relationships!.PushReferences(relationships, token);
                 report.RelationshipsCreated += _result.Created;
             }
             catch (Exception e)
@@ -1042,7 +1046,8 @@ namespace Cognite.OpcUa.Pushers
             {
                 var _result = await cdfWriter.Raw!.PushReferences(RawMetadataTargetConfig!.Database!, RawMetadataTargetConfig!.RelationshipsTable!, relationships, token);
                 report.RawRelationshipsCreated += _result.Created;
-            } catch (Exception e)
+            }
+            catch (Exception e)
             {
                 log.LogError(e, "Failed to ensure raw relationships");
                 result.RawReferences = false;

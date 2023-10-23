@@ -7,6 +7,7 @@ using Cognite.OpcUa.History;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.Pushers;
+using Cognite.OpcUa.Subscriptions;
 using Cognite.OpcUa.Types;
 using CogniteSdk;
 using Com.Cognite.V1.Timeseries.Proto;
@@ -1102,7 +1103,7 @@ namespace Test.Unit
             var converter = tester.Client.StringConverter;
             converter.AddConverters(options, type);
 
-            var id = node.GetUniqueId(extractor);
+            var id = node.GetUniqueId(extractor.Context);
 
             var json = JsonSerializer.Serialize(node, options);
 
@@ -1271,7 +1272,7 @@ namespace Test.Unit
             Assert.Empty(handler.Assets);
 
             await extractor.WaitForSubscriptions();
-            await tester.Client.RemoveSubscription("DataChangeListener");
+            await tester.RemoveSubscription(SubscriptionName.DataPoints);
 
             extractor.State.Clear();
 
@@ -1349,7 +1350,7 @@ namespace Test.Unit
             Assert.Empty(handler.Assets);
 
             await extractor.WaitForSubscriptions();
-            await tester.Client.RemoveSubscription("EventListener");
+            await tester.RemoveSubscription(SubscriptionName.Events);
 
             extractor.State.Clear();
 
@@ -1423,7 +1424,7 @@ namespace Test.Unit
             Assert.Empty(handler.Assets);
 
             await extractor.WaitForSubscriptions();
-            await tester.Client.RemoveSubscription("EventListener");
+            await tester.RemoveSubscription(SubscriptionName.Events);
 
             extractor.State.Clear();
 
@@ -1461,7 +1462,7 @@ namespace Test.Unit
 
             (handler, pusher) = tester.GetCDFPusher();
             using var extractor = tester.BuildExtractor(true, null, pusher);
- 
+
             var update = new UpdateConfig();
             var dt = new UADataType(DataTypeIds.Double);
             var node = new UAObject(tester.Server.Ids.Base.Root, "BaseRoot", null, null, NodeId.Null, null);
@@ -1469,14 +1470,14 @@ namespace Test.Unit
             variable.FullAttributes.DataType = dt;
             var rel = new UAReference(extractor.TypeManager.GetReferenceType(ReferenceTypeIds.Organizes), true, node, variable);
 
-            var result = await pusher.PushNodes(new[] { node }, new [] { variable }, new[] { rel }, update, tester.Source.Token);
+            var result = await pusher.PushNodes(new[] { node }, new[] { variable }, new[] { rel }, update, tester.Source.Token);
 
             Assert.True(result.Objects);
             Assert.True(result.RawObjects);
 
             Assert.True(result.Variables);
             Assert.True(result.RawVariables);
- 
+
             Assert.True(result.References);
             Assert.True(result.RawReferences);
 

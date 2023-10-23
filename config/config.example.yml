@@ -132,6 +132,7 @@ source:
     # the .xml config file
     certificate-expiry: 60
     # Configuration for retrying operations against the OPC-UA server.
+    # Note that when running the config tool, this option is ignored.
     retries:
         # Total timeout, after this much time has elapsed no more retries will be started.
         # Syntax is N[timeunit] where timeunit is w, d, h, m, s or ms.
