@@ -215,7 +215,8 @@ namespace Cognite.OpcUa.Pushers.FDM
             // We also need to collect any types, and any nodes referenced by those types.
             var typeCollector = new NodeTypeCollector(log,
                 nodes.SelectNonNull(n => n.TypeDefinition).Where(id => !id.IsNullNodeId).ToHashSet(),
-                typeHierarchy);
+                typeHierarchy,
+                config.Cognite!.MetadataTargets!.DataModels!.TypesToMap);
 
             var typeResult = typeCollector.MapTypes();
 

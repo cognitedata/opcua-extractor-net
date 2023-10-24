@@ -1,4 +1,5 @@
-﻿using Cognite.OpcUa.Nodes;
+﻿using Cognite.OpcUa.Config;
+using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.Pushers.FDM.Types;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
@@ -54,12 +55,43 @@ namespace Cognite.OpcUa.Pushers.FDM
 
         private readonly Dictionary<NodeId, BaseUANode> mappedNodes = new();
         private readonly HashSet<UAReference> mappedReferences = new();
+        private readonly TypesToMap typesToMap;
 
-        public NodeTypeCollector(ILogger log, HashSet<NodeId> knownTypeDefinitions, NodeHierarchy typeHierarchy)
+        public NodeTypeCollector(ILogger log, HashSet<NodeId> knownTypeDefinitions, NodeHierarchy typeHierarchy, TypesToMap typesToMap)
         {
             this.log = log;
             this.knownTypeDefinitions = knownTypeDefinitions;
+            this.typesToMap = typesToMap;
             this.typeHierarchy = typeHierarchy;
+        }
+
+        private HashSet<NodeId> GetTargetNodeIds()
+        {
+            // Always map referenced types.
+            var res = new HashSet<NodeId>(knownTypeDefinitions);
+
+            if (typesToMap != TypesToMap.Referenced)
+            {
+                foreach (var node in typeHierarchy.NodeMap.Values)
+                {
+                    // This should be impossible here, but best to just avoid it.
+                    if (node.Id.IsNullNodeId) continue;
+                    // We only concern ourselves with type definitions here.
+                    if (node.NodeClass != NodeClass.ObjectType && node.NodeClass != NodeClass.VariableType) continue;
+                    // Should be impossible if the node class is ObjectType or VariableType
+                    if (node is not BaseUAType typeNode) continue;
+                    // Do not map event types as type definitions. They technically are, but it really isn't valid to use them
+                    // like that.
+                    if (typeNode.IsChildOf(ObjectTypeIds.BaseEventType)) continue;
+                    // Only map nodes with namespace index 0 if TypesToMap is All. Namespace index 0 is the base OPC-UA hierarchy,
+                    // generally speaking users won't want to extract this, as it is way too heavy.
+                    if (typesToMap != TypesToMap.All && node.Id.NamespaceIndex == 0) continue;
+
+                    res.Add(node.Id);
+                }
+            }
+
+            return res;
         }
 
         public TypeTraverseResult MapTypes()
@@ -69,7 +101,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             //    just to include any type fields
             // 2. Browse up to any parent types, until we reach one of the root types.
             //    This is fully recursive, so any parent type will get the full treatment.
-            foreach (var type in knownTypeDefinitions)
+            foreach (var type in GetTargetNodeIds())
             {
                 TraverseNodeTypeUp(type, null);
             }

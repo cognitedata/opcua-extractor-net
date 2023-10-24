@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Cognite.Extensions.DataModels;
@@ -34,7 +35,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             Views.Add(container.Name,
                 container.ToView(viewVersion,
                     baseView == null
-                    ? new ViewIdentifier[0] 
+                    ? new ViewIdentifier[0]
                     : new[] { new ViewIdentifier(container.Space, baseView, viewVersion) }
                 )
             );
@@ -108,15 +109,16 @@ namespace Cognite.OpcUa.Pushers.FDM
             {
                 if (rf.ModellingRule != ModellingRule.ExposesItsArray)
                 {
+                    var idf = GetViewIdentifier(rf.ExternalId, type.ExternalId, rf, config);
                     view.Properties.Add(rf.ExternalId, new ConnectionDefinition
                     {
                         Description = rf.BrowseName.Name,
                         Name = rf.BrowseName.Name,
                         Direction = ConnectionDirection.outwards,
-                        Source = GetViewIdentifier(rf.ExternalId, type.ExternalId, rf, config),
+                        Source = idf,
                         Type = new DirectRelationIdentifier(space, context.NodeIdToString(rf.Reference.Type.Id))
                     });
-                    ViewIsReferenced[rf.Type!.ExternalId] = true;
+                    ViewIsReferenced[idf.ExternalId] = true;
                 }
             }
             Views.Add(view.Name!, view);
@@ -131,7 +133,24 @@ namespace Cognite.OpcUa.Pushers.FDM
 
             if (rf.NodeClass == NodeClass.Object || rf.NodeClass == NodeClass.Variable)
             {
-                return new ViewIdentifier(space, rf.Type!.ExternalId, viewVersion);
+                string typeExternalId;
+                if (rf.Type != null)
+                {
+                    typeExternalId = rf.Type.ExternalId;
+                }
+                else
+                {
+                    if (rf.NodeClass == NodeClass.Object)
+                    {
+                        typeExternalId = "BaseObjectType";
+                    }
+                    else
+                    {
+                        typeExternalId = "BaseVariableType";
+                    }
+                }
+
+                return new ViewIdentifier(space, typeExternalId, viewVersion);
             }
             else if (rf.NodeClass == NodeClass.ObjectType)
             {

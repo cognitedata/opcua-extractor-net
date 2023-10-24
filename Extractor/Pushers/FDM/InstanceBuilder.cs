@@ -340,9 +340,6 @@ namespace Cognite.OpcUa.Pushers.FDM
             {
                 if (!MappedNodes.Contains(rf.Source.Id) || !MappedNodes.Contains(rf.Target.Id))
                 {
-                    log.LogDebug("Skipping ref {S} {Ty} {T} due to missing source or target {Sx} {Tx}",
-                        rf.Source.Name, rf.Type.Name, rf.Target.Name, MappedNodes.Contains(rf.Source.Id),
-                        MappedNodes.Contains(rf.Target.Id));
                     continue;
                 }
 
