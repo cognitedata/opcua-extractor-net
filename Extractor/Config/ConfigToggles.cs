@@ -27,7 +27,9 @@ namespace Cognite.OpcUa.Config
         /// </summary>
         public bool CreateUnknownReferencedNodes => FdmEnabled || config.Extraction.Relationships.CreateReferencedNodes;
         /// <summary>
-        /// Should the extractor create nodes with NodeClass ObjectType, ReferenceType, VariableType, or DataType?
+        /// Should the extractor create nodes that are types in OPC-UA?
+        /// Any node with NodeClass ObjectType, ReferenceType, VariableType, or DataType is considered
+        /// a type.
         /// </summary>
         public bool LoadTypesAsNodes => FdmEnabled || config.Extraction.NodeTypes.AsNodes;
 
@@ -38,8 +40,8 @@ namespace Cognite.OpcUa.Config
         public bool LoadDataTypes => FdmEnabled || config.Extraction.DataTypes.AutoIdentifyTypes;
         /// <summary>
         /// Should the type manager load event types when reading the type hierarchy?
-        /// Since event types are also type definitions, this is enabled by default if
-        /// LoadTypeDefinitions is true.
+        /// If LoadTypeDefinitions is true, this is enabled implicitly, since event types
+        /// are also type definitions.
         /// </summary>
         public bool LoadEventTypes => config.Events.Enabled;
         /// <summary>
