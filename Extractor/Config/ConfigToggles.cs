@@ -47,7 +47,7 @@ namespace Cognite.OpcUa.Config
         /// </summary>
         public bool LoadReferenceTypes => FdmEnabled || config.Extraction.Relationships.Enabled;
         /// <summary>
-        /// Should the type manager load object- and variable types when reading the type hierarchy?
+        /// Should the type manager load object and variable types when reading the type hierarchy?
         /// </summary>
         public bool LoadTypeDefinitions => FdmEnabled;
         /// <summary>
