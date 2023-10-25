@@ -21,6 +21,7 @@ using Cognite.Extractor.Metrics;
 using Cognite.Extractor.Utils;
 using System.Collections.Generic;
 using System.ComponentModel;
+using YamlDotNet.Serialization;
 
 namespace Cognite.OpcUa.Config
 {
@@ -37,6 +38,17 @@ namespace Cognite.OpcUa.Config
     }
     public class FullConfig : VersionedConfig
     {
+        /// <summary>
+        /// Dynamic properties based on other config sections.
+        /// </summary>
+        [YamlIgnore]
+        public ConfigToggles Toggles { get; }
+
+        public FullConfig() : base()
+        {
+            Toggles = new ConfigToggles(this);
+        }
+
         /// <summary>
         /// Configuration for the OPC-UA server.
         /// </summary>

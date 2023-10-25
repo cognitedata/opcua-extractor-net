@@ -66,6 +66,7 @@ namespace Cognite.OpcUa
         public NamespaceTable? NamespaceTable => uaClient.NamespaceTable;
 
         public TypeManager TypeManager => uaClient.TypeManager;
+        public SessionContext Context => uaClient.Context;
 
         private NodeSetNodeSource? nodeSetSource;
 
@@ -104,8 +105,7 @@ namespace Cognite.OpcUa
 
         public bool AllowUpdateState =>
             !Config.Source.Redundancy.MonitorServiceLevel
-            || uaClient.SessionManager != null
-            && uaClient.SessionManager.CurrentServiceLevel >= Config.Source.Redundancy.ServiceLevelThreshold;
+            || uaClient.SessionManager.CurrentServiceLevel >= Config.Source.Redundancy.ServiceLevelThreshold;
 
         /// <summary>
         /// Construct extractor with list of pushers
@@ -252,7 +252,6 @@ namespace Cognite.OpcUa
             await EnsureSubscriptions();
             if (Config.Source.RestartOnReconnect)
             {
-                source.ClearNodeOverrides();
                 await RestartExtractor();
             }
             else
@@ -724,7 +723,7 @@ namespace Cognite.OpcUa
                 await rebrowseTriggerManager.EnableCustomServerSubscriptions(Source.Token);
             }
 
-            if (Config.Source.Redundancy.MonitorServiceLevel && uaClient.SessionManager != null)
+            if (Config.Source.Redundancy.MonitorServiceLevel)
             {
                 uaClient.SessionManager.EnsureServiceLevelSubscription();
             }
@@ -812,15 +811,7 @@ namespace Cognite.OpcUa
         /// </summary>
         private async Task ConfigureExtractor()
         {
-            RootNodes = Config.Extraction.GetRootNodes(uaClient, log);
-
-            if (Config.Extraction.NodeMap != null)
-            {
-                foreach (var kvp in Config.Extraction.NodeMap)
-                {
-                    uaClient.AddNodeOverride(kvp.Value.ToNodeId(uaClient), kvp.Key);
-                }
-            }
+            RootNodes = Config.Extraction.GetRootNodes(uaClient.Context, log);
 
             foreach (var state in State.NodeStates)
             {
@@ -842,13 +833,13 @@ namespace Cognite.OpcUa
                 if (Config.Events.EmitterIds != null && Config.Events.EmitterIds.Any()
                     || Config.Events.HistorizingEmitterIds != null && Config.Events.HistorizingEmitterIds.Any())
                 {
-                    var histEmitterIds = Config.Events.GetHistorizingEmitterIds(uaClient, log);
-                    var emitterIds = Config.Events.GetEmitterIds(uaClient, log);
+                    var histEmitterIds = Config.Events.GetHistorizingEmitterIds(uaClient.Context, log);
+                    var emitterIds = Config.Events.GetEmitterIds(uaClient.Context, log);
                     var eventEmitterIds = new HashSet<NodeId>(histEmitterIds.Concat(emitterIds));
 
                     foreach (var id in eventEmitterIds)
                     {
-                        var history = (histEmitterIds.Contains(id)) && Config.Events.History;
+                        var history = histEmitterIds.Contains(id) && Config.Events.History;
                         var subscription = emitterIds.Contains(id);
                         State.SetEmitterState(new EventExtractionState(this, id, history, history && Config.History.Backfill, subscription));
                         State.RegisterNode(id, uaClient.GetUniqueId(id));
@@ -1299,5 +1290,6 @@ namespace Cognite.OpcUa
         StringConverter StringConverter { get; }
         string GetRelationshipId(UAReference reference);
         NamespaceTable? NamespaceTable { get; }
+        public SessionContext Context { get; }
     }
 }

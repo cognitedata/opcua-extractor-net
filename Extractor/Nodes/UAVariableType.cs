@@ -18,6 +18,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.TypeCollectors;
+using Cognite.OpcUa.Types;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using System;
@@ -131,7 +132,7 @@ namespace Cognite.OpcUa.Nodes
                 && FullAttributes.DataType.AllowValueRead(this, FullAttributes.ArrayDimensions, FullAttributes.ValueRank, logger, config, ignoreDimension);
         }
 
-        public override Dictionary<string, string>? GetExtraMetadata(FullConfig config, IUAClientAccess client)
+        public override Dictionary<string, string>? GetExtraMetadata(FullConfig config, SessionContext context, StringConverter converter)
         {
             Dictionary<string, string>? fields = new Dictionary<string, string>();
             var dt = FullAttributes.DataType;
@@ -150,10 +151,10 @@ namespace Cognite.OpcUa.Nodes
                 }
                 else
                 {
-                    fields["dataType"] = dt.Name ?? dt.GetUniqueId(client) ?? "null";
+                    fields["dataType"] = dt.Name ?? dt.GetUniqueId(context) ?? "null";
                 }
             }
-            fields["Value"] = client.StringConverter.ConvertToString(FullAttributes.Value, dt.EnumValues);
+            fields["Value"] = converter.ConvertToString(FullAttributes.Value, dt.EnumValues);
 
             return fields;
         }

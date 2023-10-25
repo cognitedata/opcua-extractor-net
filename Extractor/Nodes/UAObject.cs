@@ -18,6 +18,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.TypeCollectors;
+using Cognite.OpcUa.Types;
 using Opc.Ua;
 using System.Collections.Generic;
 using System.Globalization;
@@ -105,7 +106,7 @@ namespace Cognite.OpcUa.Nodes
 
         public override NodeId? TypeDefinition => FullAttributes.TypeDefinition?.Id;
 
-        public override Dictionary<string, string>? GetExtraMetadata(FullConfig config, IUAClientAccess client)
+        public override Dictionary<string, string>? GetExtraMetadata(FullConfig config, SessionContext context, StringConverter converter)
         {
             if (config.Extraction.NodeTypes.Metadata && FullAttributes.TypeDefinition?.Name != null)
             {
