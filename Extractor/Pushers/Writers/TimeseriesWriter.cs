@@ -40,20 +40,20 @@ namespace Cognite.OpcUa.Pushers.Writers
                 IEnumerable<string> ids, UAExtractor extractor, IDictionary<NodeId, long> nodeToAssetIds, Result result)
         {
             var tss = ids.Select(id => tsMap[id]);
-                var creates = tss.Select(
-                        ts =>
-                            ts.ToTimeseries(
-                                config,
-                                extractor,
-                                extractor,
-                                config.Cognite?.DataSet?.Id,
-                                nodeToAssetIds,
-                                config.Cognite?.MetadataMapping?.Timeseries
-                            )
-                    )
-                    .Where(ts => ts != null);
-                result.Created += creates.Count();
-                return creates;
+            var creates = tss.Select(
+                    ts =>
+                        ts.ToTimeseries(
+                            config,
+                            extractor,
+                            extractor,
+                            config.Cognite?.DataSet?.Id,
+                            nodeToAssetIds,
+                            config.Cognite?.MetadataMapping?.Timeseries
+                        )
+                )
+                .Where(ts => ts != null);
+            result.Created += creates.Count();
+            return creates;
         }
 
         /// <summary>
