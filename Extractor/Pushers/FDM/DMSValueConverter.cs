@@ -1,4 +1,5 @@
-﻿using Cognite.OpcUa.Types;
+﻿using Cognite.OpcUa.Config;
+using Cognite.OpcUa.Types;
 using CogniteSdk.Beta.DataModels;
 using Opc.Ua;
 using System;
@@ -13,11 +14,11 @@ namespace Cognite.OpcUa.Pushers.FDM
         private readonly StringConverter converter;
 
         public StringConverter Converter => converter;
-        private readonly string space;
-        public DMSValueConverter(StringConverter converter, string space)
+        private readonly FdmDestinationConfig.ModelInfo modelInfo;
+        public DMSValueConverter(StringConverter converter, FdmDestinationConfig.ModelInfo modelInfo)
         {
             this.converter = converter;
-            this.space = space;
+            this.modelInfo = modelInfo;
         }
 
         public IDMSValue? ConvertVariant(BasePropertyType? type, Variant? value, NodeIdContext context)
@@ -26,7 +27,7 @@ namespace Cognite.OpcUa.Pushers.FDM
 
             var variant = type?.Type ?? PropertyTypeVariant.json;
             var isArray = type?.GetType()?.GetProperty("List")?.GetValue(type) as bool? ?? false;
-            
+
             if (isArray)
             {
                 return ConvertArrayVariant(variant, value.Value, context);
@@ -57,7 +58,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                 case PropertyTypeVariant.direct:
                     if (value.Value is NodeId id && !id.IsNullNodeId)
                     {
-                        return new RawPropertyValue<DirectRelationIdentifier>(new DirectRelationIdentifier(space, context.NodeIdToString(id)));
+                        return new RawPropertyValue<DirectRelationIdentifier>(new DirectRelationIdentifier(modelInfo.InstanceSpace, context.NodeIdToString(id)));
                     }
                     return null;
                 case PropertyTypeVariant.json:

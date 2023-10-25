@@ -31,7 +31,9 @@ namespace Test.Unit
                 DataModels = new FdmDestinationConfig
                 {
                     Enabled = true,
-                    Space = "test",
+                    ModelSpace = "modelspace",
+                    InstanceSpace = "instancespace",
+                    ModelVersion = "1"
                 }
             };
             tester.Config.Extraction.RootNode = new ProtoNodeId
@@ -70,7 +72,7 @@ namespace Test.Unit
 
             await extractor.RunExtractor(true);
 
-            Assert.Single(handler.Spaces);
+            Assert.Equal(2, handler.Spaces.Count);
             // FolderType, BaseObjectType, BaseVariableType, BaseDataVariableType, PropertyType,
             // 4 custom object types, 1 custom variable types
             // BaseNode, BaseType, +4 type types
