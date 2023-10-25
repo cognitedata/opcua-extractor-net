@@ -12,21 +12,21 @@ using Opc.Ua.Client;
 
 namespace Cognite.OpcUa
 {
-    class NamespacePublicationDateStorableState : BaseStorableState
+    public class NamespacePublicationDateStorableState : BaseStorableState
     {
+        public long LastTimestamp { get; set; }
         public DateTime CreatedAt { get; set; }
     }
 
-    class NamespacePublicationDateState : IExtractionState
+    public class NamespacePublicationDateState : IExtractionState
     {
         public bool Existing { get; set; }
-        public DateTime? LastTimeModified { get; set; }
         public long LastTimestamp { get; set; }
+        public DateTime? LastTimeModified { get; set; }
         public string Id { get; set; }
 
-        public NamespacePublicationDateState(string id, DateTime lastTimeModified)
+        public NamespacePublicationDateState(string id)
         {
-            LastTimeModified = lastTimeModified;
             Id = id;
         }
     }
@@ -135,6 +135,10 @@ namespace Cognite.OpcUa
                         continue;
                     var id = _uaClient.ToNodeId(reference.NodeId);
                     nodes.TryAdd(id, (id, reference.DisplayName.Text));
+                    _extractionStates.TryAdd(
+                        id.ToString(),
+                        new NamespacePublicationDateState(id.ToString())
+                    );
                 }
             }
 
@@ -143,7 +147,15 @@ namespace Cognite.OpcUa
                 await _extractor.StateStorage.RestoreExtractionState<
                     NamespacePublicationDateStorableState,
                     NamespacePublicationDateState
-                >(_extractionStates, _npdStore, (_, _1) => { }, token);
+                >(
+                    _extractionStates,
+                    _npdStore,
+                    (value, item) =>
+                    {
+                        value.LastTimestamp = item.LastTimestamp;
+                    },
+                    token
+                );
             }
 
             if (nodes.Any())
@@ -161,8 +173,11 @@ namespace Cognite.OpcUa
                 {
                     // item.DisplayName
                     var values = item.DequeueValues();
-                    var valueTime = ((DateTimeOffset)values[0].ServerTimestamp).ToUnixTimeMilliseconds();
-                    var shouldRebrowse = EvaluateTimestampFor(item.DisplayName, valueTime);
+                    var valueTime = (
+                        (DateTimeOffset)values[0].ServerTimestamp
+                    ).ToUnixTimeMilliseconds();
+                    var id = item.ResolvedNodeId.ToString();
+                    var shouldRebrowse = EvaluateTimestampFor(id, valueTime);
                     if (shouldRebrowse)
                     {
                         logger.LogInformation(
@@ -171,12 +186,12 @@ namespace Cognite.OpcUa
                             valueTime
                         );
                         _extractor.Looper.QueueRebrowse();
-                        Task.Run(async () => await UpdateTimestampFor(item.DisplayName, valueTime, token));
+                        Task.Run(async () => await UpsertStoredTimestampFor(id, valueTime, token));
                     }
                     else
                     {
                         logger.LogDebug(
-                            "Received a rebrowse trigger notification with time {Time}, which is not greater than extractor start time {StartTime}",
+                            "Received a rebrowse trigger notification with time {Time}, which is not greater than last rebrowse time {lastTime}",
                             valueTime,
                             UAExtractor.StartTime
                         );
@@ -189,30 +204,47 @@ namespace Cognite.OpcUa
             };
         }
 
-        private bool EvaluateTimestampFor(string displayName, long valueTime) =>
-            (_extractionStates.TryGetValue(displayName, out var lastState))
+        private bool EvaluateTimestampFor(string id, long valueTime) =>
+            (_extractionStates.TryGetValue(id, out var lastState))
             && lastState.LastTimestamp < valueTime;
 
-        private async Task UpdateTimestampFor(string displayName, long valueTime, CancellationToken token)
+        private async Task UpsertStoredTimestampFor(
+            string id,
+            long valueTime,
+            CancellationToken token
+        )
         {
-            if (_extractor.StateStorage != null && _extractionStates.TryGetValue(displayName, out var lastState))
+            if (_extractor.StateStorage == null)
+                return;
+
+            if (_extractionStates.TryGetValue(id, out var lastState))
             {
+                logger.LogInformation($"Updating state for: {id}");
                 lastState.LastTimestamp = valueTime;
-                await _extractor.StateStorage.StoreExtractionState<
-                    NamespacePublicationDateStorableState,
-                    NamespacePublicationDateState
-                >(
-                    _extractionStates.Values.ToList(),
-                    _npdStore,
-                    (state) =>
-                        new NamespacePublicationDateStorableState
-                        {
-                            Id = state.Id,
-                            CreatedAt = DateTime.UtcNow
-                        },
-                    token
-                );
             }
+            else
+            {
+                logger.LogInformation($"No state found for: {id}");
+                var npds = new NamespacePublicationDateState(id);
+                npds.LastTimestamp = valueTime;
+                _extractionStates[id] = npds;
+            }
+            _extractionStates[id].LastTimeModified = DateTime.UtcNow;
+
+            await _extractor.StateStorage.StoreExtractionState<
+                NamespacePublicationDateStorableState,
+                NamespacePublicationDateState
+            >(
+                _extractionStates.Values.ToList(),
+                _npdStore,
+                (state) =>
+                    new NamespacePublicationDateStorableState
+                    {
+                        Id = state.Id,
+                        LastTimestamp = valueTime,
+                    },
+                token
+            );
         }
 
         private void CreateSubscriptions(

@@ -12,8 +12,8 @@
 
     <!-- Where the application instance certificate is stored (MachineDefault) -->
     <ApplicationCertificate>
-      <StoreType>X509Store</StoreType>
-      <StorePath>CurrentUser\My</StorePath>
+      <StoreType>Directory</StoreType>
+      <StorePath>./certificates/</StorePath>
       <SubjectName>CN=Opcua-extractor, C=NO, S=Oslo, O=Cognite, DC=localhost</SubjectName>
     </ApplicationCertificate>
 

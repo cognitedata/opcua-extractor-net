@@ -348,11 +348,6 @@ namespace Cognite.OpcUa
 
             Started = true;
 
-            if (rebrowseTriggerManager is not null)
-            {
-                await rebrowseTriggerManager.EnableCustomServerSubscriptions(Source.Token);
-            }
-
             startTime.Set(new DateTimeOffset(UAExtractor.StartTime).ToUnixTimeMilliseconds());
 
             foreach (var pusher in pushers)
@@ -361,6 +356,11 @@ namespace Cognite.OpcUa
             }
 
             var synchTasks = await RunMapping(RootNodes, initial: true, isFull: true);
+
+            if (rebrowseTriggerManager is not null)
+            {
+                await rebrowseTriggerManager.EnableCustomServerSubscriptions(Source.Token);
+            }
 
             if (Config.FailureBuffer.Enabled && FailureBuffer != null)
             {
