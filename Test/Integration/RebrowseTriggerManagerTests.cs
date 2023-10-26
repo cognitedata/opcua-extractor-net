@@ -121,7 +121,8 @@ namespace Test.Integration
             );
 
             // Act
-            tester.Server.Server.SetNamespacePublicationDate(DateTime.UtcNow);
+            var newTime = DateTime.UtcNow;
+            tester.Server.Server.SetNamespacePublicationDate(newTime);
 
             // Assert
             await TestUtils.WaitForCondition(
@@ -144,9 +145,34 @@ namespace Test.Integration
                 tester.Source.Token
             );
             Assert.True(_extractionStates.TryGetValue(npdId.ToString(), out var newNpds));
-            Assert.True(simulatedLastTimestamp < newNpds.LastTimestamp);
-            tester.Server.Server.RemoveNode(addedId);
+            Assert.Equal(((DateTimeOffset)newTime).ToUnixTimeMilliseconds(), newNpds.LastTimestamp);
+            _output.WriteLine($"Blah blah: {((DateTimeOffset)newTime).ToUnixTimeMilliseconds()}, {newNpds.LastTimestamp}");
             await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
+
+
+            var newTask = extractor.RunExtractor();
+
+            var nextTime = DateTime.UtcNow;
+            tester.Server.Server.SetNamespacePublicationDate(nextTime);
+
+
+            await stateStore.RestoreExtractionState<
+                NamespacePublicationDateStorableState,
+                NamespacePublicationDateState
+            >(
+                _extractionStates,
+                tester.Config.StateStorage.NamespacePublicationDateStore,
+                (value, item) =>
+                {
+                    value.LastTimestamp = item.LastTimestamp;
+                },
+                tester.Source.Token
+            );
+            Assert.True(_extractionStates.TryGetValue(npdId.ToString(), out var nextNpds));
+            _output.WriteLine($"Blah blah: {((DateTimeOffset)nextTime).ToUnixTimeMilliseconds()}, {nextNpds.LastTimestamp}");
+            Assert.Equal(((DateTimeOffset)nextTime).ToUnixTimeMilliseconds(), nextNpds.LastTimestamp);
+            tester.Server.Server.RemoveNode(addedId);
+            await BaseExtractorTestFixture.TerminateRunTask(newTask, extractor);
         }
 
         public static IEnumerable<object[]> TriggeringConfigurationStates =>

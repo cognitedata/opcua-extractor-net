@@ -187,7 +187,7 @@ namespace Cognite.OpcUa
                     (dv, i) =>
                         (
                             nodes[i].ToString(),
-                            ((DateTimeOffset)dv.SourceTimestamp).ToUnixTimeSeconds()
+                            ((DateTimeOffset)dv.GetValue(UAExtractor.StartTime)).ToUnixTimeSeconds()
                         )
                 )
                 .ToDictionary(item => item.Item1, item => item.Item2);
@@ -220,14 +220,7 @@ namespace Cognite.OpcUa
                 try
                 {
                     var values = item.DequeueValues();
-                    logger.LogInformation(
-                        "Print out the value: {v}: {v2}",
-                        values[0].Value,
-                        values[0].SourceTimestamp
-                    );
-                    var valueTime = (
-                        (DateTimeOffset)values[0].SourceTimestamp
-                    ).ToUnixTimeMilliseconds();
+                    var valueTime = ((DateTimeOffset)values[0].GetValue(UAExtractor.StartTime)).ToUnixTimeMilliseconds();
                     var id = item.ResolvedNodeId.ToString();
                     var lastTimestamp = GetLastTimestampFor(id);
                     if (lastTimestamp < valueTime)
