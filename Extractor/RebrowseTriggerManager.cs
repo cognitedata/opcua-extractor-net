@@ -159,7 +159,55 @@ namespace Cognite.OpcUa
             }
 
             if (nodes.Any())
+            {
+                await CheckLastStateTriggered(nodes.Values.ToList(), token);
                 CreateSubscriptions(nodes, token);
+            }
+        }
+
+        private async Task CheckLastStateTriggered(List<(NodeId, string)> nodes, CancellationToken token)
+        {
+            // Check if there is need to trigger for previously unattended items.
+            if (!nodes.Select(n => GetLastTimestampFor(n.ToString())).Any(v => v > 0))
+                return;
+
+            var readValueIds = new ReadValueIdCollection(
+                nodes.Select(
+                    node => new ReadValueId { NodeId = node.Item1, AttributeId = Attributes.Value }
+                )
+            );
+            var dataValues = await _uaClient.ReadAttributes(
+                readValueIds,
+                nodes.Count,
+                token,
+                "rebrowse trigger"
+            );
+            var mapping = dataValues
+                .Select(
+                    (dv, i) =>
+                        (
+                            nodes[i].ToString(),
+                            ((DateTimeOffset)dv.SourceTimestamp).ToUnixTimeSeconds()
+                        )
+                )
+                .ToDictionary(item => item.Item1, item => item.Item2);
+            foreach (var node in nodes)
+            {
+                var id = node.ToString();
+                var lastTimestamp = GetLastTimestampFor(id);
+                if (
+                    lastTimestamp != 0
+                    && (mapping.TryGetValue(id, out var valueTime) && lastTimestamp < valueTime)
+                )
+                {
+                    logger.LogInformation(
+                        "Triggering a rebrowse due to a changes yet in {value} to be reflected",
+                        node.Item2
+                    );
+                    _extractor.Looper.QueueRebrowse();
+                    await UpsertSavedTimestampFor(id, valueTime, token);
+                }
+            }
         }
 
         private MonitoredItemNotificationEventHandler OnRebrowseTriggerNotification(
@@ -171,14 +219,18 @@ namespace Cognite.OpcUa
             {
                 try
                 {
-                    // item.DisplayName
                     var values = item.DequeueValues();
+                    logger.LogInformation(
+                        "Print out the value: {v}: {v2}",
+                        values[0].Value,
+                        values[0].SourceTimestamp
+                    );
                     var valueTime = (
-                        (DateTimeOffset)values[0].ServerTimestamp
+                        (DateTimeOffset)values[0].SourceTimestamp
                     ).ToUnixTimeMilliseconds();
                     var id = item.ResolvedNodeId.ToString();
-                    var shouldRebrowse = EvaluateTimestampFor(id, valueTime);
-                    if (shouldRebrowse)
+                    var lastTimestamp = GetLastTimestampFor(id);
+                    if (lastTimestamp < valueTime)
                     {
                         logger.LogInformation(
                             "Triggering a rebrowse due to a change in the value of {NodeId} to {Value}",
@@ -186,14 +238,14 @@ namespace Cognite.OpcUa
                             valueTime
                         );
                         _extractor.Looper.QueueRebrowse();
-                        Task.Run(async () => await UpsertStoredTimestampFor(id, valueTime, token));
+                        Task.Run(async () => await UpsertSavedTimestampFor(id, valueTime, token));
                     }
                     else
                     {
                         logger.LogDebug(
                             "Received a rebrowse trigger notification with time {Time}, which is not greater than last rebrowse time {lastTime}",
                             valueTime,
-                            UAExtractor.StartTime
+                            lastTimestamp
                         );
                     }
                 }
@@ -204,11 +256,10 @@ namespace Cognite.OpcUa
             };
         }
 
-        private bool EvaluateTimestampFor(string id, long valueTime) =>
-            (_extractionStates.TryGetValue(id, out var lastState))
-            && lastState.LastTimestamp < valueTime;
+        private long GetLastTimestampFor(string id) =>
+            (_extractionStates.TryGetValue(id, out var lastState)) ? lastState.LastTimestamp : 0;
 
-        private async Task UpsertStoredTimestampFor(
+        private async Task UpsertSavedTimestampFor(
             string id,
             long valueTime,
             CancellationToken token

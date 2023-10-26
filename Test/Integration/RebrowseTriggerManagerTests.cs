@@ -92,7 +92,8 @@ namespace Test.Integration
             using var extractor = tester.BuildExtractor(true, stateStore, cdfPusher);
             var npdId = tester.Server.Server.GetNamespacePublicationDateId();
             var npds = new NamespacePublicationDateState(npdId.ToString());
-            var simulatedLastTimestamp = ((DateTimeOffset)DateTime.UtcNow).ToUnixTimeSeconds() - 10;
+            var lts = DateTime.UtcNow.AddSeconds(-10);
+            var simulatedLastTimestamp = ((DateTimeOffset)lts).ToUnixTimeSeconds();
             npds.LastTimestamp = simulatedLastTimestamp;
             npds.LastTimeModified = DateTime.UtcNow;
             _extractionStates.TryAdd(npdId.ToString(), npds);
