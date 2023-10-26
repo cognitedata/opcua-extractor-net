@@ -7,6 +7,7 @@ using Cognite.OpcUa.History;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.Pushers;
+using Cognite.OpcUa.Pushers.Writers;
 using Cognite.OpcUa.Subscriptions;
 using Cognite.OpcUa.Types;
 using CogniteSdk;
@@ -215,9 +216,11 @@ namespace Test.Unit
             Assert.Null(await pusher.PushEvents(invalidEvents, tester.Source.Token));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_skipped_events_cdf", 2));
 
-            var nodeToAssetIds = (Dictionary<NodeId, long>)pusher.GetType()
-                .GetField("nodeToAssetIds", BindingFlags.Instance | BindingFlags.NonPublic)
+
+            var writer = (CDFWriter)pusher.GetType()
+                .GetField("cdfWriter", BindingFlags.Instance | BindingFlags.NonPublic)
                 .GetValue(pusher);
+            var nodeToAssetIds = writer.NodeToAssetIds;
 
             nodeToAssetIds[new NodeId("source")] = 123;
 
@@ -452,9 +455,11 @@ namespace Test.Unit
 
             var dt = new UADataType(DataTypeIds.Double);
 
-            var nodeToAssetIds = (Dictionary<NodeId, long>)pusher.GetType()
-                .GetField("nodeToAssetIds", BindingFlags.Instance | BindingFlags.NonPublic)
+            var writer = (CDFWriter)pusher.GetType()
+                .GetField("cdfWriter", BindingFlags.Instance | BindingFlags.NonPublic)
                 .GetValue(pusher);
+
+            var nodeToAssetIds = writer.NodeToAssetIds;
             nodeToAssetIds[new NodeId("parent")] = 123;
 
             var rels = Enumerable.Empty<UAReference>();
@@ -592,10 +597,11 @@ namespace Test.Unit
             using var extractor = tester.BuildExtractor(true, null, pusher);
             var dt = new UADataType(DataTypeIds.Double);
 
-            var nodeToAssetIds = (Dictionary<NodeId, long>)pusher.GetType()
-                .GetField("nodeToAssetIds", BindingFlags.Instance | BindingFlags.NonPublic)
+            var writer = (CDFWriter)pusher.GetType()
+                .GetField("cdfWriter", BindingFlags.Instance | BindingFlags.NonPublic)
                 .GetValue(pusher);
-            nodeToAssetIds[new NodeId("parent")] = 123;
+
+            var nodeToAssetIds = writer.NodeToAssetIds;
 
             var rels = Enumerable.Empty<UAReference>();
             var assets = Enumerable.Empty<BaseUANode>();
