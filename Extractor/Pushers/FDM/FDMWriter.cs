@@ -43,7 +43,6 @@ namespace Cognite.OpcUa.Pushers.FDM
         private FullConfig config;
         private ILogger<FDMWriter> log;
         private string instSpace;
-        public UAExtractor Extractor { get; set; } = null!;
         public FDMWriter(FullConfig config, CogniteDestination destination, ILogger<FDMWriter> log)
         {
             this.config = config;
@@ -176,29 +175,17 @@ namespace Cognite.OpcUa.Pushers.FDM
             await destination.CogniteClient.Beta.DataModels.UpsertDataModels(new[] { model }, token);
         }
 
-        private IEnumerable<BaseUANode> GetModellingRules()
-        {
-            var mgr = Extractor.TypeManager;
-            return new BaseUANode[] {
-                mgr.GetModellingRule(ObjectIds.ModellingRule_Mandatory, "Mandatory"),
-                mgr.GetModellingRule(ObjectIds.ModellingRule_Optional, "Optional"),
-                mgr.GetModellingRule(ObjectIds.ModellingRule_MandatoryPlaceholder, "MandatoryPlaceholder"),
-                mgr.GetModellingRule(ObjectIds.ModellingRule_OptionalPlaceholder, "OptionalPlaceholder"),
-                mgr.GetModellingRule(ObjectIds.ModellingRule_ExposesItsArray, "ExposesItsArray")
-            };
-        }
-
         public async Task<bool> PushNodes(
             IEnumerable<BaseUANode> objects,
             IEnumerable<UAVariable> variables,
             IEnumerable<UAReference> references,
-            IUAClientAccess client,
+            UAExtractor extractor,
             CancellationToken token)
         {
             await InitializeSpaceAndServer(token);
-            var context = await SyncServerMeta(client.NamespaceTable!, token);
+            var context = await SyncServerMeta(extractor.NamespaceTable!, token);
 
-            var converter = new DMSValueConverter(client.StringConverter, instSpace);
+            var converter = new DMSValueConverter(extractor.StringConverter, instSpace);
             var builder = new TypeHierarchyBuilder(log, converter, config, context);
 
             // First, collect all nodes, including properties.
@@ -210,7 +197,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                 .ToList();
 
             // Hierarchy of all known type-hierarchy nodes
-            var typeHierarchy = new NodeHierarchy(Extractor.TypeManager.References, Extractor.TypeManager.NodeMap);
+            var typeHierarchy = new NodeHierarchy(extractor.TypeManager.References, extractor.TypeManager.NodeMap);
 
             // We also need to collect any types, and any nodes referenced by those types.
             var typeCollector = new NodeTypeCollector(log,
@@ -289,7 +276,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             // Initialize if needed
             await Initialize(types, token);
 
-            var instanceBuilder = new InstanceBuilder(nodeHierarchy, types, converter, context, client, instSpace, log);
+            var instanceBuilder = new InstanceBuilder(nodeHierarchy, types, converter, context, extractor, instSpace, log);
             log.LogInformation("Begin building instances");
             instanceBuilder.Build();
             log.LogInformation("Finish building instances");
