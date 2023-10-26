@@ -16,7 +16,9 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using Cognite.Extensions;
+using Cognite.Extractor.Common;
 using Cognite.Extractor.Utils;
+using CogniteSdk.Beta.DataModels;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -139,7 +141,7 @@ namespace Cognite.OpcUa.Config
         /// </summary>
         public string? RelationshipsTable { get; set; }
     }
-    public class MetadataTargetsConfig 
+    public class MetadataTargetsConfig
     {
         /// <summary>
         /// Raw metadata targets config
@@ -214,10 +216,48 @@ namespace Cognite.OpcUa.Config
 
     public class FdmDestinationConfig
     {
+        public class ModelInfo
+        {
+            public ModelInfo(FdmDestinationConfig config)
+            {
+                ModelSpace = config.ModelSpace ?? throw new ConfigurationException("data-models.model-space is required when writing to data models is enabled");
+                InstanceSpace = config.InstanceSpace ?? throw new ConfigurationException("data-models.instance-space is required when writing to data models is enabled");
+                ModelVersion = config.ModelVersion ?? throw new ConfigurationException("data-models.model-version is required when writing to data models is enabled");
+            }
+
+            public string ModelSpace { get; }
+            public string InstanceSpace { get; }
+            public string ModelVersion { get; }
+
+            public FDMExternalId FDMExternalId(string externalId)
+            {
+                return new FDMExternalId(externalId, ModelSpace, ModelVersion);
+            }
+
+            public ViewIdentifier ViewIdentifier(string externalId)
+            {
+                return new ViewIdentifier(ModelSpace, externalId, ModelVersion);
+            }
+
+            public ContainerIdentifier ContainerIdentifier(string externalId)
+            {
+                return new ContainerIdentifier(ModelSpace, externalId);
+            }
+        }
+
         /// <summary>
-        /// Instance space to write to
+        /// Space to create models in.
         /// </summary>
-        public string? Space { get; set; }
+        public string? ModelSpace { get; set; }
+        /// <summary>
+        /// Space to create instances in. Can be the same as ModelSpace.
+        /// </summary>
+        public string? InstanceSpace { get; set; }
+
+        /// <summary>
+        /// Version string used for model and view.
+        /// </summary>
+        public string? ModelVersion { get; set; }
         /// <summary>
         /// True to enable. This will not produce meaningful results unless
         /// extraction.types.as-nodes, extraction.relationships.enabled, extraction.relationships.hierarchical,
@@ -237,7 +277,7 @@ namespace Cognite.OpcUa.Config
         /// Simplifies the model greatly.
         /// </summary>
         public bool SkipSimpleTypes { get; set; }
-        
+
         /// <summary>
         /// Do not ingest views if the number of views in the data model is equal to the number of views in OPC-UA.
         /// </summary>
