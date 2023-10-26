@@ -142,7 +142,7 @@ namespace Cognite.OpcUa.Pushers.Writers
             {
                 tasks.Add(clean.MarkDeleted(deletes, token));
             }
-            tasks.Add(timeseries.MarkTimeseriesDeleted(deletes.Variables, token));
+            tasks.Add(timeseries.MarkTimeseriesDeleted(deletes.Variables.Select(d => d.Id), token));
 
             await Task.WhenAll(tasks);
         }

@@ -43,6 +43,8 @@ namespace Cognite.OpcUa.Pushers.FDM
         private FullConfig config;
         private ILogger<FDMWriter> log;
         private string instSpace;
+
+        private NodeIdContext? context;
         public FDMWriter(FullConfig config, CogniteDestination destination, ILogger<FDMWriter> log)
         {
             this.config = config;
@@ -183,7 +185,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             CancellationToken token)
         {
             await InitializeSpaceAndServer(token);
-            var context = await SyncServerMeta(extractor.NamespaceTable!, token);
+            context = await SyncServerMeta(extractor.NamespaceTable!, token);
 
             var converter = new DMSValueConverter(extractor.StringConverter, instSpace);
             var builder = new TypeHierarchyBuilder(log, converter, config, context);
@@ -413,6 +415,47 @@ namespace Cognite.OpcUa.Pushers.FDM
             if (finalNamespaces == null) throw new InvalidOperationException("Namespaces were not successfully assigned");
 
             return new NodeIdContext(finalNamespaces, nss);
+        }
+
+
+        private async Task DeleteInstances(IEnumerable<string> instances, InstanceType type, int chunkSize, CancellationToken token)
+        {
+            var chunks = instances.ChunkBy(chunkSize).ToList();
+            var generators = chunks
+                .Select<IEnumerable<string>, Func<Task>>(c => async () =>
+                {
+                    await destination.CogniteClient.Beta.DataModels.DeleteInstances(
+                        instances.Select(e => new InstanceIdentifier(type, "SPACE", e)),
+                        token
+                    );
+                });
+
+            int taskNum = 0;
+            await generators.RunThrottled(
+                4,
+                (_) =>
+                {
+                    if (chunks.Count > 1)
+                        log.LogDebug("{MethodName} completed {NumDone}/{TotalNum} tasks",
+                            nameof(DeleteInstances), ++taskNum, chunks.Count);
+                },
+                token
+            );
+        }
+
+        private async Task GetAllReferencingEdges(IEnumerable<NodeId> nodes, NodeIdContext context, CancellationToken token)
+        {
+
+        }
+
+        public async Task DeleteInFdm(DeletedNodes deletes, CancellationToken token)
+        {
+            if (context == null) throw new InvalidOperationException("Cannot delete, no initialized node context");
+            // First find all edges pointing to or from the nodes we are deleting.
+            // We pretty much need to do this, since we don't know if anyone has added edges to the nodes.
+
+
+            await DeleteInstances(deletes.References, InstanceType.ty)
         }
     }
 

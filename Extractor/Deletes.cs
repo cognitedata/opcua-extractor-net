@@ -2,9 +2,11 @@
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.NodeSources;
 using Microsoft.Extensions.Logging;
+using Opc.Ua;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -12,18 +14,42 @@ namespace Cognite.OpcUa
 {
     internal class NodeExistsState : BaseExtractionState
     {
-        public NodeExistsState(string id, DateTime time) : base(id)
+        public string? Namespace { get; }
+        public string? RawId { get; }
+
+        public NodeExistsState(string id, string? ns, string? rawId, DateTime time) : base(id)
         {
             LastTimeModified = time;
+            Namespace = ns;
+            RawId = rawId;
+        }
+
+        public NodeExistsState(string id, NodeId nodeId, SessionContext context, DateTime time) : base(id)
+        {
+            LastTimeModified = time;
+            Namespace = context.NamespaceTable.GetString(nodeId.NamespaceIndex);
+            var buffer = new StringBuilder();
+            NodeId.Format(buffer, nodeId.Identifier, nodeId.IdType, 0);
+            RawId = buffer.ToString();
+        }
+    }
+
+    public class KnownNodesState : BaseStorableState
+    {
+        public string? Namespace { get; set; }
+        public string? RawId { get; set; }
+        public NodeId GetNodeId(SessionContext context)
+        {
+            return context.ToNodeId(Namespace, RawId);
         }
     }
 
     public class DeletedNodes
     {
-        public IEnumerable<string> Objects { get; }
-        public IEnumerable<string> Variables { get; }
-        public IEnumerable<string> References { get; }
-        public DeletedNodes(IEnumerable<string> objects, IEnumerable<string> variables, IEnumerable<string> references)
+        public IEnumerable<KnownNodesState> Objects { get; }
+        public IEnumerable<KnownNodesState> Variables { get; }
+        public IEnumerable<KnownNodesState> References { get; }
+        public DeletedNodes(IEnumerable<KnownNodesState> objects, IEnumerable<KnownNodesState> variables, IEnumerable<KnownNodesState> references)
         {
             Objects = objects;
             Variables = variables;
@@ -32,9 +58,9 @@ namespace Cognite.OpcUa
 
         public DeletedNodes()
         {
-            Objects = Enumerable.Empty<string>();
-            Variables = Enumerable.Empty<string>();
-            References = Enumerable.Empty<string>();
+            Objects = Enumerable.Empty<KnownNodesState>();
+            Variables = Enumerable.Empty<KnownNodesState>();
+            References = Enumerable.Empty<KnownNodesState>();
         }
 
         public DeletedNodes Merge(DeletedNodes other)
@@ -60,22 +86,22 @@ namespace Cognite.OpcUa
             this.logger = logger;
         }
 
-        private async Task<Dictionary<string, BaseStorableState>> GetExistingStates(string tableName, CancellationToken token)
+        private async Task<Dictionary<string, KnownNodesState>> GetExistingStates(string tableName, CancellationToken token)
         {
             try
             {
-                return (await stateStore.GetAllExtractionStates<BaseStorableState>(tableName, token)).ToDictionary(s => s.Id);
+                return (await stateStore.GetAllExtractionStates<KnownNodesState>(tableName, token)).ToDictionary(s => s.Id);
             }
             catch (Exception ex)
             {
                 logger.LogWarning(ex, "Failed to get states from state store, assuming it is empty");
-                return new Dictionary<string, BaseStorableState>();
+                return new Dictionary<string, KnownNodesState>();
             }
         }
 
-        private async Task<IEnumerable<string>> GetDeletedItems(string? tableName, Dictionary<string, NodeExistsState> states, CancellationToken token)
+        private async Task<IEnumerable<KnownNodesState>> GetDeletedItems(string? tableName, Dictionary<string, NodeExistsState> states, CancellationToken token)
         {
-            if (tableName == null) return Enumerable.Empty<string>();
+            if (tableName == null) return Enumerable.Empty<KnownNodesState>();
 
             var oldStates = await GetExistingStates(tableName, token);
 
@@ -84,28 +110,35 @@ namespace Cognite.OpcUa
             if (deletedStates.Any())
             {
                 logger.LogInformation("Found {Del} stored nodes in {Tab} that no longer exist and will be marked as deleted", deletedStates.Count, tableName);
-                if (!config.DryRun) await stateStore.DeleteExtractionState(deletedStates.Select(d => new NodeExistsState(d.Id, time)), tableName, token);
+                if (!config.DryRun) await stateStore.DeleteExtractionState(deletedStates.Select(d =>
+                    new NodeExistsState(d.Id, d.Namespace, d.RawId, time)), tableName, token);
             }
 
             var newStates = states.Values.Where(s => !oldStates.ContainsKey(s.Id)).ToList();
             if (newStates.Any())
             {
                 logger.LogInformation("Found {New} new nodes in {Tab}, adding to state store...", newStates.Count, tableName);
-                if (!config.DryRun) await stateStore.StoreExtractionState(newStates, tableName, s => new BaseStorableState { Id = s.Id }, token);
+                if (!config.DryRun) await stateStore.StoreExtractionState(newStates, tableName,
+                    s => new KnownNodesState { Id = s.Id, Namespace = s.Namespace, RawId = s.RawId }, token);
             }
 
-            return deletedStates.Select(d => d.Id);
+            return deletedStates;
         }
 
-        public async Task<DeletedNodes> GetDiffAndStoreIds(NodeSourceResult result, CancellationToken token)
+        public async Task<DeletedNodes> GetDiffAndStoreIds(NodeSourceResult result, SessionContext context, CancellationToken token)
         {
             if (!result.CanBeUsedForDeletes) return new DeletedNodes();
 
             var time = DateTime.UtcNow.AddSeconds(-1);
-            var newVariables = result.DestinationVariables.Select(v => v.GetUniqueId(client.Context)!).ToDictionary(
-                i => i, i => new NodeExistsState(i, time));
-            var newObjects = result.DestinationObjects.Select(o => o.GetUniqueId(client.Context)!).ToDictionary(i => i, i => new NodeExistsState(i, time));
-            var newReferences = result.DestinationReferences.Select(r => client.GetRelationshipId(r)!).ToDictionary(i => i, i => new NodeExistsState(i, time));
+            var newVariables = result.DestinationVariables.Select(v => (v.Id, v.GetUniqueId(context)!)).ToDictionary(
+                i => i.Item2,
+                i => new NodeExistsState(i.Item2, i.Item1, context, time));
+            var newObjects = result.DestinationObjects.Select(o => (o.Id, o.GetUniqueId(context)!)).ToDictionary(
+                i => i.Item2,
+                i => new NodeExistsState(i.Item2, i.Item1, context, time));
+            var newReferences = result.DestinationReferences.Select(r => client.GetRelationshipId(r)!).ToDictionary(
+                i => i,
+                i => new NodeExistsState(i, null, null, time));
 
             var res = await Task.WhenAll(
                 GetDeletedItems(config.StateStorage?.KnownObjectsStore, newObjects, token),
