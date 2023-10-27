@@ -1,6 +1,7 @@
 ﻿using Cognite.Extractor.StateStorage;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.NodeSources;
+using LiteDB;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using System;
@@ -37,10 +38,13 @@ namespace Cognite.OpcUa
     public class KnownNodesState : BaseStorableState
     {
         public string? Namespace { get; set; }
+        [BsonField(Name = "rawId")]
         public string? RawId { get; set; }
-        public NodeId GetNodeId(SessionContext context)
+        public NodeId GetNodeId(SessionContext context, ILogger log)
         {
-            return context.ToNodeId(Namespace, RawId);
+            var id = context.ToNodeId(RawId, Namespace);
+            if (id.IsNullNodeId) log.LogWarning("Failed to delete node defined by {Ns};{RawId}, unable to construct a valid node ID", Namespace, RawId);
+            return id;
         }
     }
 

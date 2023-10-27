@@ -685,7 +685,7 @@ namespace Cognite.OpcUa
 
             Streamer.AllowData = State.NodeStates.Any();
 
-            var toPush = await PusherInput.FromNodeSourceResult(result, deletesManager, Source.Token);
+            var toPush = await PusherInput.FromNodeSourceResult(result, Context, deletesManager, Source.Token);
 
             await PushNodes(toPush);
             // Changed flag means that it already existed, so we avoid synchronizing these.

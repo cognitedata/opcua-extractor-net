@@ -131,7 +131,7 @@ namespace Cognite.OpcUa.Pushers.Writers
         }
 
 
-        public async Task ExecuteDeletes(DeletedNodes deletes, CancellationToken token)
+        public async Task ExecuteDeletes(DeletedNodes deletes, UAExtractor extractor, CancellationToken token)
         {
             var tasks = new List<Task>();
             if (raw != null)
@@ -143,6 +143,10 @@ namespace Cognite.OpcUa.Pushers.Writers
                 tasks.Add(clean.MarkDeleted(deletes, token));
             }
             tasks.Add(timeseries.MarkTimeseriesDeleted(deletes.Variables.Select(d => d.Id), token));
+            if (fdm != null)
+            {
+                tasks.Add(fdm.DeleteInFdm(deletes, extractor.Context, token));
+            }
 
             await Task.WhenAll(tasks);
         }
