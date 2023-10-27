@@ -8,11 +8,14 @@ jobs:
     common:
         uses: ./.github/workflows/common.yml
         secrets: inherit
-
+    build:
+        uses: ./.github/workflows/test.yml
+        secrets: inherit
     publish-binaries:
         runs-on: ubuntu-latest
         needs: common
         environment: CD
+        if: ${{ needs.common.outputs.should-release == 0 }}
         steps:
           - uses: actions/checkout@v4
 

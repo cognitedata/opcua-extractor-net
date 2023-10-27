@@ -1,5 +1,6 @@
 ﻿using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
+using Cognite.OpcUa.Subscriptions;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using Opc.Ua.Client;
@@ -13,23 +14,26 @@ using Metrics = Prometheus.Metrics;
 
 namespace Cognite.OpcUa
 {
+
     public class SessionManager : IDisposable
     {
-        private SourceConfig config;
-        private UAClient client;
+        private readonly SourceConfig config;
+        private readonly FullConfig fullConfig;
+        private readonly UAClient client;
         private ReverseConnectManager? reverseConnectManager;
         private SessionReconnectHandler? reconnectHandler;
-        private ApplicationConfiguration appConfig;
+        // Initialized late, will be non-null after Initialize is called.
+        private ApplicationConfiguration appConfig = null!;
         private ILogger log;
 
         public byte CurrentServiceLevel { get; private set; } = 255;
         private DateTime? lastLowSLConnectAttempt = null;
-        private SemaphoreSlim redundancyReconnectLock = new SemaphoreSlim(1);
+        private readonly SemaphoreSlim redundancyReconnectLock = new SemaphoreSlim(1);
 
         private ISession? session;
         private CancellationToken liveToken;
         private bool disposedValue;
-        public int Timeout { get; set; }
+        private int timeout;
 
         private static readonly Counter connects = Metrics
             .CreateCounter("opcua_connects", "Number of times the client has connected to and mapped the opcua server");
@@ -39,14 +43,43 @@ namespace Cognite.OpcUa
 
         public string? EndpointUrl { get; private set; }
 
-        public SessionManager(SourceConfig config, UAClient parent, ApplicationConfiguration appConfig, ILogger log, CancellationToken token, int timeout = -1)
+        private readonly SemaphoreSlim sessionWaitLock = new SemaphoreSlim(0);
+        private int sessionWaiters = 0;
+        private readonly object sessionWaitExtLock = new();
+
+        public SessionContext Context { get; }
+
+
+        public SessionManager(FullConfig config, UAClient parent, ILogger log)
         {
             client = parent;
-            this.config = config;
-            this.appConfig = appConfig;
+            this.config = config.Source;
+            fullConfig = config;
             this.log = log;
-            liveToken = token;
-            Timeout = timeout;
+            Context = new SessionContext(config, log);
+        }
+
+        public async Task<ISession> WaitForSession()
+        {
+            lock (sessionWaitExtLock)
+            {
+                if (session != null) return session;
+                sessionWaiters++;
+            }
+            await sessionWaitLock.WaitAsync(liveToken);
+            if (session == null)
+            {
+                throw new ExtractorFailureException("Session does not exist after waiting, extractor is unable to continue");
+            }
+            return session;
+        }
+
+        public void RegisterExternalNamespaces(string[] table)
+        {
+            lock (sessionWaitExtLock)
+            {
+                Context.AddExternalNamespaces(table);
+            }
         }
 
         private async Task TryWithBackoff(Func<Task> method, int maxBackoff, CancellationToken token)
@@ -67,7 +100,7 @@ namespace Cognite.OpcUa
                     iter = Math.Min(iter, maxBackoff);
                     backoff = TimeSpan.FromSeconds(Math.Pow(2, iter));
 
-                    if (Timeout >= 0 && (DateTime.UtcNow - start).TotalSeconds > Timeout)
+                    if (timeout >= 0 && (DateTime.UtcNow - start).TotalSeconds > timeout)
                     {
                         throw;
                     }
@@ -81,9 +114,26 @@ namespace Cognite.OpcUa
         private void SetNewSession(ISession session)
         {
             session.KeepAliveInterval = config.KeepAliveInterval;
+            session.KeepAlive -= ClientKeepAlive;
             session.KeepAlive += ClientKeepAlive;
+            session.PublishError -= OnPublishError;
             session.PublishError += OnPublishError;
-            this.session = session;
+            lock (sessionWaitExtLock)
+            {
+                this.session = session;
+                Context.UpdateFromSession(session);
+                for (; sessionWaiters > 0; sessionWaiters--)
+                {
+                    sessionWaitLock.Release();
+                }
+            }
+        }
+
+        public void Initialize(ApplicationConfiguration appConfig, CancellationToken token, int timeout)
+        {
+            liveToken = token;
+            this.timeout = timeout;
+            this.appConfig = appConfig;
         }
 
         public async Task Connect()
@@ -135,7 +185,7 @@ namespace Cognite.OpcUa
 
             if (config.Redundancy.MonitorServiceLevel)
             {
-                await EnsureServiceLevelSubscription();
+                EnsureServiceLevelSubscription();
                 if (config.Redundancy.ReconnectIntervalValue.Value != System.Threading.Timeout.InfiniteTimeSpan
                     && !client.Callbacks.TaskScheduler.ContainsTask("CheckServiceLevel"))
                 {
@@ -373,7 +423,7 @@ namespace Cognite.OpcUa
         {
             if (!ReferenceEquals(sender, reconnectHandler)) return;
             if (reconnectHandler == null) return;
-            session = reconnectHandler.Session;
+            SetNewSession(reconnectHandler.Session);
             reconnectHandler.Dispose();
             log.LogWarning("--- RECONNECTED ---");
 
@@ -590,38 +640,29 @@ namespace Cognite.OpcUa
             await UpdateServiceLevel(CurrentServiceLevel, false);
         }
 
-        public async Task EnsureServiceLevelSubscription()
+        private void OnServiceLevelUpdate(MonitoredItem item, MonitoredItemNotificationEventArgs _)
         {
-            var state = new UAHistoryExtractionState(client, VariableIds.Server_ServiceLevel, false, false);
-            await client.AddSubscriptions(new[] { state }, "ServiceLevel", (MonitoredItem item, MonitoredItemNotificationEventArgs _) =>
+            try
             {
-                try
+                var values = item.DequeueValues();
+                var value = values.FirstOrDefault()
+                    ?.GetValue<byte>(0);
+                if (value == null)
                 {
-                    var values = item.DequeueValues();
-                    var value = values.FirstOrDefault()
-                        ?.GetValue<byte>(0);
-                    if (value == null)
-                    {
-                        log.LogWarning("Received null or invalid ServiceLevel");
-                        return;
-                    }
-                    client.Callbacks.TaskScheduler.ScheduleTask(null, async (_) => await UpdateServiceLevel(value.Value, false));
+                    log.LogWarning("Received null or invalid ServiceLevel");
+                    return;
                 }
-                catch (Exception ex)
-                {
-                    log.LogError(ex, "Unexpected error handling ServiceLevel trigger");
-                }
-            }, state => new MonitoredItem
+                client.Callbacks.TaskScheduler.ScheduleTask(null, async (_) => await UpdateServiceLevel(value.Value, false));
+            }
+            catch (Exception ex)
             {
-                StartNodeId = state.SourceId,
-                SamplingInterval = 1000,
-                DisplayName = "Value " + state.Id,
-                QueueSize = 1,
-                DiscardOldest = true,
-                AttributeId = Attributes.Value,
-                NodeClass = NodeClass.Variable,
-                CacheQueueSize = 1
-            }, liveToken, "service level");
+                log.LogError(ex, "Unexpected error handling ServiceLevel trigger");
+            }
+        }
+
+        public void EnsureServiceLevelSubscription()
+        {
+            client.SubscriptionManager!.EnqueueTask(new ServiceLevelSubscriptionTask(OnServiceLevelUpdate));
         }
 
         protected virtual void Dispose(bool disposing)

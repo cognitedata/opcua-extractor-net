@@ -7,6 +7,8 @@ using Cognite.OpcUa.History;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.Pushers;
+using Cognite.OpcUa.Pushers.Writers;
+using Cognite.OpcUa.Subscriptions;
 using Cognite.OpcUa.Types;
 using CogniteSdk;
 using Com.Cognite.V1.Timeseries.Proto;
@@ -214,9 +216,11 @@ namespace Test.Unit
             Assert.Null(await pusher.PushEvents(invalidEvents, tester.Source.Token));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_skipped_events_cdf", 2));
 
-            var nodeToAssetIds = (Dictionary<NodeId, long>)pusher.GetType()
-                .GetField("nodeToAssetIds", BindingFlags.Instance | BindingFlags.NonPublic)
+
+            var writer = (CDFWriter)pusher.GetType()
+                .GetField("cdfWriter", BindingFlags.Instance | BindingFlags.NonPublic)
                 .GetValue(pusher);
+            var nodeToAssetIds = writer.NodeToAssetIds;
 
             nodeToAssetIds[new NodeId("source")] = 123;
 
@@ -451,9 +455,11 @@ namespace Test.Unit
 
             var dt = new UADataType(DataTypeIds.Double);
 
-            var nodeToAssetIds = (Dictionary<NodeId, long>)pusher.GetType()
-                .GetField("nodeToAssetIds", BindingFlags.Instance | BindingFlags.NonPublic)
+            var writer = (CDFWriter)pusher.GetType()
+                .GetField("cdfWriter", BindingFlags.Instance | BindingFlags.NonPublic)
                 .GetValue(pusher);
+
+            var nodeToAssetIds = writer.NodeToAssetIds;
             nodeToAssetIds[new NodeId("parent")] = 123;
 
             var rels = Enumerable.Empty<UAReference>();
@@ -591,10 +597,11 @@ namespace Test.Unit
             using var extractor = tester.BuildExtractor(true, null, pusher);
             var dt = new UADataType(DataTypeIds.Double);
 
-            var nodeToAssetIds = (Dictionary<NodeId, long>)pusher.GetType()
-                .GetField("nodeToAssetIds", BindingFlags.Instance | BindingFlags.NonPublic)
+            var writer = (CDFWriter)pusher.GetType()
+                .GetField("cdfWriter", BindingFlags.Instance | BindingFlags.NonPublic)
                 .GetValue(pusher);
-            nodeToAssetIds[new NodeId("parent")] = 123;
+
+            var nodeToAssetIds = writer.NodeToAssetIds;
 
             var rels = Enumerable.Empty<UAReference>();
             var assets = Enumerable.Empty<BaseUANode>();
@@ -1102,7 +1109,7 @@ namespace Test.Unit
             var converter = tester.Client.StringConverter;
             converter.AddConverters(options, type);
 
-            var id = node.GetUniqueId(extractor);
+            var id = node.GetUniqueId(extractor.Context);
 
             var json = JsonSerializer.Serialize(node, options);
 
@@ -1271,7 +1278,7 @@ namespace Test.Unit
             Assert.Empty(handler.Assets);
 
             await extractor.WaitForSubscriptions();
-            await tester.Client.RemoveSubscription("DataChangeListener");
+            await tester.RemoveSubscription(SubscriptionName.DataPoints);
 
             extractor.State.Clear();
 
@@ -1349,7 +1356,7 @@ namespace Test.Unit
             Assert.Empty(handler.Assets);
 
             await extractor.WaitForSubscriptions();
-            await tester.Client.RemoveSubscription("EventListener");
+            await tester.RemoveSubscription(SubscriptionName.Events);
 
             extractor.State.Clear();
 
@@ -1423,7 +1430,7 @@ namespace Test.Unit
             Assert.Empty(handler.Assets);
 
             await extractor.WaitForSubscriptions();
-            await tester.Client.RemoveSubscription("EventListener");
+            await tester.RemoveSubscription(SubscriptionName.Events);
 
             extractor.State.Clear();
 
@@ -1461,7 +1468,7 @@ namespace Test.Unit
 
             (handler, pusher) = tester.GetCDFPusher();
             using var extractor = tester.BuildExtractor(true, null, pusher);
- 
+
             var update = new UpdateConfig();
             var dt = new UADataType(DataTypeIds.Double);
             var node = new UAObject(tester.Server.Ids.Base.Root, "BaseRoot", null, null, NodeId.Null, null);
@@ -1469,14 +1476,14 @@ namespace Test.Unit
             variable.FullAttributes.DataType = dt;
             var rel = new UAReference(extractor.TypeManager.GetReferenceType(ReferenceTypeIds.Organizes), true, node, variable);
 
-            var result = await pusher.PushNodes(new[] { node }, new [] { variable }, new[] { rel }, update, tester.Source.Token);
+            var result = await pusher.PushNodes(new[] { node }, new[] { variable }, new[] { rel }, update, tester.Source.Token);
 
             Assert.True(result.Objects);
             Assert.True(result.RawObjects);
 
             Assert.True(result.Variables);
             Assert.True(result.RawVariables);
- 
+
             Assert.True(result.References);
             Assert.True(result.RawReferences);
 

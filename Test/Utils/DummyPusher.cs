@@ -115,7 +115,7 @@ namespace Test.Utils
                         {
                             DataPoints[variable.DestinationId()] = new List<UADataPoint>();
                         }
-                        UniqueToNodeId[variable.GetUniqueId(Extractor)] = variable.DestinationId();
+                        UniqueToNodeId[variable.GetUniqueId(Extractor.Context)] = variable.DestinationId();
                         PushedVariables[variable.DestinationId()] = variable;
                     }
                 }

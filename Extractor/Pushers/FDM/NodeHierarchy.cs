@@ -10,17 +10,25 @@ namespace Cognite.OpcUa.Pushers.FDM
 {
     public class NodeHierarchy
     {
-        public Dictionary<NodeId, IEnumerable<UAReference>> ReferencesByTargetId { get; }
-        public Dictionary<NodeId, IEnumerable<UAReference>> ReferencesBySourceId { get; }
-        public Dictionary<NodeId, BaseUANode> NodeMap { get; }
+        public IReadOnlyDictionary<NodeId, IEnumerable<UAReference>> ReferencesByTargetId { get; }
+        public IReadOnlyDictionary<NodeId, IEnumerable<UAReference>> ReferencesBySourceId { get; }
+        public IReadOnlyDictionary<NodeId, BaseUANode> NodeMap { get; }
         public HashSet<NodeId> KnownTypeDefinitions { get; }
 
         public NodeHierarchy(IEnumerable<UAReference> references, IEnumerable<BaseUANode> nodes)
+            : this(references, nodes.ToDictionary(node => node.Id))
         {
-            ReferencesByTargetId = references.Where(rf => rf.IsForward).GroupBy(rf => rf.Target.Id).ToDictionary(group => group.Key, group => (IEnumerable<UAReference>)group);
+        }
+
+        public NodeHierarchy(IEnumerable<UAReference> references, IReadOnlyDictionary<NodeId, BaseUANode> nodes)
+        {
+            NodeMap = nodes;
+            ReferencesByTargetId = references
+                .Where(rf => rf.IsForward && NodeMap.ContainsKey(rf.Source.Id) && NodeMap.ContainsKey(rf.Target.Id))
+                .GroupBy(rf => rf.Target.Id)
+                .ToDictionary(group => group.Key, group => (IEnumerable<UAReference>)group);
             ReferencesBySourceId = references.Where(rf => rf.IsForward).GroupBy(rf => rf.Source.Id).ToDictionary(group => group.Key, group => (IEnumerable<UAReference>)group);
-            NodeMap = nodes.ToDictionary(node => node.Id);
-            KnownTypeDefinitions = new HashSet<NodeId>(nodes.Where(node => node.Id.NamespaceIndex > 0 || !node.IsChildOfType).SelectNonNull(s => s.TypeDefinition));
+            KnownTypeDefinitions = new HashSet<NodeId>(nodes.Values.Where(node => node.Id.NamespaceIndex > 0 || !node.IsChildOfType).SelectNonNull(s => s.TypeDefinition));
         }
 
         public IEnumerable<UAReference> BySource(NodeId id)

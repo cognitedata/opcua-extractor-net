@@ -147,12 +147,12 @@ namespace Cognite.OpcUa.Config
         /// It is possible to have multiple of each filter type.
         /// </summary>
         public IEnumerable<RawNodeTransformation>? Transformations { get; set; }
-        public IEnumerable<NodeId> GetRootNodes(UAClient client, ILogger logger)
+        public IEnumerable<NodeId> GetRootNodes(SessionContext context, ILogger logger)
         {
             var roots = new List<NodeId>();
             if (RootNode != null)
             {
-                var id = RootNode.ToNodeId(client);
+                var id = RootNode.ToNodeId(context);
                 if (id.IsNullNodeId)
                 {
                     logger.LogWarning("Failed to convert configured root node {Namespace} {Id} to NodeId", RootNode.NamespaceUri, RootNode.NodeId);
@@ -166,7 +166,7 @@ namespace Cognite.OpcUa.Config
             {
                 foreach (var root in RootNodes)
                 {
-                    var id = root.ToNodeId(client);
+                    var id = root.ToNodeId(context);
                     if (id.IsNullNodeId)
                     {
                         logger.LogWarning("Failed to convert configured root node {Namespace} {Id} to NodeId", root.NamespaceUri, root.NodeId);
@@ -287,12 +287,15 @@ namespace Cognite.OpcUa.Config
         public bool CreateReferencedNodes { get; set; }
 
         [YamlIgnore]
-        public HierarchicalReferenceMode Mode { get
+        public HierarchicalReferenceMode Mode
+        {
+            get
             {
                 if (!Enabled || !Hierarchical) return HierarchicalReferenceMode.Disabled;
                 if (!InverseHierarchical) return HierarchicalReferenceMode.Forward;
                 return HierarchicalReferenceMode.Both;
-            } }
+            }
+        }
     }
     public class NodeTypeConfig
     {

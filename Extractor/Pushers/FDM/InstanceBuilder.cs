@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Xml.Linq;
+using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.Pushers.FDM.Types;
 using Cognite.OpcUa.Types;
@@ -30,7 +31,7 @@ namespace Cognite.OpcUa.Pushers.FDM
         private HashSet<NodeId> MappedAsProperty { get; } = new();
 
         private readonly NodeHierarchy nodes;
-        private readonly string space;
+        private readonly FdmDestinationConfig.ModelInfo modelInfo;
         private readonly FDMTypeBatch types;
         private readonly DMSValueConverter converter;
         private readonly IUAClientAccess client;
@@ -42,11 +43,11 @@ namespace Cognite.OpcUa.Pushers.FDM
             DMSValueConverter converter,
             NodeIdContext context,
             IUAClientAccess client,
-            string space,
+            FdmDestinationConfig.ModelInfo modelInfo,
             ILogger log)
         {
             this.nodes = nodes;
-            this.space = space;
+            this.modelInfo = modelInfo;
             this.types = types;
             this.converter = converter;
             this.client = client;
@@ -58,7 +59,7 @@ namespace Cognite.OpcUa.Pushers.FDM
         {
             return new InstanceData<BaseNodeData>
             {
-                Source = new ContainerIdentifier(space, "BaseNode"),
+                Source = modelInfo.ContainerIdentifier("BaseNode"),
                 Properties = new BaseNodeData(node, knownProperties)
             };
         }
@@ -69,8 +70,8 @@ namespace Cognite.OpcUa.Pushers.FDM
 
             return new InstanceData<VariableData>
             {
-                Source = new ContainerIdentifier(space, "BaseVariableType"),
-                Properties = new VariableData(node, client, converter, space, context)
+                Source = modelInfo.ContainerIdentifier("BaseVariableType"),
+                Properties = new VariableData(node, client, converter, modelInfo.InstanceSpace, context)
             };
         }
 
@@ -78,8 +79,8 @@ namespace Cognite.OpcUa.Pushers.FDM
         {
             return new InstanceData<ObjectData>
             {
-                Source = new ContainerIdentifier(space, "BaseObjectType"),
-                Properties = new ObjectData(node, space, context)
+                Source = modelInfo.ContainerIdentifier("BaseObjectType"),
+                Properties = new ObjectData(node, modelInfo.InstanceSpace, context)
             };
         }
 
@@ -87,7 +88,7 @@ namespace Cognite.OpcUa.Pushers.FDM
         {
             return new InstanceData<TypeData>
             {
-                Source = new ContainerIdentifier(space, "BaseType"),
+                Source = modelInfo.ContainerIdentifier("BaseType"),
                 Properties = new TypeData(type, context)
             };
         }
@@ -96,7 +97,7 @@ namespace Cognite.OpcUa.Pushers.FDM
         {
             return new InstanceData<ObjectTypeData>
             {
-                Source = new ContainerIdentifier(space, "ObjectType"),
+                Source = modelInfo.ContainerIdentifier("ObjectType"),
                 Properties = new ObjectTypeData(node)
             };
         }
@@ -107,8 +108,8 @@ namespace Cognite.OpcUa.Pushers.FDM
 
             return new InstanceData<VariableTypeData>
             {
-                Source = new ContainerIdentifier(space, "VariableType"),
-                Properties = new VariableTypeData(node, converter, space, context)
+                Source = modelInfo.ContainerIdentifier("VariableType"),
+                Properties = new VariableTypeData(node, converter, modelInfo.InstanceSpace, context)
             };
         }
 
@@ -116,7 +117,7 @@ namespace Cognite.OpcUa.Pushers.FDM
         {
             return new InstanceData<ReferenceTypeData>
             {
-                Source = new ContainerIdentifier(space, "ReferenceType"),
+                Source = modelInfo.ContainerIdentifier("ReferenceType"),
                 Properties = new ReferenceTypeData(node)
             };
         }
@@ -125,7 +126,7 @@ namespace Cognite.OpcUa.Pushers.FDM
         {
             return new InstanceData<DataTypeData>
             {
-                Source = new ContainerIdentifier(space, "DataType"),
+                Source = modelInfo.ContainerIdentifier("DataType"),
                 Properties = new DataTypeData(node, converter)
             };
         }
@@ -157,7 +158,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                     {
                         if (variable.IsArray)
                         {
-                            value = new RawPropertyValue<string[]>(variable.ArrayChildren.Select(v => v.GetUniqueId(client)!).ToArray());
+                            value = new RawPropertyValue<string[]>(variable.ArrayChildren.Select(v => v.GetUniqueId(client.Context)!).ToArray());
                         }
                         else
                         {
@@ -268,7 +269,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                     data.Add(new InstanceData<Dictionary<string, IDMSValue?>>
                     {
                         Properties = props,
-                        Source = new ContainerIdentifier(space, currentType.ExternalId)
+                        Source = modelInfo.ContainerIdentifier(currentType.ExternalId)
                     });
                 }
 
@@ -285,7 +286,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             {
                 ExternalId = context.NodeIdToString(node.Id),
                 Sources = data,
-                Space = space,
+                Space = modelInfo.InstanceSpace,
             };
             switch (node.NodeClass)
             {
@@ -338,15 +339,21 @@ namespace Cognite.OpcUa.Pushers.FDM
             // Finally, add any reference between two mapped nodes
             foreach (var rf in nodes.ReferencesBySourceId.Values.SelectMany(v => v))
             {
-                if (!MappedNodes.Contains(rf.Source.Id) || !MappedNodes.Contains(rf.Target.Id)) continue;
+                if (!MappedNodes.Contains(rf.Source.Id) || !MappedNodes.Contains(rf.Target.Id))
+                {
+                    log.LogDebug("Skipping ref {S} {Ty} {T} due to missing source or target {Sx} {Tx}",
+                        rf.Source.Name, rf.Type.Name, rf.Target.Name, MappedNodes.Contains(rf.Source.Id),
+                        MappedNodes.Contains(rf.Target.Id));
+                    continue;
+                }
 
                 var edge = new EdgeWrite
                 {
-                    StartNode = new DirectRelationIdentifier(space, context.NodeIdToString(rf.Source.Id)),
-                    EndNode = new DirectRelationIdentifier(space, context.NodeIdToString(rf.Target.Id)),
+                    StartNode = new DirectRelationIdentifier(modelInfo.InstanceSpace, context.NodeIdToString(rf.Source.Id)),
+                    EndNode = new DirectRelationIdentifier(modelInfo.InstanceSpace, context.NodeIdToString(rf.Target.Id)),
                     ExternalId = $"{context.NodeIdToString(rf.Source.Id)}{rf.Type.GetName(false)}{context.NodeIdToString(rf.Target.Id)}",
-                    Space = space,
-                    Type = new DirectRelationIdentifier(space, context.NodeIdToString(rf.Type.Id))
+                    Space = modelInfo.InstanceSpace,
+                    Type = new DirectRelationIdentifier(modelInfo.InstanceSpace, context.NodeIdToString(rf.Type.Id))
                 };
                 References.Add(edge);
             }

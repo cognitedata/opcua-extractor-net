@@ -1,5 +1,6 @@
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
+using Cognite.OpcUa.Subscriptions;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using Opc.Ua.Client;
@@ -18,8 +19,6 @@ namespace Cognite.OpcUa
         private readonly RebrowseTriggersConfig _config;
         private readonly UAExtractor _extractor;
 
-        public readonly static string SubscriptionName = "TriggerRebrowse";
-
         public RebrowseTriggerManager(
             ILogger<RebrowseTriggerManager> logger,
             UAClient uaClient,
@@ -36,7 +35,6 @@ namespace Cognite.OpcUa
         public async Task EnableCustomServerSubscriptions(CancellationToken token)
         {
             var targetNodes = _config.Targets.GetTargets;
-            List<NodeId> nodeIds = new List<NodeId>();
             var filteredNamespaces = _config.Namespaces;
             var filteredNamespacesCount = filteredNamespaces?.Count();
             var shouldFilterNamespaces = filteredNamespacesCount > 0;
@@ -97,75 +95,57 @@ namespace Cognite.OpcUa
                 );
             }
 
+            var nodes = new Dictionary<NodeId, (NodeId, string)>();
+
             foreach (var @namespace in processedNamespaces)
             {
                 var nodeId = namespaceNameToId.GetValueOrDefault(@namespace);
                 var references = grouping.GetValueOrDefault(nodeId);
 
-                nodeIds.AddRange(
-                    references.Where(@ref => targetNodes.Contains(@ref.DisplayName.ToString()))
-                        .Select(@ref => (NodeId)@ref.NodeId)
-                );
+                foreach (var reference in references)
+                {
+                    if (!targetNodes.Contains(reference.DisplayName.Text)) continue;
+                    var id = _uaClient.ToNodeId(reference.NodeId);
+                    nodes.TryAdd(id, (id, reference.DisplayName.Text));
+                }
             };
 
-            if (nodeIds.Count > 0)
-                logger.LogInformation("The following nodes will be subscribed to for rebrowse triggers: {Nodes}", nodeIds);
-
-            var nodes = nodeIds.Select(node => new ServerItemSubscriptionState(_uaClient, node)).ToList();
-
-            if (nodes.Any()) await CreateSubscriptions(nodes, token);
+            if (nodes.Any()) CreateSubscriptions(nodes);
         }
 
-        private async Task CreateSubscriptions(List<ServerItemSubscriptionState> nodes, CancellationToken token)
+        private void OnRebrowseTriggerNotification(MonitoredItem item, MonitoredItemNotificationEventArgs _)
         {
-            var sub = await _uaClient.AddSubscriptions(
-                nodes, SubscriptionName,
-                (MonitoredItem item, MonitoredItemNotificationEventArgs _) =>
-                {
-                    try
-                    {
-                        var values = item.DequeueValues();
-                        var value = values.Count > 0
-                            ? values[0].GetValue(UAExtractor.StartTime)
-                            : UAExtractor.StartTime;
+            try
+            {
+                var values = item.DequeueValues();
+                var value = values.Count > 0
+                    ? values[0].GetValue(UAExtractor.StartTime)
+                    : UAExtractor.StartTime;
 
-                        if (UAExtractor.StartTime < value)
-                        {
-                            logger.LogInformation("Triggering a rebrowse due to a change in the value of {NodeId} to {Value}", item.ResolvedNodeId, value);
-                            _extractor.Looper.QueueRebrowse();
-                        }
-                        else
-                        {
-                            logger.LogDebug("Received a rebrowse trigger notification with time {Time}, which is not greater than extractor start time {StartTime}",
-                                value,
-                                UAExtractor.StartTime);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        logger.LogError(ex, "Unexpected error handling rebrowse trigger");
-                    }
-
-                },
-                state => new MonitoredItem
+                if (UAExtractor.StartTime < value)
                 {
-                    StartNodeId = state.SourceId,
-                    SamplingInterval = 1000,
-                    DisplayName = "Value " + state.Id,
-                    QueueSize = 1,
-                    DiscardOldest = true,
-                    AttributeId = Attributes.Value,
-                    NodeClass = NodeClass.Variable,
-                    CacheQueueSize = 1
-                }, token, "namespaces"
-            );
+                    logger.LogInformation("Triggering a rebrowse due to a change in the value of {NodeId} to {Value}", item.ResolvedNodeId, value);
+                    _extractor.Looper.QueueRebrowse();
+                }
+                else
+                {
+                    logger.LogDebug("Received a rebrowse trigger notification with time {Time}, which is not greater than extractor start time {StartTime}",
+                        value,
+                        UAExtractor.StartTime);
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Unexpected error handling rebrowse trigger");
+            }
         }
-    }
 
-    public class ServerItemSubscriptionState : UAHistoryExtractionState
-    {
-        public ServerItemSubscriptionState(IUAClientAccess client, NodeId id) : base(client, id, false, false)
+        private void CreateSubscriptions(Dictionary<NodeId, (NodeId, string)> nodes)
         {
+            if (_uaClient.SubscriptionManager == null) throw new InvalidOperationException("Client not initialized");
+
+            _uaClient.SubscriptionManager.EnqueueTask(new RebrowseTriggerSubscriptionTask(
+                OnRebrowseTriggerNotification, nodes));
         }
     }
 }

@@ -177,7 +177,7 @@ namespace Cognite.OpcUa.Types
             {
                 if (context != null && uaClient != null)
                 {
-                    returnStr = context.NodeIdToString(uaClient.ToNodeId(expandedNodeId));
+                    returnStr = context.NodeIdToString(uaClient.Context.ToNodeId(expandedNodeId));
                 }
                 else
                 {
@@ -250,7 +250,8 @@ namespace Cognite.OpcUa.Types
             else if (IsNumber(value)) return value.ToString();
             else returnStr = value.ToString();
 
-            switch (mode) {
+            switch (mode)
+            {
                 case StringConverterMode.Simple:
                     return returnStr;
                 case StringConverterMode.Json:
@@ -340,7 +341,7 @@ namespace Cognite.OpcUa.Types
         {
             if (config == null || uaClient == null || nodeIdConverter == null)
                 throw new InvalidOperationException("Config and UAClient must be supplied to create converters");
-            options.Converters.Add(converters.GetOrAdd(type, key => new NodeSerializer(this, config, uaClient, key, log)));
+            options.Converters.Add(converters.GetOrAdd(type, key => new NodeSerializer(this, config, uaClient.Context, key, log)));
             options.Converters.Add(nodeIdConverter);
         }
     }
@@ -355,14 +356,14 @@ namespace Cognite.OpcUa.Types
     {
         private readonly StringConverter converter;
         private readonly FullConfig config;
-        private readonly UAClient uaClient;
+        private readonly SessionContext context;
         public ConverterType Type { get; }
         private readonly ILogger log;
-        public NodeSerializer(StringConverter converter, FullConfig config, UAClient uaClient, ConverterType type, ILogger log)
+        public NodeSerializer(StringConverter converter, FullConfig config, SessionContext context, ConverterType type, ILogger log)
         {
             this.converter = converter;
             this.config = config;
-            this.uaClient = uaClient;
+            this.context = context;
             Type = type;
             this.log = log;
         }
@@ -393,7 +394,7 @@ namespace Cognite.OpcUa.Types
 
             if (getExtras)
             {
-                extras = node.GetExtraMetadata(config, uaClient);
+                extras = node.GetExtraMetadata(config, context, converter);
                 if (extras != null) extras.Remove("Value");
             }
             // If we should treat this as a key/value pair, or write it as an object
@@ -450,7 +451,7 @@ namespace Cognite.OpcUa.Types
 
         private void WriteBaseValues(Utf8JsonWriter writer, BaseUANode node)
         {
-            var id = uaClient.GetUniqueId(node.Id);
+            var id = context.GetUniqueId(node.Id);
             writer.WriteString("externalId", id);
             writer.WriteString("name", string.IsNullOrEmpty(node.Name) ? id : node.Name);
             writer.WriteString("description", node.Attributes.Description);
@@ -458,13 +459,13 @@ namespace Cognite.OpcUa.Types
             WriteProperties(writer, node, true, node.NodeClass == NodeClass.VariableType);
             if (Type == ConverterType.Variable && node is UAVariable variable)
             {
-                writer.WriteString("assetExternalId", uaClient.GetUniqueId(node.ParentId));
+                writer.WriteString("assetExternalId", context.GetUniqueId(node.ParentId));
                 writer.WriteBoolean("isString", variable.FullAttributes.DataType?.IsString ?? false);
                 writer.WriteBoolean("isStep", variable.FullAttributes.DataType?.IsStep ?? false);
             }
             else
             {
-                writer.WriteString("parentExternalId", uaClient.GetUniqueId(node.ParentId));
+                writer.WriteString("parentExternalId", context.GetUniqueId(node.ParentId));
             }
         }
         private void WriteNodeIds(Utf8JsonWriter writer, BaseUANode node, JsonSerializerOptions options)

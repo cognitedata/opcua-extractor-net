@@ -178,14 +178,14 @@ namespace Test.Unit
             tester.Config.Extraction.DataTypes.DataTypeMetadata = true;
             var variable = new UAVariable(new NodeId("test"), "test", null, null, NodeId.Null, null);
             variable.FullAttributes.DataType = new UADataType(DataTypeIds.Double);
-            var fields = variable.GetExtraMetadata(tester.Config, extractor);
+            var fields = variable.GetExtraMetadata(tester.Config, extractor.Context, extractor.StringConverter);
             Assert.Single(fields);
             Assert.Equal("Double", fields["dataType"]);
 
             tester.Config.Extraction.NodeTypes.Metadata = true;
             var node = new UAObject(new NodeId("test"), "test", null, null, NodeId.Null, new UAObjectType(new NodeId("type")));
             node.FullAttributes.TypeDefinition.Attributes.DisplayName = "SomeType";
-            fields = node.GetExtraMetadata(tester.Config, extractor);
+            fields = node.GetExtraMetadata(tester.Config, extractor.Context, extractor.StringConverter);
             Assert.Single(fields);
             Assert.Equal("SomeType", fields["TypeDefinition"]);
 
@@ -196,26 +196,24 @@ namespace Test.Unit
             var type = new UAVariableType(new NodeId("test"), "test", null, null, NodeId.Null);
             type.FullAttributes.DataType = new UADataType(DataTypeIds.String);
             type.FullAttributes.Value = new Variant("value");
-            fields = type.GetExtraMetadata(tester.Config, extractor);
+            fields = type.GetExtraMetadata(tester.Config, extractor.Context, extractor.StringConverter);
             Assert.Single(fields);
             Assert.Equal("value", fields["Value"]);
         }
         [Fact]
-        public async Task TestNodeMapping()
+        public void TestNodeMapping()
         {
             tester.Config.Extraction.NodeMap = new Dictionary<string, ProtoNodeId>
             {
                 { "Test1", new NodeId("test").ToProtoNodeId(tester.Client) },
                 { "Test2", new NodeId("test2", 2).ToProtoNodeId(tester.Client) }
             };
-            using var extractor = tester.BuildExtractor();
+            var ctx = new SessionContext(tester.Config, tester.Log);
+            ctx.UpdateFromSession(tester.Client.SessionManager.Session);
 
-            // Run the configure extractor method...
-            await extractor.RunExtractor(true);
-
-            Assert.Equal("Test1", extractor.GetUniqueId(new NodeId("test")));
-            Assert.Equal("Test2", tester.Client.GetUniqueId(new NodeId("test2", 2)));
-            Assert.Equal("Test1[0]", extractor.GetUniqueId(new NodeId("test"), 0));
+            Assert.Equal("Test1", ctx.GetUniqueId(new NodeId("test")));
+            Assert.Equal("Test2", ctx.GetUniqueId(new NodeId("test2", 2)));
+            Assert.Equal("Test1[0]", ctx.GetUniqueId(new NodeId("test"), 0));
         }
 
         [Fact]

@@ -3,7 +3,9 @@ using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using Server;
 using System;
+using System.CommandLine;
 using System.Linq;
+using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using Test.Utils;
 using Xunit;
@@ -29,14 +31,15 @@ namespace Test.Unit
                 DataModels = new FdmDestinationConfig
                 {
                     Enabled = true,
-                    Space = "test",
-                    ExcludeNonReferenced = true,
+                    ModelSpace = "modelspace",
+                    InstanceSpace = "instancespace",
+                    ModelVersion = "1"
                 }
             };
             tester.Config.Extraction.RootNode = new ProtoNodeId
             {
                 NamespaceUri = "http://opcfoundation.org/UA/",
-                NodeId = "i=84"
+                NodeId = "i=85"
             };
             tester.Config.Extraction.NodeTypes.AsNodes = true;
             tester.Config.Extraction.Relationships.Enabled = true;
@@ -45,27 +48,40 @@ namespace Test.Unit
             tester.Config.Extraction.DataTypes.AutoIdentifyTypes = true;
         }
 
+        private static T GetProperty<T>(JsonNode node, string property, string view) where T : class
+        {
+            return node["sources"]?.AsArray()?.FirstOrDefault(f => f["source"]["externalId"].ToString() == view)
+                ?["properties"]?[property]?.GetValue<T>();
+        }
+
+        private static T? GetPropertyStruct<T>(JsonNode node, string property, string view) where T : struct
+        {
+            return node["sources"]?.AsArray()?.FirstOrDefault(f => f["source"]["externalId"].ToString() == view)
+                ?["properties"]?[property]?.GetValue<T>();
+        }
+
+
+
         [Fact]
         public async Task TestMapCustomTypes()
         {
-            tester.Config.Cognite.MetadataTargets.DataModels.ExcludeNonReferenced = true;
-            tester.Config.Cognite.MetadataTargets.DataModels.TypesToMap = TypesToMap.Custom;
+            tester.Config.Cognite.MetadataTargets.DataModels.SkipSimpleTypes = false;
 
             var (handler, pusher) = tester.GetCDFPusher();
             using var extractor = tester.BuildExtractor(true, null, pusher);
 
             await extractor.RunExtractor(true);
 
-            Assert.Single(handler.Spaces);
+            Assert.Equal(2, handler.Spaces.Count);
             // FolderType, BaseObjectType, BaseVariableType, BaseDataVariableType, PropertyType,
             // 4 custom object types, 1 custom variable types
-            // BaseNode, BaseType, +4 type types, and ModellingRuleType
+            // BaseNode, BaseType, +4 type types
 
             foreach (var view in handler.Views)
             {
                 tester.Log.LogDebug("{Key}", view.Key);
             }
-            Assert.Equal(19, handler.Views.Count);
+            Assert.Equal(18, handler.Views.Count);
             // 8 base types, 2 custom object types, 1 custom variable type have container data
             Assert.Equal(13, handler.Containers.Count);
             /* foreach (var inst in handler.Instances)
@@ -74,87 +90,40 @@ namespace Test.Unit
                     ?["sources"]?.AsArray()?.FirstOrDefault(r => r["source"]["externalId"].GetValue<string>() == "BaseNode")
                         ?["properties"]?["DisplayName"]);
             } */
-            Assert.Equal(80, handler.Instances.Count(inst => inst.Value["instanceType"].ToString() == "node"));
-            Assert.Equal(105, handler.Instances.Count(inst => inst.Value["instanceType"].ToString() == "edge"));
-        }
+            Assert.Equal(68, handler.Instances.Count(inst => inst.Value["instanceType"].ToString() == "node"));
+            Assert.Equal(81, handler.Instances.Count(inst => inst.Value["instanceType"].ToString() == "edge"));
 
-        [Fact]
-        public async Task TestMapReferencedTypes()
-        {
-            tester.Config.Cognite.MetadataTargets.DataModels.ExcludeNonReferenced = true;
-            tester.Config.Cognite.MetadataTargets.DataModels.TypesToMap = TypesToMap.Referenced;
 
-            var (handler, pusher) = tester.GetCDFPusher();
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            // HasTypeDefinition references from objects, typesroot, devices 1-3, devices.data 1-3,
+            // devices.trivial 1-3, and 4 variables
+            // In the type hierarchy there are 3 on the variable type, 3 under complex type,
+            // 8 under simpletype and nestedtype
+            Assert.Equal(29, handler.Instances.Count(inst => inst.Value["type"]?["externalId"]?.ToString() ==
+                ReferenceTypeIds.HasTypeDefinition.ToString()));
 
-            await extractor.RunExtractor(true);
-
-            Assert.Single(handler.Spaces);
-            // FolderType, BaseObjectType, BaseVariableType, BaseDataVariableType, PropertyType,
-            // 4 custom object types, 1 custom variable type
-            // BaseNode, BaseType, +4 type types, and ModellingRuleType
-            /* foreach (var inst in handler.Instances)
+            // Every type mapped should be referenced through a "HasSubType, except for the root types
+            // References, BaseObjectType, BaseVariableType, and BaseDataType.
+            // 6 total object types (4 custom + folder type + base)
+            // 4 total variable types (1 custom + property type + data variable type + base)
+            // 11 total reference types
+            // 7 (?) data types
+            uint? GetNodeClass(JsonNode node)
             {
-                tester.Log.LogDebug("{Id}: {Name}", inst.Key, inst.Value
-                    ?["sources"]?.AsArray()?.FirstOrDefault(r => r["source"]["externalId"].GetValue<string>() == "BaseNode")
-                        ?["properties"]?["DisplayName"]);
-            } */
-            foreach (var view in handler.Views)
-            {
-                tester.Log.LogDebug("{Key}", view.Key);
+                return GetPropertyStruct<uint>(node, "NodeClass", "BaseNode");
             }
-            Assert.Equal(19, handler.Views.Count);
-            // 8 base types, 2 custom object types, 1 custom variable type have container data
-            Assert.Equal(13, handler.Containers.Count);
-            Assert.Equal(80, handler.Instances.Count(inst => inst.Value["instanceType"].ToString() == "node"));
-            Assert.Equal(105, handler.Instances.Count(inst => inst.Value["instanceType"].ToString() == "edge"));
-        }
 
-        [Fact]
-        public async Task TestMapReferencedTypesNoTrim()
-        {
-            tester.Config.Cognite.MetadataTargets.DataModels.ExcludeNonReferenced = false;
-            tester.Config.Cognite.MetadataTargets.DataModels.TypesToMap = TypesToMap.Referenced;
-
-            var (handler, pusher) = tester.GetCDFPusher();
-            using var extractor = tester.BuildExtractor(true, null, pusher);
-
-            await extractor.RunExtractor(true);
-
-            Assert.Single(handler.Spaces);
-            // FolderType, BaseObjectType, BaseVariableType, BaseDataVariableType, PropertyType,
-            // 4 custom object types, 1 custom variable type
-            // BaseNode, BaseType, +4 type types, ModellingRuleType, and DataTypeSystemType
-            foreach (var view in handler.Views)
+            foreach (var node in handler.Instances.Where(inst => GetNodeClass(inst.Value) == (uint)NodeClass.ReferenceType))
             {
-                tester.Log.LogDebug("{Key}", view.Key);
+                tester.Log.LogDebug("{V}", GetProperty<string>(node.Value, "DisplayName", "BaseNode"));
             }
-            Assert.Equal(21, handler.Views.Count);
-            
-            // 8 base types, 2 custom object types, 1 custom variable type have container data
-            Assert.Equal(13, handler.Containers.Count);
-            Assert.Equal(2570, handler.Instances.Count(inst => inst.Value["instanceType"].ToString() == "node"));
-            Assert.Equal(6567, handler.Instances.Count(inst => inst.Value["instanceType"].ToString() == "edge"));
-        }
 
-        [Fact]
-        public async Task TestMapEverything()
-        {
-            tester.Config.Cognite.MetadataTargets.DataModels.ExcludeNonReferenced = false;
-            tester.Config.Cognite.MetadataTargets.DataModels.TypesToMap = TypesToMap.All;
+            Assert.Equal(6, handler.Instances.Count(inst => GetNodeClass(inst.Value) == (uint)NodeClass.ObjectType));
+            Assert.Equal(4, handler.Instances.Count(inst => GetNodeClass(inst.Value) == (uint)NodeClass.VariableType));
+            Assert.Equal(11, handler.Instances.Count(inst => GetNodeClass(inst.Value) == (uint)NodeClass.ReferenceType));
+            Assert.Equal(7, handler.Instances.Count(inst => GetNodeClass(inst.Value) == (uint)NodeClass.DataType));
 
-            var (handler, pusher) = tester.GetCDFPusher();
-            using var extractor = tester.BuildExtractor(true, null, pusher);
-
-            await extractor.RunExtractor(true);
-
-            Assert.Single(handler.Spaces);
-            Assert.Equal(214, handler.Views.Count);
-            Assert.Equal(133, handler.Containers.Count);
-            // Numbers are lower because more types are mapped, so more nodes are mapped as metadata.
-            // This isn't always desired. You may want the entire type hierarchy without the types for all nodes.
-            Assert.Equal(2287, handler.Instances.Count(inst => inst.Value["instanceType"].ToString() == "node"));
-            Assert.Equal(4254, handler.Instances.Count(inst => inst.Value["instanceType"].ToString() == "edge"));
+            Assert.Equal(6 + 4 + 11 + 7 - 4, handler.Instances.Count(inst => inst.Value["type"]?["externalId"]?.ToString() ==
+                ReferenceTypeIds.HasSubtype.ToString()));
         }
     }
 }
