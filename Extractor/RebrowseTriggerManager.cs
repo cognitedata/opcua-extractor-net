@@ -187,11 +187,10 @@ namespace Cognite.OpcUa
                     (dv, i) =>
                         (
                             nodes[i].Item1,
-                            dv.GetValue(UAExtractor.StartTime).ToUnixTimeMilliseconds()
+                            dv.GetValue<DateTime>(default).ToUnixTimeMilliseconds()
                         )
                 )
                 .ToDictionary(item => item.Item1, item => item.Item2);
-            logger.LogInformation("Should print this");
             foreach (var node in nodes)
             {
                 var id = node.Item1;
@@ -222,7 +221,7 @@ namespace Cognite.OpcUa
                 {
                     var values = item.DequeueValues();
                     var valueTime = values[0]
-                        .GetValue(UAExtractor.StartTime)
+                        .GetValue<DateTime>(default)
                         .ToUnixTimeMilliseconds();
                     var id = item.ResolvedNodeId.ToString();
                     var lastTimestamp = GetLastTimestampFor(id);
