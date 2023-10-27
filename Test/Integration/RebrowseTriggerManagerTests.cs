@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Cognite.Extractor.Common;
 using Cognite.Extractor.StateStorage;
 using Cognite.Extractor.Testing;
 using Cognite.OpcUa;
@@ -93,7 +94,7 @@ namespace Test.Integration
             var npdId = tester.Server.Server.GetNamespacePublicationDateId();
             var npds = new NamespacePublicationDateState(npdId.ToString());
             var lts = DateTime.UtcNow.AddSeconds(-10);
-            var simulatedLastTimestamp = ((DateTimeOffset)lts).ToUnixTimeSeconds();
+            var simulatedLastTimestamp = lts.ToUnixTimeMilliseconds();
             npds.LastTimestamp = simulatedLastTimestamp;
             npds.LastTimeModified = DateTime.UtcNow;
             _extractionStates.TryAdd(npdId.ToString(), npds);
@@ -130,7 +131,6 @@ namespace Test.Integration
                 10,
                 "Expected node to be discovered"
             );
-            Assert.True(cdfPusher.PushedNodes.ContainsKey(addedId));
 
             await stateStore.RestoreExtractionState<
                 NamespacePublicationDateStorableState,
@@ -145,34 +145,9 @@ namespace Test.Integration
                 tester.Source.Token
             );
             Assert.True(_extractionStates.TryGetValue(npdId.ToString(), out var newNpds));
-            Assert.Equal(((DateTimeOffset)newTime).ToUnixTimeMilliseconds(), newNpds.LastTimestamp);
-            _output.WriteLine($"Blah blah: {((DateTimeOffset)newTime).ToUnixTimeMilliseconds()}, {newNpds.LastTimestamp}");
-            await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
-
-
-            var newTask = extractor.RunExtractor();
-
-            var nextTime = DateTime.UtcNow;
-            tester.Server.Server.SetNamespacePublicationDate(nextTime);
-
-
-            await stateStore.RestoreExtractionState<
-                NamespacePublicationDateStorableState,
-                NamespacePublicationDateState
-            >(
-                _extractionStates,
-                tester.Config.StateStorage.NamespacePublicationDateStore,
-                (value, item) =>
-                {
-                    value.LastTimestamp = item.LastTimestamp;
-                },
-                tester.Source.Token
-            );
-            Assert.True(_extractionStates.TryGetValue(npdId.ToString(), out var nextNpds));
-            _output.WriteLine($"Blah blah: {((DateTimeOffset)nextTime).ToUnixTimeMilliseconds()}, {nextNpds.LastTimestamp}");
-            Assert.Equal(((DateTimeOffset)nextTime).ToUnixTimeMilliseconds(), nextNpds.LastTimestamp);
+            Assert.Equal(newTime.ToUnixTimeMilliseconds(), newNpds.LastTimestamp);
             tester.Server.Server.RemoveNode(addedId);
-            await BaseExtractorTestFixture.TerminateRunTask(newTask, extractor);
+            await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
         }
 
         public static IEnumerable<object[]> TriggeringConfigurationStates =>

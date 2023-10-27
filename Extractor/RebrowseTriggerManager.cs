@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Cognite.Extractor.Common;
 using Cognite.Extractor.StateStorage;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Subscriptions;
@@ -165,12 +166,11 @@ namespace Cognite.OpcUa
             }
         }
 
-        private async Task CheckLastStateTriggered(List<(NodeId, string)> nodes, CancellationToken token)
+        private async Task CheckLastStateTriggered(
+            List<(NodeId, string)> nodes,
+            CancellationToken token
+        )
         {
-            // Check if there is need to trigger for previously unattended items.
-            if (!nodes.Select(n => GetLastTimestampFor(n.ToString())).Any(v => v > 0))
-                return;
-
             var readValueIds = new ReadValueIdCollection(
                 nodes.Select(
                     node => new ReadValueId { NodeId = node.Item1, AttributeId = Attributes.Value }
@@ -186,26 +186,27 @@ namespace Cognite.OpcUa
                 .Select(
                     (dv, i) =>
                         (
-                            nodes[i].ToString(),
-                            ((DateTimeOffset)dv.GetValue(UAExtractor.StartTime)).ToUnixTimeSeconds()
+                            nodes[i].Item1,
+                            dv.GetValue(UAExtractor.StartTime).ToUnixTimeMilliseconds()
                         )
                 )
                 .ToDictionary(item => item.Item1, item => item.Item2);
+            logger.LogInformation("Should print this");
             foreach (var node in nodes)
             {
-                var id = node.ToString();
-                var lastTimestamp = GetLastTimestampFor(id);
+                var id = node.Item1;
+                var lastTimestamp = GetLastTimestampFor(id.ToString());
                 if (
                     lastTimestamp != 0
                     && (mapping.TryGetValue(id, out var valueTime) && lastTimestamp < valueTime)
                 )
                 {
-                    logger.LogInformation(
+                    logger.LogDebug(
                         "Triggering a rebrowse due to a changes yet in {value} to be reflected",
                         node.Item2
                     );
                     _extractor.Looper.QueueRebrowse();
-                    await UpsertSavedTimestampFor(id, valueTime, token);
+                    await UpsertSavedTimestampFor(id.ToString(), valueTime, token);
                 }
             }
         }
@@ -220,12 +221,14 @@ namespace Cognite.OpcUa
                 try
                 {
                     var values = item.DequeueValues();
-                    var valueTime = ((DateTimeOffset)values[0].GetValue(UAExtractor.StartTime)).ToUnixTimeMilliseconds();
+                    var valueTime = values[0]
+                        .GetValue(UAExtractor.StartTime)
+                        .ToUnixTimeMilliseconds();
                     var id = item.ResolvedNodeId.ToString();
                     var lastTimestamp = GetLastTimestampFor(id);
                     if (lastTimestamp < valueTime)
                     {
-                        logger.LogInformation(
+                        logger.LogDebug(
                             "Triggering a rebrowse due to a change in the value of {NodeId} to {Value}",
                             item.ResolvedNodeId,
                             valueTime
@@ -263,12 +266,13 @@ namespace Cognite.OpcUa
 
             if (_extractionStates.TryGetValue(id, out var lastState))
             {
-                logger.LogInformation($"Updating state for: {id}");
+                logger.LogDebug($"Updating state for: {id}");
                 lastState.LastTimestamp = valueTime;
             }
             else
             {
-                logger.LogInformation($"No state found for: {id}");
+                logger.LogDebug($"No state found for: {id}");
+                logger.LogDebug($"Creating state for: {id}");
                 var npds = new NamespacePublicationDateState(id);
                 npds.LastTimestamp = valueTime;
                 _extractionStates[id] = npds;
