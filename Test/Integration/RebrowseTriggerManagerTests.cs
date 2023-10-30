@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Cognite.Extractor.Common;
@@ -148,6 +149,9 @@ namespace Test.Integration
             Assert.Equal(newTime.ToUnixTimeMilliseconds(), newNpds.LastTimestamp);
             tester.Server.Server.RemoveNode(addedId);
             await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
+            try {
+                File.Delete(tester.Config.StateStorage.Location);
+            } catch {}
         }
 
         public static IEnumerable<object[]> TriggeringConfigurationStates =>

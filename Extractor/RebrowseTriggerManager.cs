@@ -137,8 +137,8 @@ namespace Cognite.OpcUa
                     var id = _uaClient.ToNodeId(reference.NodeId);
                     nodes.TryAdd(id, (id, reference.DisplayName.Text));
                     _extractionStates.TryAdd(
-                        id.ToString(),
-                        new NamespacePublicationDateState(id.ToString())
+                        _uaClient.GetUniqueId(id)!,
+                        new NamespacePublicationDateState(_uaClient.GetUniqueId(id)!)
                     );
                 }
             }
@@ -306,7 +306,5 @@ namespace Cognite.OpcUa
                 new RebrowseTriggerSubscriptionTask(OnRebrowseTriggerNotification(token), nodes)
             );
         }
-
-        private void OnServerReconnect() { }
     }
 }
