@@ -12,14 +12,12 @@ namespace Cognite.OpcUa.Pushers.FDM
 {
     public class FDMTypeBatch
     {
-        private readonly string viewVersion;
-        private readonly string space;
+        private readonly FdmDestinationConfig.ModelInfo modelInfo;
         private readonly ILogger log;
         private readonly NodeIdContext context;
-        public FDMTypeBatch(string viewVersion, string space, ILogger log, NodeIdContext context)
+        public FDMTypeBatch(FdmDestinationConfig.ModelInfo modelInfo, ILogger log, NodeIdContext context)
         {
-            this.viewVersion = viewVersion;
-            this.space = space;
+            this.modelInfo = modelInfo;
             this.log = log;
             this.context = context;
         }
@@ -33,10 +31,10 @@ namespace Cognite.OpcUa.Pushers.FDM
         {
             Containers.Add(container.Name, container);
             Views.Add(container.Name,
-                container.ToView(viewVersion,
+                container.ToView(modelInfo.ModelVersion,
                     baseView == null
                     ? new ViewIdentifier[0]
-                    : new[] { new ViewIdentifier(container.Space, baseView, viewVersion) }
+                    : new[] { modelInfo.ViewIdentifier(baseView) }
                 )
             );
         }
@@ -73,11 +71,11 @@ namespace Cognite.OpcUa.Pushers.FDM
                     Name = type.Node.Name,
                     ExternalId = type.ExternalId,
                     UsedFor = UsedFor.node,
-                    Space = space,
+                    Space = modelInfo.ModelSpace,
                     Properties = GetContainerProperties(type, converter, config)
                 };
                 Containers.Add(ct.Name!, ct);
-                view = ct.ToView(viewVersion, new ViewIdentifier(space, type.Parent.ExternalId, viewVersion));
+                view = ct.ToView(modelInfo.ModelVersion, modelInfo.ViewIdentifier(type.Parent.ExternalId));
             }
             else
             {
@@ -87,16 +85,16 @@ namespace Cognite.OpcUa.Pushers.FDM
                     Description = type.Node.Attributes.Description,
                     Name = type.Node.Name,
                     ExternalId = type.ExternalId,
-                    Version = viewVersion,
-                    Space = space,
-                    Implements = new[] { new ViewIdentifier(space, type.Parent.ExternalId, viewVersion) },
+                    Version = modelInfo.ModelVersion,
+                    Space = modelInfo.ModelSpace,
+                    Implements = new[] { modelInfo.ViewIdentifier(type.Parent.ExternalId) },
                     Properties = new Dictionary<string, ICreateViewProperty>(),
                     Filter = new NestedFilter
                     {
-                        Scope = new[] { space, baseNodeType, "TypeDefinition" },
+                        Scope = new[] { modelInfo.ModelSpace, baseNodeType, "TypeDefinition" },
                         Filter = new ContainsAnyFilter
                         {
-                            Property = new[] { space, "BaseType", "TypeHierarchy" },
+                            Property = new[] { modelInfo.ModelSpace, "BaseType", "TypeHierarchy" },
                             Values = new[] { new RawPropertyValue<string>(context.NodeIdToString(type.Node.Id)) }
                         }
                     }
@@ -116,7 +114,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                         Name = rf.BrowseName.Name,
                         Direction = ConnectionDirection.outwards,
                         Source = idf,
-                        Type = new DirectRelationIdentifier(space, context.NodeIdToString(rf.Reference.Type.Id))
+                        Type = new DirectRelationIdentifier(modelInfo.InstanceSpace, context.NodeIdToString(rf.Reference.Type.Id))
                     });
                     ViewIsReferenced[idf.ExternalId] = true;
                 }
@@ -128,7 +126,7 @@ namespace Cognite.OpcUa.Pushers.FDM
         {
             if (config.ConnectionTargetMap != null && config.ConnectionTargetMap.TryGetValue($"{typeName}.{externalId}", out var mapped))
             {
-                return new ViewIdentifier(space, mapped, viewVersion);
+                return modelInfo.ViewIdentifier(mapped);
             }
 
             if (rf.NodeClass == NodeClass.Object || rf.NodeClass == NodeClass.Variable)
@@ -149,24 +147,23 @@ namespace Cognite.OpcUa.Pushers.FDM
                         typeExternalId = "BaseVariableType";
                     }
                 }
-
-                return new ViewIdentifier(space, typeExternalId, viewVersion);
+                return modelInfo.ViewIdentifier(typeExternalId);
             }
             else if (rf.NodeClass == NodeClass.ObjectType)
             {
-                return new ViewIdentifier(space, "ObjectType", viewVersion);
+                return modelInfo.ViewIdentifier("ObjectType");
             }
             else if (rf.NodeClass == NodeClass.VariableType)
             {
-                return new ViewIdentifier(space, "VariableType", viewVersion);
+                return modelInfo.ViewIdentifier("VariableType");
             }
             else if (rf.NodeClass == NodeClass.ReferenceType)
             {
-                return new ViewIdentifier(space, "ReferenceType", viewVersion);
+                return modelInfo.ViewIdentifier("ReferenceType");
             }
             else
             {
-                return new ViewIdentifier(space, "DataType", viewVersion);
+                return modelInfo.ViewIdentifier("DataType");
             }
         }
 
@@ -231,7 +228,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             if (dt.Id == DataTypeIds.NodeId || dt.Id == DataTypeIds.ExpandedNodeId)
             {
                 if (isArray) return BasePropertyType.Create(PropertyTypeVariant.json);
-                return BasePropertyType.Direct(new ContainerIdentifier(space, "BaseNode"));
+                return BasePropertyType.Direct(modelInfo.ContainerIdentifier("BaseNode"));
             }
 
             return BasePropertyType.Create(PropertyTypeVariant.json);
@@ -243,13 +240,13 @@ namespace Cognite.OpcUa.Pushers.FDM
         private readonly ILogger log;
         private readonly FdmDestinationConfig fdmConfig;
         private readonly DMSValueConverter converter;
-        private readonly string space;
         private readonly Dictionary<NodeId, FullUANodeType> typeMap = new();
         private readonly NodeIdContext context;
-        public TypeHierarchyBuilder(ILogger log, DMSValueConverter converter, FullConfig config, NodeIdContext context)
+        private readonly FdmDestinationConfig.ModelInfo modelInfo;
+        public TypeHierarchyBuilder(ILogger log, DMSValueConverter converter, FullConfig config, FdmDestinationConfig.ModelInfo modelInfo, NodeIdContext context)
         {
             this.log = log;
-            space = config.Cognite!.MetadataTargets!.DataModels!.Space!;
+            this.modelInfo = modelInfo;
             fdmConfig = config.Cognite!.MetadataTargets!.DataModels!;
             this.converter = converter;
             this.context = context;
@@ -257,17 +254,17 @@ namespace Cognite.OpcUa.Pushers.FDM
 
         public FDMTypeBatch ConstructTypes(IReadOnlyDictionary<NodeId, FullUANodeType> types)
         {
-            var batch = new FDMTypeBatch("1", space, log, context);
+            var batch = new FDMTypeBatch(modelInfo, log, context);
             // Add core containers and views
-            batch.Add(BaseDataModelDefinitions.BaseNode(space));
-            batch.Add(BaseDataModelDefinitions.BaseType(space), "BaseNode");
-            batch.Add(BaseDataModelDefinitions.BaseVariable(space), "BaseNode");
-            batch.Add(BaseDataModelDefinitions.BaseObject(space), "BaseNode");
-            batch.Add(BaseDataModelDefinitions.ObjectType(space), "BaseType");
-            batch.Add(BaseDataModelDefinitions.VariableType(space), "BaseType");
-            batch.Add(BaseDataModelDefinitions.ReferenceType(space), "BaseType");
-            batch.Add(BaseDataModelDefinitions.DataType(space), "BaseType");
-            batch.Add(BaseDataModelDefinitions.TypeMeta(space));
+            batch.Add(BaseDataModelDefinitions.BaseNode(modelInfo.ModelSpace));
+            batch.Add(BaseDataModelDefinitions.BaseType(modelInfo.ModelSpace), "BaseNode");
+            batch.Add(BaseDataModelDefinitions.BaseVariable(modelInfo.ModelSpace), "BaseNode");
+            batch.Add(BaseDataModelDefinitions.BaseObject(modelInfo.ModelSpace), "BaseNode");
+            batch.Add(BaseDataModelDefinitions.ObjectType(modelInfo.ModelSpace), "BaseType");
+            batch.Add(BaseDataModelDefinitions.VariableType(modelInfo.ModelSpace), "BaseType");
+            batch.Add(BaseDataModelDefinitions.ReferenceType(modelInfo.ModelSpace), "BaseType");
+            batch.Add(BaseDataModelDefinitions.DataType(modelInfo.ModelSpace), "BaseType");
+            batch.Add(BaseDataModelDefinitions.TypeMeta(modelInfo.ModelSpace));
 
             foreach (var type in types.Values)
             {

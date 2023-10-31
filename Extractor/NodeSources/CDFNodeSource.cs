@@ -119,7 +119,11 @@ namespace Cognite.OpcUa.NodeSources
                     if (node.NodeId == null || node.NodeId.IsNullNodeId || !nodeSet.Add(node.NodeId)) continue;
 
                     var res = BaseUANode.FromSavedNode(node, typeManager);
-                    if (res is not UAVariable variable) continue;
+                    if (res is not UAVariable variable)
+                    {
+                        logger.LogWarning("Node {Id} {Name} in variables table is not a variable, skipping", res?.Id, res?.Name);
+                        continue;
+                    }
 
                     if (nodeMap.TryAdd(variable)) varCount++;
 

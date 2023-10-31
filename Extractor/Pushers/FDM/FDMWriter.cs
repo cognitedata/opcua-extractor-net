@@ -42,14 +42,13 @@ namespace Cognite.OpcUa.Pushers.FDM
         private CogniteDestination destination;
         private FullConfig config;
         private ILogger<FDMWriter> log;
-        private string instSpace;
-        public UAExtractor Extractor { get; set; } = null!;
+        private FdmDestinationConfig.ModelInfo modelInfo;
         public FDMWriter(FullConfig config, CogniteDestination destination, ILogger<FDMWriter> log)
         {
             this.config = config;
             this.destination = destination;
             this.log = log;
-            instSpace = config.Cognite!.MetadataTargets!.DataModels!.Space!;
+            modelInfo = new FdmDestinationConfig.ModelInfo(config.Cognite!.MetadataTargets!.DataModels!);
         }
 
         private async Task IngestInstances(IEnumerable<BaseInstanceWrite> instances, int chunkSize, CancellationToken token)
@@ -93,17 +92,13 @@ namespace Cognite.OpcUa.Pushers.FDM
         {
             if (config.DryRun) return;
 
-            await destination.CogniteClient.Beta.DataModels.UpsertSpaces(new[]
-            {
-                new SpaceCreate
-                {
-                    Space = instSpace
-                }
-            }, token);
+            var spaces = new[] { modelInfo.InstanceSpace, modelInfo.ModelSpace }.Distinct();
 
-            var serverMetaContainer = BaseDataModelDefinitions.ServerMeta(instSpace);
+            await destination.CogniteClient.Beta.DataModels.UpsertSpaces(spaces.Select(s => new SpaceCreate { Space = s, Name = s }), token);
+
+            var serverMetaContainer = BaseDataModelDefinitions.ServerMeta(modelInfo.ModelSpace);
             await destination.CogniteClient.Beta.DataModels.UpsertContainers(new[] { serverMetaContainer }, token);
-            await destination.CogniteClient.Beta.DataModels.UpsertViews(new[] { serverMetaContainer.ToView("1") }, token);
+            await destination.CogniteClient.Beta.DataModels.UpsertViews(new[] { serverMetaContainer.ToView(modelInfo.ModelVersion) }, token);
         }
 
         private async Task Initialize(FDMTypeBatch types, CancellationToken token)
@@ -132,7 +127,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             {
                 try
                 {
-                    var existingModels = await destination.CogniteClient.Beta.DataModels.RetrieveDataModels(new[] { new FDMExternalId("OPC_UA", instSpace, "1") }, false, token);
+                    var existingModels = await destination.CogniteClient.Beta.DataModels.RetrieveDataModels(new[] { modelInfo.FDMExternalId("OPC_UA") }, false, token);
                     if (existingModels.Any())
                     {
                         var existingModel = existingModels.First();
@@ -167,39 +162,27 @@ namespace Cognite.OpcUa.Pushers.FDM
             {
                 Name = "OPC-UA",
                 ExternalId = "OPC_UA",
-                Space = instSpace,
-                Version = "1",
+                Space = modelInfo.ModelSpace,
+                Version = modelInfo.ModelVersion,
                 Views = viewsToInsert
-                    .Select(v => new ViewIdentifier(instSpace, v.ExternalId, v.Version))
-                    .Append(new ViewIdentifier(instSpace, "ServerMeta", "1"))
+                    .Select(v => modelInfo.ViewIdentifier(v.ExternalId))
+                    .Append(modelInfo.ViewIdentifier("ServerMeta"))
             };
             await destination.CogniteClient.Beta.DataModels.UpsertDataModels(new[] { model }, token);
-        }
-
-        private IEnumerable<BaseUANode> GetModellingRules()
-        {
-            var mgr = Extractor.TypeManager;
-            return new BaseUANode[] {
-                mgr.GetModellingRule(ObjectIds.ModellingRule_Mandatory, "Mandatory"),
-                mgr.GetModellingRule(ObjectIds.ModellingRule_Optional, "Optional"),
-                mgr.GetModellingRule(ObjectIds.ModellingRule_MandatoryPlaceholder, "MandatoryPlaceholder"),
-                mgr.GetModellingRule(ObjectIds.ModellingRule_OptionalPlaceholder, "OptionalPlaceholder"),
-                mgr.GetModellingRule(ObjectIds.ModellingRule_ExposesItsArray, "ExposesItsArray")
-            };
         }
 
         public async Task<bool> PushNodes(
             IEnumerable<BaseUANode> objects,
             IEnumerable<UAVariable> variables,
             IEnumerable<UAReference> references,
-            IUAClientAccess client,
+            UAExtractor extractor,
             CancellationToken token)
         {
             await InitializeSpaceAndServer(token);
-            var context = await SyncServerMeta(client.NamespaceTable!, token);
+            var context = await SyncServerMeta(extractor.NamespaceTable!, token);
 
-            var converter = new DMSValueConverter(client.StringConverter, instSpace);
-            var builder = new TypeHierarchyBuilder(log, converter, config, context);
+            var converter = new DMSValueConverter(extractor.StringConverter, modelInfo);
+            var builder = new TypeHierarchyBuilder(log, converter, config, modelInfo, context);
 
             // First, collect all nodes, including properties.
             var nodes = objects
@@ -210,7 +193,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                 .ToList();
 
             // Hierarchy of all known type-hierarchy nodes
-            var typeHierarchy = new NodeHierarchy(Extractor.TypeManager.References, Extractor.TypeManager.NodeMap);
+            var typeHierarchy = new NodeHierarchy(extractor.TypeManager.References, extractor.TypeManager.NodeMap);
 
             // We also need to collect any types, and any nodes referenced by those types.
             var typeCollector = new NodeTypeCollector(log,
@@ -290,7 +273,8 @@ namespace Cognite.OpcUa.Pushers.FDM
             // Initialize if needed
             await Initialize(types, token);
 
-            var instanceBuilder = new InstanceBuilder(nodeHierarchy, types, converter, context, client, instSpace, log);
+            var instanceBuilder = new InstanceBuilder(nodeHierarchy, types, converter, context, extractor, modelInfo, log);
+
             log.LogInformation("Begin building instances");
             instanceBuilder.Build();
             log.LogInformation("Finish building instances");
@@ -304,12 +288,12 @@ namespace Cognite.OpcUa.Pushers.FDM
             var typeMeta = types.Types.Values.Select(v => (BaseInstanceWrite)new NodeWrite
             {
                 ExternalId = $"{v.ExternalId}_TypeMetadata",
-                Space = instSpace,
+                Space = modelInfo.InstanceSpace,
                 Sources = new[]
                 {
                     new InstanceData<TypeMetadata>
                     {
-                        Source = new ContainerIdentifier(instSpace, "TypeMeta"),
+                        Source = modelInfo.ContainerIdentifier("TypeMeta"),
                         Properties = v.GetTypeMetadata(context)
                     }
                 }
@@ -367,13 +351,13 @@ namespace Cognite.OpcUa.Pushers.FDM
 
             await destination.CogniteClient.Beta.DataModels.UpsertAtomic<Dictionary<string, Dictionary<string, ServerMeta>>>(
                 new[] { externalId },
-                instSpace,
+                modelInfo.InstanceSpace,
                 InstanceType.node,
                 new[]
                 {
                     new InstanceSource
                     {
-                        Source = new ViewIdentifier(instSpace, "ServerMeta", "1")
+                        Source = modelInfo.ViewIdentifier("ServerMeta")
                     }
                 }, old =>
                 {
@@ -410,12 +394,12 @@ namespace Cognite.OpcUa.Pushers.FDM
                         new NodeWrite
                         {
                             ExternalId = externalId,
-                            Space = instSpace,
+                            Space = modelInfo.InstanceSpace,
                             Sources = new[]
                             {
                                 new InstanceData<ServerMeta>
                                 {
-                                    Source = new ContainerIdentifier(instSpace, "ServerMeta"),
+                                    Source = modelInfo.ContainerIdentifier("ServerMeta"),
                                     Properties = meta,
                                 }
                             }
