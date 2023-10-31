@@ -46,7 +46,14 @@ namespace Cognite.OpcUa.Subscriptions
                 {
                     throw ExtractorUtils.HandleServiceResult(logger, ex, ExtractorUtils.SourceOp.CreateMonitoredItems);
                 }
-            }, retries, retries.ShouldRetryException, logger, token);
+            }, retries, ex => retries.ShouldRetryException(
+                    ex,
+                    // Do not retry on certain errors here.
+                    // If we actually lose connection to the server the subscription will probably be invalidated,
+                    // so we need to retry it anyway.
+                    // If it isn't invalid, the retry will actually pick up from where we left of, so we can handle retrying much less here.
+                    retries.FinalRetryStatusCodes.Except(outerStatusCodes)
+                ), logger, token);
         }
 
         private async Task CreateMonitoredItems(ILogger logger, FullConfig config, Subscription subscription, SubscriptionManager manager, CancellationToken token)
@@ -77,8 +84,9 @@ namespace Cognite.OpcUa.Subscriptions
             await CreateItemsWithRetry(logger, config.Source.Retries, subscription, token);
         }
 
-        private async Task<Subscription> EnsureSubscriptionExists(ILogger logger, ISession session, FullConfig config, SubscriptionManager subManager, CancellationToken token)
+        private async Task<Subscription> EnsureSubscriptionExists(ILogger logger, SessionManager sessionManager, FullConfig config, SubscriptionManager subManager, CancellationToken token)
         {
+            var session = await sessionManager.WaitForSession();
             var subscription = session.Subscriptions.FirstOrDefault(sub => sub.DisplayName.StartsWith(SubscriptionName.Name(), StringComparison.InvariantCulture));
 
             if (subscription == null)
@@ -120,13 +128,14 @@ namespace Cognite.OpcUa.Subscriptions
 
         private async Task RunInternal(ILogger logger, SessionManager sessionManager, FullConfig config, SubscriptionManager subManager, CancellationToken token)
         {
-            var session = await sessionManager.WaitForSession();
-
             var subscription = await RetryUtil.RetryResultAsync(
                 $"ensure subscription {SubscriptionName.Name()}",
-                () => EnsureSubscriptionExists(logger, session, config, subManager, token),
+                () => EnsureSubscriptionExists(logger, sessionManager, config, subManager, token),
                 config.Source.Retries,
-                config.Source.Retries.ShouldRetryException,
+                ex => config.Source.Retries.ShouldRetryException(
+                    ex,
+                    config.Source.Retries.FinalRetryStatusCodes.Except(outerStatusCodes)
+                ),
                 logger,
                 token);
 
@@ -138,7 +147,15 @@ namespace Cognite.OpcUa.Subscriptions
         private static readonly uint[] outerStatusCodes = new[]
         {
             StatusCodes.BadSubscriptionIdInvalid,
-            StatusCodes.BadNoSubscription
+            StatusCodes.BadNoSubscription,
+            StatusCodes.BadSecureChannelClosed,
+            StatusCodes.BadSecureChannelIdInvalid,
+            StatusCodes.BadConnectionClosed,
+            StatusCodes.BadServerNotConnected,
+            StatusCodes.BadServerHalted,
+            StatusCodes.BadShutdown,
+            StatusCodes.BadCommunicationError,
+            StatusCodes.BadNotConnected,
         };
 
         public override async Task Run(ILogger logger, SessionManager sessionManager, FullConfig config, SubscriptionManager subManager, CancellationToken token)
