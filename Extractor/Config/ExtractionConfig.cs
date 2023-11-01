@@ -151,7 +151,7 @@ namespace Cognite.OpcUa.Config
         {
             var roots = new List<NodeId>();
             var protoRoots = RootNodes ?? Enumerable.Empty<ProtoNodeId>();
-            if (RootNode != null)
+            if (RootNode != null && RootNode.NamespaceUri != null && RootNode.NodeId != null)
             {
                 protoRoots = protoRoots.Prepend(RootNode);
             }
