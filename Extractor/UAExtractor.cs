@@ -810,7 +810,7 @@ namespace Cognite.OpcUa
         /// </summary>
         private async Task ConfigureExtractor()
         {
-            RootNodes = Config.Extraction.GetRootNodes(uaClient.Context, log);
+            RootNodes = Config.Extraction.GetRootNodes(uaClient.Context);
 
             foreach (var state in State.NodeStates)
             {
