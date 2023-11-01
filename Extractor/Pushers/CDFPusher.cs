@@ -547,7 +547,7 @@ namespace Cognite.OpcUa.Pushers
             if (fullConfig.DryRun) return true;
             try
             {
-                await cdfWriter.ExecuteDeletes(deletes, token);
+                await cdfWriter.ExecuteDeletes(deletes, Extractor, token);
             }
             catch (Exception ex)
             {
