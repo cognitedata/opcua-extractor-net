@@ -257,8 +257,8 @@ namespace Cognite.OpcUa.Pushers.Writers
         public async Task MarkDeleted(DeletedNodes deletes, CancellationToken token)
         {
             await Task.WhenAll(
-                SetAssetsDeleted(deletes.Objects, token),
-                DeleteRelationships(deletes.References, token)
+                SetAssetsDeleted(deletes.Objects.Select(d => d.Id), token),
+                DeleteRelationships(deletes.References.Select(d => d.Id), token)
             );
         }
 

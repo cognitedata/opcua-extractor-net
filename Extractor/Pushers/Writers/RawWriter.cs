@@ -130,15 +130,15 @@ namespace Cognite.OpcUa.Pushers.Writers
             var tasks = new List<Task>();
             if (rawConfig.AssetsTable != null)
             {
-                tasks.Add(MarkRawRowsAsDeleted(rawConfig.Database, rawConfig.AssetsTable, deletes.Objects, token));
+                tasks.Add(MarkRawRowsAsDeleted(rawConfig.Database, rawConfig.AssetsTable, deletes.Objects.Select(d => d.Id), token));
             }
             if (rawConfig.TimeseriesTable != null)
             {
-                tasks.Add(MarkRawRowsAsDeleted(rawConfig.Database, rawConfig.TimeseriesTable, deletes.Variables, token));
+                tasks.Add(MarkRawRowsAsDeleted(rawConfig.Database, rawConfig.TimeseriesTable, deletes.Variables.Select(d => d.Id), token));
             }
             if (rawConfig.RelationshipsTable != null)
             {
-                tasks.Add(MarkRawRowsAsDeleted(rawConfig.Database, rawConfig.RelationshipsTable, deletes.References, token));
+                tasks.Add(MarkRawRowsAsDeleted(rawConfig.Database, rawConfig.RelationshipsTable, deletes.References.Select(d => d.Id), token));
             }
             await Task.WhenAll(tasks);
         }
