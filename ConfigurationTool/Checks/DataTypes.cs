@@ -156,7 +156,7 @@ namespace Cognite.OpcUa.Config
         /// </summary>
         public async Task IdentifyDataTypeSettings(CancellationToken token)
         {
-            var roots = Config.Extraction.GetRootNodes(Context, log);
+            var roots = Config.Extraction.GetRootNodes(Context);
 
             int oldArraySize = Config.Extraction.DataTypes.MaxArraySize;
             int arrayLimit = Config.Extraction.DataTypes.MaxArraySize == 0 ? 10 : Config.Extraction.DataTypes.MaxArraySize;

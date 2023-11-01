@@ -96,7 +96,7 @@ namespace Cognite.OpcUa.Config
             if (nodesRead) return;
             nodeList.Clear();
             log.LogInformation("Mapping out node hierarchy");
-            var roots = Config.Extraction.GetRootNodes(Context, log);
+            var roots = Config.Extraction.GetRootNodes(Context);
             try
             {
                 await Browser.BrowseNodeHierarchy(roots, ToolUtil.GetSimpleListWriterCallback(nodeList, this, TypeManager, log), token,
