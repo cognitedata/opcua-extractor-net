@@ -140,7 +140,7 @@ namespace Test.Unit
 
             await extractor.RunExtractor(true);
 
-            Assert.Single(handler.Spaces);
+            Assert.Equal(2, handler.Spaces.Count);
 
             Assert.Equal(214, handler.Views.Count);
             Assert.Equal(133, handler.Containers.Count);
