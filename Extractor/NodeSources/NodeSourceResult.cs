@@ -76,12 +76,12 @@ namespace Cognite.OpcUa.NodeSources
             Deletes = deletes;
         }
 
-        public static async Task<PusherInput> FromNodeSourceResult(NodeSourceResult result, DeletesManager? deletesManager, CancellationToken token)
+        public static async Task<PusherInput> FromNodeSourceResult(NodeSourceResult result, SessionContext context, DeletesManager? deletesManager, CancellationToken token)
         {
             DeletedNodes? deleted = null;
             if (deletesManager != null)
             {
-                deleted = await deletesManager.GetDiffAndStoreIds(result, token);
+                deleted = await deletesManager.GetDiffAndStoreIds(result, context, token);
             }
             return new PusherInput(result.DestinationObjects, result.DestinationVariables, result.DestinationReferences, deleted);
         }

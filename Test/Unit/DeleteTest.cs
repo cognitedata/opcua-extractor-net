@@ -148,7 +148,7 @@ namespace Test.Unit
                 false, false);
 
             // Cannot be used for deletes, so nothing happens.
-            var toDelete = await manager.GetDiffAndStoreIds(result, tester.Source.Token);
+            var toDelete = await manager.GetDiffAndStoreIds(result, tester.Client.Context, tester.Source.Token);
             Assert.Empty(toDelete.Objects);
             Assert.Empty(toDelete.Variables);
             Assert.Empty(toDelete.References);
@@ -165,7 +165,7 @@ namespace Test.Unit
             tester.Config.StateStorage.KnownObjectsStore = null;
             tester.Config.StateStorage.KnownVariablesStore = null;
             tester.Config.StateStorage.KnownReferencesStore = null;
-            toDelete = await manager.GetDiffAndStoreIds(result, tester.Source.Token);
+            toDelete = await manager.GetDiffAndStoreIds(result, tester.Client.Context, tester.Source.Token);
             Assert.Empty(toDelete.Objects);
             Assert.Empty(toDelete.Variables);
             Assert.Empty(toDelete.References);
@@ -174,7 +174,7 @@ namespace Test.Unit
             tester.Config.StateStorage = new StateStorageConfig();
 
             // This time there is a store and data, so we get some states, nothing reported as deleted yet.
-            toDelete = await manager.GetDiffAndStoreIds(result, tester.Source.Token);
+            toDelete = await manager.GetDiffAndStoreIds(result, tester.Client.Context, tester.Source.Token);
             Assert.Empty(toDelete.Objects);
             Assert.Empty(toDelete.Variables);
             Assert.Empty(toDelete.References);
@@ -189,7 +189,7 @@ namespace Test.Unit
                 new[] { GetVariable("var2") },
                 Enumerable.Empty<UAReference>(), true, false);
 
-            toDelete = await manager.GetDiffAndStoreIds(result, tester.Source.Token);
+            toDelete = await manager.GetDiffAndStoreIds(result, tester.Client.Context, tester.Source.Token);
             Assert.Single(toDelete.Objects);
             Assert.Single(toDelete.Variables);
             Assert.Empty(toDelete.References);
@@ -222,7 +222,7 @@ namespace Test.Unit
             tester.Config.StateStorage.KnownObjectsStore = null;
             tester.Config.StateStorage.KnownVariablesStore = null;
             tester.Config.StateStorage.KnownReferencesStore = null;
-            var toDelete = await manager.GetDiffAndStoreIds(result, tester.Source.Token);
+            var toDelete = await manager.GetDiffAndStoreIds(result, tester.Client.Context, tester.Source.Token);
             Assert.Empty(toDelete.Objects);
             Assert.Empty(toDelete.Variables);
             Assert.Empty(toDelete.References);
@@ -231,7 +231,7 @@ namespace Test.Unit
             tester.Config.StateStorage = new StateStorageConfig();
 
             // This time there is a store and data, so we get some states, nothing reported as deleted yet.
-            toDelete = await manager.GetDiffAndStoreIds(result, tester.Source.Token);
+            toDelete = await manager.GetDiffAndStoreIds(result, tester.Client.Context, tester.Source.Token);
             Assert.Empty(toDelete.Objects);
             Assert.Empty(toDelete.Variables);
             Assert.Empty(toDelete.References);
@@ -246,7 +246,7 @@ namespace Test.Unit
                 new[] { GetVariable("var2") },
                 new[] { GetReference(variables[0], variables[1], typeManager) }, true, false);
 
-            toDelete = await manager.GetDiffAndStoreIds(result, tester.Source.Token);
+            toDelete = await manager.GetDiffAndStoreIds(result, tester.Client.Context, tester.Source.Token);
             Assert.Single(toDelete.Objects);
             Assert.Single(toDelete.Variables);
             Assert.Single(toDelete.References);
@@ -295,7 +295,7 @@ namespace Test.Unit
             var result = GetTestResult(extractor, 2);
 
             // Get the diff
-            var input = await PusherInput.FromNodeSourceResult(result, deleteManager, tester.Source.Token);
+            var input = await PusherInput.FromNodeSourceResult(result, extractor.Context, deleteManager, tester.Source.Token);
             // Should be empty
             Assert.Empty(input.Deletes.Objects);
             Assert.Empty(input.Deletes.Variables);
@@ -319,7 +319,7 @@ namespace Test.Unit
             // Get some more results, this time a shorter list
             result = GetTestResult(extractor, 1);
 
-            input = await PusherInput.FromNodeSourceResult(result, deleteManager, tester.Source.Token);
+            input = await PusherInput.FromNodeSourceResult(result, extractor.Context, deleteManager, tester.Source.Token);
             // Now there should be one of each
             Assert.Single(input.Deletes.Objects);
             Assert.Single(input.Deletes.Variables);
@@ -338,7 +338,7 @@ namespace Test.Unit
             Assert.Single(stateStore.States["known_references"]);
 
             // Next push with same input should result in no deletes
-            input = await PusherInput.FromNodeSourceResult(result, deleteManager, tester.Source.Token);
+            input = await PusherInput.FromNodeSourceResult(result, extractor.Context, deleteManager, tester.Source.Token);
 
             await extractor.PushNodes(input, pusher, false);
             Assert.Empty(pusher.LastDeleteReq.Objects);
@@ -376,8 +376,8 @@ namespace Test.Unit
             await extractor.Rebrowse();
             Assert.False(stateStore.States["known_objects"].ContainsKey(addedExtId));
             Assert.False(stateStore.States["known_variables"].ContainsKey(addedVarExtId));
-            Assert.Contains(addedExtId, pusher.LastDeleteReq.Objects);
-            Assert.Contains(addedVarExtId, pusher.LastDeleteReq.Variables);
+            Assert.Contains(addedExtId, pusher.LastDeleteReq.Objects.Select(s => s.Id));
+            Assert.Contains(addedVarExtId, pusher.LastDeleteReq.Variables.Select(s => s.Id));
         }
 
         [Fact]
@@ -447,7 +447,7 @@ namespace Test.Unit
             tester.Config.Extraction.Relationships.Enabled = true;
             tester.Config.Extraction.Relationships.Hierarchical = true;
             tester.Config.Cognite.DeleteRelationships = true;
-            tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig 
+            tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
             {
                 Clean = new CleanMetadataTargetConfig
                 {
