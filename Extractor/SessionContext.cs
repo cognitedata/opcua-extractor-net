@@ -1,3 +1,4 @@
+using Cognite.Extractor.Common;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.Types;
@@ -46,7 +47,10 @@ namespace Cognite.OpcUa
             {
                 foreach (var kvp in config.Extraction.NodeMap)
                 {
-                    nodeOverrides[kvp.Value.ToNodeId(this)] = kvp.Key;
+                    var nodeId = kvp.Value.ToNodeId(this);
+                    if (nodeId.IsNullNodeId) throw new ConfigurationException($"Failed to convert nodeId override {kvp.Value.NamespaceUri} {kvp.Value.NodeId} to NodeId");
+
+                    nodeOverrides[nodeId] = kvp.Key;
                 }
             }
         }

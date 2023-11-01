@@ -147,35 +147,22 @@ namespace Cognite.OpcUa.Config
         /// It is possible to have multiple of each filter type.
         /// </summary>
         public IEnumerable<RawNodeTransformation>? Transformations { get; set; }
-        public IEnumerable<NodeId> GetRootNodes(SessionContext context, ILogger logger)
+        public IEnumerable<NodeId> GetRootNodes(SessionContext context)
         {
             var roots = new List<NodeId>();
-            if (RootNode != null)
+            var protoRoots = RootNodes ?? Enumerable.Empty<ProtoNodeId>();
+            if (RootNode != null && RootNode.NamespaceUri != null && RootNode.NodeId != null)
             {
-                var id = RootNode.ToNodeId(context);
+                protoRoots = protoRoots.Prepend(RootNode);
+            }
+            foreach (var root in protoRoots)
+            {
+                var id = root.ToNodeId(context);
                 if (id.IsNullNodeId)
                 {
-                    logger.LogWarning("Failed to convert configured root node {Namespace} {Id} to NodeId", RootNode.NamespaceUri, RootNode.NodeId);
+                    throw new ConfigurationException($"Failed to convert configured root node {root.NamespaceUri} {root.NodeId} to NodeId");
                 }
-                else
-                {
-                    roots.Add(id);
-                }
-            }
-            if (RootNodes != null)
-            {
-                foreach (var root in RootNodes)
-                {
-                    var id = root.ToNodeId(context);
-                    if (id.IsNullNodeId)
-                    {
-                        logger.LogWarning("Failed to convert configured root node {Namespace} {Id} to NodeId", root.NamespaceUri, root.NodeId);
-                    }
-                    else
-                    {
-                        roots.Add(id);
-                    }
-                }
+                roots.Add(id);
             }
             if (!roots.Any())
             {

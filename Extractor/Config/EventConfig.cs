@@ -15,6 +15,7 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using Cognite.Extractor.Common;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using System.Collections.Generic;
@@ -105,12 +106,10 @@ namespace Cognite.OpcUa.Config
                 var id = proto.ToNodeId(context);
                 if (id.IsNullNodeId)
                 {
-                    logger.LogWarning("Failed to convert event id {Namespace} {Id} to NodeId", proto.NamespaceUri, proto.NodeId);
+                    throw new ConfigurationException($"Failed to convert event id {proto.NamespaceUri} {proto.NodeId} to NodeId");
                 }
-                else
-                {
-                    whitelist.Add(id);
-                }
+
+                whitelist.Add(id);
             }
             return whitelist;
         }
@@ -124,12 +123,10 @@ namespace Cognite.OpcUa.Config
                 var id = proto.ToNodeId(context);
                 if (id.IsNullNodeId)
                 {
-                    logger.LogWarning("Failed to convert emitter id {Namespace} {Id} to NodeId", proto.NamespaceUri, proto.NodeId);
+                    throw new ConfigurationException($"Failed to convert emitter id {proto.NamespaceUri} {proto.NodeId} to NodeId");
                 }
-                else
-                {
-                    ids.Add(id);
-                }
+
+                ids.Add(id);
             }
             return ids;
         }
@@ -143,12 +140,9 @@ namespace Cognite.OpcUa.Config
                 var id = proto.ToNodeId(context);
                 if (id.IsNullNodeId)
                 {
-                    logger.LogWarning("Failed to convert historizing emitter id {Namespace} {Id} to NodeId", proto.NamespaceUri, proto.NodeId);
+                    throw new ConfigurationException($"Failed to convert historizing emitter id {proto.NamespaceUri} {proto.NodeId} to NodeId");
                 }
-                else
-                {
-                    ids.Add(id);
-                }
+                ids.Add(id);
             }
             return ids;
         }
