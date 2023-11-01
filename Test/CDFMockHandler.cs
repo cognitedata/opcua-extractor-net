@@ -15,6 +15,7 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using Cognite.Extensions.DataModels.QueryBuilder;
 using Cognite.OpcUa;
 using CogniteSdk;
 using CogniteSdk.Beta.DataModels;
@@ -30,10 +31,12 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Net.Mime;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
+using Xunit;
 
 #pragma warning disable IDE1006 // Naming Styles
 
@@ -246,10 +249,10 @@ namespace Test
                             res = HandleCreateInstances(content);
                             break;
                         case "/models/instances/list":
-                            res = new HttpResponseMessage(HttpStatusCode.OK)
-                            {
-                                Content = new StringContent("{\"items\":[]}")
-                            };
+                            res = HandleFilterInstances(content);
+                            break;
+                        case "/models/instances/delete":
+                            res = HandleDeleteInstances(content);
                             break;
                         default:
                             log.LogWarning("Unknown path: {DummyFactoryUnknownPath}", reqPath);
@@ -1163,6 +1166,64 @@ namespace Test
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent(content)
+            };
+        }
+
+        private HttpResponseMessage HandleFilterInstances(string content)
+        {
+            var results = new List<BaseInstance<JsonObject>>();
+
+            var req = System.Text.Json.JsonSerializer.Deserialize<InstancesFilter>(content, Oryx.Cognite.Common.jsonOptions);
+            if (req.InstanceType == InstanceType.edge && req.Filter is OrFilter orF && orF.Or.First() is InFilter)
+            {
+                var filters = orF.Or.OfType<InFilter>().ToList();
+                Assert.Equal(2, filters.Count);
+
+                var startNodes = filters
+                    .First(f => f.Property.ElementAt(1) == "startNode")
+                    .Values
+                    .Select(v => (v as RawPropertyValue<JsonElement>).Value
+                        .Deserialize<DirectRelationIdentifier>(Oryx.Cognite.Common.jsonOptions).ExternalId)
+                    .ToHashSet();
+                var endNodes = filters
+                    .First(f => f.Property.ElementAt(1) == "endNode")
+                    .Values
+                    .Select(v => (v as RawPropertyValue<JsonElement>).Value
+                        .Deserialize<DirectRelationIdentifier>(Oryx.Cognite.Common.jsonOptions).ExternalId)
+                    .ToHashSet();
+
+                foreach (var inst in Instances.Values)
+                {
+                    if (inst["instanceType"].GetValue<string>() == "edge"
+                        && (startNodes.Contains(inst["startNode"]["externalId"].GetValue<string>())
+                            || endNodes.Contains(inst["endNode"]["externalId"].GetValue<string>())))
+                    {
+                        results.Add(inst.Deserialize<Edge<JsonObject>>(Oryx.Cognite.Common.jsonOptions));
+                    }
+                }
+            }
+
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(System.Text.Json.JsonSerializer.Serialize(new ItemsWithCursor<BaseInstance<JsonObject>>
+                {
+                    Items = results,
+                    NextCursor = null
+                }, Oryx.Cognite.Common.jsonOptions))
+            };
+        }
+
+        private HttpResponseMessage HandleDeleteInstances(string content)
+        {
+            var req = System.Text.Json.JsonSerializer.Deserialize<ItemsWithoutCursor<InstanceIdentifier>>(content, Oryx.Cognite.Common.jsonOptions);
+            foreach (var id in req.Items)
+            {
+                Instances.Remove(id.ExternalId);
+            }
+
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("{}")
             };
         }
     }

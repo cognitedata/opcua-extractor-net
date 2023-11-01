@@ -1,9 +1,12 @@
-﻿using Cognite.OpcUa.Config;
+﻿using Cognite.Extractor.StateStorage;
+using Cognite.OpcUa.Config;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using Server;
 using System;
 using System.CommandLine;
+using System.IO;
 using System.Linq;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
@@ -124,6 +127,89 @@ namespace Test.Unit
 
             Assert.Equal(6 + 4 + 11 + 7 - 4, handler.Instances.Count(inst => inst.Value["type"]?["externalId"]?.ToString() ==
                 ReferenceTypeIds.HasSubtype.ToString()));
+        }
+
+        [Fact]
+        public async Task TestDeleteNodesAndEdges()
+        {
+            try
+            {
+                File.Delete("fdm-test-1.db");
+            }
+            catch { }
+            tester.Config.Extraction.Deletes.Enabled = true;
+            tester.Config.Cognite.MetadataTargets.DataModels.EnableDeletes = true;
+            tester.Config.Cognite.MetadataTargets.DataModels.SkipSimpleTypes = false;
+            using var stateStore = new LiteDBStateStore(new StateStoreConfig
+            {
+                Database = StateStoreConfig.StorageType.LiteDb,
+                Location = "fdm-test-1.db"
+            }, tester.Provider.GetRequiredService<ILogger<LiteDBStateStore>>());
+
+
+            var (handler, pusher) = tester.GetCDFPusher();
+            var extractor = tester.BuildExtractor(true, stateStore, pusher);
+
+            try
+            {
+                await extractor.RunExtractor(true);
+                Assert.Equal(2, handler.Spaces.Count);
+                Assert.Equal(18, handler.Views.Count);
+                Assert.Equal(13, handler.Containers.Count);
+                Assert.Equal(68, handler.Instances.Count(inst => inst.Value["instanceType"].ToString() == "node"));
+                Assert.Equal(81, handler.Instances.Count(inst => inst.Value["instanceType"].ToString() == "edge"));
+            }
+            finally
+            {
+                await extractor.DisposeAsync();
+            }
+
+            tester.Config.Extraction.Transformations = tester.Config.Extraction.Transformations
+                .Append(new RawNodeTransformation
+                {
+                    Type = Cognite.OpcUa.TransformationType.Ignore,
+                    Filter = new RawNodeFilter
+                    {
+                        Name = "DeviceThree"
+                    }
+                });
+
+
+            await using var extractor2 = tester.BuildExtractor(true, stateStore, pusher);
+            await extractor2.RunExtractor(true);
+
+            Assert.Equal(2, handler.Spaces.Count);
+            Assert.Equal(18, handler.Views.Count);
+            Assert.Equal(13, handler.Containers.Count);
+            Assert.Equal(64, handler.Instances.Count(inst => inst.Value["instanceType"].ToString() == "node"));
+            Assert.Equal(73, handler.Instances.Count(inst => inst.Value["instanceType"].ToString() == "edge"));
+        }
+
+        [Fact]
+        public async Task TestMapAllTypes()
+        {
+            // This test mostly just exists to check that it doesn't fail, and that it produces correct results even for
+            // very complex types.
+
+            tester.Config.Cognite.MetadataTargets.DataModels.SkipSimpleTypes = false;
+            tester.Config.Cognite.MetadataTargets.DataModels.TypesToMap = TypesToMap.All;
+
+            var (handler, pusher) = tester.GetCDFPusher();
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+
+            await extractor.RunExtractor(true);
+
+            Assert.Equal(2, handler.Spaces.Count);
+
+            Assert.Equal(214, handler.Views.Count);
+            Assert.Equal(133, handler.Containers.Count);
+
+            var extensionFieldsType = handler.Views["ExtensionFieldsType"];
+            Assert.Single(extensionFieldsType["properties"].AsObject());
+            Assert.Equal("<ExtensionFieldName>", extensionFieldsType["properties"]["ExtensionFieldName"]["name"].ToString());
+
+            var pubSubDiagnosticsType = handler.Views["PubSubDiagnosticsType"];
+            Assert.Equal(10, pubSubDiagnosticsType["properties"].AsObject().Count);
         }
     }
 }

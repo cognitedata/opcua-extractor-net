@@ -267,7 +267,7 @@ namespace Test.Unit
                 tester.Config.Source.Username = "testuser";
                 tester.Config.Source.Password = "wrongpassword";
 
-                await Assert.ThrowsAsync<SilentServiceException>(async () => await tester.Client.Run(tester.Source.Token, 0));
+                await Assert.ThrowsAsync<SilentServiceException>((Func<Task>)(async () => await tester.Client.Run(tester.Source.Token, 0)));
 
                 tester.Config.Source.Password = "testpassword";
 
@@ -654,9 +654,9 @@ namespace Test.Unit
 
             tester.Config.Source.Retries.MaxTries = 1;
             tester.Server.Issues.RemainingBrowseCount = 6;
-            var ex = await Assert.ThrowsAsync<AggregateException>(async () =>
+            var ex = await Assert.ThrowsAsync<AggregateException>((Func<Task>)(async () =>
                 await tester.Client.Browser.BrowseNodeHierarchy(tester.Server.Ids.Full.DeepRoot, callback, tester.Source.Token)
-            );
+            ));
 
             var root = ex.InnerException;
             Assert.IsType<SilentServiceException>(root);

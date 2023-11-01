@@ -34,6 +34,8 @@ using System.Text.Json.Serialization;
 using Cognite.Extensions.DataModels;
 using System.Text.Json.Nodes;
 using System.ComponentModel.Design;
+using Cognite.Extensions.DataModels.QueryBuilder;
+using System.Net;
 
 namespace Cognite.OpcUa.Pushers.FDM
 {
@@ -42,6 +44,7 @@ namespace Cognite.OpcUa.Pushers.FDM
         private CogniteDestination destination;
         private FullConfig config;
         private ILogger<FDMWriter> log;
+        private NodeIdContext? context;
         private FdmDestinationConfig.ModelInfo modelInfo;
         public FDMWriter(FullConfig config, CogniteDestination destination, ILogger<FDMWriter> log)
         {
@@ -179,7 +182,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             CancellationToken token)
         {
             await InitializeSpaceAndServer(token);
-            var context = await SyncServerMeta(extractor.NamespaceTable!, token);
+            context = await SyncServerMeta(extractor.NamespaceTable!, token);
 
             var converter = new DMSValueConverter(extractor.StringConverter, modelInfo);
             var builder = new TypeHierarchyBuilder(log, converter, config, modelInfo, context);
@@ -198,7 +201,8 @@ namespace Cognite.OpcUa.Pushers.FDM
             // We also need to collect any types, and any nodes referenced by those types.
             var typeCollector = new NodeTypeCollector(log,
                 nodes.SelectNonNull(n => n.TypeDefinition).Where(id => !id.IsNullNodeId).ToHashSet(),
-                typeHierarchy);
+                typeHierarchy,
+                config.Cognite!.MetadataTargets!.DataModels!.TypesToMap);
 
             var typeResult = typeCollector.MapTypes();
 
@@ -410,6 +414,102 @@ namespace Cognite.OpcUa.Pushers.FDM
             if (finalNamespaces == null) throw new InvalidOperationException("Namespaces were not successfully assigned");
 
             return new NodeIdContext(finalNamespaces, nss);
+        }
+
+
+        private async Task DeleteInstances(IEnumerable<InstanceIdentifier> instances, int chunkSize, CancellationToken token)
+        {
+            var chunks = instances.ChunkBy(chunkSize).ToList();
+            var generators = chunks
+                .Select<IEnumerable<InstanceIdentifier>, Func<Task>>(c => async () =>
+                {
+                    await destination.CogniteClient.Beta.DataModels.DeleteInstances(
+                        instances,
+                        token
+                    );
+                });
+
+            int taskNum = 0;
+            await generators.RunThrottled(
+                    4,
+                (_) =>
+                    {
+                        if (chunks.Count > 1)
+                            log.LogDebug("{MethodName} completed {NumDone}/{TotalNum} tasks",
+                            nameof(DeleteInstances), ++taskNum, chunks.Count);
+                    },
+                    token
+                );
+        }
+
+        private async Task<IEnumerable<InstanceIdentifier>> GetAllReferencingEdges(IEnumerable<NodeId> nodes, NodeIdContext context, CancellationToken token)
+        {
+            var chunks = nodes.Select(n => context.NodeIdToString(n)).ChunkBy(1000).ToList();
+            if (!chunks.Any()) return Enumerable.Empty<InstanceIdentifier>();
+
+            var edgeIds = new IEnumerable<InstanceIdentifier>[chunks.Count];
+            var generators = chunks
+                .Select<IEnumerable<string>, Func<Task>>((c, idx) => async () =>
+                {
+                    var values = c.Select(id => Value.Raw(new DirectRelationIdentifier(modelInfo.InstanceSpace, id)));
+                    var filter = Filter.Or(
+                        Filter.In(values, "edge", "startNode"),
+                        Filter.In(values, "edge", "endNode")
+                    );
+                    var res = new List<InstanceIdentifier>();
+                    string? cursor = null;
+                    do
+                    {
+                        var r = await destination.CogniteClient.Beta.DataModels.FilterInstances<JsonElement>(new InstancesFilter
+                        {
+                            IncludeTyping = false,
+                            InstanceType = InstanceType.edge,
+                            Filter = filter,
+                            Limit = 1000,
+                            Cursor = cursor
+                        }, token);
+                        res.AddRange(r.Items.Select(it => new InstanceIdentifier(InstanceType.edge, it.Space, it.ExternalId)));
+                        cursor = r.NextCursor;
+                    } while (cursor != null);
+
+                    edgeIds[idx] = res;
+                });
+
+            int taskNum = 0;
+            await generators.RunThrottled(
+                4,
+                (_) =>
+                {
+                    if (chunks.Count > 1)
+                        log.LogDebug("{MethodName} completed {NumDone}/{TotalNum} tasks",
+                            nameof(GetAllReferencingEdges), ++taskNum, chunks.Count);
+                },
+                token
+            );
+
+            return edgeIds.Aggregate((seed, r) => seed.Concat(r)).ToList();
+        }
+
+        public async Task DeleteInFdm(DeletedNodes deletes, SessionContext sessionContext, CancellationToken token)
+        {
+            if (!(config.Cognite?.MetadataTargets?.DataModels?.EnableDeletes ?? false)) return;
+
+            // First find all edges pointing to or from the nodes we are deleting.
+            // We pretty much need to do this, since we don't know if anyone has added edges to the nodes.
+            var nodes = deletes.Objects
+                .Concat(deletes.Variables)
+                .Select(d => d.GetNodeId(sessionContext, log))
+                .Where(id => !id.IsNullNodeId)
+                .Distinct()
+                .ToList();
+            log.LogInformation("Deleting edges for {Count} nodes", nodes.Count);
+            var edges = await GetAllReferencingEdges(nodes, context!, token);
+            log.LogInformation("Deleting {Count} edges", edges.Count());
+            await DeleteInstances(edges, 1000, token);
+            log.LogInformation("Deleting {Count} nodes", nodes.Count);
+            await DeleteInstances(nodes.Select(id =>
+                new InstanceIdentifier(InstanceType.node, modelInfo.InstanceSpace, context!.NodeIdToString(id))
+            ), 1000, token);
         }
     }
 
