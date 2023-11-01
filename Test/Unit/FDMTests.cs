@@ -125,5 +125,32 @@ namespace Test.Unit
             Assert.Equal(6 + 4 + 11 + 7 - 4, handler.Instances.Count(inst => inst.Value["type"]?["externalId"]?.ToString() ==
                 ReferenceTypeIds.HasSubtype.ToString()));
         }
+
+        [Fact]
+        public async Task TestMapAllTypes()
+        {
+            // This test mostly just exists to check that it doesn't fail, and that it produces correct results even for
+            // very complex types.
+
+            tester.Config.Cognite.MetadataTargets.DataModels.SkipSimpleTypes = false;
+            tester.Config.Cognite.MetadataTargets.DataModels.TypesToMap = TypesToMap.All;
+
+            var (handler, pusher) = tester.GetCDFPusher();
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+
+            await extractor.RunExtractor(true);
+
+            Assert.Equal(2, handler.Spaces.Count);
+
+            Assert.Equal(214, handler.Views.Count);
+            Assert.Equal(133, handler.Containers.Count);
+
+            var extensionFieldsType = handler.Views["ExtensionFieldsType"];
+            Assert.Single(extensionFieldsType["properties"].AsObject());
+            Assert.Equal("<ExtensionFieldName>", extensionFieldsType["properties"]["ExtensionFieldName"]["name"].ToString());
+
+            var pubSubDiagnosticsType = handler.Views["PubSubDiagnosticsType"];
+            Assert.Equal(10, pubSubDiagnosticsType["properties"].AsObject().Count);
+        }
     }
 }
