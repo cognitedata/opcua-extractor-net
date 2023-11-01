@@ -5,6 +5,7 @@ using System.Xml.Linq;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.Types;
 using Opc.Ua;
+using Serilog;
 
 namespace Cognite.OpcUa.Pushers.FDM.Types
 {

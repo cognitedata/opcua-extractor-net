@@ -266,9 +266,10 @@ namespace Cognite.OpcUa.Config
         public bool Enabled { get; set; }
 
         /// <summary>
-        /// Enum for which types to map to FDM
-        /// 
-        /// TODO: Currently does nothing
+        /// Enum for which types to map to FDM.
+        /// Note that setting this to "All" tends to not work that well. It is rarely something you want.
+        /// The extractor can handle it, but it will produce a lot of types, and no application will ever need all of them.
+        /// Still, it is easy to add for completeness.
         /// </summary>
         public TypesToMap TypesToMap { get; set; } = TypesToMap.Custom;
 
