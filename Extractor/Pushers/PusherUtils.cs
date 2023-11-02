@@ -136,11 +136,13 @@ namespace Cognite.OpcUa.Pushers
                         out _);
 
                 if (newMetaData.Any() && (old.Metadata == null
-                        || !newMetaData.All(kvp => old.Metadata.TryGetValue(kvp.Key, out var oldVal) && kvp.Value == oldVal)))
+                        || !newMetaData.All(kvp => old.Metadata.TryGetValue(kvp.Key, out var oldVal) && kvp.Value == oldVal))
+                    || config.Extraction.Deletes.Enabled && old.Metadata.ContainsKey(config.Extraction.Deletes.DeleteMarker))
                 {
                     tsUpdate.Metadata = new UpdateDictionary<string>(newMetaData);
                 }
             }
+
             return tsUpdate;
         }
 
@@ -191,7 +193,8 @@ namespace Cognite.OpcUa.Pushers
                         out _);
 
                 if (newMetaData.Any() && (old.Metadata == null
-                        || !newMetaData.All(kvp => old.Metadata.TryGetValue(kvp.Key, out var oldVal) && kvp.Value == oldVal)))
+                        || !newMetaData.All(kvp => old.Metadata.TryGetValue(kvp.Key, out var oldVal) && kvp.Value == oldVal))
+                    || config.Extraction.Deletes.Enabled && old.Metadata.ContainsKey(config.Extraction.Deletes.DeleteMarker))
                 {
                     assetUpdate.Metadata = new UpdateDictionary<string>(newMetaData);
                 }
