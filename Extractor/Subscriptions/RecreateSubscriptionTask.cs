@@ -1,5 +1,6 @@
 ﻿using Cognite.OpcUa.Config;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.ObjectPool;
 using Opc.Ua;
 using Opc.Ua.Client;
 using System;
@@ -65,24 +66,30 @@ namespace Cognite.OpcUa.Subscriptions
             var subState = subManager.Cache.GetSubscriptionState(SubscriptionName);
             if (subState == null) return;
             var diff = DateTime.UtcNow - subState.LastModifiedTime;
-            if (diff < TimeSpan.FromMilliseconds(oldSubscription.CurrentPublishingInterval * 4))
+            if (diff < TimeSpan.FromMilliseconds(oldSubscription.CurrentPublishingInterval * 8))
             {
-                logger.LogWarning("Subscription was updated {Time} ago. Waiting until 4 * publishing interval has passed before recreating",
-                    diff);
+                logger.LogWarning("Subscription {Name} was updated {Time} ago. Waiting until 4 * publishing interval has passed before recreating",
+                    diff, SubscriptionName);
                 await Task.Delay(diff, token);
             }
+            else
+            {
+                var delay = TimeSpan.FromMilliseconds(oldSubscription.CurrentPublishingInterval * 2);
+                logger.LogWarning("Waiting {Time} before recreating stopped subscription {Name}", SubscriptionName);
+                await Task.Delay(delay, token);
+            }
 
-            if (!oldSubscription.PublishingStopped) return;
+            if (!await ShouldRun(logger, sessionManager, token)) return;
 
             try
             {
-                logger.LogWarning("Server is available, but subscription is not responding to notifications. Attempting to recreate.");
+                logger.LogWarning("Server is available, but subscription {Name} is not responding to notifications. Attempting to recreate.", SubscriptionName);
                 await session.RemoveSubscriptionAsync(oldSubscription);
             }
             catch (ServiceResultException serviceEx)
             {
                 var symId = StatusCode.LookupSymbolicId(serviceEx.StatusCode);
-                logger.LogWarning("Error attempting to remove subscription from the server: {Err}. It has most likely been dropped. Attempting to recreate...", symId);
+                logger.LogWarning("Error attempting to remove subscription {Name} from the server: {Err}. It has most likely been dropped. Attempting to recreate...", symId, SubscriptionName);
             }
             finally
             {

@@ -13,13 +13,21 @@
                 "trigger": {
                     "type": "string",
                     "description": "What changes to a variable trigger an update. One of `Status`, `StatusValue` or `StatusValueTimestamp`",
-                    "enum": [ "Status", "StatusValue", "StatusValueTimestamp" ],
+                    "enum": [
+                        "Status",
+                        "StatusValue",
+                        "StatusValueTimestamp"
+                    ],
                     "default": "StatusValue"
                 },
                 "deadband-type": {
                     "type": "string",
                     "description": "Enable deadband for numeric nodes. One of `None`, `Absolute` or `Percent`",
-                    "enum": [ "None", "Absolute", "Percent" ],
+                    "enum": [
+                        "None",
+                        "Absolute",
+                        "Percent"
+                    ],
                     "default": "None"
                 },
                 "deadband-value": {
@@ -71,6 +79,11 @@
             "description": "The number of publish requests without a response before the server should close the subscription. Must be at least 3 * keep-alive-count",
             "default": 1000
         },
+        "recreate-stopped-subscriptions": {
+            "type": "boolean",
+            "default": true,
+            "description": "Recreate subscriptions that have stopped publishing. True by default."
+        },
         "alternative-configs": {
             "type": "array",
             "description": "List of alternative subscription configurations. The first entry with a matching filter will be used for each node.",
@@ -93,7 +106,10 @@
                                 "description": "Regex match on node data type, if it is a variable"
                             },
                             "is-event-state": {
-                                "type": [ "boolean", "null" ],
+                                "type": [
+                                    "boolean",
+                                    "null"
+                                ],
                                 "description": "Match on whether this subscription is for data points or events"
                             }
                         }
@@ -106,13 +122,21 @@
                             "trigger": {
                                 "type": "string",
                                 "description": "What changes to a variable trigger an update. One of `Status`, `StatusValue` or `StatusValueTimestamp`",
-                                "enum": [ "Status", "StatusValue", "StatusValueTimestamp" ],
+                                "enum": [
+                                    "Status",
+                                    "StatusValue",
+                                    "StatusValueTimestamp"
+                                ],
                                 "default": "StatusValue"
                             },
                             "deadband-type": {
                                 "type": "string",
                                 "description": "Enable deadband for numeric nodes. One of `None`, `Absolute` or `Percent`",
-                                "enum": [ "None", "Absolute", "Percent" ],
+                                "enum": [
+                                    "None",
+                                    "Absolute",
+                                    "Percent"
+                                ],
                                 "default": "None"
                             },
                             "deadband-value": {
