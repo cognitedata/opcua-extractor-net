@@ -45,6 +45,13 @@ namespace Cognite.OpcUa.Subscriptions
         {
             if (sender is not Subscription sub || !sub.PublishingStopped) return;
 
+            if (!config.Subscriptions.RecreateStoppedSubscriptions)
+            {
+                logger.LogWarning("Subscription {Name} is stopped. Recreating stopped subscriptions is disabled.",
+                    sub.DisplayName);
+                return;
+            }
+
             EnqueueTaskEnsureUnique(new RecreateSubscriptionTask(sub));
         }
 
