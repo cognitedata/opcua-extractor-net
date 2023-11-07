@@ -69,13 +69,13 @@ namespace Cognite.OpcUa.Subscriptions
             if (diff < TimeSpan.FromMilliseconds(oldSubscription.CurrentPublishingInterval * 8))
             {
                 logger.LogWarning("Subscription {Name} was updated {Time} ago. Waiting until 4 * publishing interval has passed before recreating",
-                    diff, SubscriptionName);
+                    SubscriptionName, diff);
                 await Task.Delay(diff, token);
             }
             else
             {
                 var delay = TimeSpan.FromMilliseconds(oldSubscription.CurrentPublishingInterval * 2);
-                logger.LogWarning("Waiting {Time} before recreating stopped subscription {Name}", SubscriptionName);
+                logger.LogWarning("Waiting {Time} before recreating stopped subscription {Name}", delay, SubscriptionName);
                 await Task.Delay(delay, token);
             }
 
@@ -89,7 +89,7 @@ namespace Cognite.OpcUa.Subscriptions
             catch (ServiceResultException serviceEx)
             {
                 var symId = StatusCode.LookupSymbolicId(serviceEx.StatusCode);
-                logger.LogWarning("Error attempting to remove subscription {Name} from the server: {Err}. It has most likely been dropped. Attempting to recreate...", symId, SubscriptionName);
+                logger.LogWarning("Error attempting to remove subscription {Name} from the server: {Err}. It has most likely been dropped. Attempting to recreate...", SubscriptionName, symId);
             }
             finally
             {
