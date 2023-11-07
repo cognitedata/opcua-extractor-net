@@ -76,10 +76,6 @@ namespace Cognite.OpcUa.Pushers.Writers
                 {
                     await UpdateAssets(extractor, nodes, assets, update, result, token);
                 }
-                else
-                {
-                    log.LogDebug("Not updating cause fuck you");
-                }
 
                 report.AssetsUpdated += result.Updated;
                 report.AssetsCreated += result.Created;
