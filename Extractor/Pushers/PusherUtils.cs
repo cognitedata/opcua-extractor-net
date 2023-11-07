@@ -86,6 +86,23 @@ namespace Cognite.OpcUa.Pushers
             return null;
         }
 
+        private static bool ShouldSetNewMetadata(FullConfig config, Dictionary<string, string> newMetadata, Dictionary<string, string>? oldMetadata)
+        {
+            if (newMetadata.Any())
+            {
+                if (oldMetadata == null) return true;
+                if (!newMetadata.All(kvp => oldMetadata.TryGetValue(kvp.Key, out var oldVal) && kvp.Value == oldVal)) return true;
+            }
+            if (config.Extraction.Deletes.Enabled
+                && oldMetadata != null
+                && oldMetadata.ContainsKey(config.Extraction.Deletes.DeleteMarker))
+            {
+                return true;
+            }
+
+            return false;
+        }
+
         /// <summary>
         /// Create timeseries update from existing timeseries and new OPC-UA variable.
         /// </summary>
@@ -125,7 +142,7 @@ namespace Cognite.OpcUa.Pushers
 
             if (update.Metadata)
             {
-                var newMetaData = newTs.BuildMetadata(config, client, true)
+                var newMetadata = newTs.BuildMetadata(config, client, true)
                     .Where(kvp => !string.IsNullOrEmpty(kvp.Value))
                     .ToDictionary(kvp => kvp.Key, kvp => kvp.Value)
                     .SanitizeMetadata(
@@ -135,11 +152,9 @@ namespace Cognite.OpcUa.Pushers
                         Sanitation.TimeSeriesMetadataMaxBytes,
                         out _);
 
-                if (newMetaData.Any() && (old.Metadata == null
-                        || !newMetaData.All(kvp => old.Metadata.TryGetValue(kvp.Key, out var oldVal) && kvp.Value == oldVal))
-                    || config.Extraction.Deletes.Enabled && old.Metadata.ContainsKey(config.Extraction.Deletes.DeleteMarker))
+                if (ShouldSetNewMetadata(config, newMetadata, old.Metadata))
                 {
-                    tsUpdate.Metadata = new UpdateDictionary<string>(newMetaData);
+                    tsUpdate.Metadata = new UpdateDictionary<string>(newMetadata);
                 }
             }
 
@@ -182,7 +197,7 @@ namespace Cognite.OpcUa.Pushers
 
             if (update.Metadata)
             {
-                var newMetaData = newAsset.BuildMetadata(config, extractor, true)
+                var newMetadata = newAsset.BuildMetadata(config, extractor, true)
                     .Where(kvp => !string.IsNullOrEmpty(kvp.Value))
                     .ToDictionary(kvp => kvp.Key, kvp => kvp.Value)
                     .SanitizeMetadata(
@@ -192,11 +207,9 @@ namespace Cognite.OpcUa.Pushers
                         Sanitation.AssetMetadataMaxBytes,
                         out _);
 
-                if (newMetaData.Any() && (old.Metadata == null
-                        || !newMetaData.All(kvp => old.Metadata.TryGetValue(kvp.Key, out var oldVal) && kvp.Value == oldVal))
-                    || config.Extraction.Deletes.Enabled && old.Metadata.ContainsKey(config.Extraction.Deletes.DeleteMarker))
+                if (ShouldSetNewMetadata(config, newMetadata, old.Metadata))
                 {
-                    assetUpdate.Metadata = new UpdateDictionary<string>(newMetaData);
+                    assetUpdate.Metadata = new UpdateDictionary<string>(newMetadata);
                 }
             }
             return assetUpdate;
