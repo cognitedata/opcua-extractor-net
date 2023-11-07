@@ -653,7 +653,7 @@ namespace Test.Unit
             var (callback, nodes) = UAClientTestFixture.GetCallback();
 
             tester.Config.Source.Retries.MaxTries = 1;
-            tester.Server.Issues.RemainingBrowseCount = 6;
+            tester.Server.Issues.RemainingBrowse = 6;
             var ex = await Assert.ThrowsAsync<AggregateException>((Func<Task>)(async () =>
                 await tester.Client.Browser.BrowseNodeHierarchy(tester.Server.Ids.Full.DeepRoot, callback, tester.Source.Token)
             ));

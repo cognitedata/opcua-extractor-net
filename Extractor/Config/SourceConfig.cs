@@ -318,6 +318,13 @@ namespace Cognite.OpcUa.Config
             }
         }
 
+        private static HashSet<Type> retryExceptions = new HashSet<Type>
+        {
+            typeof(ArgumentNullException),
+            typeof(NullReferenceException),
+            typeof(InvalidOperationException)
+        };
+
         public bool ShouldRetryException(Exception ex, IEnumerable<uint> statusCodes)
         {
             if (ex is ServiceResultException serviceExc)
@@ -342,7 +349,8 @@ namespace Cognite.OpcUa.Config
                 var flat = aex.Flatten();
                 return flat.InnerExceptions.Any(e => ShouldRetryException(e, statusCodes));
             }
-            return false;
+
+            return retryExceptions.Contains(ex.GetType());
         }
 
         public bool ShouldRetryException(Exception ex)
