@@ -102,6 +102,10 @@ namespace Cognite.OpcUa.Config
         /// </summary>
         public uint KeepAliveCount { get; set; } = 10;
         /// <summary>
+        /// Recreate subscriptions that have stopped publishing. True by default.
+        /// </summary>
+        public bool RecreateStoppedSubscriptions { get; set; } = true;
+        /// <summary>
         /// List of alternative subscription configurations.
         /// The first match will be applied, or the top level if none match.
         /// </summary>
