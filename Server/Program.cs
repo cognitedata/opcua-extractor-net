@@ -101,9 +101,10 @@ namespace Server
         [CommandLineOption("Set server redundancy support. One of None, Cold, Warm, Hot, Transparent, HotAndMirrored")]
         public string RedundancySupport { get; set; }
 
-        [CommandLineOption("Server issue: This is the denominator for a probability that an arbitrary browse operation will fail " +
-            "I.e. 5 means that 1/5 browse ops will fail with BadNoCommunication")]
-        public int RandomBrowseFail { get; set; }
+        [CommandLineOption("Server issue: This is the denominator for a probability that an arbitrary operation will fail " +
+            "I.e. 5 means that 1/5 browse ops will fail with BadInternalError")]
+        public int RandomFail { get; set; }
+
         [CommandLineOption("List of NodeSet2 XML schemas to load the node hierarchy from, the base node hierarchy will not be loaded if this is specified. " +
             "May be specified more than once, the base OPC-UA nodeset should not be added.", true, "-s")]
         public IEnumerable<string> NodeSetFiles { get; set; }
@@ -127,7 +128,8 @@ namespace Server
                 if (opt.CustomHistory || opt.CoreProfile) setups.Add(PredefinedSetup.Custom);
                 if (opt.EventHistory || opt.CoreProfile) setups.Add(PredefinedSetup.Events);
                 if (opt.GrowthPeriodic) setups.Add(PredefinedSetup.Auditing);
-            } else
+            }
+            else
             {
                 setups = new List<PredefinedSetup> { PredefinedSetup.Custom, PredefinedSetup.Base,
                     PredefinedSetup.Events, PredefinedSetup.Wrong, PredefinedSetup.Auditing };
@@ -159,10 +161,15 @@ namespace Server
             server.Server.Issues.MaxBrowseResults = opt.MaxBrowseResults;
             server.Server.Issues.MaxBrowseNodes = opt.MaxBrowseNodes;
             server.Server.Issues.MaxAttributes = opt.MaxAttributes;
-            server.Server.Issues.MaxSubscriptions = opt.MaxSubscriptions;
+            server.Server.Issues.MaxMonitoredItems = opt.MaxSubscriptions;
             server.Server.Issues.MaxHistoryNodes = opt.MaxHistoryNodes;
-            server.Server.Issues.RemainingBrowseCount = opt.RemainingBrowseCount;
-            server.Server.Issues.BrowseFailDenom = opt.RandomBrowseFail;
+            server.Server.Issues.RemainingBrowse = opt.RemainingBrowseCount;
+            server.Server.Issues.RandomBrowseFailDenom = opt.RandomFail;
+            server.Server.Issues.RandomBrowseNextFailDenom = opt.RandomFail;
+            server.Server.Issues.RandomHistoryReadFailDenom = opt.RandomFail;
+            server.Server.Issues.RandomReadFailDenom = opt.RandomFail;
+            server.Server.Issues.RandomCreateMonitoredItemsFailDenom = opt.RandomFail;
+            server.Server.Issues.RandomCreateSubscriptionsFailDenom = opt.RandomFail;
 
             if (opt.RedundancySupport != null)
             {

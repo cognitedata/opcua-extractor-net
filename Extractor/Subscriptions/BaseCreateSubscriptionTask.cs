@@ -156,6 +156,7 @@ namespace Cognite.OpcUa.Subscriptions
             StatusCodes.BadShutdown,
             StatusCodes.BadCommunicationError,
             StatusCodes.BadNotConnected,
+            StatusCodes.BadInvalidState
         };
 
         public override async Task Run(ILogger logger, SessionManager sessionManager, FullConfig config, SubscriptionManager subManager, CancellationToken token)

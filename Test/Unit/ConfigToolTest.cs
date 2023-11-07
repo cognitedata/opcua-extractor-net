@@ -317,7 +317,7 @@ namespace Test.Unit
 
             // Test issue with chunk sizes
             tester.Config.Extraction.RootNode = tester.Server.Ids.Full.Root.ToProtoNodeId(tester.Explorer);
-            tester.Server.Issues.MaxSubscriptions = 100;
+            tester.Server.Issues.MaxMonitoredItems = 100;
             tester.Explorer.ResetNodes();
             tester.Explorer.ResetSummary();
             await tester.Explorer.GetSubscriptionChunkSizes(tester.Source.Token);
@@ -329,7 +329,7 @@ namespace Test.Unit
             generate = false;
             tester.Server.WipeHistory(tester.Server.Ids.Base.DoubleVar1, 0);
             tester.Config.Source.SubscriptionChunk = 1000;
-            tester.Server.Issues.MaxSubscriptions = 0;
+            tester.Server.Issues.MaxMonitoredItems = 0;
         }
         [Fact(Timeout = 30000)]
         public async Task TestGetHistoryChunkSizes()

@@ -76,7 +76,14 @@ namespace Server
         private readonly IServiceProvider provider;
         private readonly IEnumerable<string> nodeSetFiles;
 
-        public TestServer(IEnumerable<PredefinedSetup> setups, string mqttUrl, IServiceProvider provider, bool logTrace = false, IEnumerable<string> nodeSetFiles = null)
+        public IServerRequestCallbacks Callbacks { get; set; }
+
+        public TestServer(
+            IEnumerable<PredefinedSetup> setups,
+            string mqttUrl,
+            IServiceProvider provider,
+            bool logTrace = false,
+            IEnumerable<string> nodeSetFiles = null)
         {
             this.setups = setups;
             this.mqttUrl = mqttUrl;
@@ -85,6 +92,12 @@ namespace Server
             this.provider = provider;
             traceLog = provider.GetRequiredService<ILogger<Tracing>>();
             this.nodeSetFiles = nodeSetFiles;
+
+            Callbacks = new AggregateCallbacks(
+                new MaxPerRequestCallbacks(Issues),
+                new RandomFailureCallbacks(Issues),
+                new FailureCountdownCallbacks(Issues)
+            );
         }
 
         protected override void OnServerStarting(ApplicationConfiguration configuration)
@@ -151,7 +164,7 @@ namespace Server
             // create the custom node managers.
 
             // create master node manager.
-            return new DebugMasterNodeManager(server, configuration, null, Issues, nodeManagers.ToArray());
+            return new DebugMasterNodeManager(server, configuration, null, Issues, this, nodeManagers.ToArray());
         }
         protected override ServerProperties LoadServerProperties()
         {
@@ -355,5 +368,35 @@ namespace Server
                 logger.LogDebug("Deleted {Cnt} subscriptions manually", cnt);
             }
         }
+
+        #region overrides
+        public override ResponseHeader CreateSubscription(RequestHeader requestHeader, double requestedPublishingInterval, uint requestedLifetimeCount, uint requestedMaxKeepAliveCount, uint maxNotificationsPerPublish, bool publishingEnabled, byte priority, out uint subscriptionId, out double revisedPublishingInterval, out uint revisedLifetimeCount, out uint revisedMaxKeepAliveCount)
+        {
+            var context = ValidateRequest(requestHeader, RequestType.CreateSubscription);
+            Callbacks.OnCreateSubscription(context, requestedPublishingInterval, requestedLifetimeCount, requestedMaxKeepAliveCount, maxNotificationsPerPublish, publishingEnabled, priority);
+
+            return base.CreateSubscription(requestHeader, requestedPublishingInterval, requestedLifetimeCount, requestedMaxKeepAliveCount, maxNotificationsPerPublish, publishingEnabled, priority, out subscriptionId, out revisedPublishingInterval, out revisedLifetimeCount, out revisedMaxKeepAliveCount);
+        }
+
+        public override ResponseHeader ModifyMonitoredItems(RequestHeader requestHeader, uint subscriptionId, TimestampsToReturn timestampsToReturn, MonitoredItemModifyRequestCollection itemsToModify, out MonitoredItemModifyResultCollection results, out DiagnosticInfoCollection diagnosticInfos)
+        {
+            return base.ModifyMonitoredItems(requestHeader, subscriptionId, timestampsToReturn, itemsToModify, out results, out diagnosticInfos);
+        }
+
+        public override ResponseHeader ModifySubscription(RequestHeader requestHeader, uint subscriptionId, double requestedPublishingInterval, uint requestedLifetimeCount, uint requestedMaxKeepAliveCount, uint maxNotificationsPerPublish, byte priority, out double revisedPublishingInterval, out uint revisedLifetimeCount, out uint revisedMaxKeepAliveCount)
+        {
+            return base.ModifySubscription(requestHeader, subscriptionId, requestedPublishingInterval, requestedLifetimeCount, requestedMaxKeepAliveCount, maxNotificationsPerPublish, priority, out revisedPublishingInterval, out revisedLifetimeCount, out revisedMaxKeepAliveCount);
+        }
+
+        public override ResponseHeader DeleteMonitoredItems(RequestHeader requestHeader, uint subscriptionId, UInt32Collection monitoredItemIds, out StatusCodeCollection results, out DiagnosticInfoCollection diagnosticInfos)
+        {
+            return base.DeleteMonitoredItems(requestHeader, subscriptionId, monitoredItemIds, out results, out diagnosticInfos);
+        }
+
+        public override ResponseHeader DeleteSubscriptions(RequestHeader requestHeader, UInt32Collection subscriptionIds, out StatusCodeCollection results, out DiagnosticInfoCollection diagnosticInfos)
+        {
+            return base.DeleteSubscriptions(requestHeader, subscriptionIds, out results, out diagnosticInfos);
+        }
+        #endregion
     }
 }
