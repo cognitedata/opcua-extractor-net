@@ -151,7 +151,7 @@ namespace Test.Integration
             }
             Assert.True(_extractionStates.TryGetValue(npdId, out var newNpds));
             _output.WriteLine($"Test response {newTime.ToUnixTimeMilliseconds()}: {newNpds.LastTimestamp}");
-            // Assert.True(false);
+            Assert.True(false);
             Assert.Equal(newTime.ToUnixTimeMilliseconds(), newNpds.LastTimestamp);
             tester.Server.Server.RemoveNode(addedId);
             await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);

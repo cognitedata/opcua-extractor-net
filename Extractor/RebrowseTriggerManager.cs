@@ -230,8 +230,9 @@ namespace Cognite.OpcUa
                     if (lastTimestamp < valueTime)
                     {
                         logger.LogDebug(
-                            "Triggering a rebrowse due to a change in the value of {NodeId} to {Value}",
+                            "Triggering a rebrowse due to a change in the value of {NodeId} from {oldValue} to {Value}",
                             item.ResolvedNodeId,
+                            lastTimestamp,
                             valueTime
                         );
                         _extractor.Looper.QueueRebrowse();
