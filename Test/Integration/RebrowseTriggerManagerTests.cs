@@ -94,26 +94,26 @@ namespace Test.Integration
             using var extractor = tester.BuildExtractor(true, stateStore, cdfPusher);
             var npdId = tester.Client.GetUniqueId(tester.Server.Server.GetNamespacePublicationDateId());
             var npds = new NamespacePublicationDateState(npdId);
-            // var lts = DateTime.UtcNow.AddSeconds(-10);
-            // var simulatedLastTimestamp = lts.ToUnixTimeMilliseconds();
-            // npds.LastTimestamp = simulatedLastTimestamp;
-            // npds.LastTimeModified = DateTime.UtcNow;
+            var lts = DateTime.UtcNow.AddSeconds(-10);
+            var simulatedLastTimestamp = lts.ToUnixTimeMilliseconds();
+            npds.LastTimestamp = simulatedLastTimestamp;
+            npds.LastTimeModified = DateTime.UtcNow;
             _extractionStates.TryAdd(npdId, npds);
-            // await stateStore.StoreExtractionState<
-            //     NamespacePublicationDateStorableState,
-            //     NamespacePublicationDateState
-            // >(
-            //     _extractionStates.Values.ToList(),
-            //     tester.Config.StateStorage.NamespacePublicationDateStore,
-            //     (state) =>
-            //         new NamespacePublicationDateStorableState
-            //         {
-            //             Id = state.Id,
-            //             CreatedAt = DateTime.UtcNow,
-            //             LastTimestamp = npds.LastTimestamp,
-            //         },
-            //     tester.Source.Token
-            // );
+            await stateStore.StoreExtractionState<
+                NamespacePublicationDateStorableState,
+                NamespacePublicationDateState
+            >(
+                _extractionStates.Values.ToList(),
+                tester.Config.StateStorage.NamespacePublicationDateStore,
+                (state) =>
+                    new NamespacePublicationDateStorableState
+                    {
+                        Id = state.Id,
+                        CreatedAt = DateTime.UtcNow,
+                        LastTimestamp = npds.LastTimestamp,
+                    },
+                tester.Source.Token
+            );
             var runTask = extractor.RunExtractor();
             await extractor.WaitForSubscriptions();
             var initialCount = cdfPusher.PushedNodes.Count;
@@ -146,6 +146,9 @@ namespace Test.Integration
                 },
                 tester.Source.Token
             );
+            foreach (var id in _extractionStates) {
+                _output.WriteLine($"Value of {id.Key} is {id.Value.LastTimestamp}");
+            }
             Assert.True(_extractionStates.TryGetValue(npdId, out var newNpds));
             _output.WriteLine($"Test response {newTime.ToUnixTimeMilliseconds()}: {newNpds.LastTimestamp}");
             // Assert.True(false);

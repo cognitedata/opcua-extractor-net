@@ -77,6 +77,7 @@ namespace Cognite.OpcUa
                     if (visited)
                         return;
                     var nodeId = (NodeId)refDef.NodeId;
+                    // logger.LogInformation($"This is the display name {refDef.DisplayName.ToString()}");
 
                     if (parent == serverNamespaces && !grouping.ContainsKey(nodeId))
                     {
@@ -136,8 +137,9 @@ namespace Cognite.OpcUa
                         continue;
                     var id = _uaClient.ToNodeId(reference.NodeId);
                     nodes.TryAdd(id, (id, reference.DisplayName.Text));
+                    var uniqueId = _uaClient.GetUniqueId(id)!;
                     _extractionStates.TryAdd(
-                        _uaClient.GetUniqueId(id)!,
+                        uniqueId,
                         new NamespacePublicationDateState(_uaClient.GetUniqueId(id)!)
                     );
                 }
@@ -269,9 +271,9 @@ namespace Cognite.OpcUa
                 logger.LogDebug($"Creating state for: {id}");
                 lastState = new NamespacePublicationDateState(id);
             }
-            logger.LogDebug($"Updating state for: {id} to {valueTime}");
             lastState.LastTimestamp = valueTime;
             lastState.LastTimeModified = DateTime.UtcNow;
+            logger.LogDebug($"Updating state for: {id} to {valueTime}");
             _extractionStates[id] = lastState;
 
             await _extractor.StateStorage.StoreExtractionState<
