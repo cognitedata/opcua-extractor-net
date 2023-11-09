@@ -456,11 +456,22 @@ namespace Server
             Ids.NamespaceMetadata = namespaceMetadataState.NodeId;
         }
 
+        private NamespaceMetadataState GetNamespaceMetadata()
+        {
+            return FindPredefinedNode(Ids.NamespaceMetadata, typeof(NamespaceMetadataState)) as NamespaceMetadataState;
+        }
+
         public void SetNamespacePublicationDate(DateTime time)
         {
-            var ns = FindPredefinedNode(Ids.NamespaceMetadata, typeof(NamespaceMetadataState)) as NamespaceMetadataState;
+            var ns = GetNamespaceMetadata();
             ns.NamespacePublicationDate.Value = time;
             ns.ClearChangeMasks(SystemContext, true);
+        }
+
+        public PropertyState<DateTime> GetNamespacePublicationDate()
+        {
+            var ns = GetNamespaceMetadata();
+            return ns.NamespacePublicationDate;
         }
         #endregion
 
