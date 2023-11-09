@@ -269,10 +269,9 @@ namespace Cognite.OpcUa
                 logger.LogDebug($"Creating state for: {id}");
                 lastState = new NamespacePublicationDateState(id);
             }
-            logger.LogDebug($"Updating state for: {id}");
+            logger.LogDebug($"Updating state for: {id} to {valueTime}");
             lastState.LastTimestamp = valueTime;
             lastState.LastTimeModified = DateTime.UtcNow;
-            logger.LogInformation($"This is the new value: {valueTime}");
             _extractionStates[id] = lastState;
 
             await _extractor.StateStorage.StoreExtractionState<
