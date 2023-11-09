@@ -32,6 +32,10 @@ namespace Cognite.OpcUa.Config
             get => IntervalValue.RawValue; set => IntervalValue.RawValue = value!;
         }
         /// <summary>
+        /// Name of the raw table or litedb for namespace publication dates.
+        /// </summary>
+        public string NamespacePublicationDateStore { get; set; } = "namespace_publication_dates";
+        /// <summary>
         /// Name of the raw table or litedb store for variable ranges.
         /// </summary>
         public string VariableStore { get; set; } = "variable_states";

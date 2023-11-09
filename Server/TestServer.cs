@@ -40,7 +40,7 @@ namespace Server
         }
     }
 
-    internal class NodeSetBundle
+    internal sealed class NodeSetBundle
     {
         public NodeStateCollection Nodes { get; }
         public IEnumerable<string> NamespaceUris { get; }
@@ -336,6 +336,12 @@ namespace Server
         public void SetNamespacePublicationDate(DateTime time)
         {
             custom.SetNamespacePublicationDate(time);
+        }
+
+        public NodeId GetNamespacePublicationDateId()
+        {
+            var nsm = custom.GetNamespacePublicationDate();
+            return nsm.NodeId;
         }
 
         public void DropSubscriptions()
