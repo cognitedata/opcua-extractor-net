@@ -35,7 +35,7 @@ namespace Cognite.OpcUa.History
         private CancellationTokenSource source;
         // private ILogger log = Log.Logger.ForContext<HistoryReader>();
         private readonly TaskThrottler throttler;
-        private readonly BlockingResourceCounter continuationPoints;
+        private BlockingResourceCounter continuationPoints;
 
         private readonly OperationWaiter waiter;
 
@@ -65,6 +65,13 @@ namespace Cognite.OpcUa.History
             using var op = waiter.GetInstance();
 
             await scheduler.RunAsync();
+        }
+
+        public void MaxNodeParallelismChanged()
+        {
+            continuationPoints = new BlockingResourceCounter(
+                config.Throttling.MaxNodeParallelism > 0 ? config.Throttling.MaxNodeParallelism : 1_000
+            );
         }
 
         /// <summary>

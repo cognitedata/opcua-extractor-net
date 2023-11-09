@@ -860,7 +860,18 @@ namespace Cognite.OpcUa
             BuildTransformations();
 
             var helper = new ServerInfoHelper(Provider.GetRequiredService<ILogger<ServerInfoHelper>>(), uaClient);
+            var oldHistoryPar = Config.History.Throttling.MaxNodeParallelism;
+            var oldBrowsePar = Config.Source.BrowseThrottling.MaxNodeParallelism;
             await helper.LimitConfigValues(Config, Source.Token);
+
+            if (historyReader != null && oldHistoryPar != Config.History.Throttling.MaxNodeParallelism)
+            {
+                historyReader.MaxNodeParallelismChanged();
+            }
+            if (oldBrowsePar != Config.Source.BrowseThrottling.MaxNodeParallelism)
+            {
+                uaClient.Browser.MaxNodeParallelismChanged();
+            }
         }
 
         /// <summary>

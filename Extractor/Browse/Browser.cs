@@ -37,7 +37,7 @@ namespace Cognite.OpcUa.Browse
         private readonly ContinuationPointThrottlingConfig throttling;
         private readonly TaskThrottler throttler;
 
-        private readonly BlockingResourceCounter continuationPoints;
+        private BlockingResourceCounter continuationPoints;
 
         public IEnumerable<NodeFilter>? IgnoreFilters { get; set; }
 
@@ -49,6 +49,13 @@ namespace Cognite.OpcUa.Browse
             throttling = config.Source.BrowseThrottling;
             throttler = new TaskThrottler(throttling.MaxParallelism, false, throttling.MaxPerMinute, TimeSpan.FromMinutes(1));
             continuationPoints = new BlockingResourceCounter(throttling.MaxNodeParallelism <= 0 ? 100_000 : throttling.MaxNodeParallelism);
+        }
+
+        public void MaxNodeParallelismChanged()
+        {
+            continuationPoints = new BlockingResourceCounter(
+                config.Source.BrowseThrottling.MaxNodeParallelism > 0 ? config.Source.BrowseThrottling.MaxNodeParallelism : 100_000
+            );
         }
 
         /// <summary>
