@@ -280,11 +280,6 @@ namespace Cognite.OpcUa.Config
         public bool SkipSimpleTypes { get; set; }
 
         /// <summary>
-        /// Do not ingest views if the number of views in the data model is equal to the number of views in OPC-UA.
-        /// </summary>
-        public bool SkipTypesOnEqualCount { get; set; }
-
-        /// <summary>
         /// Let mandatory options be nullable.
         /// 
         /// Lots of servers don't do this properly.
