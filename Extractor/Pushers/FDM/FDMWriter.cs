@@ -229,9 +229,11 @@ namespace Cognite.OpcUa.Pushers.FDM
 
             var containersToInsert = new List<ContainerCreate>();
 
+            var containersByExtId = types.Containers.Values.ToDictionary(c => c.ExternalId);
+
             foreach (var view in viewsToInsert)
             {
-                if (types.Containers.TryGetValue(view.ExternalId, out var container))
+                if (containersByExtId.TryGetValue(view.ExternalId, out var container))
                 {
                     containersToInsert.Add(container);
                 }
