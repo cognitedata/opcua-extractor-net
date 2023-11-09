@@ -186,15 +186,15 @@ namespace Cognite.OpcUa
                 .Select(
                     (dv, i) =>
                         (
-                            nodes[i].Item1,
+                            _uaClient.GetUniqueId(nodes[i].Item1),
                             dv.GetValue<DateTime>(default).ToUnixTimeMilliseconds()
                         )
                 )
                 .ToDictionary(item => item.Item1, item => item.Item2);
             foreach (var node in nodes)
             {
-                var id = node.Item1;
-                var lastTimestamp = GetLastTimestampFor(id.ToString());
+                var id = _uaClient.GetUniqueId(node.Item1);
+                var lastTimestamp = GetLastTimestampFor(id!);
                 if (
                     lastTimestamp != 0
                     && (mapping.TryGetValue(id, out var valueTime) && lastTimestamp < valueTime)
@@ -205,7 +205,7 @@ namespace Cognite.OpcUa
                         node.Item2
                     );
                     _extractor.Looper.QueueRebrowse();
-                    await UpsertSavedTimestampFor(id.ToString(), valueTime, token);
+                    await UpsertSavedTimestampFor(id!, valueTime, token);
                 }
             }
         }
@@ -223,7 +223,7 @@ namespace Cognite.OpcUa
                     var valueTime = values[0]
                         .GetValue<DateTime>(default)
                         .ToUnixTimeMilliseconds();
-                    var id = item.ResolvedNodeId.ToString();
+                    var id = _uaClient.GetUniqueId(item.ResolvedNodeId)!;
                     var lastTimestamp = GetLastTimestampFor(id);
                     if (lastTimestamp < valueTime)
                     {
@@ -263,20 +263,17 @@ namespace Cognite.OpcUa
             if (_extractor.StateStorage == null)
                 return;
 
-            if (_extractionStates.TryGetValue(id, out var lastState))
-            {
-                logger.LogDebug($"Updating state for: {id}");
-                lastState.LastTimestamp = valueTime;
-            }
-            else
+            if (!_extractionStates.TryGetValue(id, out var lastState))
             {
                 logger.LogDebug($"No state found for: {id}");
                 logger.LogDebug($"Creating state for: {id}");
-                var npds = new NamespacePublicationDateState(id);
-                npds.LastTimestamp = valueTime;
-                _extractionStates[id] = npds;
+                lastState = new NamespacePublicationDateState(id);
             }
-            _extractionStates[id].LastTimeModified = DateTime.UtcNow;
+            logger.LogDebug($"Updating state for: {id}");
+            lastState.LastTimestamp = valueTime;
+            lastState.LastTimeModified = DateTime.UtcNow;
+            logger.LogInformation($"This is the new value: {valueTime}");
+            _extractionStates[id] = lastState;
 
             await _extractor.StateStorage.StoreExtractionState<
                 NamespacePublicationDateStorableState,
