@@ -197,10 +197,8 @@ namespace Cognite.OpcUa
             {
                 var id = _uaClient.GetUniqueId(node.Item1);
                 var lastTimestamp = GetLastTimestampFor(id!);
-                if (
-                    lastTimestamp != 0
-                    && (mapping.TryGetValue(id, out var valueTime) && lastTimestamp < valueTime)
-                )
+                mapping.TryGetValue(id, out var v);
+                if (mapping.TryGetValue(id, out var valueTime) && lastTimestamp < valueTime)
                 {
                     logger.LogDebug(
                         "Triggering a rebrowse due to a changes yet in {value} to be reflected",
@@ -222,16 +220,14 @@ namespace Cognite.OpcUa
                 try
                 {
                     var values = item.DequeueValues();
-                    var valueTime = values[0]
-                        .GetValue<DateTime>(default)
-                        .ToUnixTimeMilliseconds();
+                    var valueTime = values[0].GetValue<DateTime>(default).ToUnixTimeMilliseconds();
                     var id = _uaClient.GetUniqueId(item.ResolvedNodeId)!;
                     var lastTimestamp = GetLastTimestampFor(id);
                     if (lastTimestamp < valueTime)
                     {
                         logger.LogDebug(
                             "Triggering a rebrowse due to a change in the value of {NodeId} from {oldValue} to {Value}",
-                            item.ResolvedNodeId,
+                            id,
                             lastTimestamp,
                             valueTime
                         );
@@ -241,7 +237,8 @@ namespace Cognite.OpcUa
                     else
                     {
                         logger.LogDebug(
-                            "Received a rebrowse trigger notification with time {Time}, which is not greater than last rebrowse time {lastTime}",
+                            "Received a rebrowse trigger notification for {id} with time {Time}, which is not greater than last rebrowse time {lastTime}",
+                            id,
                             valueTime,
                             lastTimestamp
                         );
