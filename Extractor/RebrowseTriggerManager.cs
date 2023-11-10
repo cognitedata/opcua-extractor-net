@@ -77,7 +77,6 @@ namespace Cognite.OpcUa
                     if (visited)
                         return;
                     var nodeId = (NodeId)refDef.NodeId;
-                    // logger.LogInformation($"This is the display name {refDef.DisplayName.ToString()}");
 
                     if (parent == serverNamespaces && !grouping.ContainsKey(nodeId))
                     {
