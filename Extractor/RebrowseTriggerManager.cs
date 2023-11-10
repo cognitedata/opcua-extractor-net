@@ -197,7 +197,6 @@ namespace Cognite.OpcUa
             {
                 var id = _uaClient.GetUniqueId(node.Item1);
                 var lastTimestamp = GetLastTimestampFor(id!);
-                mapping.TryGetValue(id, out var v);
                 if (mapping.TryGetValue(id, out var valueTime) && lastTimestamp < valueTime)
                 {
                     logger.LogDebug(
