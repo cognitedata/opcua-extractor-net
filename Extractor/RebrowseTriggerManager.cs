@@ -218,7 +218,9 @@ namespace Cognite.OpcUa
                 try
                 {
                     var values = item.DequeueValues();
-                    var valueTime = values[0].GetValue<DateTime>(DateTime.MinValue).ToUnixTimeMilliseconds();
+                    var valueTime = values[0]
+                        .GetValue<DateTime>(DateTime.MinValue)
+                        .ToUnixTimeMilliseconds();
                     var id = _uaClient.GetUniqueId(item.ResolvedNodeId)!;
                     var lastTimestamp = GetLastTimestampFor(id);
                     if (lastTimestamp < valueTime)
@@ -250,7 +252,9 @@ namespace Cognite.OpcUa
         }
 
         private long GetLastTimestampFor(string id) =>
-            (_extractionStates.TryGetValue(id, out var lastState)) ? lastState.LastTimestamp : 0;
+            (_extractionStates.TryGetValue(id, out var lastState))
+                ? lastState.LastTimestamp
+                : DateTime.MinValue.ToUnixTimeMilliseconds();
 
         private async Task UpsertSavedTimestampFor(
             string id,
