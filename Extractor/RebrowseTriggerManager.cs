@@ -184,14 +184,16 @@ namespace Cognite.OpcUa
                 "rebrowse trigger"
             );
             var mapping = dataValues
-                .Select(
-                    (dv, i) =>
-                        (
-                            _uaClient.GetUniqueId(nodes[i].Item1),
-                            dv.GetValue<DateTime>(default).ToUnixTimeMilliseconds()
-                        )
+                .Zip(
+                    nodes,
+                    (f, s) =>
+                        new
+                        {
+                            k = _uaClient.GetUniqueId(s.Item1),
+                            v = f.GetValue<DateTime>(DateTime.MinValue).ToUnixTimeMilliseconds()
+                        }
                 )
-                .ToDictionary(item => item.Item1, item => item.Item2);
+                .ToDictionary(item => item.k, item => item.v);
             foreach (var node in nodes)
             {
                 var id = _uaClient.GetUniqueId(node.Item1);
