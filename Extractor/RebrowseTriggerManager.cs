@@ -190,7 +190,7 @@ namespace Cognite.OpcUa
                         new
                         {
                             k = _uaClient.GetUniqueId(s.Item1),
-                            v = f.GetValue<DateTime>(DateTime.MinValue).ToUnixTimeMilliseconds()
+                            v = f.GetValue<DateTime>(CogniteTime.DateTimeEpoch).ToUnixTimeMilliseconds()
                         }
                 )
                 .ToDictionary(item => item.k, item => item.v);
