@@ -36,6 +36,7 @@ using System.Text.Json.Nodes;
 using System.ComponentModel.Design;
 using Cognite.Extensions.DataModels.QueryBuilder;
 using System.Net;
+using Microsoft.Extensions.ObjectPool;
 
 namespace Cognite.OpcUa.Pushers.FDM
 {
@@ -104,6 +105,88 @@ namespace Cognite.OpcUa.Pushers.FDM
             await destination.CogniteClient.Beta.DataModels.UpsertViews(new[] { serverMetaContainer.ToView(modelInfo.ModelVersion) }, token);
         }
 
+        private bool IsConnectionDefEqual(ConnectionDefinition lh, ConnectionDefinition rh)
+        {
+            if (lh.Name != rh.Name) return false;
+            if (lh.Description != rh.Description) return false;
+            if (lh.Source?.ExternalId != rh.Source?.ExternalId) return false;
+            if (lh.Source?.Version != rh.Source?.Version) return false;
+            if (lh.Source?.Space != rh.Source?.Space) return false;
+            if (lh.Type?.ExternalId != rh.Type?.ExternalId) return false;
+            if (lh.Type?.Space != rh.Type?.Space) return false;
+            if (lh.Direction != rh.Direction) return false;
+            return true;
+        }
+
+        private bool IsViewPropertyEqual(ViewPropertyDefinition lh, ViewPropertyCreate rh)
+        {
+            if (lh.Name != rh.Name) return false;
+            if (lh.Container.Space != rh.Container.Space
+                || lh.Container.ExternalId != rh.Container.ExternalId) return false;
+            if (lh.ContainerPropertyIdentifier != rh.ContainerPropertyIdentifier) return false;
+            if (lh.Description != rh.Description) return false;
+            return true;
+        }
+
+        private bool IsViewEqual(View lh, ViewCreate rh)
+        {
+            if (lh.Version != rh.Version) return false;
+            if (lh.Space != rh.Space) return false;
+            if (lh.Name != rh.Name) return false;
+            foreach (var kvp in rh.Properties)
+            {
+                var rhProp = kvp.Value;
+                var lhProp = lh.Properties.GetValueOrDefault(kvp.Key);
+                if (lhProp == null) return false;
+
+                if (lhProp is ConnectionDefinition lhConn)
+                {
+                    if (rhProp is not ConnectionDefinition rhConn) return false;
+                    if (!IsConnectionDefEqual(lhConn, rhConn)) return false;
+                }
+                else
+                {
+                    if (lhProp is not ViewPropertyDefinition lhP
+                        || rhProp is not ViewPropertyCreate rhP)
+                    {
+                        log.LogWarning("Invalid view retrieved from CDF, this is a bug: {Name}", lh.Name);
+                        return false;
+                    }
+                    if (!IsViewPropertyEqual(lhP, rhP)) return false;
+                }
+            }
+            if (lh.Description != rh.Description) return false;
+            if (lh.Implements.Count() != rh.Implements.Count()) return false;
+            var lhImp = lh.Implements.ToArray();
+            var rhImp = rh.Implements.ToArray();
+            for (int i = 0; i < lhImp.Length; i++)
+            {
+                var lhI = lhImp[i];
+                var rhI = rhImp[i];
+                if (lhI.Version != rhI.Version) return false;
+                if (lhI.Space != rhI.Space) return false;
+                if (lhI.ExternalId != rhI.ExternalId) return false;
+            }
+            return true;
+        }
+
+        private IEnumerable<ViewCreate> FilterModifiedViews(IEnumerable<ViewCreate> toCreate, DataModel model)
+        {
+            var views = model.Views.OfType<View>();
+            var oldViews = views.ToDictionary(v => v.ExternalId);
+            var newViews = toCreate.ToDictionary(v => v.ExternalId);
+
+            foreach (var newView in newViews)
+            {
+                if (!oldViews.TryGetValue(newView.Key, out var oldView))
+                {
+                    yield return newView.Value;
+                    continue;
+                }
+                if (!IsViewEqual(oldView, newView.Value)) yield return newView.Value;
+            }
+        }
+
         private async Task Initialize(FDMTypeBatch types, CancellationToken token)
         {
             var options = new JsonSerializerOptions(Oryx.Cognite.Common.jsonOptions) { WriteIndented = true };
@@ -126,27 +209,39 @@ namespace Cognite.OpcUa.Pushers.FDM
             if (config.DryRun) return;
 
             // Check if the data model exists
-            if (config.Cognite!.MetadataTargets!.DataModels!.SkipTypesOnEqualCount)
+            try
             {
-                try
-                {
-                    var existingModels = await destination.CogniteClient.Beta.DataModels.RetrieveDataModels(new[] { modelInfo.FDMExternalId("OPC_UA") }, false, token);
-                    if (existingModels.Any())
-                    {
-                        var existingModel = existingModels.First();
-                        var viewCount = existingModel.Views.Count();
-                        if (viewCount == viewsToInsert.Count)
-                        {
-                            log.LogInformation("Number of views in model is the same, not updating");
-                            return;
-                        }
-                    }
+                var existingModels = await destination.CogniteClient.Beta.DataModels.RetrieveDataModels(new[] { modelInfo.FDMExternalId("OPC_UA") }, true, token);
 
+                if (existingModels.Any())
+                {
+                    var existingModel = existingModels.First();
+                    viewsToInsert = FilterModifiedViews(viewsToInsert, existingModel).ToList();
                 }
-                catch { }
+            }
+            catch { }
+
+            if (!viewsToInsert.Any())
+            {
+                log.LogDebug("No views have changed, not updating");
+                return;
             }
 
-            foreach (var chunk in types.Containers.Values.ChunkBy(100))
+            var containersToInsert = new List<ContainerCreate>();
+
+            var containersByExtId = types.Containers.Values.ToDictionary(c => c.ExternalId);
+
+            foreach (var view in viewsToInsert)
+            {
+                if (containersByExtId.TryGetValue(view.ExternalId, out var container))
+                {
+                    containersToInsert.Add(container);
+                }
+            }
+
+            log.LogDebug("Creating {Count} containers and {Count2} views", containersToInsert.Count, viewsToInsert.Count);
+
+            foreach (var chunk in containersToInsert.ChunkBy(100))
             {
                 log.LogDebug("Creating {Count} containers", chunk.Count());
                 await destination.CogniteClient.Beta.DataModels.UpsertContainers(chunk, token);
