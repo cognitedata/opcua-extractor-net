@@ -189,11 +189,11 @@ namespace Cognite.OpcUa
                     (f, s) =>
                         new
                         {
-                            k = _uaClient.GetUniqueId(s.Item1),
-                            v = f.GetValue<DateTime>(CogniteTime.DateTimeEpoch).ToUnixTimeMilliseconds()
+                            Key = _uaClient.GetUniqueId(s.Item1),
+                            Value = f.GetValue<DateTime>(CogniteTime.DateTimeEpoch).ToUnixTimeMilliseconds()
                         }
                 )
-                .ToDictionary(item => item.k, item => item.v);
+                .ToDictionary(item => item.Key, item => item.Value);
             foreach (var node in nodes)
             {
                 var id = _uaClient.GetUniqueId(node.Item1);
