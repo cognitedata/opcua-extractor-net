@@ -523,8 +523,13 @@ namespace Cognite.OpcUa
         public uint StatusCode { get; }
         public ServiceResultException? InnerServiceException { get; }
 
+        private static string GetSymbolicId(uint sc)
+        {
+            return Opc.Ua.StatusCode.LookupSymbolicId(sc);
+        }
+
         public SilentServiceException(string msg, ServiceResultException ex, ExtractorUtils.SourceOp op)
-            : base($"{msg}: code {ex?.StatusCode ?? StatusCodes.BadUnexpectedError}, operation {op}", ex)
+            : base($"{msg}: code {GetSymbolicId(ex?.StatusCode ?? StatusCodes.BadUnexpectedError)}, operation {op}", ex)
         {
             Operation = op;
             StatusCode = ex?.StatusCode ?? StatusCodes.BadUnexpectedError;

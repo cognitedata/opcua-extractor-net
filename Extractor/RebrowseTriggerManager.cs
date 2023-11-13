@@ -136,8 +136,9 @@ namespace Cognite.OpcUa
                         continue;
                     var id = _uaClient.ToNodeId(reference.NodeId);
                     nodes.TryAdd(id, (id, reference.DisplayName.Text));
+                    var uniqueId = _uaClient.GetUniqueId(id)!;
                     _extractionStates.TryAdd(
-                        _uaClient.GetUniqueId(id)!,
+                        uniqueId,
                         new NamespacePublicationDateState(_uaClient.GetUniqueId(id)!)
                     );
                 }
@@ -183,29 +184,28 @@ namespace Cognite.OpcUa
                 "rebrowse trigger"
             );
             var mapping = dataValues
-                .Select(
-                    (dv, i) =>
-                        (
-                            nodes[i].Item1,
-                            dv.GetValue<DateTime>(default).ToUnixTimeMilliseconds()
-                        )
+                .Zip(
+                    nodes,
+                    (f, s) =>
+                        new
+                        {
+                            Key = _uaClient.GetUniqueId(s.Item1),
+                            Value = f.GetValue<DateTime>(CogniteTime.DateTimeEpoch).ToUnixTimeMilliseconds()
+                        }
                 )
-                .ToDictionary(item => item.Item1, item => item.Item2);
+                .ToDictionary(item => item.Key, item => item.Value);
             foreach (var node in nodes)
             {
-                var id = node.Item1;
-                var lastTimestamp = GetLastTimestampFor(id.ToString());
-                if (
-                    lastTimestamp != 0
-                    && (mapping.TryGetValue(id, out var valueTime) && lastTimestamp < valueTime)
-                )
+                var id = _uaClient.GetUniqueId(node.Item1);
+                var lastTimestamp = GetLastTimestampFor(id!);
+                if (mapping.TryGetValue(id, out var valueTime) && lastTimestamp < valueTime)
                 {
                     logger.LogDebug(
                         "Triggering a rebrowse due to a changes yet in {value} to be reflected",
                         node.Item2
                     );
                     _extractor.Looper.QueueRebrowse();
-                    await UpsertSavedTimestampFor(id.ToString(), valueTime, token);
+                    await UpsertSavedTimestampFor(id!, valueTime, token);
                 }
             }
         }
@@ -221,15 +221,16 @@ namespace Cognite.OpcUa
                 {
                     var values = item.DequeueValues();
                     var valueTime = values[0]
-                        .GetValue<DateTime>(default)
+                        .GetValue<DateTime>(CogniteTime.DateTimeEpoch)
                         .ToUnixTimeMilliseconds();
-                    var id = item.ResolvedNodeId.ToString();
+                    var id = _uaClient.GetUniqueId(item.ResolvedNodeId)!;
                     var lastTimestamp = GetLastTimestampFor(id);
                     if (lastTimestamp < valueTime)
                     {
                         logger.LogDebug(
-                            "Triggering a rebrowse due to a change in the value of {NodeId} to {Value}",
-                            item.ResolvedNodeId,
+                            "Triggering a rebrowse due to a change in the value of {NodeId} from {oldValue} to {Value}",
+                            id,
+                            lastTimestamp,
                             valueTime
                         );
                         _extractor.Looper.QueueRebrowse();
@@ -238,7 +239,8 @@ namespace Cognite.OpcUa
                     else
                     {
                         logger.LogDebug(
-                            "Received a rebrowse trigger notification with time {Time}, which is not greater than last rebrowse time {lastTime}",
+                            "Received a rebrowse trigger notification for {id} with time {Time}, which is not greater than last rebrowse time {lastTime}",
+                            id,
                             valueTime,
                             lastTimestamp
                         );
@@ -252,7 +254,9 @@ namespace Cognite.OpcUa
         }
 
         private long GetLastTimestampFor(string id) =>
-            (_extractionStates.TryGetValue(id, out var lastState)) ? lastState.LastTimestamp : 0;
+            (_extractionStates.TryGetValue(id, out var lastState))
+                ? lastState.LastTimestamp
+                : DateTime.MinValue.ToUnixTimeMilliseconds();
 
         private async Task UpsertSavedTimestampFor(
             string id,
@@ -263,20 +267,16 @@ namespace Cognite.OpcUa
             if (_extractor.StateStorage == null)
                 return;
 
-            if (_extractionStates.TryGetValue(id, out var lastState))
-            {
-                logger.LogDebug($"Updating state for: {id}");
-                lastState.LastTimestamp = valueTime;
-            }
-            else
+            if (!_extractionStates.TryGetValue(id, out var lastState))
             {
                 logger.LogDebug($"No state found for: {id}");
                 logger.LogDebug($"Creating state for: {id}");
-                var npds = new NamespacePublicationDateState(id);
-                npds.LastTimestamp = valueTime;
-                _extractionStates[id] = npds;
+                lastState = new NamespacePublicationDateState(id);
             }
-            _extractionStates[id].LastTimeModified = DateTime.UtcNow;
+            lastState.LastTimestamp = valueTime;
+            lastState.LastTimeModified = DateTime.UtcNow;
+            logger.LogDebug($"Updating state for: {id} to {valueTime}");
+            _extractionStates[id] = lastState;
 
             await _extractor.StateStorage.StoreExtractionState<
                 NamespacePublicationDateStorableState,

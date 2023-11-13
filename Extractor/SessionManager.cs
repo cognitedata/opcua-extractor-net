@@ -21,7 +21,6 @@ namespace Cognite.OpcUa
         private readonly FullConfig fullConfig;
         private readonly UAClient client;
         private ReverseConnectManager? reverseConnectManager;
-        private SessionReconnectHandler? reconnectHandler;
         // Initialized late, will be non-null after Initialize is called.
         private ApplicationConfiguration appConfig = null!;
         private ILogger log;
@@ -31,6 +30,7 @@ namespace Cognite.OpcUa
         private readonly SemaphoreSlim redundancyReconnectLock = new SemaphoreSlim(1);
 
         private ISession? session;
+        private bool currentSessionIsDead;
         private CancellationToken liveToken;
         private bool disposedValue;
         private int timeout;
@@ -121,6 +121,7 @@ namespace Cognite.OpcUa
             lock (sessionWaitExtLock)
             {
                 this.session = session;
+                currentSessionIsDead = false;
                 Context.UpdateFromSession(session);
                 for (; sessionWaiters > 0; sessionWaiters--)
                 {
@@ -138,39 +139,35 @@ namespace Cognite.OpcUa
 
         public async Task Connect()
         {
-            if (session != null)
-            {
-                try
-                {
-                    await session.CloseAsync();
-                }
-                catch { }
-                session.KeepAlive -= ClientKeepAlive;
-                session.PublishError -= OnPublishError;
-                session.Dispose();
-                session = null;
-            }
-            if (reconnectHandler != null) reconnectHandler.Dispose();
-            session = null;
-
             Func<Task> generator = async () =>
             {
                 ISession newSession;
                 if (!string.IsNullOrEmpty(config.ReverseConnectUrl))
                 {
-                    newSession = await WaitForReverseConnect();
+                    if (session != null && EndpointUrl != config.EndpointUrl)
+                    {
+                        await Close(liveToken);
+                    }
+                    newSession = await WaitForReverseConnect(session);
                     EndpointUrl = config.EndpointUrl;
                 }
                 else if (config.IsRedundancyEnabled)
                 {
-                    var result = await CreateSessionWithRedundancy(config.AltEndpointUrls!.Prepend(config.EndpointUrl!), null);
+                    var result = await CreateSessionWithRedundancy(config.AltEndpointUrls!.Prepend(config.EndpointUrl!),
+                        session == null || EndpointUrl == null
+                        ? null
+                        : new SessionRedundancyResult(session, EndpointUrl, 0));
                     newSession = result.Session;
                     EndpointUrl = result.EndpointUrl;
                     await UpdateServiceLevel(result.ServiceLevel, true);
                 }
                 else
                 {
-                    newSession = await CreateSessionDirect(config.EndpointUrl!);
+                    if (session != null && EndpointUrl != config.EndpointUrl)
+                    {
+                        await Close(liveToken);
+                    }
+                    newSession = await CreateSessionDirect(config.EndpointUrl!, session);
                     EndpointUrl = config.EndpointUrl;
                 }
                 SetNewSession(newSession);
@@ -217,8 +214,33 @@ namespace Cognite.OpcUa
             }
         }
 
-        private async Task<Session> WaitForReverseConnect()
+        private async Task<ISession> WaitForReverseConnect(ISession? oldSession)
         {
+            if (oldSession != null && reverseConnectManager != null)
+            {
+                log.LogInformation("Attempting to reconnect to the server, before creating a new connection");
+                try
+                {
+                    var reconn = await reverseConnectManager.WaitForConnection(new Uri(oldSession.Endpoint.EndpointUrl), oldSession.Endpoint.Server.ApplicationUri, liveToken);
+                    if (reconn == null)
+                    {
+                        log.LogError("Reverse connect failed, no connection established");
+                        throw new ExtractorFailureException("Failed to obtain reverse connection from server");
+                    }
+                    await Task.Run(() => oldSession.Reconnect(reconn), liveToken);
+                    return oldSession;
+                }
+                catch (Exception ex)
+                {
+                    log.LogError(ex, "Failed to reconnect to server at {Url}: {Message}", oldSession.Endpoint.EndpointUrl, ex.Message);
+                    if (ShouldAbandonReconnect(ex) || config.ForceRestart)
+                    {
+                        await Close(liveToken);
+                    }
+                    else throw;
+                }
+            }
+
             reverseConnectManager?.Dispose();
 
             appConfig.ClientConfiguration.ReverseConnect = new ReverseConnectClientConfiguration
@@ -289,8 +311,46 @@ namespace Cognite.OpcUa
             }
         }
 
-        private async Task<Session> CreateSessionDirect(string endpointUrl)
+        private static uint[] statusCodesToAbandon = new[] {
+            StatusCodes.BadSessionIdInvalid,
+            StatusCodes.BadSessionNotActivated,
+            StatusCodes.BadSessionClosed
+        };
+
+        private bool ShouldAbandonReconnect(Exception ex)
         {
+            if (ex is AggregateException aex)
+            {
+                return ShouldAbandonReconnect(aex.InnerException);
+            }
+            if (ex is ServiceResultException e)
+            {
+                return statusCodesToAbandon.Contains(e.StatusCode);
+            }
+            return false;
+        }
+
+        private async Task<ISession> CreateSessionDirect(string endpointUrl, ISession? oldSession)
+        {
+            if (oldSession != null)
+            {
+                log.LogInformation("Attempting to reconnect to the server, before creating a new connection");
+                try
+                {
+                    await Task.Run(() => oldSession.Reconnect(), liveToken);
+                    return oldSession;
+                }
+                catch (Exception ex)
+                {
+                    log.LogError(ex, "Failed to reconnect to server at {Url}: {Message}", endpointUrl, ex.Message);
+                    if (ShouldAbandonReconnect(ex) || config.ForceRestart)
+                    {
+                        await Close(liveToken);
+                    }
+                    else throw;
+                }
+            }
+
             log.LogInformation("Attempt to select endpoint from: {EndpointURL}", CoreClientUtils.GetDiscoveryUrl(endpointUrl));
 
             var identity = AuthenticationUtils.GetUserIdentity(config);
@@ -341,7 +401,7 @@ namespace Cognite.OpcUa
 
         private class SessionRedundancyResult
         {
-            public ISession Session { get; }
+            public ISession Session { get; set; }
             public string EndpointUrl { get; }
             public byte ServiceLevel { get; set; }
             public SessionRedundancyResult(ISession session, string endpointUrl, byte serviceLevel)
@@ -357,12 +417,31 @@ namespace Cognite.OpcUa
             endpointUrls = endpointUrls.Distinct().ToList();
             log.LogInformation("Create session with redundant connections to {Urls}", string.Join(", ", endpointUrls));
 
+            var exceptions = new List<Exception>();
+
+            // First check if we can reuse the current session
             if (initial != null)
             {
-                initial.ServiceLevel = await ReadServiceLevel(initial.Session);
+                try
+                {
+                    if (currentSessionIsDead)
+                    {
+                        log.LogInformation("Attempting to reconnect to the current server before switching to another");
+                        initial.Session = await CreateSessionDirect(initial.EndpointUrl, initial.Session);
+                    }
+                    initial.ServiceLevel = await ReadServiceLevel(initial.Session);
+                    if (initial.ServiceLevel >= config.Redundancy.ServiceLevelThreshold)
+                    {
+                        log.LogInformation("Service level on current server is above threshold ({Val}), not switching", initial.ServiceLevel);
+                        return initial;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    var hEx = ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.CreateSession);
+                    log.LogWarning("Failed to reconnect to current session: {Message}", hEx.Message);
+                }
             }
-
-            var exceptions = new List<Exception>();
 
             SessionRedundancyResult? current = initial;
             foreach (var url in endpointUrls)
@@ -371,7 +450,7 @@ namespace Cognite.OpcUa
                 {
                     if (initial != null && url == initial.EndpointUrl) continue;
 
-                    var session = await CreateSessionDirect(url);
+                    var session = await CreateSessionDirect(url, null);
                     var serviceLevel = await ReadServiceLevel(session);
 
                     if (serviceLevel > (current?.ServiceLevel ?? 0))
@@ -379,6 +458,8 @@ namespace Cognite.OpcUa
                         if (current != null)
                         {
                             await current.Session.CloseAsync();
+                            current.Session.KeepAlive -= ClientKeepAlive;
+                            current.Session.PublishError -= OnPublishError;
                             current.Session.Dispose();
                         }
                         current = new SessionRedundancyResult(session, url, serviceLevel);
@@ -417,27 +498,6 @@ namespace Cognite.OpcUa
         }
 
         /// <summary>
-        /// Event triggered after a succesfull reconnect.
-        /// </summary>
-        private void ClientReconnectComplete(object sender, EventArgs eventArgs)
-        {
-            if (!ReferenceEquals(sender, reconnectHandler)) return;
-            if (reconnectHandler == null) return;
-            SetNewSession(reconnectHandler.Session);
-            reconnectHandler.Dispose();
-            log.LogWarning("--- RECONNECTED ---");
-
-            client.Callbacks.TaskScheduler.ScheduleTask(null, async (_) =>
-            {
-                await client.Callbacks.OnServerReconnect(client);
-            });
-
-            connects.Inc();
-            connected.Set(1);
-            reconnectHandler = null;
-        }
-
-        /// <summary>
         /// Called on client keep alive, handles the case where the server has stopped responding and the connection timed out.
         /// </summary>
         private void ClientKeepAlive(ISession sender, KeepAliveEventArgs eventArgs)
@@ -445,66 +505,30 @@ namespace Cognite.OpcUa
             client.LogDump("Keep Alive", eventArgs);
             if (eventArgs.Status == null || !ServiceResult.IsNotGood(eventArgs.Status)) return;
             log.LogWarning("Keep alive failed: {Status}", eventArgs.Status);
-            if (reconnectHandler != null || liveToken.IsCancellationRequested) return;
+            if (liveToken.IsCancellationRequested) return;
             connected.Set(0);
 
-#pragma warning disable CA1508 // Avoid dead conditional code
-            if (reconnectHandler != null) return;
-#pragma warning restore CA1508 // Avoid dead conditional code
             log.LogWarning("--- RECONNECTING ---");
-            if (!config.ForceRestart && !liveToken.IsCancellationRequested)
+            if (!liveToken.IsCancellationRequested)
             {
-                reconnectHandler = new SessionReconnectHandler();
-                if (reverseConnectManager != null)
+                currentSessionIsDead = true;
+                client.Callbacks.TaskScheduler.ScheduleTask(null, async (_) =>
                 {
-                    reconnectHandler.BeginReconnect(sender, reverseConnectManager, 5000, ClientReconnectComplete);
-                }
-                else
-                {
-                    reconnectHandler.BeginReconnect(sender, 5000, ClientReconnectComplete);
-                }
-            }
-            else
-            {
-                try
-                {
-                    session?.Close();
-                }
-                catch
-                {
-                    log.LogWarning("Client failed to close");
-                }
-                finally
-                {
-                    if (session != null)
+                    log.LogInformation("Attempting to reconnect to server");
+                    if (!liveToken.IsCancellationRequested)
                     {
-                        session.KeepAlive -= ClientKeepAlive;
-                        session.PublishError -= OnPublishError;
-                        session = null;
+                        await Connect();
+                        await client.Callbacks.OnServerReconnect(client);
+                        connects.Inc();
+                        connected.Set(1);
                     }
-                }
-                if (!liveToken.IsCancellationRequested)
-                {
-                    client.Callbacks.TaskScheduler.ScheduleTask(null, async (_) =>
-                    {
-                        log.LogInformation("Attempting to reconnect to server");
-                        if (!liveToken.IsCancellationRequested)
-                        {
-                            await Connect();
-                            await client.Callbacks.OnServerReconnect(client);
-                            connects.Inc();
-                            connected.Set(1);
-                        }
-                    });
-                }
+                });
             }
             client.Callbacks.TaskScheduler.ScheduleTask(null, async (_) => await client.Callbacks.OnServerDisconnect(client));
         }
 
         public async Task Close(CancellationToken token)
         {
-            reconnectHandler?.Dispose();
-            reconnectHandler = null;
             try
             {
                 if (session != null && !session.Disposed)
@@ -609,28 +633,31 @@ namespace Cognite.OpcUa
 
                 client.Callbacks.TaskScheduler.ScheduleTask(null, async (token) =>
                 {
-                    var current = session != null ? new SessionRedundancyResult(session, EndpointUrl!, CurrentServiceLevel) : null;
-                    var result = await CreateSessionWithRedundancy(config.AltEndpointUrls!.Prepend(config.EndpointUrl!), current);
-                    if (result.EndpointUrl == EndpointUrl)
+                    await TryWithBackoff(async () =>
                     {
-                        log.LogWarning("Attempted reconnect due to low service level resulted in same server {Url}. Proceeding with ServiceLevel {Level}", result.EndpointUrl, result.ServiceLevel);
-                        await UpdateServiceLevel(result.ServiceLevel, false);
-                        if (result.Session != session)
+                        var current = session != null ? new SessionRedundancyResult(session, EndpointUrl!, CurrentServiceLevel) : null;
+                        var result = await CreateSessionWithRedundancy(config.AltEndpointUrls!.Prepend(config.EndpointUrl!), current);
+                        if (result.EndpointUrl == EndpointUrl)
                         {
-                            log.LogError("Error! Returned endpoint was the same, but session had changed. This is a bug!");
+                            log.LogWarning("Attempted reconnect due to low service level resulted in same server {Url}. Proceeding with ServiceLevel {Level}", result.EndpointUrl, result.ServiceLevel);
+                            await UpdateServiceLevel(result.ServiceLevel, false);
+                            if (result.Session != session)
+                            {
+                                log.LogError("Error! Returned endpoint was the same, but session had changed. This is a bug!");
+                            }
                         }
-                    }
-                    else
-                    {
-                        log.LogInformation("Reconnect due to low ServiceLevel resulted in new server {Url} (Old {Old}) with ServiceLevel {Level}",
-                            result.EndpointUrl,
-                            EndpointUrl,
-                            result.ServiceLevel);
-                        EndpointUrl = result.EndpointUrl;
-                        SetNewSession(result.Session);
-                        await UpdateServiceLevel(result.ServiceLevel, true);
-                        await client.Callbacks.OnServerReconnect(client);
-                    }
+                        else
+                        {
+                            log.LogInformation("Reconnect due to low ServiceLevel resulted in new server {Url} (Old {Old}) with ServiceLevel {Level}",
+                                result.EndpointUrl,
+                                EndpointUrl,
+                                result.ServiceLevel);
+                            EndpointUrl = result.EndpointUrl;
+                            SetNewSession(result.Session);
+                            await UpdateServiceLevel(result.ServiceLevel, true);
+                            await client.Callbacks.OnServerReconnect(client);
+                        }
+                    }, 6, token);
                 });
             }
         }
@@ -673,8 +700,6 @@ namespace Cognite.OpcUa
                 {
                     reverseConnectManager?.Dispose();
                     reverseConnectManager = null;
-                    reconnectHandler?.Dispose();
-                    reconnectHandler = null;
                     if (session != null)
                     {
                         try
