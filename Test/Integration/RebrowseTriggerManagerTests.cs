@@ -92,14 +92,13 @@ namespace Test.Integration
                 tester.Provider.GetRequiredService<ILogger<LiteDBStateStore>>()
             );
             using var extractor = tester.BuildExtractor(true, stateStore, cdfPusher);
-            var npdId = tester.Server.Server.GetNamespacePublicationDateId();
-            var npds = new NamespacePublicationDateState(npdId.ToString());
+            var npdId = tester.Client.GetUniqueId(tester.Server.Server.GetNamespacePublicationDateId());
+            var npds = new NamespacePublicationDateState(npdId);
             var lts = DateTime.UtcNow.AddSeconds(-10);
             var simulatedLastTimestamp = lts.ToUnixTimeMilliseconds();
             npds.LastTimestamp = simulatedLastTimestamp;
             npds.LastTimeModified = DateTime.UtcNow;
-            _extractionStates.TryAdd(npdId.ToString(), npds);
-            var runTask = extractor.RunExtractor();
+            _extractionStates.TryAdd(npdId, npds);
             await stateStore.StoreExtractionState<
                 NamespacePublicationDateStorableState,
                 NamespacePublicationDateState
@@ -115,6 +114,7 @@ namespace Test.Integration
                     },
                 tester.Source.Token
             );
+            var runTask = extractor.RunExtractor();
             await extractor.WaitForSubscriptions();
             var initialCount = cdfPusher.PushedNodes.Count;
             var addedId = tester.Server.Server.AddObject(
@@ -124,6 +124,7 @@ namespace Test.Integration
 
             // Act
             var newTime = DateTime.UtcNow;
+            _output.WriteLine($"New time set to {newTime.ToUnixTimeMilliseconds()}");
             tester.Server.Server.SetNamespacePublicationDate(newTime);
 
             // Assert
@@ -145,7 +146,12 @@ namespace Test.Integration
                 },
                 tester.Source.Token
             );
-            Assert.True(_extractionStates.TryGetValue(npdId.ToString(), out var newNpds));
+            foreach (var id in _extractionStates) {
+                _output.WriteLine($"Value of {id.Key} is {id.Value.LastTimestamp}");
+            }
+            Assert.True(_extractionStates.TryGetValue(npdId, out var newNpds));
+            _output.WriteLine($"Test response {newTime.ToUnixTimeMilliseconds()}: {newNpds.LastTimestamp}");
+            // Assert.True(false);
             Assert.Equal(newTime.ToUnixTimeMilliseconds(), newNpds.LastTimestamp);
             tester.Server.Server.RemoveNode(addedId);
             await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
