@@ -221,7 +221,7 @@ namespace Cognite.OpcUa
                 {
                     var values = item.DequeueValues();
                     var valueTime = values[0]
-                        .GetValue<DateTime>(DateTime.MinValue)
+                        .GetValue<DateTime>(CogniteTime.DateTimeEpoch)
                         .ToUnixTimeMilliseconds();
                     var id = _uaClient.GetUniqueId(item.ResolvedNodeId)!;
                     var lastTimestamp = GetLastTimestampFor(id);
