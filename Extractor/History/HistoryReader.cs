@@ -64,7 +64,14 @@ namespace Cognite.OpcUa.History
 
             using var op = waiter.GetInstance();
 
-            await scheduler.RunAsync();
+            try
+            {
+                await scheduler.RunAsync();
+            }
+            catch (AggregateException aex)
+            {
+                throw new SmartAggregateException(aex);
+            }
         }
 
         public void MaxNodeParallelismChanged()
