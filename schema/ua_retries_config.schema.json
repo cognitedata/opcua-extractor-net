@@ -3,7 +3,11 @@
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
     "description": "Configuration for retries on OPC-UA service calls",
-    "allOf": [{ "$ref": "https://raw.githubusercontent.com/cognitedata/dotnet-extractor-utils/v1.12.2/schema/retry_config.schema.json" }],
+    "allOf": [
+        {
+            "$ref": "https://raw.githubusercontent.com/cognitedata/dotnet-extractor-utils/v1.16.0/schema/retry_config.schema.json"
+        }
+    ],
     "unevaluatedProperties": false,
     "properties": {
         "retry-status-codes": {

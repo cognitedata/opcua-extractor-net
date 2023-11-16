@@ -67,7 +67,7 @@
             }
         },
         "high-availability": {
-            "$ref": "https://raw.githubusercontent.com/cognitedata/dotnet-extractor-utils/v1.4.2/schema/high_availability.schema.json",
+            "$ref": "https://raw.githubusercontent.com/cognitedata/dotnet-extractor-utils/v1.16.0/schema/high_availability.schema.json",
             "unevaluatedProperties": false
         }
     }

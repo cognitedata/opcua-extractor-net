@@ -3,7 +3,11 @@
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
     "description": "Configuration for pushing data to Cognite Data Fusion (CDF)",
-    "allOf": [{ "$ref": "https://raw.githubusercontent.com/cognitedata/dotnet-extractor-utils/v1.12.2/schema/cognite_config.schema.json" }],
+    "allOf": [
+        {
+            "$ref": "https://raw.githubusercontent.com/cognitedata/dotnet-extractor-utils/v1.16.0/schema/cognite_config.schema.json"
+        }
+    ],
     "unevaluatedProperties": false,
     "properties": {
         "data-set": {
@@ -38,7 +42,9 @@
                     "type": "object",
                     "description": "Details of CDF raw (database and table).",
                     "unevaluatedProperties": false,
-                    "required": ["database"],
+                    "required": [
+                        "database"
+                    ],
                     "properties": {
                         "database": {
                             "type": "string",
@@ -81,7 +87,14 @@
                     "unevaluatedProperties": false,
                     "description": "configuration for flexible data models in CDF",
                     "type": "object",
-                    "required": ["enabled", "exclude-no-referenced", "types-to-map", "skip-simple-types", "skip-types-on-equal-count", "ignore-mandatory"],
+                    "required": [
+                        "enabled",
+                        "exclude-no-referenced",
+                        "types-to-map",
+                        "skip-simple-types",
+                        "skip-types-on-equal-count",
+                        "ignore-mandatory"
+                    ],
                     "properties": {
                         "space": {
                             "type": "string",
@@ -98,7 +111,11 @@
                         "types-to-map": {
                             "type": "string",
                             "description": "Types to map to fdm",
-                            "enum": ["referenced", "custom", "all"]
+                            "enum": [
+                                "referenced",
+                                "custom",
+                                "all"
+                            ]
                         },
                         "skip-simple-types": {
                             "type": "boolean",
@@ -145,7 +162,11 @@
                     "patternProperties": {
                         ".*": {
                             "type": "string",
-                            "enum": [ "description", "name", "parentId" ]
+                            "enum": [
+                                "description",
+                                "name",
+                                "parentId"
+                            ]
                         }
                     }
                 },
@@ -155,7 +176,12 @@
                     "patternProperties": {
                         ".*": {
                             "type": "string",
-                            "enum": [ "description", "name", "parentId", "unit" ]
+                            "enum": [
+                                "description",
+                                "name",
+                                "parentId",
+                                "unit"
+                            ]
                         }
                     }
                 }
@@ -165,7 +191,10 @@
             "type": "object",
             "description": "Read from CDF instead of OPC-UA when starting, to speed up start on slow servers. Requires `extraction-data-types.expand-node-ids` and `append-internal-values` to be set to `true`. This should generaly be enabled along with `skip-metadata` or `raw-metadata`. If `browse-on-empty` is set to `true` and `raw-metadata` is configured with the same database and tables the extractor will read into raw on first run, then use raw as source for later runs. The Raw database can be deleted to reset on next read.",
             "unevaluatedProperties": false,
-            "required": [ "enable", "database" ],
+            "required": [
+                "enable",
+                "database"
+            ],
             "properties": {
                 "enable": {
                     "type": "boolean",
@@ -190,7 +219,10 @@
             }
         },
         "non-finite-replacement": {
-            "type": [ "number", "null" ],
+            "type": [
+                "number",
+                "null"
+            ],
             "description": "Replacement for NaN values. Deprecated in favor of `nan-replacement`",
             "deprecated": true
         },
