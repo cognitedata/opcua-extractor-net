@@ -1106,7 +1106,7 @@ namespace Test.Unit
             tester.Server.Issues.HistoryReadStatusOverride[tester.Server.Ids.Base.DoubleVar1] = StatusCodes.BadInvalidArgument;
 
             var exc = await Assert.ThrowsAsync<SmartAggregateException>(() => reader.BackfillData(states));
-            Assert.Equal("2 errors of type Opc.Ua.ServiceResultException: BadInvalidArgument", exc.Message);
+            Assert.Equal("2 errors of type Opc.Ua.ServiceResultException. StatusCode: BadInvalidArgument", exc.Message);
         }
     }
 }

@@ -29,32 +29,39 @@ namespace Cognite.OpcUa.History
             var builder = new StringBuilder();
             var flattened = aex.Flatten();
             var byType = flattened.InnerExceptions
-                .GroupBy(ex =>
+                .GroupBy<Exception, (Type, uint?)>(ex =>
                 {
                     if (ex is ServiceResultException serviceExc)
                     {
-                        return $"Opc.Ua.ServiceResultException: {StatusCode.LookupSymbolicId(serviceExc.StatusCode) ?? serviceExc.StatusCode.ToString()}";
+                        return (ex.GetType(), serviceExc.StatusCode);
                     }
                     else if (ex is SilentServiceException silentExc)
                     {
-                        return $"Opc.Ua.SilentServiceException: {StatusCode.LookupSymbolicId(silentExc.StatusCode) ?? silentExc.StatusCode.ToString()}";
+                        return (ex.GetType(), silentExc.StatusCode);
                     }
                     else
                     {
-                        return ex.GetType().ToString();
+                        return (ex.GetType(), null);
                     }
                 })
                 .ToDictionary(g => g.Key, v => v.Count());
 
             var needNewline = false;
-            foreach (var (type, count) in byType)
+            foreach (var ((type, statusCode), count) in byType)
             {
                 if (needNewline)
                 {
                     builder.AppendLine();
                 }
                 needNewline = true;
-                builder.AppendFormat("{0} errors of type {1}", count, type);
+                if (statusCode != null)
+                {
+                    builder.AppendFormat("{0} errors of type {1}. StatusCode: {2}", count, type, StatusCode.LookupSymbolicId(statusCode.Value) ?? statusCode.Value.ToString());
+                }
+                else
+                {
+                    builder.AppendFormat("{0} errors of type {1}", count, type);
+                }
             }
 
             return builder.ToString();
