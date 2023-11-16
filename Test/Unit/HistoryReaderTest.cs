@@ -1103,12 +1103,10 @@ namespace Test.Unit
             Assert.True(states[0].IsFrontfilling);
             Assert.All(states, (st, idx) => Assert.True(!st.IsFrontfilling || idx == 0));
 
-            tester.Server.Issues.HistoryReadStatusOverride[tester.Server.Ids.Base.DoubleVar1] = StatusCodes.Bad;
+            tester.Server.Issues.HistoryReadStatusOverride[tester.Server.Ids.Base.DoubleVar1] = StatusCodes.BadInvalidArgument;
 
-            var exc = await Assert.ThrowsAsync<AggregateException>(() => reader.BackfillData(states));
-            Assert.Equal(2, exc.InnerExceptions.Count);
-            var serviceExceptions = exc.InnerExceptions.OfType<ServiceResultException>().ToList();
-            Assert.Equal(2, serviceExceptions.Count);
+            var exc = await Assert.ThrowsAsync<SmartAggregateException>(() => reader.BackfillData(states));
+            Assert.Equal("2 errors of type Opc.Ua.ServiceResultException. StatusCode: BadInvalidArgument", exc.Message);
         }
     }
 }
