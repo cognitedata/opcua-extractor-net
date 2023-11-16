@@ -18,6 +18,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using System;
 using System.Linq;
 using System.Text;
+using Opc.Ua;
 
 namespace Cognite.OpcUa.History
 {
@@ -28,13 +29,32 @@ namespace Cognite.OpcUa.History
             var builder = new StringBuilder();
             var flattened = aex.Flatten();
             var byType = flattened.InnerExceptions
-                .GroupBy(ex => ex.GetType())
+                .GroupBy(ex =>
+                {
+                    if (ex is ServiceResultException serviceExc)
+                    {
+                        return $"Opc.Ua.ServiceResultException: {StatusCode.LookupSymbolicId(serviceExc.StatusCode) ?? serviceExc.StatusCode.ToString()}";
+                    }
+                    else if (ex is SilentServiceException silentExc)
+                    {
+                        return $"Opc.Ua.SilentServiceException: {StatusCode.LookupSymbolicId(silentExc.StatusCode) ?? silentExc.StatusCode.ToString()}";
+                    }
+                    else
+                    {
+                        return ex.GetType().ToString();
+                    }
+                })
                 .ToDictionary(g => g.Key, v => v.Count());
 
+            var needNewline = false;
             foreach (var (type, count) in byType)
             {
+                if (needNewline)
+                {
+                    builder.AppendLine();
+                }
+                needNewline = true;
                 builder.AppendFormat("{0} errors of type {1}", count, type);
-                builder.AppendLine();
             }
 
             return builder.ToString();
