@@ -62,7 +62,7 @@ jobs:
             run: echo "rpmver=$(echo "${{ steps.get-version.outputs.version}}" | tr - _)" >> "$GITHUB_OUTPUT"
 
           - name: Message about build
-            uses: actions/github-script@v6
+            uses: actions/github-script@v7
             with:
                 script: |
                     if (${{ steps.confirm-release.outputs.test }} == 0) {
