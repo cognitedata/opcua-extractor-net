@@ -74,6 +74,11 @@ namespace Cognite.OpcUa.History
             }
         }
 
+        public void MaxNodeParallelismChanged()
+        {
+            continuationPoints.SetCapacity(config.Throttling.MaxNodeParallelism > 0 ? config.Throttling.MaxNodeParallelism : 1_000);
+        }
+
         /// <summary>
         /// Frontfill data for the given list of states. Chunks by time granularity and given chunksizes.
         /// </summary>

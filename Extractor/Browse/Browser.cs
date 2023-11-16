@@ -51,6 +51,13 @@ namespace Cognite.OpcUa.Browse
             continuationPoints = new BlockingResourceCounter(throttling.MaxNodeParallelism <= 0 ? 100_000 : throttling.MaxNodeParallelism);
         }
 
+        public void MaxNodeParallelismChanged()
+        {
+            continuationPoints.SetCapacity(
+                config.Source.BrowseThrottling.MaxNodeParallelism > 0 ? config.Source.BrowseThrottling.MaxNodeParallelism : 100_000
+            );
+        }
+
         /// <summary>
         /// Browse node hierarchy for single root node
         /// </summary>
