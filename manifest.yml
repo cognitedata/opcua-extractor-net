@@ -60,6 +60,11 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.22.1":
+    description: Fix issue causing the extractor to try to create very many monitored items at the same time.
+    changelog:
+      fixed:
+        - "Fix to issue related to recreating subscriptions with lots of monitored items. The extractor would sometimes try to create all monitored items in a single request, which would invariably fail."
   "2.22.0":
     description: Reliability improvements and some minor additions
     changelog:
