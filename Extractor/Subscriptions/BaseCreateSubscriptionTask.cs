@@ -4,11 +4,9 @@ using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using Opc.Ua.Client;
 using Prometheus;
-using Serilog.Core;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -30,30 +28,60 @@ namespace Cognite.OpcUa.Subscriptions
         protected abstract MonitoredItem CreateMonitoredItem(T item, FullConfig config);
 
 
-        private async Task CreateItemsWithRetry(ILogger logger, UARetryConfig retries, Subscription subscription, CancellationToken token)
+        private async Task CreateItemsWithRetryInner(ILogger logger, int count, UARetryConfig retries, Subscription subscription, CancellationToken token)
         {
-            var numToCreate = subscription.MonitoredItems.Count(m => !m.Created);
-            if (numToCreate == 0) return;
-
             await RetryUtil.RetryAsync($"create monitored items for {SubscriptionName.Name()}", async () =>
             {
                 try
                 {
                     await subscription.CreateItemsAsync(token);
-                    numSubscriptions.Inc(numToCreate);
+                    numSubscriptions.Inc(count);
                 }
                 catch (Exception ex)
                 {
                     throw ExtractorUtils.HandleServiceResult(logger, ex, ExtractorUtils.SourceOp.CreateMonitoredItems);
                 }
             }, retries, ex => retries.ShouldRetryException(
-                    ex,
-                    // Do not retry on certain errors here.
-                    // If we actually lose connection to the server the subscription will probably be invalidated,
-                    // so we need to retry it anyway.
-                    // If it isn't invalid, the retry will actually pick up from where we left of, so we can handle retrying much less here.
-                    retries.FinalRetryStatusCodes.Except(outerStatusCodes)
-                ), logger, token);
+                ex,
+                // Do not retry on certain errors here.
+                // If we actually lose connection to the server the subscription will probably be invalidated,
+                // so we need to retry it anyway.
+                // If it isn't invalid, the retry will actually pick up from where we left of, so we can handle retrying much less here.
+                retries.FinalRetryStatusCodes.Except(outerStatusCodes)
+            ), logger, token);
+        }
+
+        private async Task CreateItemsWithRetry(ILogger logger, UARetryConfig retries, Subscription subscription, FullConfig config, CancellationToken token)
+        {
+            var numToCreate = subscription.MonitoredItems.Count(m => !m.Created);
+            if (numToCreate == 0) return;
+
+            if (numToCreate > config.Source.SubscriptionChunk)
+            {
+                // This can happen if the subscription is created by the server, synchronized (somehow? still not sure why the SDK does this)
+                // then needs to have its items created. The SDK is very dumb, and if this happens and there are thousands of non-created
+                // monitored items, it will try to create them all in one request, obviously running into limits somewhere.
+
+                // The only way to make it _not_ do that is to remove the non-created items before proceeding. This might work,
+                // I have not been able to reproduce the issue locally.
+                logger.LogWarning("Creating more than {Chunk} items, removing and re-adding all non-created monitored items",
+                    config.Source.SubscriptionChunk);
+
+                var toAdd = new List<MonitoredItem>();
+                toAdd.AddRange(subscription.MonitoredItems.Where(m => !m.Created));
+                subscription.RemoveItems(toAdd);
+
+                foreach (var chunk in toAdd.ChunkBy(config.Source.SubscriptionChunk))
+                {
+                    subscription.AddItems(chunk);
+
+                    await CreateItemsWithRetryInner(logger, numToCreate, retries, subscription, token);
+                }
+            }
+            else
+            {
+                await CreateItemsWithRetryInner(logger, numToCreate, retries, subscription, token);
+            }
         }
 
         private async Task CreateMonitoredItems(ILogger logger, FullConfig config, Subscription subscription, SubscriptionManager manager, CancellationToken token)
@@ -75,13 +103,17 @@ namespace Cognite.OpcUa.Subscriptions
                         items.Count, SubscriptionName, count, toAdd.Count);
                     subscription.AddItems(items);
 
-                    await CreateItemsWithRetry(logger, config.Source.Retries, subscription, token);
+                    await CreateItemsWithRetry(logger, config.Source.Retries, subscription, config, token);
 
                     manager.Cache.IncrementMonitoredItems(SubscriptionName, items.Count);
                 }
             }
+            else
+            {
+                logger.LogInformation("All monitored items already exist for subscription {Name}, none added", SubscriptionName);
+            }
 
-            await CreateItemsWithRetry(logger, config.Source.Retries, subscription, token);
+            await CreateItemsWithRetry(logger, config.Source.Retries, subscription, config, token);
         }
 
         private async Task<Subscription> EnsureSubscriptionExists(ILogger logger, SessionManager sessionManager, FullConfig config, SubscriptionManager subManager, CancellationToken token)
