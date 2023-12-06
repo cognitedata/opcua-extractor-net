@@ -60,6 +60,8 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.22.2":
+    description: Shut down history when service level goes bad, to avoid gaps if it goes back to good while history is still running.
   "2.22.1":
     description: Fix issue causing the extractor to try to create very many monitored items at the same time.
     changelog:
