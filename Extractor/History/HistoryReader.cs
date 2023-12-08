@@ -113,6 +113,8 @@ namespace Cognite.OpcUa.History
         {
             await Run(states, HistoryReadType.BackfillEvents);
         }
+        private readonly SemaphoreSlim terminateSem = new SemaphoreSlim(1);
+
         /// <summary>
         /// Request the history read terminate, then wait for all operations to finish before quitting.
         /// </summary>
@@ -120,11 +122,34 @@ namespace Cognite.OpcUa.History
         /// <returns>True if successfully aborted, false if waiting timed out</returns>
         public async Task<bool> Terminate(CancellationToken token, int timeoutsec = 30)
         {
-            source.Cancel();
-            bool timedOut = await waiter.Wait(timeoutsec * 1000, token);
-            source.Dispose();
-            source = CancellationTokenSource.CreateLinkedTokenSource(token);
-            return timedOut;
+            await terminateSem.WaitAsync(token);
+            try
+            {
+                source.Cancel();
+                log.LogInformation("Terminating any active history reads");
+                bool timedOut = await waiter.Wait(timeoutsec * 1000, token);
+                if (timedOut)
+                {
+                    log.LogWarning("Terminating history reads timed out after {Timeout} seconds", timeoutsec);
+                }
+                else
+                {
+                    log.LogInformation("History reads successfully terminated");
+                }
+                source.Dispose();
+                source = CancellationTokenSource.CreateLinkedTokenSource(token);
+                return timedOut;
+            }
+            catch (Exception ex)
+            {
+                log.LogError(ex, "Unexpected error terminating history: {Err}", ex.Message);
+                return false;
+            }
+            finally
+            {
+                terminateSem.Release();
+            }
+
         }
 
         public void Dispose()

@@ -201,6 +201,7 @@ namespace Cognite.OpcUa
         {
             if (Source.IsCancellationRequested) return;
 
+            log.LogInformation("Service level went above threshold");
             if (historyReader != null)
             {
                 await historyReader.Terminate(Source.Token);
@@ -220,24 +221,26 @@ namespace Cognite.OpcUa
             }
         }
 
-        public Task OnServicelevelBelowThreshold(UAClient source)
+        public async Task OnServicelevelBelowThreshold(UAClient source)
         {
-            if (Source.IsCancellationRequested) return Task.CompletedTask;
+            if (Source.IsCancellationRequested) return;
 
+            log.LogInformation("Service level dropped below threshold");
             if (historyReader != null)
             {
+                await historyReader.Terminate(Source.Token);
                 foreach (var state in State.NodeStates)
                 {
-                    if (!state.IsFrontfilling && !state.IsBackfilling) state.RestartHistory();
+                    state.RestartHistory();
                 }
 
                 foreach (var state in State.EmitterStates)
                 {
-                    if (!state.IsFrontfilling && !state.IsBackfilling) state.RestartHistory();
+                    state.RestartHistory();
                 }
             }
 
-            return Task.CompletedTask;
+            return;
         }
 
         /// <summary>
