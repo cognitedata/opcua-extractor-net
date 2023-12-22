@@ -170,7 +170,7 @@ namespace Cognite.OpcUa.Nodes
         /// <param name="value">Value to convert</param>
         /// <param name="timestamp">Timestamp of created datapoint</param>
         /// <param name="id">Id of created datapoint</param>
-        /// <param name="stringOverride">True to override the IsString parameter of this datatype, converting 
+        /// <param name="stringOverride">True to override the IsString parameter of this datatype, converting
         /// numerical datavalues to string as well.</param>
         /// <returns>Created UADataPoint</returns>
         public UADataPoint ToDataPoint(IUAClientAccess client, object value, DateTime timestamp, string id, bool stringOverride = false)
@@ -238,10 +238,14 @@ namespace Cognite.OpcUa.Nodes
                     return false;
                 }
             }
-            else if (node.ArrayDimensions == null)
+            // Check for null ArrayDimensions or empty array
+            else if (node.ArrayDimensions == null || node.ArrayDimensions.Length == 0)
             {
                 if (config.UnknownAsScalar && (node.ValueRank == ValueRanks.ScalarOrOneDimension
-                    || node.ValueRank == ValueRanks.Any)) return true;
+                    || node.ValueRank == ValueRanks.Any)) 
+                {
+                    return true;
+                }
                 log.LogDebug("Skipping variable {Name} {Id} due to non-scalar ValueRank {Rank} and null ArrayDimensions",
                     node.Name, node.Id, ExtractorUtils.GetValueRankString(node.ValueRank));
                 return false;
