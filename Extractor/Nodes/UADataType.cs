@@ -237,6 +237,10 @@ namespace Cognite.OpcUa.Nodes
                         node.Name, node.Id, ExtractorUtils.GetValueRankString(node.ValueRank), length);
                     return false;
                 }
+            } 
+            else if (node.ArrayDimensions != null && node.ArrayDimensions.Length == 0)
+            {
+                return true;
             }
             else if (node.ArrayDimensions == null)
             {
