@@ -7,7 +7,7 @@ OPC-UA extractor using libraries from OPCFoundation see [here](https://github.co
 
 ### Setup
 
-Install paket using `dotnet tool restore`. Then run `dotnet restore` to install packages.
+Install using `dotnet tool restore`. Then run `dotnet restore` to install packages.
 
 Now you can build projects using `dotnet build [Project]`. Using just `dotnet build` is likely to fail on "OpcUaServiceManager", since it cannot be built
 with the dotnet CLI.
@@ -93,8 +93,9 @@ During development it is perfectly fine to just run a subset of the tests using 
 
 ### Releasing
 
-The release.sh script just creates a new tag on the current commit, then pushes it to `origin`, which should be this repository. This will automatically
-deploy binaries to github releases and docker images to eu.gcr.io/cognite-registry/. For the MSI to build, the version must be simple, i.e. on the form "a.b.c".
+Update `manifest.yaml` with the new release`. Merging to master will automatically
+deploy binaries to github releases and docker images to eu.gcr.io/cognite-registry/. For
+the MSI to build, the version must be simple, i.e. on the form "a.b.c".
 
 ## Contributing
 
