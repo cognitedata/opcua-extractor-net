@@ -242,7 +242,10 @@ namespace Cognite.OpcUa.Nodes
             else if (node.ArrayDimensions == null || node.ArrayDimensions.Length == 0)
             {
                 if (config.UnknownAsScalar && (node.ValueRank == ValueRanks.ScalarOrOneDimension
-                    || node.ValueRank == ValueRanks.Any)) return true;
+                    || node.ValueRank == ValueRanks.Any)) 
+                {
+                    return true;
+                }
                 log.LogDebug("Skipping variable {Name} {Id} due to non-scalar ValueRank {Rank} and null ArrayDimensions",
                     node.Name, node.Id, ExtractorUtils.GetValueRankString(node.ValueRank));
                 return false;
