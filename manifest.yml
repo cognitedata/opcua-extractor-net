@@ -60,6 +60,11 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.24.0":
+    description: "Bugfixes and improvements"
+    changelog:
+      fixed:
+        - "fix: Allow empty array dimensions #564"
   "2.23.0":
     description: Update to .NET 8
     changelog:
