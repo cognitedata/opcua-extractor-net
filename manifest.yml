@@ -64,7 +64,7 @@ versions:
     description: "Bugfixes and improvements"
     changelog:
       fixed:
-        - "fix: Allow empty array dimensions #564"
+        - "fix: Allow empty array dimensions"
   "2.23.0":
     description: Update to .NET 8
     changelog:
