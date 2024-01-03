@@ -1288,7 +1288,7 @@ namespace Test.Unit
             Assert.Equal(new NodeId("string-ns", 2), tester.Client.Context.ToNodeId(nodeId));
             nodeId = new ExpandedNodeId(new byte[] { 12, 12, 6 }, 1);
             Assert.Equal(new NodeId(new byte[] { 12, 12, 6 }, 1), tester.Client.Context.ToNodeId(nodeId));
-            nodeId = new ExpandedNodeId("other-server", "opc.tcp://some-other-server.test", 1);
+            nodeId = new ExpandedNodeId("other-server", 0, "opc.tcp://some-other-server.test", 1);
             Assert.Null(tester.Client.Context.ToNodeId(nodeId));
         }
         [Fact]
