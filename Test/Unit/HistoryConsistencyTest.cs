@@ -81,7 +81,7 @@ namespace Test.Unit
         private readonly HistoryConsistencyTestFixture tester;
         public HistoryConsistencyTest(ITestOutputHelper output, HistoryConsistencyTestFixture tester)
         {
-            if (tester == null) throw new ArgumentNullException(nameof(tester));
+            ArgumentNullException.ThrowIfNull(tester);
             this.tester = tester;
             tester.ResetConfig();
             tester.Init(output);

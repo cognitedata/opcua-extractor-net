@@ -151,7 +151,7 @@ namespace Cognite.OpcUa
                 metrics[nodes[i]] = state;
             }
 
-            if (!metrics.Any()) return;
+            if (metrics.Count == 0) return;
 
             if (client.SubscriptionManager == null) throw new InvalidOperationException("Client not initialized");
 

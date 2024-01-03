@@ -86,7 +86,7 @@ namespace Cognite.OpcUa
             baseParams = options.InitialParams;
 
             filters = options.Filters;
-            if (baseParams.Nodes.Any())
+            if (baseParams.Nodes.Count != 0)
             {
                 foreach (var node in baseParams.Nodes)
                 {
@@ -212,7 +212,7 @@ namespace Cognite.OpcUa
             }
             await base.RunAsync();
             LogBrowseResult();
-            if (exceptions.Any())
+            if (exceptions.Count != 0)
             {
                 throw new AggregateException(exceptions);
             }

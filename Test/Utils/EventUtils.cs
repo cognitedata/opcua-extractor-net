@@ -16,8 +16,8 @@ namespace Test.Utils
 
         public static EventExtractionState PopulateEventData(UAExtractor extractor, BaseExtractorTestFixture tester, bool init)
         {
-            if (tester == null) throw new ArgumentNullException(nameof(tester));
-            if (extractor == null) throw new ArgumentNullException(nameof(extractor));
+            ArgumentNullException.ThrowIfNull(tester);
+            ArgumentNullException.ThrowIfNull(extractor);
             // Add state
             var state = new EventExtractionState(tester.Client, new NodeId("emitter"), true, true, true);
             if (init)
@@ -38,7 +38,7 @@ namespace Test.Utils
 
         public static SimpleAttributeOperandCollection GetSelectClause(BaseExtractorTestFixture tester)
         {
-            if (tester == null) throw new ArgumentNullException(nameof(tester));
+            ArgumentNullException.ThrowIfNull(tester);
             var attrs = baseFields.Select(field => new SimpleAttributeOperand(ObjectTypeIds.BaseEventType, new QualifiedName(field)));
             attrs = attrs.Append(new SimpleAttributeOperand(tester.Server.Ids.Custom.Array, new QualifiedName("Array"))); // some other field
             attrs = attrs.Append(new SimpleAttributeOperand(tester.Server.Ids.Custom.EUProp, new QualifiedName("EUProp")));

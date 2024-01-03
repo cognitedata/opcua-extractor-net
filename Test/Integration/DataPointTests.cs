@@ -70,7 +70,7 @@ namespace Test.Integration
 
             await extractor.WaitForSubscriptions();
 
-            await TestUtils.WaitForCondition(() => pusher.DataPoints.Any(kvp => kvp.Value.Any()), 5);
+            await TestUtils.WaitForCondition(() => pusher.DataPoints.Any(kvp => kvp.Value.Count != 0), 5);
             foreach (var kvp in pusher.DataPoints)
             {
                 kvp.Value.Clear();
@@ -92,8 +92,8 @@ namespace Test.Integration
             // enum array
             tester.Server.UpdateNode(ids.EnumVar3, new[] { 123, 321, 321, 321 });
 
-            await TestUtils.WaitForCondition(() => pusher.DataPoints.Count(kvp => kvp.Value.Any()) == 13,
-                5, () => $"Expected to get values in 13 timeseries, but got {pusher.DataPoints.Count(kvp => kvp.Value.Any())}");
+            await TestUtils.WaitForCondition(() => pusher.DataPoints.Count(kvp => kvp.Value.Count != 0) == 13,
+                5, () => $"Expected to get values in 13 timeseries, but got {pusher.DataPoints.Count(kvp => kvp.Value.Count != 0)}");
 
             void TestDataPoints((NodeId, int) id, object expected)
             {
@@ -149,7 +149,7 @@ namespace Test.Integration
 
             try
             {
-                await TestUtils.WaitForCondition(() => pusher.DataPoints.Any(kvp => kvp.Value.Any()), 5);
+                await TestUtils.WaitForCondition(() => pusher.DataPoints.Any(kvp => kvp.Value.Count != 0), 5);
             }
             finally
             {
@@ -164,8 +164,8 @@ namespace Test.Integration
             // enum array
             tester.Server.UpdateNode(ids.EnumVar3, new[] { 123, 321, 321, 321 });
 
-            await TestUtils.WaitForCondition(() => pusher.DataPoints.Count(kvp => kvp.Value.Any()) == 5,
-                5, () => $"Expected to get values in 5 timeseries, but got {pusher.DataPoints.Count(kvp => kvp.Value.Any())}");
+            await TestUtils.WaitForCondition(() => pusher.DataPoints.Count(kvp => kvp.Value.Count != 0) == 5,
+                5, () => $"Expected to get values in 5 timeseries, but got {pusher.DataPoints.Count(kvp => kvp.Value.Count != 0)}");
 
             void TestDataPoints((NodeId, int) id, object expected)
             {
@@ -215,7 +215,7 @@ namespace Test.Integration
 
             await extractor.WaitForSubscriptions();
 
-            await TestUtils.WaitForCondition(() => pusher.DataPoints.Any(kvp => kvp.Value.Any()), 5);
+            await TestUtils.WaitForCondition(() => pusher.DataPoints.Any(kvp => kvp.Value.Count != 0), 5);
             foreach (var kvp in pusher.DataPoints)
             {
                 kvp.Value.Clear();
@@ -231,8 +231,8 @@ namespace Test.Integration
             tester.Server.UpdateNode(ids.RankImpreciseNoDim, new[] { 1, 2, 3, 4 });
             tester.Server.UpdateNode(ids.NullType, 1);
 
-            await TestUtils.WaitForCondition(() => pusher.DataPoints.Count(kvp => kvp.Value.Any()) == 8,
-                5, () => $"Expected to get values in 8 timeseries, but got {pusher.DataPoints.Count(kvp => kvp.Value.Any())}");
+            await TestUtils.WaitForCondition(() => pusher.DataPoints.Count(kvp => kvp.Value.Count != 0) == 8,
+                5, () => $"Expected to get values in 8 timeseries, but got {pusher.DataPoints.Count(kvp => kvp.Value.Count != 0)}");
 
             void TestDataPoints((NodeId, int) id, object expected)
             {
@@ -969,7 +969,7 @@ namespace Test.Integration
                 && extractor.State.NodeStates.All(state => !state.IsFrontfilling), 5,
                 () => $"Pusher is dataFailing: {pusher.DataFailing}");
 
-            Assert.True(pusher.DataPoints.All(dps => !dps.Value.Any()));
+            Assert.True(pusher.DataPoints.All(dps => dps.Value.Count == 0));
 
             tester.Server.UpdateNode(ids.DoubleVar1, 1000);
             tester.Server.UpdateNode(ids.DoubleVar2, 1);

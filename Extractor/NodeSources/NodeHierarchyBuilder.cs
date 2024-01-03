@@ -226,7 +226,7 @@ namespace Cognite.OpcUa.NodeSources
                 FinalReferences.Add(reference);
             }
 
-            if (FinalReferences.Any())
+            if (FinalReferences.Count != 0)
             {
                 logger.LogInformation("Mapped {Count} references", FinalReferences.Count);
             }
@@ -375,7 +375,7 @@ namespace Cognite.OpcUa.NodeSources
                 }
                 toReadValues.Add(node);
             }
-            if (!toReadValues.Any()) return;
+            if (toReadValues.Count == 0) return;
 
             if (config.Source.EndpointUrl == null)
             {

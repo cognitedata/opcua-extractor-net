@@ -83,9 +83,13 @@ namespace Test.Unit
 
         public async Task DisposeAsync()
         {
-            Source.Cancel();
+            if (Source != null)
+            {
+                await Source.CancelAsync();
+                Source.Dispose();
+                Source = null;
+            }
             await Client.Close(CancellationToken.None);
-            Source.Dispose();
             Server.Stop();
             await Provider.DisposeAsync();
         }

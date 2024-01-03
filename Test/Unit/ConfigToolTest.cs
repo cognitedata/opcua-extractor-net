@@ -56,10 +56,14 @@ namespace Test.Unit
 
         public async Task DisposeAsync()
         {
-            Source?.Cancel();
+            if (Source != null)
+            {
+                await Source.CancelAsync();
+                Source.Dispose();
+                Source = null;
+            }
             await Explorer?.Close(CancellationToken.None);
             Explorer?.Dispose();
-            Source?.Dispose();
             Server?.Stop();
             Server?.Dispose();
 

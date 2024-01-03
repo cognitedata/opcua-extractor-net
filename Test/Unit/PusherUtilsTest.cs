@@ -24,7 +24,7 @@ namespace Test.Unit
         private readonly StaticServerTestFixture tester;
         public PusherUtilsTest(ITestOutputHelper output, StaticServerTestFixture tester)
         {
-            if (tester == null) throw new ArgumentNullException(nameof(tester));
+            ArgumentNullException.ThrowIfNull(tester);
             tester.ResetConfig();
             tester.Init(output);
             this.tester = tester;

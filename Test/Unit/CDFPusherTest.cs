@@ -1272,9 +1272,9 @@ namespace Test.Unit
             tester.Config.Cognite.RawNodeBuffer.BrowseOnEmpty = true;
             await extractor.RunExtractor(true);
             Assert.True(extractor.State.NodeStates.Any());
-            Assert.True(handler.AssetsRaw.Any());
-            Assert.True(handler.TimeseriesRaw.Any());
-            Assert.True(handler.Timeseries.Any());
+            Assert.True(handler.AssetsRaw.Count != 0);
+            Assert.True(handler.TimeseriesRaw.Count != 0);
+            Assert.True(handler.Timeseries.Count != 0);
             Assert.Empty(handler.Assets);
 
             await extractor.WaitForSubscriptions();
@@ -1307,7 +1307,7 @@ namespace Test.Unit
             await TestUtils.WaitForCondition(async () =>
             {
                 await extractor.Streamer.PushDataPoints(new[] { pusher }, Enumerable.Empty<IPusher>(), tester.Source.Token);
-                return handler.Datapoints.ContainsKey(id) && handler.Datapoints[id].NumericDatapoints.Any();
+                return handler.Datapoints.ContainsKey(id) && handler.Datapoints[id].NumericDatapoints.Count != 0;
             }, 10);
 
             Assert.True(extractor.State.NodeStates.Where(state => state.FrontfillEnabled).Any());
@@ -1350,9 +1350,9 @@ namespace Test.Unit
             tester.Config.Cognite.RawNodeBuffer.BrowseOnEmpty = true;
             await extractor.RunExtractor(true);
             Assert.True(extractor.State.NodeStates.Any());
-            Assert.True(handler.AssetsRaw.Any());
-            Assert.True(handler.TimeseriesRaw.Any());
-            Assert.True(handler.Timeseries.Any());
+            Assert.True(handler.AssetsRaw.Count != 0);
+            Assert.True(handler.TimeseriesRaw.Count != 0);
+            Assert.True(handler.Timeseries.Count != 0);
             Assert.Empty(handler.Assets);
 
             await extractor.WaitForSubscriptions();
@@ -1384,7 +1384,7 @@ namespace Test.Unit
             await TestUtils.WaitForCondition(async () =>
             {
                 await extractor.Streamer.PushEvents(new[] { pusher }, Enumerable.Empty<IPusher>(), tester.Source.Token);
-                return handler.Events.Any();
+                return handler.Events.Count != 0;
             }, 10);
 
             tester.WipeEventHistory();
@@ -1424,9 +1424,9 @@ namespace Test.Unit
             tester.Config.Cognite.RawNodeBuffer.BrowseOnEmpty = true;
             await extractor.RunExtractor(true);
             Assert.True(extractor.State.NodeStates.Any());
-            Assert.True(handler.AssetsRaw.Any());
-            Assert.True(handler.TimeseriesRaw.Any());
-            Assert.True(handler.Timeseries.Any());
+            Assert.True(handler.AssetsRaw.Count != 0);
+            Assert.True(handler.TimeseriesRaw.Count != 0);
+            Assert.True(handler.Timeseries.Count != 0);
             Assert.Empty(handler.Assets);
 
             await extractor.WaitForSubscriptions();

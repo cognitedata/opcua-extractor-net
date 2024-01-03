@@ -138,7 +138,7 @@ namespace Test.Utils
                 {
                     int idx = state.IsArray ? 0 : -1;
 
-                    if (DataPoints.TryGetValue((state.SourceId, idx), out var dps) && dps.Any())
+                    if (DataPoints.TryGetValue((state.SourceId, idx), out var dps) && dps.Count != 0)
                     {
                         var (min, max) = dps.MinMax(dp => dp.Timestamp);
                         if (backfillEnabled)

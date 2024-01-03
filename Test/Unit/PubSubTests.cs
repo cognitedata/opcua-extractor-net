@@ -27,7 +27,7 @@ namespace Test.Unit
         private readonly PubSubTestFixture tester;
         public PubSubTests(ITestOutputHelper output, PubSubTestFixture tester)
         {
-            if (tester == null) throw new ArgumentNullException(nameof(tester));
+            ArgumentNullException.ThrowIfNull(tester);
             tester.Init(output);
             this.tester = tester;
             tester.Server.UpdateNode(tester.Ids.Base.DoubleVar1, 17);

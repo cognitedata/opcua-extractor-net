@@ -211,11 +211,11 @@ namespace Test
             CustomNodeReference ids,
             bool raw)
         {
-            if (assets == null) throw new ArgumentNullException(nameof(assets));
-            if (timeseries == null) throw new ArgumentNullException(nameof(timeseries));
+            ArgumentNullException.ThrowIfNull(assets);
+            ArgumentNullException.ThrowIfNull(timeseries);
             if (upd == null) upd = new UpdateConfig();
-            if (client == null) throw new ArgumentNullException(nameof(client));
-            if (ids == null) throw new ArgumentNullException(nameof(ids));
+            ArgumentNullException.ThrowIfNull(client);
+            ArgumentNullException.ThrowIfNull(ids);
             Assert.Equal(6, assets.Count);
             Assert.Equal(16, timeseries.Count);
 
@@ -262,13 +262,13 @@ namespace Test
 
             if (!upd.Objects.Metadata)
             {
-                Assert.True(obj1Meta == null || !obj1Meta.Any());
+                Assert.True(obj1Meta == null || obj1Meta.Count == 0);
                 Assert.Equal(2, obj2Meta.Count);
                 Assert.Equal("1234", obj2Meta["NumericProp"]);
             }
             if (!upd.Variables.Metadata)
             {
-                Assert.True(stringyMeta == null || !stringyMeta.Any());
+                Assert.True(stringyMeta == null || stringyMeta.Count == 0);
                 Assert.Equal(2, mysteryMeta.Count);
                 Assert.Equal("(0, 100)", mysteryMeta["EURange"]);
             }
@@ -283,11 +283,11 @@ namespace Test
             CustomNodeReference ids,
             bool raw)
         {
-            if (assets == null) throw new ArgumentNullException(nameof(assets));
-            if (timeseries == null) throw new ArgumentNullException(nameof(timeseries));
+            ArgumentNullException.ThrowIfNull(assets);
+            ArgumentNullException.ThrowIfNull(timeseries);
             if (upd == null) upd = new UpdateConfig();
-            if (client == null) throw new ArgumentNullException(nameof(client));
-            if (ids == null) throw new ArgumentNullException(nameof(ids));
+            ArgumentNullException.ThrowIfNull(client);
+            ArgumentNullException.ThrowIfNull(ids);
             Assert.Equal(6, assets.Count);
             Assert.Equal(16, timeseries.Count);
 
@@ -348,12 +348,14 @@ namespace Test
             }
         }
 
+        private static readonly JsonSerializerOptions jsonOptions = new JsonSerializerOptions
+        {
+            Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+        };
+
         public static string JsonElementToString(JsonElement elem)
         {
-            return System.Text.Json.JsonSerializer.Serialize(elem, new JsonSerializerOptions
-            {
-                Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
-            });
+            return System.Text.Json.JsonSerializer.Serialize(elem, jsonOptions);
         }
 
         public static ProtoNodeId ToProtoNodeId(this NodeId id, UAClient client)

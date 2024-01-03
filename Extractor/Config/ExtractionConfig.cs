@@ -164,7 +164,7 @@ namespace Cognite.OpcUa.Config
                 }
                 roots.Add(id);
             }
-            if (!roots.Any())
+            if (roots.Count == 0)
             {
                 roots.Add(ObjectIds.ObjectsFolder);
             }

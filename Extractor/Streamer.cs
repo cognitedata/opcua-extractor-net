@@ -177,7 +177,7 @@ namespace Cognite.OpcUa
                 return false;
             }
             var reconnectedPushers = passingPushers.Where(pusher => pusher.DataFailing).ToList();
-            if (reconnectedPushers.Any())
+            if (reconnectedPushers.Count != 0)
             {
                 log.LogInformation("{Count} failing pushers were able to push data, reconnecting", reconnectedPushers.Count);
 
@@ -269,7 +269,7 @@ namespace Cognite.OpcUa
                 return false;
             }
             var reconnectedPushers = passingPushers.Where(pusher => pusher.EventsFailing).ToList();
-            if (reconnectedPushers.Any())
+            if (reconnectedPushers.Count != 0)
             {
                 log.LogInformation("{Count} failing pushers were able to push events, reconnecting", reconnectedPushers.Count);
 
