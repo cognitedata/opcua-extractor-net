@@ -920,8 +920,8 @@ namespace Test.Unit
             var nodes = new[]
             {
                 new UAVariable(tester.Server.Ids.Base.DoubleVar1, "DoubleVar1", null, null, tester.Server.Ids.Base.Root, null),
-                new UAVariable(new NodeId("missing-node"), "MissingNode", null, null, tester.Server.Ids.Base.Root, null),
-                new UAVariable(new NodeId("missing-node2"), "MissingNode2", null, null, tester.Server.Ids.Base.Root, null),
+                new UAVariable(new NodeId("missing-node", 0), "MissingNode", null, null, tester.Server.Ids.Base.Root, null),
+                new UAVariable(new NodeId("missing-node2", 0), "MissingNode2", null, null, tester.Server.Ids.Base.Root, null),
             };
 
             await tester.Client.ReadNodeData(nodes, tester.Source.Token);

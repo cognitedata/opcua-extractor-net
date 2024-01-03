@@ -372,7 +372,7 @@ namespace Test
         }
         public static UAVariable GetSimpleVariable(string name, UADataType dt, int dim = 0, NodeId id = null)
         {
-            var variable = new UAVariable(id ?? new NodeId(name), name, null, null, NodeId.Null, null);
+            var variable = new UAVariable(id ?? new NodeId(name, 0), name, null, null, NodeId.Null, null);
             variable.FullAttributes.DataType = dt;
             variable.FullAttributes.ValueRank = ValueRanks.Scalar;
             if (dim > 0)

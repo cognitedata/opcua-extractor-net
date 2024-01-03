@@ -19,7 +19,7 @@ namespace Test.Utils
             ArgumentNullException.ThrowIfNull(tester);
             ArgumentNullException.ThrowIfNull(extractor);
             // Add state
-            var state = new EventExtractionState(tester.Client, new NodeId("emitter"), true, true, true);
+            var state = new EventExtractionState(tester.Client, new NodeId("emitter", 0), true, true, true);
             if (init)
             {
                 state.InitExtractedRange(DateTime.UtcNow.Subtract(TimeSpan.FromHours(1)), DateTime.UtcNow.AddHours(1));
@@ -27,11 +27,11 @@ namespace Test.Utils
             }
             extractor.State.SetEmitterState(state);
 
-            var fields = baseFields.Select(field => new TypeField(new UAVariable(new NodeId(field), field, new QualifiedName(field), null, null, null)));
-            fields = fields.Append(new TypeField(new UAVariable(new NodeId("EUProp"), "EUProp", new QualifiedName("EUProp"), null, null, null)));
-            var type = new UAObjectType(new NodeId("test"), "TestEvent", null, null, null);
+            var fields = baseFields.Select(field => new TypeField(new UAVariable(new NodeId(field, 0), field, new QualifiedName(field), null, null, null)));
+            fields = fields.Append(new TypeField(new UAVariable(new NodeId("EUProp", 0), "EUProp", new QualifiedName("EUProp"), null, null, null)));
+            var type = new UAObjectType(new NodeId("test", 0), "TestEvent", null, null, null);
             type.AllCollectedFields = fields.ToHashSet();
-            extractor.State.ActiveEvents[new NodeId("test")] = type;
+            extractor.State.ActiveEvents[new NodeId("test", 0)] = type;
 
             return state;
         }
@@ -51,8 +51,8 @@ namespace Test.Utils
             return new Variant[]
             {
                 new byte[] { 0, 0, 0, 0, 2 },
-                new NodeId("source"),
-                new NodeId("test"),
+                new NodeId("source", 0),
+                new NodeId("test", 0),
                 new LocalizedText("message"),
                 time,
                 new int[] { 1, 2, 3 },
