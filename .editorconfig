@@ -46,3 +46,6 @@ dotnet_diagnostic.IDE0090.severity = none
 
 # CA1851: Possible multiple enumerations. Nice in theory, but this one is a bit overzealous.
 dotnet_diagnostic.CA1851.severity = none
+
+# CA1861: Prefer static readonly fields over constant array arguments. Not really that important where this pops up, and there are tons of false positives.
+dotnet_diagnostic.CA1861.severity = none

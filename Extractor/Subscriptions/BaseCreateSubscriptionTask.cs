@@ -88,7 +88,7 @@ namespace Cognite.OpcUa.Subscriptions
         {
             var hasSubscription = subscription.MonitoredItems.Select(s => s.ResolvedNodeId).ToHashSet();
             var toAdd = Items.Where(i => !hasSubscription.Contains(i.Key)).ToList();
-            if (toAdd.Any())
+            if (toAdd.Count != 0)
             {
                 logger.LogInformation("Adding {Count} new monitored items to subscription {Name}", toAdd.Count, SubscriptionName.Name());
 

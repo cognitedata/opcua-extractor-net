@@ -51,7 +51,7 @@ namespace Test.Unit
                 Key = "somekey",
                 Value = new NodeId("abc", 2)
             }));
-            var readValueId = new ReadValueId { AttributeId = Attributes.Value, NodeId = new NodeId("test") };
+            var readValueId = new ReadValueId { AttributeId = Attributes.Value, NodeId = new NodeId("test", 0) };
             var readValueIdStr = @"{""NodeId"":{""IdType"":1,""Id"":""test""},""AttributeId"":13}";
             Assert.Equal(readValueIdStr, converter.ConvertToString(new Variant(readValueId)));
             var ids = new ReadValueIdCollection { readValueId, readValueId };
@@ -197,7 +197,7 @@ namespace Test.Unit
             }
 
             TestConvert(new NodeId(123u), @"{""idType"":0,""identifier"":123}");
-            TestConvert(new NodeId("test"), @"{""idType"":1,""identifier"":""test""}");
+            TestConvert(new NodeId("test", 0), @"{""idType"":1,""identifier"":""test""}");
             TestConvert(new NodeId(Guid.Parse("123e4567-e89b-12d3-a456-426614174000")),
                 @"{""idType"":2,""identifier"":""123e4567-e89b-12d3-a456-426614174000""}");
             TestConvert(new NodeId(new byte[] { 6, 45, 213, 93 }), @"{""idType"":3,""identifier"":""Bi3VXQ==""}");
@@ -249,20 +249,20 @@ namespace Test.Unit
             }
 
             tester.Config.Extraction.DataTypes.ExpandNodeIds = true;
-            var node = new UAObject(new NodeId("test"), "test", null, null, NodeId.Null, null);
+            var node = new UAObject(new NodeId("test", 0), "test", null, null, NodeId.Null, null);
             TestConvert(node,
                 @"{""externalId"":""gp.base:s=test"",""name"":""test"","
                 + @"""description"":null,""metadata"":null,""parentExternalId"":null,"
                 + @"""NodeId"":{""idType"":1,""identifier"":""test""}}");
 
-            node.FullAttributes.TypeDefinition = new UAObjectType(new NodeId("test-type"));
+            node.FullAttributes.TypeDefinition = new UAObjectType(new NodeId("test-type", 0));
             TestConvert(node,
                 @"{""externalId"":""gp.base:s=test"",""name"":""test"","
                 + @"""description"":null,""metadata"":null,""parentExternalId"":null,"
                 + @"""NodeId"":{""idType"":1,""identifier"":""test""},"
                 + @"""TypeDefinitionId"":{""idType"":1,""identifier"":""test-type""}}");
 
-            node = new UAObject(new NodeId("test"), "test", null, null, new NodeId("parent"), null);
+            node = new UAObject(new NodeId("test", 0), "test", null, null, new NodeId("parent", 0), null);
             TestConvert(node,
                 @"{""externalId"":""gp.base:s=test"",""name"":""test"","
                 + @"""description"":null,""metadata"":null,""parentExternalId"":""gp.base:s=parent"","
@@ -272,7 +272,7 @@ namespace Test.Unit
             options = new JsonSerializerOptions();
             converter.AddConverters(options, ConverterType.Variable);
 
-            var variable = new UAVariable(new NodeId("test"), "test", null, null, NodeId.Null, null);
+            var variable = new UAVariable(new NodeId("test", 0), "test", null, null, NodeId.Null, null);
             variable.FullAttributes.DataType = new UADataType(DataTypeIds.Boolean);
 
             TestConvert(variable,
@@ -299,7 +299,7 @@ namespace Test.Unit
             tester.Config.Extraction.DataTypes.AppendInternalValues = true;
             tester.Config.Events.Enabled = true;
             tester.Config.Events.History = true;
-            var node = new UAObject(new NodeId("test"), "test", null, null, NodeId.Null, null);
+            var node = new UAObject(new NodeId("test", 0), "test", null, null, NodeId.Null, null);
             TestConvert(node,
                 @"{""externalId"":""gp.base:s=test"",""name"":""test"","
                 + @"""description"":null,""metadata"":null,""parentExternalId"":null,"
@@ -313,7 +313,7 @@ namespace Test.Unit
                 + @"""InternalInfo"":{""EventNotifier"":5,""ShouldSubscribeEvents"":true,"
                 + @"""ShouldReadHistoryEvents"":true,""NodeClass"":1}}");
 
-            var variable = new UAVariable(new NodeId("test"), "test", null, null, NodeId.Null, null);
+            var variable = new UAVariable(new NodeId("test", 0), "test", null, null, NodeId.Null, null);
             options = new JsonSerializerOptions();
             converter.AddConverters(options, ConverterType.Variable);
             variable.FullAttributes.AccessLevel |= AccessLevels.CurrentRead | AccessLevels.HistoryRead;
@@ -347,7 +347,7 @@ namespace Test.Unit
             var converter = tester.Client.StringConverter;
             converter.AddConverters(options, ConverterType.Node);
 
-            var node = new UAObject(new NodeId("test", 2), "test", null, null, new NodeId("parent"), null);
+            var node = new UAObject(new NodeId("test", 2), "test", null, null, new NodeId("parent", 0), null);
             node.FullAttributes.EventNotifier = 5;
 
             tester.Config.Extraction.DataTypes.AppendInternalValues = true;
@@ -373,7 +373,7 @@ namespace Test.Unit
             options = new JsonSerializerOptions();
             converter.AddConverters(options, ConverterType.Variable);
 
-            var variable = new UAVariable(new NodeId("test", 2), "test", null, null, new NodeId("parent"), null);
+            var variable = new UAVariable(new NodeId("test", 2), "test", null, null, new NodeId("parent", 0), null);
             variable.FullAttributes.AccessLevel = 5;
             variable.FullAttributes.DataType = new UADataType(DataTypeIds.Double);
             variable.FullAttributes.ValueRank = -1;

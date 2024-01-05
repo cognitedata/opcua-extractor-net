@@ -202,11 +202,11 @@ namespace Test.Unit
                 "opcua_events_pushed_influx", "opcua_event_pushes_influx",
                 "opcua_skipped_events_influx");
 
-            var state = new EventExtractionState(tester.Client, new NodeId("emitter"), true, true, true);
+            var state = new EventExtractionState(tester.Client, new NodeId("emitter", 0), true, true, true);
             extractor.State.SetEmitterState(state);
-            extractor.State.RegisterNode(new NodeId("source"), extractor.GetUniqueId(new NodeId("source")));
-            extractor.State.RegisterNode(new NodeId("emitter"), extractor.GetUniqueId(new NodeId("emitter")));
-            extractor.State.RegisterNode(new NodeId("type"), extractor.GetUniqueId(new NodeId("type")));
+            extractor.State.RegisterNode(new NodeId("source", 0), extractor.GetUniqueId(new NodeId("source", 0)));
+            extractor.State.RegisterNode(new NodeId("emitter", 0), extractor.GetUniqueId(new NodeId("emitter", 0)));
+            extractor.State.RegisterNode(new NodeId("type", 0), extractor.GetUniqueId(new NodeId("type", 0)));
 
             Assert.Null(await pusher.PushEvents(null, tester.Source.Token));
             var invalidEvents = new[]
@@ -223,7 +223,7 @@ namespace Test.Unit
             Assert.Null(await pusher.PushEvents(invalidEvents, tester.Source.Token));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_skipped_events_influx", 2));
 
-            var eventType = new UAObjectType(new NodeId("type"));
+            var eventType = new UAObjectType(new NodeId("type", 0));
             extractor.State.ActiveEvents[eventType.Id] = eventType;
 
             var time = DateTime.UtcNow;
@@ -233,8 +233,8 @@ namespace Test.Unit
                 new UAEvent
                 {
                     Time = time,
-                    EmittingNode = new NodeId("emitter"),
-                    SourceNode = new NodeId("source"),
+                    EmittingNode = new NodeId("emitter", 0),
+                    SourceNode = new NodeId("source", 0),
                     EventType = eventType,
                     EventId = "someid",
                     MetaData = new Dictionary<string, string>
@@ -246,8 +246,8 @@ namespace Test.Unit
                 new UAEvent
                 {
                     Time = time.AddSeconds(1),
-                    EmittingNode = new NodeId("emitter"),
-                    SourceNode = new NodeId("source"),
+                    EmittingNode = new NodeId("emitter", 0),
+                    SourceNode = new NodeId("source", 0),
                     EventType = eventType,
                     EventId = "someid2",
                     MetaData = new Dictionary<string, string>
@@ -271,7 +271,7 @@ namespace Test.Unit
             pusher.Reconfigure();
 
             Assert.True(await pusher.PushEvents(events, tester.Source.Token));
-            var ifEvents = await GetAllEvents(pusher, extractor, new NodeId("emitter"));
+            var ifEvents = await GetAllEvents(pusher, extractor, new NodeId("emitter", 0));
             Assert.Equal(2, ifEvents.Count());
             var eventsById = events.ToDictionary(evt => evt.EventId);
 
@@ -293,14 +293,14 @@ namespace Test.Unit
             events = events.Append(new UAEvent
             {
                 Time = time,
-                EmittingNode = new NodeId("emitter"),
-                SourceNode = new NodeId("source"),
-                EventType = new UAObjectType(new NodeId("type")),
+                EmittingNode = new NodeId("emitter", 0),
+                SourceNode = new NodeId("source", 0),
+                EventType = new UAObjectType(new NodeId("type", 0)),
                 EventId = "someid3"
             }).ToArray();
 
             Assert.True(await pusher.PushEvents(events, tester.Source.Token));
-            ifEvents = await GetAllEvents(pusher, extractor, new NodeId("emitter"));
+            ifEvents = await GetAllEvents(pusher, extractor, new NodeId("emitter", 0));
             Assert.Equal(3, ifEvents.Count());
             Assert.True(CommonTestUtils.TestMetricValue("opcua_event_pushes_influx", 2));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_events_pushed_influx", 5));
@@ -405,18 +405,18 @@ namespace Test.Unit
 
             EventExtractionState[] GetStates()
             {
-                var state = new EventExtractionState(tester.Client, new NodeId("emitter"), true, true, true);
-                var state2 = new EventExtractionState(tester.Client, new NodeId("emitter2"), true, true, true);
+                var state = new EventExtractionState(tester.Client, new NodeId("emitter", 0), true, true, true);
+                var state2 = new EventExtractionState(tester.Client, new NodeId("emitter2", 0), true, true, true);
                 extractor.State.SetEmitterState(state);
                 extractor.State.SetEmitterState(state2);
                 return new[] { state, state2 };
             }
 
-            extractor.State.RegisterNode(new NodeId("source"), extractor.GetUniqueId(new NodeId("source")));
-            extractor.State.RegisterNode(new NodeId("emitter"), extractor.GetUniqueId(new NodeId("emitter")));
-            extractor.State.RegisterNode(new NodeId("emitter2"), extractor.GetUniqueId(new NodeId("emitter2")));
-            extractor.State.RegisterNode(new NodeId("type"), extractor.GetUniqueId(new NodeId("type")));
-            extractor.State.RegisterNode(new NodeId("type2"), extractor.GetUniqueId(new NodeId("type2")));
+            extractor.State.RegisterNode(new NodeId("source", 0), extractor.GetUniqueId(new NodeId("source", 0)));
+            extractor.State.RegisterNode(new NodeId("emitter", 0), extractor.GetUniqueId(new NodeId("emitter", 0)));
+            extractor.State.RegisterNode(new NodeId("emitter2", 0), extractor.GetUniqueId(new NodeId("emitter2", 0)));
+            extractor.State.RegisterNode(new NodeId("type", 0), extractor.GetUniqueId(new NodeId("type", 0)));
+            extractor.State.RegisterNode(new NodeId("type2", 0), extractor.GetUniqueId(new NodeId("type2", 0)));
 
             var states = GetStates();
 
@@ -446,29 +446,29 @@ namespace Test.Unit
                 new UAEvent
                 {
                     Time = GetTs(1000),
-                    EmittingNode = new NodeId("emitter"),
-                    EventType = new UAObjectType (new NodeId("type")),
+                    EmittingNode = new NodeId("emitter", 0),
+                    EventType = new UAObjectType (new NodeId("type", 0)),
                     EventId = "someid"
                 },
                 new UAEvent
                 {
                     Time = GetTs(3000),
-                    EmittingNode = new NodeId("emitter"),
-                    EventType = new UAObjectType(new NodeId("type2")),
+                    EmittingNode = new NodeId("emitter", 0),
+                    EventType = new UAObjectType(new NodeId("type2", 0)),
                     EventId = "someid2"
                 },
                 new UAEvent
                 {
                     Time = GetTs(1000),
-                    EmittingNode = new NodeId("emitter2"),
-                    EventType = new UAObjectType (new NodeId("type")),
+                    EmittingNode = new NodeId("emitter2", 0),
+                    EventType = new UAObjectType (new NodeId("type", 0)),
                     EventId = "someid3"
                 },
                 new UAEvent
                 {
                     Time = GetTs(2000),
-                    EmittingNode = new NodeId("emitter2"),
-                    EventType = new UAObjectType (new NodeId("type")),
+                    EmittingNode = new NodeId("emitter2", 0),
+                    EventType = new UAObjectType (new NodeId("type", 0)),
                     EventId = "someid4"
                 }
             };

@@ -83,10 +83,12 @@ namespace Cognite.OpcUa.Types
             StringConverterMode mode = StringConverterMode.Simple,
             NodeIdContext? context = null)
         {
+
+
             if (mode == StringConverterMode.ReversibleJson && uaClient != null && value is Variant variant)
             {
                 using var encoder = new JsonEncoder(uaClient.MessageContext, true, null, false);
-                encoder.WriteVariant(null, variant, true);
+                encoder.WriteVariant(null, variant);
                 var result = encoder.CloseAndReturnText();
 
                 return result[1..^1];
@@ -107,7 +109,7 @@ namespace Cognite.OpcUa.Types
                 try
                 {
                     using var encoder = new JsonEncoder(uaClient.MessageContext, mode == StringConverterMode.ReversibleJson, null, false);
-                    encoder.WriteVariant(null, variant2, false);
+                    encoder.WriteVariant(null, variant2);
                     var result = encoder.CloseAndReturnText();
 
                     return result[1..^1];
@@ -357,14 +359,14 @@ namespace Cognite.OpcUa.Types
         private readonly StringConverter converter;
         private readonly FullConfig config;
         private readonly SessionContext context;
-        public ConverterType Type { get; }
+        public ConverterType ConverterType { get; }
         private readonly ILogger log;
         public NodeSerializer(StringConverter converter, FullConfig config, SessionContext context, ConverterType type, ILogger log)
         {
             this.converter = converter;
             this.config = config;
             this.context = context;
-            Type = type;
+            ConverterType = type;
             this.log = log;
         }
 
@@ -398,7 +400,7 @@ namespace Cognite.OpcUa.Types
                 if (extras != null) extras.Remove("Value");
             }
             // If we should treat this as a key/value pair, or write it as an object
-            if (extras != null && extras.Any() || node.Properties != null && node.Properties.Any())
+            if (extras != null && extras.Count != 0 || node.Properties != null && node.Properties.Any())
             {
                 writer.WriteStartObject();
             }
@@ -457,7 +459,7 @@ namespace Cognite.OpcUa.Types
             writer.WriteString("description", node.Attributes.Description);
             writer.WritePropertyName("metadata");
             WriteProperties(writer, node, true, node.NodeClass == NodeClass.VariableType);
-            if (Type == ConverterType.Variable && node is UAVariable variable)
+            if (ConverterType == ConverterType.Variable && node is UAVariable variable)
             {
                 writer.WriteString("assetExternalId", context.GetUniqueId(node.ParentId));
                 writer.WriteBoolean("isString", variable.FullAttributes.DataType?.IsString ?? false);
@@ -494,7 +496,7 @@ namespace Cognite.OpcUa.Types
                     writer.WritePropertyName("TypeDefinitionId");
                     JsonSerializer.Serialize(writer, variable.FullAttributes.TypeDefinition.Id, options);
                 }
-                if (Type == ConverterType.Variable)
+                if (ConverterType == ConverterType.Variable)
                 {
                     if (variable.FullAttributes.DataType != null && !variable.FullAttributes.DataType.Id.IsNullNodeId)
                     {
@@ -516,7 +518,7 @@ namespace Cognite.OpcUa.Types
                 writer.WriteBoolean("ShouldReadHistoryEvents", obj.FullAttributes.ShouldReadEventHistory(config));
             }
             writer.WriteNumber("NodeClass", (int)node.NodeClass);
-            if (Type == ConverterType.Variable && node is UAVariable variable)
+            if (ConverterType == ConverterType.Variable && node is UAVariable variable)
             {
                 writer.WriteNumber("AccessLevel", variable.FullAttributes.AccessLevel);
                 writer.WriteBoolean("Historizing", variable.FullAttributes.Historizing);

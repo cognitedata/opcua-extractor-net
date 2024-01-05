@@ -10,7 +10,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using MQTTnet;
 using MQTTnet.Client;
-using MQTTnet.Client.Options;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -64,7 +63,7 @@ namespace Test.Unit
                     .Build();
                 client = new MqttFactory().CreateMqttClient();
                 baseBuilder = new MqttApplicationMessageBuilder()
-                    .WithAtLeastOnceQoS();
+                    .WithQualityOfServiceLevel(MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce);
                 client.ConnectAsync(options).Wait();
             }
 
@@ -147,7 +146,7 @@ namespace Test.Unit
                     Table = "assets",
                     Rows = assets.Select(asset => new RawRowCreateDto<AssetCreate> { Key = asset.ExternalId, Columns = asset })
                 };
-                var data = JsonSerializer.SerializeToUtf8Bytes(wrapper, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+                var data = JsonSerializer.SerializeToUtf8Bytes(wrapper, Oryx.Cognite.Common.jsonOptions);
 
                 var msg = baseBuilder
                     .WithPayload(data)
@@ -696,6 +695,7 @@ namespace Test.Unit
                     ExternalId = "test-event-9"
                 }
             };
+
             await tester.PublishAssets(assets);
             Assert.Equal(2, tester.Handler.Assets.Count);
             await tester.PublishEvents(roundOne);

@@ -60,7 +60,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             Types.Add(type.Node.Id, type);
 
             // Only create a container if the node has properties
-            bool shouldCreateContainer = type.Properties.Values.Any();
+            bool shouldCreateContainer = type.Properties.Values.Count != 0;
 
             ViewCreate view;
             if (shouldCreateContainer)

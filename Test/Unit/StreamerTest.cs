@@ -33,9 +33,9 @@ namespace Test.Unit
         {
             using var pusher = new DummyPusher(new DummyPusherConfig());
 
-            pusher.UniqueToNodeId["id"] = (new NodeId("id"), -1);
+            pusher.UniqueToNodeId["id"] = (new NodeId("id", 0), -1);
             var dps = new List<UADataPoint>();
-            pusher.DataPoints[(new NodeId("id"), -1)] = dps;
+            pusher.DataPoints[(new NodeId("id", 0), -1)] = dps;
             using var extractor = tester.BuildExtractor(pushers: pusher);
 
             using var evt = new ManualResetEvent(false);
@@ -56,7 +56,7 @@ namespace Test.Unit
             var start = DateTime.UtcNow;
 
             var state = new VariableExtractionState(tester.Client,
-                new UAVariable(new NodeId("id"), "test", null, null, NodeId.Null, null),
+                new UAVariable(new NodeId("id", 0), "test", null, null, NodeId.Null, null),
                 false, false, true);
             state.InitToEmpty();
             state.FinalizeRangeInit();
@@ -101,7 +101,7 @@ namespace Test.Unit
             using var pusher = new DummyPusher(new DummyPusherConfig());
             using var extractor = tester.BuildExtractor(pushers: pusher);
 
-            var id = new NodeId("id");
+            var id = new NodeId("id", 0);
 
             var queue = (Queue<UAEvent>)extractor.Streamer.GetType()
                 .GetField("eventQueue", BindingFlags.NonPublic | BindingFlags.Instance)
@@ -120,7 +120,7 @@ namespace Test.Unit
             extractor.Streamer.AllowEvents = true;
             var start = DateTime.UtcNow;
 
-            var state = new EventExtractionState(tester.Client, new NodeId("id"), false, false, true);
+            var state = new EventExtractionState(tester.Client, new NodeId("id", 0), false, false, true);
             state.InitToEmpty();
             state.FinalizeRangeInit();
             extractor.State.SetEmitterState(state);
@@ -169,13 +169,13 @@ namespace Test.Unit
             using var pusher = new DummyPusher(new DummyPusherConfig());
             using var pusher2 = new DummyPusher(new DummyPusherConfig());
 
-            pusher.UniqueToNodeId["id"] = (new NodeId("id"), -1);
+            pusher.UniqueToNodeId["id"] = (new NodeId("id", 0), -1);
             var dps = new List<UADataPoint>();
-            pusher.DataPoints[(new NodeId("id"), -1)] = dps;
+            pusher.DataPoints[(new NodeId("id", 0), -1)] = dps;
 
-            pusher2.UniqueToNodeId["id"] = (new NodeId("id"), -1);
+            pusher2.UniqueToNodeId["id"] = (new NodeId("id", 0), -1);
             var dps2 = new List<UADataPoint>();
-            pusher2.DataPoints[(new NodeId("id"), -1)] = dps2;
+            pusher2.DataPoints[(new NodeId("id", 0), -1)] = dps2;
 
             using var extractor = tester.BuildExtractor(true, null, pusher, pusher2);
 
@@ -183,7 +183,7 @@ namespace Test.Unit
             var start = DateTime.UtcNow;
 
             var state = new VariableExtractionState(tester.Client,
-                new UAVariable(new NodeId("id"), "test", null, null, NodeId.Null, null),
+                new UAVariable(new NodeId("id", 0), "test", null, null, NodeId.Null, null),
                 true, true, true);
             state.InitToEmpty();
             state.FinalizeRangeInit();
@@ -236,7 +236,7 @@ namespace Test.Unit
             extractor.Streamer.AllowEvents = true;
             var start = DateTime.UtcNow;
 
-            var id = new NodeId("id");
+            var id = new NodeId("id", 0);
 
             var state = new EventExtractionState(tester.Client, id, true, true, true);
             state.InitToEmpty();
@@ -285,7 +285,7 @@ namespace Test.Unit
         public void TestDataHandler()
         {
             using var extractor = tester.BuildExtractor();
-            var var1 = new UAVariable(new NodeId("id"), "node", null, null, NodeId.Null, null);
+            var var1 = new UAVariable(new NodeId("id", 0), "node", null, null, NodeId.Null, null);
             var1.FullAttributes.DataType = new UADataType(DataTypeIds.Double);
             var node = new VariableExtractionState(tester.Client, var1, true, true, true);
             extractor.State.SetNodeState(node, "id");
@@ -302,7 +302,7 @@ namespace Test.Unit
             CommonTestUtils.ResetMetricValue("opcua_bad_datapoints");
 
             // Test against existing node
-            var item = new MonitoredItem() { StartNodeId = new NodeId("id"), CacheQueueSize = 10 };
+            var item = new MonitoredItem() { StartNodeId = new NodeId("id", 0), CacheQueueSize = 10 };
             var values = new[]
             {
                 (DateTime.UtcNow, 100.0, StatusCodes.Good), // OK value
@@ -333,7 +333,7 @@ namespace Test.Unit
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_bad_datapoints", 3));
 
-            var item2 = new MonitoredItem() { StartNodeId = new NodeId("otherid"), CacheQueueSize = 10 };
+            var item2 = new MonitoredItem() { StartNodeId = new NodeId("otherid", 0), CacheQueueSize = 10 };
             foreach (var not in notifications) item2.SaveValueInCache(not);
             extractor.Streamer.DataSubscriptionHandler(item2, null);
 
@@ -344,7 +344,7 @@ namespace Test.Unit
         {
             CommonTestUtils.ResetMetricValue("opcua_array_points_missed");
             using var extractor = tester.BuildExtractor();
-            var var1 = new UAVariable(new NodeId("id"), "node", null, null, NodeId.Null, null);
+            var var1 = new UAVariable(new NodeId("id", 0), "node", null, null, NodeId.Null, null);
             var1.FullAttributes.DataType = new UADataType(DataTypeIds.Double);
             var node1 = new VariableExtractionState(tester.Client, var1, true, true, true);
 
@@ -441,8 +441,8 @@ namespace Test.Unit
                 .GetField("eventQueue", BindingFlags.NonPublic | BindingFlags.Instance)
                 .GetValue(extractor.Streamer);
 
-            var item = new MonitoredItem() { StartNodeId = new NodeId("emitter"), NodeClass = NodeClass.Object };
-            var item2 = new MonitoredItem() { StartNodeId = new NodeId("someotherid"), NodeClass = NodeClass.Object };
+            var item = new MonitoredItem() { StartNodeId = new NodeId("emitter", 0), NodeClass = NodeClass.Object };
+            var item2 = new MonitoredItem() { StartNodeId = new NodeId("someotherid", 0), NodeClass = NodeClass.Object };
 
             var values = EventUtils.GetEventValues(DateTime.UtcNow);
             var rawEvt = new EventFieldList { EventFields = values };
@@ -462,7 +462,7 @@ namespace Test.Unit
 
             // Test null eventFields
             var rawEvt2 = new EventFieldList { EventFields = null };
-            item2.StartNodeId = new NodeId("emitter");
+            item2.StartNodeId = new NodeId("emitter", 0);
             item2.SaveValueInCache(rawEvt2);
             extractor.Streamer.EventSubscriptionHandler(item2, null);
             Assert.Empty(queue);
@@ -525,7 +525,7 @@ namespace Test.Unit
 
             var filter = new EventFilter { SelectClauses = EventUtils.GetSelectClause(tester) };
             var values = EventUtils.GetEventValues(DateTime.UtcNow);
-            var emitter = new NodeId("emitter");
+            var emitter = new NodeId("emitter", 0);
 
             UAEvent created = null;
 
@@ -534,8 +534,8 @@ namespace Test.Unit
             Assert.NotNull(created);
             Assert.Equal(emitter, created.EmittingNode);
             Assert.Equal("message", created.Message);
-            Assert.Equal(new NodeId("source"), created.SourceNode);
-            Assert.Equal(new NodeId("test"), created.EventType.Id);
+            Assert.Equal(new NodeId("source", 0), created.SourceNode);
+            Assert.Equal(new NodeId("test", 0), created.EventType.Id);
             Assert.Equal(DateTime.UtcNow, created.Time, TimeSpan.FromMinutes(10));
             Assert.Single(created.MetaData);
             Assert.True(created.MetaData.ContainsKey("EUProp"));
@@ -552,7 +552,7 @@ namespace Test.Unit
 
             // Bad type
             var badTypeValues = EventUtils.GetEventValues(DateTime.UtcNow);
-            badTypeValues[2] = new NodeId("SomeOtherType");
+            badTypeValues[2] = new NodeId("SomeOtherType", 0);
             created = extractor.Streamer.ConstructEvent(filter, badTypeValues, emitter);
             Assert.Null(created);
 
@@ -585,7 +585,7 @@ namespace Test.Unit
         {
             CommonTestUtils.ResetMetricValue("opcua_array_points_missed");
             using var extractor = tester.BuildExtractor();
-            var var1 = new UAVariable(new NodeId("id"), "node", null, null, NodeId.Null, null);
+            var var1 = new UAVariable(new NodeId("id", 0), "node", null, null, NodeId.Null, null);
             var1.FullAttributes.DataType = new UADataType(DataTypeIds.Double);
             var1.AsEvents = true;
             var node1 = new VariableExtractionState(tester.Client, var1, true, true, true);

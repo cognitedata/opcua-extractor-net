@@ -15,7 +15,6 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
-using Cognite.Extensions.DataModels.QueryBuilder;
 using Cognite.OpcUa;
 using CogniteSdk;
 using CogniteSdk.Beta.DataModels;
@@ -31,7 +30,6 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
-using System.Net.Mime;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading;
@@ -305,9 +303,9 @@ namespace Test
                     Content = new StringContent(res)
                 };
             }
-            if (missing.Any() && !ids.ignoreUnknownIds)
+            if (missing.Count != 0 && !ids.ignoreUnknownIds)
             {
-                IList<string> finalMissing;
+                List<string> finalMissing;
                 if (mode == MockMode.All)
                 {
                     foreach (string id in missing)
@@ -429,9 +427,9 @@ namespace Test
                     missing.Add(id.externalId);
                 }
             }
-            if (missing.Any() && !ids.ignoreUnknownIds)
+            if (missing.Count != 0 && !ids.ignoreUnknownIds)
             {
-                IList<string> finalMissing;
+                List<string> finalMissing;
                 if (mode == MockMode.All)
                 {
                     foreach (string id in missing)
@@ -488,6 +486,7 @@ namespace Test
                 {
                     if (Datapoints.TryGetValue(ts.externalId, out var dps))
                     {
+#pragma warning disable CA1860 // Avoid using 'Enumerable.Any()' extension method
                         if (ts.isString && (dps.StringDatapoints?.Any() ?? false))
                         {
                             ts.datapoints = new[] { new DataPoint
@@ -502,6 +501,7 @@ namespace Test
                                 timestamp = dps.NumericDatapoints.Max(dp => dp.Timestamp)
                             } };
                         }
+#pragma warning restore CA1860 // Avoid using 'Enumerable.Any()' extension method
                     }
                 }
                 string result = JsonConvert.SerializeObject(new ReadWrapper<TimeseriesDummy>
@@ -597,19 +597,20 @@ namespace Test
 
             foreach (var item in req.Items)
             {
-                if (!Datapoints.ContainsKey(item.ExternalId))
+                if (!Datapoints.TryGetValue(item.ExternalId, out var value))
                 {
-                    Datapoints[item.ExternalId] = (new List<NumericDatapoint>(), new List<StringDatapoint>());
+                    value = (new List<NumericDatapoint>(), new List<StringDatapoint>());
+                    Datapoints[item.ExternalId] = value;
                 }
                 if (item.DatapointTypeCase == DataPointInsertionItem.DatapointTypeOneofCase.NumericDatapoints)
                 {
                     log.LogInformation("{Count} numeric datapoints to {Id}", item.NumericDatapoints.Datapoints.Count, item.ExternalId);
-                    Datapoints[item.ExternalId].NumericDatapoints.AddRange(item.NumericDatapoints.Datapoints);
+                    value.NumericDatapoints.AddRange(item.NumericDatapoints.Datapoints);
                 }
                 else
                 {
                     log.LogInformation("{Count} string datapoints to {Id}", item.StringDatapoints.Datapoints.Count, item.ExternalId);
-                    Datapoints[item.ExternalId].StringDatapoints.AddRange(item.StringDatapoints.Datapoints);
+                    value.StringDatapoints.AddRange(item.StringDatapoints.Datapoints);
                 }
             }
 
@@ -645,14 +646,14 @@ namespace Test
                     duplicated.Add(new CdfIdentity { externalId = ev.externalId });
                     continue;
                 }
-                if (duplicated.Any()) continue;
+                if (duplicated.Count != 0) continue;
                 ev.id = eventIdCounter++;
                 ev.createdTime = new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds();
                 ev.lastUpdatedTime = new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds();
                 created.Add((ev.externalId, ev));
             }
 
-            if (duplicated.Any())
+            if (duplicated.Count != 0)
             {
                 string errResult = JsonConvert.SerializeObject(new ErrorWrapper
                 {
@@ -702,6 +703,7 @@ namespace Test
                     if (Timeseries[id.externalId].isString)
                     {
                         item.StringDatapoints = new StringDatapoints();
+#pragma warning disable CA1860 // Avoid using 'Enumerable.Any()' extension method
                         if (dps.StringDatapoints?.Any() ?? false)
                         {
                             item.StringDatapoints.Datapoints.Add(dps.StringDatapoints.Aggregate((curMin, x) =>
@@ -716,7 +718,7 @@ namespace Test
                             item.NumericDatapoints.Datapoints.Add(Datapoints[id.externalId].NumericDatapoints.Aggregate((curMin, x) =>
                                 curMin == null || x.Timestamp < curMin.Timestamp ? x : curMin));
                         }
-
+#pragma warning restore CA1860 // Avoid using 'Enumerable.Any()' extension method
                     }
                 }
 
@@ -1045,12 +1047,12 @@ namespace Test
                     duplicated.Add(new CdfIdentity { externalId = rel.externalId });
                     continue;
                 }
-                if (duplicated.Any()) continue;
+                if (duplicated.Count != 0) continue;
                 rel.createdTime = new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds();
                 rel.lastUpdatedTime = new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds();
                 created.Add((rel.externalId, rel));
             }
-            if (duplicated.Any())
+            if (duplicated.Count != 0)
             {
                 string errResult = JsonConvert.SerializeObject(new ErrorWrapper
                 {

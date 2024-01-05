@@ -105,7 +105,7 @@ namespace Cognite.OpcUa.Pushers.Writers
             }
 
             // Raw assets and timeseries
-            if (assetMap.Any() && raw != null)
+            if (assetMap.Count != 0 && raw != null)
             {
                 tasks.Add(Task.Run(async () =>
                 {
@@ -113,7 +113,7 @@ namespace Cognite.OpcUa.Pushers.Writers
                 }));
             }
 
-            if (timeseriesMap.Any() && raw != null)
+            if (timeseriesMap.Count != 0 && raw != null)
             {
                 tasks.Add(Task.Run(async () =>
                 {

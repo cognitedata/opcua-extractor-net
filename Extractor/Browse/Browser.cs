@@ -160,7 +160,7 @@ namespace Cognite.OpcUa.Browse
                     .Select(r => uaClient.ToNodeId(r.NodeId))
                     .ToList();
 
-                if (toBrowseForTypeDef.Any())
+                if (toBrowseForTypeDef.Count != 0)
                 {
                     var nodes = toBrowseForTypeDef.Select(id => new BrowseNode(id)).ToDictionary(node => node.Id);
 
@@ -230,7 +230,7 @@ namespace Cognite.OpcUa.Browse
             string purpose = "")
         {
             var result = new Dictionary<NodeId, ReferenceDescriptionCollection>();
-            if (baseParams == null || baseParams.Nodes == null || !baseParams.Nodes.Any()) return result;
+            if (baseParams == null || baseParams.Nodes == null || baseParams.Nodes.Count == 0) return result;
             var options = new DirectoryBrowseParams
             {
                 Callback = GetDictWriteCallback(result),
