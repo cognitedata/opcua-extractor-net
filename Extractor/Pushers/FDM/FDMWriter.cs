@@ -194,7 +194,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             var viewsToInsert = types.Views.Values.ToList();
             if (config.Cognite!.MetadataTargets!.DataModels!.SkipSimpleTypes)
             {
-                viewsToInsert = viewsToInsert.Where(v => v.Properties.Any() || types.ViewIsReferenced.GetValueOrDefault(v.ExternalId)).ToList();
+                viewsToInsert = viewsToInsert.Where(v => v.Properties.Count != 0 || types.ViewIsReferenced.GetValueOrDefault(v.ExternalId)).ToList();
             }
 
             log.LogInformation("Building {Count} containers, and {Count2} views", types.Containers.Count, viewsToInsert.Count);
@@ -221,7 +221,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             }
             catch { }
 
-            if (!viewsToInsert.Any())
+            if (viewsToInsert.Count == 0)
             {
                 log.LogDebug("No views have changed, not updating");
                 return;
@@ -540,7 +540,7 @@ namespace Cognite.OpcUa.Pushers.FDM
         private async Task<IEnumerable<InstanceIdentifier>> GetAllReferencingEdges(IEnumerable<NodeId> nodes, NodeIdContext context, CancellationToken token)
         {
             var chunks = nodes.Select(n => context.NodeIdToString(n)).ChunkBy(1000).ToList();
-            if (!chunks.Any()) return Enumerable.Empty<InstanceIdentifier>();
+            if (chunks.Count == 0) return Enumerable.Empty<InstanceIdentifier>();
 
             var edgeIds = new IEnumerable<InstanceIdentifier>[chunks.Count];
             var generators = chunks

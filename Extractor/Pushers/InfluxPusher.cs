@@ -259,17 +259,17 @@ namespace Cognite.OpcUa
                 var last = await client.QueryMultiSeriesAsync(config.Database,
                     $"SELECT last(value) FROM \"{id}\"");
 
-                if (last.Any() && last.First().HasEntries)
+                if (last.Count != 0 && last.First().HasEntries)
                 {
                     DateTime ts = last.First().Entries[0].Time;
                     ranges[id] = new TimeRange(ts, ts);
                 }
 
-                if (backfillEnabled && last.Any() && last.First().HasEntries)
+                if (backfillEnabled && last.Count != 0 && last.First().HasEntries)
                 {
                     var first = await client.QueryMultiSeriesAsync(config.Database,
                         $"SELECT first(value) FROM \"{id}\"");
-                    if (first.Any() && first.First().HasEntries)
+                    if (first.Count != 0 && first.First().HasEntries)
                     {
                         DateTime ts = first.First().Entries[0].Time;
                         ranges[id] = new TimeRange(ts, ranges[id].Last);
@@ -351,7 +351,7 @@ namespace Cognite.OpcUa
                 var last = await client.QueryMultiSeriesAsync(config.Database,
                     $"SELECT last(value) FROM \"{id}\"");
 
-                if (last.Any() && last.First().HasEntries)
+                if (last.Count != 0 && last.First().HasEntries)
                 {
                     DateTime ts = last.First().Entries[0].Time;
                     lock (mutex)
@@ -362,10 +362,10 @@ namespace Cognite.OpcUa
 
                 if (backfillEnabled)
                 {
-                    if (!last.Any()) return;
+                    if (last.Count == 0) return;
                     var first = await client.QueryMultiSeriesAsync(config.Database,
                         $"SELECT first(value) FROM \"{id}\"");
-                    if (first.Any() && first.First().HasEntries)
+                    if (first.Count != 0 && first.First().HasEntries)
                     {
                         DateTime ts = first.First().Entries[0].Time;
                         lock (mutex)
@@ -599,7 +599,7 @@ namespace Cognite.OpcUa
 
             foreach (var series in results)
             {
-                if (!series.Any()) continue;
+                if (series.Count == 0) continue;
                 var current = series.First();
                 string id = current.SeriesName;
                 if (!states.TryGetValue(id, out var state)) continue;

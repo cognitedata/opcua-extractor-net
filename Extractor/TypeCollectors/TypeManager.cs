@@ -181,7 +181,7 @@ namespace Cognite.OpcUa.TypeCollectors
                 loadReferences = true;
             }
 
-            if (!rootNodes.Any()) return;
+            if (rootNodes.Count == 0) return;
 
 
             var result = await source.LoadNodes(rootNodes, mask, referenceMode, "the type hierarchy", token);
@@ -293,7 +293,7 @@ namespace Cognite.OpcUa.TypeCollectors
             {
                 if (!type.IsEventType()) continue;
                 if (ignoreFilter != null && ignoreFilter.IsMatch(type.Name)) continue;
-                if (whitelist != null && whitelist.Any())
+                if (whitelist != null && whitelist.Count != 0)
                 {
                     if (!whitelist.Contains(type.Id)) continue;
                 }

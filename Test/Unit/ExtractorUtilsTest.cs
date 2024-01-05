@@ -31,19 +31,19 @@ namespace Test.Unit
             // Null
             Assert.Throws<ArgumentNullException>(() => ExtractorUtils.SortNodes(null));
 
-            var arrParent = new UAVariable(new NodeId("arr1"), "arr1", null, null, NodeId.Null, null);
+            var arrParent = new UAVariable(new NodeId("arr1", 0), "arr1", null, null, NodeId.Null, null);
             arrParent.FullAttributes.ValueRank = 1;
             arrParent.FullAttributes.ArrayDimensions = new[] { 2 };
             var children = arrParent.CreateTimeseries();
             // Populated
             var nodes = new BaseUANode[]
             {
-                new UAObject(new NodeId("object1"), "obj1", null, null, NodeId.Null, null),
-                new UAObject(new NodeId("object2"), "obj2", null, null, NodeId.Null, null),
-                new UAVariable(new NodeId("var1"), "var1", null, null, NodeId.Null, null),
-                new UAVariable(new NodeId("var2"), "var2", null, null, NodeId.Null, null),
+                new UAObject(new NodeId("object1", 0), "obj1", null, null, NodeId.Null, null),
+                new UAObject(new NodeId("object2", 0), "obj2", null, null, NodeId.Null, null),
+                new UAVariable(new NodeId("var1", 0), "var1", null, null, NodeId.Null, null),
+                new UAVariable(new NodeId("var2", 0), "var2", null, null, NodeId.Null, null),
                 arrParent,
-                new UAVariable(new NodeId("arr2"), "arr2", null, null, NodeId.Null, null)
+                new UAVariable(new NodeId("arr2", 0), "arr2", null, null, NodeId.Null, null)
             };
             (nodes[5].Attributes as Cognite.OpcUa.Nodes.VariableAttributes).ValueRank = 1;
             (nodes[5].Attributes as Cognite.OpcUa.Nodes.VariableAttributes).ArrayDimensions = new[] { 2 };

@@ -252,7 +252,7 @@ namespace Cognite.OpcUa
         {
             bool success = true;
 
-            if (UseInflux() && nodeBufferStates.Any() && !fullConfig.DryRun)
+            if (UseInflux() && nodeBufferStates.Count != 0 && !fullConfig.DryRun)
             {
                 try
                 {
@@ -373,7 +373,7 @@ namespace Cognite.OpcUa
         {
             bool success = true;
 
-            if (UseInflux() && eventBufferStates.Any() && !fullConfig.DryRun)
+            if (UseInflux() && eventBufferStates.Count != 0 && !fullConfig.DryRun)
             {
                 try
                 {
@@ -444,7 +444,7 @@ namespace Cognite.OpcUa
                         .SelectMany(group => group).ToList();
 
                     log.LogInformation("Read {Count} datapoints from file", points.Count);
-                    if (!points.Any() && final) break;
+                    if (points.Count == 0 && final) break;
 
                     var results = await Task.WhenAll(pushers.Select(pusher => pusher.PushDataPoints(points, token)));
 
@@ -513,7 +513,7 @@ namespace Cognite.OpcUa
                         .ToList();
 
                     log.LogInformation("Read {Count} events from file", events.Count);
-                    if (!events.Any() && final) break;
+                    if (events.Count == 0 && final) break;
 
                     var results = await Task.WhenAll(pushers.Select(pusher => pusher.PushEvents(events, token)));
 

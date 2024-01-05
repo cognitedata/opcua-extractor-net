@@ -222,7 +222,7 @@ namespace Test.Unit
                 .GetValue(pusher);
             var nodeToAssetIds = writer.NodeToAssetIds;
 
-            nodeToAssetIds[new NodeId("source")] = 123;
+            nodeToAssetIds[new NodeId("source", 0)] = 123;
 
             var time = DateTime.UtcNow;
 
@@ -231,17 +231,17 @@ namespace Test.Unit
                 new UAEvent
                 {
                     Time = time,
-                    EmittingNode = new NodeId("emitter"),
-                    SourceNode = new NodeId("source"),
-                    EventType = new UAObjectType(new NodeId("type")),
+                    EmittingNode = new NodeId("emitter", 0),
+                    SourceNode = new NodeId("source", 0),
+                    EventType = new UAObjectType(new NodeId("type", 0)),
                     EventId = "someid"
                 },
                 new UAEvent
                 {
                     Time = time,
-                    EmittingNode = new NodeId("emitter"),
-                    SourceNode = new NodeId("missingsource"),
-                    EventType = new UAObjectType(new NodeId("type")),
+                    EmittingNode = new NodeId("emitter", 0),
+                    SourceNode = new NodeId("missingsource", 0),
+                    EventType = new UAObjectType(new NodeId("type", 0)),
                     EventId = "someid2"
                 }
             };
@@ -263,9 +263,9 @@ namespace Test.Unit
             events = events.Append(new UAEvent
             {
                 Time = time,
-                EmittingNode = new NodeId("emitter"),
-                SourceNode = new NodeId("source"),
-                EventType = new UAObjectType(new NodeId("type")),
+                EmittingNode = new NodeId("emitter", 0),
+                SourceNode = new NodeId("source", 0),
+                EventType = new UAObjectType(new NodeId("type", 0)),
                 EventId = "someid3"
             }).ToArray();
 
@@ -460,14 +460,14 @@ namespace Test.Unit
                 .GetValue(pusher);
 
             var nodeToAssetIds = writer.NodeToAssetIds;
-            nodeToAssetIds[new NodeId("parent")] = 123;
+            nodeToAssetIds[new NodeId("parent", 0)] = 123;
 
             var rels = Enumerable.Empty<UAReference>();
             var assets = Enumerable.Empty<BaseUANode>();
             var update = new UpdateConfig();
 
             // Test debug mode
-            var node = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", null, null, new NodeId("parent"), null);
+            var node = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", null, null, new NodeId("parent", 0), null);
             node.FullAttributes.DataType = dt;
             tester.Config.DryRun = true;
             Assert.True((await pusher.PushNodes(assets, new[] { node }, rels, update, tester.Source.Token)).Variables);
@@ -475,7 +475,7 @@ namespace Test.Unit
             Assert.Empty(handler.Timeseries);
 
             // Fail to create timeseries
-            node = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", null, null, new NodeId("parent"), null);
+            node = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", null, null, new NodeId("parent", 0), null);
             node.FullAttributes.DataType = dt;
             handler.FailedRoutes.Add("/timeseries");
             Assert.False((await pusher.PushNodes(assets, new[] { node }, rels, update, tester.Source.Token)).Variables);
@@ -501,7 +501,7 @@ namespace Test.Unit
             Assert.True((await pusher.PushNodes(assets, new[] { node }, rels, update, tester.Source.Token)).Variables);
 
             // Create one, fail to update the other
-            var node2 = new UAVariable(tester.Server.Ids.Custom.MysteryVar, "MysteryVar", null, null, new NodeId("parent"), null);
+            var node2 = new UAVariable(tester.Server.Ids.Custom.MysteryVar, "MysteryVar", null, null, new NodeId("parent", 0), null);
             node2.FullAttributes.DataType = dt;
             node.Attributes.Description = "description";
             Assert.False((await pusher.PushNodes(assets, new[] { node, node2 }, rels, update, tester.Source.Token)).Variables);
@@ -547,7 +547,7 @@ namespace Test.Unit
             var rels = Enumerable.Empty<UAReference>();
             var assets = Enumerable.Empty<BaseUANode>();
             var update = new UpdateConfig();
-            var node = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", null, null, new NodeId("parent"), null);
+            var node = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", null, null, new NodeId("parent", 0), null);
             node.FullAttributes.DataType = dt;
 
             // Fail to create
@@ -562,7 +562,7 @@ namespace Test.Unit
             Assert.Equal("Variable 1", handler.TimeseriesRaw.First().Value.GetProperty("name").GetString());
 
             // Create another, do not overwrite the existing one, due to no update settings
-            var node2 = new UAVariable(tester.Server.Ids.Custom.MysteryVar, "MysteryVar", null, null, new NodeId("parent"), null);
+            var node2 = new UAVariable(tester.Server.Ids.Custom.MysteryVar, "MysteryVar", null, null, new NodeId("parent", 0), null);
             node2.FullAttributes.DataType = dt;
             node.Attributes.Description = "description";
             Assert.True((await pusher.PushNodes(assets, new[] { node, node2 }, rels, update, tester.Source.Token)).RawVariables);
@@ -610,7 +610,7 @@ namespace Test.Unit
             update.Variables.Description = true;
             update.Variables.Metadata = true;
             update.Variables.Name = true;
-            var node = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", null, null, new NodeId("parent"), null);
+            var node = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", null, null, new NodeId("parent", 0), null);
             node.FullAttributes.DataType = dt;
 
             // Fail to upsert
@@ -625,7 +625,7 @@ namespace Test.Unit
             Assert.Equal("Variable 1", handler.TimeseriesRaw.First().Value.GetProperty("name").GetString());
 
             // Create another, overwrite the existing due to update settings
-            var node2 = new UAVariable(tester.Server.Ids.Custom.MysteryVar, "MysteryVar", null, null, new NodeId("parent"), null);
+            var node2 = new UAVariable(tester.Server.Ids.Custom.MysteryVar, "MysteryVar", null, null, new NodeId("parent", 0), null);
             node2.FullAttributes.DataType = dt;
             node.Attributes.Description = "description";
             Assert.True((await pusher.PushNodes(assets, new[] { node, node2 }, rels, update, tester.Source.Token)).Variables);
@@ -679,14 +679,14 @@ namespace Test.Unit
 
             var organizes = tester.Client.TypeManager.GetReferenceType(ReferenceTypeIds.Organizes);
 
-            var source = new UAObject(new NodeId("source"), "Source", "Source", null, NodeId.Null, null);
-            var target = new UAObject(new NodeId("target"), "Target", "Target", null, NodeId.Null, null);
-            var sourceVar = new UAVariable(new NodeId("source2"), "Source", "Source", null, NodeId.Null, null);
-            var targetVar = new UAVariable(new NodeId("target2"), "Target", "Target", null, NodeId.Null, null);
+            var source = new UAObject(new NodeId("source", 0), "Source", "Source", null, NodeId.Null, null);
+            var target = new UAObject(new NodeId("target", 0), "Target", "Target", null, NodeId.Null, null);
+            var sourceVar = new UAVariable(new NodeId("source2", 0), "Source", "Source", null, NodeId.Null, null);
+            var targetVar = new UAVariable(new NodeId("target2", 0), "Target", "Target", null, NodeId.Null, null);
 
             // Create one of each.
             var node = new UAObject(tester.Server.Ids.Base.Root, "BaseRoot", null, null, NodeId.Null, null);
-            var variable = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", null, null, new NodeId("parent"), null);
+            var variable = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", null, null, new NodeId("parent", 0), null);
             variable.FullAttributes.DataType = dt;
             var rel = new UAReference(organizes, true, source, target);
 
@@ -762,10 +762,10 @@ namespace Test.Unit
 
             var organizes = tester.Client.TypeManager.GetReferenceType(ReferenceTypeIds.Organizes);
 
-            var source = new UAObject(new NodeId("source"), "Source", "Source", null, NodeId.Null, null);
-            var target = new UAObject(new NodeId("target"), "Target", "Target", null, NodeId.Null, null);
-            var sourceVar = new UAVariable(new NodeId("source2"), "Source", "Source", null, NodeId.Null, null);
-            var targetVar = new UAVariable(new NodeId("target2"), "Target", "Target", null, NodeId.Null, null);
+            var source = new UAObject(new NodeId("source", 0), "Source", "Source", null, NodeId.Null, null);
+            var target = new UAObject(new NodeId("target", 0), "Target", "Target", null, NodeId.Null, null);
+            var sourceVar = new UAVariable(new NodeId("source2", 0), "Source", "Source", null, NodeId.Null, null);
+            var targetVar = new UAVariable(new NodeId("target2", 0), "Target", "Target", null, NodeId.Null, null);
 
             (handler, pusher) = tester.GetCDFPusher();
             using var extractor = tester.BuildExtractor(true, null, pusher);
@@ -793,7 +793,7 @@ namespace Test.Unit
 
             // Create one of each.
             var node = new UAObject(tester.Server.Ids.Base.Root, "BaseRoot", null, null, NodeId.Null, null);
-            var variable = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", null, null, new NodeId("parent"), null);
+            var variable = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", null, null, new NodeId("parent", 0), null);
             variable.FullAttributes.DataType = dt;
             var rel = new UAReference(organizes, true, source, targetVar);
 
@@ -964,10 +964,10 @@ namespace Test.Unit
 
             var organizes = tester.Client.TypeManager.GetReferenceType(ReferenceTypeIds.Organizes);
 
-            var source = new UAObject(new NodeId("source"), "Source", "Source", null, NodeId.Null, null);
-            var target = new UAObject(new NodeId("target"), "Target", "Target", null, NodeId.Null, null);
-            var sourceVar = new UAVariable(new NodeId("source2"), "Source", "Source", null, NodeId.Null, null);
-            var targetVar = new UAVariable(new NodeId("target2"), "Target", "Target", null, NodeId.Null, null);
+            var source = new UAObject(new NodeId("source", 0), "Source", "Source", null, NodeId.Null, null);
+            var target = new UAObject(new NodeId("target", 0), "Target", "Target", null, NodeId.Null, null);
+            var sourceVar = new UAVariable(new NodeId("source2", 0), "Source", "Source", null, NodeId.Null, null);
+            var targetVar = new UAVariable(new NodeId("target2", 0), "Target", "Target", null, NodeId.Null, null);
 
             (handler, pusher) = tester.GetCDFPusher();
             using var extractor = tester.BuildExtractor(true, null, pusher);
@@ -1041,10 +1041,10 @@ namespace Test.Unit
 
             var organizes = tester.Client.TypeManager.GetReferenceType(ReferenceTypeIds.Organizes);
 
-            var source = new UAObject(new NodeId("source"), "Source", "Source", null, NodeId.Null, null);
-            var target = new UAObject(new NodeId("target"), "Target", "Target", null, NodeId.Null, null);
-            var sourceVar = new UAVariable(new NodeId("source2"), "Source", "Source", null, NodeId.Null, null);
-            var targetVar = new UAVariable(new NodeId("target2"), "Target", "Target", null, NodeId.Null, null);
+            var source = new UAObject(new NodeId("source", 0), "Source", "Source", null, NodeId.Null, null);
+            var target = new UAObject(new NodeId("target", 0), "Target", "Target", null, NodeId.Null, null);
+            var sourceVar = new UAVariable(new NodeId("source2", 0), "Source", "Source", null, NodeId.Null, null);
+            var targetVar = new UAVariable(new NodeId("target2", 0), "Target", "Target", null, NodeId.Null, null);
 
             tester.Config.Extraction.Relationships.Enabled = true;
             (handler, pusher) = tester.GetCDFPusher();
@@ -1156,20 +1156,20 @@ namespace Test.Unit
 
             // Datapoints
             // Not a variable
-            var node = new UAObject(new NodeId("test"), "test", null, null, NodeId.Null, null);
+            var node = new UAObject(new NodeId("test", 0), "test", null, null, NodeId.Null, null);
             NodeToRaw(extractor, node, ConverterType.Node, false);
             // Normal double
-            var variable = new UAVariable(new NodeId("test2"), "test2", null, null, NodeId.Null, null);
+            var variable = new UAVariable(new NodeId("test2", 0), "test2", null, null, NodeId.Null, null);
             variable.FullAttributes.DataType = new UADataType(DataTypeIds.Double);
             variable.FullAttributes.ValueRank = -1;
             NodeToRaw(extractor, variable, ConverterType.Variable, true);
             // Normal string
-            variable = new UAVariable(new NodeId("test3"), "test3", null, null, NodeId.Null, null);
+            variable = new UAVariable(new NodeId("test3", 0), "test3", null, null, NodeId.Null, null);
             variable.FullAttributes.DataType = new UADataType(DataTypeIds.String);
             variable.FullAttributes.ValueRank = -1;
             NodeToRaw(extractor, variable, ConverterType.Variable, true);
             // Array
-            variable = new UAVariable(new NodeId("test4"), "test4", null, null, NodeId.Null, null);
+            variable = new UAVariable(new NodeId("test4", 0), "test4", null, null, NodeId.Null, null);
             variable.FullAttributes.DataType = new UADataType(DataTypeIds.Double);
             variable.FullAttributes.ValueRank = 1;
             variable.FullAttributes.ArrayDimensions = new[] { 4 };
@@ -1215,11 +1215,11 @@ namespace Test.Unit
             Assert.Empty(extractor.State.EmitterStates);
 
             // Add a couple emitters
-            node = new UAObject(new NodeId("test5"), "test5", null, null, NodeId.Null, null);
+            node = new UAObject(new NodeId("test5", 0), "test5", null, null, NodeId.Null, null);
             node.FullAttributes.EventNotifier = EventNotifiers.HistoryRead | EventNotifiers.SubscribeToEvents;
             NodeToRaw(extractor, node, ConverterType.Node, false);
 
-            variable = new UAVariable(new NodeId("test6"), "test6", null, null, NodeId.Null, null);
+            variable = new UAVariable(new NodeId("test6", 0), "test6", null, null, NodeId.Null, null);
             variable.FullAttributes.DataType = new UADataType(DataTypeIds.String);
             variable.FullAttributes.ValueRank = -1;
             NodeToRaw(extractor, variable, ConverterType.Variable, true);
@@ -1272,9 +1272,9 @@ namespace Test.Unit
             tester.Config.Cognite.RawNodeBuffer.BrowseOnEmpty = true;
             await extractor.RunExtractor(true);
             Assert.True(extractor.State.NodeStates.Any());
-            Assert.True(handler.AssetsRaw.Any());
-            Assert.True(handler.TimeseriesRaw.Any());
-            Assert.True(handler.Timeseries.Any());
+            Assert.True(handler.AssetsRaw.Count != 0);
+            Assert.True(handler.TimeseriesRaw.Count != 0);
+            Assert.True(handler.Timeseries.Count != 0);
             Assert.Empty(handler.Assets);
 
             await extractor.WaitForSubscriptions();
@@ -1307,7 +1307,7 @@ namespace Test.Unit
             await TestUtils.WaitForCondition(async () =>
             {
                 await extractor.Streamer.PushDataPoints(new[] { pusher }, Enumerable.Empty<IPusher>(), tester.Source.Token);
-                return handler.Datapoints.ContainsKey(id) && handler.Datapoints[id].NumericDatapoints.Any();
+                return handler.Datapoints.ContainsKey(id) && handler.Datapoints[id].NumericDatapoints.Count != 0;
             }, 10);
 
             Assert.True(extractor.State.NodeStates.Where(state => state.FrontfillEnabled).Any());
@@ -1350,9 +1350,9 @@ namespace Test.Unit
             tester.Config.Cognite.RawNodeBuffer.BrowseOnEmpty = true;
             await extractor.RunExtractor(true);
             Assert.True(extractor.State.NodeStates.Any());
-            Assert.True(handler.AssetsRaw.Any());
-            Assert.True(handler.TimeseriesRaw.Any());
-            Assert.True(handler.Timeseries.Any());
+            Assert.True(handler.AssetsRaw.Count != 0);
+            Assert.True(handler.TimeseriesRaw.Count != 0);
+            Assert.True(handler.Timeseries.Count != 0);
             Assert.Empty(handler.Assets);
 
             await extractor.WaitForSubscriptions();
@@ -1384,7 +1384,7 @@ namespace Test.Unit
             await TestUtils.WaitForCondition(async () =>
             {
                 await extractor.Streamer.PushEvents(new[] { pusher }, Enumerable.Empty<IPusher>(), tester.Source.Token);
-                return handler.Events.Any();
+                return handler.Events.Count != 0;
             }, 10);
 
             tester.WipeEventHistory();
@@ -1424,9 +1424,9 @@ namespace Test.Unit
             tester.Config.Cognite.RawNodeBuffer.BrowseOnEmpty = true;
             await extractor.RunExtractor(true);
             Assert.True(extractor.State.NodeStates.Any());
-            Assert.True(handler.AssetsRaw.Any());
-            Assert.True(handler.TimeseriesRaw.Any());
-            Assert.True(handler.Timeseries.Any());
+            Assert.True(handler.AssetsRaw.Count != 0);
+            Assert.True(handler.TimeseriesRaw.Count != 0);
+            Assert.True(handler.Timeseries.Count != 0);
             Assert.Empty(handler.Assets);
 
             await extractor.WaitForSubscriptions();
@@ -1472,7 +1472,7 @@ namespace Test.Unit
             var update = new UpdateConfig();
             var dt = new UADataType(DataTypeIds.Double);
             var node = new UAObject(tester.Server.Ids.Base.Root, "BaseRoot", null, null, NodeId.Null, null);
-            var variable = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", null, null, new NodeId("parent"), null);
+            var variable = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", null, null, new NodeId("parent", 0), null);
             variable.FullAttributes.DataType = dt;
             var rel = new UAReference(extractor.TypeManager.GetReferenceType(ReferenceTypeIds.Organizes), true, node, variable);
 

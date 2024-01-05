@@ -131,9 +131,9 @@ namespace Test.Unit
 
             var nodeInfluxStates = nodeStates.Select(state => new InfluxBufferState(state)).ToList();
 
-            var estate1 = new EventExtractionState(extractor, new NodeId("emitter1"), false, false, true);
-            var estate2 = new EventExtractionState(extractor, new NodeId("emitter2"), false, false, true);
-            var estate3 = new EventExtractionState(extractor, new NodeId("emitter3"), true, true, true);
+            var estate1 = new EventExtractionState(extractor, new NodeId("emitter1", 0), false, false, true);
+            var estate2 = new EventExtractionState(extractor, new NodeId("emitter2", 0), false, false, true);
+            var estate3 = new EventExtractionState(extractor, new NodeId("emitter3", 0), true, true, true);
             var evtStates = new[] { estate1, estate2, estate3 };
 
             var evtInfluxStates = evtStates.Select(state => new InfluxBufferState(state)).ToList();
@@ -285,9 +285,9 @@ namespace Test.Unit
             using var pusher = new InfluxPusher(iflog, tester.Config);
             var fb1 = new FailureBuffer(log, cfg, extractor, pusher);
 
-            var estate1 = new EventExtractionState(extractor, new NodeId("emitter1"), false, false, true);
-            var estate2 = new EventExtractionState(extractor, new NodeId("emitter2"), false, false, true);
-            var estate3 = new EventExtractionState(extractor, new NodeId("emitter3"), true, true, true);
+            var estate1 = new EventExtractionState(extractor, new NodeId("emitter1", 0), false, false, true);
+            var estate2 = new EventExtractionState(extractor, new NodeId("emitter2", 0), false, false, true);
+            var estate3 = new EventExtractionState(extractor, new NodeId("emitter3", 0), true, true, true);
 
             extractor.State.SetEmitterState(estate1);
             extractor.State.SetEmitterState(estate2);
@@ -382,9 +382,9 @@ namespace Test.Unit
             state3.UpdateFromBackfill(DateTime.MaxValue, true);
             state3.UpdateFromFrontfill(DateTime.MinValue, true);
 
-            var dps1 = dPusher.DataPoints[(new NodeId("state1"), -1)] = new List<UADataPoint>();
-            var dps2 = dPusher.DataPoints[(new NodeId("state2"), -1)] = new List<UADataPoint>();
-            var dps3 = dPusher.DataPoints[(new NodeId("state3"), -1)] = new List<UADataPoint>();
+            var dps1 = dPusher.DataPoints[(new NodeId("state1", 0), -1)] = new List<UADataPoint>();
+            var dps2 = dPusher.DataPoints[(new NodeId("state2", 0), -1)] = new List<UADataPoint>();
+            var dps3 = dPusher.DataPoints[(new NodeId("state3", 0), -1)] = new List<UADataPoint>();
 
             // Just read, this happens on startup. We'd expect nothing to really happen here.
             Assert.False(fb1.AnyPoints);
@@ -469,9 +469,9 @@ namespace Test.Unit
             var log = tester.Provider.GetRequiredService<ILogger<FailureBuffer>>();
             var fb1 = new FailureBuffer(log, cfg, extractor, pusher);
 
-            var estate1 = new EventExtractionState(extractor, new NodeId("emitter1"), false, false, true);
-            var estate2 = new EventExtractionState(extractor, new NodeId("emitter2"), false, false, true);
-            var estate3 = new EventExtractionState(extractor, new NodeId("emitter3"), true, true, true);
+            var estate1 = new EventExtractionState(extractor, new NodeId("emitter1", 0), false, false, true);
+            var estate2 = new EventExtractionState(extractor, new NodeId("emitter2", 0), false, false, true);
+            var estate3 = new EventExtractionState(extractor, new NodeId("emitter3", 0), true, true, true);
 
             extractor.State.SetEmitterState(estate1);
             extractor.State.RegisterNode(estate1.SourceId, estate1.Id);
@@ -484,9 +484,9 @@ namespace Test.Unit
 
             var evts = GetEvents(start, estate1.SourceId, 100).Concat(GetEvents(start, estate3.SourceId, 100)).ToList();
 
-            var evts1 = dPusher.Events[new NodeId("emitter1")] = new List<UAEvent>();
-            var evts2 = dPusher.Events[new NodeId("emitter2")] = new List<UAEvent>();
-            var evts3 = dPusher.Events[new NodeId("emitter3")] = new List<UAEvent>();
+            var evts1 = dPusher.Events[new NodeId("emitter1", 0)] = new List<UAEvent>();
+            var evts2 = dPusher.Events[new NodeId("emitter2", 0)] = new List<UAEvent>();
+            var evts3 = dPusher.Events[new NodeId("emitter3", 0)] = new List<UAEvent>();
 
             // Just read, this happens on startup. We'd expect nothing to really happen here.
             Assert.False(fb1.AnyPoints);
@@ -568,9 +568,9 @@ namespace Test.Unit
             extractor.State.SetNodeState(state2, "state2");
             extractor.State.SetNodeState(state3, "state3");
 
-            var dps1 = dPusher.DataPoints[(new NodeId("state1"), -1)] = new List<UADataPoint>();
-            var dps2 = dPusher.DataPoints[(new NodeId("state2"), -1)] = new List<UADataPoint>();
-            var dps3 = dPusher.DataPoints[(new NodeId("state3"), -1)] = new List<UADataPoint>();
+            var dps1 = dPusher.DataPoints[(new NodeId("state1", 0), -1)] = new List<UADataPoint>();
+            var dps2 = dPusher.DataPoints[(new NodeId("state2", 0), -1)] = new List<UADataPoint>();
+            var dps3 = dPusher.DataPoints[(new NodeId("state3", 0), -1)] = new List<UADataPoint>();
 
             foreach (var state in new[] { state1, state2, state3 })
             {
@@ -652,9 +652,9 @@ namespace Test.Unit
             var log = tester.Provider.GetRequiredService<ILogger<FailureBuffer>>();
             var fb1 = new FailureBuffer(log, cfg, extractor, null);
 
-            var estate1 = new EventExtractionState(extractor, new NodeId("emitter1"), false, false, true);
-            var estate2 = new EventExtractionState(extractor, new NodeId("emitter2"), false, false, true);
-            var estate3 = new EventExtractionState(extractor, new NodeId("emitter3"), true, true, true);
+            var estate1 = new EventExtractionState(extractor, new NodeId("emitter1", 0), false, false, true);
+            var estate2 = new EventExtractionState(extractor, new NodeId("emitter2", 0), false, false, true);
+            var estate3 = new EventExtractionState(extractor, new NodeId("emitter3", 0), true, true, true);
 
             extractor.State.SetEmitterState(estate1);
             extractor.State.RegisterNode(estate1.SourceId, estate1.Id);
@@ -667,13 +667,13 @@ namespace Test.Unit
 
             var evts = GetEvents(start, estate1.SourceId, 100)
                 .Concat(GetEvents(start, estate2.SourceId, 100))
-                .Concat(GetEvents(start, new NodeId("somemissingemitter"), 100))
+                .Concat(GetEvents(start, new NodeId("somemissingemitter", 0), 100))
                 .Concat(GetEvents(start, estate3.SourceId, 100)).ToList();
 
-            var evts1 = dPusher.Events[new NodeId("emitter1")] = new List<UAEvent>();
-            var evts2 = dPusher.Events[new NodeId("emitter2")] = new List<UAEvent>();
-            var evts3 = dPusher.Events[new NodeId("emitter3")] = new List<UAEvent>();
-            var evts4 = dPusher.Events[new NodeId("somemissingemitter")] = new List<UAEvent>();
+            var evts1 = dPusher.Events[new NodeId("emitter1", 0)] = new List<UAEvent>();
+            var evts2 = dPusher.Events[new NodeId("emitter2", 0)] = new List<UAEvent>();
+            var evts3 = dPusher.Events[new NodeId("emitter3", 0)] = new List<UAEvent>();
+            var evts4 = dPusher.Events[new NodeId("somemissingemitter", 0)] = new List<UAEvent>();
 
             Assert.Equal(0, new FileInfo(cfg.FailureBuffer.EventPath).Length);
 

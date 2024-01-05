@@ -58,7 +58,7 @@ namespace Server
             out DataValueCollection values,
             out DiagnosticInfoCollection diagnosticInfos)
         {
-            if (nodesToRead == null) throw new ArgumentNullException(nameof(nodesToRead));
+            ArgumentNullException.ThrowIfNull(nodesToRead);
 
             callbacks.OnRead(context, nodesToRead);
 
@@ -75,8 +75,8 @@ namespace Server
             IList<MonitoringFilterResult> filterResults,
             IList<IMonitoredItem> monitoredItems)
         {
-            if (itemsToCreate == null) throw new ArgumentNullException(nameof(itemsToCreate));
-            if (errors == null) throw new ArgumentNullException(nameof(errors));
+            ArgumentNullException.ThrowIfNull(itemsToCreate);
+            ArgumentNullException.ThrowIfNull(errors);
 
             callbacks.OnCreateMonitoredItems(context, subscriptionId, itemsToCreate);
 
@@ -92,7 +92,7 @@ namespace Server
             out HistoryReadResultCollection results,
             out DiagnosticInfoCollection diagnosticInfos)
         {
-            if (nodesToRead == null) throw new ArgumentNullException(nameof(nodesToRead));
+            ArgumentNullException.ThrowIfNull(nodesToRead);
 
             callbacks.OnHistoryRead(context, historyReadDetails, nodesToRead);
 
@@ -107,8 +107,8 @@ namespace Server
             out BrowseResultCollection results,
             out DiagnosticInfoCollection diagnosticInfos)
         {
-            if (context == null) throw new ArgumentNullException(nameof(context));
-            if (nodesToBrowse == null) throw new ArgumentNullException(nameof(nodesToBrowse));
+            ArgumentNullException.ThrowIfNull(context);
+            ArgumentNullException.ThrowIfNull(nodesToBrowse);
 
             callbacks.OnBrowse(context, nodesToBrowse);
 

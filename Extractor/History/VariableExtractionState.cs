@@ -110,7 +110,7 @@ namespace Cognite.OpcUa.History
         /// <returns>The contents of the buffer once called.</returns>
         public IEnumerable<UADataPoint> FlushBuffer()
         {
-            if (IsFrontfilling || buffer == null || !buffer.Any()) return Array.Empty<UADataPoint>();
+            if (IsFrontfilling || buffer == null || buffer.Count == 0) return Array.Empty<UADataPoint>();
             lock (Mutex)
             {
                 var result = buffer.Where(pt => pt.Timestamp > SourceExtractedRange.Last).ToList();

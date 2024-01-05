@@ -407,7 +407,7 @@ namespace Cognite.OpcUa.Nodes
             Action<string> parentIdHandler,
             StringConverter converter)
         {
-            if (Properties == null || !Properties.Any() || metaMap == null || !metaMap.Any()) return;
+            if (Properties == null || !Properties.Any() || metaMap == null || metaMap.Count == 0) return;
             foreach (var prop in Properties)
             {
                 if (prop is not UAVariable propVar) continue;

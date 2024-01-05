@@ -184,7 +184,7 @@ namespace Test.Unit
             Assert.Null(await pusher.PushEvents(invalidEvents, tester.Source.Token));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_skipped_events_mqtt", 2));
 
-            handler.MockAsset(tester.Client.GetUniqueId(new NodeId("source")));
+            handler.MockAsset(tester.Client.GetUniqueId(new NodeId("source", 0)));
 
             var time = DateTime.UtcNow;
 
@@ -193,17 +193,17 @@ namespace Test.Unit
                 new UAEvent
                 {
                     Time = time,
-                    EmittingNode = new NodeId("emitter"),
-                    SourceNode = new NodeId("source"),
-                    EventType = new UAObjectType(new NodeId("type")),
+                    EmittingNode = new NodeId("emitter", 0),
+                    SourceNode = new NodeId("source", 0),
+                    EventType = new UAObjectType(new NodeId("type", 0)),
                     EventId = "someid"
                 },
                 new UAEvent
                 {
                     Time = time,
-                    EmittingNode = new NodeId("emitter"),
-                    SourceNode = new NodeId("missingsource"),
-                    EventType = new UAObjectType(new NodeId("type")),
+                    EmittingNode = new NodeId("emitter", 0),
+                    SourceNode = new NodeId("missingsource", 0),
+                    EventType = new UAObjectType(new NodeId("type", 0)),
                     EventId = "someid2"
                 }
             };
@@ -222,9 +222,9 @@ namespace Test.Unit
             events = events.Append(new UAEvent
             {
                 Time = time,
-                EmittingNode = new NodeId("emitter"),
-                SourceNode = new NodeId("source"),
-                EventType = new UAObjectType(new NodeId("type")),
+                EmittingNode = new NodeId("emitter", 0),
+                SourceNode = new NodeId("source", 0),
+                EventType = new UAObjectType(new NodeId("type", 0)),
                 EventId = "someid3"
             }).ToArray();
 
@@ -365,10 +365,10 @@ namespace Test.Unit
             var update = new UpdateConfig();
             var rels = Enumerable.Empty<UAReference>();
 
-            handler.MockAsset(tester.Client.GetUniqueId(new NodeId("parent")));
+            handler.MockAsset(tester.Client.GetUniqueId(new NodeId("parent", 0)));
 
             // Test debug mode
-            var node = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", null, null, new NodeId("parent"), null);
+            var node = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", null, null, new NodeId("parent", 0), null);
             node.FullAttributes.DataType = dt;
             tester.Config.DryRun = true;
             var waitTask = bridge.WaitForNextMessage(1);
@@ -401,7 +401,7 @@ namespace Test.Unit
             await waitTask;
 
             // Create new node
-            var node2 = new UAVariable(tester.Server.Ids.Custom.MysteryVar, "MysteryVar", null, null, new NodeId("parent"), null);
+            var node2 = new UAVariable(tester.Server.Ids.Custom.MysteryVar, "MysteryVar", null, null, new NodeId("parent", 0), null);
             node2.FullAttributes.DataType = dt;
             waitTask = bridge.WaitForNextMessage();
             Assert.True((await pusher.PushNodes(assets, new[] { node, node2 }, rels, update, tester.Source.Token)).Variables);
@@ -439,7 +439,7 @@ namespace Test.Unit
             var assets = Enumerable.Empty<BaseUANode>();
             var rels = Enumerable.Empty<UAReference>();
             var update = new UpdateConfig();
-            var node = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", null, null, new NodeId("parent"), null);
+            var node = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", null, null, new NodeId("parent", 0), null);
             node.FullAttributes.DataType = dt;
 
             // Create one
@@ -450,7 +450,7 @@ namespace Test.Unit
             Assert.Equal("Variable 1", handler.TimeseriesRaw.First().Value.GetProperty("name").GetString());
 
             // Create another, do not overwrite the existing one, due to no update settings
-            var node2 = new UAVariable(tester.Server.Ids.Custom.MysteryVar, "MysteryVar", null, null, new NodeId("parent"), null);
+            var node2 = new UAVariable(tester.Server.Ids.Custom.MysteryVar, "MysteryVar", null, null, new NodeId("parent", 0), null);
             node2.FullAttributes.DataType = dt;
             node.Attributes.Description = "description";
             waitTask = bridge.WaitForNextMessage(topic: tester.Config.Mqtt.RawTopic);
@@ -488,10 +488,10 @@ namespace Test.Unit
 
             var organizes = tester.Client.TypeManager.GetReferenceType(ReferenceTypeIds.Organizes);
 
-            var source = new UAObject(new NodeId("source"), "Source", "Source", null, NodeId.Null, null);
-            var target = new UAObject(new NodeId("target"), "Target", "Target", null, NodeId.Null, null);
-            var sourceVar = new UAVariable(new NodeId("source2"), "Source", "Source", null, NodeId.Null, null);
-            var targetVar = new UAVariable(new NodeId("target2"), "Target", "Target", null, NodeId.Null, null);
+            var source = new UAObject(new NodeId("source", 0), "Source", "Source", null, NodeId.Null, null);
+            var target = new UAObject(new NodeId("target", 0), "Target", "Target", null, NodeId.Null, null);
+            var sourceVar = new UAVariable(new NodeId("source2", 0), "Source", "Source", null, NodeId.Null, null);
+            var targetVar = new UAVariable(new NodeId("target2", 0), "Target", "Target", null, NodeId.Null, null);
 
             var assets = Enumerable.Empty<BaseUANode>();
             var tss = Enumerable.Empty<UAVariable>();
@@ -556,10 +556,10 @@ namespace Test.Unit
 
             var organizes = tester.Client.TypeManager.GetReferenceType(ReferenceTypeIds.Organizes);
 
-            var source = new UAObject(new NodeId("source"), "Source", "Source", null, NodeId.Null, null);
-            var target = new UAObject(new NodeId("target"), "Target", "Target", null, NodeId.Null, null);
-            var sourceVar = new UAVariable(new NodeId("source2"), "Source", "Source", null, NodeId.Null, null);
-            var targetVar = new UAVariable(new NodeId("target2"), "Target", "Target", null, NodeId.Null, null);
+            var source = new UAObject(new NodeId("source", 0), "Source", "Source", null, NodeId.Null, null);
+            var target = new UAObject(new NodeId("target", 0), "Target", "Target", null, NodeId.Null, null);
+            var sourceVar = new UAVariable(new NodeId("source2", 0), "Source", "Source", null, NodeId.Null, null);
+            var targetVar = new UAVariable(new NodeId("target2", 0), "Target", "Target", null, NodeId.Null, null);
 
             tester.Config.Mqtt.RawMetadata = new RawMetadataConfig
             {
@@ -647,9 +647,9 @@ namespace Test.Unit
 
             var rels = Enumerable.Empty<UAReference>();
 
-            var ts = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", null, null, new NodeId("parent"), null);
+            var ts = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", null, null, new NodeId("parent", 0), null);
             ts.FullAttributes.DataType = dt;
-            var ts2 = new UAVariable(tester.Server.Ids.Base.DoubleVar2, "Variable 2", null, null, new NodeId("parent"), null);
+            var ts2 = new UAVariable(tester.Server.Ids.Base.DoubleVar2, "Variable 2", null, null, new NodeId("parent", 0), null);
             ts2.FullAttributes.DataType = dt;
             var node = new UAObject(tester.Server.Ids.Base.Root, "BaseRoot", null, null, NodeId.Null, null);
             var node2 = new UAObject(tester.Server.Ids.Custom.Root, "BaseRoot", null, null, NodeId.Null, null);
@@ -690,10 +690,10 @@ namespace Test.Unit
 
             var organizes = tester.Client.TypeManager.GetReferenceType(ReferenceTypeIds.Organizes);
 
-            var source = new UAObject(new NodeId("source"), "Source", "Source", null, NodeId.Null, null);
-            var target = new UAObject(new NodeId("target"), "Target", "Target", null, NodeId.Null, null);
-            var sourceVar = new UAVariable(new NodeId("source2"), "Source", "Source", null, NodeId.Null, null);
-            var targetVar = new UAVariable(new NodeId("target2"), "Target", "Target", null, NodeId.Null, null);
+            var source = new UAObject(new NodeId("source", 0), "Source", "Source", null, NodeId.Null, null);
+            var target = new UAObject(new NodeId("target", 0), "Target", "Target", null, NodeId.Null, null);
+            var sourceVar = new UAVariable(new NodeId("source2", 0), "Source", "Source", null, NodeId.Null, null);
+            var targetVar = new UAVariable(new NodeId("target2", 0), "Target", "Target", null, NodeId.Null, null);
 
             var stateStoreConfig = new StateStoreConfig
             {

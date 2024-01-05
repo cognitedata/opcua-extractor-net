@@ -71,7 +71,7 @@ namespace Test.Utils
             await Client.Run(Source.Token, 0);
         }
 
-        private void ResetType(object obj, object reference)
+        private static void ResetType(object obj, object reference)
         {
             if (obj == null) return;
             var type = obj.GetType();
@@ -206,7 +206,7 @@ namespace Test.Utils
 
         public static async Task TerminateRunTask(Task runTask, UAExtractor extractor)
         {
-            if (extractor == null) throw new ArgumentNullException(nameof(extractor));
+            ArgumentNullException.ThrowIfNull(extractor);
             await extractor.Close(false);
             try
             {
@@ -259,9 +259,12 @@ namespace Test.Utils
 
         public virtual async Task DisposeAsync()
         {
-            Source?.Cancel();
-            Source?.Dispose();
-            Source = null;
+            if (Source != null)
+            {
+                await Source.CancelAsync();
+                Source.Dispose();
+                Source = null;
+            }
             if (Client != null)
             {
                 await Client.Close(CancellationToken.None);

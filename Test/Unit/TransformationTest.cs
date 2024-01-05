@@ -36,10 +36,10 @@ namespace Test.Unit
             };
             var nodes = new[]
             {
-                new UAObject(new NodeId(1), null, null, null, new NodeId("parent"), null),
-                new UAObject(new NodeId(2), "OtherTest", null, null, new NodeId("parent"), null),
-                new UAObject(new NodeId(3), "Test", null, null, new NodeId("parent"), null),
-                new UAObject(new NodeId(4), "Other", null, null, new NodeId("parent"), null),
+                new UAObject(new NodeId(1), null, null, null, new NodeId("parent", 0), null),
+                new UAObject(new NodeId(2), "OtherTest", null, null, new NodeId("parent", 0), null),
+                new UAObject(new NodeId(3), "Test", null, null, new NodeId("parent", 0), null),
+                new UAObject(new NodeId(4), "Other", null, null, new NodeId("parent", 0), null),
             };
             var filter = new NodeFilter(raw);
             var matched = nodes.Where(node => filter.IsMatch(node, nss)).ToList();
@@ -61,10 +61,10 @@ namespace Test.Unit
             };
             var nodes = new[]
             {
-                new UAObject(new NodeId(1), "TestTest", null, null, new NodeId("parent"), null),
-                new UAObject(new NodeId(2), "OtherTest", null, null, new NodeId("parent"), null),
-                new UAObject(new NodeId(3), "Test", null, null, new NodeId("parent"), null),
-                new UAObject(new NodeId(4), "Other", null, null, new NodeId("parent"), null)
+                new UAObject(new NodeId(1), "TestTest", null, null, new NodeId("parent", 0), null),
+                new UAObject(new NodeId(2), "OtherTest", null, null, new NodeId("parent", 0), null),
+                new UAObject(new NodeId(3), "Test", null, null, new NodeId("parent", 0), null),
+                new UAObject(new NodeId(4), "Other", null, null, new NodeId("parent", 0), null)
             };
             nodes[0].Attributes.Description = "Some Test";
             nodes[1].Attributes.Description = "Some Other test";
@@ -90,10 +90,10 @@ namespace Test.Unit
             };
             var nodes = new[]
             {
-                new UAObject(new NodeId(1), "TestTest", null, null, new NodeId("parent"), null),
-                new UAObject(new NodeId("id"), "OtherTest", null, null, new NodeId("parent"), null),
-                new UAObject(new NodeId(3), "Test", null, null, new NodeId("parent"), null),
-                new UAObject(new NodeId(4), "Other", null, null, new NodeId("parent"), null),
+                new UAObject(new NodeId(1), "TestTest", null, null, new NodeId("parent", 0), null),
+                new UAObject(new NodeId("id", 0), "OtherTest", null, null, new NodeId("parent", 0), null),
+                new UAObject(new NodeId(3), "Test", null, null, new NodeId("parent", 0), null),
+                new UAObject(new NodeId(4), "Other", null, null, new NodeId("parent", 0), null),
             };
             var filter = new NodeFilter(raw);
             var matched = nodes.Where(node => filter.IsMatch(node, nss)).ToList();
@@ -114,10 +114,10 @@ namespace Test.Unit
             };
             var nodes = new[]
             {
-                new UAObject(new NodeId(1, 1), "TestTest", null, null, new NodeId("parent"), null),
-                new UAObject(new NodeId(2, 2), "OtherTest", null, null, new NodeId("parent"), null),
-                new UAObject(new NodeId(3, 2), "Test", null, null, new NodeId("parent"), null),
-                new UAObject(new NodeId(4, 3), "Other", null, null, new NodeId("parent"), null),
+                new UAObject(new NodeId(1, 1), "TestTest", null, null, new NodeId("parent", 0), null),
+                new UAObject(new NodeId(2, 2), "OtherTest", null, null, new NodeId("parent", 0), null),
+                new UAObject(new NodeId(3, 2), "Test", null, null, new NodeId("parent", 0), null),
+                new UAObject(new NodeId(4, 3), "Other", null, null, new NodeId("parent", 0), null),
             };
             var filter = new NodeFilter(raw);
             var matched = nodes.Where(node => filter.IsMatch(node, nss)).ToList();
@@ -140,10 +140,10 @@ namespace Test.Unit
 
             var nodes = new[]
             {
-                new UAObject(new NodeId(1), "TestTest", null, null, new NodeId("parent"), new UAObjectType(new NodeId(1))),
-                new UAObject(new NodeId(2), "OtherTest", null, null, new NodeId("parent"), new UAObjectType(new NodeId(2))),
-                new UAObject(new NodeId(3), "Test", null, null, new NodeId("parent"), null),
-                new UAObject(new NodeId(4), "Other", null, null, new NodeId("parent"), new UAObjectType(new NodeId("test"))),
+                new UAObject(new NodeId(1), "TestTest", null, null, new NodeId("parent", 0), new UAObjectType(new NodeId(1))),
+                new UAObject(new NodeId(2), "OtherTest", null, null, new NodeId("parent", 0), new UAObjectType(new NodeId(2))),
+                new UAObject(new NodeId(3), "Test", null, null, new NodeId("parent", 0), null),
+                new UAObject(new NodeId(4), "Other", null, null, new NodeId("parent", 0), new UAObjectType(new NodeId("test", 0))),
             };
             var filter = new NodeFilter(raw);
             var matched = nodes.Where(node => filter.IsMatch(node, nss)).ToList();
@@ -176,11 +176,11 @@ namespace Test.Unit
 
             var nodes = new BaseUANode[]
             {
-                new UAVariable(new NodeId(1), "TestTest", null, null, new NodeId("parent"), null),
-                new UAVariable(new NodeId(2), "OtherTest", null, null, new NodeId("parent"), null),
-                new UAVariable(new NodeId(3), "Test", null, null, new NodeId("parent"), null),
-                new UAObject(new NodeId(4), "Other", null, null, new NodeId("parent"), null),
-                new UAVariable(new NodeId(5), "Test", null, null, new NodeId("parent"), null)
+                new UAVariable(new NodeId(1), "TestTest", null, null, new NodeId("parent", 0), null),
+                new UAVariable(new NodeId(2), "OtherTest", null, null, new NodeId("parent", 0), null),
+                new UAVariable(new NodeId(3), "Test", null, null, new NodeId("parent", 0), null),
+                new UAObject(new NodeId(4), "Other", null, null, new NodeId("parent", 0), null),
+                new UAVariable(new NodeId(5), "Test", null, null, new NodeId("parent", 0), null)
             };
             (nodes[2].Attributes as Cognite.OpcUa.Nodes.VariableAttributes).ArrayDimensions = new[] { 4 };
             (nodes[4].Attributes as Cognite.OpcUa.Nodes.VariableAttributes).ArrayDimensions = new[] { 4 };
@@ -215,15 +215,15 @@ namespace Test.Unit
                 }
             };
 
-            var parent1 = new UAObject(new NodeId("parent1"), "parent1", null, null, NodeId.Null, null);
-            var parent2 = new UAObject(new NodeId("parent2"), "parent2", null, null, NodeId.Null, null);
+            var parent1 = new UAObject(new NodeId("parent1", 0), "parent1", null, null, NodeId.Null, null);
+            var parent2 = new UAObject(new NodeId("parent2", 0), "parent2", null, null, NodeId.Null, null);
 
             var nodes = new[]
             {
-                new UAObject(new NodeId(1, 1), "TestTest", null, parent1, new NodeId("parent1"), null) { Parent = parent1 },
-                new UAObject(new NodeId(2, 2), "OtherTest", null, parent1, new NodeId("parent1"), null) { Parent = parent1 },
-                new UAObject(new NodeId(3, 2), "Test", null, parent2, new NodeId("parent2"), null) { Parent = parent2 },
-                new UAObject(new NodeId(4, 3), "Other", null, parent2, new NodeId("parent2"), null) { Parent = parent2 },
+                new UAObject(new NodeId(1, 1), "TestTest", null, parent1, new NodeId("parent1", 0), null) { Parent = parent1 },
+                new UAObject(new NodeId(2, 2), "OtherTest", null, parent1, new NodeId("parent1", 0), null) { Parent = parent1 },
+                new UAObject(new NodeId(3, 2), "Test", null, parent2, new NodeId("parent2", 0), null) { Parent = parent2 },
+                new UAObject(new NodeId(4, 3), "Other", null, parent2, new NodeId("parent2", 0), null) { Parent = parent2 },
             };
             var filter = new NodeFilter(raw);
             var matched = nodes.Where(node => filter.IsMatch(node, nss)).ToList();
@@ -246,10 +246,10 @@ namespace Test.Unit
 
             var nodes = new BaseUANode[]
             {
-                new UAVariableType(new NodeId(1), "TestTest", null, null, new NodeId("parent")),
-                new UAObject(new NodeId(2), "OtherTest", null, null, new NodeId("parent"), null),
-                new UAObject(new NodeId(3), "Test", null, null, new NodeId("parent"), null),
-                new UAObjectType(new NodeId(4), "Other", null, null, new NodeId("parent")),
+                new UAVariableType(new NodeId(1), "TestTest", null, null, new NodeId("parent", 0)),
+                new UAObject(new NodeId(2), "OtherTest", null, null, new NodeId("parent", 0), null),
+                new UAObject(new NodeId(3), "Test", null, null, new NodeId("parent", 0), null),
+                new UAObjectType(new NodeId(4), "Other", null, null, new NodeId("parent", 0)),
             };
             var filter = new NodeFilter(raw);
             var matched = nodes.Where(node => filter.IsMatch(node, nss)).ToList();
@@ -274,11 +274,11 @@ namespace Test.Unit
 
             var nodes = new BaseUANode[]
             {
-                new UAVariable(new NodeId(1), "TestTest", null, null, new NodeId("parent"), null),
-                new UAVariable(new NodeId(2), "OtherTest", null, null, new NodeId("parent"), null),
-                new UAVariable(new NodeId(3), "Test", null, null, new NodeId("parent"), null),
-                new UAObject(new NodeId(4), "Other", null, null, new NodeId("parent"), null),
-                new UAVariable(new NodeId(5), "Test", null, null, new NodeId("parent"), null)
+                new UAVariable(new NodeId(1), "TestTest", null, null, new NodeId("parent", 0), null),
+                new UAVariable(new NodeId(2), "OtherTest", null, null, new NodeId("parent", 0), null),
+                new UAVariable(new NodeId(3), "Test", null, null, new NodeId("parent", 0), null),
+                new UAObject(new NodeId(4), "Other", null, null, new NodeId("parent", 0), null),
+                new UAVariable(new NodeId(5), "Test", null, null, new NodeId("parent", 0), null)
             };
             (nodes[2].Attributes as Cognite.OpcUa.Nodes.VariableAttributes).Historizing = true;
             (nodes[4].Attributes as Cognite.OpcUa.Nodes.VariableAttributes).Historizing = true;
@@ -320,8 +320,8 @@ namespace Test.Unit
                 Namespace = "test-",
                 NodeClass = NodeClass.Variable
             };
-            var parent1 = new UAObject(new NodeId("parent1"), "parent1", null, null, NodeId.Null, null);
-            var parent2 = new UAObject(new NodeId("parent2"), "parent2", null, null, NodeId.Null, null);
+            var parent1 = new UAObject(new NodeId("parent1", 0), "parent1", null, null, NodeId.Null, null);
+            var parent2 = new UAObject(new NodeId("parent2", 0), "parent2", null, null, NodeId.Null, null);
             // Each node deviates on only one point.
             var nodes = new List<BaseUANode>();
             for (int i = 0; i < 10; i++)
@@ -379,10 +379,10 @@ namespace Test.Unit
             };
             var nodes = new[]
             {
-                new UAObject(new NodeId(1), null, null, null, new NodeId("parent"), null),
-                new UAObject(new NodeId(2), "OtherTest", null, null, new NodeId("parent"), null),
-                new UAObject(new NodeId(3), "Test", null, null, new NodeId("parent"), null),
-                new UAObject(new NodeId(4), "Other", null, null, new NodeId("parent"), null),
+                new UAObject(new NodeId(1), null, null, null, new NodeId("parent", 0), null),
+                new UAObject(new NodeId(2), "OtherTest", null, null, new NodeId("parent", 0), null),
+                new UAObject(new NodeId(3), "Test", null, null, new NodeId("parent", 0), null),
+                new UAObject(new NodeId(4), "Other", null, null, new NodeId("parent", 0), null),
             };
             var cfg = new FullConfig();
             cfg.GenerateDefaults();
@@ -410,10 +410,10 @@ namespace Test.Unit
             };
             var nodes = new[]
             {
-                new UAObject(new NodeId(1), null, null, null, new NodeId("parent"), null),
-                new UAObject(new NodeId(2), "OtherTest", null, null, new NodeId("parent"), null),
-                new UAObject(new NodeId(3), "Test", null, null, new NodeId("parent"), null),
-                new UAObject(new NodeId(4), "Other", null, null, new NodeId("parent"), null),
+                new UAObject(new NodeId(1), null, null, null, new NodeId("parent", 0), null),
+                new UAObject(new NodeId(2), "OtherTest", null, null, new NodeId("parent", 0), null),
+                new UAObject(new NodeId(3), "Test", null, null, new NodeId("parent", 0), null),
+                new UAObject(new NodeId(4), "Other", null, null, new NodeId("parent", 0), null),
             };
             var cfg = new FullConfig();
             cfg.GenerateDefaults();
@@ -448,10 +448,10 @@ namespace Test.Unit
             };
             var nodes = new BaseUANode[]
             {
-                new UAVariable(new NodeId(1), null, null, null, new NodeId("parent"), null),
-                new UAObject(new NodeId(2), "OtherTest", null, null, new NodeId("parent"), null),
-                new UAObject(new NodeId(3), "Test", null, null, new NodeId("parent"), null),
-                new UAObject(new NodeId(4), "Other", null, null, new NodeId("parent"), null),
+                new UAVariable(new NodeId(1), null, null, null, new NodeId("parent", 0), null),
+                new UAObject(new NodeId(2), "OtherTest", null, null, new NodeId("parent", 0), null),
+                new UAObject(new NodeId(3), "Test", null, null, new NodeId("parent", 0), null),
+                new UAObject(new NodeId(4), "Other", null, null, new NodeId("parent", 0), null),
             };
             var cfg = new FullConfig();
             cfg.GenerateDefaults();
@@ -481,10 +481,10 @@ namespace Test.Unit
             };
             var nodes = new BaseUANode[]
             {
-                new UAVariable(new NodeId(1), null, null, null, new NodeId("parent"), null),
-                new UAVariable(new NodeId(2), "OtherTest", null, null, new NodeId("parent"), null),
-                new UAVariable(new NodeId(3), "Test", null, null, new NodeId("parent"), null),
-                new UAObject(new NodeId(4), "TestTest", null, null, new NodeId("parent"), null),
+                new UAVariable(new NodeId(1), null, null, null, new NodeId("parent", 0), null),
+                new UAVariable(new NodeId(2), "OtherTest", null, null, new NodeId("parent", 0), null),
+                new UAVariable(new NodeId(3), "Test", null, null, new NodeId("parent", 0), null),
+                new UAObject(new NodeId(4), "TestTest", null, null, new NodeId("parent", 0), null),
             };
             var cfg = new FullConfig();
             cfg.GenerateDefaults();

@@ -138,7 +138,7 @@ namespace Cognite.OpcUa
                 {
                     LogException(log, exc, message, silentMessage);
                 }
-                if (!flat.InnerExceptions.Any())
+                if (flat.InnerExceptions.Count == 0)
                 {
                     log.LogError(e, "{Message} - {ErrMessage}", message, e.Message);
                 }
@@ -195,7 +195,7 @@ namespace Cognite.OpcUa
         {
             var exceptions = new List<Exception>();
             var flat = ex.Flatten();
-            if (flat.InnerExceptions != null && flat.InnerExceptions.Any())
+            if (flat.InnerExceptions != null && flat.InnerExceptions.Count != 0)
             {
                 foreach (var e in flat.InnerExceptions)
                 {

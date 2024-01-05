@@ -351,10 +351,19 @@ namespace Server
             var node = PredefinedNodes[id];
             var refsToRemove = new List<LocalReference>();
             RemovePredefinedNode(SystemContext, node, refsToRemove);
-            if (refsToRemove.Any())
+            if (refsToRemove.Count != 0)
             {
                 Server.NodeManager.RemoveReferences(refsToRemove);
             }
+        }
+
+        // There is a very stupid bug in the SDK, this is hacky workaround until they fix it.
+        private static bool RemoveReferenceHack(NodeState state, NodeId referenceType, bool isInverse, NodeId target)
+        {
+            var references = (IReferenceDictionary<object>)typeof(NodeState)
+                .GetField("m_references", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                .GetValue(state);
+            return references.Remove(new NodeStateReference(referenceType, isInverse, target));
         }
 
         public void ReContextualize(NodeId id, NodeId oldParentId, NodeId newParentId, NodeId referenceType)
@@ -365,10 +374,20 @@ namespace Server
             var state = PredefinedNodes[id];
             var oldParent = PredefinedNodes[oldParentId];
             var newParent = PredefinedNodes[newParentId];
-            if (state == null || oldParent == null || newParent == null) return;
-            oldParent.RemoveReference(referenceType, false, id);
-            state.RemoveReference(referenceType, true, oldParentId);
+            if (!RemoveReferenceHack(oldParent, referenceType, false, id))
+            {
+                log.LogWarning("Failed to remove reference of type {Type} from {OldP} to {Id}",
+                    referenceType, oldParent.NodeId, id);
+            }
+            if (!RemoveReferenceHack(state, referenceType, true, oldParentId))
+            {
+                log.LogWarning("Failed to remove reference of type {Type} from {OldP} to {Id}",
+                    referenceType, state.NodeId, oldParentId);
+            }
+
+            log.LogDebug("Add forward ref");
             newParent.AddReference(referenceType, false, id);
+            log.LogDebug("Add inverse ref");
             state.AddReference(referenceType, true, newParentId);
         }
 
@@ -1268,6 +1287,8 @@ namespace Server
             }
             pubSub.Start();
         }
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification =
+            "NodeStates are disposed in CustomNodeManager2, so long as they are added to the list of predefined nodes")]
         public void CreateTypeAddressSpace(IDictionary<NodeId, IList<IReference>> externalReferences)
         {
             log.LogInformation("Create types address space");
@@ -1337,7 +1358,7 @@ namespace Server
             }
         }
 
-        private NodeState CreateComplexInstance(string name, string[] variables, long lValue, string sValue, double dValue)
+        private BaseObjectState CreateComplexInstance(string name, string[] variables, long lValue, string sValue, double dValue)
         {
             var node = CreateObject(name);
             node.TypeDefinitionId = Ids.Types.ComplexType;
@@ -2019,7 +2040,9 @@ namespace Server
                 FilterContext = filterContext
             };
         }
+#pragma warning disable CA1859 // Use concrete types when possible for improved performance
         private HistoryEventFieldList GetEventFields(InternalEventHistoryRequest request, IFilterTarget instance)
+#pragma warning restore CA1859 // Use concrete types when possible for improved performance
         {
             HistoryEventFieldList fields = new HistoryEventFieldList();
 
