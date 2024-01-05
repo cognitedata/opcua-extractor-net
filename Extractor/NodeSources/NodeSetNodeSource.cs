@@ -354,7 +354,7 @@ namespace Cognite.OpcUa.NodeSources
                 }
             }
 
-            while (nextIds.Any())
+            while (nextIds.Count != 0)
             {
                 var refs = new List<(IReference Node, NodeId ParentId)>();
 

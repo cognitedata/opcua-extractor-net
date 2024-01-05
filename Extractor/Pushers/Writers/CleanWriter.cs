@@ -192,7 +192,7 @@ namespace Cognite.OpcUa.Pushers.Writers
                     }
                 }
             }
-            if (updates.Any())
+            if (updates.Count != 0)
             {
                 var res = await destination.UpdateAssetsAsync(updates, RetryMode.OnError, SanitationMode.Clean, token);
 
@@ -234,7 +234,7 @@ namespace Cognite.OpcUa.Pushers.Writers
                             }
                         }
                     }
-                    if (!existing.Any())
+                    if (existing.Count == 0)
                         throw;
 
                     relationships = relationships

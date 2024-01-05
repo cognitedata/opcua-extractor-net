@@ -29,7 +29,7 @@ namespace Cognite.OpcUa.NodeSources
         public async Task<NodeLoadResult> LoadNodes(IEnumerable<NodeId> nodesToBrowse, uint nodeClassMask, HierarchicalReferenceMode hierarchicalReferences, string purpose, CancellationToken token)
         {
             var res = await cdfSource.LoadNodes(nodesToBrowse, nodeClassMask, hierarchicalReferences, purpose, token);
-            if (!res.Nodes.Any())
+            if (res.Nodes.Count == 0)
             {
                 usingFallback = true;
                 return await fallbackSource.LoadNodes(nodesToBrowse, nodeClassMask, hierarchicalReferences, purpose, token);

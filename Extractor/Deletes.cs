@@ -111,7 +111,7 @@ namespace Cognite.OpcUa
 
             var time = DateTime.UtcNow;
             var deletedStates = oldStates.Where(s => !states.ContainsKey(s.Key)).Select(kvp => kvp.Value).ToList();
-            if (deletedStates.Any())
+            if (deletedStates.Count != 0)
             {
                 logger.LogInformation("Found {Del} stored nodes in {Tab} that no longer exist and will be marked as deleted", deletedStates.Count, tableName);
                 if (!config.DryRun) await stateStore.DeleteExtractionState(deletedStates.Select(d =>

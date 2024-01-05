@@ -576,7 +576,7 @@ namespace Test.Integration
                 && extractor.State.EmitterStates.All(state => !state.IsFrontfilling), 5,
                 () => $"Pusher is dataFailing: {pusher.DataFailing}");
 
-            Assert.True(pusher.DataPoints.All(dps => !dps.Value.Any()));
+            Assert.True(pusher.DataPoints.All(dps => dps.Value.Count == 0));
 
             tester.Server.TriggerEvents(100);
 

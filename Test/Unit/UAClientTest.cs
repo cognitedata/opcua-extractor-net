@@ -83,9 +83,13 @@ namespace Test.Unit
 
         public async Task DisposeAsync()
         {
-            Source.Cancel();
+            if (Source != null)
+            {
+                await Source.CancelAsync();
+                Source.Dispose();
+                Source = null;
+            }
             await Client.Close(CancellationToken.None);
-            Source.Dispose();
             Server.Stop();
             await Provider.DisposeAsync();
         }
@@ -916,8 +920,8 @@ namespace Test.Unit
             var nodes = new[]
             {
                 new UAVariable(tester.Server.Ids.Base.DoubleVar1, "DoubleVar1", null, null, tester.Server.Ids.Base.Root, null),
-                new UAVariable(new NodeId("missing-node"), "MissingNode", null, null, tester.Server.Ids.Base.Root, null),
-                new UAVariable(new NodeId("missing-node2"), "MissingNode2", null, null, tester.Server.Ids.Base.Root, null),
+                new UAVariable(new NodeId("missing-node", 0), "MissingNode", null, null, tester.Server.Ids.Base.Root, null),
+                new UAVariable(new NodeId("missing-node2", 0), "MissingNode2", null, null, tester.Server.Ids.Base.Root, null),
             };
 
             await tester.Client.ReadNodeData(nodes, tester.Source.Token);
@@ -1284,7 +1288,7 @@ namespace Test.Unit
             Assert.Equal(new NodeId("string-ns", 2), tester.Client.Context.ToNodeId(nodeId));
             nodeId = new ExpandedNodeId(new byte[] { 12, 12, 6 }, 1);
             Assert.Equal(new NodeId(new byte[] { 12, 12, 6 }, 1), tester.Client.Context.ToNodeId(nodeId));
-            nodeId = new ExpandedNodeId("other-server", "opc.tcp://some-other-server.test", 1);
+            nodeId = new ExpandedNodeId("other-server", 0, "opc.tcp://some-other-server.test", 1);
             Assert.Null(tester.Client.Context.ToNodeId(nodeId));
         }
         [Fact]

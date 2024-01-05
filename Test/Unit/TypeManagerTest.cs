@@ -35,21 +35,21 @@ namespace Test.Unit
             var config = tester.Config.Extraction.DataTypes;
             config.IgnoreDataTypes = new List<ProtoNodeId>
             {
-                new NodeId("enum").ToProtoNodeId(tester.Client),
-                new NodeId("test").ToProtoNodeId(tester.Client),
+                new NodeId("enum", 0).ToProtoNodeId(tester.Client),
+                new NodeId("test", 0).ToProtoNodeId(tester.Client),
                 new ProtoNodeId { NamespaceUri = "some.missing.uri", NodeId = "i=123" }
             };
             mgr = new TypeManager(tester.Config, tester.Client, tester.Log);
             mgr.InitDataTypeConfig();
-            mgr.GetDataType(new NodeId("enum"));
-            mgr.GetDataType(new NodeId("test"));
+            mgr.GetDataType(new NodeId("enum", 0));
+            mgr.GetDataType(new NodeId("test", 0));
             // with ignore data types
             mgr.BuildTypeInfo();
             Assert.Equal(2, mgr.NodeMap.Values.OfType<UADataType>().Count());
 
-            var dt1 = mgr.NodeMap[new NodeId("enum")] as UADataType;
+            var dt1 = mgr.NodeMap[new NodeId("enum", 0)] as UADataType;
             Assert.True(dt1.ShouldIgnore);
-            var dt2 = mgr.NodeMap[new NodeId("test")] as UADataType;
+            var dt2 = mgr.NodeMap[new NodeId("test", 0)] as UADataType;
             Assert.True(dt2.ShouldIgnore);
         }
 
@@ -62,23 +62,23 @@ namespace Test.Unit
             var config = tester.Config.Extraction.DataTypes;
             config.CustomNumericTypes = new List<ProtoDataType>
             {
-                new ProtoDataType { Enum = true, NodeId = new NodeId("enum").ToProtoNodeId(tester.Client) },
-                new ProtoDataType { NodeId = new NodeId("test").ToProtoNodeId(tester.Client) },
+                new ProtoDataType { Enum = true, NodeId = new NodeId("enum", 0).ToProtoNodeId(tester.Client) },
+                new ProtoDataType { NodeId = new NodeId("test", 0).ToProtoNodeId(tester.Client) },
                 new ProtoDataType { NodeId = new ProtoNodeId { NamespaceUri = "some.missing.uri", NodeId = "i=123" } }
             };
             mgr = new TypeManager(tester.Config, tester.Client, tester.Log);
             mgr.InitDataTypeConfig();
-            mgr.GetDataType(new NodeId("enum"));
-            mgr.GetDataType(new NodeId("test"));
+            mgr.GetDataType(new NodeId("enum", 0));
+            mgr.GetDataType(new NodeId("test", 0));
 
             // with custom numeric types
             mgr.BuildTypeInfo();
             Assert.Equal(2, mgr.NodeMap.Values.OfType<UADataType>().Count());
 
-            var dt1 = mgr.NodeMap[new NodeId("enum")] as UADataType;
+            var dt1 = mgr.NodeMap[new NodeId("enum", 0)] as UADataType;
             Assert.NotNull(dt1.EnumValues);
             Assert.False(dt1.IsString);
-            var dt2 = mgr.NodeMap[new NodeId("test")] as UADataType;
+            var dt2 = mgr.NodeMap[new NodeId("test", 0)] as UADataType;
             Assert.False(dt2.IsString);
         }
 
@@ -100,7 +100,7 @@ namespace Test.Unit
             config.AutoIdentifyTypes = true;
 
             // child of number
-            var dt1 = mgr.GetDataType(new NodeId("dt1"));
+            var dt1 = mgr.GetDataType(new NodeId("dt1", 0));
             dt1.Parent = mgr.GetDataType(DataTypeIds.Number);
             mgr.BuildTypeInfo();
             Assert.False(dt1.IsString);
@@ -108,7 +108,7 @@ namespace Test.Unit
             Assert.Equal(2, mgr.NodeMap.Values.OfType<UADataType>().Count());
 
             // Grandchild of number
-            var dt2 = mgr.GetDataType(new NodeId("dt2"));
+            var dt2 = mgr.GetDataType(new NodeId("dt2", 0));
             dt2.Parent = dt1;
             mgr.BuildTypeInfo();
             Assert.False(dt2.IsString);
@@ -116,15 +116,15 @@ namespace Test.Unit
             Assert.Equal(3, mgr.NodeMap.Values.OfType<UADataType>().Count());
 
             // Child of unknown
-            var dt3 = mgr.GetDataType(new NodeId("dt3"));
-            dt3.Parent = mgr.GetDataType(new NodeId("udt"));
+            var dt3 = mgr.GetDataType(new NodeId("dt3", 0));
+            dt3.Parent = mgr.GetDataType(new NodeId("udt", 0));
             mgr.BuildTypeInfo();
             Assert.True(dt3.IsString);
             Assert.False(dt3.IsStep);
             Assert.Equal(5, mgr.NodeMap.Values.OfType<UADataType>().Count());
 
             // Child of known
-            var dt4 = mgr.GetDataType(new NodeId("dt4"));
+            var dt4 = mgr.GetDataType(new NodeId("dt4", 0));
             dt4.Parent = dt2;
             mgr.BuildTypeInfo();
             Assert.False(dt4.IsString);
@@ -132,7 +132,7 @@ namespace Test.Unit
             Assert.Equal(6, mgr.NodeMap.Values.OfType<UADataType>().Count());
 
             // Child of bool
-            var dt5 = mgr.GetDataType(new NodeId("dt5"));
+            var dt5 = mgr.GetDataType(new NodeId("dt5", 0));
             dt5.Parent = mgr.GetDataType(DataTypeIds.Boolean);
             mgr.BuildTypeInfo();
             Assert.False(dt5.IsString);
@@ -140,7 +140,7 @@ namespace Test.Unit
             Assert.Equal(8, mgr.NodeMap.Values.OfType<UADataType>().Count());
 
             // Child of enum
-            var dt6 = mgr.GetDataType(new NodeId("dt6"));
+            var dt6 = mgr.GetDataType(new NodeId("dt6", 0));
             dt6.Parent = mgr.GetDataType(DataTypeIds.Enumeration);
             mgr.BuildTypeInfo();
             Assert.False(dt6.IsString);
@@ -157,7 +157,7 @@ namespace Test.Unit
             Assert.Equal(11, mgr.NodeMap.Values.OfType<UADataType>().Count());
 
             // Recognized NodeId
-            var dt8 = mgr.GetDataType(new NodeId("dt6"));
+            var dt8 = mgr.GetDataType(new NodeId("dt6", 0));
             mgr.BuildTypeInfo();
             Assert.False(dt8.IsString);
             Assert.True(dt8.IsStep);
@@ -170,10 +170,10 @@ namespace Test.Unit
             {
                 IgnoreDataTypes = new List<ProtoNodeId>
                 {
-                    new NodeId("ignore").ToProtoNodeId(tester.Client)
+                    new NodeId("ignore", 0).ToProtoNodeId(tester.Client)
                 }
             };
-            var node = new UAVariable(new NodeId("node"), "node", null, null, NodeId.Null, null);
+            var node = new UAVariable(new NodeId("node", 0), "node", null, null, NodeId.Null, null);
             node.FullAttributes.ValueRank = ValueRanks.Scalar;
             var config = tester.Config.Extraction.DataTypes;
 
@@ -190,7 +190,7 @@ namespace Test.Unit
             Assert.True(node.AllowTSMap(tester.Log, config));
 
             // Ignored datatype
-            node.FullAttributes.DataType = new UADataType(new NodeId("ignore"));
+            node.FullAttributes.DataType = new UADataType(new NodeId("ignore", 0));
             node.FullAttributes.DataType.ShouldIgnore = true;
             Assert.False(node.AllowTSMap(tester.Log, config));
 

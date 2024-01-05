@@ -373,7 +373,7 @@ namespace Cognite.OpcUa.History
 
         private static void LogHistoryTermination(ILogger log, List<HistoryReadNode> toTerminate, HistoryReadType type)
         {
-            if (!toTerminate.Any()) return;
+            if (toTerminate.Count == 0) return;
             string name = GetResourceName(type);
             var builder = new StringBuilder();
             foreach (var node in toTerminate)
@@ -436,7 +436,7 @@ namespace Cognite.OpcUa.History
                 metrics.NumItems.Inc(node.LastRead);
             }
 
-            if (failed.Any())
+            if (failed.Count != 0)
             {
                 log.LogError("HistoryRead {Type} failed for {Nodes}", type, string.Join(", ", failed.Select(f => $"{f.id}: {f.status}")));
             }
@@ -505,14 +505,14 @@ namespace Cognite.OpcUa.History
             var last = DateTime.MinValue;
             var first = DateTime.MaxValue;
 
-            if (dataPoints.Any())
+            if (dataPoints.Count != 0)
             {
                 (first, last) = dataPoints.MinMax(dp => dp.SourceTimestamp);
             }
 
             if (config.IgnoreContinuationPoints)
             {
-                node.Completed = !dataPoints.Any()
+                node.Completed = dataPoints.Count == 0
                     || Frontfill && first == last && last == node.State.SourceExtractedRange.Last
                     || !Frontfill && first == last && last == node.State.SourceExtractedRange.First
                     || !Frontfill && last <= historyStartTime;
