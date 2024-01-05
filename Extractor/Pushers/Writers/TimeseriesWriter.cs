@@ -85,7 +85,7 @@ namespace Cognite.OpcUa.Pushers.Writers
                 }
             }
 
-            if (updates.Any())
+            if (updates.Count != 0)
             {
                 var res = await destination.UpdateTimeSeriesAsync(updates, RetryMode.OnError, SanitationMode.Clean, token);
 

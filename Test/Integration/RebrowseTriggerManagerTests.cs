@@ -22,8 +22,7 @@ namespace Test.Integration
     {
         private readonly StaticServerTestFixture tester;
         private readonly ITestOutputHelper _output;
-        private IDictionary<string, NamespacePublicationDateState> _extractionStates =
-            new Dictionary<string, NamespacePublicationDateState>();
+        private Dictionary<string, NamespacePublicationDateState> _extractionStates = new();
 
         public RebrowseTriggerManagerTests(ITestOutputHelper output, StaticServerTestFixture tester)
         {
@@ -146,7 +145,8 @@ namespace Test.Integration
                 },
                 tester.Source.Token
             );
-            foreach (var id in _extractionStates) {
+            foreach (var id in _extractionStates)
+            {
                 _output.WriteLine($"Value of {id.Key} is {id.Value.LastTimestamp}");
             }
             Assert.True(_extractionStates.TryGetValue(npdId, out var newNpds));
@@ -155,9 +155,11 @@ namespace Test.Integration
             Assert.Equal(newTime.ToUnixTimeMilliseconds(), newNpds.LastTimestamp);
             tester.Server.Server.RemoveNode(addedId);
             await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
-            try {
+            try
+            {
                 File.Delete(tester.Config.StateStorage.Location);
-            } catch {}
+            }
+            catch { }
         }
 
         public static IEnumerable<object[]> TriggeringConfigurationStates =>

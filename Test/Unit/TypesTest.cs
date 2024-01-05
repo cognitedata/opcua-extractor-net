@@ -64,8 +64,8 @@ namespace Test.Unit
                 }
             }
 
-            var nodeA = new UAObject(new NodeId("node"), null, null, null, NodeId.Null, null);
-            var nodeB = new UAObject(new NodeId("node"), null, null, null, NodeId.Null, null);
+            var nodeA = new UAObject(new NodeId("node", 0), null, null, null, NodeId.Null, null);
+            var nodeB = new UAObject(new NodeId("node", 0), null, null, null, NodeId.Null, null);
 
             (int, int) Update(BaseUANode nodeA, BaseUANode nodeB)
             {
@@ -79,18 +79,18 @@ namespace Test.Unit
             Assert.Equal(csA, csB);
 
             // Test name
-            nodeA = new UAObject(new NodeId("node"), "name", null, null, NodeId.Null, null);
+            nodeA = new UAObject(new NodeId("node", 0), "name", null, null, NodeId.Null, null);
             (csA, csB) = Update(nodeA, nodeB);
             AssertNotEqualIf(update.Name);
-            nodeB = new UAObject(new NodeId("node"), "name", null, null, NodeId.Null, null);
+            nodeB = new UAObject(new NodeId("node", 0), "name", null, null, NodeId.Null, null);
             (csA, csB) = Update(nodeA, nodeB);
             Assert.Equal(csA, csB);
 
             // Test context
-            nodeA = new UAObject(new NodeId("node"), "name", null, null, new NodeId("parent"), null);
+            nodeA = new UAObject(new NodeId("node", 0), "name", null, null, new NodeId("parent", 0), null);
             (csA, csB) = Update(nodeA, nodeB);
             AssertNotEqualIf(update.Context);
-            nodeB = new UAObject(new NodeId("node"), "name", null, null, new NodeId("parent"), null);
+            nodeB = new UAObject(new NodeId("node", 0), "name", null, null, new NodeId("parent", 0), null);
             (csA, csB) = Update(nodeA, nodeB);
             Assert.Equal(csA, csB);
 
@@ -131,11 +131,11 @@ namespace Test.Unit
             Assert.Equal(csA, csB);
 
             // Test NodeType metadata
-            nodeA.FullAttributes.TypeDefinition = new UAObjectType(new NodeId("type"));
-            nodeB.FullAttributes.TypeDefinition = new UAObjectType(new NodeId("type2"));
+            nodeA.FullAttributes.TypeDefinition = new UAObjectType(new NodeId("type", 0));
+            nodeB.FullAttributes.TypeDefinition = new UAObjectType(new NodeId("type2", 0));
             (csA, csB) = Update(nodeA, nodeB);
             AssertNotEqualIf(ntMeta && update.Metadata);
-            nodeB.FullAttributes.TypeDefinition = new UAObjectType(new NodeId("type"));
+            nodeB.FullAttributes.TypeDefinition = new UAObjectType(new NodeId("type", 0));
             (csA, csB) = Update(nodeA, nodeB);
             Assert.Equal(csA, csB);
 
@@ -155,10 +155,10 @@ namespace Test.Unit
             Assert.Equal(csA, csB);
 
             // Test variable types
-            var typeA = new UAVariableType(new NodeId("typeA"), "typeA", null, null, NodeId.Null);
+            var typeA = new UAVariableType(new NodeId("typeA", 0), "typeA", null, null, NodeId.Null);
             typeA.FullAttributes.DataType = pdt;
             typeA.FullAttributes.Value = new Variant("value1");
-            var typeB = new UAVariableType(new NodeId("typeA"), "typeA", null, null, NodeId.Null);
+            var typeB = new UAVariableType(new NodeId("typeA", 0), "typeA", null, null, NodeId.Null);
             typeB.FullAttributes.DataType = pdt;
             typeB.FullAttributes.Value = new Variant("value2");
             (csA, csB) = Update(typeA, typeB);
@@ -171,7 +171,7 @@ namespace Test.Unit
         public void TestDebugDescription()
         {
             // Super basic
-            var node = new UAObject(new NodeId("test"), "name", null, null, NodeId.Null, null);
+            var node = new UAObject(new NodeId("test", 0), "name", null, null, NodeId.Null, null);
             var str = node.ToString();
             var refStr = "Object: name\n"
                        + "    Id: s=test\n";
@@ -181,7 +181,7 @@ namespace Test.Unit
             var pdt = new UADataType(DataTypeIds.String);
             pdt.Attributes.DisplayName = "String";
 
-            node = new UAObject(new NodeId("test"), "name", null, null, new NodeId("parent"), null);
+            node = new UAObject(new NodeId("test", 0), "name", null, null, new NodeId("parent", 0), null);
             node.Attributes.Description = "description";
             node.FullAttributes.EventNotifier = EventNotifiers.HistoryRead | EventNotifiers.SubscribeToEvents;
             var propA = CommonTestUtils.GetSimpleVariable("propA", pdt);
@@ -195,7 +195,7 @@ namespace Test.Unit
             {
                 propA, nestedProp, propB
             };
-            node.FullAttributes.TypeDefinition = new UAObjectType(new NodeId("type"));
+            node.FullAttributes.TypeDefinition = new UAObjectType(new NodeId("type", 0));
 
             str = node.ToString();
             refStr = "Object: name\n"
@@ -237,11 +237,11 @@ namespace Test.Unit
         public void TestBuildMetadata()
         {
             using var extractor = tester.BuildExtractor();
-            var node = new UAObject(new NodeId("test"), "test", null, null, NodeId.Null, null);
+            var node = new UAObject(new NodeId("test", 0), "test", null, null, NodeId.Null, null);
             Assert.Empty(node.BuildMetadata(tester.Config, extractor, false));
             Assert.Empty(node.BuildMetadata(tester.Config, extractor, true));
             tester.Config.Extraction.NodeTypes.Metadata = true;
-            node.FullAttributes.TypeDefinition = new UAObjectType(new NodeId("type"));
+            node.FullAttributes.TypeDefinition = new UAObjectType(new NodeId("type", 0));
             node.FullAttributes.TypeDefinition.Attributes.DisplayName = "SomeType";
             // Test extras only
             Assert.Single(node.BuildMetadata(tester.Config, extractor, true));
@@ -281,14 +281,14 @@ namespace Test.Unit
             Assert.Equal("nestedValue", meta["propB_nestedProp"]);
 
             // Test null name
-            var nullNameProp = new UAVariable(new NodeId("nullName"), null, null, null, NodeId.Null, null);
+            var nullNameProp = new UAVariable(new NodeId("nullName", 0), null, null, null, NodeId.Null, null);
             nullNameProp.FullAttributes.DataType = pdt;
             node.Attributes.AddProperty(nullNameProp);
             meta = node.BuildMetadata(tester.Config, extractor, true);
             Assert.Equal(4, meta.Count);
 
             // Test null value
-            var nullValueProp = new UAVariable(new NodeId("nullValue"), "nullValue", null, null, NodeId.Null, null);
+            var nullValueProp = new UAVariable(new NodeId("nullValue", 0), "nullValue", null, null, NodeId.Null, null);
             nullValueProp.FullAttributes.DataType = pdt;
             node.Attributes.AddProperty(nullValueProp);
             meta = node.BuildMetadata(tester.Config, extractor, true);
@@ -296,7 +296,7 @@ namespace Test.Unit
             Assert.Equal("", meta["nullValue"]);
 
             // Test duplicated properties
-            var propA2 = new UAVariable(new NodeId("propA2"), "propA", null, null, NodeId.Null, null);
+            var propA2 = new UAVariable(new NodeId("propA2", 0), "propA", null, null, NodeId.Null, null);
             propA2.FullAttributes.DataType = pdt;
             node.Attributes.AddProperty(propA2);
             propA2.FullAttributes.Value = new Variant("valueA2");
@@ -306,7 +306,7 @@ namespace Test.Unit
 
             // Test overwrite extras
             Assert.Equal("SomeType", meta["TypeDefinition"]);
-            var propNT = new UAVariable(new NodeId("TypeDef"), "TypeDefinition", null, null, NodeId.Null, null);
+            var propNT = new UAVariable(new NodeId("TypeDef", 0), "TypeDefinition", null, null, NodeId.Null, null);
             propNT.FullAttributes.DataType = pdt;
             propNT.FullAttributes.Value = new Variant("SomeOtherType");
             node.Attributes.AddProperty(propNT);
@@ -320,7 +320,7 @@ namespace Test.Unit
         {
             using var extractor = tester.BuildExtractor();
 
-            var node = new UAObject(new NodeId("test"), "test", null, null, new NodeId("parent"), null);
+            var node = new UAObject(new NodeId("test", 0), "test", null, null, new NodeId("parent", 0), null);
             node.Attributes.Description = "description";
             var ts = DateTime.UtcNow;
             var pdt = new UADataType(DataTypeIds.String);
@@ -373,14 +373,14 @@ namespace Test.Unit
         public void TestToJson()
         {
             using var extractor = tester.BuildExtractor();
-            var node = new UAObject(new NodeId("test"), "test", null, null, NodeId.Null, null);
+            var node = new UAObject(new NodeId("test", 0), "test", null, null, NodeId.Null, null);
             var converter = tester.Client.StringConverter;
             var log = tester.Provider.GetRequiredService<ILogger<TypesTest>>();
             Assert.Equal("", MetadataToJson(log, node, extractor));
 
             // Extras only
             tester.Config.Extraction.NodeTypes.Metadata = true;
-            node.FullAttributes.TypeDefinition = new UAObjectType(new NodeId("type"));
+            node.FullAttributes.TypeDefinition = new UAObjectType(new NodeId("type", 0));
             node.FullAttributes.TypeDefinition.Attributes.DisplayName = "SomeType";
             Assert.Equal(@"{""TypeDefinition"":""SomeType""}", MetadataToJson(log, node, extractor));
 
@@ -415,7 +415,7 @@ namespace Test.Unit
                 MetadataToJson(log, node, extractor));
 
             // Test null name
-            var nullNameProp = new UAVariable(new NodeId("nullName"), null, null, null, NodeId.Null, null);
+            var nullNameProp = new UAVariable(new NodeId("nullName", 0), null, null, null, NodeId.Null, null);
             nullNameProp.FullAttributes.DataType = pdt;
             node.Attributes.AddProperty(nullNameProp);
             Assert.Equal(@"{""TypeDefinition"":""SomeType"",""propA"":""valueA"","
@@ -423,7 +423,7 @@ namespace Test.Unit
                 MetadataToJson(log, node, extractor));
 
             // Test null value
-            var nullValueProp = new UAVariable(new NodeId("nullValue"), "nullValue", null, null, NodeId.Null, null);
+            var nullValueProp = new UAVariable(new NodeId("nullValue", 0), "nullValue", null, null, NodeId.Null, null);
             nullValueProp.FullAttributes.DataType = pdt;
             node.Attributes.AddProperty(nullValueProp);
             Assert.Equal(@"{""TypeDefinition"":""SomeType"",""propA"":""valueA"","
@@ -431,7 +431,7 @@ namespace Test.Unit
                 MetadataToJson(log, node, extractor));
 
             // Test duplicated properties
-            var propA2 = new UAVariable(new NodeId("propA2"), "propA", null, null, NodeId.Null, null);
+            var propA2 = new UAVariable(new NodeId("propA2", 0), "propA", null, null, NodeId.Null, null);
             propA2.FullAttributes.DataType = pdt;
             node.Attributes.AddProperty(propA2);
             propA2.FullAttributes.Value = new Variant("valueA2");
@@ -443,16 +443,16 @@ namespace Test.Unit
         public void TestToJsonComplexTypes()
         {
             using var extractor = tester.BuildExtractor();
-            var node = new UAObject(new NodeId("test"), "test", null, null, NodeId.Null, null);
+            var node = new UAObject(new NodeId("test", 0), "test", null, null, NodeId.Null, null);
             var converter = tester.Client.StringConverter;
             var log = tester.Provider.GetRequiredService<ILogger<TypesTest>>();
 
             var pdt = new UADataType(DataTypeIds.ReadValueId);
-            var prop = new UAVariable(new NodeId("readvalueid"), "readvalueid", null, null, NodeId.Null, null);
+            var prop = new UAVariable(new NodeId("readvalueid", 0), "readvalueid", null, null, NodeId.Null, null);
 
             // Test simple value
             prop.FullAttributes.DataType = pdt;
-            var value = new ReadValueId { NodeId = new NodeId("test"), AttributeId = Attributes.Value };
+            var value = new ReadValueId { NodeId = new NodeId("test", 0), AttributeId = Attributes.Value };
             prop.FullAttributes.Value = new Variant(value);
             node.Attributes.AddProperty(prop);
 
@@ -461,7 +461,7 @@ namespace Test.Unit
 
             // Test nested
             node.Attributes.Properties.Clear();
-            var outerProp = new UAObject(new NodeId("outer"), "outer", null, null, NodeId.Null, null);
+            var outerProp = new UAObject(new NodeId("outer", 0), "outer", null, null, NodeId.Null, null);
             outerProp.Attributes.AddProperty(prop);
             node.Attributes.AddProperty(outerProp);
             Assert.Equal(@"{""outer"":{""readvalueid"":{""NodeId"":{""IdType"":1,""Id"":""test""},""AttributeId"":13}}}",
@@ -484,7 +484,7 @@ namespace Test.Unit
             pdt.Attributes.DisplayName = "String";
 
             // basic
-            var node = new UAVariable(new NodeId("test"), "name", null, null, NodeId.Null, null);
+            var node = new UAVariable(new NodeId("test", 0), "name", null, null, NodeId.Null, null);
             node.FullAttributes.ValueRank = ValueRanks.Scalar;
             var str = node.ToString();
             var refStr = "Variable: name\n"
@@ -492,14 +492,14 @@ namespace Test.Unit
             Assert.Equal(refStr.ReplaceLineEndings(), str.ReplaceLineEndings());
 
             // full
-            node = new UAVariable(new NodeId("test"), "name", null, null, new NodeId("parent"), null);
+            node = new UAVariable(new NodeId("test", 0), "name", null, null, new NodeId("parent", 0), null);
             node.Attributes.Description = "description";
             node.FullAttributes.DataType = new UADataType(DataTypeIds.Double);
             node.FullAttributes.DataType.Attributes.DisplayName = "Double";
             node.FullAttributes.AccessLevel = AccessLevels.CurrentRead | AccessLevels.HistoryRead;
             node.FullAttributes.ValueRank = ValueRanks.Any;
             node.FullAttributes.ArrayDimensions = new int[] { 4 };
-            node.FullAttributes.TypeDefinition = new UAVariableType(new NodeId("type"));
+            node.FullAttributes.TypeDefinition = new UAVariableType(new NodeId("type", 0));
             node.AsEvents = true;
 
             var propA = CommonTestUtils.GetSimpleVariable("propA", pdt);
@@ -558,8 +558,8 @@ namespace Test.Unit
         [Fact]
         public void TestGetArrayChildren()
         {
-            var id = new NodeId("test");
-            var node = new UAVariable(id, "name", null, null, NodeId.Null, new UAVariableType(new NodeId("test")));
+            var id = new NodeId("test", 0);
+            var node = new UAVariable(id, "name", null, null, NodeId.Null, new UAVariableType(new NodeId("test", 0)));
             Assert.Single(node.CreateTimeseries());
             Assert.Null(node.ArrayChildren);
 
@@ -590,8 +590,8 @@ namespace Test.Unit
         [Fact]
         public void TestGetTimeseries()
         {
-            var id = new NodeId("test");
-            var node = new UAVariable(id, "name", null, null, NodeId.Null, new UAVariableType(new NodeId("test")));
+            var id = new NodeId("test", 0);
+            var node = new UAVariable(id, "name", null, null, NodeId.Null, new UAVariableType(new NodeId("test", 0)));
 
             node.FullAttributes.AccessLevel = AccessLevels.CurrentRead | AccessLevels.HistoryRead;
             node.FullAttributes.DataType = new UADataType(DataTypeIds.Double);
@@ -622,7 +622,7 @@ namespace Test.Unit
 
             var pdt = new UADataType(DataTypeIds.String);
 
-            var node = new UAVariable(new NodeId("test"), "test", null, null, new NodeId("parent"), null);
+            var node = new UAVariable(new NodeId("test", 0), "test", null, null, new NodeId("parent", 0), null);
             node.Attributes.Description = "description";
             node.FullAttributes.DataType = new UADataType(DataTypeIds.Boolean);
             node.Attributes.Properties = new List<BaseUANode>();
@@ -673,7 +673,7 @@ namespace Test.Unit
         {
             using var extractor = tester.BuildExtractor();
 
-            var node = new UAVariable(new NodeId("test"), "test", null, null, new NodeId("parent"), null);
+            var node = new UAVariable(new NodeId("test", 0), "test", null, null, new NodeId("parent", 0), null);
             node.Attributes.Description = "description";
             node.FullAttributes.DataType = new UADataType(DataTypeIds.Boolean);
             node.Attributes.Properties = new List<BaseUANode>();
@@ -690,10 +690,10 @@ namespace Test.Unit
 
             var nodeToAssetIds = new Dictionary<NodeId, long>
             {
-                { new NodeId("parent"), 111 },
-                { new NodeId("parent2"), 222 }
+                { new NodeId("parent", 0), 111 },
+                { new NodeId("parent2", 0), 222 }
             };
-            extractor.State.RegisterNode(new NodeId("parent2"), "value4");
+            extractor.State.RegisterNode(new NodeId("parent2", 0), "value4");
 
             var ts = node.ToTimeseries(tester.Config, extractor, extractor, 123, nodeToAssetIds, null);
             Assert.Equal("gp.base:s=test", ts.ExternalId);
@@ -841,7 +841,7 @@ namespace Test.Unit
             Assert.False(dt.IsString);
 
             // Custom type
-            dt = new UADataType(new NodeId("test"));
+            dt = new UADataType(new NodeId("test", 0));
             Assert.False(dt.IsStep);
             Assert.True(dt.IsString);
 
@@ -849,19 +849,19 @@ namespace Test.Unit
             var config = new DataTypeConfig();
 
             // Override step
-            dt = new UADataType(new ProtoDataType { IsStep = true }, new NodeId("test"), config);
+            dt = new UADataType(new ProtoDataType { IsStep = true }, new NodeId("test", 0), config);
             Assert.True(dt.IsStep);
             Assert.False(dt.IsString);
 
             // Override enum, strings disabled
-            dt = new UADataType(new ProtoDataType { Enum = true }, new NodeId("test"), config);
+            dt = new UADataType(new ProtoDataType { Enum = true }, new NodeId("test", 0), config);
             Assert.True(dt.IsStep);
             Assert.False(dt.IsString);
             Assert.NotNull(dt.EnumValues);
 
             // Override enum, strings enabled
             config.EnumsAsStrings = true;
-            dt = new UADataType(new ProtoDataType { Enum = true }, new NodeId("test"), config);
+            dt = new UADataType(new ProtoDataType { Enum = true }, new NodeId("test", 0), config);
             Assert.False(dt.IsStep);
             Assert.True(dt.IsString);
             Assert.NotNull(dt.EnumValues);
@@ -869,7 +869,7 @@ namespace Test.Unit
 
             // Child constructor
             var rootDt = new UADataType(DataTypeIds.Boolean);
-            dt = new UADataType(new NodeId("test"), rootDt);
+            dt = new UADataType(new NodeId("test", 0), rootDt);
             Assert.True(dt.IsStep);
             Assert.False(dt.IsString);
 
@@ -877,7 +877,7 @@ namespace Test.Unit
             {
                 [123] = "test"
             };
-            dt = new UADataType(new NodeId("test"), rootDt);
+            dt = new UADataType(new NodeId("test", 0), rootDt);
             Assert.True(dt.IsStep);
             Assert.False(dt.IsString);
             Assert.NotNull(dt.EnumValues);
@@ -904,7 +904,7 @@ namespace Test.Unit
 
             // Enum double
             var config = new DataTypeConfig();
-            dt = new UADataType(new ProtoDataType { Enum = true }, new NodeId("test"), config);
+            dt = new UADataType(new ProtoDataType { Enum = true }, new NodeId("test", 0), config);
             dp = dt.ToDataPoint(extractor, 123, now, "id");
             Assert.Equal("id", dp.Id);
             Assert.Equal(123, dp.DoubleValue);
@@ -912,7 +912,7 @@ namespace Test.Unit
 
             // Enum string
             config.EnumsAsStrings = true;
-            dt = new UADataType(new ProtoDataType { Enum = true }, new NodeId("test"), config);
+            dt = new UADataType(new ProtoDataType { Enum = true }, new NodeId("test", 0), config);
             dt.EnumValues[123] = "enum";
             dp = dt.ToDataPoint(extractor, 123, now, "id");
             Assert.Equal("id", dp.Id);
@@ -933,7 +933,7 @@ namespace Test.Unit
 
             // Test complex type
             dt = new UADataType(DataTypeIds.ReadValueId);
-            var value = new Variant(new ReadValueId { AttributeId = Attributes.Value, NodeId = new NodeId("test") });
+            var value = new Variant(new ReadValueId { AttributeId = Attributes.Value, NodeId = new NodeId("test", 0) });
             dp = dt.ToDataPoint(extractor, value, now, "id");
             Assert.Equal("id", dp.Id);
             Assert.Equal(@"{""NodeId"":{""IdType"":1,""Id"":""test""},""AttributeId"":13}", dp.StringValue);
@@ -952,7 +952,7 @@ namespace Test.Unit
             Assert.Equal(refStr.ReplaceLineEndings(), str.ReplaceLineEndings());
 
             // full
-            dt = new UADataType(new NodeId("test"))
+            dt = new UADataType(new NodeId("test", 0))
             {
                 IsString = false,
                 IsStep = true,
@@ -983,8 +983,8 @@ namespace Test.Unit
             {
                 EventId = "test.test",
                 Time = now,
-                EmittingNode = new NodeId("emitter"),
-                EventType = new UAObjectType(new NodeId("type"))
+                EmittingNode = new NodeId("emitter", 0),
+                EventType = new UAObjectType(new NodeId("type", 0))
             };
             evt.EventType.Attributes.DisplayName = "EventType";
 
@@ -996,7 +996,7 @@ namespace Test.Unit
             Assert.Equal(refStr.ReplaceLineEndings(), str.ReplaceLineEndings());
 
             evt.Message = "message";
-            evt.SourceNode = new NodeId("source");
+            evt.SourceNode = new NodeId("source", 0);
             evt.MetaData = new Dictionary<string, string>
             {
                 { "key", "value1" },
@@ -1024,12 +1024,12 @@ namespace Test.Unit
             // minimal
             var now = DateTime.UtcNow;
             using var extractor = tester.BuildExtractor();
-            var state = new EventExtractionState(tester.Client, new NodeId("emitter"), true, true, true);
+            var state = new EventExtractionState(tester.Client, new NodeId("emitter", 0), true, true, true);
             extractor.State.SetEmitterState(state);
-            extractor.State.RegisterNode(new NodeId("type"), tester.Client.GetUniqueId(new NodeId("type")));
-            var type = new UAObjectType(new NodeId("type"));
+            extractor.State.RegisterNode(new NodeId("type", 0), tester.Client.GetUniqueId(new NodeId("type", 0)));
+            var type = new UAObjectType(new NodeId("type", 0));
             extractor.State.ActiveEvents[type.Id] = type;
-            extractor.State.RegisterNode(new NodeId("emitter"), tester.Client.GetUniqueId(new NodeId("emitter")));
+            extractor.State.RegisterNode(new NodeId("emitter", 0), tester.Client.GetUniqueId(new NodeId("emitter", 0)));
 
             ILogger log = tester.Provider.GetRequiredService<ILogger<TypesTest>>();
             // No event should be created without all of these
@@ -1037,7 +1037,7 @@ namespace Test.Unit
             {
                 EventId = "test.test",
                 Time = DateTime.MinValue,
-                EmittingNode = new NodeId("emitter"),
+                EmittingNode = new NodeId("emitter", 0),
                 EventType = type,
                 SourceNode = NodeId.Null
             };
@@ -1056,16 +1056,16 @@ namespace Test.Unit
             }
 
             // full
-            extractor.State.RegisterNode(new NodeId("source"), tester.Client.GetUniqueId(new NodeId("source")));
+            extractor.State.RegisterNode(new NodeId("source", 0), tester.Client.GetUniqueId(new NodeId("source", 0)));
             evt.Message = "message";
             evt.Time = now;
-            evt.SourceNode = new NodeId("source");
+            evt.SourceNode = new NodeId("source", 0);
             evt.SetMetadata(extractor.StringConverter, new[]
             {
                 new EventFieldValue(new RawTypeField("key1"), "value1"),
                 new EventFieldValue(new RawTypeField("key1"), 123),
                 new EventFieldValue(new RawTypeField("key1"), Variant.Null),
-                new EventFieldValue(new RawTypeField("key1"), new NodeId("meta")),
+                new EventFieldValue(new RawTypeField("key1"), new NodeId("meta", 0)),
             }, log);
 
             bytes = evt.ToStorableBytes(extractor);
@@ -1094,12 +1094,12 @@ namespace Test.Unit
 
             var evt = new UAEvent
             {
-                EmittingNode = new NodeId("emitter"),
+                EmittingNode = new NodeId("emitter", 0),
                 MetaData = new Dictionary<string, string>(),
                 EventId = "eventid",
-                EventType = new UAObjectType(new NodeId("type")),
+                EventType = new UAObjectType(new NodeId("type", 0)),
                 Message = "message",
-                SourceNode = new NodeId("source"),
+                SourceNode = new NodeId("source", 0),
                 Time = ts
             };
             evt.EventType.Attributes.DisplayName = "EventType";
@@ -1123,7 +1123,7 @@ namespace Test.Unit
             // With parentId mapping
             conv = evt.ToStatelessCDFEvent(extractor, 123, new Dictionary<NodeId, string>
             {
-                { new NodeId("source"), "source" }
+                { new NodeId("source", 0), "source" }
             });
             Assert.Equal(new[] { "source" }, conv.AssetExternalIds);
 
@@ -1157,12 +1157,12 @@ namespace Test.Unit
 
             var evt = new UAEvent
             {
-                EmittingNode = new NodeId("emitter"),
+                EmittingNode = new NodeId("emitter", 0),
                 MetaData = new Dictionary<string, string>(),
                 EventId = "eventid",
-                EventType = new UAObjectType(new NodeId("type")),
+                EventType = new UAObjectType(new NodeId("type", 0)),
                 Message = "message",
-                SourceNode = new NodeId("source"),
+                SourceNode = new NodeId("source", 0),
                 Time = ts
             };
             evt.MetaData["field"] = "value";
@@ -1171,7 +1171,7 @@ namespace Test.Unit
             // Plain
             var nodeToAsset = new Dictionary<NodeId, long>
             {
-                { new NodeId("source"), 111 }
+                { new NodeId("source", 0), 111 }
             };
 
             var conv = evt.ToCDFEvent(extractor, 123, null);
@@ -1218,11 +1218,11 @@ namespace Test.Unit
 
             var evt = new UAEvent
             {
-                EmittingNode = new NodeId("emitter"),
+                EmittingNode = new NodeId("emitter", 0),
                 EventId = "eventid",
-                EventType = new UAObjectType(new NodeId("type")),
+                EventType = new UAObjectType(new NodeId("type", 0)),
                 Message = "message",
-                SourceNode = new NodeId("source"),
+                SourceNode = new NodeId("source", 0),
                 Time = ts
             };
 
@@ -1230,11 +1230,11 @@ namespace Test.Unit
 
             var rawMeta = new[]
             {
-                new EventFieldValue(new RawTypeField("test-simple"), new NodeId("test")),
-                new EventFieldValue(new RawTypeField("test-complex"), new Variant(new ReadValueId { AttributeId = 1, NodeId = new NodeId("test2") })),
+                new EventFieldValue(new RawTypeField("test-simple"), new NodeId("test", 0)),
+                new EventFieldValue(new RawTypeField("test-complex"), new Variant(new ReadValueId { AttributeId = 1, NodeId = new NodeId("test2", 0) })),
                 new EventFieldValue(new RawTypeField(new QualifiedNameCollection { "deep", "deep-2", "deep-simple" }), 123.123),
                 new EventFieldValue(new RawTypeField(new QualifiedNameCollection { "deep", "deep-2", "deep-complex" }),
-                    new Variant(new ReadValueId { AttributeId = 1, NodeId = new NodeId("test2") })),
+                    new Variant(new ReadValueId { AttributeId = 1, NodeId = new NodeId("test2", 0) })),
                 new EventFieldValue(new RawTypeField(new QualifiedNameCollection { "deep", "deep-2" }), new [] { 1, 2, 3, 4 }),
                 new EventFieldValue(new RawTypeField(new QualifiedNameCollection { "deep", "deep-2", "Value" }), 123.321)
             };
@@ -1258,10 +1258,10 @@ namespace Test.Unit
             var organizes = tester.Client.TypeManager.GetReferenceType(ReferenceTypeIds.Organizes);
             var hasComponent = tester.Client.TypeManager.GetReferenceType(ReferenceTypeIds.HasComponent);
 
-            var source = new UAObject(new NodeId("source"), "Source", "Source", null, NodeId.Null, null);
-            var target = new UAObject(new NodeId("target"), "Target", "Target", null, NodeId.Null, null);
-            var sourceVar = new UAVariable(new NodeId("source"), "Source", "Source", null, NodeId.Null, null);
-            var targetVar = new UAVariable(new NodeId("target"), "Target", "Target", null, NodeId.Null, null);
+            var source = new UAObject(new NodeId("source", 0), "Source", "Source", null, NodeId.Null, null);
+            var target = new UAObject(new NodeId("target", 0), "Target", "Target", null, NodeId.Null, null);
+            var sourceVar = new UAVariable(new NodeId("source", 0), "Source", "Source", null, NodeId.Null, null);
+            var targetVar = new UAVariable(new NodeId("target", 0), "Target", "Target", null, NodeId.Null, null);
             // asset - asset
             var reference = new UAReference(organizes, true, source, target);
             reference.Type.Attributes.DisplayName = "Organizes";
@@ -1291,10 +1291,10 @@ namespace Test.Unit
             var organizes = tester.Client.TypeManager.GetReferenceType(ReferenceTypeIds.Organizes);
             var hasComponent = tester.Client.TypeManager.GetReferenceType(ReferenceTypeIds.HasComponent);
 
-            var source = new UAObject(new NodeId("source"), "Source", "Source", null, NodeId.Null, null);
-            var target = new UAObject(new NodeId("target"), "Target", "Target", null, NodeId.Null, null);
-            var sourceVar = new UAVariable(new NodeId("source2"), "Source", "Source", null, NodeId.Null, null);
-            var targetVar = new UAVariable(new NodeId("target2"), "Target", "Target", null, NodeId.Null, null);
+            var source = new UAObject(new NodeId("source", 0), "Source", "Source", null, NodeId.Null, null);
+            var target = new UAObject(new NodeId("target", 0), "Target", "Target", null, NodeId.Null, null);
+            var sourceVar = new UAVariable(new NodeId("source2", 0), "Source", "Source", null, NodeId.Null, null);
+            var targetVar = new UAVariable(new NodeId("target2", 0), "Target", "Target", null, NodeId.Null, null);
 
             var reference = new UAReference(organizes, true, source, target);
             Assert.Equal(reference, reference);
@@ -1320,8 +1320,8 @@ namespace Test.Unit
         {
             using var extractor = tester.BuildExtractor();
             var organizes = tester.Client.TypeManager.GetReferenceType(ReferenceTypeIds.Organizes);
-            var source = new UAObject(new NodeId("source"), "Source", "Source", null, NodeId.Null, null);
-            var target = new UAVariable(new NodeId("target"), "Target", "Target", null, NodeId.Null, null);
+            var source = new UAObject(new NodeId("source", 0), "Source", "Source", null, NodeId.Null, null);
+            var target = new UAVariable(new NodeId("target", 0), "Target", "Target", null, NodeId.Null, null);
 
             var reference = new UAReference(organizes, true, source, target);
             reference.Type.Attributes.DisplayName = "Organizes";

@@ -160,7 +160,7 @@ namespace Cognite.OpcUa
                 );
             }
 
-            if (nodes.Any())
+            if (nodes.Count != 0)
             {
                 await CheckLastStateTriggered(nodes.Values.ToList(), token);
                 CreateSubscriptions(nodes, token);

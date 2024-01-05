@@ -88,7 +88,7 @@ namespace Cognite.OpcUa.Pushers
 
         private static bool ShouldSetNewMetadata(FullConfig config, Dictionary<string, string> newMetadata, Dictionary<string, string>? oldMetadata)
         {
-            if (newMetadata.Any())
+            if (newMetadata.Count != 0)
             {
                 if (oldMetadata == null) return true;
                 if (!newMetadata.All(kvp => oldMetadata.TryGetValue(kvp.Key, out var oldVal) && kvp.Value == oldVal)) return true;

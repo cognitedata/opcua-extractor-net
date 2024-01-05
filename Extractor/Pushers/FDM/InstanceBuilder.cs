@@ -256,7 +256,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             var currentType = type;
             while (currentType != null)
             {
-                if (!currentType.Children.Any())
+                if (currentType.Children.Count == 0)
                 {
                     currentType = currentType.Parent;
                     continue;
@@ -264,7 +264,7 @@ namespace Cognite.OpcUa.Pushers.FDM
 
                 var props = new Dictionary<string, IDMSValue?>();
                 CollectProperties(node, currentType.Children, Enumerable.Empty<string>(), props, knownProperties, currentType, true);
-                if (props.Any())
+                if (props.Count != 0)
                 {
                     data.Add(new InstanceData<Dictionary<string, IDMSValue?>>
                     {
@@ -426,7 +426,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             NodeClass = (int)node.NodeClass;
             DisplayName = node.Attributes.DisplayName;
             Description = node.Attributes.Description;
-            if (knownProperties.Any())
+            if (knownProperties.Count != 0)
             {
                 NodeMeta = knownProperties;
             }

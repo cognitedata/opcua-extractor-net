@@ -89,7 +89,7 @@ namespace Cognite.OpcUa.Types
                 builder.AppendFormat(CultureInfo.InvariantCulture, "SourceNode: {0}", SourceNode);
                 builder.AppendLine();
             }
-            if (MetaData != null && MetaData.Any())
+            if (MetaData != null && MetaData.Count != 0)
             {
                 builder.Append("MetaData: {");
                 builder.AppendLine();
@@ -262,7 +262,7 @@ namespace Cognite.OpcUa.Types
                 }
             }
 
-            if (finalMetaData.Any())
+            if (finalMetaData.Count != 0)
             {
                 evt.Metadata = finalMetaData;
             }

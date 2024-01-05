@@ -55,7 +55,7 @@ namespace Cognite.Bridge
             if (update.DataSetId != null && update.DataSetId != old.DataSetId) upd.DataSetId = new UpdateNullable<long?>(update.DataSetId);
             if (update.Description != null && update.Description != old.Description) upd.Description = new UpdateNullable<string>(update.Description);
 
-            if (update.Metadata != null && update.Metadata.Any())
+            if (update.Metadata != null && update.Metadata.Count != 0)
                 upd.Metadata = new UpdateDictionary<string>(update.Metadata, Enumerable.Empty<string>());
 
             if (update.Name != null && update.Name != old.Name) upd.Name = new Update<string>(update.Name);
@@ -123,12 +123,12 @@ namespace Cognite.Bridge
         /// <returns>True on success</returns>
         public async Task<bool> PushAssets(MqttApplicationMessage msg, CancellationToken token)
         {
-            if (msg == null || msg.Payload == null)
+            if (msg == null)
             {
                 log.LogWarning("Null payload in assets");
                 return true;
             }
-            var assets = JsonSerializer.Deserialize<IEnumerable<AssetCreate>>(Encoding.UTF8.GetString(msg.Payload));
+            var assets = JsonSerializer.Deserialize<IEnumerable<AssetCreate>>(Encoding.UTF8.GetString(msg.PayloadSegment));
             if (assets == null || !assets.Any()) return true;
 
             var idsToTest = assets.Select(asset => asset.ExternalId).ToList();
@@ -168,7 +168,7 @@ namespace Cognite.Bridge
                     .Where(update => update != null)
                     .ToList();
 
-                if (!toUpdate.Any()) return true;
+                if (toUpdate.Count == 0) return true;
 
                 try
                 {
@@ -240,13 +240,7 @@ namespace Cognite.Bridge
         public async Task<bool> PushTimeseries(MqttApplicationMessage msg, CancellationToken token)
         {
             if (msg == null) return true;
-            if (msg.Payload == null)
-            {
-                log.LogWarning("Null payload in timeseries");
-                return true;
-            }
-            var str = Encoding.UTF8.GetString(msg.Payload);
-            var timeseries = JsonSerializer.Deserialize<IEnumerable<StatelessTimeSeriesCreate>>(Encoding.UTF8.GetString(msg.Payload));
+            var timeseries = JsonSerializer.Deserialize<IEnumerable<StatelessTimeSeriesCreate>>(Encoding.UTF8.GetString(msg.PayloadSegment));
 
             if (timeseries == null || !timeseries.Any()) return true;
 
@@ -315,7 +309,7 @@ namespace Cognite.Bridge
                     .Where(update => update != null)
                     .ToList();
 
-                if (!toUpdate.Any()) return true;
+                if (toUpdate.Count == 0) return true;
 
                 try
                 {
@@ -338,12 +332,12 @@ namespace Cognite.Bridge
         /// <returns>True on success</returns>
         public async Task<bool> PushDatapoints(MqttApplicationMessage msg, CancellationToken token)
         {
-            if (msg == null || msg.Payload == null)
+            if (msg == null)
             {
                 log.LogWarning("Null payload in datapoints");
                 return true;
             }
-            var datapoints = DataPointInsertionRequest.Parser.ParseFrom(msg.Payload);
+            var datapoints = DataPointInsertionRequest.Parser.ParseFrom(msg.PayloadSegment);
 
             var ids = datapoints.Items.Select(pts => pts.ExternalId).ToList();
 
@@ -351,7 +345,7 @@ namespace Cognite.Bridge
                 .Where(id => !tsIsString.ContainsKey(id))
                 .ToList();
 
-            if (missingTsIds.Any())
+            if (missingTsIds.Count != 0)
             {
                 if (!await RetrieveMissingTimeSeries(missingTsIds, token))
                 {
@@ -391,13 +385,8 @@ namespace Cognite.Bridge
         /// <returns>True on success</returns>
         public async Task<bool> PushEvents(MqttApplicationMessage msg, CancellationToken token)
         {
-            if (msg == null) throw new ArgumentNullException(nameof(msg));
-            if (msg.Payload == null)
-            {
-                log.LogWarning("Null payload in events");
-                return true;
-            }
-            var events = JsonSerializer.Deserialize<IEnumerable<StatelessEventCreate>>(Encoding.UTF8.GetString(msg.Payload));
+            ArgumentNullException.ThrowIfNull(msg);
+            var events = JsonSerializer.Deserialize<IEnumerable<StatelessEventCreate>>(Encoding.UTF8.GetString(msg.PayloadSegment));
 
             if (events == null || !events.Any()) return true;
 
@@ -444,13 +433,8 @@ namespace Cognite.Bridge
         /// <returns></returns>
         public async Task<bool> PushRelationships(MqttApplicationMessage msg, CancellationToken token)
         {
-            if (msg == null) throw new ArgumentNullException(nameof(msg));
-            if (msg.Payload == null)
-            {
-                log.LogWarning("Null payload in relationships");
-                return true;
-            }
-            var relationships = JsonSerializer.Deserialize<IEnumerable<RelationshipCreate>>(Encoding.UTF8.GetString(msg.Payload));
+            ArgumentNullException.ThrowIfNull(msg);
+            var relationships = JsonSerializer.Deserialize<IEnumerable<RelationshipCreate>>(Encoding.UTF8.GetString(msg.PayloadSegment));
 
             if (relationships == null || !relationships.Any()) return true;
 
@@ -494,7 +478,7 @@ namespace Cognite.Bridge
                             existing.Add((value as MultiValue.String)!.Value);
                         }
                     }
-                    if (!existing.Any()) throw;
+                    if (existing.Count == 0) throw;
 
                     relationships = relationships.Where(rel => !existing.Contains(rel.ExternalId)).ToList();
                     await PushRelationshipsChunk(relationships, token);
@@ -506,6 +490,11 @@ namespace Cognite.Bridge
             }
         }
 
+        private static readonly JsonSerializerOptions rawJsonOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        };
+
         /// <summary>
         /// Push contents of message to raw, the message should contain both the Raw database and table.
         /// If update is enabled, existing rows are updated.
@@ -515,16 +504,8 @@ namespace Cognite.Bridge
         /// <returns></returns>
         public async Task<bool> PushRaw(MqttApplicationMessage msg, CancellationToken token)
         {
-            if (msg == null) throw new ArgumentNullException(nameof(msg));
-            if (msg.Payload == null)
-            {
-                log.LogWarning("Null payload in raw");
-                return true;
-            }
-            var rows = JsonSerializer.Deserialize<RawRequestWrapper>(Encoding.UTF8.GetString(msg.Payload), new JsonSerializerOptions
-            {
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-            });
+            ArgumentNullException.ThrowIfNull(msg);
+            var rows = JsonSerializer.Deserialize<RawRequestWrapper>(Encoding.UTF8.GetString(msg.PayloadSegment), rawJsonOptions);
 
             if (rows?.Rows == null || !rows.Rows.Any() || rows.Database == null || rows.Table == null) return true;
 
@@ -559,10 +540,10 @@ namespace Cognite.Bridge
         private async Task UpsertRawRows(
             string dbName,
             string tableName,
-            IDictionary<string, JsonElement> toUpsert,
+            Dictionary<string, JsonElement> toUpsert,
             CancellationToken token)
         {
-            if (!toUpsert.Any()) return;
+            if (toUpsert.Count == 0) return;
             string? cursor = null;
             var existing = new List<RawRow<Dictionary<string, JsonElement>>>();
             do

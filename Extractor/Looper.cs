@@ -128,13 +128,13 @@ namespace Cognite.OpcUa
 
         private async Task CheckFailingPushers(CancellationToken token)
         {
-            if (!failingPushers.Any()) return;
+            if (failingPushers.Count == 0) return;
 
             var result = await Task.WhenAll(failingPushers.Select(pusher => pusher.TestConnection(config, token)));
             var recovered = result.Select((res, idx) => (result: res, pusher: failingPushers.ElementAt(idx)))
                 .Where(x => x.result == true).ToList();
 
-            if (recovered.Any())
+            if (recovered.Count != 0)
             {
                 log.LogInformation("Pushers {Names} recovered", string.Join(", ", recovered.Select(val => val.pusher.GetType())));
             }

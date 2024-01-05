@@ -116,17 +116,17 @@ namespace Test.Unit
 
         private static UAObject GetObject(string id)
         {
-            return new UAObject(new NodeId(id), id, null, null, NodeId.Null, null);
+            return new UAObject(new NodeId(id, 0), id, null, null, NodeId.Null, null);
         }
 
         private static UAVariable GetVariable(string id)
         {
-            return new UAVariable(new NodeId(id), id, null, null, NodeId.Null, null);
+            return new UAVariable(new NodeId(id, 0), id, null, null, NodeId.Null, null);
         }
 
         private static UAReference GetReference(BaseUANode source, BaseUANode target, TypeManager manager)
         {
-            return new UAReference(manager.GetReferenceType(new NodeId("type")),
+            return new UAReference(manager.GetReferenceType(new NodeId("type", 0)),
                 true, source, target);
         }
 
@@ -258,10 +258,10 @@ namespace Test.Unit
         {
             // Create some test data
             var root = new NodeId(1);
-            var nodes = Enumerable.Range(1, count).Select(i => new UAObject(new NodeId($"object{i}"), $"object{i}", null, null, root, null)).ToList();
+            var nodes = Enumerable.Range(1, count).Select(i => new UAObject(new NodeId($"object{i}", 0), $"object{i}", null, null, root, null)).ToList();
             var variables = Enumerable.Range(1, count).Select(i =>
             {
-                var v = new UAVariable(new NodeId($"var{i}"), $"var{i}", null, null, root, null);
+                var v = new UAVariable(new NodeId($"var{i}", 0), $"var{i}", null, null, root, null);
                 if (i % 2 == 0)
                 {
                     v.FullAttributes.ShouldReadHistoryOverride = true;

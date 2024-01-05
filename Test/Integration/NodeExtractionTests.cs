@@ -3,6 +3,7 @@ using Cognite.OpcUa;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.Types;
+using CogniteSdk;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
@@ -703,6 +704,10 @@ namespace Test.Integration
             using var extractor = tester.BuildExtractor(true, null, pusher);
             await RunReferenceExtraction(extractor);
 
+            foreach (var rf in pusher.PushedReferences)
+            {
+                tester.Log.LogDebug("{S}", rf);
+            }
             Assert.Equal(18, pusher.PushedReferences.Count);
             Assert.Equal(14, pusher.PushedReferences.Count(rel => rel.IsForward));
 
@@ -893,7 +898,7 @@ namespace Test.Integration
 
             var runTask = extractor.RunExtractor();
 
-            await TestUtils.WaitForCondition(() => handler.Assets.Any() && handler.Timeseries.Any(), 5);
+            await TestUtils.WaitForCondition(() => handler.Assets.Count != 0 && handler.Timeseries.Count != 0, 5);
 
             CommonTestUtils.VerifyStartingConditions(handler.Assets, handler.Timeseries, null, extractor, tester.Server.Ids.Custom, false);
 
@@ -955,7 +960,7 @@ namespace Test.Integration
 
             var runTask = extractor.RunExtractor();
 
-            await TestUtils.WaitForCondition(() => handler.AssetsRaw.Any() && handler.TimeseriesRaw.Any(), 5);
+            await TestUtils.WaitForCondition(() => handler.AssetsRaw.Count != 0 && handler.TimeseriesRaw.Count != 0, 5);
 
             CommonTestUtils.VerifyStartingConditions(
                 handler.AssetsRaw
@@ -1027,7 +1032,7 @@ namespace Test.Integration
 
             var runTask = extractor.RunExtractor();
 
-            await TestUtils.WaitForCondition(() => handler.Assets.Any() && handler.Timeseries.Any(), 5);
+            await TestUtils.WaitForCondition(() => handler.Assets.Count != 0 && handler.Timeseries.Count != 0, 5);
 
             var id = tester.Client.GetUniqueId(tester.Server.Ids.Wrong.RankImprecise);
 

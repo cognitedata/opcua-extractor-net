@@ -74,7 +74,7 @@ namespace Test.Unit
 
             var task = extractor.RunExtractor();
             await extractor.WaitForSubscriptions();
-            Assert.True(pusher.PushedNodes.Any());
+            Assert.True(pusher.PushedNodes.Count != 0);
             pusher.PushedNodes.Clear();
             await extractor.OnServerReconnect(tester.Client);
 
@@ -121,13 +121,13 @@ namespace Test.Unit
             var ids = tester.Server.Ids.Base;
             var nodes = new List<BaseUANode>
             {
-                new UAObject(new NodeId("object1"), "object1", null, null, root, null),
-                new UAObject(new NodeId("object2"), "object2", null, null, root, null)
+                new UAObject(new NodeId("object1", 0), "object1", null, null, root, null),
+                new UAObject(new NodeId("object2", 0), "object2", null, null, root, null)
             };
             var variables = new List<UAVariable>
             {
-                new UAVariable(new NodeId("var1"), "var1", null, null, root, null),
-                new UAVariable(new NodeId("var2"), "var2", null, null, root, null)
+                new UAVariable(new NodeId("var1", 0), "var1", null, null, root, null),
+                new UAVariable(new NodeId("var2", 0), "var2", null, null, root, null)
             };
 
             variables[0].FullAttributes.ShouldReadHistoryOverride = true;
@@ -176,14 +176,14 @@ namespace Test.Unit
             using var extractor = tester.BuildExtractor();
 
             tester.Config.Extraction.DataTypes.DataTypeMetadata = true;
-            var variable = new UAVariable(new NodeId("test"), "test", null, null, NodeId.Null, null);
+            var variable = new UAVariable(new NodeId("test", 0), "test", null, null, NodeId.Null, null);
             variable.FullAttributes.DataType = new UADataType(DataTypeIds.Double);
             var fields = variable.GetExtraMetadata(tester.Config, extractor.Context, extractor.StringConverter);
             Assert.Single(fields);
             Assert.Equal("Double", fields["dataType"]);
 
             tester.Config.Extraction.NodeTypes.Metadata = true;
-            var node = new UAObject(new NodeId("test"), "test", null, null, NodeId.Null, new UAObjectType(new NodeId("type")));
+            var node = new UAObject(new NodeId("test", 0), "test", null, null, NodeId.Null, new UAObjectType(new NodeId("type", 0)));
             node.FullAttributes.TypeDefinition.Attributes.DisplayName = "SomeType";
             fields = node.GetExtraMetadata(tester.Config, extractor.Context, extractor.StringConverter);
             Assert.Single(fields);
@@ -193,7 +193,7 @@ namespace Test.Unit
             tester.Config.Extraction.NodeTypes.Metadata = false;
 
             tester.Config.Extraction.NodeTypes.AsNodes = true;
-            var type = new UAVariableType(new NodeId("test"), "test", null, null, NodeId.Null);
+            var type = new UAVariableType(new NodeId("test", 0), "test", null, null, NodeId.Null);
             type.FullAttributes.DataType = new UADataType(DataTypeIds.String);
             type.FullAttributes.Value = new Variant("value");
             fields = type.GetExtraMetadata(tester.Config, extractor.Context, extractor.StringConverter);
@@ -205,15 +205,15 @@ namespace Test.Unit
         {
             tester.Config.Extraction.NodeMap = new Dictionary<string, ProtoNodeId>
             {
-                { "Test1", new NodeId("test").ToProtoNodeId(tester.Client) },
+                { "Test1", new NodeId("test", 0).ToProtoNodeId(tester.Client) },
                 { "Test2", new NodeId("test2", 2).ToProtoNodeId(tester.Client) }
             };
             var ctx = new SessionContext(tester.Config, tester.Log);
             ctx.UpdateFromSession(tester.Client.SessionManager.Session);
 
-            Assert.Equal("Test1", ctx.GetUniqueId(new NodeId("test")));
+            Assert.Equal("Test1", ctx.GetUniqueId(new NodeId("test", 0)));
             Assert.Equal("Test2", ctx.GetUniqueId(new NodeId("test2", 2)));
-            Assert.Equal("Test1[0]", ctx.GetUniqueId(new NodeId("test"), 0));
+            Assert.Equal("Test1[0]", ctx.GetUniqueId(new NodeId("test", 0), 0));
         }
 
         [Fact]

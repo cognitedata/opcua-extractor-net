@@ -130,7 +130,7 @@ version: 1
             };
             await Program.Main(args);
 
-            var file = File.ReadAllText("config-output-test-1.yml");
+            var file = await File.ReadAllTextAsync("config-output-test-1.yml");
             Assert.Equal(
                 GetConfigToolOutput().Replace("\r\n", "\n", StringComparison.InvariantCulture),
                 file.Replace("\r\n", "\n", StringComparison.InvariantCulture));
@@ -155,7 +155,7 @@ version: 1
 
                 await extractor.WaitForSubscriptions();
 
-                await TestUtils.WaitForCondition(() => pusher.PushedNodes.Any(), 10);
+                await TestUtils.WaitForCondition(() => pusher.PushedNodes.Count != 0, 10);
                 Assert.Equal(167, pusher.PushedNodes.Count);
                 Assert.Equal(2006, pusher.PushedVariables.Count);
             }
@@ -176,7 +176,7 @@ version: 1
                 "config-test-1.yml",
                 "--exit"
             };
-            File.WriteAllText("config-test-1.yml", GetConfigToolOutput());
+            await File.WriteAllTextAsync("config-test-1.yml", GetConfigToolOutput());
 
             var task = Program.Main(args);
 
@@ -186,7 +186,7 @@ version: 1
 
                 await extractor.WaitForSubscriptions();
 
-                await TestUtils.WaitForCondition(() => pusher.PushedNodes.Any(), 10);
+                await TestUtils.WaitForCondition(() => pusher.PushedNodes.Count != 0, 10);
                 Assert.Equal(172, pusher.PushedNodes.Count);
                 Assert.Equal(2032, pusher.PushedVariables.Count);
             }
@@ -212,7 +212,7 @@ version: 1
                 "config",
                 "--exit"
             };
-            File.WriteAllText("config-test-1.yml", GetConfigToolOutput());
+            await File.WriteAllTextAsync("config-test-1.yml", GetConfigToolOutput());
 
             var task = Program.Main(args);
 
@@ -222,7 +222,7 @@ version: 1
 
                 await extractor.WaitForSubscriptions();
 
-                await TestUtils.WaitForCondition(() => pusher.PushedNodes.Any(), 10);
+                await TestUtils.WaitForCondition(() => pusher.PushedNodes.Count != 0, 10);
                 Assert.Equal(172, pusher.PushedNodes.Count);
                 Assert.Equal(2032, pusher.PushedVariables.Count);
             }

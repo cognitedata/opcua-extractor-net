@@ -64,7 +64,7 @@ namespace Cognite.OpcUa.Pushers.Writers
                     .Where(kvp => kvp.Value.Source != NodeSource.CDF)
                     .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
 
-                if (update.AnyUpdate && toPushMeta.Any())
+                if (update.AnyUpdate && toPushMeta.Count != 0)
                 {
                     await UpdateTimeseries(extractor, toPushMeta, timeseries, nodeToAssetIds, update, result, token);
                 }
@@ -135,7 +135,7 @@ namespace Cognite.OpcUa.Pushers.Writers
                     foundBadTimeseries.Add(ts.ExternalId);
                 }
             }
-            if (foundBadTimeseries.Any())
+            if (foundBadTimeseries.Count != 0)
             {
                 logger.LogDebug(
                     "Found mismatched timeseries when ensuring: {TimeSeries}",

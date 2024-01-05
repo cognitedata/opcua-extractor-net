@@ -24,6 +24,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography.X509Certificates;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Server
 {
@@ -35,6 +37,16 @@ namespace Server
         }
 
         public void Validate(X509Certificate2Collection certificates)
+        {
+            throw ServiceResultException.Create(StatusCodes.BadCertificateInvalid, "Bad certificate");
+        }
+
+        public Task ValidateAsync(X509Certificate2 certificate, CancellationToken ct)
+        {
+            throw ServiceResultException.Create(StatusCodes.BadCertificateInvalid, "Bad certificate");
+        }
+
+        public Task ValidateAsync(X509Certificate2Collection certificateChain, CancellationToken ct)
         {
             throw ServiceResultException.Create(StatusCodes.BadCertificateInvalid, "Bad certificate");
         }
@@ -102,7 +114,7 @@ namespace Server
 
         protected override void OnServerStarting(ApplicationConfiguration configuration)
         {
-            if (configuration == null) throw new ArgumentNullException(nameof(configuration));
+            ArgumentNullException.ThrowIfNull(configuration);
             configuration.ServerConfiguration.ReverseConnect = new ReverseConnectServerConfiguration
             {
                 ConnectInterval = 1000,
@@ -147,7 +159,7 @@ namespace Server
 
         protected override void OnServerStarted(IServerInternal server)
         {
-            if (server == null) throw new ArgumentNullException(nameof(server));
+            ArgumentNullException.ThrowIfNull(server);
 
             base.OnServerStarted(server);
 
@@ -313,7 +325,7 @@ namespace Server
         }
         public void MutateNode(NodeId id, Action<NodeState> mutation)
         {
-            if (mutation == null) throw new ArgumentNullException(nameof(mutation));
+            ArgumentNullException.ThrowIfNull(mutation);
             custom.MutateNode(id, mutation);
         }
         public void ReContextualize(NodeId id, NodeId oldParentId, NodeId newParentId, NodeId referenceType)

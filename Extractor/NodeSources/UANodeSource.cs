@@ -73,7 +73,7 @@ namespace Cognite.OpcUa.NodeSources
 
             await client.Browser.BrowseNodeHierarchy(nodesToBrowse, HandleNode, token, purpose, nodeClassMask);
 
-            if (nodeMap.Any()) await client.ReadNodeData(nodeMap, token, purpose);
+            if (nodeMap.Count != 0) await client.ReadNodeData(nodeMap, token, purpose);
 
             return TakeResults(false);
         }
@@ -87,7 +87,7 @@ namespace Cognite.OpcUa.NodeSources
         {
             await LoadNonHierarchicalReferencesInternal(knownNodes, getTypeReferences, initUnknownNodes, purpose, token);
 
-            if (nodeMap.Any()) await client.ReadNodeData(nodeMap, token, "new non-hierarchical instances");
+            if (nodeMap.Count != 0) await client.ReadNodeData(nodeMap, token, "new non-hierarchical instances");
 
             logger.LogDebug("Is mandatory in nodemap? {Yes}", nodeMap.FirstOrDefault(n => n.Id == ObjectIds.ModellingRule_Mandatory));
 

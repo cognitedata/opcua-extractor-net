@@ -29,7 +29,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using MQTTnet;
 using MQTTnet.Client;
-using MQTTnet.Client.Options;
 using Opc.Ua;
 using Prometheus;
 using System;
@@ -53,7 +52,7 @@ namespace Cognite.OpcUa.Pushers
         public IPusherConfig BaseConfig => config;
         private readonly MqttPusherConfig config;
         private readonly IMqttClient client;
-        private readonly IMqttClientOptions options;
+        private readonly MqttClientOptions options;
 
         private readonly ILogger<MQTTPusher> log;
 
@@ -101,15 +100,12 @@ namespace Cognite.OpcUa.Pushers
                 .WithClientId(config.ClientId)
                 .WithTcpServer(config.Host, config.Port)
                 .WithKeepAlivePeriod(TimeSpan.FromSeconds(15))
-                .WithCommunicationTimeout(TimeSpan.FromSeconds(10))
-                .WithCleanSession();
-
-            if (config.UseTls)
-            {
-                builder = builder.WithTls(new MqttClientOptionsBuilderTlsParameters
+                .WithTimeout(TimeSpan.FromSeconds(10))
+                .WithCleanSession()
+                .WithTlsOptions(new MqttClientTlsOptions
                 {
+                    UseTls = config.UseTls,
                     AllowUntrustedCertificates = config.AllowUntrustedCertificates,
-                    UseTls = true,
                     CertificateValidationHandler = (context) =>
                     {
                         if (context.SslPolicyErrors == System.Net.Security.SslPolicyErrors.None)
@@ -138,23 +134,22 @@ namespace Cognite.OpcUa.Pushers
                             }
                         }
                         return isValid;
-
                     }
                 });
-                if (!string.IsNullOrEmpty(config.Username) && !string.IsNullOrEmpty(config.Host))
-                {
-                    builder = builder.WithCredentials(config.Username, config.Password);
-                }
+
+            if (!string.IsNullOrEmpty(config.Username) && !string.IsNullOrEmpty(config.Password))
+            {
+                builder = builder.WithCredentials(config.Username, config.Password);
             }
 
             options = builder.Build();
             client = new MqttFactory().CreateMqttClient();
             baseBuilder = new MqttApplicationMessageBuilder()
-                .WithAtLeastOnceQoS();
+                .WithQualityOfServiceLevel(MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce);
 
             if (fullConfig.DryRun) return;
 
-            client.UseDisconnectedHandler(async e =>
+            client.DisconnectedAsync += async e =>
             {
                 log.LogWarning(e.Exception, "MQTT client disconnected");
                 async Task TryReconnect(int retries)
@@ -173,11 +168,12 @@ namespace Cognite.OpcUa.Pushers
                     }
                 }
                 await TryReconnect(3);
-            });
-            client.UseConnectedHandler(_ =>
+            };
+            client.ConnectedAsync += _ =>
             {
                 log.LogInformation("MQTT client connected");
-            });
+                return Task.CompletedTask;
+            };
             client.ConnectAsync(options, CancellationToken.None).Wait();
         }
         #region interface
@@ -341,7 +337,7 @@ namespace Cognite.OpcUa.Pushers
                 }
             }
 
-            if (existingNodes.Any())
+            if (existingNodes.Count != 0)
             {
                 if (!update.Objects.AnyUpdate)
                 {
@@ -521,7 +517,7 @@ namespace Cognite.OpcUa.Pushers
 
             var req = new DataPointInsertionRequest();
             req.Items.AddRange(inserts);
-            if (!req.Items.Any()) return true;
+            if (req.Items.Count == 0) return true;
 
 
             var data = req.ToByteArray();
@@ -701,7 +697,7 @@ namespace Cognite.OpcUa.Pushers
                     .Where(variable => variable != null)
                     .ToList();
 
-                if (minimalTimeseries.Any())
+                if (minimalTimeseries.Count != 0)
                 {
                     var minimalData = JsonSerializer.SerializeToUtf8Bytes(minimalTimeseries);
 
