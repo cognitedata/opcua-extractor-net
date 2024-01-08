@@ -1,12 +1,12 @@
 #!/bin/bash
 
-set -x
+set -x -e
 configuration="$1"
 linux="$2"
 version="$3"
 
 mkdir -p $configuration/
-mv ExtractorLauncher/bin/Release/net7.0/$configuration/publish/* ./$configuration/
+mv ExtractorLauncher/bin/Release/net8.0/$configuration/publish/* ./$configuration/
 rm -f ./$configuration/*.config ./$configuration/*.pdb ./$configuration/*.xml
 mkdir -p ./$configuration/config
 

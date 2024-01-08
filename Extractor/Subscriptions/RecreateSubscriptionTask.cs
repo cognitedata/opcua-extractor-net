@@ -1,13 +1,12 @@
-﻿using Cognite.OpcUa.Config;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.ObjectPool;
-using Opc.Ua;
-using Opc.Ua.Client;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Cognite.OpcUa.Config;
+using Microsoft.Extensions.Logging;
+using Opc.Ua;
+using Opc.Ua.Client;
 
 namespace Cognite.OpcUa.Subscriptions
 {
@@ -49,7 +48,7 @@ namespace Cognite.OpcUa.Subscriptions
             }
             catch (Exception ex)
             {
-                logger.LogError("Failed to obtain server state when checking a failing subscription. Server is likely down: ", ex.Message);
+                logger.LogError("Failed to obtain server state when checking a failing subscription. Server is likely down: {}", ex.Message);
                 return false;
             }
 

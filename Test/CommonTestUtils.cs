@@ -15,6 +15,14 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
+using System.Text;
+using System.Text.Json;
+using System.Threading.Tasks;
 using Cognite.OpcUa;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Nodes;
@@ -24,14 +32,6 @@ using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using Prometheus;
 using Server;
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Linq;
-using System.Reflection;
-using System.Text;
-using System.Text.Json;
-using System.Threading.Tasks;
 using Xunit;
 
 [assembly: CLSCompliant(false)]
@@ -86,8 +86,9 @@ namespace Test
             {
                 return null;
             }
-            if (family == null) return null;
-            var collectors = /* ConcurrentDictionary<CollectorIdentity, Collector> */ family.GetType().GetProperty("Collectors").GetValue(family);
+
+            var collectors = /* ConcurrentDictionary<CollectorIdentity, Collector> */ family?.GetType().GetField("_collectors", BindingFlags.NonPublic | BindingFlags.Instance)?.GetValue(family);
+            if (collectors == null) return null;
             return ((IEnumerable<Collector>)collectors.GetType().GetProperty("Values").GetValue(collectors)).FirstOrDefault();
         }
 
