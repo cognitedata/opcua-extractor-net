@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -x
+set -x -e
 version="$1"
 rpmver="$(echo "$version" | tr - _)"
 

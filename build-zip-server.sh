@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -x
+set -x -e
 configuration="$1"
 linux="$2"
 version="$3"
