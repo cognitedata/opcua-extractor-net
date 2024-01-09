@@ -306,21 +306,19 @@ namespace Cognite.OpcUa.History
 
         public void AddStates(IEnumerable<VariableExtractionState> varStates, IEnumerable<EventExtractionState> eventStates)
         {
-            bool shouldTrigger = false;
             lock (statesLock)
             {
                 foreach (var state in varStates.Where(s => s.FrontfillEnabled))
                 {
-                    shouldTrigger |= activeVarStates.TryAdd(state.SourceId, state);
+                    activeVarStates[state.SourceId] = state;
                 }
 
                 foreach (var state in eventStates.Where(s => s.FrontfillEnabled))
                 {
-                    shouldTrigger |= activeEventStates.TryAdd(state.SourceId, state);
+                    activeEventStates[state.SourceId] = state;
                 }
-                shouldTrigger &= state.IsGood;
             }
-            if (shouldTrigger)
+            if (state.IsGood)
             {
                 stateChangedEvent.Set();
             }

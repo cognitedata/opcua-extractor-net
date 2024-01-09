@@ -353,6 +353,7 @@ namespace Test.Unit
             tester.Server.SetServerRedundancyStatus(230, RedundancySupport.Hot);
             tester.Config.Source.Redundancy.MonitorServiceLevel = true;
             tester.Callbacks.Reset();
+            tester.Client.Callbacks = tester.Callbacks;
             var altServer = new ServerController(new[] {
                 PredefinedSetup.Base
             }, tester.Provider, 62300)
@@ -379,7 +380,7 @@ namespace Test.Unit
                 await TestUtils.WaitForCondition(() => sm.CurrentServiceLevel == 230, 10, "Expected session to reconnect to original server");
 
                 Assert.Equal(230, sm.CurrentServiceLevel);
-                Assert.Equal(0, tester.Callbacks.ServiceLevelCbCount);
+                Assert.Equal(1, tester.Callbacks.ServiceLevelCbCount);
                 Assert.Equal(1, tester.Callbacks.LowServiceLevelCbCount);
                 Assert.Equal(1, tester.Callbacks.ReconnectCbCount);
                 Assert.Equal(sm.EndpointUrl, tester.Config.Source.EndpointUrl);
@@ -399,7 +400,7 @@ namespace Test.Unit
 
                 // Set the servicelevel back up, should trigger a callback, but no switch
                 tester.Server.SetServerRedundancyStatus(255, RedundancySupport.Hot);
-                await TestUtils.WaitForCondition(() => tester.Callbacks.ServiceLevelCbCount == 1, 10);
+                await TestUtils.WaitForCondition(() => tester.Callbacks.ServiceLevelCbCount == 2, 10);
                 Assert.Equal(sm.EndpointUrl, tester.Config.Source.EndpointUrl);
                 Assert.Equal(255, sm.CurrentServiceLevel);
             }

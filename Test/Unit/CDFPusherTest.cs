@@ -1289,6 +1289,8 @@ namespace Test.Unit
             handler.Timeseries.Clear();
             extractor.GetType().GetField("subscribed", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(extractor, 0);
             extractor.GetType().GetField("subscribeFlag", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(extractor, false);
+            var reader = (HistoryReader)extractor.GetType().GetField("historyReader", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(extractor);
+            reader.AddIssue(HistoryReader.StateIssue.NodeHierarchyRead);
             await extractor.RunExtractor(true);
             Assert.True(extractor.State.NodeStates.Any());
 
@@ -1301,11 +1303,24 @@ namespace Test.Unit
 
             await extractor.WaitForSubscriptions();
 
-            var id = tester.Client.GetUniqueId(tester.Server.Ids.Custom.MysteryVar);
-            tester.Server.UpdateNode(tester.Server.Ids.Custom.MysteryVar, 1.0);
+            try
+            {
+                await TestUtils.WaitForCondition(() => extractor.State.NodeStates.All(s => !s.IsFrontfilling), 5);
+            }
+            finally
+            {
+                foreach (var state in extractor.State.NodeStates)
+                {
+                    tester.Log.LogDebug("State is frontfilling: {Id} {State}", state.Id, state.IsFrontfilling);
+                }
+            }
 
+            var id = tester.Client.GetUniqueId(tester.Server.Ids.Custom.MysteryVar);
+
+            int idx = 0;
             await TestUtils.WaitForCondition(async () =>
             {
+                tester.Server.UpdateNode(tester.Server.Ids.Custom.MysteryVar, idx++);
                 await extractor.Streamer.PushDataPoints(new[] { pusher }, Enumerable.Empty<IPusher>(), tester.Source.Token);
                 return handler.Datapoints.ContainsKey(id) && handler.Datapoints[id].NumericDatapoints.Count != 0;
             }, 10);

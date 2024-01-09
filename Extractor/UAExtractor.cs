@@ -1047,8 +1047,7 @@ namespace Cognite.OpcUa
                     Streamer.EventSubscriptionHandler,
                     subscribeStates,
                     uaClient.BuildEventFilter(TypeManager.EventFields)),
-                    Source.Token
-                    );
+                    Source.Token);
             }
 
             Interlocked.Increment(ref subscribed);
