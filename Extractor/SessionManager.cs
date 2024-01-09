@@ -614,7 +614,7 @@ namespace Cognite.OpcUa
                     await client.Callbacks.OnServicelevelBelowThreshold(client);
                 }
             }
-            else if (oldServiceLevel < config.Redundancy.ServiceLevelThreshold && !fromConnectionChange)
+            else if (oldServiceLevel < config.Redundancy.ServiceLevelThreshold)
             {
                 // We have moved from being at low SL to high, so we should restart history before we set the service level.
                 log.LogInformation("New service level {Level} is a above threshold {Threshold}, triggering callback", newLevel, config.Redundancy.ServiceLevelThreshold);

@@ -193,35 +193,31 @@ namespace Test.Unit
             extractor.State.SetNodeState(state, "id");
             var toPush = Enumerable.Range(0, 1000).Select(idx => new UADataPoint(start.AddMilliseconds(idx), "id", idx)).ToList();
             extractor.Streamer.Enqueue(toPush);
-            bool result = await extractor.Streamer.PushDataPoints(new[] { pusher, pusher2 }, Enumerable.Empty<IPusher>(), tester.Source.Token);
+            await extractor.Streamer.PushDataPoints(new[] { pusher, pusher2 }, Enumerable.Empty<IPusher>(), tester.Source.Token);
             Assert.Equal(1000, dps.Count);
             Assert.Equal(1000, dps2.Count);
-            Assert.False(result);
 
             Assert.Equal(dps, dps2);
 
             pusher.PushDataPointResult = false;
             extractor.Streamer.Enqueue(toPush);
-            result = await extractor.Streamer.PushDataPoints(new[] { pusher, pusher2 }, Enumerable.Empty<IPusher>(), tester.Source.Token);
+            await extractor.Streamer.PushDataPoints(new[] { pusher, pusher2 }, Enumerable.Empty<IPusher>(), tester.Source.Token);
             Assert.True(pusher.DataFailing);
             Assert.Equal(1000, dps.Count);
             Assert.Equal(2000, dps2.Count);
-            Assert.False(result);
 
             extractor.Streamer.Enqueue(toPush);
-            result = await extractor.Streamer.PushDataPoints(new[] { pusher2 }, new[] { pusher }, tester.Source.Token);
+            await extractor.Streamer.PushDataPoints(new[] { pusher2 }, new[] { pusher }, tester.Source.Token);
             Assert.True(pusher.DataFailing);
             Assert.Equal(1000, dps.Count);
             Assert.Equal(3000, dps2.Count);
-            Assert.False(result);
 
             extractor.Streamer.Enqueue(toPush);
             pusher.PushDataPointResult = true;
-            result = await extractor.Streamer.PushDataPoints(new[] { pusher2, pusher }, Enumerable.Empty<IPusher>(), tester.Source.Token);
+            await extractor.Streamer.PushDataPoints(new[] { pusher2, pusher }, Enumerable.Empty<IPusher>(), tester.Source.Token);
             Assert.False(pusher.DataFailing);
             Assert.Equal(2000, dps.Count);
             Assert.Equal(4000, dps2.Count);
-            Assert.True(result);
         }
         [Fact]
         public async Task TestPushEvents()
@@ -247,39 +243,35 @@ namespace Test.Unit
             extractor.State.SetEmitterState(state);
             var toPush = Enumerable.Range(0, 1000).Select(idx => new UAEvent { Time = start.AddMilliseconds(idx), EmittingNode = id }).ToList();
             extractor.Streamer.Enqueue(toPush);
-            bool result = await extractor.Streamer.PushEvents(new[] { pusher, pusher2 }, Enumerable.Empty<IPusher>(), tester.Source.Token);
+            await extractor.Streamer.PushEvents(new[] { pusher, pusher2 }, Enumerable.Empty<IPusher>(), tester.Source.Token);
 
             var evts = pusher.Events[id];
             var evts2 = pusher2.Events[id];
 
             Assert.Equal(1000, evts.Count);
             Assert.Equal(1000, evts2.Count);
-            Assert.False(result);
 
             Assert.Equal(evts, evts2);
 
             pusher.PushEventResult = false;
             extractor.Streamer.Enqueue(toPush);
-            result = await extractor.Streamer.PushEvents(new[] { pusher, pusher2 }, Enumerable.Empty<IPusher>(), tester.Source.Token);
+            await extractor.Streamer.PushEvents(new[] { pusher, pusher2 }, Enumerable.Empty<IPusher>(), tester.Source.Token);
             Assert.True(pusher.EventsFailing);
             Assert.Equal(1000, evts.Count);
             Assert.Equal(2000, evts2.Count);
-            Assert.False(result);
 
             extractor.Streamer.Enqueue(toPush);
-            result = await extractor.Streamer.PushEvents(new[] { pusher2 }, new[] { pusher }, tester.Source.Token);
+            await extractor.Streamer.PushEvents(new[] { pusher2 }, new[] { pusher }, tester.Source.Token);
             Assert.True(pusher.EventsFailing);
             Assert.Equal(1000, evts.Count);
             Assert.Equal(3000, evts2.Count);
-            Assert.False(result);
 
             extractor.Streamer.Enqueue(toPush);
             pusher.PushEventResult = true;
-            result = await extractor.Streamer.PushEvents(new[] { pusher2, pusher }, Enumerable.Empty<IPusher>(), tester.Source.Token);
+            await extractor.Streamer.PushEvents(new[] { pusher2, pusher }, Enumerable.Empty<IPusher>(), tester.Source.Token);
             Assert.False(pusher.EventsFailing);
             Assert.Equal(2000, evts.Count);
             Assert.Equal(4000, evts2.Count);
-            Assert.True(result);
         }
         [Fact]
         public void TestDataHandler()

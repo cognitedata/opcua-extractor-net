@@ -235,7 +235,7 @@ namespace Cognite.OpcUa
 
             if (SubscriptionManager == null)
             {
-                SubscriptionManager = new SubscriptionManager(SessionManager, Config, log);
+                SubscriptionManager = new SubscriptionManager(this, Config, log);
                 Callbacks.TaskScheduler.ScheduleTask("SubscriptionManager", SubscriptionManager.RunTaskLoop);
             }
 

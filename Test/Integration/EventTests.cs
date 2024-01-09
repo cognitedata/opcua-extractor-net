@@ -2,6 +2,7 @@
 using Cognite.Extractor.Testing;
 using Cognite.OpcUa;
 using Cognite.OpcUa.Config;
+using Cognite.OpcUa.History;
 using Cognite.OpcUa.Subscriptions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -195,6 +196,8 @@ namespace Test.Integration
                 extractor.State.Clear();
                 extractor.GetType().GetField("subscribed", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(extractor, 0);
                 extractor.GetType().GetField("subscribeFlag", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(extractor, false);
+                var reader = (HistoryReader)extractor.GetType().GetField("historyReader", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(extractor);
+                reader.AddIssue(HistoryReader.StateIssue.NodeHierarchyRead);
                 await tester.RemoveSubscription(SubscriptionName.Events);
             }
 
@@ -342,12 +345,7 @@ namespace Test.Integration
             tester.Server.PopulateEvents(now.AddSeconds(5));
             tester.Server.PopulateEvents(now.AddSeconds(-15));
 
-            foreach (var state in extractor.State.EmitterStates)
-            {
-                state.RestartHistory();
-            }
-
-            await extractor.RestartHistory();
+            await extractor.RestartHistoryWaitForStop();
 
             await TestUtils.WaitForCondition(() => pusher.Events.Count == 2 && pusher.Events[ObjectIds.Server].Count == 1407
                 && pusher.Events[ids.Obj1].Count == 402, 5,

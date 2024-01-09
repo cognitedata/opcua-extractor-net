@@ -25,6 +25,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Cognite.OpcUa;
 using Cognite.OpcUa.Config;
+using Cognite.OpcUa.History;
 using Cognite.OpcUa.Nodes;
 using CogniteSdk;
 using Microsoft.Extensions.DependencyInjection;
@@ -382,6 +383,13 @@ namespace Test
                 variable.FullAttributes.ValueRank = ValueRanks.OneDimension;
             }
             return variable;
+        }
+
+        public static async Task RunHistory(HistoryReader reader, IEnumerable<UAHistoryExtractionState> states, HistoryReadType type)
+        {
+            var task = (Task)reader.GetType().GetMethod("RunHistoryBatch", BindingFlags.Instance | BindingFlags.NonPublic)
+                .Invoke(reader, new object[] { states, type });
+            await task;
         }
     }
 }

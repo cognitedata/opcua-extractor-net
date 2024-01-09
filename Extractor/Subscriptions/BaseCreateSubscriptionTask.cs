@@ -14,7 +14,8 @@ namespace Cognite.OpcUa.Subscriptions
 {
     public abstract class BaseCreateSubscriptionTask<T> : PendingSubscriptionTask
     {
-        protected SubscriptionName SubscriptionName { get; }
+        public override SubscriptionName SubscriptionToCreate => SubscriptionName;
+        public SubscriptionName SubscriptionName { get; }
         protected Dictionary<NodeId, T> Items { get; }
         private static readonly Gauge numSubscriptions = Metrics
             .CreateGauge("opcua_subscriptions", "Number of active monitored items");

@@ -16,8 +16,8 @@ namespace Cognite.OpcUa.Subscriptions
 
         public override string TaskName => $"Recreate subscription {oldSubscription.Id}";
 
-        public RecreateSubscriptionTask(Subscription oldSubscription)
-            : base(Enum.Parse<SubscriptionName>(oldSubscription.DisplayName.Split(' ').First()), new Dictionary<Opc.Ua.NodeId, MonitoredItem>())
+        public RecreateSubscriptionTask(Subscription oldSubscription, SubscriptionName subscription)
+            : base(subscription, new Dictionary<Opc.Ua.NodeId, MonitoredItem>())
         {
             this.oldSubscription = oldSubscription;
         }

@@ -125,12 +125,10 @@ namespace Cognite.OpcUa
         /// <param name="passingPushers">Succeeding pushers, data will be pushed to these.</param>
         /// <param name="failingPushers">Failing pushers, data will not be pushed to these.</param>
         /// <returns>True if history should be restarted after this</returns>
-        public async Task<bool> PushDataPoints(IEnumerable<IPusher> passingPushers,
+        public async Task PushDataPoints(IEnumerable<IPusher> passingPushers,
             IEnumerable<IPusher> failingPushers, CancellationToken token)
         {
-            if (!AllowData) return false;
-
-            bool restartHistory = false;
+            if (!AllowData) return;
 
             var dataPointList = new List<UADataPoint>();
             var pointRanges = new Dictionary<string, TimeRange>();
@@ -174,7 +172,7 @@ namespace Cognite.OpcUa
                     await extractor.FailureBuffer.WriteDatapoints(dataPointList, pointRanges, token);
                 }
 
-                return false;
+                return;
             }
             var reconnectedPushers = passingPushers.Where(pusher => pusher.DataFailing).ToList();
             if (reconnectedPushers.Count != 0)
@@ -184,13 +182,7 @@ namespace Cognite.OpcUa
                 if (config.History.Enabled && extractor.State.NodeStates.Any(state => state.FrontfillEnabled))
                 {
                     log.LogInformation("Restarting history for {Count} states", extractor.State.NodeStates.Count(state => state.FrontfillEnabled));
-                    bool success = await extractor.TerminateHistory(30);
-                    if (!success) throw new ExtractorFailureException("Failed to terminate history reader");
-                    foreach (var state in extractor.State.NodeStates.Where(state => state.FrontfillEnabled))
-                    {
-                        state.RestartHistory();
-                    }
-                    restartHistory = true;
+                    await extractor.RestartHistoryWaitForStop();
                 }
 
                 foreach (var pusher in reconnectedPushers)
@@ -206,9 +198,8 @@ namespace Cognite.OpcUa
             foreach ((string id, var range) in pointRanges)
             {
                 var state = extractor.State.GetNodeState(id);
-                if (extractor.AllowUpdateState) state?.UpdateDestinationRange(range.First, range.Last);
+                if (state != null && (extractor.AllowUpdateState || !state.FrontfillEnabled && !state.BackfillEnabled)) state.UpdateDestinationRange(range.First, range.Last);
             }
-            return restartHistory;
         }
         /// <summary>
         /// Push events to destinations
@@ -216,15 +207,13 @@ namespace Cognite.OpcUa
         /// <param name="passingPushers">Succeeding pushers, events will be pushed to these.</param>
         /// <param name="failingPushers">Failing pushers, events will not be pushed to these.</param>
         /// <returns>True if history should be restarted after this</returns>
-        public async Task<bool> PushEvents(IEnumerable<IPusher> passingPushers,
+        public async Task PushEvents(IEnumerable<IPusher> passingPushers,
             IEnumerable<IPusher> failingPushers, CancellationToken token)
         {
-            if (!AllowEvents) return false;
+            if (!AllowEvents) return;
 
             var eventList = new List<UAEvent>();
             var eventRanges = new Dictionary<NodeId, TimeRange>();
-
-            bool restartHistory = false;
 
             lock (eventMutex)
             {
@@ -266,7 +255,7 @@ namespace Cognite.OpcUa
                     await extractor.FailureBuffer.WriteEvents(eventList, token);
                 }
 
-                return false;
+                return;
             }
             var reconnectedPushers = passingPushers.Where(pusher => pusher.EventsFailing).ToList();
             if (reconnectedPushers.Count != 0)
@@ -276,13 +265,7 @@ namespace Cognite.OpcUa
                 if (config.Events.History && extractor.State.EmitterStates.Any(state => state.FrontfillEnabled))
                 {
                     log.LogInformation("Restarting event history for {Count} states", extractor.State.EmitterStates.Count(state => state.FrontfillEnabled));
-                    bool success = await extractor.TerminateHistory(30);
-                    if (!success) throw new ExtractorFailureException("Failed to terminate history reader");
-                    foreach (var state in extractor.State.EmitterStates.Where(state => state.FrontfillEnabled))
-                    {
-                        state.RestartHistory();
-                    }
-                    restartHistory = true;
+                    await extractor.RestartHistoryWaitForStop();
                 }
 
                 foreach (var pusher in reconnectedPushers)
@@ -297,11 +280,8 @@ namespace Cognite.OpcUa
             foreach (var (id, range) in eventRanges)
             {
                 var state = extractor.State.GetEmitterState(id);
-                if (extractor.AllowUpdateState) state?.UpdateDestinationRange(range.First, range.Last);
+                if (state != null && (extractor.AllowUpdateState || !state.FrontfillEnabled && !state.BackfillEnabled)) state?.UpdateDestinationRange(range.First, range.Last);
             }
-
-
-            return restartHistory;
         }
         /// <summary>
         /// Handles notifications on subscribed items, pushes all new datapoints to the queue.
