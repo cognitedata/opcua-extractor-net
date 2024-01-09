@@ -62,7 +62,7 @@ namespace Test.Unit
         private readonly MQTTBridge bridge;
         private readonly CDFMockHandler handler;
         private readonly MQTTPusher pusher;
-        private readonly CancellationTokenSource bridgeSource;
+        private CancellationTokenSource bridgeSource;
 
         public MQTTPusherTest(ITestOutputHelper output, MQTTPusherTestFixture tester)
         {
@@ -757,8 +757,9 @@ namespace Test.Unit
         {
             bridge?.Dispose();
             pusher?.Dispose();
-            bridgeSource?.Dispose();
             bridgeSource?.Cancel();
+            bridgeSource?.Dispose();
+            bridgeSource = null;
         }
     }
 }

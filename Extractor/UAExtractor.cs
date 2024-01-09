@@ -63,7 +63,7 @@ namespace Cognite.OpcUa
         private readonly ConcurrentQueue<NodeId> extraNodesToBrowse = new ConcurrentQueue<NodeId>();
         public IEnumerable<NodeTransformation>? Transformations { get; private set; }
         public StringConverter StringConverter => uaClient.StringConverter;
-        private readonly PubSubManager? pubSubManager;
+        private PubSubManager? pubSubManager;
         public NamespaceTable? NamespaceTable => uaClient.NamespaceTable;
 
         public TypeManager TypeManager => uaClient.TypeManager;
@@ -1232,7 +1232,9 @@ namespace Cognite.OpcUa
         {
             Starting.Set(0);
             historyReader?.Dispose();
+            historyReader = null;
             pubSubManager?.Dispose();
+            pubSubManager = null;
 
             await base.DisposeAsyncCore();
         }
@@ -1243,7 +1245,9 @@ namespace Cognite.OpcUa
             {
                 Starting.Set(0);
                 historyReader?.Dispose();
+                historyReader = null;
                 pubSubManager?.Dispose();
+                pubSubManager = null;
             }
             base.Dispose(disposing);
         }
