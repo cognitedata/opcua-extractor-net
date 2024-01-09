@@ -91,6 +91,7 @@ namespace Cognite.OpcUa
         // For testing
         public static bool CommandDryRun { get; set; }
         public static Action<ServiceCollection, BaseExtractorParams>? OnLaunch { get; set; }
+        public static CancellationToken? RootToken { get; set; }
         public static async Task<int> Main(string[] args)
         {
             return await GetCommandLineOptions().InvokeAsync(args);
@@ -128,7 +129,7 @@ namespace Cognite.OpcUa
                 }
                 else
                 {
-                    await ExtractorStarter.RunExtractor(null, setup, services, CancellationToken.None);
+                    await ExtractorStarter.RunExtractor(null, setup, services, RootToken ?? CancellationToken.None);
                 }
             }, rootBinder);
 
@@ -139,7 +140,7 @@ namespace Cognite.OpcUa
             {
                 setup.ConfigTool = true;
                 if (!OnLaunchCommon(setup)) return;
-                await ExtractorStarter.RunConfigTool(null, setup, services, CancellationToken.None);
+                await ExtractorStarter.RunConfigTool(null, setup, services, RootToken ?? CancellationToken.None);
             }, toolBinder);
 
             return new CommandLineBuilder(rootCommand)

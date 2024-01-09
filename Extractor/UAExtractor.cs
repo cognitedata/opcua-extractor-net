@@ -1228,6 +1228,15 @@ namespace Cognite.OpcUa
         }
         #endregion
 
+        protected override async ValueTask DisposeAsyncCore()
+        {
+            Starting.Set(0);
+            historyReader?.Dispose();
+            pubSubManager?.Dispose();
+
+            await base.DisposeAsyncCore();
+        }
+
         protected override void Dispose(bool disposing)
         {
             if (disposing)

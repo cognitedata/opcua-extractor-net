@@ -62,10 +62,10 @@ namespace Cognite.Bridge
         {
             client.DisconnectedAsync += async e =>
             {
+                if (disconnected || token.IsCancellationRequested) return;
                 log.LogWarning("MQTT Client disconnected");
                 log.LogDebug(e.Exception, "MQTT client disconnected");
                 await Task.Delay(1000);
-                if (disconnected) return;
                 try
                 {
                     await client.ConnectAsync(options, token);
@@ -77,6 +77,8 @@ namespace Cognite.Bridge
             };
             client.ConnectedAsync += async _ =>
             {
+                if (token.IsCancellationRequested) return;
+
                 log.LogInformation("MQTT client connected");
                 await client.SubscribeAsync(new MqttClientSubscribeOptionsBuilder()
                     .WithTopicFilter(config.Mqtt.AssetTopic, MqttQualityOfServiceLevel.AtLeastOnce)
@@ -90,6 +92,8 @@ namespace Cognite.Bridge
             };
             client.ApplicationMessageReceivedAsync += async msg =>
             {
+                if (token.IsCancellationRequested) return;
+
                 bool success;
 
                 if (msg.ApplicationMessage.Topic == config.Mqtt.DatapointTopic)
@@ -212,7 +216,7 @@ namespace Cognite.Bridge
         public void Dispose()
         {
             disconnected = true;
-            client.DisconnectAsync().Wait();
+            client.DisconnectAsync().Wait(TimeSpan.FromSeconds(10));
             client.Dispose();
         }
     }

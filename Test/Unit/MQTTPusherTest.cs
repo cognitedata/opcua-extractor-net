@@ -18,6 +18,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Threading;
 using System.Threading.Tasks;
 using Test.Utils;
 using Xunit;
@@ -61,6 +62,7 @@ namespace Test.Unit
         private readonly MQTTBridge bridge;
         private readonly CDFMockHandler handler;
         private readonly MQTTPusher pusher;
+        private readonly CancellationTokenSource bridgeSource;
 
         public MQTTPusherTest(ITestOutputHelper output, MQTTPusherTestFixture tester)
         {
@@ -68,7 +70,16 @@ namespace Test.Unit
             tester.ResetConfig();
             tester.Init(output);
             (handler, bridge, pusher) = tester.GetPusher();
-            bridge.StartBridge(tester.Source.Token).Wait();
+            bridgeSource = new CancellationTokenSource();
+            try
+            {
+                bridge.StartBridge(bridgeSource.Token).Wait();
+            }
+            catch
+            {
+                bridgeSource.Cancel();
+                throw;
+            }
             tester.Client.TypeManager.Reset();
         }
 
@@ -746,6 +757,8 @@ namespace Test.Unit
         {
             bridge?.Dispose();
             pusher?.Dispose();
+            bridgeSource?.Dispose();
+            bridgeSource?.Cancel();
         }
     }
 }

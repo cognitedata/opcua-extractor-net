@@ -23,8 +23,10 @@ using Cognite.OpcUa.Subscriptions;
 
 namespace Test.Utils
 {
-    public abstract class BaseExtractorTestFixture : LoggingTestFixture, IAsyncLifetime
+    public abstract class BaseExtractorTestFixture : LoggingTestFixture, IAsyncLifetime, IDisposable
     {
+        private bool disposedValue;
+
         public int Port { get; }
         public NodeIdReference Ids => Server.Ids;
         public UAClient Client { get; private set; }
@@ -303,6 +305,28 @@ namespace Test.Utils
             subscription = Client.SessionManager.Session?.Subscriptions?.FirstOrDefault(sub =>
                 sub.DisplayName.StartsWith(name.Name(), StringComparison.InvariantCulture));
             return subscription != null;
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!disposedValue)
+            {
+                if (disposing)
+                {
+                    Source?.Cancel();
+                    Source?.Dispose();
+                }
+
+                disposedValue = true;
+            }
+        }
+
+
+        public void Dispose()
+        {
+            // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+            Dispose(disposing: true);
+            GC.SuppressFinalize(this);
         }
     }
 }
