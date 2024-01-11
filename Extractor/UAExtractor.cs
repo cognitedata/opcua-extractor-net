@@ -674,7 +674,8 @@ namespace Cognite.OpcUa
                 uaClient.SubscriptionManager.EnqueueTask(new EventSubscriptionTask(
                     Streamer.EventSubscriptionHandler,
                     subscribeStates,
-                    uaClient.BuildEventFilter(TypeManager.EventFields)));
+                    uaClient.BuildEventFilter(TypeManager.EventFields),
+                    this));
             }
 
             if (Config.Subscriptions.DataPoints)
@@ -683,7 +684,8 @@ namespace Cognite.OpcUa
 
                 uaClient.SubscriptionManager.EnqueueTask(new DataPointSubscriptionTask(
                     Streamer.DataSubscriptionHandler,
-                    subscribeStates));
+                    subscribeStates,
+                    this));
             }
 
             if (rebrowseTriggerManager is not null)
@@ -1046,7 +1048,8 @@ namespace Cognite.OpcUa
                 await uaClient.SubscriptionManager.EnqueueTaskAndWait(new EventSubscriptionTask(
                     Streamer.EventSubscriptionHandler,
                     subscribeStates,
-                    uaClient.BuildEventFilter(TypeManager.EventFields)),
+                    uaClient.BuildEventFilter(TypeManager.EventFields),
+                    this),
                     Source.Token);
             }
 
@@ -1068,7 +1071,8 @@ namespace Cognite.OpcUa
 
                 await uaClient.SubscriptionManager.EnqueueTaskAndWait(new DataPointSubscriptionTask(
                     Streamer.DataSubscriptionHandler,
-                    subscribeStates),
+                    subscribeStates,
+                    this),
                     Source.Token);
             }
 
@@ -1103,7 +1107,7 @@ namespace Cognite.OpcUa
             {
                 if (uaClient.SubscriptionManager == null) throw new InvalidOperationException("Client not initialized");
 
-                tasks.Add(token => uaClient.SubscriptionManager.EnqueueTaskAndWait(new AuditSubscriptionTask(AuditEventSubscriptionHandler), token));
+                tasks.Add(token => uaClient.SubscriptionManager.EnqueueTaskAndWait(new AuditSubscriptionTask(AuditEventSubscriptionHandler, this), token));
             }
             return tasks;
         }

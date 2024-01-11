@@ -57,18 +57,21 @@ namespace Cognite.OpcUa.Subscriptions
 
             var subName = Enum.Parse<SubscriptionName>(sub.DisplayName.Split(' ').First());
 
-            client.Callbacks.OnSubscriptionFailure(subName);
 
-            EnqueueTaskEnsureUnique(new RecreateSubscriptionTask(sub, subName));
+            if (EnqueueTaskEnsureUnique(new RecreateSubscriptionTask(sub, subName, client.Callbacks)))
+            {
+                client.Callbacks.OnSubscriptionFailure(subName);
+            }
         }
 
-        public void EnqueueTaskEnsureUnique(PendingSubscriptionTask task)
+        public bool EnqueueTaskEnsureUnique(PendingSubscriptionTask task)
         {
             lock (taskQueueLock)
             {
-                if (taskQueue.Any(q => q.TaskName == task.TaskName)) return;
+                if (taskQueue.Any(q => q.TaskName == task.TaskName)) return false;
                 taskQueue.Enqueue(task);
                 taskQueueEvent.Set();
+                return true;
             }
         }
 

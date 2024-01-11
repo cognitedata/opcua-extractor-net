@@ -303,7 +303,7 @@ namespace Cognite.OpcUa
                 throw new InvalidOperationException("Client not initialized");
 
             _uaClient.SubscriptionManager.EnqueueTask(
-                new RebrowseTriggerSubscriptionTask(OnRebrowseTriggerNotification(token), nodes)
+                new RebrowseTriggerSubscriptionTask(OnRebrowseTriggerNotification(token), nodes, _extractor)
             );
         }
     }

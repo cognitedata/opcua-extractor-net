@@ -1021,5 +1021,44 @@ namespace Test.Integration
             Assert.True(CommonTestUtils.TestMetricValue("opcua_buffer_num_points", 0));
         }
         #endregion
+
+        [Fact]
+        public async Task TestReadHistoryOnRecreateSub()
+        {
+            tester.Config.History.Enabled = true;
+            tester.Config.History.Data = true;
+
+            var now = DateTime.UtcNow;
+            var ids = tester.Server.Ids.Base;
+            tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(ids.Root, tester.Client);
+
+            tester.Server.PopulateBaseHistory(now.AddSeconds(-20));
+
+            using var pusher = new DummyPusher(new DummyPusherConfig() { ReadExtractedRanges = true });
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+
+            var runTask = extractor.RunExtractor();
+            await extractor.WaitForSubscriptions();
+
+            Assert.False(runTask.IsFaulted, $"Faulted! {runTask.Exception}");
+
+            // Wait for history to arrive properly
+            await TestUtils.WaitForCondition(() => pusher.DataPoints[(ids.DoubleVar1, -1)].Count >= 1000 && extractor.State.NodeStates.All(st => !st.IsFrontfilling), 5);
+
+            // Add some historical data, it won't be read since we are already done reading history
+            tester.Server.PopulateBaseHistory(now.AddSeconds(10));
+
+            // Generate a datapoint, this should be captured
+            tester.Server.UpdateNode(ids.DoubleVar1, 2000);
+            await TestUtils.WaitForCondition(() => pusher.DataPoints[(ids.DoubleVar1, -1)][^1].DoubleValue == 2000, 5);
+
+            Assert.True(pusher.DataPoints[(ids.DoubleVar1, -1)].Count < 2000);
+
+            tester.Server.Server.DropSubscriptions();
+
+            // Wait for history to be read back once the subscription recovers.
+            await TestUtils.WaitForCondition(() => pusher.DataPoints[(ids.DoubleVar1, -1)].Count >= 2000, 20, () =>
+                $"Expected 2000 got {pusher.DataPoints[(ids.DoubleVar1, -1)].Count}");
+        }
     }
 }

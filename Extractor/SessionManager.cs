@@ -689,7 +689,7 @@ namespace Cognite.OpcUa
 
         public void EnsureServiceLevelSubscription()
         {
-            client.SubscriptionManager!.EnqueueTask(new ServiceLevelSubscriptionTask(OnServiceLevelUpdate));
+            client.SubscriptionManager!.EnqueueTask(new ServiceLevelSubscriptionTask(OnServiceLevelUpdate, client.Callbacks));
         }
 
         protected virtual void Dispose(bool disposing)

@@ -147,7 +147,8 @@ namespace Cognite.OpcUa.Config
                 var task = new EventSubscriptionTask(
                         (item, args) => { },
                         states.Take(baseConfig.Source.SubscriptionChunk),
-                        BuildEventFilter(TypeManager.EventFields));
+                        BuildEventFilter(TypeManager.EventFields),
+                        Callbacks);
 
                 await ToolUtil.RunWithTimeout(task.Run(log, SessionManager, Config, SubscriptionManager!, token), 120);
             }
