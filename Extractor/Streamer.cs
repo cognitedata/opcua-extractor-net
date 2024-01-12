@@ -336,9 +336,6 @@ namespace Cognite.OpcUa
                     case StatusCodeMode.GoodOnly:
                         return;
                 }
-
-                // Unreachable
-                return;
             }
 
             timeToExtractorDps.Observe((DateTime.UtcNow - datapoint.SourceTimestamp).TotalSeconds);

@@ -507,9 +507,6 @@ namespace Cognite.OpcUa.History
                             case StatusCodeMode.GoodOnly:
                                 continue;
                         }
-
-                        // Unreachable
-                        continue;
                     }
                     dataPoints.Add(dp);
                 }

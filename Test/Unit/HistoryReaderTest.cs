@@ -56,6 +56,8 @@ namespace Test.Unit
                 Data = true
             };
 
+            tester.Config.History = cfg;
+
             using var throttler = new TaskThrottler(2, false);
             var cps = new BlockingResourceCounter(1000);
 
@@ -63,9 +65,9 @@ namespace Test.Unit
 
             var log = tester.Provider.GetRequiredService<ILogger<HistoryReaderTest>>();
 
-            using var reader = new HistoryScheduler(log, tester.Client, extractor, extractor.TypeManager, cfg, HistoryReadType.FrontfillData,
+            using var reader = new HistoryScheduler(log, tester.Client, extractor, extractor.TypeManager, tester.Config, HistoryReadType.FrontfillData,
                 throttler, cps, new[] { dummyState }, tester.Source.Token);
-            using var backfillReader = new HistoryScheduler(log, tester.Client, extractor, extractor.TypeManager, cfg, HistoryReadType.BackfillData,
+            using var backfillReader = new HistoryScheduler(log, tester.Client, extractor, extractor.TypeManager, tester.Config, HistoryReadType.BackfillData,
                 throttler, cps, new[] { dummyState }, tester.Source.Token);
 
             var dt = new UADataType(DataTypeIds.Double);
@@ -188,6 +190,8 @@ namespace Test.Unit
                 Backfill = true
             };
 
+            tester.Config.History = cfg;
+
             var log = tester.Provider.GetRequiredService<ILogger<HistoryReaderTest>>();
 
             using var throttler = new TaskThrottler(2, false);
@@ -195,9 +199,9 @@ namespace Test.Unit
 
             var dummyState = new UAHistoryExtractionState(tester.Client, new NodeId("test", 0), true, true);
 
-            using var reader = new HistoryScheduler(log, tester.Client, extractor, extractor.TypeManager, cfg, HistoryReadType.FrontfillEvents,
+            using var reader = new HistoryScheduler(log, tester.Client, extractor, extractor.TypeManager, tester.Config, HistoryReadType.FrontfillEvents,
                 throttler, cps, new[] { dummyState }, tester.Source.Token);
-            using var backfillReader = new HistoryScheduler(log, tester.Client, extractor, extractor.TypeManager, cfg, HistoryReadType.BackfillEvents,
+            using var backfillReader = new HistoryScheduler(log, tester.Client, extractor, extractor.TypeManager, tester.Config, HistoryReadType.BackfillEvents,
                 throttler, cps, new[] { dummyState }, tester.Source.Token);
 
             var state = EventUtils.PopulateEventData(extractor, tester, false);
