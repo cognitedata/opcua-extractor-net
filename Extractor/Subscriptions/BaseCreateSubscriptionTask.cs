@@ -14,15 +14,18 @@ namespace Cognite.OpcUa.Subscriptions
 {
     public abstract class BaseCreateSubscriptionTask<T> : PendingSubscriptionTask
     {
-        protected SubscriptionName SubscriptionName { get; }
+        public override SubscriptionName SubscriptionToCreate => SubscriptionName;
+        public SubscriptionName SubscriptionName { get; }
+        protected IClientCallbacks Callbacks { get; }
         protected Dictionary<NodeId, T> Items { get; }
         private static readonly Gauge numSubscriptions = Metrics
             .CreateGauge("opcua_subscriptions", "Number of active monitored items");
 
-        protected BaseCreateSubscriptionTask(SubscriptionName name, Dictionary<NodeId, T> items)
+        protected BaseCreateSubscriptionTask(SubscriptionName name, Dictionary<NodeId, T> items, IClientCallbacks callbacks)
         {
             SubscriptionName = name;
             Items = items;
+            Callbacks = callbacks;
         }
 
         protected abstract MonitoredItem CreateMonitoredItem(T item, FullConfig config);
@@ -200,6 +203,7 @@ namespace Cognite.OpcUa.Subscriptions
                 ex => config.Source.Retries.ShouldRetryException(ex, outerStatusCodes),
                 logger,
                 token);
+            Callbacks.OnCreatedSubscription(SubscriptionName);
             logger.LogDebug("Finished creating subscription {Name}", SubscriptionName);
         }
     }

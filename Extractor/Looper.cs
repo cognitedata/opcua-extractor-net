@@ -172,19 +172,10 @@ namespace Cognite.OpcUa
 
             await CheckFailingPushers(token);
 
-            var results = await Task.WhenAll(
-            Task.Run(async () =>
-                await extractor.Streamer.PushDataPoints(passingPushers, failingPushers, token), token),
-            Task.Run(async () => await extractor.Streamer.PushEvents(passingPushers, failingPushers, token), token));
-
-            if (results.Any(res => res))
-            {
-                try
-                {
-                    Scheduler.TryTriggerTask(nameof(HistoryRestart));
-                }
-                catch { }
-            }
+            await Task.WhenAll(
+                Task.Run(async () => await extractor.Streamer.PushDataPoints(passingPushers, failingPushers, token), token),
+                Task.Run(async () => await extractor.Streamer.PushEvents(passingPushers, failingPushers, token), token)
+            );
 
             var failedPushers = passingPushers.Where(pusher =>
             pusher.DataFailing && extractor.Streamer.AllowData
@@ -244,27 +235,12 @@ namespace Cognite.OpcUa
             }
         }
 
-        private async Task HistoryRestart(CancellationToken token)
+        private void HistoryRestart(CancellationToken token)
         {
             if (token.IsCancellationRequested) return;
-            log.LogInformation("Restarting history...");
-            bool success = await extractor.TerminateHistory(30);
-            if (!success) throw new ExtractorFailureException("Failed to terminate history");
-            if (config.History.Enabled && config.History.Data)
-            {
-                foreach (var state in extractor.State.NodeStates.Where(state => state.FrontfillEnabled))
-                {
-                    state.RestartHistory();
-                }
-            }
-            if (config.Events.History && config.Events.Enabled)
-            {
-                foreach (var state in extractor.State.EmitterStates.Where(state => state.FrontfillEnabled))
-                {
-                    state.RestartHistory();
-                }
-            }
-            await extractor.RestartHistory();
+            log.LogInformation("Requesting restart of history...");
+
+            extractor.TriggerHistoryRestart();
         }
     }
 }

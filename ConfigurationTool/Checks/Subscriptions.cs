@@ -104,7 +104,8 @@ namespace Cognite.OpcUa.Config
                 {
                     var task = new DataPointSubscriptionTask(
                         ToolUtil.GetSimpleListWriterHandler(dps, states.ToDictionary(state => state.SourceId), this, log, true),
-                        states.Take(chunkSize));
+                        states.Take(chunkSize),
+                        Callbacks);
 
                     await ToolUtil.RunWithTimeout(task.Run(log, SessionManager, Config, SubscriptionManager!, token), 120);
                     baseConfig.Source.SubscriptionChunk = chunkSize;

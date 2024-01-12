@@ -157,7 +157,8 @@ namespace Cognite.OpcUa
 
             client.SubscriptionManager.EnqueueTask(new NodeMetricsSubscriptionTask(
                 SubscriptionHandler,
-                metrics));
+                metrics,
+                client.Callbacks));
         }
         /// <summary>
         /// Converts datapoint callback to metric value

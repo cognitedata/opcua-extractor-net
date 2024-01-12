@@ -16,10 +16,11 @@ namespace Cognite.OpcUa.Subscriptions
 
         public override string TaskName => $"Recreate subscription {oldSubscription.Id}";
 
-        public RecreateSubscriptionTask(Subscription oldSubscription)
-            : base(Enum.Parse<SubscriptionName>(oldSubscription.DisplayName.Split(' ').First()), new Dictionary<Opc.Ua.NodeId, MonitoredItem>())
+        public RecreateSubscriptionTask(Subscription oldSubscription, SubscriptionName subscription, IClientCallbacks callbacks)
+            : base(subscription, new Dictionary<NodeId, MonitoredItem>(), callbacks)
         {
             this.oldSubscription = oldSubscription;
+            callbacks.OnSubscriptionFailure(subscription);
         }
 
 
@@ -29,7 +30,11 @@ namespace Cognite.OpcUa.Subscriptions
             // If the session is currently unset, we will recreate all subscriptions eventually,
             // so no point to doing it now.
             if (session == null) return false;
-            if (!oldSubscription.PublishingStopped) return false;
+            if (!oldSubscription.PublishingStopped)
+            {
+                Callbacks.OnCreatedSubscription(SubscriptionName);
+                return false;
+            }
             if (!session.Subscriptions.Any(s => s.Id == oldSubscription.Id)) return false;
             try
             {

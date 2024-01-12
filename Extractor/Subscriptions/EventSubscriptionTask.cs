@@ -18,8 +18,9 @@ namespace Cognite.OpcUa.Subscriptions
         public EventSubscriptionTask(
             MonitoredItemNotificationEventHandler handler,
             IEnumerable<EventExtractionState> states,
-            EventFilter filter)
-            : base(SubscriptionName.Events, states.ToDictionary(s => s.SourceId))
+            EventFilter filter,
+            IClientCallbacks callbacks)
+            : base(SubscriptionName.Events, states.ToDictionary(s => s.SourceId), callbacks)
         {
             this.filter = filter;
             this.handler = handler;

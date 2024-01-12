@@ -12,11 +12,11 @@ namespace Cognite.OpcUa.Subscriptions
     public class AuditSubscriptionTask : BaseCreateSubscriptionTask<string>
     {
         private readonly MonitoredItemNotificationEventHandler handler;
-        public AuditSubscriptionTask(MonitoredItemNotificationEventHandler handler)
+        public AuditSubscriptionTask(MonitoredItemNotificationEventHandler handler, IClientCallbacks callbacks)
             : base(SubscriptionName.Audit, new Dictionary<NodeId, string>
             {
                 { ObjectIds.Server, "Audit: Server" }
-            })
+            }, callbacks)
         {
             this.handler = handler;
         }

@@ -353,6 +353,7 @@ namespace Test.Unit
             tester.Server.SetServerRedundancyStatus(230, RedundancySupport.Hot);
             tester.Config.Source.Redundancy.MonitorServiceLevel = true;
             tester.Callbacks.Reset();
+            tester.Client.Callbacks = tester.Callbacks;
             var altServer = new ServerController(new[] {
                 PredefinedSetup.Base
             }, tester.Provider, 62300)
@@ -379,7 +380,7 @@ namespace Test.Unit
                 await TestUtils.WaitForCondition(() => sm.CurrentServiceLevel == 230, 10, "Expected session to reconnect to original server");
 
                 Assert.Equal(230, sm.CurrentServiceLevel);
-                Assert.Equal(0, tester.Callbacks.ServiceLevelCbCount);
+                Assert.Equal(1, tester.Callbacks.ServiceLevelCbCount);
                 Assert.Equal(1, tester.Callbacks.LowServiceLevelCbCount);
                 Assert.Equal(1, tester.Callbacks.ReconnectCbCount);
                 Assert.Equal(sm.EndpointUrl, tester.Config.Source.EndpointUrl);
@@ -399,7 +400,7 @@ namespace Test.Unit
 
                 // Set the servicelevel back up, should trigger a callback, but no switch
                 tester.Server.SetServerRedundancyStatus(255, RedundancySupport.Hot);
-                await TestUtils.WaitForCondition(() => tester.Callbacks.ServiceLevelCbCount == 1, 10);
+                await TestUtils.WaitForCondition(() => tester.Callbacks.ServiceLevelCbCount == 2, 10);
                 Assert.Equal(sm.EndpointUrl, tester.Config.Source.EndpointUrl);
                 Assert.Equal(255, sm.CurrentServiceLevel);
             }
@@ -1018,9 +1019,9 @@ namespace Test.Unit
 
             try
             {
-                await new DataPointSubscriptionTask(handler, nodes.Take(1000)).Run(tester.Logger,
+                await new DataPointSubscriptionTask(handler, nodes.Take(1000), tester.Callbacks).Run(tester.Logger,
                     tester.Client.SessionManager, tester.Config, tester.Client.SubscriptionManager, tester.Source.Token);
-                await new DataPointSubscriptionTask(handler, nodes.Skip(1000)).Run(tester.Logger,
+                await new DataPointSubscriptionTask(handler, nodes.Skip(1000), tester.Callbacks).Run(tester.Logger,
                     tester.Client.SessionManager, tester.Config, tester.Client.SubscriptionManager, tester.Source.Token);
 
                 await TestUtils.WaitForCondition(() => dps.Count == 2000, 5,
@@ -1117,7 +1118,7 @@ namespace Test.Unit
 
             try
             {
-                await new DataPointSubscriptionTask(handler, nodes).Run(tester.Logger,
+                await new DataPointSubscriptionTask(handler, nodes, tester.Callbacks).Run(tester.Logger,
                     tester.Client.SessionManager, tester.Config, tester.Client.SubscriptionManager, tester.Source.Token);
 
                 await TestUtils.WaitForCondition(() => dps.Count == 3, 5,
@@ -1178,9 +1179,9 @@ namespace Test.Unit
             {
                 await tester.Client.TypeManager.Initialize(uaNodeSource, tester.Source.Token);
 
-                await new EventSubscriptionTask(handler, emitters.Take(2), tester.Client.BuildEventFilter(tester.Client.TypeManager.EventFields))
+                await new EventSubscriptionTask(handler, emitters.Take(2), tester.Client.BuildEventFilter(tester.Client.TypeManager.EventFields), tester.Callbacks)
                     .Run(tester.Logger, tester.Client.SessionManager, tester.Config, tester.Client.SubscriptionManager, tester.Source.Token);
-                await new EventSubscriptionTask(handler, emitters.Skip(2), tester.Client.BuildEventFilter(tester.Client.TypeManager.EventFields))
+                await new EventSubscriptionTask(handler, emitters.Skip(2), tester.Client.BuildEventFilter(tester.Client.TypeManager.EventFields), tester.Callbacks)
                     .Run(tester.Logger, tester.Client.SessionManager, tester.Config, tester.Client.SubscriptionManager, tester.Source.Token);
 
                 tester.Server.TriggerEvents(0);
@@ -1226,7 +1227,7 @@ namespace Test.Unit
             try
             {
                 await tester.Client.TypeManager.Initialize(uaNodeSource, tester.Source.Token);
-                await new EventSubscriptionTask(handler, emitters, tester.Client.BuildEventFilter(tester.Client.TypeManager.EventFields))
+                await new EventSubscriptionTask(handler, emitters, tester.Client.BuildEventFilter(tester.Client.TypeManager.EventFields), tester.Callbacks)
                     .Run(tester.Logger, tester.Client.SessionManager, tester.Config, tester.Client.SubscriptionManager, tester.Source.Token);
 
                 tester.Server.TriggerEvents(0);
@@ -1260,7 +1261,7 @@ namespace Test.Unit
 
             try
             {
-                await new AuditSubscriptionTask(handler)
+                await new AuditSubscriptionTask(handler, tester.Callbacks)
                     .Run(tester.Logger, tester.Client.SessionManager, tester.Config, tester.Client.SubscriptionManager, tester.Source.Token);
 
                 tester.Server.DirectGrowth();

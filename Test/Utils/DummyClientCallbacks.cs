@@ -1,5 +1,7 @@
 ﻿using Cognite.Extractor.Common;
 using Cognite.OpcUa;
+using Cognite.OpcUa.Subscriptions;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -13,6 +15,7 @@ namespace Test.Utils
         public int LowServiceLevelCbCount { get; set; }
         public int ReconnectCbCount { get; set; }
         public int DisconnectCbCount { get; set; }
+        public HashSet<SubscriptionName> ActivelyFailedSubscriptions { get; } = new();
 
         public DummyClientCallbacks(CancellationToken token)
         {
@@ -51,6 +54,16 @@ namespace Test.Utils
             ReconnectCbCount = 0;
             ServiceLevelCbCount = 0;
             LowServiceLevelCbCount = 0;
+        }
+
+        public void OnSubscriptionFailure(SubscriptionName subscription)
+        {
+            ActivelyFailedSubscriptions.Add(subscription);
+        }
+
+        public void OnCreatedSubscription(SubscriptionName subscription)
+        {
+            ActivelyFailedSubscriptions.Remove(subscription);
         }
     }
 }
