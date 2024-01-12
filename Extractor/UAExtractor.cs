@@ -287,7 +287,7 @@ namespace Cognite.OpcUa
             }
             Looper = new Looper(Provider.GetRequiredService<ILogger<Looper>>(), Scheduler, this, Config, pushers);
             historyReader = new HistoryReader(Provider.GetRequiredService<ILogger<HistoryReader>>(),
-                uaClient, this, TypeManager, Config.History, Source.Token);
+                uaClient, this, TypeManager, Config, Source.Token);
         }
 
         public void InitExternal(CancellationToken token)

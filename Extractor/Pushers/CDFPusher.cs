@@ -132,7 +132,7 @@ namespace Cognite.OpcUa.Pushers
             var inserts = dataPointList.ToDictionary(kvp =>
                 Identity.Create(kvp.Key),
                 kvp => kvp.Value.Select(
-                    dp => dp.IsString ? new Datapoint(dp.Timestamp, dp.StringValue) : new Datapoint(dp.Timestamp, dp.DoubleValue.Value))
+                    dp => dp.ToCDFDataPoint(fullConfig.Extraction.StatusCodes.IngestStatusCodes))
                 );
 
             if (fullConfig.DryRun)

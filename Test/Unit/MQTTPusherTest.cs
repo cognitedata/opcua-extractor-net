@@ -102,10 +102,10 @@ namespace Test.Unit
             // Test filtering out dps
             var invalidDps = new[]
             {
-                new UADataPoint(DateTime.MinValue, "test-ts-double", 123),
-                new UADataPoint(DateTime.UtcNow, "test-ts-double", double.NaN),
-                new UADataPoint(DateTime.UtcNow, "test-ts-double", double.NegativeInfinity),
-                new UADataPoint(DateTime.UtcNow, "test-ts-double", double.PositiveInfinity),
+                new UADataPoint(DateTime.MinValue, "test-ts-double", 123, StatusCodes.Good),
+                new UADataPoint(DateTime.UtcNow, "test-ts-double", double.NaN, StatusCodes.Good),
+                new UADataPoint(DateTime.UtcNow, "test-ts-double", double.NegativeInfinity, StatusCodes.Good),
+                new UADataPoint(DateTime.UtcNow, "test-ts-double", double.PositiveInfinity, StatusCodes.Good),
             };
             Assert.Null(await pusher.PushDataPoints(invalidDps, tester.Source.Token));
 
@@ -115,11 +115,11 @@ namespace Test.Unit
 
             var dps = new[]
             {
-                new UADataPoint(time, "test-ts-double", 123),
-                new UADataPoint(time.AddSeconds(1), "test-ts-double", 321),
-                new UADataPoint(time, "test-ts-string", "string"),
-                new UADataPoint(time.AddSeconds(1), "test-ts-string", "string2"),
-                new UADataPoint(time, "test-ts-missing", "value")
+                new UADataPoint(time, "test-ts-double", 123, StatusCodes.Good),
+                new UADataPoint(time.AddSeconds(1), "test-ts-double", 321, StatusCodes.Good),
+                new UADataPoint(time, "test-ts-string", "string", StatusCodes.Good),
+                new UADataPoint(time.AddSeconds(1), "test-ts-string", "string2", StatusCodes.Good),
+                new UADataPoint(time, "test-ts-missing", "value", StatusCodes.Good)
             };
 
             // Debug true
@@ -147,11 +147,11 @@ namespace Test.Unit
             // Mismatched timeseries, handled by bridge
             dps = new[]
             {
-                new UADataPoint(time.AddSeconds(2), "test-ts-double", "string"),
-                new UADataPoint(time.AddSeconds(3), "test-ts-double", "string2"),
-                new UADataPoint(time.AddSeconds(2), "test-ts-string", "string3"),
-                new UADataPoint(time.AddSeconds(3), "test-ts-string", "string4"),
-                new UADataPoint(time, "test-ts-missing", "value")
+                new UADataPoint(time.AddSeconds(2), "test-ts-double", "string", StatusCodes.Good),
+                new UADataPoint(time.AddSeconds(3), "test-ts-double", "string2", StatusCodes.Good),
+                new UADataPoint(time.AddSeconds(2), "test-ts-string", "string3", StatusCodes.Good),
+                new UADataPoint(time.AddSeconds(3), "test-ts-string", "string4", StatusCodes.Good),
+                new UADataPoint(time, "test-ts-missing", "value", StatusCodes.Good)
             };
             waitTask = bridge.WaitForNextMessage();
             Assert.True(await pusher.PushDataPoints(dps, tester.Source.Token));

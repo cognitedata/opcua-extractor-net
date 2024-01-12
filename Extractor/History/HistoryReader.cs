@@ -30,7 +30,7 @@ namespace Cognite.OpcUa.History
     {
         private readonly UAClient uaClient;
         private readonly UAExtractor extractor;
-        private readonly HistoryConfig config;
+        private readonly FullConfig config;
         private readonly TypeManager typeManager;
         private CancellationTokenSource source;
         // private ILogger log = Log.Logger.ForContext<HistoryReader>();
@@ -42,14 +42,14 @@ namespace Cognite.OpcUa.History
         private readonly ILogger<HistoryReader> log;
 
         public HistoryReader(ILogger<HistoryReader> log,
-            UAClient uaClient, UAExtractor extractor, TypeManager typeManager, HistoryConfig config, CancellationToken token)
+            UAClient uaClient, UAExtractor extractor, TypeManager typeManager, FullConfig config, CancellationToken token)
         {
             this.log = log;
             this.config = config;
             this.uaClient = uaClient;
             this.extractor = extractor;
             this.typeManager = typeManager;
-            var throttling = config.Throttling;
+            var throttling = config.History.Throttling;
             throttler = new TaskThrottler(throttling.MaxParallelism, false, throttling.MaxPerMinute, TimeSpan.FromMinutes(1));
             source = CancellationTokenSource.CreateLinkedTokenSource(token);
             continuationPoints = new BlockingResourceCounter(
@@ -76,7 +76,7 @@ namespace Cognite.OpcUa.History
 
         public void MaxNodeParallelismChanged()
         {
-            continuationPoints.SetCapacity(config.Throttling.MaxNodeParallelism > 0 ? config.Throttling.MaxNodeParallelism : 1_000);
+            continuationPoints.SetCapacity(config.History.Throttling.MaxNodeParallelism > 0 ? config.History.Throttling.MaxNodeParallelism : 1_000);
         }
 
         /// <summary>

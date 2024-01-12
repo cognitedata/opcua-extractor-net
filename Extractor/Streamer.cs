@@ -15,6 +15,7 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using Cognite.Extensions.DataModels.QueryBuilder;
 using Cognite.Extractor.Common;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
@@ -27,6 +28,7 @@ using Prometheus;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -340,6 +342,22 @@ namespace Cognite.OpcUa
                     log.LogDebug("Bad streaming datapoint: {BadDatapointExternalId} {SourceTimestamp}. Value: {Value}, Status: {Status}",
                         node.Id, datapoint.SourceTimestamp, datapoint.Value, ExtractorUtils.GetStatusCodeName((uint)datapoint.StatusCode));
                 }
+
+                switch (config.Extraction.StatusCodes.StatusBehavior)
+                {
+                    case StatusCodeMode.All:
+                        break;
+                    case StatusCodeMode.Uncertain:
+                        if (!StatusCode.IsUncertain(datapoint.StatusCode))
+                        {
+                            return;
+                        }
+                        break;
+                    case StatusCodeMode.GoodOnly:
+                        return;
+                }
+
+                // Unreachable
                 return;
             }
 
@@ -355,7 +373,10 @@ namespace Cognite.OpcUa
             }
 
             var buffDps = ToDataPoint(datapoint, node);
-            node.UpdateFromStream(buffDps);
+            if (StatusCode.IsGood(datapoint.StatusCode))
+            {
+                node.UpdateFromStream(buffDps);
+            }
 
             if ((extractor.StateStorage == null || config.StateStorage.IntervalValue.Value == Timeout.InfiniteTimeSpan)
                  && (node.IsFrontfilling && datapoint.SourceTimestamp > node.SourceExtractedRange.Last
@@ -429,7 +450,7 @@ namespace Cognite.OpcUa
                 for (int i = 0; i < dim; i++)
                 {
                     var id = variable.IsArray ? GetArrayUniqueId(uniqueId, i) : uniqueId;
-                    ret.Add(variable.DataType.ToDataPoint(extractor, values.GetValue(i), value.SourceTimestamp, id));
+                    ret.Add(variable.DataType.ToDataPoint(extractor, values.GetValue(i), value.SourceTimestamp, id, value.StatusCode));
                 }
                 return ret;
             }
@@ -438,7 +459,7 @@ namespace Cognite.OpcUa
                 uniqueId = GetArrayUniqueId(uniqueId, 0);
             }
 
-            var sdp = variable.DataType.ToDataPoint(extractor, value.WrappedValue, value.SourceTimestamp, uniqueId);
+            var sdp = variable.DataType.ToDataPoint(extractor, value.WrappedValue, value.SourceTimestamp, uniqueId, value.StatusCode);
             return new[] { sdp };
         }
 

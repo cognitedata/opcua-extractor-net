@@ -179,7 +179,7 @@ namespace Test.Unit
 
         private static IEnumerable<UADataPoint> GetDps(DateTime start, string id, int count)
         {
-            return Enumerable.Range(0, count).Select(idx => new UADataPoint(start.AddSeconds(idx), id, idx));
+            return Enumerable.Range(0, count).Select(idx => new UADataPoint(start.AddSeconds(idx), id, idx, StatusCodes.Good));
         }
 
         [Fact]
@@ -582,7 +582,7 @@ namespace Test.Unit
             var start = DateTime.UtcNow;
 
             var dps = GetDps(start, "state1", 100)
-                .Concat(Enumerable.Range(0, 100).Select(idx => new UADataPoint(start.AddSeconds(idx), "state2", "value" + idx)))
+                .Concat(Enumerable.Range(0, 100).Select(idx => new UADataPoint(start.AddSeconds(idx), "state2", "value" + idx, StatusCodes.Good)))
                 .Concat(GetDps(start, "state4", 100))
                 .Concat(GetDps(start, "state3", 100)).ToList();
 
@@ -628,7 +628,7 @@ namespace Test.Unit
 
             var writeDps = fb.GetType().GetMethod("WriteDatapointsToFile", BindingFlags.Instance | BindingFlags.NonPublic);
 
-            var dps = Enumerable.Range(0, 200).Select(idx => new UADataPoint(DateTime.UtcNow, "id", idx));
+            var dps = Enumerable.Range(0, 200).Select(idx => new UADataPoint(DateTime.UtcNow, "id", idx, StatusCodes.Good));
 
             writeDps.Invoke(fb, new object[] { dps.Take(10), tester.Source.Token });
 

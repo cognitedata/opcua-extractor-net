@@ -65,14 +65,14 @@ namespace Test.Unit
 
             Assert.False(evt.WaitOne(100));
 
-            extractor.Streamer.Enqueue(new UADataPoint(start, "id", -1));
+            extractor.Streamer.Enqueue(new UADataPoint(start, "id", -1, StatusCodes.Good));
             Assert.Single(queue);
             await extractor.Streamer.PushDataPoints(new[] { pusher }, Enumerable.Empty<IPusher>(), tester.Source.Token);
 
             Assert.Single(dps);
             Assert.Empty(queue);
 
-            extractor.Streamer.Enqueue(Enumerable.Range(0, 2000000).Select(idx => new UADataPoint(start.AddMilliseconds(idx), "id", idx)));
+            extractor.Streamer.Enqueue(Enumerable.Range(0, 2000000).Select(idx => new UADataPoint(start.AddMilliseconds(idx), "id", idx, StatusCodes.Good)));
 
             Assert.True(evt.WaitOne(10000));
             Assert.Equal(2000000, queue.Count);
@@ -82,12 +82,12 @@ namespace Test.Unit
             Assert.Equal(2000001, dps.Count);
             Assert.Empty(queue);
 
-            extractor.Streamer.Enqueue(Enumerable.Range(2000000, 999999).Select(idx => new UADataPoint(start.AddMilliseconds(idx), "id", idx)));
+            extractor.Streamer.Enqueue(Enumerable.Range(2000000, 999999).Select(idx => new UADataPoint(start.AddMilliseconds(idx), "id", idx, StatusCodes.Good)));
 
             Assert.False(evt.WaitOne(100));
             Assert.Equal(999999, queue.Count);
 
-            extractor.Streamer.Enqueue(new UADataPoint(start.AddMilliseconds(3000000), "id", 300));
+            extractor.Streamer.Enqueue(new UADataPoint(start.AddMilliseconds(3000000), "id", 300, StatusCodes.Good));
             Assert.True(evt.WaitOne(10000));
             Assert.Equal(1000000, queue.Count);
 
@@ -191,7 +191,7 @@ namespace Test.Unit
             state.UpdateFromFrontfill(DateTime.MinValue, true);
 
             extractor.State.SetNodeState(state, "id");
-            var toPush = Enumerable.Range(0, 1000).Select(idx => new UADataPoint(start.AddMilliseconds(idx), "id", idx)).ToList();
+            var toPush = Enumerable.Range(0, 1000).Select(idx => new UADataPoint(start.AddMilliseconds(idx), "id", idx, StatusCodes.Good)).ToList();
             extractor.Streamer.Enqueue(toPush);
             bool result = await extractor.Streamer.PushDataPoints(new[] { pusher, pusher2 }, Enumerable.Empty<IPusher>(), tester.Source.Token);
             Assert.Equal(1000, dps.Count);

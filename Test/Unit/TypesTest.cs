@@ -741,7 +741,7 @@ namespace Test.Unit
         public void TestDataPointConstructors()
         {
             var now = DateTime.UtcNow;
-            var dt = new UADataPoint(now, "id", 123.123);
+            var dt = new UADataPoint(now, "id", 123.123, StatusCodes.Good);
             Assert.Equal(now, dt.Timestamp);
             Assert.Equal("id", dt.Id);
             Assert.False(dt.IsString);
@@ -755,7 +755,7 @@ namespace Test.Unit
             Assert.Equal(12.34, dt.DoubleValue);
             Assert.Null(dt.StringValue);
 
-            dt = new UADataPoint(now, "id", "value");
+            dt = new UADataPoint(now, "id", "value", StatusCodes.Good);
             Assert.Equal(now, dt.Timestamp);
             Assert.Equal("id", dt.Id);
             Assert.True(dt.IsString);
@@ -782,11 +782,11 @@ namespace Test.Unit
             var ts = DateTime.UtcNow;
             if (value is string || value == null)
             {
-                dt = new UADataPoint(ts, id, value as string);
+                dt = new UADataPoint(ts, id, value as string, StatusCodes.Good);
             }
             else
             {
-                dt = new UADataPoint(ts, id, UAClient.ConvertToDouble(value));
+                dt = new UADataPoint(ts, id, UAClient.ConvertToDouble(value), StatusCodes.Good);
             }
             var bytes = dt.ToStorableBytes();
 
@@ -803,12 +803,12 @@ namespace Test.Unit
         public void TestDataPointDebugDescription()
         {
             var ts = DateTime.UtcNow;
-            var dt = new UADataPoint(ts, "id", 123.123);
+            var dt = new UADataPoint(ts, "id", 123.123, StatusCodes.Good);
             var str = dt.ToString();
             var refStr = $"Update timeseries id to 123.123 at {ts.ToString(CultureInfo.InvariantCulture)}";
             Assert.Equal(refStr.ReplaceLineEndings(), str.ReplaceLineEndings());
 
-            dt = new UADataPoint(ts, "id", "value");
+            dt = new UADataPoint(ts, "id", "value", StatusCodes.Good);
             str = dt.ToString();
             refStr = $"Update timeseries id to \"value\" at {ts.ToString(CultureInfo.InvariantCulture)}";
             Assert.Equal(refStr.ReplaceLineEndings(), str.ReplaceLineEndings());
@@ -890,14 +890,14 @@ namespace Test.Unit
             using var extractor = tester.BuildExtractor();
             var now = DateTime.UtcNow;
             var dt = new UADataType(DataTypeIds.Double);
-            var dp = dt.ToDataPoint(extractor, 123.123, now, "id");
+            var dp = dt.ToDataPoint(extractor, 123.123, now, "id", StatusCodes.Good);
             Assert.Equal("id", dp.Id);
             Assert.Equal(123.123, dp.DoubleValue);
             Assert.Equal(now, dp.Timestamp);
 
             // Normal string
             dt = new UADataType(DataTypeIds.String);
-            dp = dt.ToDataPoint(extractor, 123.123, now, "id");
+            dp = dt.ToDataPoint(extractor, 123.123, now, "id", StatusCodes.Good);
             Assert.Equal("id", dp.Id);
             Assert.Equal("123.123", dp.StringValue);
             Assert.Equal(now, dp.Timestamp);
@@ -905,7 +905,7 @@ namespace Test.Unit
             // Enum double
             var config = new DataTypeConfig();
             dt = new UADataType(new ProtoDataType { Enum = true }, new NodeId("test", 0), config);
-            dp = dt.ToDataPoint(extractor, 123, now, "id");
+            dp = dt.ToDataPoint(extractor, 123, now, "id", StatusCodes.Good);
             Assert.Equal("id", dp.Id);
             Assert.Equal(123, dp.DoubleValue);
             Assert.Equal(now, dp.Timestamp);
@@ -914,19 +914,19 @@ namespace Test.Unit
             config.EnumsAsStrings = true;
             dt = new UADataType(new ProtoDataType { Enum = true }, new NodeId("test", 0), config);
             dt.EnumValues[123] = "enum";
-            dp = dt.ToDataPoint(extractor, 123, now, "id");
+            dp = dt.ToDataPoint(extractor, 123, now, "id", StatusCodes.Good);
             Assert.Equal("id", dp.Id);
             Assert.Equal("enum", dp.StringValue);
             Assert.Equal(now, dp.Timestamp);
 
-            dp = dt.ToDataPoint(extractor, 124, now, "id");
+            dp = dt.ToDataPoint(extractor, 124, now, "id", StatusCodes.Good);
             Assert.Equal("id", dp.Id);
             Assert.Equal("124", dp.StringValue);
             Assert.Equal(now, dp.Timestamp);
 
             // Use variant
             dt = new UADataType(DataTypeIds.String);
-            dp = dt.ToDataPoint(extractor, new Variant("test"), now, "id");
+            dp = dt.ToDataPoint(extractor, new Variant("test"), now, "id", StatusCodes.Good);
             Assert.Equal("id", dp.Id);
             Assert.Equal("test", dp.StringValue);
             Assert.Equal(now, dp.Timestamp);
@@ -934,7 +934,7 @@ namespace Test.Unit
             // Test complex type
             dt = new UADataType(DataTypeIds.ReadValueId);
             var value = new Variant(new ReadValueId { AttributeId = Attributes.Value, NodeId = new NodeId("test", 0) });
-            dp = dt.ToDataPoint(extractor, value, now, "id");
+            dp = dt.ToDataPoint(extractor, value, now, "id", StatusCodes.Good);
             Assert.Equal("id", dp.Id);
             Assert.Equal(@"{""NodeId"":{""IdType"":1,""Id"":""test""},""AttributeId"":13}", dp.StringValue);
             Assert.Equal(now, dp.Timestamp);

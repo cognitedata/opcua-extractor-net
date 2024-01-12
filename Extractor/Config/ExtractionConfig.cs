@@ -174,6 +174,9 @@ namespace Cognite.OpcUa.Config
         /// Server namespace nodes the should be subscribed to a rebrowse upon changes to their values.
         /// </summary>
         public RebrowseTriggersConfig? RebrowseTriggers { get; set; }
+
+        private StatusConfig statusCodes = new StatusConfig();
+        public StatusConfig StatusCodes { get => statusCodes; set => statusCodes = value ?? statusCodes; }
     }
     public class DataTypeConfig
     {
@@ -433,5 +436,22 @@ namespace Cognite.OpcUa.Config
         /// NodeFilter. All non-null filters must match each node for the transformation to be applied.
         /// </summary>
         public RawNodeFilter? Filter { get; set; }
+    }
+
+    public enum StatusCodeMode
+    {
+        GoodOnly,
+        Uncertain,
+        All
+    }
+
+    public class StatusConfig
+    {
+        /// <summary>
+        /// Default behavior, ignore bad data points.
+        /// </summary>
+        public StatusCodeMode StatusBehavior { get; } = StatusCodeMode.GoodOnly;
+
+        public bool IngestStatusCodes { get; }
     }
 }

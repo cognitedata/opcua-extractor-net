@@ -150,7 +150,7 @@ namespace Test.Unit
             queue.Clear();
             // Get a datapoint from stream that happened after the last history point was read from the server, but arrived
             // at the extractor before the history data was parsed. This is an edge-case, but a potential lost datapoint 
-            state1.UpdateFromStream(new[] { new UADataPoint(start.AddSeconds(100), "state1", 1.0) });
+            state1.UpdateFromStream(new[] { new UADataPoint(start.AddSeconds(100), "state1", 1.0, StatusCodes.Good) });
             node = new HistoryReadNode(HistoryReadType.FrontfillData, new NodeId("state1", 0)) { Completed = true };
             node.LastResult = historyData;
             historyDataHandler.Invoke(reader, new object[] { node });

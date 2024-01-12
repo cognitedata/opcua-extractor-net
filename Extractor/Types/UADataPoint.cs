@@ -16,6 +16,8 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using Cognite.Extensions;
+using CogniteSdk;
+using Opc.Ua;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
@@ -36,23 +38,27 @@ namespace Cognite.OpcUa.Types
         [MemberNotNullWhen(false, nameof(DoubleValue))]
         [MemberNotNullWhen(true, nameof(StringValue))]
         public bool IsString => !DoubleValue.HasValue;
+
+        public StatusCode Status { get; }
         /// <param name="timestamp">Timestamp in ms since epoch</param>
         /// <param name="id">Converted id of node this belongs to, equal to externalId of timeseries in CDF</param>
         /// <param name="value">Value to set</param>
-        public UADataPoint(DateTime timestamp, string id, double value)
+        public UADataPoint(DateTime timestamp, string id, double value, StatusCode status)
         {
             Timestamp = timestamp;
             Id = id;
             DoubleValue = value;
+            Status = status;
         }
         /// <param name="timestamp">Timestamp in ms since epoch</param>
         /// <param name="id">Converted id of node this belongs to, equal to externalId of timeseries in CDF</param>
         /// <param name="value">Value to set</param>
-        public UADataPoint(DateTime timestamp, string id, string? value)
+        public UADataPoint(DateTime timestamp, string id, string? value, StatusCode status)
         {
             Timestamp = timestamp;
             Id = id;
             StringValue = value;
+            Status = status;
         }
         /// <summary>
         /// Copy given datapoint with given replacement value
@@ -64,6 +70,7 @@ namespace Cognite.OpcUa.Types
             Timestamp = other.Timestamp;
             Id = other.Id;
             StringValue = replacement;
+            Status = other.Status;
         }
         /// <summary>
         /// Copy given datapoint with given replacement value
@@ -75,6 +82,29 @@ namespace Cognite.OpcUa.Types
             Timestamp = other.Timestamp;
             Id = other.Id;
             DoubleValue = replacement;
+            Status = other.Status;
+        }
+
+
+        public Datapoint ToCDFDataPoint(bool includeStatus)
+        {
+            Datapoint dp;
+            if (DoubleValue.HasValue)
+            {
+                dp = new Datapoint(Timestamp, DoubleValue.Value);
+            }
+            else
+            {
+                dp = new Datapoint(Timestamp, StringValue);
+            }
+            if (includeStatus)
+            {
+                dp.StatusCode = new Com.Cognite.V1.Timeseries.Proto.Alpha.Status
+                {
+                    Code = Status.Code
+                };
+            }
+            return dp;
         }
         /// <summary>
         /// Converts datapoint into an array of bytes which may be written to file.
@@ -88,10 +118,11 @@ namespace Cognite.OpcUa.Types
         /// <returns>Array of bytes</returns>
         public byte[] ToStorableBytes()
         {
-            var bytes = new List<byte>(16);
+            var bytes = new List<byte>(20);
             bytes.AddRange(CogniteUtils.StringToStorable(Id));
             bytes.AddRange(BitConverter.GetBytes(Timestamp.ToBinary()));
             bytes.AddRange(BitConverter.GetBytes(IsString));
+            bytes.AddRange(BitConverter.GetBytes(Status.Code));
 
             if (IsString)
             {
@@ -116,18 +147,20 @@ namespace Cognite.OpcUa.Types
             var buffer = new byte[sizeof(long)];
             if (stream.Read(buffer, 0, sizeof(long)) < sizeof(long)) return null;
             DateTime ts = DateTime.FromBinary(BitConverter.ToInt64(buffer, 0));
+            if (stream.Read(buffer, 0, sizeof(uint)) < sizeof(uint)) return null;
+            var status = new StatusCode(BitConverter.ToUInt32(buffer, 0));
             if (stream.Read(buffer, 0, sizeof(bool)) < sizeof(bool)) return null;
             bool isstr = BitConverter.ToBoolean(buffer, 0);
             if (isstr)
             {
                 var value = CogniteUtils.StringFromStream(stream);
-                return new UADataPoint(ts, id, value);
+                return new UADataPoint(ts, id, value, status);
             }
             else
             {
                 if (stream.Read(buffer, 0, sizeof(double)) < sizeof(double)) return null;
                 var value = BitConverter.ToDouble(buffer, 0);
-                return new UADataPoint(ts, id, value);
+                return new UADataPoint(ts, id, value, status);
             }
         }
         public override string ToString()

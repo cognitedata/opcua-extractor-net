@@ -67,6 +67,7 @@ namespace Cognite.OpcUa.History
         private readonly UAClient uaClient;
         private readonly UAExtractor extractor;
         private readonly HistoryConfig config;
+        private readonly FullConfig fullConfig;
         private readonly TypeManager typeManager;
 
         private readonly HistoryReadType type;
@@ -94,44 +95,45 @@ namespace Cognite.OpcUa.History
             UAClient uaClient,
             UAExtractor extractor,
             TypeManager typeManager,
-            HistoryConfig config,
+            FullConfig config,
             HistoryReadType type,
             TaskThrottler throttler,
             IResourceCounter resource,
             IEnumerable<UAHistoryExtractionState> states,
             CancellationToken token)
             : base(
-                  GetNodes(states, log, type, config.StartTime, out var count),
+                  GetNodes(states, log, type, config.History.StartTime, out var count),
                   throttler,
                   (type == HistoryReadType.FrontfillData || type == HistoryReadType.BackfillData)
-                    ? config.DataNodesChunk
-                    : config.EventNodesChunk,
+                    ? config.History.DataNodesChunk
+                    : config.History.EventNodesChunk,
                   resource,
                   token)
         {
             this.log = log;
             this.uaClient = uaClient;
             this.extractor = extractor;
-            this.config = config;
+            this.config = config.History;
+            fullConfig = config;
             this.type = type;
             this.typeManager = typeManager;
-            chunkSize = Data ? config.DataNodesChunk : config.EventNodesChunk;
+            chunkSize = Data ? config.History.DataNodesChunk : config.History.EventNodesChunk;
 
-            maxReadLength = config.MaxReadLengthValue.Value;
+            maxReadLength = config.History.MaxReadLengthValue.Value;
             if (maxReadLength == TimeSpan.Zero || maxReadLength == Timeout.InfiniteTimeSpan) maxReadLength = null;
 
             nodeCount = count;
 
-            thresholdManager = new FailureThresholdManager<NodeId, Exception>(config.ErrorThreshold, nodeCount, (x) =>
+            thresholdManager = new FailureThresholdManager<NodeId, Exception>(config.History.ErrorThreshold, nodeCount, (x) =>
             {
                 exceptions = x;
                 TokenSource.Cancel();
             });
 
-            historyStartTime = GetStartTime(config.StartTime);
-            if (!string.IsNullOrWhiteSpace(config.EndTime)) historyEndTime = CogniteTime.ParseTimestampString(config.EndTime)!;
+            historyStartTime = GetStartTime(config.History.StartTime);
+            if (!string.IsNullOrWhiteSpace(config.History.EndTime)) historyEndTime = CogniteTime.ParseTimestampString(config.History.EndTime)!;
 
-            historyGranularity = config.GranularityValue.Value;
+            historyGranularity = config.History.GranularityValue.Value;
 
             metrics = new HistoryMetrics(type);
         }
@@ -491,6 +493,22 @@ namespace Cognite.OpcUa.History
                             log.LogTrace("Bad history datapoint: {BadDatapointExternalId} {SourceTimestamp}. Value: {Value}, Status: {Status}",
                                 node.State.Id, dp.SourceTimestamp, dp.Value, ExtractorUtils.GetStatusCodeName((uint)dp.StatusCode));
                         }
+
+                        switch (fullConfig.Extraction.StatusCodes.StatusBehavior)
+                        {
+                            case StatusCodeMode.All:
+                                break;
+                            case StatusCodeMode.Uncertain:
+                                if (!StatusCode.IsUncertain(dp.StatusCode))
+                                {
+                                    continue;
+                                }
+                                break;
+                            case StatusCodeMode.GoodOnly:
+                                continue;
+                        }
+
+                        // Unreachable
                         continue;
                     }
                     dataPoints.Add(dp);
@@ -505,14 +523,27 @@ namespace Cognite.OpcUa.History
             var last = DateTime.MinValue;
             var first = DateTime.MaxValue;
 
-            if (dataPoints.Count != 0)
+            var goodDataPoints = dataPoints.Where(dp => StatusCode.IsGood(dp.StatusCode));
+
+            int goodDpCount = 0;
+
+            foreach (var dp in goodDataPoints)
             {
-                (first, last) = dataPoints.MinMax(dp => dp.SourceTimestamp);
+                if (first > dp.SourceTimestamp)
+                {
+                    first = dp.SourceTimestamp;
+                }
+
+                if (last < dp.SourceTimestamp)
+                {
+                    last = dp.SourceTimestamp;
+                }
+                goodDpCount++;
             }
 
             if (config.IgnoreContinuationPoints)
             {
-                node.Completed = dataPoints.Count == 0
+                node.Completed = goodDpCount == 0
                     || Frontfill && first == last && last == node.State.SourceExtractedRange.Last
                     || !Frontfill && first == last && last == node.State.SourceExtractedRange.First
                     || !Frontfill && last <= historyStartTime;
