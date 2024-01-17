@@ -363,7 +363,7 @@ cognite:
         # Maximum number of assets per get/create asset request
         assets: 1000
         # Maximum number of timeseries per datapoint create request
-        data-point-time-series: 10000
+        data-point-time-series: 100
         # Maximum number of datapoints per datapoint create request
         data-points: 100000
         # Maximum number of timeseries per datapoint read request, used when getting the first point in a timeseries
