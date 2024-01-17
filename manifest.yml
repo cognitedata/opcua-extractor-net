@@ -60,6 +60,12 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.24.2":
+    description: Restart history more consistently and in more cases.
+    changelog:
+      changed:
+        - Restart history when subscriptions are recreated.
+        - Stop history when any condition for not running history is satisfied, then start it once all conditions are satisfied.
   "2.24.1":
     description: Fix Archive Release Builds
     changelog:
