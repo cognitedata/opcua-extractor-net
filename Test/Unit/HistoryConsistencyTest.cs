@@ -119,7 +119,9 @@ namespace Test.Unit
             cfg.Throttling.MaxNodeParallelism = nodeParallelism;
             cfg.StartTime = tester.HistoryStart.AddSeconds(-10).ToUnixTimeMilliseconds().ToString();
 
-            using var reader = new HistoryReader(logger, tester.Client, extractor, extractor.TypeManager, cfg, tester.Source.Token);
+            tester.Config.History = cfg;
+
+            using var reader = new HistoryReader(logger, tester.Client, extractor, extractor.TypeManager, tester.Config, tester.Source.Token);
 
             var dt = new UADataType(DataTypeIds.Double);
             var dt2 = new UADataType(DataTypeIds.String);
@@ -149,11 +151,11 @@ namespace Test.Unit
                 .GetField("dataPointQueue", BindingFlags.NonPublic | BindingFlags.Instance)
                 .GetValue(extractor.Streamer);
 
-            await reader.FrontfillData(states);
+            await CommonTestUtils.RunHistory(reader, states, HistoryReadType.FrontfillData);
 
             if (backfill)
             {
-                await reader.BackfillData(states);
+                await CommonTestUtils.RunHistory(reader, states, HistoryReadType.BackfillData);
             }
 
             var distinct = queue.ToList().DistinctBy(dp => (dp.Id, dp.Timestamp)).GroupBy(dp => dp.Id)
@@ -201,7 +203,9 @@ namespace Test.Unit
             cfg.Throttling.MaxNodeParallelism = nodeParallelism;
             cfg.StartTime = tester.HistoryStart.AddSeconds(-10).ToUnixTimeMilliseconds().ToString();
 
-            using var reader = new HistoryReader(logger, tester.Client, extractor, extractor.TypeManager, cfg, tester.Source.Token);
+            tester.Config.History = cfg;
+
+            using var reader = new HistoryReader(logger, tester.Client, extractor, extractor.TypeManager, tester.Config, tester.Source.Token);
 
             var states = new[]
             {
@@ -230,11 +234,11 @@ namespace Test.Unit
             var fields = extractor.TypeManager.EventFields;
             extractor.State.PopulateActiveEventTypes(fields);
 
-            await reader.FrontfillEvents(states);
+            await CommonTestUtils.RunHistory(reader, states, HistoryReadType.FrontfillEvents);
 
             if (backfill)
             {
-                await reader.BackfillEvents(states);
+                await CommonTestUtils.RunHistory(reader, states, HistoryReadType.BackfillEvents);
             }
 
             var distinct = queue.ToList().DistinctBy(evt => evt.Message).GroupBy(evt => evt.EmittingNode)

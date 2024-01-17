@@ -60,6 +60,14 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.25.0":
+    description: Restart history more consistently and in more cases. Add support for azure key vault.
+    changelog:
+      changed:
+        - Restart history when subscriptions are recreated.
+        - Stop history when any condition for not running history is satisfied, then start it once all conditions are satisfied.
+      added:
+        - "Support for azure key vault. Secrets are injected by adding a `key-vault` section to the config, and using the !keyvault [secretname] tag"
   "2.24.1":
     description: Fix Archive Release Builds
     changelog:

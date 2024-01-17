@@ -3,6 +3,7 @@ using Cognite.OpcUa.Config;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
+using Serilog;
 using Server;
 using System;
 using System.CommandLine;
@@ -129,7 +130,7 @@ namespace Test.Unit
                 ReferenceTypeIds.HasSubtype.ToString()));
         }
 
-        [Fact]
+        [Fact(Timeout = 10000)]
         public async Task TestDeleteNodesAndEdges()
         {
             try
@@ -161,7 +162,9 @@ namespace Test.Unit
             }
             finally
             {
+                tester.Log.LogDebug("Start dispose");
                 await extractor.DisposeAsync();
+                tester.Log.LogDebug("End dispose");
             }
 
             tester.Config.Extraction.Transformations = tester.Config.Extraction.Transformations

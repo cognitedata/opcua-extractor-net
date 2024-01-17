@@ -41,6 +41,7 @@ namespace Test.Unit
             private readonly IMqttClient client;
             private readonly MqttApplicationMessageBuilder baseBuilder;
             private readonly IServiceProvider provider;
+            private readonly CancellationTokenSource source;
             public BridgeTester(CDFMockHandler.MockMode mode, ITestOutputHelper output)
             {
                 var services = new ServiceCollection();
@@ -53,25 +54,35 @@ namespace Test.Unit
                 provider = services.BuildServiceProvider();
 
                 Handler = provider.GetRequiredService<CDFMockHandler>();
+                source = new CancellationTokenSource();
 
                 bridge = new MQTTBridge(new Destination(Config.Cognite, provider), Config, provider.GetRequiredService<ILogger<MQTTBridge>>());
-                bridge.StartBridge(CancellationToken.None).Wait();
-                var options = new MqttClientOptionsBuilder()
+                try
+                {
+                    bridge.StartBridge(source.Token).Wait();
+                    var options = new MqttClientOptionsBuilder()
                     .WithClientId("test-mqtt-publisher")
                     .WithTcpServer(Config.Mqtt.Host, Config.Mqtt.Port)
                     .WithCleanSession()
                     .Build();
-                client = new MqttFactory().CreateMqttClient();
-                baseBuilder = new MqttApplicationMessageBuilder()
-                    .WithQualityOfServiceLevel(MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce);
-                client.ConnectAsync(options).Wait();
+                    client = new MqttFactory().CreateMqttClient();
+                    baseBuilder = new MqttApplicationMessageBuilder()
+                        .WithQualityOfServiceLevel(MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce);
+                    client.ConnectAsync(options).Wait();
+                }
+                catch
+                {
+                    source.Cancel();
+                    throw;
+                }
+
             }
 
             public async Task RecreateBridge()
             {
                 bridge.Dispose();
                 bridge = new MQTTBridge(new Destination(Config.Cognite, provider), Config, provider.GetRequiredService<ILogger<MQTTBridge>>());
-                bool success = await bridge.StartBridge(CancellationToken.None);
+                bool success = await bridge.StartBridge(source.Token);
                 if (!success) throw new ConfigurationException("Unable to start bridge");
             }
 
@@ -178,6 +189,8 @@ namespace Test.Unit
             {
                 bridge?.Dispose();
                 client?.Dispose();
+                source.Cancel();
+                source.Dispose();
             }
         }
 

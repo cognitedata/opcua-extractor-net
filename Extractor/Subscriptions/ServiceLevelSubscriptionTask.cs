@@ -13,8 +13,8 @@ namespace Cognite.OpcUa.Subscriptions
     internal class ServiceLevelSubscriptionTask : BaseCreateSubscriptionTask<NodeId>
     {
         private MonitoredItemNotificationEventHandler handler;
-        public ServiceLevelSubscriptionTask(MonitoredItemNotificationEventHandler handler)
-            : base(SubscriptionName.ServiceLevel, new Dictionary<NodeId, NodeId> { { VariableIds.Server_ServiceLevel, VariableIds.Server_ServiceLevel } })
+        public ServiceLevelSubscriptionTask(MonitoredItemNotificationEventHandler handler, IClientCallbacks callbacks)
+            : base(SubscriptionName.ServiceLevel, new Dictionary<NodeId, NodeId> { { VariableIds.Server_ServiceLevel, VariableIds.Server_ServiceLevel } }, callbacks)
         {
             this.handler = handler;
         }

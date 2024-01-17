@@ -1,4 +1,5 @@
 ﻿using Cognite.Extractor.Common;
+using Cognite.OpcUa.Subscriptions;
 using System.Threading.Tasks;
 
 namespace Cognite.OpcUa
@@ -28,5 +29,17 @@ namespace Cognite.OpcUa
         /// the configured threshold.
         /// </summary>
         Task OnServicelevelBelowThreshold(UAClient source);
+
+        /// <summary>
+        /// Invoked when a subscription is dropped.
+        /// </summary>
+        /// <param name="subscription">Dropped subscription</param>
+        void OnSubscriptionFailure(SubscriptionName subscription);
+
+        /// <summary>
+        /// Invoked when a subscription is created or recreated.
+        /// </summary>
+        /// <param name="subscription"></param>
+        void OnCreatedSubscription(SubscriptionName subscription);
     }
 }
