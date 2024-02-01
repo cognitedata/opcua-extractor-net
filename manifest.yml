@@ -64,7 +64,7 @@ versions:
     description: Configurable grace period for recreating dead subscriptions.
     changelog:
       added:
-        - "subscriptions.recreate-subscription-grace for grace period when recreating subscriptions"
+        - "subscriptions.recreate-subscription-grace-period for grace period when recreating subscriptions"
   "2.25.1":
     description: Be less aggressive with history restart on dead subscriptions.
     changelog:

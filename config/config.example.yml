@@ -868,7 +868,7 @@ subscriptions:
     # Grace period for recreating stopped subscriptions.
     # If this is negative, default to 8 * publishing-interval.
     # Syntax is N[timeunit] where timeunit is w, d, h, m, s or ms.
-    recreate-subscription-grace: -1
+    recreate-subscription-grace-period: -1
     # List of alternative subscription configurations.
     # The first entry with a matching filter will be used for each node.
     alternative-configs:

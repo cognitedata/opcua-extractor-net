@@ -111,11 +111,11 @@ namespace Cognite.OpcUa.Config
         /// Optional grace period for recreating stopped subscriptions.
         /// Defaults to 8 * Publishing interval
         /// </summary>
-        public string RecreateSubscriptionGrace
+        public string RecreateSubscriptionGracePeriod
         {
-            get => RecreateSubscriptionGraceValue.RawValue; set => RecreateSubscriptionGraceValue.RawValue = value!;
+            get => RecreateSubscriptionGracePeriodValue.RawValue; set => RecreateSubscriptionGracePeriodValue.RawValue = value!;
         }
-        public TimeSpanWrapper RecreateSubscriptionGraceValue { get; } = new TimeSpanWrapper(true, "s", "-1");
+        public TimeSpanWrapper RecreateSubscriptionGracePeriodValue { get; } = new TimeSpanWrapper(true, "s", "-1");
 
         /// <summary>
         /// List of alternative subscription configurations.

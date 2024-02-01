@@ -84,7 +84,7 @@
             "default": true,
             "description": "Recreate subscriptions that have stopped publishing. True by default."
         },
-        "recreate-subscription-grace": {
+        "recreate-subscription-grace-period": {
             "type": "string",
             "default": "-1",
             "description": "Grace period for recreating stopped subscriptions. If this is negative, default to 8 * publishing-interval. Syntax is `N[timeunit]` where timeunit is `w`, `d`, `h`, `m`, `s`, or `ms`"

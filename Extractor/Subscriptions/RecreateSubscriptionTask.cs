@@ -72,7 +72,7 @@ namespace Cognite.OpcUa.Subscriptions
             var subState = subManager.Cache.GetSubscriptionState(SubscriptionName);
             if (subState == null) return;
 
-            var grace = config.Subscriptions.RecreateSubscriptionGraceValue.Value;
+            var grace = config.Subscriptions.RecreateSubscriptionGracePeriodValue.Value;
             if (grace == Timeout.InfiniteTimeSpan) grace = TimeSpan.FromMilliseconds(oldSubscription.CurrentPublishingInterval * 8);
 
             var diff = DateTime.UtcNow - subState.LastModifiedTime;
