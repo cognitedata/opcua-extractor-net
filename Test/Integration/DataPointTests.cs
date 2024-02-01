@@ -774,6 +774,8 @@ namespace Test.Integration
             using var pusher = new DummyPusher(new DummyPusherConfig() { ReadExtractedRanges = true });
             using var extractor = tester.BuildExtractor(true, null, pusher);
 
+            tester.Config.Subscriptions.RecreateSubscriptionGracePeriod = "100ms";
+
             var ids = tester.Ids.Base;
 
             var now = DateTime.UtcNow;

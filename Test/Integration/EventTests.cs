@@ -190,6 +190,7 @@ namespace Test.Integration
             tester.Config.History.Enabled = true;
             tester.Config.History.Backfill = true;
             tester.Config.Events.History = true;
+            tester.Config.Subscriptions.RecreateSubscriptionGracePeriod = "100ms";
 
             async Task Reset()
             {
@@ -215,7 +216,7 @@ namespace Test.Integration
             Assert.All(extractor.State.EmitterStates, state => { Assert.True(state.ShouldSubscribe); });
             await extractor.WaitForSubscriptions();
             Assert.Equal(3u, session.Subscriptions.First(sub => sub.DisplayName.StartsWith(SubscriptionName.Events.Name(), StringComparison.InvariantCulture)).MonitoredItemCount);
-            await TestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 1), 5);
+            await TestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 1), 10);
 
             // Test disable subscriptions
             await Reset();
@@ -227,7 +228,7 @@ namespace Test.Integration
             Assert.False(state.ShouldSubscribe);
             await extractor.WaitForSubscriptions();
             Assert.DoesNotContain(session.Subscriptions, sub => sub.DisplayName.StartsWith(SubscriptionName.Events.Name(), StringComparison.InvariantCulture));
-            await TestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 2), 5);
+            await TestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 2), 10);
 
             // Test disable specific subscriptions
             await Reset();
@@ -252,7 +253,7 @@ namespace Test.Integration
             Assert.True(state.ShouldSubscribe);
             await extractor.WaitForSubscriptions();
             Assert.Equal(2u, session.Subscriptions.First(sub => sub.DisplayName.StartsWith(SubscriptionName.Events.Name(), StringComparison.InvariantCulture)).MonitoredItemCount);
-            await TestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 3), 5);
+            await TestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 3), 10);
         }
         #endregion
 

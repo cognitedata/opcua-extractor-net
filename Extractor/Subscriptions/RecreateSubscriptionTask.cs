@@ -32,7 +32,6 @@ namespace Cognite.OpcUa.Subscriptions
             if (session == null) return false;
             if (!oldSubscription.PublishingStopped)
             {
-                Callbacks.OnCreatedSubscription(SubscriptionName);
                 return false;
             }
             if (!session.Subscriptions.Any(s => s.Id == oldSubscription.Id)) return false;
@@ -47,9 +46,12 @@ namespace Cognite.OpcUa.Subscriptions
                 var dv = result.Results.First();
                 var state = (ServerState)(int)dv.Value;
                 // If the server is in a bad state that is why the subscription is failing
-                logger.LogWarning("Server is in a non-running state {State}, not recreating subscription {Name}",
-                    state, SubscriptionName);
-                if (state != ServerState.Running) return false;
+
+                if (state != ServerState.Running)
+                {
+                    logger.LogWarning("Server is in a non-running state {State}, not recreating subscription {Name}", state, SubscriptionName);
+                    return false;
+                }
             }
             catch (Exception ex)
             {
@@ -69,18 +71,16 @@ namespace Cognite.OpcUa.Subscriptions
 
             var subState = subManager.Cache.GetSubscriptionState(SubscriptionName);
             if (subState == null) return;
+
+            var grace = config.Subscriptions.RecreateSubscriptionGracePeriodValue.Value;
+            if (grace == Timeout.InfiniteTimeSpan) grace = TimeSpan.FromMilliseconds(oldSubscription.CurrentPublishingInterval * 8);
+
             var diff = DateTime.UtcNow - subState.LastModifiedTime;
             if (diff < TimeSpan.FromMilliseconds(oldSubscription.CurrentPublishingInterval * 8))
             {
-                logger.LogWarning("Subscription {Name} was updated {Time} ago. Waiting until 4 * publishing interval has passed before recreating",
-                    SubscriptionName, diff);
-                await Task.Delay(diff, token);
-            }
-            else
-            {
-                var delay = TimeSpan.FromMilliseconds(oldSubscription.CurrentPublishingInterval * 2);
-                logger.LogWarning("Waiting {Time} before recreating stopped subscription {Name}", delay, SubscriptionName);
-                await Task.Delay(delay, token);
+                logger.LogWarning("Subscription {Name} was updated {Time} ago. Waiting until {Grace} has passed before recreating",
+                    SubscriptionName, diff, grace);
+                await Task.Delay(grace - diff, token);
             }
 
             if (!await ShouldRun(logger, sessionManager, token)) return;
@@ -88,6 +88,7 @@ namespace Cognite.OpcUa.Subscriptions
             try
             {
                 logger.LogWarning("Server is available, but subscription {Name} is not responding to notifications. Attempting to recreate.", SubscriptionName);
+                Callbacks.OnSubscriptionFailure(SubscriptionName);
                 await session.RemoveSubscriptionAsync(oldSubscription);
             }
             catch (ServiceResultException serviceEx)
