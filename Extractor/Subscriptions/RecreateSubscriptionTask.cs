@@ -32,7 +32,6 @@ namespace Cognite.OpcUa.Subscriptions
             if (session == null) return false;
             if (!oldSubscription.PublishingStopped)
             {
-                Callbacks.OnCreatedSubscription(SubscriptionName);
                 return false;
             }
             if (!session.Subscriptions.Any(s => s.Id == oldSubscription.Id)) return false;
@@ -47,9 +46,12 @@ namespace Cognite.OpcUa.Subscriptions
                 var dv = result.Results.First();
                 var state = (ServerState)(int)dv.Value;
                 // If the server is in a bad state that is why the subscription is failing
-                logger.LogWarning("Server is in a non-running state {State}, not recreating subscription {Name}",
-                    state, SubscriptionName);
-                if (state != ServerState.Running) return false;
+
+                if (state != ServerState.Running)
+                {
+                    logger.LogWarning("Server is in a non-running state {State}, not recreating subscription {Name}", state, SubscriptionName);
+                    return false;
+                }
             }
             catch (Exception ex)
             {
@@ -88,6 +90,7 @@ namespace Cognite.OpcUa.Subscriptions
             try
             {
                 logger.LogWarning("Server is available, but subscription {Name} is not responding to notifications. Attempting to recreate.", SubscriptionName);
+                Callbacks.OnSubscriptionFailure(SubscriptionName);
                 await session.RemoveSubscriptionAsync(oldSubscription);
             }
             catch (ServiceResultException serviceEx)
