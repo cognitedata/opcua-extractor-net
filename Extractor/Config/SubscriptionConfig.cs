@@ -15,6 +15,7 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using Cognite.Extractor.Common;
 using Cognite.OpcUa.History;
 using Opc.Ua;
 using System.Collections.Generic;
@@ -105,6 +106,17 @@ namespace Cognite.OpcUa.Config
         /// Recreate subscriptions that have stopped publishing. True by default.
         /// </summary>
         public bool RecreateStoppedSubscriptions { get; set; } = true;
+
+        /// <summary>
+        /// Optional grace period for recreating stopped subscriptions.
+        /// Defaults to 8 * Publishing interval
+        /// </summary>
+        public string RecreateSubscriptionGracePeriod
+        {
+            get => RecreateSubscriptionGracePeriodValue.RawValue; set => RecreateSubscriptionGracePeriodValue.RawValue = value!;
+        }
+        public TimeSpanWrapper RecreateSubscriptionGracePeriodValue { get; } = new TimeSpanWrapper(true, "s", "-1");
+
         /// <summary>
         /// List of alternative subscription configurations.
         /// The first match will be applied, or the top level if none match.
