@@ -155,10 +155,13 @@ namespace Cognite.OpcUa.Types
             var buffer = new byte[sizeof(long)];
             if (stream.Read(buffer, 0, sizeof(long)) < sizeof(long)) return null;
             DateTime ts = DateTime.FromBinary(BitConverter.ToInt64(buffer, 0));
-            if (stream.Read(buffer, 0, sizeof(uint)) < sizeof(uint)) return null;
-            var status = new StatusCode(BitConverter.ToUInt32(buffer, 0));
+
             if (stream.Read(buffer, 0, sizeof(bool)) < sizeof(bool)) return null;
             bool isstr = BitConverter.ToBoolean(buffer, 0);
+
+            if (stream.Read(buffer, 0, sizeof(uint)) < sizeof(uint)) return null;
+            var status = new StatusCode(BitConverter.ToUInt32(buffer, 0));
+
             if (isstr)
             {
                 var value = CogniteUtils.StringFromStream(stream);
@@ -186,12 +189,8 @@ namespace Cognite.OpcUa.Types
                 builder.AppendFormat("{0}", DoubleValue.Value);
             }
 
-            builder.AppendFormat(" at {0}", Timestamp);
-
-            if (Status != null)
-            {
-                builder.AppendFormat(" with status {0}", StatusCode.LookupSymbolicId(Status.Code));
-            }
+            builder.AppendFormat(" at {0}", Timestamp.ToString(CultureInfo.InvariantCulture));
+            builder.AppendFormat(" with status {0}", StatusCode.LookupSymbolicId(Status.Code));
 
             return builder.ToString();
         }

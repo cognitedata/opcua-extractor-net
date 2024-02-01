@@ -805,12 +805,12 @@ namespace Test.Unit
             var ts = DateTime.UtcNow;
             var dt = new UADataPoint(ts, "id", 123.123, StatusCodes.Good);
             var str = dt.ToString();
-            var refStr = $"Update timeseries id to 123.123 at {ts.ToString(CultureInfo.InvariantCulture)}";
+            var refStr = $"Update timeseries id to 123.123 at {ts.ToString(CultureInfo.InvariantCulture)} with status Good";
             Assert.Equal(refStr.ReplaceLineEndings(), str.ReplaceLineEndings());
 
-            dt = new UADataPoint(ts, "id", "value", StatusCodes.Good);
+            dt = new UADataPoint(ts, "id", "value", StatusCodes.Bad);
             str = dt.ToString();
-            refStr = $"Update timeseries id to \"value\" at {ts.ToString(CultureInfo.InvariantCulture)}";
+            refStr = $"Update timeseries id to \"value\" at {ts.ToString(CultureInfo.InvariantCulture)} with status Bad";
             Assert.Equal(refStr.ReplaceLineEndings(), str.ReplaceLineEndings());
         }
         #endregion
