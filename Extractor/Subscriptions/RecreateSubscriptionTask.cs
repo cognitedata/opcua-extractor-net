@@ -71,18 +71,16 @@ namespace Cognite.OpcUa.Subscriptions
 
             var subState = subManager.Cache.GetSubscriptionState(SubscriptionName);
             if (subState == null) return;
+
+            var grace = config.Subscriptions.RecreateSubscriptionGraceValue.Value;
+            if (grace == Timeout.InfiniteTimeSpan) grace = TimeSpan.FromMilliseconds(oldSubscription.CurrentPublishingInterval * 8);
+
             var diff = DateTime.UtcNow - subState.LastModifiedTime;
             if (diff < TimeSpan.FromMilliseconds(oldSubscription.CurrentPublishingInterval * 8))
             {
-                logger.LogWarning("Subscription {Name} was updated {Time} ago. Waiting until 4 * publishing interval has passed before recreating",
-                    SubscriptionName, diff);
-                await Task.Delay(diff, token);
-            }
-            else
-            {
-                var delay = TimeSpan.FromMilliseconds(oldSubscription.CurrentPublishingInterval * 2);
-                logger.LogWarning("Waiting {Time} before recreating stopped subscription {Name}", delay, SubscriptionName);
-                await Task.Delay(delay, token);
+                logger.LogWarning("Subscription {Name} was updated {Time} ago. Waiting until {Grace} has passed before recreating",
+                    SubscriptionName, diff, grace);
+                await Task.Delay(grace - diff, token);
             }
 
             if (!await ShouldRun(logger, sessionManager, token)) return;
