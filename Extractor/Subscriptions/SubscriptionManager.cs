@@ -57,11 +57,7 @@ namespace Cognite.OpcUa.Subscriptions
 
             var subName = Enum.Parse<SubscriptionName>(sub.DisplayName.Split(' ').First());
 
-
-            if (EnqueueTaskEnsureUnique(new RecreateSubscriptionTask(sub, subName, client.Callbacks)))
-            {
-                client.Callbacks.OnSubscriptionFailure(subName);
-            }
+            EnqueueTaskEnsureUnique(new RecreateSubscriptionTask(sub, subName, client.Callbacks));
         }
 
         public bool EnqueueTaskEnsureUnique(PendingSubscriptionTask task)

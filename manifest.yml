@@ -60,6 +60,11 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.25.1":
+    description: Be less aggressive with history restart on dead subscriptions.
+    changelog:
+      changed:
+        - Only restart history after a subscription recovery grace period.
   "2.25.0":
     description: Restart history more consistently and in more cases. Add support for azure key vault.
     changelog:
