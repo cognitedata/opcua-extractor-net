@@ -450,7 +450,7 @@ namespace Cognite.OpcUa.Config
         /// <summary>
         /// Default behavior, ignore bad data points.
         /// </summary>
-        public StatusCodeMode StatusBehavior { get; set; } = StatusCodeMode.GoodOnly;
+        public StatusCodeMode StatusCodesToIngest { get; set; } = StatusCodeMode.GoodOnly;
 
         public bool IngestStatusCodes { get; set; }
     }

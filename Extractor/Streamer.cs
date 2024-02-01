@@ -323,7 +323,7 @@ namespace Cognite.OpcUa
                         node.Id, datapoint.SourceTimestamp, datapoint.Value, ExtractorUtils.GetStatusCodeName((uint)datapoint.StatusCode));
                 }
 
-                switch (config.Extraction.StatusCodes.StatusBehavior)
+                switch (config.Extraction.StatusCodes.StatusCodesToIngest)
                 {
                     case StatusCodeMode.All:
                         break;

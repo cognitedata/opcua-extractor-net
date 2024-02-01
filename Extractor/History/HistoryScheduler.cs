@@ -494,7 +494,7 @@ namespace Cognite.OpcUa.History
                                 node.State.Id, dp.SourceTimestamp, dp.Value, ExtractorUtils.GetStatusCodeName((uint)dp.StatusCode));
                         }
 
-                        switch (fullConfig.Extraction.StatusCodes.StatusBehavior)
+                        switch (fullConfig.Extraction.StatusCodes.StatusCodesToIngest)
                         {
                             case StatusCodeMode.All:
                                 break;

@@ -359,7 +359,7 @@ namespace Test.Integration
         public async Task TestIngestDataPointsWithStatus()
         {
             tester.Config.Extraction.StatusCodes.IngestStatusCodes = true;
-            tester.Config.Extraction.StatusCodes.StatusBehavior = StatusCodeMode.All;
+            tester.Config.Extraction.StatusCodes.StatusCodesToIngest = StatusCodeMode.All;
 
             using var pusher = new DummyPusher(new DummyPusherConfig());
             using var extractor = tester.BuildExtractor(true, null, pusher);
