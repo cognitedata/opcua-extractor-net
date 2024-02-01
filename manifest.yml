@@ -60,6 +60,11 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.27.0":
+    description: Alpha support for status codes in time series.
+    changelog:
+      added:
+        - "Alpha support for status codes in time series. Note that this may change without being considered a breaking change in the extractor."
   "2.26.0":
     description: Configurable grace period for recreating dead subscriptions.
     changelog:
