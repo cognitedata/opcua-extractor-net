@@ -356,6 +356,35 @@ namespace Test.Integration
         }
 
         [Fact]
+        public async Task TestIngestDataPointsWithStatus()
+        {
+            tester.Config.Extraction.StatusCodes.IngestStatusCodes = true;
+            tester.Config.Extraction.StatusCodes.StatusBehavior = StatusCodeMode.All;
+
+            using var pusher = new DummyPusher(new DummyPusherConfig());
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+
+            var ids = tester.Ids.Base;
+
+            tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(ids.Root, tester.Client);
+
+            var runTask = extractor.RunExtractor();
+
+            await extractor.WaitForSubscriptions();
+
+            tester.Server.UpdateNode(ids.DoubleVar1, 1.0, StatusCodes.Uncertain);
+            await Task.Delay(100);
+            tester.Server.UpdateNode(ids.DoubleVar1, 2.0, StatusCodes.GoodClamped);
+
+            await TestUtils.WaitForCondition(() => pusher.DataPoints[(ids.DoubleVar1, -1)].Count >= 2, 5);
+
+            var dps = pusher.DataPoints[(ids.DoubleVar1, -1)];
+
+            Assert.Contains(dps, dp => dp.Status.Code == StatusCodes.Uncertain);
+            Assert.Contains(dps, dp => dp.Status.Code == StatusCodes.GoodClamped);
+        }
+
+        [Fact]
         public async Task TestVariableDataPointsConfig()
         {
             using var pusher = new DummyPusher(new DummyPusherConfig());

@@ -17,12 +17,14 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using Cognite.Extensions;
 using CogniteSdk;
+using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.IO;
+using System.Text;
 
 namespace Cognite.OpcUa.Types
 {
@@ -86,26 +88,32 @@ namespace Cognite.OpcUa.Types
         }
 
 
-        public Datapoint ToCDFDataPoint(bool includeStatus)
+        public Datapoint? ToCDFDataPoint(bool includeStatusCodes, ILogger logger)
         {
+            Extensions.Alpha.StatusCode? status = null;
+            if (includeStatusCodes)
+            {
+                var res = Extensions.Alpha.StatusCode.TryCreate(Status.Code, out status);
+                if (res != null)
+                {
+                    logger.LogWarning("Invalid status code, skipping data point: {Status}", res);
+                    return null;
+                }
+            }
+
+
             Datapoint dp;
             if (DoubleValue.HasValue)
             {
-                dp = new Datapoint(Timestamp, DoubleValue.Value);
+                dp = new Datapoint(Timestamp, DoubleValue.Value, status);
             }
             else
             {
                 dp = new Datapoint(Timestamp, StringValue);
             }
-            if (includeStatus)
-            {
-                dp.StatusCode = new Com.Cognite.V1.Timeseries.Proto.Alpha.Status
-                {
-                    Code = Status.Code
-                };
-            }
             return dp;
         }
+
         /// <summary>
         /// Converts datapoint into an array of bytes which may be written to file.
         /// The structure is as follows: ushort size | unknown encoding string externalid | double value | long timestamp
@@ -165,8 +173,27 @@ namespace Cognite.OpcUa.Types
         }
         public override string ToString()
         {
-            return $"Update timeseries {Id} to {(IsString ? "\"" + StringValue + "\"" : DoubleValue.Value.ToString(CultureInfo.InvariantCulture))}" +
-                   $" at {Timestamp.ToString(CultureInfo.InvariantCulture)}";
+            var builder = new StringBuilder();
+
+            builder.AppendFormat("Update timeseries {0} to ", Id);
+
+            if (IsString)
+            {
+                builder.AppendFormat("\"{0}\"", StringValue);
+            }
+            else
+            {
+                builder.AppendFormat("{0}", DoubleValue.Value);
+            }
+
+            builder.AppendFormat(" at {0}", Timestamp);
+
+            if (Status != null)
+            {
+                builder.AppendFormat(" with status {0}", StatusCode.LookupSymbolicId(Status.Code));
+            }
+
+            return builder.ToString();
         }
     }
 }
