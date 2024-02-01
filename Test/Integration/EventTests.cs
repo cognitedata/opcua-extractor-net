@@ -190,6 +190,7 @@ namespace Test.Integration
             tester.Config.History.Enabled = true;
             tester.Config.History.Backfill = true;
             tester.Config.Events.History = true;
+            tester.Config.Subscriptions.RecreateSubscriptionGrace = "100ms";
 
             async Task Reset()
             {
