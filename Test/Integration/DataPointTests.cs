@@ -1059,6 +1059,8 @@ namespace Test.Integration
             tester.Config.History.Enabled = true;
             tester.Config.History.Data = true;
 
+            tester.Config.Subscriptions.RecreateSubscriptionGracePeriod = "100ms";
+
             var now = DateTime.UtcNow;
             var ids = tester.Server.Ids.Base;
             tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(ids.Root, tester.Client);
