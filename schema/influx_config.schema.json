@@ -3,46 +3,41 @@
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
     "unevaluatedProperties": false,
-    "description": "Write datapoints and events to an influxdb database",
-    "required": ["host", "database"],
+    "description": "Configuration for pushing to an [InfluxDB](https://www.influxdata.com/) database. Data points and events will be pushed, but no context or metadata.",
+    "required": [
+        "host",
+        "database"
+    ],
     "properties": {
         "host": {
             "type": "string",
-            "description": "URL of the host influxdb server"
+            "description": "URL of the host InfluxDB server"
         },
         "username": {
             "type": "string",
-            "description": "Username for the influxdb server"
+            "description": "The username for connecting to the InfluxDB database."
         },
         "password": {
             "type": "string",
-            "description": "Password for the influxdb server"
+            "description": "The password for connecting to the InfluxDB database."
         },
         "database": {
             "type": "string",
-            "description": "Database to connect to on the influxdb server"
+            "description": "The database to connect to on the InfluxDB server. The database will not be created automatically."
         },
         "point-chunk-size": {
             "type": "integer",
-            "description": "Maximum number of points to send in each request to influx",
+            "description": "Maximum number of points to send in each request to InfluxDB.",
             "minimum": 1,
             "default": 100000
         },
-        "debug": {
-            "type": "boolean",
-            "description": "Debug mode. If true, data will not be pushed to target"
-        },
         "read-extracted-ranges": {
             "type": "boolean",
-            "description": "Whether to read start/end points on startup, where possible."
+            "description": "Whether to read start/end points on startup, where possible. It is recommended that you use [`state-storage`](#state-storage) instead."
         },
         "read-extracted-event-ranges": {
             "type": "boolean",
-            "description": "Whether to read start/end points for events on startup, where possible"
-        },
-        "non-finite-replacement": {
-            "type": ["number", "null"],
-            "description": "Replace all instances of NaN or Infinity with this floating point number"
+            "description": "Whether to read start/end points for events on startup, where possible. It is recommended that you use [`state-storage`](#state-storage) instead."
         }
     }
 }

@@ -6,74 +6,81 @@
     "properties": {
         "enabled": {
             "type": "boolean",
-            "description": "Enable/disable history synchronization from the OPC-UA server to CDF"
+            "description": "Set to `true` to enable reading history from the server. If this is `false` no history will be read, overriding configuration set elsewhere.",
+            "default": false
         },
         "data": {
             "type": "boolean",
-            "description": "Enable or disable reading data point history. `enabled` must be `true`. By default nodes with AccessLevel ReadHistory are read"
+            "description": "Set to `false` to disable reading history for data points.",
+            "default": true
         },
         "backfill": {
             "type": "boolean",
-            "description": "Enable/disable backfill behavior. If this is enabled, the extractor will read history backwards as well as forwards, which makes it catch up to fresh data more quickly. This is especially useful if there is a lot of history"
+            "description": "Enable backfill, meaning that data is read backward and forward through history. This makes it so that the extractor will prioritize reading recent values, then keep reading old data in the background while loading live data. This is potentially useful if there is a lot of history.",
+            "default": false
         },
         "require-historizing": {
             "type": "boolean",
-            "description": "`true` to require `Historizing` to be `true` on timeseries in order to read history. `Historizing` means that the node writes history, but not all servers correctly set it"
+            "description": "Set this to `true` to require the `Historizing` attribute to be `true` on OPC UA variables in order to read history from them.",
+            "default": false
+        },
+        "restart-period": {
+            "type": "string",
+            "description": "Time in seconds between restarts of history. Setting this too low may impact performance. Leave at 0 to disable periodic restarts. Format is as given in [Timestamps and intervals](#timestamps-and-intervals). This option also allows using cron expressions."
         },
         "data-chunk": {
             "type": "integer",
-            "description": "Max number of datapoints per variable for each history read request. 0 means that the server decides",
+            "description": "Maximum number of datapoints per variable for each `HistoryRead` service call Generally, this is limited by the server, so it can safely be set to 0, which means the server decides the number of points to return.",
             "minimum": 0,
             "maximum": 100000,
             "default": 1000
         },
         "data-nodes-chunk": {
             "type": "integer",
-            "description": "Max number of simultaneous nodes per history read request for datapoints",
+            "description": "Maximum number of variables to query in each `HistoryRead` service call. If [`granularity`](#history.granularity) is set, this is applied _after_ calculating chunks based on history granularity.",
             "minimum": 1,
             "maximum": 10000,
             "default": 100
         },
         "event-chunk": {
             "type": "integer",
-            "description": "Maximum number of events per node for each history read request. 0 means that the server decides",
+            "description": "Maximum number of events per node for each `HistoryRead` service call for events. Generally, this is limited by the server, so it can safely be set to 0, which means the server decides the number of events to return.",
             "minimum": 0,
             "maximum": 100000,
             "default": 1000
         },
         "event-nodes-chunk": {
             "type": "integer",
-            "description": "Maximum number of simultaneous nodes per history read request for events",
+            "description": "Maximum number of nodes to query in each `HistoryRead` service call for events.",
             "minimum": 1,
             "maximum": 10000,
             "default": 100
         },
-        "max-read-length": {
+        "granularity": {
             "type": "string",
-            "description": "Maximum length of time for each history read request. If this is set greater than zero, history will be read in chunks of this size until the end. Format is `N[timeunit]` where `timeunit` is one of `w`, `d`, `h`, `m`, `s`, or `ms`",
-            "default": "0"
+            "description": "Granularity in seconds for chunking history read operations. Variables with latest timestamp within the same granularity chunk will have their history read together. Reading more variables per operation is more efficient, but if the granularity is set too high, then the same history may be read multiple times. A good choice for this value is `60 * average_update_frequency`.\n\nFormat is as given in [Timestamps and intervals](#timestamps-and-intervals).",
+            "default": "600s"
         },
         "start-time": {
             "type": "string",
-            "description": "The earliest timestamp history will be read from, in milliseconds since 01/01/1970. Alternatively use syntax `N[timeunit](-ago)` where `timeunit` is one of `w`, `d`, `h`, `m`, `s`, or `ms`. `-ago` indicates that this is set in the past, if left out it will be that duration in the future",
-            "default": "0"
+            "description": "Earliest timestamp to read history from in milliseconds since January 1, 1970. Format is as given in [Timestamps and intervals](#timestamps-and-intervals), `-ago` can be added to make a relative timestamp in the past.",
+            "default": "0",
+            "examples": [
+                "3d-ago"
+            ]
         },
         "end-time": {
             "type": "string",
-            "description": "The latest timestamp history will be read from. Only relevant if `max-read-length` is set. In milliseconds since 01/01/1970. Default is current time. Alternatively use syntax `N[timeunit](-ago)` where `timeunit` is one of `w`, `d`, `h`, `m`, `s`, or `ms`. `-ago` indicates that this is set in the past, if left out it will be that duration in the future"
+            "description": "Last timestamp to read history from in milliseconds since January 1, 1970. Format is as given in [Timestamps and intervals](#timestamps-and-intervals), `-ago` can be added to make a relative timestamp in the past. Defaults to current time."
         },
-        "granularity": {
+        "max-read-length": {
             "type": "string",
-            "description": "Granularity to use when doing history read, in seconds. Nodes with last known timestamp within this range of each other will be read together. Should not be smaller than usual average update rate. Leave at 0 to always read a single node each time. Format is `N[timeunit]` where `timeunit` is one of `w`, `d`, `h`, `m`, `s`, or `ms`",
-            "default": "600s"
+            "description": "Maximum length in time of each history read. If this is greater than zero, history will be read in chunks until the end. This is a workaround for server issues, do _not_ use this unless you have concrete issues with continuation points. Format is as given in [Timestamps and intervals](#timestamps-and-intervals).",
+            "default": "0"
         },
         "ignore-continuation-points": {
             "type": "boolean",
-            "description": "Set to `true` to read history without using ContinuationPoints, instead using the `Time` field on events, and `SourceTimestamp` on datapoints to incrementally increase the start time of the request until no data is returned"
-        },
-        "restart-period": {
-            "type": "string",
-            "description": "Time in seconds between restarts of history. Setting this too low may impact performance. Leave at 0 to disable periodic restarts. Format is `N[timeunit]` where `timeunit` is one of `w`, `d`, `h`, `m`, `s`, or `ms`. You can also use a cron expression on the form `[minute] [hour] [day of month] [month] [day of week]`"
+            "description": "Set to `true` to read history without using `ContinuationPoints`, instead using the `Time` field on events, and `SourceTimestamp` on datapoints to incrementally increase the start time of the request until no data is returned. This is a workaround for server issues, do _not_ use this unless you have concrete issues with continuation points."
         },
         "throttling": {
             "$ref": "continuation_point_throttling.schema.json",
@@ -81,12 +88,12 @@
         },
         "log-bad-values": {
             "type": "boolean",
-            "description": "Log bad history datapoints: Count per read at Debug level, and each individual datapoint at Verbose level",
+            "description": "Log the number of bad datapoints per `HistoryRead` call at Debug level, and each individual bad datapoint at Verbose level",
             "default": true
         },
         "error-threshold": {
             "type": "number",
-            "description": "Threshold in percent for a history run to be considered failed. Example: 10.0 -> History read operation would be considered failed if more than 10% of nodes fail to read at some point. Retries still apply, this only applies to nodes that fail even after retries.",
+            "description": "Threshold in percent for a history run to be considered failed. Example: 10.0 -> History read operation would be considered failed if more than 10% of nodes fail to read at some point. Retries still apply, this only applies to nodes that fail even after retries.\n\nThis is safe in terms data loss. A node that has failed during history will not receive state updates from live values, next time history is read, the extractor will continue from where it last successfully read history.",
             "default": 10
         }
     }

@@ -2,30 +2,12 @@
     "$id": "extraction_config.schema.json",
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
-    "description": "Configuration for how metadata should be extracted from the server, and generally about the startup phase of the extractor",
+    "description": "Configuration for general extraction options, such as data types, mapping, and filters.\n### External ID generation\nIDs used in OPC UA are special `nodeId` objects with an identifier and a namespace that must be converted to a string before they are written to CDF. A direct conversion, however, has several potential problems.\n * The namespace index is by default part of the node, but it may change between server restarts. Only the namespace itself is fixed.\n * The namespace table may be modified, in which case all old node IDs are invalidated.\n * Node IDs are not unique between different OPC UA servers.\n * Node identifiers can be duplicated accross namespaces.\n\n The solution is to create a node ID on the following form:\n ```[id-prefix][namespace][identifierType]=[identifier as string]([optional array index])```.\nFor example, the node with node ID `ns=1;i=123` with ID prefix `gp:` would be mapped to `gp:http://my.namespace.url:i=123`.\n\nYou can optionally override this behavior for individual nodes by using `node-map`(#extraction.node-map).",
     "unevaluatedProperties": false,
     "properties": {
         "id-prefix": {
             "type": "string",
-            "description": "Global prefix for `externalId`s in destinations. Should be unique to prevent name conflicts. The generated `externalId` is on the form `[id-prefix][namespace][identifier]`"
-        },
-        "ignore-name-prefix": {
-            "type": "array",
-            "description": "DEPRECATED. Specify a list of prefixes on `DisplayName` to ignore",
-            "deprecated": true,
-            "items": {
-                "type": "string",
-                "description": "`DisplayName` prefix"
-            }
-        },
-        "ignore-name": {
-            "type": "array",
-            "description": "DEPRECATED. Specify a list `DisplayName`s to ignore",
-            "deprecated": true,
-            "items": {
-                "type": "string",
-                "description": "`DisplayName` to ignore"
-            }
+            "description": "Global prefix for `externalId`s in destinations. Should be unique for each extractor deployment to prevent name conflicts."
         },
         "root-node": {
             "$ref": "proto_node_id.schema.json",
@@ -40,145 +22,148 @@
             "uniqueItems": true,
             "items": {
                 "$ref": "proto_node_id.schema.json",
-                "description": "Root node. Defaults to the Objects node",
-                "default": {
-                    "node-id": "i=86"
-                }
+                "description": "Root node."
             }
         },
         "node-map": {
             "type": "object",
-            "description": "Override mappings between OPC-UA node ids and externalIds, allowing e.g. the `root-node` to be mapped to a particular asset in CDF. Applies to all `externalId`s",
+            "description": "Map from external IDs to OPC UA node IDs. This can, for example, be used to place the node hierarchy as a child of a specific asset in the asset hierarchy.",
             "unevaluatedProperties": false,
             "patternProperties": {
                 ".*": {
-                    "$ref": "proto_node_id.schema.json"
+                    "$ref": "proto_node_id.schema.json",
+                    "description": "Target node ID for mapping external ID."
                 }
             }
         },
         "namespace-map": {
             "type": "object",
-            "description": "Map OPC-UA namespaces to prefixes in CDF. If not mapped, the full namespace URI is used. This saves space compared to using the full URI, and might make ids more readable",
+            "description": "Map OPC-UA namespaces to prefixes in CDF. If not mapped, the full namespace URI is used. This saves space compared to using the full URI, and might make IDs more readable.",
             "unevaluatedProperties": false,
             "patternProperties": {
                 ".*": {
                     "type": "string",
-                    "description": "Mapped namespace uri"
+                    "description": "Namespace URI to map."
                 }
             }
         },
         "auto-rebrowse-period": {
             "type": "string",
-            "description": "Time in minutes between each callto browse the OPC-UA node hierarchy, then push nodes to destinations. Note that this is a heavy operation, so this number should not be set too low. Format is `N[timeunit]` where `timeunit` is one of `w`, `d`, `h`, `m`, `s`, or `ms`. You can also use a cron expression on the form `[minute] [hour] [day of month] [month] [day of week]`",
+            "description": "Time in minutes between each automatic re-browse of the node hierarchy. Format is as given in [Timestamps and intervals](#timestamps-and-intervals), this option accepts cron expressions. Set this to `0` to disable automatic re-browsing of the server.",
             "default": "0m"
         },
         "enable-audit-discovery": {
             "type": "boolean",
-            "description": "Enable using audit events to discover new nodes on the server. If this is set to true, the client will expect `AuditAddNodes` or `AuditAddReferences` events on the server node. These will be used to add new nodes automatically be recursively browsing from each node mentioned in the event"
+            "description": "Enable this to make the extractor listen to `AuditAddNodes` and `AuditAddReferences` events from the server, and use that to identify when new nodes are added to the server. This is more efficient than browsing the node hierarchy, but does not work with data models and requires that the server supports auditing.",
+            "default": false
         },
         "data-push-delay": {
             "type": "string",
-            "description": "Delay between each push of data points to targets. Format is `N[timeunit]` where `timeunit` is one of `w`, `d`, `h`, `m`, `s`, or `ms`",
-            "default": "1000ms"
+            "description": "Time between each push to destinations. Format is as given in [Timestamps and intervals](#timestamps-and-intervals).",
+            "default": "1s"
         },
         "update": {
             "type": "object",
-            "description": "Update data in destinations on rebrowse or restart. Set `auto-rebrowse-period` to some value to do this periodically. `Context` here refers to the structure of the node graph in OPC-UA, i.e. hierarchical references. `Metadata` refers to any information obtained from OPC-UA properties. Enabling anything here will increase the startup and rebrowse-time of the extractor",
+            "description": "Update data in destinations on re-browse or restart. Set `auto-rebrowse-period` to do this periodically.",
             "unevaluatedProperties": false,
             "properties": {
                 "objects": {
                     "$ref": "type-update-config",
-                    "description": "Configuration for updating objects and object types"
+                    "description": "Configuration for updating objects and object types."
                 },
                 "variables": {
                     "$ref": "type-update-config",
-                    "description": "Configuration for updating variables and variable types"
+                    "description": "Configuration for updating variables and variable types."
                 }
             }
         },
         "data-types": {
             "$ref": "data-type-config"
         },
-        "property-name-filter": {
-            "type": "string",
-            "deprecated": true,
-            "description": "DEPRECATED. Regex filter on DisplayName to treat variables as properties"
-        },
-        "property-id-filter": {
-            "type": "string",
-            "deprecated": true,
-            "description": "DEPRECATED. Regex filter on NodeId to treat variables as properties"
-        },
         "relationships": {
             "type": "object",
-            "description": "Configuration for translating OPC-UA references to relationships in CDF",
+            "description": "Map OPC UA references to relationships in CDF, or edges in CDF data models. Generated relationships will have external ID on the form `[prefix][reference type];[source][target]`\n\nOnly relationships between mapped nodes are extracted.",
             "unevaluatedProperties": false,
             "properties": {
                 "enabled": {
                     "type": "boolean",
-                    "description": "`true` to enable mapping OPC-UA references to relationships in CDF"
+                    "description": "Set to `true` to enable mapping OPC-UA references to relationships in CDF",
+                    "default": false
                 },
                 "hierarchical": {
                     "type": "boolean",
-                    "description": "`true` to enable also mapping the hierarchical references over. These are normally mapped to `assetId`/`parentId` relations in CDF, but when doing that the type of the reference is lost. Requires `enabled` to be `true`"
+                    "description": "Set to `true` to enable also mapping the hierarchical references over. These are normally mapped to `assetId`/`parentId` relations in CDF, but when doing that the type of the reference is lost. Requires `enabled` to be `true`.",
+                    "default": false
                 },
                 "inverse-hierarchical": {
                     "type": "boolean",
-                    "description": "`true` to create inverse relationships for each fo the hierarchical references. For efficiency these are not read, but inferred from forward references. Does nothing if `hierarchical` is `false`"
+                    "description": "Set to `true` to create inverse relationships for each fo the hierarchical references. For efficiency these are not read, but inferred from forward references. Does nothing if `hierarchical` is `false`.",
+                    "default": false
                 }
-            }
+            },
+            "required": [
+                "enabled"
+            ]
         },
         "node-types": {
             "type": "object",
-            "description": "Configuration for reading OPC-UA node types",
+            "description": "Configuration for mapping OPC UA types to CDF in some way.",
             "unevaluatedProperties": false,
             "properties": {
                 "metadata": {
                     "type": "boolean",
-                    "description": "Add the `TypeDefinition` as a metadata field to all nodes"
+                    "description": "Add the `TypeDefinition` as a metadata field to all objects and variables."
                 },
                 "as-nodes": {
                     "type": "boolean",
-                    "description": "Allow reading object- and variable types as normal nodes and map them to destinations. They will need to be in the mapped hierarchy, so you will need to add a root node that they are descended from."
+                    "description": "Allow reading object- and variable types as normal nodes and map them to assets or data model nodes in CDF. They will need to be in the mapped hierarchy, so you will need to add a root node that they are descended from."
                 }
             }
         },
         "map-variable-children": {
             "type": "boolean",
-            "description": "If `true`, the extractor will try reading children of variables and map those to timeseries as well"
+            "description": "Set to `true` to make the extractor read children of variables and potentially map those to timeseries as well.",
+            "default": false
         },
         "transformations": {
             "type": "array",
-            "description": "A list of transformations to be applied to the source nodes before pushing. The possible transformations are `Ignore`, `Property`, `DropSubscriptions`, `TimeSeries`. For efficiency put `Ignore` filters first. This is also worth noting when it comes to `TimeSeries` transformations, which can undo `Property` transformations",
+            "description": "A list of transformations to be applied to the source nodes before pushing. Transformations are applied sequentially, so it can help performance to put `Ignore` filters first, and `TimeSeries` filters can undo `Property` transformations.",
             "uniqueItems": true,
             "items": {
                 "type": "object",
                 "unevaluatedProperties": false,
+                "description": "A single transformation.",
                 "properties": {
                     "type": {
                         "type": "string",
-                        "description": "Transformation type. `Ignore` ignores the node and all descendants, `DropSubscriptions` prevents the extractor from subscribing to this node, `Property` converts timeseries and their descendants into metadata, `TimeSeries` converts metadata into timeseries.",
-                        "enum": [ "Ignore", "DropSubscriptions", "Property", "TimeSeries" ]
+                        "description": "Transformation type. `Ignore` ignores the node and all descendants, `DropSubscriptions` prevents the extractor from subscribing to this node, `Property` converts time series and their descendants into metadata, `TimeSeries` converts metadata into time series, `DropSubscriptions` prevents the extractor from subscribing to events or data points on matching nodes.",
+                        "enum": [
+                            "Ignore",
+                            "DropSubscriptions",
+                            "Property",
+                            "TimeSeries"
+                        ]
                     },
                     "filter": {
                         "$ref": "raw-node-filter",
-                        "description": "Filter to match. All non-null filters must match each node for the transformation to be applied"
+                        "description": "Filter to match. All non-null filters must match each node for the transformation to be applied."
                     }
                 }
             }
         },
         "deletes": {
             "type": "object",
-            "description": "Configure soft deletes. When this is enabled, all read nodes are written to a state store after browse, and nodes that are missing on subsequent browses are marked as deleted from CDF, with a configurable marker. A notable exception is relationships in CDF, which has no metadata, so these are hard deleted if cognite.delete-relationships is enabled.",
+            "description": "Configure soft deletes. When this is enabled, all read nodes are written to a state store after browse, and nodes that are missing on subsequent browses are marked as deleted from CDF, with a configurable marker. A notable exception is relationships in CDF, which has no metadata, so these are hard deleted if [`cognite.delete-relationships`](#cognite) is enabled.",
             "unevaluatedProperties": false,
             "properties": {
                 "enabled": {
                     "type": "boolean",
-                    "description": "True to enable deletes. This requires a state store to be configured."
+                    "description": "Set this to `true` to enable deletes. This requires [`state-storage`](#state-storage) to be configured."
                 },
                 "delete-marker": {
                     "type": "string",
-                    "description": "Name of marked indicated that a node is deleted. Added to metadata, or as a column in Raw."
+                    "description": "Name of marker used to indicate that a node is deleted. Added to metadata, or as a column in Raw.",
+                    "default": "deleted"
                 }
             }
         }
@@ -191,19 +176,19 @@
             "properties": {
                 "description": {
                     "type": "boolean",
-                    "description": "`true` to update description"
+                    "description": "Set to `true` to update description"
                 },
                 "context": {
                     "type": "boolean",
-                    "description": "`true` to update context, i.e. the position of the node in the node hierarchy"
+                    "description": "Set to `true` to update context, i.e. the position of the node in the node hierarchy"
                 },
                 "metadata": {
                     "type": "boolean",
-                    "description": "`true` to update metadata"
+                    "description": "Set to `true` to update metadata, including fields like `unit`."
                 },
                 "name": {
                     "type": "boolean",
-                    "description": "`true` to update name"
+                    "description": "Set to `true` to update name."
                 }
             }
         },
@@ -211,19 +196,21 @@
             "type": "object",
             "$id": "proto-data-type",
             "unevaluatedProperties": false,
-            "description": "Definition of an OPC-UA data type",
+            "description": "Definition of an OPC UA data type.",
             "properties": {
                 "node-id": {
                     "$ref": "proto_node_id.schema.json",
-                    "description": "NodeId of the data type"
+                    "description": "Node ID of the data type"
                 },
                 "is-step": {
                     "type": "boolean",
-                    "description": "True if is-step should be set on timeseries in CDF"
+                    "description": "Set to `true` if is-step should be set on timeseries in CDF",
+                    "default": false
                 },
                 "enum": {
                     "type": "boolean",
-                    "description": "True if this is an enumeration"
+                    "description": "Set to `true` if this is data type is an enumeration",
+                    "default": false
                 }
             }
         },
@@ -231,11 +218,11 @@
             "type": "object",
             "$id": "data-type-config",
             "unevaluatedProperties": false,
-            "description": "Configuration related to how data types are mapped to CDF",
+            "description": "Configuration related to how data types and arrays should be handled by the OPC UA extractor.",
             "properties": {
                 "custom-numeric-types": {
                     "type": "array",
-                    "description": "Add custom numeric types using ther NodeId. This overwrites default behavior, so it is possible to make the `Integer` data type discrete, even if it is not considered so by default. Note that the type in question needs to have a sensible numerical conversion in C#, unless it is an array type, in which case each element needs a conversion",
+                    "description": "Set a list of manually defined numeric OPC UA data types. This can be used to make custom types be treated as numbers. Conversion from the actual returned values is done using the `C#` `Convert` functionality. If no valid conversion exists, this will fail.",
                     "uniqueItems": true,
                     "items": {
                         "$ref": "proto-data-type"
@@ -243,7 +230,7 @@
                 },
                 "ignore-data-types": {
                     "type": "array",
-                    "description": "List of NodeIds corresponding to data types that should be ignored. Time series with these data types will not be mapped to destinations",
+                    "description": "List of node IDs of data types that should not be extracted to CDF. Time series with one of these data types are not extracted.",
                     "uniqueItems": true,
                     "items": {
                         "$ref": "proto_node_id.schema.json"
@@ -251,11 +238,11 @@
                 },
                 "unknown-as-scalar": {
                     "type": "boolean",
-                    "description": "Assume imprecise `ValueRanks` without `ArrayDimensions` are all scalar, and create timeseries in destinations accordingly. If such a variable produces an array, only the first element is mapped to CDF"
+                    "description": "Assume non-specific `ValueRanks` in OPC UA (`ScalarOrOneDimension` or `Any`) are scalar if they do not have an `ArrayDimensions` attribute. If such a variable produces an array, only the first element will be extracted."
                 },
                 "max-array-size": {
                     "type": "integer",
-                    "description": "Maximum size of array variables. Only arrays with the `ArrayDimensions` property in OPC-UA will be mapped. Leave this at 0 to only allow scalar values. Note that some server implementations have issues with the `ArrayDimensions` propertiy, so it is not fetched at all if `max-array-size` is 0. -1 indicates that there is no limit to array length, but variables must still be one-dimensional and contain a fixed number of elements."
+                    "description": "Maximum length of arrays mapped to CDF, if this is set to 0, only scalar variables are mapped. Set this to `-1` to indicate that there is no upper limit.\n\n WARNING: If you set this to `-1`, and encounter a very large array, such as an image, the extractor might create hundreds of thousands of time series in CDF.\n\nIn general, extracting arrays require variables to have an `ArrayDimensions` attribute with length equal to 1. See `estimate-array-sizes` for workarounds."
                 },
                 "allow-string-variables": {
                     "type": "boolean",
@@ -263,31 +250,31 @@
                 },
                 "auto-identify-types": {
                     "type": "boolean",
-                    "description": "Map out the data type hierarchy before starting. This is useful if there are custom numeric types, or any enum types are used. This must be enabled for enum metadata and `enums-as-strings` to work. If this is false, any custom numeric types have to be added manually"
+                    "description": "Map out the data type hierarchy before starting. This is useful if there are custom numeric types, or any enum types are used. This must be enabled for enum metadata and `enums-as-strings` to work. If this is false, any custom numeric types have to be added manually."
                 },
                 "enums-as-strings": {
                     "type": "boolean",
-                    "description": "If this is false and `auto-identify-types` is true, or there are manually added enums in `custom-numeric-types`, enums will be mapped to numeric time series, and labels are added as metadata fields. If this is true, labels are not mapped to metadata, and enums will be mapped to string timeseries with values equal to mapped label values"
+                    "description": "If this is `false` and `auto-identify-types` is `true`, or there are manually added enums in `custom-numeric-types`, enums will be mapped to numeric time series, and labels are added as metadata fields.\n\nIf this is `true`, labels are not mapped to metadata, and enums will be mapped to string time series with values equal to mapped label values."
                 },
                 "data-type-metadata": {
                     "type": "boolean",
-                    "description": "Add a metadata property `dataType`, which contains the id of the OPC-UA data type"
+                    "description": "Add a metadata property `dataType`, which contains the node ID of the OPC-UA data type."
                 },
                 "null-as-numeric": {
                     "type": "boolean",
-                    "description": "Set this to `true` to treat Null NodeIds as numeric instead of string"
+                    "description": "Set this to `true` to treat `null` node IDs as numeric instead of ignoring them. Note that `null` node IDs violate the OPC UA standard."
                 },
                 "expand-node-ids": {
                     "type": "boolean",
-                    "description": "Add full JSON node-ids to data pushed to Raw"
+                    "description": "Add attributes such as `NodeId`, `ParentNodeId`, and `TypeDefinitionId` to nodes written to CDF Raw as full node IDs with reversible encoding."
                 },
                 "append-internal-values": {
                     "type": "boolean",
-                    "description": "Add attributes generally used internally like `AccessLevel`, `Historizing`, `ArrayDimensions`, `ValueRank`, etc. to data pushed to Raw"
+                    "description": "Add attributes generally used internally like `AccessLevel`, `Historizing`, `ArrayDimensions`, and `ValueRank` to data pushed to CDF Raw."
                 },
                 "estimate-array-sizes": {
                     "type": "boolean",
-                    "description": "If `max-array-size` is set, this looks for the `MaxArraySize` property on each node with `one-dimensional` ValueRank. If it is not found, the extractor tries to read the value of the node, and look at the current array length. ArrayDimensions is still the preferred way to identify array sizes, this is not guaranteed to generate reasonable or useful values"
+                    "description": "If `max-array-size` is set, this looks for the `MaxArraySize` property on each node with `one-dimensional` ValueRank. If it is not found, the extractor tries to read the value of the node, and look at the current array length.\n\n`ArrayDimensions` is still the preferred way to identify array sizes, this is not guaranteed to generate reasonable or useful values."
                 }
             }
         },
@@ -298,40 +285,47 @@
             "properties": {
                 "name": {
                     "type": "string",
-                    "description": "Regex on node `DisplayName`"
+                    "description": "Regex on node `DisplayName`."
                 },
                 "description": {
                     "type": "string",
-                    "description": "Regex on node `Description`"
+                    "description": "Regex on node `Description`."
                 },
                 "id": {
                     "type": "string",
-                    "description": "Regex on node id. Ids on the form `i=123` or `s=string` are matched"
+                    "description": "Regex on node ID. IDs on the form `i=123` or `s=string` are matched."
                 },
                 "is-array": {
-                    "type": ["boolean", "null"],
-                    "description": "Whether the node is an array. If this is set, the filter only considers variables"
+                    "type": "boolean",
+                    "description": "Match on whether a node is an array. If this is set to `true` or `false`, the filter will only match variables."
                 },
                 "namespace": {
                     "type": "string",
-                    "description": "Regex on the full namespace of the node id"
+                    "description": "Regex on the full namespace of the node ID."
                 },
                 "type-definition": {
                     "type": "string",
-                    "description": "Regex on the id of the type definition. On the form `i=123` or `s=string`"
+                    "description": "Regex on the node ID of the type definition. On the form `i=123` or `s=string`."
                 },
                 "historizing": {
-                    "type": ["boolean", "null"],
-                    "description": "Whether the node is historizing. If this is set, the filter only considers variables"
+                    "type": "boolean",
+                    "description": "Whether the node is historizing. If this is set, the filter will only match variables."
                 },
                 "node-class": {
                     "type": "string",
-                    "description": "The OPC-UA node class, exact match.",
-                    "enum": ["Object", "ObjectType", "Variable", "VariableType", "DataType", "ReferenceType"]
+                    "description": "The OPC UA node class, exact match.",
+                    "enum": [
+                        "Object",
+                        "ObjectType",
+                        "Variable",
+                        "VariableType",
+                        "DataType",
+                        "ReferenceType"
+                    ]
                 },
                 "parent": {
                     "$ref": "raw-node-filter",
-                    "description": "Another filter instance which is applied to the parent node"
+                    "description": "Another filter instance which is applied to the parent node."
                 }
             }
         },
@@ -342,14 +336,15 @@
             "properties": {
                 "namespace-publication-date": {
                     "type": "boolean",
-                    "description": "Indicate if the extractor should subscribe to namespacePublicationDate on the Server node."
+                    "description": "Indicate if the extractor should subscribe to namespacePublicationDate on the Server node.",
+                    "default": false
                 },
                 "namespaces": {
                     "type": "array",
-                    "description": "A list of namespaces uris used to filter which namespacePublicationDates the extractor will subscribe to.",
+                    "description": "A list of namespace URIs used to filter which `namespace publication data` nodes the extractor will subscribe to.",
                     "items": {
                         "type": "string",
-                        "description": "The uri of a namespace."
+                        "description": "A namespace URI."
                     }
                 }
             }

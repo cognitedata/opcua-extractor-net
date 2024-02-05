@@ -5,7 +5,7 @@
     "description": "Configuration for retries on OPC-UA service calls",
     "allOf": [
         {
-            "$ref": "https://raw.githubusercontent.com/cognitedata/dotnet-extractor-utils/v1.16.0/schema/retry_config.schema.json"
+            "$ref": "https://raw.githubusercontent.com/cognitedata/dotnet-extractor-utils/v1.19.0/schema/retry_config.schema.json"
         }
     ],
     "unevaluatedProperties": false,
@@ -13,7 +13,7 @@
         "retry-status-codes": {
             "type": "array",
             "uniqueItems": true,
-            "description": "List of additional OPC-UA status codes to retry on. In additional to defaults. Should be integer values from http://www.opcfoundation.org/UA/schemas/StatusCode.csv, or symbolic names as shown in the same csv file.",
+            "description": "List of additional OPC-UA status codes to retry on. In additional to defaults. Should be integer values from http://www.opcfoundation.org/UA/schemas/StatusCode.csv, or symbolic names as shown in the same .csv file.",
             "items": {
                 "type": "string"
             }

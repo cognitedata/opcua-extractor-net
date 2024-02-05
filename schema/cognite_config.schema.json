@@ -5,7 +5,7 @@
     "description": "Configuration for pushing data to Cognite Data Fusion (CDF)",
     "allOf": [
         {
-            "$ref": "https://raw.githubusercontent.com/cognitedata/dotnet-extractor-utils/v1.16.0/schema/cognite_config.schema.json"
+            "$ref": "https://raw.githubusercontent.com/cognitedata/dotnet-extractor-utils/v1.19.0/schema/cognite_config.schema.json"
         }
     ],
     "unevaluatedProperties": false,
@@ -13,34 +13,43 @@
         "data-set": {
             "type": "object",
             "unevaluatedProperties": false,
+            "description": "Data set used for new time series, assets, events, and relationships. Existing objects will not be updated",
             "properties": {
                 "id": {
                     "type": "integer",
-                    "description": "Data set used for new objects. Existing objects will not be updated"
+                    "description": "Data set internal ID"
                 },
                 "external-id": {
                     "type": "string",
-                    "description": "Data set used for new objects. Requires the capability `datasets:Read` for the given data set"
+                    "description": "Data set external ID"
                 }
-            }
-        },
-        "debug": {
-            "type": "boolean",
-            "description": "Debug mode. If `true`, the extractor will not push to target"
+            },
+            "oneOf": [
+                {
+                    "required": [
+                        "id"
+                    ]
+                },
+                {
+                    "required": [
+                        "external-id"
+                    ]
+                }
+            ]
         },
         "read-extracted-ranges": {
             "type": "boolean",
-            "description": "Whether to read start/end-points on startup, where possible. At least one pusher should be able to do this, or `state-store` should be enabled, otherwise back/frontfill will run for the entire history every restart",
+            "description": "Specifies whether to read start/end-points for datapoints on startup, where possible. It is generally recommended to use the [`state-storage`](#state-storage) instead of this.",
             "default": true
         },
         "metadata-targets": {
             "type": "object",
-            "description": "Metadata targets for objects, variable and references in CDF.",
+            "description": "Configure targets for node metadata. This configures which resources other than time series datapoints are created. By default, if this is left out, data is written to assets and time series metadata. Note that this behavior is deprecated, in the future leaving this section out will result in no metadata being written at all.",
             "unevaluatedProperties": false,
             "properties": {
                 "raw": {
                     "type": "object",
-                    "description": "Details of CDF raw (database and table).",
+                    "description": "Write metadata to the CDF staging area (Raw).",
                     "unevaluatedProperties": false,
                     "required": [
                         "database"
@@ -48,93 +57,117 @@
                     "properties": {
                         "database": {
                             "type": "string",
-                            "description": "Database in raw"
+                            "description": "The CDF Raw database to write to."
                         },
                         "assets-table": {
                             "type": "string",
-                            "descripion": "Assets table in raw"
+                            "descripion": "Name of the Raw table to write assets to."
                         },
                         "timeseries-table": {
                             "type": "string",
-                            "description": "Timeseries table in raw"
+                            "description": "Name of the Raw table to write time series metadata to."
                         },
                         "relationships-table": {
                             "type": "string",
-                            "description": "Relationships table in raw"
+                            "description": "Name of the Raw table to write relationships metadata to."
                         }
                     }
                 },
                 "clean": {
                     "unevaluatedProperties": false,
-                    "description": "Enable or disable assets, timeseries and/or relationships",
+                    "description": "Write metadata to CDF clean, assets, time series, and relationships.",
                     "type": "object",
                     "properties": {
                         "assets": {
                             "type": "boolean",
-                            "description": "Indicates enabled or disabled"
+                            "description": "Set to `true` to enable creating CDF assets from OPC UA nodes."
                         },
                         "timeseries": {
                             "type": "boolean",
-                            "description": "Indicates enabled or disabled"
+                            "description": "Set to `true` to enable adding metadata to CDF time series based on OPC UA properties."
                         },
                         "relationships": {
                             "type": "boolean",
-                            "description": "Indicates enabled or disabled"
+                            "description": "Set to `true` to enable creating relationships from OPC UA references. Requires [`extraction.relationships`](#extraction.relationships) to be enabled."
                         }
                     }
                 },
                 "data-models": {
                     "unevaluatedProperties": false,
-                    "description": "configuration for flexible data models in CDF",
+                    "description": "ALPHA: Write metadata to CDF Data Models.\n\nThis will create CDF data models based on the OPC UA type hierarchy, then populate them with data from the OPC UA node hierarchy. Note that this _requires_ [`extraction.relationships.enabled`](#extraction.relationships) and [`extraction.relationships.hierarchical`](#extraction.relationships) to be set to `true`, and there must be exactly one root node with ID `i=84`.\n\nNote that this feature is in _alpha_ there may be changes that require you to delete the data model from CDF, and breaking changes to the configuration schema. These changes will not be considered breaking changes to the extractor.",
                     "type": "object",
                     "required": [
                         "enabled",
-                        "exclude-no-referenced",
-                        "types-to-map",
-                        "skip-simple-types",
-                        "skip-types-on-equal-count",
-                        "ignore-mandatory"
+                        "model-space",
+                        "instance-space",
+                        "model-version"
                     ],
                     "properties": {
-                        "space": {
-                            "type": "string",
-                            "description": "Space instance in CDF"
-                        },
                         "enabled": {
                             "type": "boolean",
-                            "description": "Should enable"
+                            "description": "Set this to `true` to enable writing to CDF Data Models."
                         },
-                        "exclude-no-referenced": {
-                            "type": "boolean",
-                            "description": "Exclude any node referenced by custom nodes"
+                        "model-space": {
+                            "type": "string",
+                            "description": "Set the space to create data models in. The space will be created if it does not exist."
+                        },
+                        "instance-space": {
+                            "type": "string",
+                            "description": "Set the space instances will be created in. The space will be created if it does not exist. May be the same as `model-space`."
+                        },
+                        "model-version": {
+                            "type": "string",
+                            "description": "Version used for created data model and all created views."
                         },
                         "types-to-map": {
                             "type": "string",
-                            "description": "Types to map to fdm",
+                            "description": "Configure which types to map to FDM.\n\n`Referenced` means that only types that are referenced by instance nodes will be created.\n`Custom` means that all types not in the base namespace will be created.\n`All` means that all types will be created.\n\nNote: Setting this to `All` is rarely useful, and may produce impractically large models.",
                             "enum": [
-                                "referenced",
-                                "custom",
-                                "all"
-                            ]
+                                "Referenced",
+                                "Custom",
+                                "All"
+                            ],
+                            "default": "Custom"
                         },
                         "skip-simple-types": {
                             "type": "boolean",
-                            "description": "Do not create views without an associated container"
-                        },
-                        "skip-types-on-equal-count": {
-                            "type": "boolean",
-                            "description": "Skip views if number of views in CDF is equal to number of views in server"
+                            "description": "Do not create views without their own connections or properties. Simplifies the model greatly, but reduces the number of distinct types in your model.",
+                            "default": false
                         },
                         "ignore-mandatory": {
                             "type": "boolean",
-                            "description": "Allow optional mandatory options"
+                            "description": "Let mandatory options be nullable. Many servers do not obey `Mandatory` requirements in their own models, which breaks when they are ingested into CDF, where nullable constraints are enforced.",
+                            "default": false
                         },
                         "connection-target-map": {
                             "type": "object",
-                            "description": "target connections",
-                            "[A-z0-9-_.]+": {
-                                "type": "string"
-                            }
+                            "description": "Target connections on the form `\"Type.Property\": \"Target\"`. This is useful for certain schemas. This overrides the expected type of specific CDF Connections, letting you override incorrect schemas. For example, the published nodeset file for ISA-95 incorrectly states that the `EquipmentClass` reference for `EquipmentType` is an `Object`, while it should be an `ObjectClass`.",
+                            "patternProperties": {
+                                "[A-z0-9-_.]+": {
+                                    "type": "string",
+                                    "description": "NodeClass to override connection with.",
+                                    "enum": [
+                                        "ObjectType",
+                                        "Object",
+                                        "VariableType",
+                                        "Variable",
+                                        "ReferenceType",
+                                        "DataType",
+                                        "View",
+                                        "Method"
+                                    ]
+                                }
+                            },
+                            "examples": [
+                                {
+                                    "EquipmentType.EquipmentClass": "ObjectType"
+                                }
+                            ]
+                        },
+                        "enable-deletes": {
+                            "type": "boolean",
+                            "described": "Enable deleting FDM nodes if deletes are enabled and the node is deleted in the source. This will only delete nodes extracted as part of the instance hierarchy. Types, and type-related nodes will not be deleted.",
+                            "default": false
                         }
                     }
                 }
@@ -142,7 +175,7 @@
         },
         "metadata-mapping": {
             "type": "object",
-            "description": "Map metadata to asset/timeseries attributes. This lets you assign properties in OPC-UA directly to fields like `description` and `unit` in CDF",
+            "description": "Define mappings between properties in OPC UA and CDF attributes. For example, it is quite common for variables in OPC UA to have a property named `EngineeringUnits`, which ideally should be mapped to `unit` in CDF. This property lets you do that.",
             "examples": [
                 {
                     "timeseries": {
@@ -158,10 +191,11 @@
             "properties": {
                 "assets": {
                     "type": "object",
-                    "description": "Map metadata for assets",
+                    "description": "Map metadata for assets.",
                     "patternProperties": {
                         ".*": {
                             "type": "string",
+                            "description": "Target asset attribute",
                             "enum": [
                                 "description",
                                 "name",
@@ -172,10 +206,11 @@
                 },
                 "timeseries": {
                     "type": "object",
-                    "description": "Map metadata for timeseries",
+                    "description": "Map metadata for time series.",
                     "patternProperties": {
                         ".*": {
                             "type": "string",
+                            "description": "Target time series attribute",
                             "enum": [
                                 "description",
                                 "name",
@@ -189,7 +224,7 @@
         },
         "raw-node-buffer": {
             "type": "object",
-            "description": "Read from CDF instead of OPC-UA when starting, to speed up start on slow servers. Requires `extraction-data-types.expand-node-ids` and `append-internal-values` to be set to `true`. This should generaly be enabled along with `skip-metadata` or `raw-metadata`. If `browse-on-empty` is set to `true` and `raw-metadata` is configured with the same database and tables the extractor will read into raw on first run, then use raw as source for later runs. The Raw database can be deleted to reset on next read.",
+            "description": "Read from CDF instead of OPC-UA when starting, to speed up start on slow servers. Requires [`extraction.data-types.expand-node-ids`](#extraction.data-types) and [`extraction.data-types.append-internal-values`](#extraction.data-types) to be set to `true`.\n\nThis should generaly be enabled along with [`metadata-targets.raw`](#cognite.metadata-targets.raw) or with no metadata targets at all.\n\nIf `browse-on-empty` is set to `true` and `metadata-targets.raw` is configured with the same database and tables the extractor will read into raw on first run, then use raw as source for later runs. The Raw database can be deleted, and it will be re-created on extractor restart.",
             "unevaluatedProperties": false,
             "required": [
                 "enable",
@@ -198,56 +233,64 @@
             "properties": {
                 "enable": {
                     "type": "boolean",
-                    "description": "Enable the raw node buffer"
+                    "description": "Set to `true` to enable loading nodes from CDF Raw.",
+                    "default": false
                 },
                 "database": {
                     "type": "string",
-                    "description": "Raw database to read from"
+                    "description": "CDF RAW database to read from."
                 },
                 "assets-table": {
                     "type": "string",
-                    "description": "Table to read assets from, used for events"
+                    "description": "CDF RAW table to read assets from, used for events. This is not useful if there are no custom nodes generating events in the server."
                 },
                 "timeseries-table": {
                     "type": "string",
-                    "description": "Table to read timeseries from"
+                    "description": "CDF RAW table to read time series from."
                 },
                 "browse-on-empty": {
                     "type": "boolean",
-                    "description": "Run normal browse if nothing is found when reading from CDF, either because the tables are empty, or because they do not exist. This applies if no valid nodes are found, meaning it will apply if there are nodes, but none of them are valid extraction targets"
+                    "description": "Run normal browse if nothing is found when reading from CDF, either because the tables are empty, or because they do not exist. Note that nodes may be present in the CDF RAW tables. Browse will run if no _valid_ nodes are found, even if there are nodes present in RAW."
                 }
             }
-        },
-        "non-finite-replacement": {
-            "type": [
-                "number",
-                "null"
-            ],
-            "description": "Replacement for NaN values. Deprecated in favor of `nan-replacement`",
-            "deprecated": true
         },
         "browse-callback": {
             "type": "object",
             "unevaluatedProperties": false,
-            "description": "Specify a CDF function that is called after nodes are pushed to CDF, reporting the number of changed and created nodes",
+            "description": "Specify a CDF function that is called after nodes are pushed to CDF, reporting the number of changed and created nodes. The function is called with a JSON object. \nThe counts for assets, time series, and relationships also include rows created in CDF Raw tables if raw is enabled as a metadata target.",
             "properties": {
                 "id": {
                     "type": "integer",
-                    "description": "InternalId of function to call"
+                    "description": "Internal ID of function to call."
                 },
                 "external-id": {
                     "type": "string",
-                    "description": "ExternalId of function to call"
+                    "description": "External ID of function to call"
                 },
                 "report-on-empty": {
                     "type": "boolean",
                     "description": "Call callback even if zero items are created or updated."
                 }
-            }
+            },
+            "examples": [
+                {
+                    "idPrefix": "Configured ID prefix",
+                    "assetsCreated": "The number of assets reported to CDF",
+                    "assetsUpdated": "The number of assets updated in CDF",
+                    "timeSeriesCreated": "The number of time series created in CDF",
+                    "timeSeriesUpdated": "The number of time series created in CDF",
+                    "minimalTimeSeriesCreated": "The number of time series created with no metadata. Only used if time series metadata is not written to CDF clean",
+                    "relationshipsCreated": "The number of new relationships created in CDF",
+                    "rawDatabase": "Name of the configured CDF RAW database",
+                    "assetsTable": "Name of the configured CDF RAW table for assets",
+                    "timeSeriesTable": "Name of the configured CDF RAW table for time series",
+                    "relationshipsTable": "Name of the configured CDF RAW table for relationships."
+                }
+            ]
         },
         "delete-relationships": {
             "type": "boolean",
-            "description": "If relationships are enabled, and written to clean, and deletes are neabled. This needs to be set to true in order to hard delete the relationships."
+            "description": "If this is set to `true`, relationships deleted from the source will be hard-deleted in CDF. Relationships do not have metadata, so soft-deleting them is not possible."
         }
     }
 }

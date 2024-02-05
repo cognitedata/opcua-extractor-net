@@ -3,11 +3,11 @@
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
     "unevaluatedProperties": false,
-    "description": "Configuration for the subscriptions created on the server.",
+    "description": "A few options for subscriptions to events and data points. Subscriptions in OPC UA consist of Subscription objects on the server, which contain a list of MonitoredItems. By default, the extractor produces a maximum of four subscriptions:\n * DataChangeListener - handles data point subscriptions.\n * EventListener - handles event subscriptions.\n * AuditListener - which handles audit events.\n * NodeMetrics - which handles subscriptions for use as metrics.\n\nEach of these can contain a number of MonitoredItems.",
     "properties": {
         "data-change-filter": {
             "type": "object",
-            "description": "Modify the DataChangeFilter used for datapoint subscriptions. See OPC-UA reference part 4 7.17.2 for details. These are just passed to hte server, they have no further effect on extractor behavior. Filters are applied to all noes, but deadband should only affect some, according to the standard.",
+            "description": "Modify the DataChangeFilter used for datapoint subscriptions. See the OPC UA reference part 4 7.17.2 for details. These are just passed to the server, they have no further effect on extractor behavior. Filters are applied to all nodes, but deadband should only affect some, according to the standard.",
             "unevaluatedProperties": false,
             "properties": {
                 "trigger": {
@@ -38,24 +38,24 @@
         },
         "sampling-interval": {
             "type": "integer",
-            "description": "Requested sample interval per variable on the server. This is how often the extractor requests the server sample changes to values. The server has no obligation to use this value, or to use any form of sampling at all, but according to the standard this should limit the _lowest_ allowed rate of updates.",
+            "description": "Requested sample interval per variable on the server. This is how often the extractor requests the server sample changes to values. The server has no obligation to use this value, or to use any form of sampling at all, but according to the standard this should limit the _lowest_ allowed rate of updates. 0 tells the server to sample as fast as possible.",
             "default": 100,
             "minimum": 0
         },
         "queue-length": {
             "type": "integer",
-            "description": "Requested length of queue for each variable on the server. This is how many data points the server will buffer. It should in general be set to at least 2 * `publishing-interval` / `sampling-interval`",
+            "description": "Requested length of queue for each variable on the server. This is how many data points the server will buffer. It should in general be set to at least 2 * `publishing-interval` / `sampling-interval`\n\nThis setting generally sets the maximum rate of points from the server (in milliseconds). On many servers, sampling is an internal operation, but on some, this may access external systems. Setting this very low can increase the load on the server significantly.",
             "default": 100,
             "minimum": 0
         },
         "data-points": {
             "type": "boolean",
-            "description": "Enable subscriptions on data-points",
+            "description": "Enable subscriptions on datapoints.",
             "default": true
         },
         "events": {
             "type": "boolean",
-            "description": "Enable subscriptions on events. Requires `events.enabled` to be set to `true`",
+            "description": "Enable subscriptions on events. Requires [`events.enabled`](#events) to be set to `true`",
             "default": true
         },
         "ignore-access-level": {
@@ -64,7 +64,7 @@
         },
         "log-bad-values": {
             "type": "boolean",
-            "description": "Log bad subscription datapoints",
+            "description": "Log bad subscription datapoints.",
             "default": true
         },
         "keep-alive-count": {
@@ -82,12 +82,12 @@
         "recreate-stopped-subscriptions": {
             "type": "boolean",
             "default": true,
-            "description": "Recreate subscriptions that have stopped publishing. True by default."
+            "description": "Recreate subscriptions that have stopped publishing."
         },
         "recreate-subscription-grace-period": {
             "type": "string",
             "default": "-1",
-            "description": "Grace period for recreating stopped subscriptions. If this is negative, default to 8 * publishing-interval. Syntax is `N[timeunit]` where timeunit is `w`, `d`, `h`, `m`, `s`, or `ms`"
+            "description": "Grace period for recreating stopped subscriptions. If this is negative, default to 8 * publishing-interval. Format is as given in [Timestamps and intervals](#timestamps-and-intervals)."
         },
         "alternative-configs": {
             "type": "array",
@@ -104,7 +104,7 @@
                         "properties": {
                             "id": {
                                 "type": "string",
-                                "descritpion": "Regex match on node external ID"
+                                "descritpion": "Regex on node external ID"
                             },
                             "data-type": {
                                 "type": "string",
@@ -121,7 +121,7 @@
                     },
                     "data-change-filter": {
                         "type": "object",
-                        "description": "Modify the DataChangeFilter used for datapoint subscriptions. See OPC-UA reference part 4 7.17.2 for details. These are just passed to hte server, they have no further effect on extractor behavior. Filters are applied to all noes, but deadband should only affect some, according to the standard.",
+                        "description": "Modify the DataChangeFilter used for datapoint subscriptions. See the OPC UA reference part 4 7.17.2 for details. These are just passed to the server, they have no further effect on extractor behavior. Filters are applied to all nodes, but deadband should only affect some, according to the standard.",
                         "unevaluatedProperties": false,
                         "properties": {
                             "trigger": {
@@ -152,13 +152,13 @@
                     },
                     "sampling-interval": {
                         "type": "integer",
-                        "description": "Requested sample interval per variable on the server. This is how often the extractor requests the server sample changes to values. The server has no obligation to use this value, or to use any form of sampling at all, but according to the standard this should limit the _lowest_ allowed rate of updates.",
+                        "description": "Requested sample interval per variable on the server. This is how often the extractor requests the server sample changes to values. The server has no obligation to use this value, or to use any form of sampling at all, but according to the standard this should limit the _lowest_ allowed rate of updates. 0 tells the server to sample as fast as possible.",
                         "default": 100,
                         "minimum": 0
                     },
                     "queue-length": {
                         "type": "integer",
-                        "description": "Requested length of queue for each variable on the server. This is how many data points the server will buffer. It should in general be set to at least 2 * `publishing-interval` / `sampling-interval`",
+                        "description": "Requested length of queue for each variable on the server. This is how many data points the server will buffer. It should in general be set to at least 2 * `publishing-interval` / `sampling-interval`\n\nThis setting generally sets the maximum rate of points from the server (in milliseconds). On many servers, sampling is an internal operation, but on some, this may access external systems. Setting this very low can increase the load on the server significantly.",
                         "default": 100,
                         "minimum": 0
                     }
