@@ -156,11 +156,13 @@ namespace Cognite.OpcUa.Config
                         ? new UADataPoint(
                             value.SourceTimestamp,
                             $"{variable.Id}[{i}]",
-                            client.StringConverter.ConvertToString(values.GetValue(i)))
+                            client.StringConverter.ConvertToString(values.GetValue(i)),
+                            value.StatusCode)
                         : new UADataPoint(
                             value.SourceTimestamp,
                             $"{variable.Id}[{i}]",
-                            UAClient.ConvertToDouble(values.GetValue(i)));
+                            UAClient.ConvertToDouble(values.GetValue(i)),
+                            value.StatusCode);
                     ret.Add(dp);
                 }
                 return ret;
@@ -169,11 +171,13 @@ namespace Cognite.OpcUa.Config
                 ? new UADataPoint(
                     value.SourceTimestamp,
                     variable.Id,
-                    client.StringConverter.ConvertToString(value.Value))
+                    client.StringConverter.ConvertToString(value.Value),
+                    value.StatusCode)
                 : new UADataPoint(
                     value.SourceTimestamp,
                     variable.Id,
-                    UAClient.ConvertToDouble(value.Value));
+                    UAClient.ConvertToDouble(value.Value),
+                    value.StatusCode);
             return new[] { sdp };
         }
 

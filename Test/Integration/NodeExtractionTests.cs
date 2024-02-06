@@ -215,14 +215,14 @@ namespace Test.Integration
             var enumv = pusher.PushedVariables[(ids.EnumVar1, -1)];
             Assert.Equal(ids.EnumType1, enumv.FullAttributes.DataType.Id);
             Assert.Equal(3, enumv.FullAttributes.DataType.EnumValues.Count);
-            var dp = enumv.FullAttributes.DataType.ToDataPoint(extractor, 1, DateTime.UtcNow, "test");
+            var dp = enumv.FullAttributes.DataType.ToDataPoint(extractor, 1, DateTime.UtcNow, "test", StatusCodes.Good);
             Assert.Equal(1, dp.DoubleValue);
 
             var node = pusher.PushedNodes[ids.EnumVar3];
             var enumArr = Assert.IsType<UAVariable>(node);
             Assert.Equal(ids.EnumType2, enumArr.FullAttributes.DataType.Id);
             Assert.Equal(2, enumArr.FullAttributes.DataType.EnumValues.Count);
-            dp = enumArr.FullAttributes.DataType.ToDataPoint(extractor, 123, DateTime.UtcNow, "test");
+            dp = enumArr.FullAttributes.DataType.ToDataPoint(extractor, 123, DateTime.UtcNow, "test", StatusCodes.Good);
             Assert.Equal(123, dp.DoubleValue);
 
             var vnode = pusher.PushedVariables[(ids.MysteryVar, -1)];
@@ -256,14 +256,14 @@ namespace Test.Integration
             var enumv = pusher.PushedVariables[(ids.EnumVar1, -1)];
             Assert.Equal(ids.EnumType1, enumv.FullAttributes.DataType.Id);
             Assert.Equal(3, enumv.FullAttributes.DataType.EnumValues.Count);
-            var dp = enumv.FullAttributes.DataType.ToDataPoint(extractor, 1, DateTime.UtcNow, "test");
+            var dp = enumv.FullAttributes.DataType.ToDataPoint(extractor, 1, DateTime.UtcNow, "test", StatusCodes.Good);
             Assert.Equal("Enum2", dp.StringValue);
 
             var node = pusher.PushedNodes[ids.EnumVar3];
             var enumArr = Assert.IsType<UAVariable>(node);
             Assert.Equal(ids.EnumType2, enumArr.FullAttributes.DataType.Id);
             Assert.Equal(2, enumArr.FullAttributes.DataType.EnumValues.Count);
-            dp = enumArr.FullAttributes.DataType.ToDataPoint(extractor, 123, DateTime.UtcNow, "test");
+            dp = enumArr.FullAttributes.DataType.ToDataPoint(extractor, 123, DateTime.UtcNow, "test", StatusCodes.Good);
             Assert.Equal("VEnum2", dp.StringValue);
 
             var vnode = pusher.PushedVariables[(ids.MysteryVar, -1)];
