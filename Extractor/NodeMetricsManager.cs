@@ -55,7 +55,7 @@ namespace Cognite.OpcUa
         /// <param name="vt">Value to set</param>
         public void UpdateMetricValue(Variant vt)
         {
-            var dp = dt.ToDataPoint(client, vt, DateTime.UtcNow, Id);
+            var dp = dt.ToDataPoint(client, vt, DateTime.UtcNow, Id, StatusCodes.Good);
             if (dp.IsString) return;
             metric.Set(dp.DoubleValue.Value);
         }

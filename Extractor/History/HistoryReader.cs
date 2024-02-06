@@ -76,7 +76,7 @@ namespace Cognite.OpcUa.History
 
         private async Task RunHistoryBatch(IEnumerable<UAHistoryExtractionState> states, HistoryReadType type)
         {
-            using var scheduler = new HistoryScheduler(log, uaClient, extractor, typeManager, config.History, type,
+            using var scheduler = new HistoryScheduler(log, uaClient, extractor, typeManager, config, type,
                 throttler, continuationPoints, states, source.Token);
 
             using var op = waiter.GetInstance();

@@ -245,9 +245,9 @@ namespace Server
             return results;
         }
 
-        public void UpdateNode(NodeId id, object value)
+        public void UpdateNode(NodeId id, object value, StatusCode? code = null)
         {
-            custom.UpdateNode(id, value);
+            custom.UpdateNode(id, value, code: code);
         }
 
         public string GetNamespace(uint index)
@@ -271,9 +271,16 @@ namespace Server
             custom.TriggerEvent(eventId, emitter, source, message, builder);
         }
 
-        public void PopulateHistory(NodeId id, int count, DateTime start, string type = "int", int msdiff = 10, Func<int, object> valueBuilder = null)
+        public void PopulateHistory(
+            NodeId id,
+            int count,
+            DateTime start,
+            string type = "int",
+            int msdiff = 10,
+            Func<int, object> valueBuilder = null,
+            Func<int, StatusCode> statusBuilder = null)
         {
-            custom.PopulateHistory(id, count, start, type, msdiff, valueBuilder);
+            custom.PopulateHistory(id, count, start, type, msdiff, valueBuilder, statusBuilder);
         }
 
         public void SetEventConfig(bool auditing, bool server, bool serverAuditing)

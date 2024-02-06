@@ -18,6 +18,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using Cognite.Extractor.Logging;
 using Cognite.Extractor.Utils.CommandLine;
 using Microsoft.Extensions.DependencyInjection;
+using Opc.Ua;
 using System;
 using System.Collections.Generic;
 using System.CommandLine;
@@ -108,6 +109,9 @@ namespace Server
         [CommandLineOption("List of NodeSet2 XML schemas to load the node hierarchy from, the base node hierarchy will not be loaded if this is specified. " +
             "May be specified more than once, the base OPC-UA nodeset should not be added.", true, "-s")]
         public IEnumerable<string> NodeSetFiles { get; set; }
+
+        [CommandLineOption("Enable setting random status codes on values. Each chunk of 10 values will get the same code")]
+        public bool RandomStatusCodes { get; set; }
     }
 
 
@@ -153,8 +157,8 @@ namespace Server
             await server.Start();
 
             if (opt.Diagnostics) server.SetDiagnosticsEnabled(true);
-            if (opt.BaseHistory || opt.CoreProfile) server.PopulateBaseHistory();
-            if (opt.CustomHistory || opt.CoreProfile) server.PopulateCustomHistory();
+            if (opt.BaseHistory || opt.CoreProfile) server.PopulateBaseHistory(null, opt.RandomStatusCodes);
+            if (opt.CustomHistory || opt.CoreProfile) server.PopulateCustomHistory(null, opt.RandomStatusCodes);
             if (opt.EventHistory || opt.CoreProfile) server.PopulateEvents();
             server.SetEventConfig(opt.GrowthPeriodic, opt.EventsPeriodic || opt.CoreProfile || opt.EventsPeriodic || opt.GrowthPeriodic, opt.GrowthPeriodic);
 
@@ -178,10 +182,23 @@ namespace Server
 
             int idx = 0;
 
+
+            var codeGen = ServerController.GetStatusGenerator();
+
             void ServerUpdate(object state)
             {
-                if (opt.BasePeriodic || opt.CoreProfile) server.UpdateBaseNodes(idx);
-                if (opt.CustomPeriodic || opt.CoreProfile) server.UpdateCustomNodes(idx);
+                StatusCode code;
+                if (opt.RandomStatusCodes)
+                {
+                    code = codeGen(idx);
+                }
+                else
+                {
+                    code = StatusCodes.Good;
+                }
+
+                if (opt.BasePeriodic || opt.CoreProfile) server.UpdateBaseNodes(idx, code);
+                if (opt.CustomPeriodic || opt.CoreProfile) server.UpdateCustomNodes(idx, code);
                 if (opt.EventsPeriodic || opt.CoreProfile) server.TriggerEvents(idx);
 
                 if (opt.GrowthPeriodic)
