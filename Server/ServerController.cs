@@ -102,30 +102,59 @@ namespace Server
             running = false;
         }
 
-        public void PopulateCustomHistory(DateTime? start = null)
+        public static Func<int, StatusCode> GetStatusGenerator()
         {
-            if (start == null)
+            var random = new Random();
+            StatusCode code = StatusCodes.Good;
+            return idx =>
             {
-                start = DateTime.UtcNow.AddMilliseconds(-1000 * 10);
-            }
-            Server.PopulateHistory(Server.Ids.Custom.Array, 1000, start.Value, "custom", 10, (i => new int[] { i, i, i, i }));
-            Server.PopulateHistory(Server.Ids.Custom.MysteryVar, 1000, start.Value, "int");
-            Server.PopulateHistory(Server.Ids.Custom.StringyVar, 1000, start.Value, "string");
-        }
-        public void PopulateBaseHistory(DateTime? start = null)
-        {
-            if (start == null)
-            {
-                start = DateTime.UtcNow.AddMilliseconds(-1000 * 10);
-            }
-            Server.PopulateHistory(Server.Ids.Base.DoubleVar1, 1000, start.Value, "double");
-            Server.PopulateHistory(Server.Ids.Base.StringVar, 1000, start.Value, "string");
-            Server.PopulateHistory(Server.Ids.Base.IntVar, 1000, start.Value, "int");
+                if ((idx % 10) == 0)
+                {
+#pragma warning disable CA5394 // Do not use insecure randomness
+                    code = new StatusCode(RandomCodes[random.Next(0, RandomCodes.Length)]);
+#pragma warning restore CA5394 // Do not use insecure randomness
+                }
+                return code;
+            };
         }
 
-        public void UpdateNode(NodeId id, object value)
+        public void PopulateCustomHistory(DateTime? start = null, bool randomStatusCodes = false)
         {
-            Server.UpdateNode(id, value);
+            Func<int, StatusCode> statusBuilder = randomStatusCodes ? GetStatusGenerator() : null;
+
+            if (start == null)
+            {
+                start = DateTime.UtcNow.AddMilliseconds(-1000 * 10);
+            }
+            Server.PopulateHistory(Server.Ids.Custom.Array, 1000, start.Value, "custom", 10, i => new int[] { i, i, i, i }, statusBuilder: statusBuilder);
+            Server.PopulateHistory(Server.Ids.Custom.MysteryVar, 1000, start.Value, "int", statusBuilder: statusBuilder);
+            Server.PopulateHistory(Server.Ids.Custom.StringyVar, 1000, start.Value, "string", statusBuilder: statusBuilder);
+        }
+
+        public static readonly uint[] RandomCodes = new[] {
+            StatusCodes.Good,
+            StatusCodes.Bad,
+            StatusCodes.Uncertain,
+            StatusCodes.GoodClamped,
+            StatusCodes.BadOutOfRange
+        };
+
+        public void PopulateBaseHistory(DateTime? start = null, bool randomStatusCodes = false)
+        {
+            Func<int, StatusCode> statusBuilder = randomStatusCodes ? GetStatusGenerator() : null;
+
+            if (start == null)
+            {
+                start = DateTime.UtcNow.AddMilliseconds(-1000 * 10);
+            }
+            Server.PopulateHistory(Server.Ids.Base.DoubleVar1, 1000, start.Value, "double", statusBuilder: statusBuilder);
+            Server.PopulateHistory(Server.Ids.Base.StringVar, 1000, start.Value, "string", statusBuilder: statusBuilder);
+            Server.PopulateHistory(Server.Ids.Base.IntVar, 1000, start.Value, "int", statusBuilder: statusBuilder);
+        }
+
+        public void UpdateNode(NodeId id, object value, StatusCode? code = null)
+        {
+            Server.UpdateNode(id, value, code);
         }
 
         public async Task UpdateNodeMultiple(NodeId id, int count, Func<int, object> generator, int delayms = 50)
@@ -323,27 +352,27 @@ namespace Server
             Server.SetDiagnosticsEnabled(value);
         }
 
-        public void UpdateBaseNodes(int idx)
+        public void UpdateBaseNodes(int idx, StatusCode? code = null)
         {
-            UpdateNode(Ids.Base.DoubleVar1, idx);
-            UpdateNode(Ids.Base.DoubleVar2, -idx);
-            UpdateNode(Ids.Base.BoolVar, idx % 2 == 0);
-            UpdateNode(Ids.Base.IntVar, idx);
-            UpdateNode(Ids.Base.StringVar, $"Idx: {idx}");
+            UpdateNode(Ids.Base.DoubleVar1, idx, code);
+            UpdateNode(Ids.Base.DoubleVar2, -idx, code);
+            UpdateNode(Ids.Base.BoolVar, idx % 2 == 0, code);
+            UpdateNode(Ids.Base.IntVar, idx, code);
+            UpdateNode(Ids.Base.StringVar, $"Idx: {idx}", code);
         }
 
-        public void UpdateCustomNodes(int idx)
+        public void UpdateCustomNodes(int idx, StatusCode? code = null)
         {
-            UpdateNode(Ids.Custom.Array, new double[] { idx, idx + 1, idx + 2, idx + 3 });
-            UpdateNode(Ids.Custom.StringArray, new string[] { $"str{idx}", $"str{-idx}" });
-            UpdateNode(Ids.Custom.StringyVar, $"Idx: {idx}");
-            UpdateNode(Ids.Custom.MysteryVar, idx);
-            UpdateNode(Ids.Custom.IgnoreVar, $"Idx: {idx}");
-            UpdateNode(Ids.Custom.NumberVar, idx);
-            UpdateNode(Ids.Custom.EnumVar1, idx % 3);
-            UpdateNode(Ids.Custom.EnumVar2, idx % 2 == 0 ? 123 : 321);
+            UpdateNode(Ids.Custom.Array, new double[] { idx, idx + 1, idx + 2, idx + 3 }, code);
+            UpdateNode(Ids.Custom.StringArray, new string[] { $"str{idx}", $"str{-idx}" }, code);
+            UpdateNode(Ids.Custom.StringyVar, $"Idx: {idx}", code);
+            UpdateNode(Ids.Custom.MysteryVar, idx, code);
+            UpdateNode(Ids.Custom.IgnoreVar, $"Idx: {idx}", code);
+            UpdateNode(Ids.Custom.NumberVar, idx, code);
+            UpdateNode(Ids.Custom.EnumVar1, idx % 3, code);
+            UpdateNode(Ids.Custom.EnumVar2, idx % 2 == 0 ? 123 : 321, code);
             UpdateNode(Ids.Custom.EnumVar3, idx % 2 == 0
-                ? new[] { 123, 123, 321, 123 } : new[] { 123, 123, 123, 321 });
+                ? new[] { 123, 123, 321, 123 } : new[] { 123, 123, 123, 321 }, code);
         }
 
         public void SetServerRedundancyStatus(byte serviceLevel, RedundancySupport support)
