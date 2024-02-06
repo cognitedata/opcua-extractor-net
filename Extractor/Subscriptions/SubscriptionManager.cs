@@ -55,9 +55,18 @@ namespace Cognite.OpcUa.Subscriptions
                 return;
             }
 
+            logger.LogDebug("Subscription status changed for subscription {Sub}", sub.DisplayName);
+
             var subName = Enum.Parse<SubscriptionName>(sub.DisplayName.Split(' ').First());
 
-            EnqueueTaskEnsureUnique(new RecreateSubscriptionTask(sub, subName, client.Callbacks));
+            if (EnqueueTaskEnsureUnique(new RecreateSubscriptionTask(sub, subName, client.Callbacks)))
+            {
+                logger.LogWarning("Subscription {Name} is not responding, adding task to recreate", subName);
+            }
+            else
+            {
+                logger.LogDebug("Subscription {Name} already queued for recreation, not adding task", subName);
+            }
         }
 
         public bool EnqueueTaskEnsureUnique(PendingSubscriptionTask task)
