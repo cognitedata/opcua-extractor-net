@@ -132,7 +132,7 @@ namespace Test.Unit
 
             var start = DateTime.UtcNow;
 
-            var dps = Enumerable.Range(0, 100).Select(idx => new UADataPoint(start.AddMilliseconds(idx), "id", idx));
+            var dps = Enumerable.Range(0, 100).Select(idx => new UADataPoint(start.AddMilliseconds(idx), "id", idx, StatusCodes.Good));
             var evts = Enumerable.Range(0, 100).Select(idx =>
                 new UAEvent { EmittingNode = new NodeId("id", 0), Time = start.AddMilliseconds(idx) });
 
@@ -228,7 +228,7 @@ namespace Test.Unit
 
             var start = DateTime.UtcNow;
 
-            var dps = Enumerable.Range(0, 100).Select(idx => new UADataPoint(start.AddMilliseconds(idx), "id", idx));
+            var dps = Enumerable.Range(0, 100).Select(idx => new UADataPoint(start.AddMilliseconds(idx), "id", idx, StatusCodes.Good));
             var evts = Enumerable.Range(0, 100).Select(idx =>
                 new UAEvent { EmittingNode = new NodeId("id", 0), Time = start.AddMilliseconds(idx) });
 
