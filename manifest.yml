@@ -65,6 +65,10 @@ versions:
     changelog:
       added:
         - "Alpha support for status codes in time series. Note that this may change without being considered a breaking change in the extractor."
+      changed:
+        - "The data format for the local failure buffer has changed. Any existing buffered datapoints will be discarded when the extractor is updated."
+  "2.26.1":
+    description: Improve logging around subscription recreation.
   "2.26.0":
     description: Configurable grace period for recreating dead subscriptions.
     changelog:
