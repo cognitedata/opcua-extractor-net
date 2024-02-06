@@ -608,7 +608,7 @@ namespace Cognite.OpcUa
                 {
                     if (isString)
                     {
-                        return new UADataPoint(dp.Time, id, (string)dp.Value);
+                        return new UADataPoint(dp.Time, id, (string)dp.Value, StatusCodes.Good);
                     }
 
                     double convVal;
@@ -621,7 +621,7 @@ namespace Cognite.OpcUa
                         convVal = Convert.ToDouble(dp.Value);
                     }
 
-                    return new UADataPoint(dp.Time, id, convVal);
+                    return new UADataPoint(dp.Time, id, convVal, StatusCodes.Good);
                 }));
             }
 

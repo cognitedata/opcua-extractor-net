@@ -158,7 +158,12 @@
                     "type": {
                         "type": "string",
                         "description": "Transformation type. `Ignore` ignores the node and all descendants, `DropSubscriptions` prevents the extractor from subscribing to this node, `Property` converts timeseries and their descendants into metadata, `TimeSeries` converts metadata into timeseries.",
-                        "enum": [ "Ignore", "DropSubscriptions", "Property", "TimeSeries" ]
+                        "enum": [
+                            "Ignore",
+                            "DropSubscriptions",
+                            "Property",
+                            "TimeSeries"
+                        ]
                     },
                     "filter": {
                         "$ref": "raw-node-filter",
@@ -309,7 +314,10 @@
                     "description": "Regex on node id. Ids on the form `i=123` or `s=string` are matched"
                 },
                 "is-array": {
-                    "type": ["boolean", "null"],
+                    "type": [
+                        "boolean",
+                        "null"
+                    ],
                     "description": "Whether the node is an array. If this is set, the filter only considers variables"
                 },
                 "namespace": {
@@ -321,13 +329,23 @@
                     "description": "Regex on the id of the type definition. On the form `i=123` or `s=string`"
                 },
                 "historizing": {
-                    "type": ["boolean", "null"],
+                    "type": [
+                        "boolean",
+                        "null"
+                    ],
                     "description": "Whether the node is historizing. If this is set, the filter only considers variables"
                 },
                 "node-class": {
                     "type": "string",
                     "description": "The OPC-UA node class, exact match.",
-                    "enum": ["Object", "ObjectType", "Variable", "VariableType", "DataType", "ReferenceType"]
+                    "enum": [
+                        "Object",
+                        "ObjectType",
+                        "Variable",
+                        "VariableType",
+                        "DataType",
+                        "ReferenceType"
+                    ]
                 },
                 "parent": {
                     "$ref": "raw-node-filter",
@@ -351,6 +369,28 @@
                         "type": "string",
                         "description": "The uri of a namespace."
                     }
+                }
+            }
+        },
+        "status-codes": {
+            "type": "object",
+            "unevaluatedProperties": false,
+            "description": "ALPHA: Configuration for ingesting status codes to CDF timeseries.",
+            "properties": {
+                "status-codes-to-ingest": {
+                    "type": "string",
+                    "enum": [
+                        "GoodOnly",
+                        "Uncertain",
+                        "All"
+                    ],
+                    "description": "Which data points to ingest to CDF. `All` ingests all datapoints, including bad. `Uncertain` ingests good and uncertain data points. `GoodOnly` ingest only good datapoints.",
+                    "default": "GoodOnly"
+                },
+                "ingest-status-codes": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Whether to ingest status codes into the time series API."
                 }
             }
         }
