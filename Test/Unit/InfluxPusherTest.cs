@@ -111,10 +111,10 @@ namespace Test.Unit
             // Test filtering out dps
             var invalidDps = new[]
             {
-                new UADataPoint(DateTime.MinValue, "test-ts-double", 123),
-                new UADataPoint(DateTime.UtcNow, "test-ts-double", double.NaN),
-                new UADataPoint(DateTime.UtcNow, "test-ts-double", double.NegativeInfinity),
-                new UADataPoint(DateTime.UtcNow, "test-ts-double", double.PositiveInfinity),
+                new UADataPoint(DateTime.MinValue, "test-ts-double", 123, StatusCodes.Good),
+                new UADataPoint(DateTime.UtcNow, "test-ts-double", double.NaN, StatusCodes.Good),
+                new UADataPoint(DateTime.UtcNow, "test-ts-double", double.NegativeInfinity, StatusCodes.Good),
+                new UADataPoint(DateTime.UtcNow, "test-ts-double", double.PositiveInfinity, StatusCodes.Good),
             };
             Assert.Null(await pusher.PushDataPoints(invalidDps, tester.Source.Token));
 
@@ -124,10 +124,10 @@ namespace Test.Unit
 
             var dps = new[]
             {
-                new UADataPoint(time, "test-ts-double", 123),
-                new UADataPoint(time.AddSeconds(1), "test-ts-double", 321),
-                new UADataPoint(time, "test-ts-string", "string"),
-                new UADataPoint(time.AddSeconds(1), "test-ts-string", "string2")
+                new UADataPoint(time, "test-ts-double", 123, StatusCodes.Good),
+                new UADataPoint(time.AddSeconds(1), "test-ts-double", 321, StatusCodes.Good),
+                new UADataPoint(time, "test-ts-string", "string", StatusCodes.Good),
+                new UADataPoint(time.AddSeconds(1), "test-ts-string", "string2", StatusCodes.Good)
             };
 
             // Debug true
@@ -168,12 +168,12 @@ namespace Test.Unit
             // Insert with mismatched types
             var dps2 = new[]
             {
-                new UADataPoint(time.AddSeconds(2), "test-ts-double", "123"),
-                new UADataPoint(time.AddSeconds(3), "test-ts-double", "321"),
-                new UADataPoint(time.AddSeconds(2), "test-ts-string", 1),
-                new UADataPoint(time.AddSeconds(3), "test-ts-string", 2),
-                new UADataPoint(time, "test-ts-double-2", 123),
-                new UADataPoint(time.AddSeconds(1), "test-ts-double-2", 321),
+                new UADataPoint(time.AddSeconds(2), "test-ts-double", "123", StatusCodes.Good),
+                new UADataPoint(time.AddSeconds(3), "test-ts-double", "321", StatusCodes.Good),
+                new UADataPoint(time.AddSeconds(2), "test-ts-string", 1, StatusCodes.Good),
+                new UADataPoint(time.AddSeconds(3), "test-ts-string", 2, StatusCodes.Good),
+                new UADataPoint(time, "test-ts-double-2", 123, StatusCodes.Good),
+                new UADataPoint(time.AddSeconds(1), "test-ts-double-2", 321, StatusCodes.Good),
             };
             // Flip the two states.. only good way to do this
             extractor.State.SetNodeState(state1, "test-ts-string");
@@ -356,16 +356,16 @@ namespace Test.Unit
             states = GetStates();
             await pusher.PushDataPoints(new[]
             {
-                new UADataPoint(GetTs(1000), states[0].Id, 123),
-                new UADataPoint(GetTs(2000), states[0].Id, 123),
-                new UADataPoint(GetTs(3000), states[0].Id, 123),
-                new UADataPoint(GetTs(1000), states[1].Id, "s1"),
-                new UADataPoint(GetTs(2000), states[1].Id, "s2"),
-                new UADataPoint(GetTs(3000), states[1].Id, "s3"),
-                new UADataPoint(GetTs(1000), $"{states[2].Id}[0]", 123),
-                new UADataPoint(GetTs(2000), $"{states[2].Id}[0]", 123),
-                new UADataPoint(GetTs(2000), $"{states[2].Id}[1]", 123),
-                new UADataPoint(GetTs(3000), $"{states[2].Id}[1]", 123)
+                new UADataPoint(GetTs(1000), states[0].Id, 123, StatusCodes.Good),
+                new UADataPoint(GetTs(2000), states[0].Id, 123, StatusCodes.Good),
+                new UADataPoint(GetTs(3000), states[0].Id, 123, StatusCodes.Good),
+                new UADataPoint(GetTs(1000), states[1].Id, "s1", StatusCodes.Good),
+                new UADataPoint(GetTs(2000), states[1].Id, "s2", StatusCodes.Good),
+                new UADataPoint(GetTs(3000), states[1].Id, "s3", StatusCodes.Good),
+                new UADataPoint(GetTs(1000), $"{states[2].Id}[0]", 123, StatusCodes.Good),
+                new UADataPoint(GetTs(2000), $"{states[2].Id}[0]", 123, StatusCodes.Good),
+                new UADataPoint(GetTs(2000), $"{states[2].Id}[1]", 123, StatusCodes.Good),
+                new UADataPoint(GetTs(3000), $"{states[2].Id}[1]", 123, StatusCodes.Good)
             }, tester.Source.Token);
 
             // Failure
@@ -386,9 +386,9 @@ namespace Test.Unit
 
             await pusher.PushDataPoints(new[]
             {
-                new UADataPoint(GetTs(1000), $"{states[2].Id}[2]", 123),
-                new UADataPoint(GetTs(2000), $"{states[2].Id}[2]", 123),
-                new UADataPoint(GetTs(3000), $"{states[2].Id}[2]", 123),
+                new UADataPoint(GetTs(1000), $"{states[2].Id}[2]", 123, StatusCodes.Good),
+                new UADataPoint(GetTs(2000), $"{states[2].Id}[2]", 123, StatusCodes.Good),
+                new UADataPoint(GetTs(3000), $"{states[2].Id}[2]", 123, StatusCodes.Good),
             }, tester.Source.Token);
 
             states = GetStates();

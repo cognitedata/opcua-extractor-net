@@ -173,14 +173,14 @@ namespace Cognite.OpcUa.Nodes
         /// <param name="stringOverride">True to override the IsString parameter of this datatype, converting
         /// numerical datavalues to string as well.</param>
         /// <returns>Created UADataPoint</returns>
-        public UADataPoint ToDataPoint(IUAClientAccess client, object value, DateTime timestamp, string id, bool stringOverride = false)
+        public UADataPoint ToDataPoint(IUAClientAccess client, object value, DateTime timestamp, string id, StatusCode status, bool stringOverride = false)
         {
             if (timestamp == DateTime.MinValue) timestamp = DateTime.UtcNow;
             if (IsString || stringOverride)
             {
-                return new UADataPoint(timestamp, id, client.StringConverter.ConvertToString(value, EnumValues));
+                return new UADataPoint(timestamp, id, client.StringConverter.ConvertToString(value, EnumValues), status);
             }
-            return new UADataPoint(timestamp, id, UAClient.ConvertToDouble(value));
+            return new UADataPoint(timestamp, id, UAClient.ConvertToDouble(value), status);
         }
 
         public override string ToString()
@@ -242,7 +242,7 @@ namespace Cognite.OpcUa.Nodes
             else if (node.ArrayDimensions == null || node.ArrayDimensions.Length == 0)
             {
                 if (config.UnknownAsScalar && (node.ValueRank == ValueRanks.ScalarOrOneDimension
-                    || node.ValueRank == ValueRanks.Any)) 
+                    || node.ValueRank == ValueRanks.Any))
                 {
                     return true;
                 }
