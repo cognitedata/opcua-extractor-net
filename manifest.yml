@@ -60,6 +60,8 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.26.1":
+    description: Improve logging around subscription recreation.
   "2.26.0":
     description: Configurable grace period for recreating dead subscriptions.
     changelog:

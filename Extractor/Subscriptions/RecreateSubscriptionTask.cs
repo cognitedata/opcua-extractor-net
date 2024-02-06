@@ -20,7 +20,6 @@ namespace Cognite.OpcUa.Subscriptions
             : base(subscription, new Dictionary<NodeId, MonitoredItem>(), callbacks)
         {
             this.oldSubscription = oldSubscription;
-            callbacks.OnSubscriptionFailure(subscription);
         }
 
 
