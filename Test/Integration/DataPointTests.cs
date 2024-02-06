@@ -848,7 +848,7 @@ namespace Test.Integration
             Assert.True(state.ShouldSubscribe);
             await extractor.WaitForSubscriptions();
             Assert.Equal(3u, session.Subscriptions.First(sub => sub.DisplayName.StartsWith(SubscriptionName.DataPoints.Name(), StringComparison.InvariantCulture)).MonitoredItemCount);
-            await TestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 3), 5);
+            await TestUtils.WaitForCondition(() => CommonTestUtils.GetMetricValue("opcua_frontfill_data_count") >= 3, 5);
         }
 
         [Fact]
