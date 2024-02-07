@@ -139,7 +139,7 @@ namespace Server
             StatusCodes.BadOutOfRange
         };
 
-        public void PopulateBaseHistory(DateTime? start = null, bool randomStatusCodes = false)
+        public void PopulateBaseHistory(DateTime? start = null, bool randomStatusCodes = false, bool notifyLast = true)
         {
             Func<int, StatusCode> statusBuilder = randomStatusCodes ? GetStatusGenerator() : null;
 
@@ -147,9 +147,9 @@ namespace Server
             {
                 start = DateTime.UtcNow.AddMilliseconds(-1000 * 10);
             }
-            Server.PopulateHistory(Server.Ids.Base.DoubleVar1, 1000, start.Value, "double", statusBuilder: statusBuilder);
-            Server.PopulateHistory(Server.Ids.Base.StringVar, 1000, start.Value, "string", statusBuilder: statusBuilder);
-            Server.PopulateHistory(Server.Ids.Base.IntVar, 1000, start.Value, "int", statusBuilder: statusBuilder);
+            Server.PopulateHistory(Server.Ids.Base.DoubleVar1, 1000, start.Value, "double", statusBuilder: statusBuilder, notifyLast: notifyLast);
+            Server.PopulateHistory(Server.Ids.Base.StringVar, 1000, start.Value, "string", statusBuilder: statusBuilder, notifyLast: notifyLast);
+            Server.PopulateHistory(Server.Ids.Base.IntVar, 1000, start.Value, "int", statusBuilder: statusBuilder, notifyLast: notifyLast);
         }
 
         public void UpdateNode(NodeId id, object value, StatusCode? code = null)

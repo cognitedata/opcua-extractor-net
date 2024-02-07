@@ -278,9 +278,10 @@ namespace Server
             string type = "int",
             int msdiff = 10,
             Func<int, object> valueBuilder = null,
-            Func<int, StatusCode> statusBuilder = null)
+            Func<int, StatusCode> statusBuilder = null,
+            bool notifyLast = true)
         {
-            custom.PopulateHistory(id, count, start, type, msdiff, valueBuilder, statusBuilder);
+            custom.PopulateHistory(id, count, start, type, msdiff, valueBuilder, statusBuilder, notifyLast);
         }
 
         public void SetEventConfig(bool auditing, bool server, bool serverAuditing)

@@ -154,7 +154,8 @@ namespace Server
             string type = "int",
             int msdiff = 10,
             Func<int, object> valueBuilder = null,
-            Func<int, StatusCode> statusBuilder = null)
+            Func<int, StatusCode> statusBuilder = null,
+            bool notifyLast = true)
         {
             for (int i = 0; i < count; i++)
             {
@@ -177,7 +178,7 @@ namespace Server
 
                 StatusCode code = statusBuilder == null ? StatusCodes.Good : statusBuilder(i);
 
-                if (i == count - 1 && start > DateTime.UtcNow.AddSeconds(-1))
+                if (i == count - 1 && start > DateTime.UtcNow.AddSeconds(-1) && notifyLast)
                 {
                     UpdateNode(id, dv.Value, start, code);
                 }
