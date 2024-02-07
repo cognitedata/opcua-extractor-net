@@ -204,8 +204,8 @@ namespace Test.Unit
 
             Assert.Equal(2, handler.Spaces.Count);
 
-            Assert.Equal(214, handler.Views.Count);
-            Assert.Equal(133, handler.Containers.Count);
+            Assert.Equal(241, handler.Views.Count);
+            Assert.Equal(158, handler.Containers.Count);
 
             var extensionFieldsType = handler.Views["ExtensionFieldsType"];
             Assert.Single(extensionFieldsType["properties"].AsObject());

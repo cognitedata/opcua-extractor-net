@@ -389,7 +389,7 @@ namespace Cognite.OpcUa.NodeSources
 
         private bool BuildNode(NodeId id, NodeId parentId, uint nodeClassMask)
         {
-            if (id == ObjectIds.Server || id == ObjectIds.Aliases) return false;
+            if (id == ObjectIds.Server || id == ObjectIds.Aliases || id == ObjectIds.Locations) return false;
 
             var nodeState = nodeDict[id];
 
