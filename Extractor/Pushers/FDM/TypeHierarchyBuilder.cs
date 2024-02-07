@@ -221,8 +221,6 @@ namespace Cognite.OpcUa.Pushers.FDM
                 || dt.Id == DataTypeIds.QualifiedName
                 || dt.Id == DataTypeIds.String) return BasePropertyType.Text(isArray);
             if (dt.Id == DataTypeIds.DateTime
-                || dt.Id == DataTypeIds.Date
-                || dt.Id == DataTypeIds.Time
                 || dt.Id == DataTypeIds.UtcTime) return BasePropertyType.Create(PropertyTypeVariant.timestamp, isArray);
 
             if (dt.Id == DataTypeIds.NodeId || dt.Id == DataTypeIds.ExpandedNodeId)
