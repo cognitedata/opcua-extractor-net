@@ -154,11 +154,11 @@ namespace Test.Unit
             tester.Server.Issues.MaxBrowseResults = 100;
             await tester.Explorer.GetBrowseChunkSizes(tester.Source.Token);
             summary = tester.Explorer.Summary;
-            Assert.Equal(1, summary.Browse.BrowseNodesChunk);
+            Assert.Equal(2, summary.Browse.BrowseNodesChunk);
             Assert.True(summary.Browse.BrowseNextWarning);
             Assert.Equal(100, summary.Browse.BrowseChunk);
             Assert.Equal(100, tester.BaseConfig.Source.BrowseChunk);
-            Assert.Equal(1, tester.BaseConfig.Source.BrowseNodesChunk);
+            Assert.Equal(2, tester.BaseConfig.Source.BrowseNodesChunk);
 
             // Test with browseNodes issues
             tester.Explorer.ResetSummary();
@@ -215,7 +215,7 @@ namespace Test.Unit
             // Test max size issues
             tester.Explorer.ResetSummary();
             tester.Explorer.ResetNodes();
-            tester.Config.Extraction.RootNode = tester.Server.Ids.Full.Root.ToProtoNodeId(tester.Explorer);
+            tester.Config.Extraction.RootNode = tester.Server.Ids.Full.WideRoot.ToProtoNodeId(tester.Explorer);
             tester.Server.Issues.MaxAttributes = 100;
             await tester.Explorer.GetAttributeChunkSizes(tester.Source.Token);
             summary = tester.Explorer.Summary;
@@ -290,7 +290,7 @@ namespace Test.Unit
                     await Task.Delay(200);
                 }
             });
-            tester.Config.Extraction.RootNode = tester.Server.Ids.Full.Root.ToProtoNodeId(tester.Explorer);
+            tester.Config.Extraction.RootNode = tester.Server.Ids.Full.WideRoot.ToProtoNodeId(tester.Explorer);
             // Test full hierarchy
             tester.Explorer.ResetNodes();
             await tester.Explorer.GetSubscriptionChunkSizes(tester.Source.Token);
@@ -320,7 +320,7 @@ namespace Test.Unit
             Assert.True(summary.Subscriptions.LimitWarning);
 
             // Test issue with chunk sizes
-            tester.Config.Extraction.RootNode = tester.Server.Ids.Full.Root.ToProtoNodeId(tester.Explorer);
+            tester.Config.Extraction.RootNode = tester.Server.Ids.Full.WideRoot.ToProtoNodeId(tester.Explorer);
             tester.Server.Issues.MaxMonitoredItems = 100;
             tester.Explorer.ResetNodes();
             tester.Explorer.ResetSummary();
