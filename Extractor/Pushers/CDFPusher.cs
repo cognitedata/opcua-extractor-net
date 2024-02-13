@@ -131,8 +131,8 @@ namespace Cognite.OpcUa.Pushers
 
             var inserts = dataPointList.ToDictionary(kvp =>
                 Identity.Create(kvp.Key),
-                kvp => kvp.Value.Select(
-                    dp => dp.IsString ? new Datapoint(dp.Timestamp, dp.StringValue) : new Datapoint(dp.Timestamp, dp.DoubleValue.Value))
+                kvp => kvp.Value.SelectNonNull(
+                    dp => dp.ToCDFDataPoint(fullConfig.Extraction.StatusCodes.IngestStatusCodes, log))
                 );
 
             if (fullConfig.DryRun)
@@ -143,7 +143,16 @@ namespace Cognite.OpcUa.Pushers
 
             try
             {
-                var result = await destination.InsertDataPointsAsync(inserts, SanitationMode.Clean, RetryMode.OnError, token);
+                CogniteResult<DataPointInsertError> result;
+                if (fullConfig.Extraction.StatusCodes.IngestStatusCodes)
+                {
+                    result = await destination.AlphaInsertDataPointsAsync(inserts, SanitationMode.Clean, RetryMode.OnError, token);
+                }
+                else
+                {
+                    result = await destination.InsertDataPointsAsync(inserts, SanitationMode.Clean, RetryMode.OnError, token);
+                }
+
                 int realCount = count;
 
                 log.LogResult(result, RequestType.CreateDatapoints, false, LogLevel.Debug);

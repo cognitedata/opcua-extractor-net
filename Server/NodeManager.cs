@@ -78,13 +78,14 @@ namespace Server
         }
 
         #region access
-        public void UpdateNode(NodeId id, object value, DateTime? timestamp = null)
+        public void UpdateNode(NodeId id, object value, DateTime? timestamp = null, StatusCode? code = null)
         {
             PredefinedNodes.TryGetValue(id, out var pstate);
             if (pstate is not BaseDataVariableState state) return;
             var ts = timestamp ?? DateTime.UtcNow;
             state.Value = value;
             state.Timestamp = ts;
+            state.StatusCode = code ?? StatusCodes.Good;
             if (state.Historizing)
             {
                 store.UpdateNode(state);
@@ -146,7 +147,14 @@ namespace Server
             }
         }
 
-        public void PopulateHistory(NodeId id, int count, DateTime start, string type = "int", int msdiff = 10, Func<int, object> valueBuilder = null)
+        public void PopulateHistory(
+            NodeId id,
+            int count,
+            DateTime start,
+            string type = "int",
+            int msdiff = 10,
+            Func<int, object> valueBuilder = null,
+            Func<int, StatusCode> statusBuilder = null)
         {
             for (int i = 0; i < count; i++)
             {
@@ -166,15 +174,18 @@ namespace Server
                         dv.Value = valueBuilder(i);
                         break;
                 }
+
+                StatusCode code = statusBuilder == null ? StatusCodes.Good : statusBuilder(i);
+
                 if (i == count - 1 && start > DateTime.UtcNow.AddSeconds(-1))
                 {
-                    UpdateNode(id, dv.Value, start);
+                    UpdateNode(id, dv.Value, start, code);
                 }
                 else
                 {
                     dv.SourceTimestamp = start;
                     dv.ServerTimestamp = start;
-                    dv.StatusCode = StatusCodes.Good;
+                    dv.StatusCode = code;
                     store.HistorizeDataValue(id, dv);
                 }
                 start = start.AddMilliseconds(msdiff);
