@@ -60,7 +60,7 @@
         },
         "end-time": {
             "type": "string",
-            "description": "The latest timestamp history will be read from. Only relevant if `max-read-length` is set. In milliseconds since 01/01/1970. Default is current time. Alternatively use syntax `N[timeunit](-ago)` where `timeunit` is one of `w`, `d`, `h`, `m`, `s`, or `ms`. `-ago` indicates that this is set in the past, if left out it will be that duration in the future"
+            "description": "The latest timestamp history will be read from. In milliseconds since 01/01/1970. Default is current time. Alternatively use syntax `N[timeunit](-ago)` where `timeunit` is one of `w`, `d`, `h`, `m`, `s`, or `ms`. `-ago` indicates that this is set in the past, if left out it will be that duration in the future"
         },
         "granularity": {
             "type": "string",

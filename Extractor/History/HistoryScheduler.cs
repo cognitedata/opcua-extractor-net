@@ -132,6 +132,12 @@ namespace Cognite.OpcUa.History
             historyStartTime = GetStartTime(config.History.StartTime);
             if (!string.IsNullOrWhiteSpace(config.History.EndTime)) historyEndTime = CogniteTime.ParseTimestampString(config.History.EndTime)!;
 
+            if (historyStartTime != null && historyEndTime != null && historyStartTime >= historyEndTime)
+            {
+                throw new ConfigurationException(
+                    $"History start time must be less than history end time. Start time is {historyStartTime}, end time is {historyEndTime}");
+            }
+
             historyGranularity = config.History.GranularityValue.Value;
 
             metrics = new HistoryMetrics(type);
@@ -220,6 +226,8 @@ namespace Cognite.OpcUa.History
         {
             HistoryReadDetails details;
             var (min, max) = GetReadRange(nodes);
+            log.LogDebug("Read {Type} history chunk for {Count} nodes from {Min} to {Max}",
+                type, nodes.Count(), min, max);
             switch (type)
             {
                 case HistoryReadType.FrontfillData:
