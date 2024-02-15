@@ -17,7 +17,7 @@ namespace Cognite.OpcUa.Subscriptions
         public override string TaskName => $"Recreate subscription {oldSubscription.Id}";
 
         public RecreateSubscriptionTask(Subscription oldSubscription, SubscriptionName subscription, IClientCallbacks callbacks)
-            : base(subscription, new Dictionary<NodeId, MonitoredItem>(), callbacks)
+            : base(subscription, oldSubscription.MonitoredItems.ToDictionary(item => item.StartNodeId), callbacks)
         {
             this.oldSubscription = oldSubscription;
         }
@@ -94,6 +94,17 @@ namespace Cognite.OpcUa.Subscriptions
             {
                 var symId = StatusCode.LookupSymbolicId(serviceEx.StatusCode);
                 logger.LogWarning("Error attempting to remove subscription {Name} from the server: {Err}. It has most likely been dropped. Attempting to recreate...", SubscriptionName, symId);
+                // Second attempt shouldn't fail, and doesn't seem to, keeping this here as a backup.
+                try
+                {
+                    await session.RemoveSubscriptionAsync(oldSubscription);
+                }
+                catch
+                {
+                    // This is not supposed to be used this way, but this method should be a foolproof way
+                    // of ensuring the subscription gets removed properly.
+                    session.RemoveTransferredSubscription(oldSubscription);
+                }
             }
             finally
             {
