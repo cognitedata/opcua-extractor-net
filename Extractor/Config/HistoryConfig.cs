@@ -89,10 +89,10 @@ namespace Cognite.OpcUa.Config
         /// Alternatively, use syntax N[timeunit](-ago) where timeunit is w, d, h, m, s or ms. In past if -ago is added,
         /// future if not.
         /// </summary>
-        public string? StartTime { get; set; } = "0";
+        public string? StartTime { get; set; }
         /// <summary>
         /// Timestamp to be considered the end of forward history. Only relevant if max-read-length is set.
-        /// In milliseconds since 1/1/1970. Default is current time, if this is 0.
+        /// In milliseconds since 1/1/1970. Default is current time, if this is null.
         /// Alternatively, use syntax N[timeunit](-ago) where timeunit is w, d, h, m, s or ms. In past if -ago is added,
         /// future if not.
         /// </summary>
