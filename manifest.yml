@@ -60,6 +60,11 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.27.1":
+    description: Enforce start-time < end-time when reading history.
+    changelog:
+      changed:
+        - The extractor will now fail on startup if start-time is configured to be greater than end-time.
   "2.27.0":
     description: Alpha support for status codes in time series.
     changelog:
