@@ -19,6 +19,7 @@ using Cognite.Extractor.Logging;
 using Cognite.Extractor.Utils.CommandLine;
 using Microsoft.Extensions.DependencyInjection;
 using Opc.Ua;
+using Serilog;
 using System;
 using System.Collections.Generic;
 using System.CommandLine;
@@ -112,6 +113,9 @@ namespace Server
 
         [CommandLineOption("Enable setting random status codes on values. Each chunk of 10 values will get the same code")]
         public bool RandomStatusCodes { get; set; }
+
+        [CommandLineOption("Enable reading instructions from the CLI while running, to execute tasks dynamically")]
+        public bool Interactive { get; set; }
     }
 
 
@@ -225,33 +229,45 @@ namespace Server
                 exitEvent.Set();
             };
 
-            var _ = Task.Run(() =>
+            if (opt.Interactive)
             {
-                int sl = opt.ServiceLevel;
-                while (true)
+                Console.WriteLine("Running in interactive mode. Instructions:");
+                Console.WriteLine("    L: Set service level to 190");
+                Console.WriteLine("    H: Set service level to 255");
+                Console.WriteLine("    G: Set service level to 180");
+                Console.WriteLine("    X: Kill all subscriptions on the server");
+                var _ = Task.Run(() =>
                 {
-                    var key = Console.ReadKey(true);
-                    if (key.Key == ConsoleKey.L && sl != 190)
+                    int sl = opt.ServiceLevel;
+                    while (true)
                     {
-                        server.SetServerRedundancyStatus(190, Opc.Ua.RedundancySupport.Hot);
-                        sl = 190;
-                        Console.WriteLine("Set service level to 190");
+                        var key = Console.ReadKey(true);
+                        if (key.Key == ConsoleKey.L && sl != 190)
+                        {
+                            server.SetServerRedundancyStatus(190, Opc.Ua.RedundancySupport.Hot);
+                            sl = 190;
+                            Console.WriteLine("Set service level to 190");
+                        }
+                        if (key.Key == ConsoleKey.H && sl != 255)
+                        {
+                            server.SetServerRedundancyStatus(255, Opc.Ua.RedundancySupport.Hot);
+                            sl = 255;
+                            Console.WriteLine("Set service level to 255");
+                        }
+                        if (key.Key == ConsoleKey.G && sl != 180)
+                        {
+                            server.SetServerRedundancyStatus(180, Opc.Ua.RedundancySupport.Hot);
+                            sl = 180;
+                            Console.WriteLine("Set service level to 180");
+                        }
+                        if (key.Key == ConsoleKey.X)
+                        {
+                            server.Server.DropSubscriptions();
+                        }
                     }
-                    if (key.Key == ConsoleKey.H && sl != 255)
-                    {
-                        server.SetServerRedundancyStatus(255, Opc.Ua.RedundancySupport.Hot);
-                        sl = 255;
-                        Console.WriteLine("Set service level to 255");
-                    }
-                    if (key.Key == ConsoleKey.G && sl != 180)
-                    {
-                        server.SetServerRedundancyStatus(180, Opc.Ua.RedundancySupport.Hot);
-                        sl = 180;
-                        Console.WriteLine("Set service level to 180");
-                    }
-                }
+                });
+            }
 
-            });
 
             exitEvent.WaitOne();
         }
