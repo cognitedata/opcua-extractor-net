@@ -6,19 +6,22 @@
     "properties": {
         "endpoint-url": {
             "type": "string",
-            "description": "URL of OPC-UA server endpoint or discovery server"
+            "examples": [
+                "opc.tcp://some-host:1883"
+            ],
+            "description": "The URL of the OPC UA server to connect to.\n\nIn practice, this is the URL of the discovery server, where multiple levels of severity may be provided. The OPC UA extractor attempts to use the highest security possible based on the configuration."
         },
         "alt-endpoint-urls": {
             "type": "array",
-            "description": "List of alternate endpoint URLs. Enables server redundancy. Should not contain `endpoint-url`",
+            "description": "List of alternative endpoint URLs the extractor can attempt when connecting to the server. Use this for non-transparent redundancy. See the [OPC UA standard part 4, section 6.6.2](https://reference.opcfoundation.org/v104/Core/docs/Part4/6.6.2/).\n\nWe recommend setting `force-restart` to `true`. Otherwise, the extractor will reconnect to the same server each time.",
             "items": {
                 "type": "string",
-                "description": "URL of OPC-UA server endpoint"
+                "description": "URL of OPC-UA server endpoint. See `endpoint-url`."
             }
         },
         "endpoint-details": {
             "type": "object",
-            "description": "Details used to override default endpoint behavior",
+            "description": "Details used to override default endpoint behavior. This is used to make the client connect directly to an OPC UA endpoint, for example if the server is behind NAT (Network Address Translation), circumventing server discovery.",
             "unevaluatedProperties": false,
             "properties": {
                 "override-endpoint-url": {
@@ -29,7 +32,7 @@
         },
         "redundancy": {
             "type": "object",
-            "description": "Extra configuration options related to redundancy and ServiceLevel monitoring",
+            "description": "Additional configuration options related to redundant servers. The OPC UA extractor supports _Cold_ redundancy, as described in the [OPC UA standard part 4, section 6.6.2](https://reference.opcfoundation.org/v104/Core/docs/Part4/6.6.2/).",
             "unevaluatedProperties": false,
             "properties": {
                 "service-level-threshold": {
@@ -37,92 +40,39 @@
                     "minimum": 0,
                     "maximum": 255,
                     "default": 200,
-                    "description": "Servers above this threshold are considered good"
+                    "description": "Servers above this threshold are considered live. If the server drops below this level, the extractor will switch, provided `monitor-service-level` is set to `true`."
                 },
                 "reconnect-interval": {
                     "type": "string",
-                    "description": "If using redundancy, the extractor will attempt to find a better server with this interval if service level is below threshold. Format is `N[timeunit]` where `timeunit` is one of `w`, `d`, `h`, `m`, `s`, or `ms`.",
+                    "description": "If using redundancy, the extractor will attempt to find a better server with this interval if service level is below threshold. Format is as given in [Timestamps and intervals](#timestamps-and-intervals).",
                     "default": "10m"
                 },
                 "monitor-service-level": {
                     "type": "boolean",
-                    "description": "If true, the extractor will subscribe to changes in ServiceLevel and trigger reconnect once it drops below service-level-threshold, and history restart once it goes back above the threshold. This also makes the server not update extraction state if it is connected to a server with service level below the threshold. If a server does not want the extractor to trust the available data ranges it should set the ServiceLevel below the threshold."
+                    "description": "If `true`, the extractor will subscribe to changes in `ServiceLevel` and attempt to change server once it drops below [`service-level-threshold`](#source.redundancy.service-level-threshold).\n\nThis also prevents the extractor from updating states while service level is below the threshold, letting servers inform the extractor that they are not receiving data from all sources, and history should not be trusted. Once the service level goes back above the threshold, history will be read to fill any gaps."
                 }
             }
+        },
+        "reverse-connect-url": {
+            "type": "string",
+            "description": "The local URL used for reverse connect, which means that the server is responsible for initiating connections, not the extractor. This lets the server be behind a firewall, forbidding incoming connections. You must also specify an [`endpoint-url`](#source.endpoint-url), to indicate to the extractor where it should accept connections from."
         },
         "auto-accept": {
             "type": "boolean",
             "default": true,
-            "description": "True to auto accept untrusted certificates. If this is set to false, server certificates must be trusted by manually moving them to the \"trusted\" certificates folder"
-        },
-        "publishing-interval": {
-            "type": "integer",
-            "description": "Interval between OPC-UA subscription publish requests in milliseconds. This is how frequentely the extractor requests updates from the server.",
-            "minimum": 0,
-            "default": 500
+            "description": "Set to `true` to automatically accept server certificates.\n\nIf this is disabled, received server certificates will be placed in the rejected certificates folder (by default `application_dir/certificates/pki/rejected`), and you can manually move them to te accepted certificates folder (`application_dir/certificates/pki/accepted`). Setting this to `true` makes the extractor move certificates automatically.\n\nA simple solution would be to set this to `true` for the first connection, then change it to `false`.\n\nWarning: This should be disabled if the extractor is running on an untrusted network."
         },
         "username": {
             "type": "string",
-            "description": "OPC-UA username"
+            "description": "OPC UA server username, leave empty to disable username/password authentication."
         },
         "password": {
             "type": "string",
-            "description": "OPC-UA password"
-        },
-        "secure": {
-            "type": "boolean",
-            "description": "True if the extractor should try to connect to a secure endpoint on the server"
-        },
-        "force-restart": {
-            "type": "boolean",
-            "description": "True if the extractor should disconnect from the server instead of using built-in OPC-UA reconnect mechanisms. Some servers handle build in reconnect poorly, in which case this is a useful workaround. If using server redundancy through `alt-endpoint-urls`, this should be set to `true`"
-        },
-        "exit-on-failure": {
-            "type": "boolean",
-            "description": "True if the extractor should quit completely when it fails to start, instead of restarting."
-        },
-        "browse-nodes-chunk": {
-            "type": "integer",
-            "description": "Number of nodes per browse request. Large numbers are likely to exceed the server's tolerance. Lower numbers greatly increase startup time.",
-            "default": 1000,
-            "minimum": 1,
-            "maximum": 100000
-        },
-        "browse-chunk": {
-            "type": "integer",
-            "description": "Number of maximum requested results per node during browse. The server may decide to return fewer. Setting this lower increases startup times. Setting it to 0 leaves the decision entirely up to the server.",
-            "minimum": 0,
-            "maximum": 100000,
-            "default": 1000
-        },
-        "attributes-chunk": {
-            "type": "integer",
-            "description": "Number of attributes per request. The extractor will read 5-10 attributes per node, so setting this too low will massively increase startup times. Setting it too high will likely exceed server limits.",
-            "default": 10000,
-            "minimum": 1,
-            "maximum": 1000000
-        },
-        "subscription-chunk": {
-            "type": "integer",
-            "description": "Number of monitored items to create per request. Setting this lower will increase startup times. High values may exceed server limits.",
-            "minimum": 1,
-            "maximum": 100000,
-            "default": 1000
-        },
-        "keep-alive-interval": {
-            "type": "integer",
-            "description": "Time between each keep-alive request to the server, in milliseconds. The third failed keep-alive request will time out the extractor and trigger a reconnect. Setting this lower will trigger reconnect logic faster. Setting this too high will make it meaningless.",
-            "minimum": 100,
-            "maximum": 60000,
-            "default": 5000
-        },
-        "restart-on-reconnect": {
-            "type": "boolean",
-            "description": "Restart the extractor on reconnect, browsing the node hierarchy and recreating subscriptions. This may be necessary if the server is expected to change after reconnecting, but it may be too expensive if the connection to the server is lost frequently"
+            "description": "OPC UA server password."
         },
         "x509-certificate": {
             "type": "object",
-            "description": "Configure settings for using an x509-certificate as login credentials. This is separate from the application certificate, and used for servers with automatic systems for authentication.",
+            "description": "Specifies the configuration for using a signed x509 certificate to connect to the server. Note that this is highly server specific. The extractor uses the provided certificate to sign requests sent to the server. The server must have a mechanism to validate this signature. Typically the certificate must be provided by the server.",
             "unevaluatedProperties": false,
             "properties": {
                 "file-name": {
@@ -131,87 +81,200 @@
                 },
                 "password": {
                     "type": "string",
-                    "description": "Password to local x509-certificate file"
+                    "description": "Password for local x509-certificate file"
                 },
                 "store": {
                     "type": "string",
-                    "description": "Local certificate store to use. One of `None` (to use a file), `Local` (for LocalMachine) or `User`",
+                    "description": "Local certificate store to use. One of `None` (to use a file), `Local` (for LocalMachine) or `User` for the `User` store.",
                     "default": "None",
-                    "enum": ["None", "Local", "User"]
+                    "enum": [
+                        "None",
+                        "Local",
+                        "User"
+                    ]
                 },
                 "cert-name": {
                     "type": "string",
-                    "description": "Name of certificate in store, e.g. CN=my-certificate"
+                    "description": "Name of certificate in store. Required to use `store`",
+                    "examples": [
+                        "CN=MyCertificate"
+                    ]
                 }
-            }
+            },
+            "oneOf": [
+                {
+                    "required": [
+                        "file-name"
+                    ]
+                },
+                {
+                    "required": [
+                        "store",
+                        "cert-name"
+                    ]
+                }
+            ]
         },
-        "reverse-connect-url": {
-            "type": "string",
-            "description": "Local URL used for reverse-connect. This is the URL the server should connect to. An endpoint-url should also be provided so that the extractor knows where it should accept requests from. The server is responsible for initiating connections"
+        "secure": {
+            "type": "boolean",
+            "default": false,
+            "description": "Set this to `true` to make the extractor try to connect to an endpoint with security above `None`. If this is enabled, the extractor will try to pick the _most secure_ endpoint, meaning the endpoint with the longest of the most modern cipher types."
         },
         "ignore-certificate-issues": {
             "type": "boolean",
-            "description": "Ignore all issues caused by the server certificate. This potentially opens the extractor up to a man-in-the-middle attack, but can be used if the server is noncompliant and on a closed network"
+            "description": "Ignore all suppressible certificate errors on the server certificate. You can use this setting if you receive errors such as _Certificate use not allowed_.\n\nCAUTION: This is potentially a security risk. Bad certificates can open the extractor to man-in-the-middle attacks or similar. If the server is secured in other ways (it is running locally, over a secure VPN, or similar), it is most likely fairly harmless.\n\nSome errors are not suppressible and must be remedied on the server. Note that enabling this is always a workaround for the server violating the OPC UA standard in some way.",
+            "default": false
         },
-        "browse-throttling": {
-            "$ref": "continuation_point_throttling.schema.json",
-            "description": "Settings for throttling browse operations"
+        "publishing-interval": {
+            "type": "integer",
+            "description": "Sets the interval (in milliseconds) between publish requests to the server, which is when the extractor asks the server for updates to any active subscriptions.\n\nThis limits the maximum frequency of points pushed to CDF, but not the maximum frequency of points on the server. In most cases, this can be set to the same as [`extraction.data-push-delay`](#extraction.data-push-delay). If set to `0` the server chooses the interval to be as low as it supports. Be aware that some servers set this lower limit very low, which may create considerable load on the server.",
+            "minimum": 0,
+            "default": 500
+        },
+        "force-restart": {
+            "type": "boolean",
+            "description": "If `true`, the extractor will not attempt to reconnect using the OPC UA reconnect protocol if connection is lost, but instead always create a new connection. Only enable this if reconnect is causing issues with the server. Even if this is disabled, the extractor will generally fall back on regular reconnects if the server produces unexpected errors on reconnect.",
+            "default": false
+        },
+        "exit-on-failure": {
+            "type": "boolean",
+            "description": "If `true`, the OPC UA extractor will be restarted completely on reconnect. Enable this if the server is expected to change dramatically while running, and the extractor cannot keep using state from previous runs.",
+            "default": false
+        },
+        "keep-alive-interval": {
+            "type": "integer",
+            "description": "Specifies the interval in milliseconds between each keep-alive request to the server. The connection times out if a keep-alive request fails twice (`2 * interval + 100ms`). This typically happens if the server is down, or if it is hanging on a heavy operation and doesn't manage to respond to keep alive requests. Set this higher if keep alives often time out without the server being down.",
+            "minimum": 100,
+            "maximum": 60000,
+            "default": 5000
+        },
+        "restart-on-reconnect": {
+            "type": "boolean",
+            "description": "If `true`, the OPC UA extractor will be restarted after reconnecting to the server. This may not be required if the server is the server is expected to not change much, and that it handles reconnects well.",
+            "default": false
         },
         "node-set-source": {
             "type": "object",
-            "description": "Configuration for using NodeSet2 files as sources for the OPC-uA node hierarchy instead of browsing the server. This can be used if the server structure is well known and fixed. Values of nodes are still read from the server",
+            "description": "Read from NodeSet2 files instead of browsing the OPC UA node hierarchy. This is useful for certain smaller servers, where the full node hierarchy is known before-hand. In general, it can be used to lower the load on the server.",
             "unevaluatedProperties": false,
-            "anyOf": [{ "required": ["instance"] }, { "required": ["type"] }],
-            "required": ["node-sets"],
+            "anyOf": [
+                {
+                    "required": [
+                        "instance"
+                    ]
+                },
+                {
+                    "required": [
+                        "type"
+                    ]
+                }
+            ],
+            "required": [
+                "node-sets"
+            ],
             "properties": {
                 "node-sets": {
                     "type": "array",
-                    "description": "List of nodesets to read. Specified by URL, file name, or both. If no name is specified, the last segment of the URL is used as file name. File name is where downloaded files are saved, and where the extractor looks for existing files.",
+                    "description": "List of nodesets to read. Specified by URL, file name, or both. If no name is specified, the last segment of the URL is used as file name. File name is where downloaded files are saved, and where the extractor looks for existing files.\n\nNote that typically, you will need to define all schemas your server schema depends on. All servers should depend on the base OPC UA schema, so you should always include `https://files.opcfoundation.org/schemas/UA/1.04/Opc.Ua.NodeSet2.xml`",
+                    "examples": [
+                        [
+                            {
+                                "file-name": "Server.NodeSet2.xml"
+                            },
+                            {
+                                "url": "https://files.opcfoundation.org/schemas/UA/1.04/Opc.Ua.NodeSet2.xml"
+                            }
+                        ]
+                    ],
                     "items": {
                         "type": "object",
-                        "description": "Configuration specifying a node set file",
+                        "description": "Configuration specifying a node set file.",
                         "unevaluatedProperties": false,
-                        "anyOf": [{ "required": ["file-name"] }, { "required": ["url"] }],
+                        "anyOf": [
+                            {
+                                "required": [
+                                    "file-name"
+                                ]
+                            },
+                            {
+                                "required": [
+                                    "url"
+                                ]
+                            }
+                        ],
                         "properties": {
                             "file-name": {
                                 "type": "string",
-                                "description": "Path to nodeset file"
+                                "description": "Path to nodeset file. This is either the place where the downloaded file is saved, or a previously downloaded file."
                             },
                             "url": {
                                 "type": "string",
-                                "description": "URL of publicly available nodeset file"
+                                "description": "URL of publicly available nodeset file."
                             }
                         }
                     }
                 },
                 "instance": {
                     "type": "boolean",
-                    "description": "Use nodeset files to replace the OPC-UA instance hierarchy, i.e. everything under \"Objects\" in the OPC-A server"
+                    "description": "If `true`, the instance hierarchy is not obtained from the server, but instead read from the NodeSet2 files."
                 },
                 "types": {
                     "type": "boolean",
-                    "description": "Use nodeset files to replace the OPC-UA type hierarchy"
+                    "description": "If `true`, event types, reference types, object types, and variable types are obtained from NodeSet2 files instead of the server."
                 }
             }
         },
-        "limit-to-server-config": {
-            "type": "boolean",
-            "description": "Limit chunking values based on exposed information from the server, if any. This can be set to false if the server info is known to be wrong, but should generally be left on, as exceeding configured server limits will almost certainly cause a crash",
-            "default": true
-        },
         "alt-source-background-browse": {
             "type": "boolean",
-            "description": "If an alternative source for the node hierarchy is used, like CDF or nodeset files, this can be set to true to also browse the node hierarchy in the background. This is useful to start the extractor quickly but also discover everything in the server"
+            "description": "If `true`, browses the OPC UA node hierarchy in the background when obtaining nodes from an alternative source, such as CDF Raw or NodeSet2 files."
+        },
+        "limit-to-server-config": {
+            "type": "boolean",
+            "description": "Uses the `Server/ServerCapabilities` node in the OPC UA server to limit chunk sizes. Set this to `false` only if you know the server reports incorrect limits and you want to set them higher. If the real server limits are exceeded, the extractor will typically crash.",
+            "default": true
+        },
+        "browse-nodes-chunk": {
+            "type": "integer",
+            "description": "Sets the maximum number of nodes per call to the Browse service. Large numbers are likely to exceed the server's tolerance. Lower numbers greatly increase startup time.",
+            "default": 1000,
+            "minimum": 1,
+            "maximum": 100000
+        },
+        "browse-chunk": {
+            "type": "integer",
+            "description": "Sets the maximum requested results per node for each call to the Browse service. The server may decide to return fewer. Setting this lower increases startup times. Setting it to 0 leaves the decision up to the server.",
+            "minimum": 0,
+            "maximum": 100000,
+            "default": 1000
+        },
+        "attributes-chunk": {
+            "type": "integer",
+            "description": "Specifies the maximum number of attributes to fetch per call to the Read service. If the server fails with `TooManyOperations` during attribute read, it may help to lower this value. This should be set as high as possible for large servers.",
+            "default": 10000,
+            "minimum": 1,
+            "maximum": 1000000
+        },
+        "subscription-chunk": {
+            "type": "integer",
+            "description": "Sets the maximum number of new `MonitoredItems` to create per operation. If the server fails with `TooManyOperations` when creating monitored items, try lowering this value.",
+            "minimum": 1,
+            "maximum": 100000,
+            "default": 1000
+        },
+        "browse-throttling": {
+            "$ref": "continuation_point_throttling.schema.json",
+            "description": "Settings for throttling browse operations."
         },
         "certificate-expiry": {
             "type": "integer",
             "minimum": 1,
             "maximum": 65535,
             "default": 60,
-            "description": "Default application certificate expiry in months"
+            "description": "Specifies the default application certificate expiration time in months. You can also replace the certificate manually by modifying the `opc.ua.net.extractor.Config.xml` configuration file. Note that the default values was changed as of version 2.5.3."
         },
         "retries": {
-            "$ref": "ua_retries_config.schema.json"
+            "$ref": "ua_retries_config.schema.json",
+            "description": "Specify the retry policy for requests to the OPC UA server."
         }
     }
 }

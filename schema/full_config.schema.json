@@ -10,6 +10,11 @@
             "minimum": 0,
             "description": "Version of the config file, the extractor specifies which config file versions are accepted in each version of the extractor."
         },
+        "dry-run": {
+            "type": "boolean",
+            "default": false,
+            "description": "Set this to `true` to prevent the extractor from writing anything to CDF. This is useful for debugging the extractor configuration."
+        },
         "source": {
             "$ref": "source_config.schema.json"
         },

@@ -2,37 +2,37 @@
     "$id": "state_storage_config.schema.json",
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
-    "description": "Configuration for storing the range of extracted datapoints and events to a persistent store",
+    "description": "A local LiteDB database or a database in CDF RAW that store various persistent information between extractor runs. This is used to replace reading first/last data points from CDF, and also allows storing first/last times for events.\n\nEnabling this is highly recommended, and will be required in a future version of the extractor.",
     "unevaluatedProperties": false,
     "allOf": [
         {
-            "$ref": "https://raw.githubusercontent.com/cognitedata/dotnet-extractor-utils/v1.16.0/schema/state_store_config.schema.json"
+            "$ref": "https://raw.githubusercontent.com/cognitedata/dotnet-extractor-utils/v1.19.0/schema/state_store_config.schema.json"
         }
     ],
     "properties": {
         "interval": {
             "type": "string",
-            "description": "Interval between each write to the buffer file, in seconds. 0 or less disables the state store. Alternatively use `N[timeunit]` where `timeunit` is one of `w`, `d`, `h`, `m`, `s`, or `ms`",
+            "description": "Interval between each write to the buffer file, in seconds. 0 or less disables the state store. Format is as given in [Timestamps and intervals](#timestamps-and-intervals).",
             "default": "0s"
         },
         "variable-store": {
             "type": "string",
-            "description": "Name of raw table or litedb store for variable ranges",
+            "description": "Name of raw table or litedb collection to store information about extracted OPC UA variables.",
             "default": "variable_states"
         },
         "event-store": {
             "type": "string",
-            "description": "Name of raw table or litedb store for event ranges",
+            "description": "Name of raw table or litedb collection to store information about extracted events.",
             "default": "event_states"
         },
         "influx-variable-store": {
             "type": "string",
-            "description": "Name of raw table or litedb store for influxdb failure buffer variable ranges",
+            "description": "Name of raw table or litedb collection to store information about variable ranges in the InfluxDB failure buffer.",
             "default": "influx_variable_states"
         },
         "influx-event-store": {
             "type": "string",
-            "description": "Name of raw table or litedb store for influxdb failure buffer event ranges",
+            "description": "Name of raw table or litedb collection to store information about events in the InfluxDB failure buffer.",
             "default": "influx_event_states"
         }
     }

@@ -2,68 +2,87 @@
     "$id": "mqtt_config.schema.json",
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
-    "description": "Push data to MQTT. This is intended to be used with the MQTT-CDF Bridge application.",
+    "description": "Push data to CDF one-way over [MQTT](https://mqtt.org/). This requires that the [MQTT-CDF Bridge](https://github.com/cognitedata/opcua-extractor-net/releases) application is running somewhere with access to CDF.",
     "unevaluatedProperties": false,
-    "required": ["host", "port"],
+    "required": [
+        "host",
+        "port"
+    ],
     "properties": {
         "host": {
             "type": "string",
-            "description": "TCP Broker URL"
+            "description": "The address of the MQTT broker.",
+            "examples": [
+                "localhost"
+            ]
         },
         "port": {
-            "type": ["string", "integer"],
-            "description": "TCP Broker port"
+            "type": "integer",
+            "description": "Port to connect to on the MQTT broker.",
+            "examples": [
+                1883
+            ]
         },
         "username": {
             "type": "string",
-            "description": "MQTT broker username"
+            "description": "The MQTT broker username. Leave empty to connect without authentication."
         },
         "password": {
             "type": "string",
-            "description": "MQTT broker password"
+            "description": "The MQTT broker password. Leave empty to connect without authentication."
         },
         "use-tls": {
             "type": "boolean",
-            "description": "`true` to enable TLS to the broker"
+            "description": "Set this to `true` to enable Transport Level Security when communicating with the broker.",
+            "default": false
+        },
+        "allow-untrusted-certificates": {
+            "type": "boolean",
+            "description": "Set this to `true` to allow untrusted SSL certificates when communicating with the broker. This is a security risk, we recommend using `custom-certificate-authority` instead.",
+            "default": false
+        },
+        "custom-certificate-authority": {
+            "type": "string",
+            "description": "Path to certificate file for a certificate authority the broker SSL certificate will be verified against."
         },
         "client-id": {
             "type": "string",
-            "description": "MQTT client id. Should be unique for a given broker",
+            "description": "MQTT client id. Should be unique for a given broker.",
             "default": "cognite-opcua-extractor"
         },
         "data-set-id": {
             "type": "integer",
-            "description": "Data set to use for new objects. Existing objects will not be updated"
+            "description": "Data set to use for new assets, relationships, events, and time series. Existing objects will not be updated."
         },
         "asset-topic": {
             "type": "string",
-            "description": "Topic to publish assets on",
+            "description": "Topic to publish assets on.",
             "default": "cognite/opcua/assets"
         },
         "ts-topic": {
             "type": "string",
-            "description": "Topic to publish timeseries on",
-            "default": "cognite/opcua/assets"
+            "description": "Topic to publish timeseries on.",
+            "default": "cognite/opcua/timeseries"
         },
         "event-topic": {
             "type": "string",
-            "description": "Topic to publish events on",
-            "default": "cognite/opcua/assets"
+            "description": "Topic to publish events on.",
+            "default": "cognite/opcua/events"
         },
         "datapoint-topic": {
             "type": "string",
-            "description": "Topic to publish datapoints on",
-            "default": "cognite/opcua/assets"
+            "description": "Topic to publish datapoints on.",
+            "default": "cognite/opcua/datapoints"
         },
         "raw-topic": {
             "type": "string",
-            "description": "Topic to publish raw rows on",
-            "default": "cognite/opcua/assets"
+            "description": "Topic to publish raw rows on.",
+            "default": "cognite/opcua/raw"
         },
-        "relationships-topic": {
+        "relationship-topic": {
             "type": "string",
-            "description": "Topic to publish relationships on",
-            "default": "cognite/opcua/assets"
+            "description": "Topic to publish relationships on.",
+            "default": "cognite/opcua/relationships"
         },
         "local-state": {
             "type": "string",
@@ -71,11 +90,7 @@
         },
         "invalidate-before": {
             "type": "integer",
-            "description": "Timestamp in ms since epoch to invalidate stored mqtt states. On extractor restart, assets/timeseries created before this will be re-created in CDF. They will not be deleted or updated."
-        },
-        "debug": {
-            "type": "boolean",
-            "description": "If `true`, data will not be pushed to mqtt"
+            "description": "Timestamp in ms since epoch to invalidate stored mqtt states. On extractor restart, assets/timeseries created before this will be re-created in CDF. They will not be deleted or updated. Requires the [`state-storage`](#state-storage) to be enabled."
         },
         "skip-metadata": {
             "type": "boolean",
@@ -83,67 +98,78 @@
         },
         "raw-metadata": {
             "type": "object",
-            "description": "Store assets/timeseries metadata and relationships in raw. Assets will not be created at all, timeseries will be created with just `externalId`, `isStep`, and `isString`. Both timeseries and assets will be persisted in their entirity to CDF Raw. Datapoints are not affected, events will be created but without being contextualized to assets. The externalId of the source node is added to metadata if applicable",
+            "description": "Store assets/timeseries metadata and relationships in raw. Assets will not be created at all, timeseries will be created with just `externalId`, `isStep`, and `isString`. Both timeseries and assets will be persisted in their entirity to CDF Raw. Datapoints are not affected.\nEvents will be created but without being contextualized to assets. The external ID of the source node is added to metadata if applicable",
             "unevaluatedProperties": false,
-            "required": ["database"],
+            "required": [
+                "database"
+            ],
             "properties": {
                 "database": {
                     "type": "string",
-                    "description": "Raw database"
+                    "description": "Raw database to write metadata to."
                 },
                 "assets-table": {
                     "type": "string",
-                    "description": "Raw table to use for assets"
+                    "description": "Raw table to use for assets."
                 },
                 "timeseries-table": {
                     "type": "string",
-                    "description": "Raw table to use for timeseries"
+                    "description": "Raw table to use for timeseries."
                 },
                 "relationships-table": {
                     "type": "string",
-                    "description": "Raw table to use for relationships"
+                    "description": "Raw table to use for relationships."
                 }
             }
         },
         "metadata-mapping": {
             "type": "object",
-            "description": "Map metadata to asset/timeseries attributes. This lets you assign properties in OPC-UA directly to fields like `description` and `unit` in CDF",
-            "examples": [{
-                "timeseries": {
-                    "EngineeringUnits": "unit",
-                    "EURange": "description"
-                },
-                "assets": {
-                    "Name": "name"
+            "description": "Define mappings between properties in OPC UA and CDF attributes. For example, it is quite common for variables in OPC UA to have a property named `EngineeringUnits`, which ideally should be mapped to `unit` in CDF. This property lets you do that.",
+            "examples": [
+                {
+                    "timeseries": {
+                        "EngineeringUnits": "unit",
+                        "EURange": "description"
+                    },
+                    "assets": {
+                        "Name": "name"
+                    }
                 }
-            }],
+            ],
             "unevaluatedProperties": false,
             "properties": {
                 "assets": {
                     "type": "object",
-                    "description": "Map metadata for assets",
+                    "description": "Map metadata for assets.",
                     "patternProperties": {
                         ".*": {
                             "type": "string",
-                            "enum": ["description", "name", "parentId"]
+                            "description": "Target asset attribute",
+                            "enum": [
+                                "description",
+                                "name",
+                                "parentId"
+                            ]
                         }
                     }
                 },
                 "timeseries": {
                     "type": "object",
-                    "description": "Map metadata for timeseries",
+                    "description": "Map metadata for time series.",
                     "patternProperties": {
                         ".*": {
                             "type": "string",
-                            "enum": ["description", "name", "parentId", "unit"]
+                            "description": "Target time series attribute",
+                            "enum": [
+                                "description",
+                                "name",
+                                "parentId",
+                                "unit"
+                            ]
                         }
                     }
                 }
             }
-        },
-        "non-finite-replacement": {
-            "type": ["number", "null"],
-            "description": "Replace all instances of NaN or Infinity with this floating point number"
         }
     }
 }

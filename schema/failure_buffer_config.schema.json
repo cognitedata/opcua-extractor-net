@@ -2,32 +2,38 @@
     "$id": "failure_buffer_config.schema.json",
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
-    "description": "Configuration to store data points in a local file when connection to CDF is lost",
+    "description": "If the connection to CDF goes down, the OPC UA extractor supports buffering data points and events in a local file or InfluxDB. This is helpful if the connection is unstable, and the server does not provide its own historical data.",
     "unevaluatedProperties": false,
     "properties": {
         "enabled": {
             "type": "boolean",
-            "description": "Set to `true` to enable the failure buffer"
-        },
-        "influx-state-store": {
-            "type": "boolean",
-            "description": "If `state-storage` is configured, this can be used to store the ranges of points buffered in influxdb, so that they can be recovered even if the extractor goes down"
-        },
-        "influx": {
-            "type": "boolean",
-            "description": "Use influxdb as a buffer. Requires `influx` to be configured. This is intended to be used if there is a local influxdb instance running. If points are received on non-historical points while the connection to CDF is down, they are read from influxdb once the connection is restored"
+            "description": "Set to `true` to enable the failure buffer.",
+            "default": false
         },
         "datapoint-path": {
             "type": "string",
-            "description": "Path to a binary file. There is no safety, and a bad write can corrupt the file, but it is very fast."
+            "description": "Path to a binary file where data points are buffered. Buffering to a file is very fast, and can handle a large amount of data. The file will be created for you if it does not already exist.",
+            "examples": [
+                "buffer.bin"
+            ]
         },
         "event-path": {
             "type": "string",
-            "description": "Path to a binary file for storing events. The two buffer paths must be different."
+            "description": "Path to a binary file for storing events. Buffering to a file is very fast and can handle a large amount of data. The file will be created for you if it does not already exist. Must be different from `datapoint-path`."
         },
         "max-buffer-size": {
             "type": "integer",
-            "description": "Maximum size of buffer file in bytes"
+            "description": "Set the maximum size in bytes of the buffer file. If the size of the file exceeds this number, no new datapoints or events will be written to their respective buffer files, and any further ephemeral data is lost. Note that if both datapoint and event buffers are enabled, the potential disk usage is twice this number."
+        },
+        "influx-state-store": {
+            "type": "boolean",
+            "description": "Set to `true` to enable storing the state of the InfluxDB buffer. This makes the InfluxDB buffer persistent even if the OPC UA extractor stops before it is emptied. Requires [`state-storage`](#state-storage) to be configured.",
+            "default": false
+        },
+        "influx": {
+            "type": "boolean",
+            "description": "Set to `true` to enable buffering data in InfluxDB. This requires a configured influx pusher. See [`influx`](#influx). This serves as an alternative to a local file, but should only be used if pushing to InfluxDB is already an requirement.",
+            "default": false
         }
     }
 }

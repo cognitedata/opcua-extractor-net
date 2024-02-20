@@ -17,11 +17,11 @@
             "properties": {
                 "server-metrics": {
                     "type": "boolean",
-                    "description": "Map a few relevant static diagnostics contained in `ServerDiagnosticsSummary` in OPC-UA"
+                    "description": "Map a few relevant static diagnostics contained in the `Server/ServerDiagnosticsSummary` node to prometheus metrics."
                 },
                 "other-metrics": {
                     "type": "array",
-                    "description": "List of nodes to map to metrics",
+                    "description": "List of additional nodes to read as metrics.",
                     "items": {
                         "$ref": "proto_node_id.schema.json"
                     }
