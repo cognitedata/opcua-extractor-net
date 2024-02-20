@@ -370,7 +370,7 @@ namespace Test.Unit
 
             var fields = mgr.EventFields;
 
-            Assert.Equal(96, fields.Count);
+            Assert.Equal(102, fields.Count);
 
             // Check that all parent properties are present in a deep event
             Assert.Equal(16, fields[ObjectTypeIds.AuditHistoryAtTimeDeleteEventType].CollectedFields.Count());

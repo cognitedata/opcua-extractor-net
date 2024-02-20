@@ -71,7 +71,7 @@
         },
         "end-time": {
             "type": "string",
-            "description": "Last timestamp to read history from in milliseconds since January 1, 1970. Format is as given in [Timestamps and intervals](#timestamps-and-intervals), `-ago` can be added to make a relative timestamp in the past. Defaults to current time."
+            "description": "The latest timestamp history will be read from. In milliseconds since 01/01/1970. Alternatively use syntax `N[timeunit](-ago)` where `timeunit` is one of `w`, `d`, `h`, `m`, `s`, or `ms`. `-ago` indicates that this is set in the past, if left out it will be that duration in the future."
         },
         "max-read-length": {
             "type": "string",

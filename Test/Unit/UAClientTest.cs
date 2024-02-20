@@ -437,7 +437,7 @@ namespace Test.Unit
                 Nodes = new Dictionary<NodeId, BrowseNode> { { ObjectIds.ObjectsFolder, node } }
             }, true, tester.Source.Token);
             var children = node.Result.References;
-            Assert.Equal(8, children.Count);
+            Assert.Equal(9, children.Count);
 
             var nodes = children.ToDictionary(child => child.DisplayName.Text);
             var fullRoot = nodes["FullRoot"];
@@ -623,7 +623,7 @@ namespace Test.Unit
             var distinctNodes = nodes.SelectMany(kvp => kvp.Value).GroupBy(rd => rd.NodeId);
 
             Assert.Equal(distinctNodes.Count(), nodes.Sum(kvp => kvp.Value.Count));
-            Assert.Equal(2710, nodes.Sum(kvp => kvp.Value.Count));
+            Assert.Equal(3117, nodes.Sum(kvp => kvp.Value.Count));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_browse_operations", 11));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_tree_depth", 11));
         }

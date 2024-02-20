@@ -1079,7 +1079,7 @@ namespace Test.Integration
             await TestUtils.WaitForCondition(() => pusher.DataPoints[(ids.DoubleVar1, -1)].Count >= 1000 && extractor.State.NodeStates.All(st => !st.IsFrontfilling), 5);
 
             // Add some historical data, it won't be read since we are already done reading history
-            tester.Server.PopulateBaseHistory(now.AddSeconds(10));
+            tester.Server.PopulateBaseHistory(now.AddSeconds(10), notifyLast: false);
 
             // Generate a datapoint, this should be captured
             tester.Server.UpdateNode(ids.DoubleVar1, 2000);

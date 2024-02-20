@@ -82,7 +82,7 @@ namespace Cognite.OpcUa.Config
             get => baseExcludeProperties;
             set => baseExcludeProperties = value ?? baseExcludeProperties;
         }
-        private IEnumerable<string> baseExcludeProperties = new List<string> { "LocalTime", "ReceiveTime" };
+        private IEnumerable<string> baseExcludeProperties = new List<string> { "LocalTime", "ReceiveTime", "ConditionClassId", "ConditionClassName", "ConditionSubClassId", "ConditionSubClassName" };
         /// <summary>
         /// Map source browse names to other values in the destination. For CDF, internal properties may be overwritten, by default
         /// "Message" is mapped to description, "SourceNode" is used for context and "EventType" is used for type.These may also be excluded or replaced by 
