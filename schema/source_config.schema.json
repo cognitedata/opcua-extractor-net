@@ -60,7 +60,7 @@
         "auto-accept": {
             "type": "boolean",
             "default": true,
-            "description": "Set to `true` to automatically accept server certificates.\n\nIf this is disabled, received server certificates will be placed in the rejected certificates folder (by default `application_dir/certificates/pki/rejected`), and you can manually move them to te accepted certificates folder (`application_dir/certificates/pki/accepted`). Setting this to `true` makes the extractor move certificates automatically.\n\nA simple solution would be to set this to `true` for the first connection, then change it to `false`."
+            "description": "Set to `true` to automatically accept server certificates.\n\nIf this is disabled, received server certificates will be placed in the rejected certificates folder (by default `application_dir/certificates/pki/rejected`), and you can manually move them to te accepted certificates folder (`application_dir/certificates/pki/accepted`). Setting this to `true` makes the extractor move certificates automatically.\n\nA simple solution would be to set this to `true` for the first connection, then change it to `false`.\n\nWarning: This should be disabled if the extractor is running on an untrusted network."
         },
         "username": {
             "type": "string",

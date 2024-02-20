@@ -121,7 +121,7 @@
                         },
                         "types-to-map": {
                             "type": "string",
-                            "description": "Configure which types to map to FDM.\n\n`Referenced` means that only types that are referenced by instance nodes will be created.\n`Custom` means that all types not in the base namespace will be created.\n`All` means that all types will be created.\n\nNote: Setting this to `All` is rarely useful, and may produce impractically large models.",
+                            "description": "Configure which types to map to Data Models.\n\n`Referenced` means that only types that are referenced by instance nodes will be created.\n`Custom` means that all types not in the base namespace will be created.\n`All` means that all types will be created.\n\nNote: Setting this to `All` is rarely useful, and may produce impractically large models.",
                             "enum": [
                                 "Referenced",
                                 "Custom",
@@ -166,7 +166,7 @@
                         },
                         "enable-deletes": {
                             "type": "boolean",
-                            "described": "Enable deleting FDM nodes if deletes are enabled and the node is deleted in the source. This will only delete nodes extracted as part of the instance hierarchy. Types, and type-related nodes will not be deleted.",
+                            "described": "Enable deleting Data Model nodes if deletes are enabled and the node is deleted in the source. This will only delete nodes extracted as part of the instance hierarchy. Types, and type-related nodes will not be deleted.",
                             "default": false
                         }
                     }
