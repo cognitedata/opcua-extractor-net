@@ -60,6 +60,8 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.27.2":
+    description: Improve reliability of history restart triggers.
   "2.27.1":
     description: Enforce start-time < end-time when reading history, fix subscription recreation bug.
     changelog:
