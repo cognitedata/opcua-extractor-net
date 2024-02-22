@@ -96,7 +96,7 @@ namespace Cognite.OpcUa.History
             continuationPoints.SetCapacity(config.History.Throttling.MaxNodeParallelism > 0 ? config.History.Throttling.MaxNodeParallelism : 1_000);
         }
 
-        private readonly AutoResetEvent stateChangedEvent = new AutoResetEvent(true);
+        private readonly ManualResetEvent stateChangedEvent = new ManualResetEvent(true);
 
         private Task? activeTask;
 
@@ -109,6 +109,7 @@ namespace Cognite.OpcUa.History
             {
                 if (activeTask != null)
                 {
+                    log.LogDebug("History is running, waiting for waker");
                     var res = await Task.WhenAny(activeTask, waitTask);
 
                     if (runTaskSource.IsCancellationRequested) break;
@@ -130,6 +131,7 @@ namespace Cognite.OpcUa.History
                     if (runTaskSource.IsCancellationRequested) break;
                 }
 
+                stateChangedEvent.Reset();
                 waitTask = CommonUtils.WaitAsync(stateChangedEvent, Timeout.InfiniteTimeSpan, runTaskSource.Token);
 
                 if (activeTask != null)
@@ -276,31 +278,39 @@ namespace Cognite.OpcUa.History
 
         public void RemoveIssue(StateIssue issue)
         {
-            bool stateOk = state.IsGood;
-
-            if (state.RemoveIssue(issue))
+            lock (statesLock)
             {
-                log.LogDebug("Removed history issue: {Issue}. New state: {State}", issue, state);
-            }
+                bool stateOk = state.IsGood;
 
-            if (stateOk != state.IsGood)
-            {
-                stateChangedEvent.Set();
+                if (state.RemoveIssue(issue))
+                {
+                    log.LogDebug("Removed history issue: {Issue}. New state: {State}", issue, state);
+                }
+
+                if (stateOk != state.IsGood)
+                {
+                    log.LogDebug("History state changed to good, history will restart");
+                    stateChangedEvent.Set();
+                }
             }
         }
 
         public void AddIssue(StateIssue issue)
         {
-            bool stateOk = state.IsGood;
-
-            if (state.AddIssue(issue))
+            lock (statesLock)
             {
-                log.LogDebug("Added history issue: {Issue}. New state: {State}", issue, state);
-            }
+                bool stateOk = state.IsGood;
 
-            if (stateOk != state.IsGood)
-            {
-                stateChangedEvent.Set();
+                if (state.AddIssue(issue))
+                {
+                    log.LogDebug("Added history issue: {Issue}. New state: {State}", issue, state);
+                }
+
+                if (stateOk != state.IsGood)
+                {
+                    log.LogDebug("History state changed to bad, history will stop");
+                    stateChangedEvent.Set();
+                }
             }
         }
 
@@ -317,10 +327,10 @@ namespace Cognite.OpcUa.History
                 {
                     activeEventStates[state.SourceId] = state;
                 }
-            }
-            if (state.IsGood)
-            {
-                stateChangedEvent.Set();
+                if (state.IsGood)
+                {
+                    stateChangedEvent.Set();
+                }
             }
         }
 
