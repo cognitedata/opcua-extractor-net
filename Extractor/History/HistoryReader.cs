@@ -289,7 +289,7 @@ namespace Cognite.OpcUa.History
 
                 if (stateOk != state.IsGood)
                 {
-                    log.LogDebug("History state changed, history will {Event}", state.IsGood ? "Restart" : "Stop");
+                    log.LogDebug("History state changed to good, history will restart");
                     stateChangedEvent.Set();
                 }
             }
@@ -308,7 +308,7 @@ namespace Cognite.OpcUa.History
 
                 if (stateOk != state.IsGood)
                 {
-                    log.LogDebug("History state changed, history will {Event}", state.IsGood ? "Restart" : "Stop");
+                    log.LogDebug("History state changed to bad, history will stop");
                     stateChangedEvent.Set();
                 }
             }
