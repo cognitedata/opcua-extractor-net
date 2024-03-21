@@ -39,7 +39,7 @@ jobs:
                 tag_exists_error: true
                 message: Cognite OPC-UA Extractor version ${{ needs.common.outputs.version }}
           - name: Upload to github releases
-            uses: softprops/action-gh-release@v1
+            uses: softprops/action-gh-release@v2
             with:
                 files: |
                     artifacts/opcua-extractor.win-x64.${{ needs.common.outputs.version }}.zip 
