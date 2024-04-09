@@ -54,12 +54,19 @@ extractor:
       type: "externalDocumentation"
   image: opc-ua.png
 
+documentation:
+  includeLeafNodes: false
+  preamble:
+    - docs/preamble.md
+
 schema:
   rootSchema: schema/full_config.schema.json
   additionalUris:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.27.3":
+    description: Documentation updates.
   "2.27.2":
     description: Improve reliability of history restart triggers.
   "2.27.1":
@@ -70,10 +77,10 @@ versions:
       fixed:
         - Fix a bug related to subscription recreation.
   "2.27.0":
-    description: Alpha support for status codes in time series.
+    description: Beta support for status codes in time series.
     changelog:
       added:
-        - "Alpha support for status codes in time series. Note that this may change without being considered a breaking change in the extractor."
+        - "Beta support for status codes in time series. Note that this may change without being considered a breaking change in the extractor."
       changed:
         - "The data format for the local failure buffer has changed. Any existing buffered datapoints will be discarded when the extractor is updated."
   "2.26.1":
