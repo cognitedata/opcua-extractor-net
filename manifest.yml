@@ -58,6 +58,8 @@ documentation:
   includeLeafNodes: false
   preamble:
     - docs/preamble.md
+    - docs/keyvault.md
+    - docs/header.md
 
 schema:
   rootSchema: schema/full_config.schema.json

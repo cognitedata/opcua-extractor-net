@@ -78,4 +78,3 @@ In most places where time intervals are required, you can use a CDF-like syntax 
 
 For history start and end times you can use a similar syntax. `[N][timeunit]` and `[N][timeunit]-ago`. `1d-ago` means 1 day in the past from the time history starts, and `1h` means 1 hour in the future. For instance, you can use this syntax to configure the extractor to read only recent history.
 
-## Configure the OPC UA extractor
