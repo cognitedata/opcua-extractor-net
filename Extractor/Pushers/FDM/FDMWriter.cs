@@ -47,12 +47,14 @@ namespace Cognite.OpcUa.Pushers.FDM
         private ILogger<FDMWriter> log;
         private NodeIdContext? context;
         private FdmDestinationConfig.ModelInfo modelInfo;
+        private FdmDestinationConfig fdmConfig;
         public FDMWriter(FullConfig config, CogniteDestination destination, ILogger<FDMWriter> log)
         {
             this.config = config;
             this.destination = destination;
             this.log = log;
             modelInfo = new FdmDestinationConfig.ModelInfo(config.Cognite!.MetadataTargets!.DataModels!);
+            fdmConfig = config.Cognite!.MetadataTargets!.DataModels!;
         }
 
         private async Task IngestInstances(IEnumerable<BaseInstanceWrite> instances, int chunkSize, CancellationToken token)
@@ -82,7 +84,7 @@ namespace Cognite.OpcUa.Pushers.FDM
 
             int taskNum = 0;
             await generators.RunThrottled(
-                4,
+                fdmConfig.InstanceParallelism,
                 (_) =>
                 {
                     if (chunks.Count > 1)
@@ -192,7 +194,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             var options = new JsonSerializerOptions(Oryx.Cognite.Common.jsonOptions) { WriteIndented = true };
 
             var viewsToInsert = types.Views.Values.ToList();
-            if (config.Cognite!.MetadataTargets!.DataModels!.SkipSimpleTypes)
+            if (fdmConfig.SkipSimpleTypes)
             {
                 viewsToInsert = viewsToInsert.Where(v => v.Properties.Count != 0 || types.ViewIsReferenced.GetValueOrDefault(v.ExternalId)).ToList();
             }
@@ -241,15 +243,15 @@ namespace Cognite.OpcUa.Pushers.FDM
 
             log.LogDebug("Creating {Count} containers and {Count2} views", containersToInsert.Count, viewsToInsert.Count);
 
-            foreach (var chunk in containersToInsert.ChunkBy(100))
+            foreach (var chunk in containersToInsert.ChunkBy(fdmConfig.ModelChunk))
             {
                 log.LogDebug("Creating {Count} containers", chunk.Count());
                 await destination.CogniteClient.Beta.DataModels.UpsertContainers(chunk, token);
             }
 
-            foreach (var level in viewsToInsert.ChunkByHierarchy(100, v => v.ExternalId, v => v.Implements?.FirstOrDefault()?.ExternalId!))
+            foreach (var level in viewsToInsert.ChunkByHierarchy(fdmConfig.ModelChunk, v => v.ExternalId, v => v.Implements?.FirstOrDefault()?.ExternalId!))
             {
-                foreach (var chunk in level.ChunkBy(100))
+                foreach (var chunk in level.ChunkBy(fdmConfig.ModelChunk))
                 {
                     log.LogDebug("Creating {Count} views", chunk.Count());
                     await destination.CogniteClient.Beta.DataModels.UpsertViews(chunk, token);
@@ -297,7 +299,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             var typeCollector = new NodeTypeCollector(log,
                 nodes.SelectNonNull(n => n.TypeDefinition).Where(id => !id.IsNullNodeId).ToHashSet(),
                 typeHierarchy,
-                config.Cognite!.MetadataTargets!.DataModels!.TypesToMap);
+                fdmConfig.TypesToMap);
 
             var typeResult = typeCollector.MapTypes();
 
@@ -322,6 +324,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             var skipped = new HashSet<NodeId>();
             int skippedCount = 0;
             log.LogInformation("Filtering {Count} references, removing any non-referenced", references.Count());
+            var seen = new HashSet<(NodeId, NodeId, NodeId)>();
             foreach (var refr in references)
             {
                 if (!refr.IsForward)
@@ -331,6 +334,8 @@ namespace Cognite.OpcUa.Pushers.FDM
                     skippedCount++;
                     continue;
                 }
+
+
 
                 if (!nodeIds.Contains(refr.Source.Id))
                 {
@@ -346,10 +351,18 @@ namespace Cognite.OpcUa.Pushers.FDM
                     skippedCount++;
                     continue;
                 }
-                if (!nodeIds.Contains(refr.Type?.Id ?? NodeId.Null))
+                if (refr.Type == null || !nodeIds.Contains(refr.Type.Id))
                 {
                     log.LogTrace("Missing type {Node} ({Source}, {Target})", refr.Type?.Id ?? NodeId.Null, refr.Source.Id, refr.Target.Id);
                     skipped.Add(refr.Type?.Id ?? NodeId.Null);
+                    skippedCount++;
+                    continue;
+                }
+
+                if (!seen.Add((refr.Source.Id, refr.Type.Id, refr.Target.Id)))
+                {
+                    log.LogTrace("Skipping reference {Source} {Type} {Target} since it has already been added",
+                        refr.Source.Id, refr.Type.Id, refr.Target.Id);
                     skippedCount++;
                     continue;
                 }
@@ -405,19 +418,19 @@ namespace Cognite.OpcUa.Pushers.FDM
             await IngestInstances(instanceBuilder.ObjectTypes
                 .Concat(instanceBuilder.ReferenceTypes)
                 .Concat(instanceBuilder.DataTypes)
-                .Concat(typeMeta), 1000, token);
+                .Concat(typeMeta), fdmConfig.InstanceChunk, token);
 
             // Then ingest variable types
             log.LogInformation("Ingesting {Count} variable types", instanceBuilder.VariableTypes.Count);
-            await IngestInstances(instanceBuilder.VariableTypes, 1000, token);
+            await IngestInstances(instanceBuilder.VariableTypes, fdmConfig.InstanceChunk, token);
 
             // Ingest instances
             log.LogInformation("Ingesting {Count1} objects, {Count2} variables", instanceBuilder.Objects.Count, instanceBuilder.Variables.Count);
-            await IngestInstances(instanceBuilder.Objects.Concat(instanceBuilder.Variables), 1000, token);
+            await IngestInstances(instanceBuilder.Objects.Concat(instanceBuilder.Variables), fdmConfig.InstanceChunk, token);
 
             // Finally, ingest edges
             log.LogInformation("Ingesting {Count} references", instanceBuilder.References.Count);
-            await IngestInstances(instanceBuilder.References, 1000, token);
+            await IngestInstances(instanceBuilder.References, fdmConfig.InstanceChunk, token);
 
             return true;
         }
@@ -587,7 +600,7 @@ namespace Cognite.OpcUa.Pushers.FDM
 
         public async Task DeleteInFdm(DeletedNodes deletes, SessionContext sessionContext, CancellationToken token)
         {
-            if (!(config.Cognite?.MetadataTargets?.DataModels?.EnableDeletes ?? false)) return;
+            if (!fdmConfig.EnableDeletes) return;
 
             // First find all edges pointing to or from the nodes we are deleting.
             // We pretty much need to do this, since we don't know if anyone has added edges to the nodes.

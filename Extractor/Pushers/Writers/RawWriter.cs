@@ -366,7 +366,7 @@ namespace Cognite.OpcUa.Pushers.Writers
         {
             if (!keys.Any()) return;
             var keySet = new HashSet<string>(keys);
-            var rows = await WriterUtils.GetRawRows(dbName, tableName, destination, keys, log, token);
+            var rows = await WriterUtils.GetRawRows(dbName, tableName, destination, null, log, token);
             var trueElem = JsonDocument.Parse("true").RootElement;
             var toMark = rows.Where(r => keySet.Contains(r.Key)).ToList();
             foreach (var row in toMark)
