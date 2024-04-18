@@ -67,6 +67,14 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.27.4":
+    description: Minor fixes to the FDM target prototype.
+    changelog:
+      fixed:
+        - Fixed issue causing errors on duplicate references in FDM writer.
+        - Fixed bug causing requests to fail on marking many raw rows as deleted.
+      added:
+        - Added configuration for controlling FDM chunk sizes.
   "2.27.3":
     description: Documentation updates.
   "2.27.2":
