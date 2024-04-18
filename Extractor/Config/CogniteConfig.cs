@@ -298,5 +298,20 @@ namespace Cognite.OpcUa.Config
         /// Types, and type-related nodes will not be deleted.
         /// </summary>
         public bool EnableDeletes { get; set; }
+
+        /// <summary>
+        /// Maximum number of parallel instance insertion requests.
+        /// </summary>
+        public int InstanceParallelism { get; set; } = 4;
+
+        /// <summary>
+        /// Number of instances per instance create request.
+        /// </summary>
+        public int InstanceChunk { get; set; } = 1000;
+
+        /// <summary>
+        /// Number of views and containers per create request.
+        /// </summary>
+        public int ModelChunk { get; set; } = 100;
     }
 }
