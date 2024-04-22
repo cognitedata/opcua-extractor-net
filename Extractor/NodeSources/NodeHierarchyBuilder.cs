@@ -23,7 +23,7 @@ namespace Cognite.OpcUa.NodeSources
         private readonly ILogger logger;
         private readonly IEnumerable<NodeId> nodesToRead;
         private readonly UAClient client;
-        private readonly IEnumerable<NodeTransformation>? transformations;
+        private readonly TransformationCollection? transformations;
         private readonly UAExtractor extractor;
 
         // Nodes that are treated as variables (and synchronized) in the source system
@@ -49,7 +49,7 @@ namespace Cognite.OpcUa.NodeSources
             IEnumerable<NodeId> nodesToRead,
             UAClient client,
             UAExtractor extractor,
-            IEnumerable<NodeTransformation>? transformations,
+            TransformationCollection? transformations,
             ILogger logger)
         {
             this.nodeSource = nodeSource;
@@ -143,7 +143,7 @@ namespace Cognite.OpcUa.NodeSources
                     // Set properties inherited from parents, if present
                     UpdateFromParent(res.Nodes, node);
                     // Apply transformations
-                    ApplyTransformations(node);
+                    transformations?.ApplyTransformations(logger, node, client.NamespaceTable, config);
                     // Check if we should ignore it, need to do it here before we modify the parent.
                     if (node.Ignore) continue;
                     // Check if the parent node should be converted to an object.
@@ -276,16 +276,6 @@ namespace Cognite.OpcUa.NodeSources
                 {
                     vb.IsRawProperty = true;
                 }
-            }
-        }
-
-        private void ApplyTransformations(BaseUANode node)
-        {
-            if (transformations == null) return;
-
-            foreach (var trns in transformations)
-            {
-                trns.ApplyTransformation(logger, node, client.NamespaceTable!, config);
             }
         }
 

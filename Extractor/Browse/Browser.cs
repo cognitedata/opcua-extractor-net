@@ -39,7 +39,7 @@ namespace Cognite.OpcUa.Browse
 
         private readonly BlockingResourceCounter continuationPoints;
 
-        public IEnumerable<NodeFilter>? IgnoreFilters { get; set; }
+        public TransformationCollection? Transformations { get; set; }
 
         public Browser(ILogger<Browser> log, UAClient client, FullConfig config)
         {
@@ -234,7 +234,7 @@ namespace Cognite.OpcUa.Browse
             var options = new DirectoryBrowseParams
             {
                 Callback = GetDictWriteCallback(result),
-                Filters = doFilter ? IgnoreFilters : null,
+                Transformations = doFilter ? Transformations : null,
                 InitialParams = baseParams,
                 MaxNodeParallelism = throttling.MaxNodeParallelism,
                 NodesChunk = config.Source.BrowseNodesChunk,
@@ -287,7 +287,7 @@ namespace Cognite.OpcUa.Browse
                 Callback = callback,
                 NodesChunk = config.Source.BrowseNodesChunk,
                 MaxDepth = maxDepth,
-                Filters = doFilter ? IgnoreFilters : null,
+                Transformations = doFilter ? Transformations : null,
                 InitialParams = baseParams,
                 MaxNodeParallelism = throttling.MaxNodeParallelism
             };
