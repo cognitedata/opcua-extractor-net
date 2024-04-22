@@ -20,6 +20,7 @@ using Cognite.OpcUa.Nodes;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using Serilog.Debugging;
+using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -99,7 +100,7 @@ namespace Cognite.OpcUa
             return MatchBasic(name, id ?? NodeId.Null, typeDefinition, namespaces, nc);
         }
 
-        public bool IsBasic => Description != null && IsArray != null && Parent != null && Historizing != null;
+        public bool IsBasic => Description == null && IsArray == null && Parent == null && Historizing == null;
 
         /// <summary>
         /// Test for match using only basic properties available in when reading from the server.
@@ -377,7 +378,7 @@ namespace Cognite.OpcUa
 
         public bool NoEarlyFiltering => hasInclude && hasNonBasicIncludeAfterIgnore;
 
-        public bool ShouldIgnoreBasic(string displayName, NodeId id, NodeId typeDefinition, NamespaceTable namespaces, NodeClass nc)
+        public bool ShouldIncludeBasic(string displayName, NodeId id, NodeId typeDefinition, NamespaceTable namespaces, NodeClass nc)
         {
             bool include = true;
             if (NoEarlyFiltering)

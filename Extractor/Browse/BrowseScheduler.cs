@@ -140,7 +140,7 @@ namespace Cognite.OpcUa
         public bool NodeFilter(string displayName, NodeId id, NodeId typeDefinition, NodeClass nc)
         {
             if (transformations == null) return true;
-            return transformations.ShouldIgnoreBasic(displayName, id, typeDefinition, client.NamespaceTable, nc);
+            return transformations.ShouldIncludeBasic(displayName, id, typeDefinition, client.NamespaceTable, nc);
         }
 
         protected override IEnumerable<BrowseNode> HandleTaskResult(IChunk<BrowseNode> chunk, CancellationToken token)
