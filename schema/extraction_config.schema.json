@@ -134,15 +134,26 @@
                 "type": "object",
                 "unevaluatedProperties": false,
                 "description": "A single transformation.",
+                "examples": [
+                    {
+                        "filter": {
+                            "name": "Cognite$",
+                            "nodeClass": "Object"
+                        },
+                        "type": "Include"
+                    }
+                ],
                 "properties": {
                     "type": {
                         "type": "string",
-                        "description": "Transformation type. `Ignore` ignores the node and all descendants, `DropSubscriptions` prevents the extractor from subscribing to this node, `Property` converts time series and their descendants into metadata, `TimeSeries` converts metadata into time series, `DropSubscriptions` prevents the extractor from subscribing to events or data points on matching nodes.",
+                        "description": "Transformation type. `Ignore` ignores the node and all descendants, `DropSubscriptions` prevents the extractor from subscribing to this node, `Property` converts time series and their descendants into metadata, `TimeSeries` converts metadata into time series, `DropSubscriptions` prevents the extractor from subscribing to events or data points on matching nodes, `AsEvents` turns time series data points into events, `Include` inverts an ignore filter. If any `Include` filter is present, all nodes are ignored by default.",
                         "enum": [
                             "Ignore",
                             "DropSubscriptions",
                             "Property",
-                            "TimeSeries"
+                            "TimeSeries",
+                            "AsEvents",
+                            "Include"
                         ]
                     },
                     "filter": {
