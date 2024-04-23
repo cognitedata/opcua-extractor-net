@@ -44,7 +44,7 @@ extractor:
       url: "https://docs.cognite.com/cdf/integration/guides/extraction/opc_ua/opc_ua_cli"
       type: "externalDocumentation"
     - name: Configuration
-      url: "https://docs.cognite.com/cdf/integration/guides/extraction/opc_ua/opc_ua_configuration"
+      url: "https://docs.cognite.com/cdf/integration/guides/extraction/configuration/opcua"
       type: "externalDocumentation"
     - name: Metrics
       url: "https://docs.cognite.com/cdf/integration/guides/extraction/opc_ua/opc_ua_metrics"
@@ -67,6 +67,8 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.27.5":
+    description: Minor documentation updates.
   "2.27.4":
     description: Minor fixes to the FDM target prototype.
     changelog:
