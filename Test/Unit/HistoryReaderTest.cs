@@ -46,7 +46,7 @@ namespace Test.Unit
             tester.Server.Issues.HistoryReadStatusOverride.Clear();
         }
 
-        [Fact(Timeout = 10000)]
+        [Fact]
         public void TestHistoryDataHandler()
         {
             using var extractor = tester.BuildExtractor();
@@ -181,7 +181,7 @@ namespace Test.Unit
             Assert.Equal(0, node.TotalRead);
             Assert.False(state1.IsFrontfilling);
         }
-        [Fact(Timeout = 10000)]
+        [Fact]
         public void TestHistoryEventHandler()
         {
             using var extractor = tester.BuildExtractor();
