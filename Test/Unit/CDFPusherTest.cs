@@ -11,7 +11,7 @@ using Cognite.OpcUa.Pushers.Writers;
 using Cognite.OpcUa.Subscriptions;
 using Cognite.OpcUa.Types;
 using CogniteSdk;
-using Com.Cognite.V1.Timeseries.Proto.Alpha;
+using Com.Cognite.V1.Timeseries.Proto.Beta;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
