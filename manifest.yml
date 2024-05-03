@@ -67,6 +67,11 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.27.6":
+    description: Fixes edge-case caused by writing to FDM and clean at the same time.
+    changelog:
+      fixed:
+        - Fixed extractor failing to upload to clean when some nodes were included from outside the main tree.
   "2.27.5":
     description: Minor documentation updates.
   "2.27.4":
