@@ -78,6 +78,11 @@ namespace Cognite.OpcUa
         {
             lock (dataPointMutex)
             {
+                while (dataPointQueue.Count >= maxDpCount)
+                {
+                    Monitor.Wait(dataPointMutex);
+                }
+
                 dataPointQueue.Enqueue(dp);
                 if (dataPointQueue.Count >= maxDpCount) extractor.Looper.Scheduler.TryTriggerTask("Pushers");
             }
@@ -91,9 +96,12 @@ namespace Cognite.OpcUa
             if (dps == null) return;
             lock (dataPointMutex)
             {
-                foreach (var dp in dps) dataPointQueue.Enqueue(dp);
-                if (dataPointQueue.Count >= maxDpCount) extractor.Looper.Scheduler.TryTriggerTask("Pushers");
-
+                foreach (var dp in dps)
+                {
+                    while (dataPointQueue.Count >= maxDpCount) Monitor.Wait(dataPointMutex);
+                    dataPointQueue.Enqueue(dp);
+                    if (dataPointQueue.Count >= maxDpCount) extractor.Looper.Scheduler.TryTriggerTask("Pushers");
+                }
             }
         }
         /// <summary>
@@ -104,6 +112,7 @@ namespace Cognite.OpcUa
         {
             lock (eventMutex)
             {
+                while (eventQueue.Count >= maxEventCount) Monitor.Wait(eventMutex);
                 eventQueue.Enqueue(evt);
                 if (eventQueue.Count >= maxEventCount) extractor.Looper.Scheduler.TryTriggerTask("Pushers");
             }
@@ -117,8 +126,12 @@ namespace Cognite.OpcUa
             if (events == null) return;
             lock (eventMutex)
             {
-                foreach (var evt in events) eventQueue.Enqueue(evt);
-                if (eventQueue.Count >= maxEventCount) extractor.Looper.Scheduler.TryTriggerTask("Pushers");
+                foreach (var evt in events)
+                {
+                    while (eventQueue.Count >= maxEventCount) Monitor.Wait(eventMutex);
+                    eventQueue.Enqueue(evt);
+                    if (eventQueue.Count >= maxEventCount) extractor.Looper.Scheduler.TryTriggerTask("Pushers");
+                }
             }
         }
         /// <summary>
@@ -147,6 +160,7 @@ namespace Cognite.OpcUa
                     }
                     pointRanges[dp.Id] = range.Extend(dp.Timestamp, dp.Timestamp);
                 }
+                Monitor.PulseAll(dataPointMutex);
             }
 
 
@@ -230,6 +244,7 @@ namespace Cognite.OpcUa
 
                     eventRanges[evt.EmittingNode] = range.Extend(evt.Time, evt.Time);
                 }
+                Monitor.PulseAll(eventMutex);
             }
 
             var results = await Task.WhenAll(passingPushers.Select(pusher => pusher.PushEvents(eventList, token)));

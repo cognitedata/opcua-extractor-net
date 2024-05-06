@@ -67,6 +67,11 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.28.0":
+    description: Limit the number of nodes and edges the extractor will buffer at a time.
+    changelog:
+      changed:
+        - The extractor will now never buffer more than 1 million datapoints, or 100 000 events.
   "2.27.6":
     description: Fixes edge-case caused by writing to FDM and clean at the same time.
     changelog:
