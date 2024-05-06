@@ -408,7 +408,7 @@ version: 1
             Assert.Equal("working dir", tSetup.WorkingDir);
         }
 
-        [Fact(Timeout = 30000)]
+        [Fact]
         public void TestVerifyAndBuildConfig()
         {
             var log = new DummyLogger();

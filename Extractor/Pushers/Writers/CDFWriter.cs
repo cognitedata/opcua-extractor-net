@@ -8,6 +8,7 @@ using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.Pushers.FDM;
 using Cognite.OpcUa.Types;
+using CogniteSdk;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 
@@ -166,7 +167,15 @@ namespace Cognite.OpcUa.Pushers.Writers
             catch (Exception ex)
             {
                 log.LogError(ex, "Failed to push nodes to CDF Data Models: {Message}", ex.Message);
-                pushResult = false;
+                if (ex is ResponseException rex && rex.Code < 500)
+                {
+                    log.LogWarning("Failed to push nodes to Data Models with a non-transient error, pushing will not be retried.");
+                    pushResult = true;
+                }
+                else
+                {
+                    pushResult = false;
+                }
             }
             result.Variables &= pushResult;
             result.Objects &= pushResult;
