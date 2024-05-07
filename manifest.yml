@@ -67,6 +67,11 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.28.1":
+    description: Fix bug causing the extractor to fail to retry token requests.
+    changelog:
+      fixed:
+        - Properly retry failed token requests.
   "2.28.0":
     description: Limit the number of nodes and edges the extractor will buffer at a time.
     changelog:
