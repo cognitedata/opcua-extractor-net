@@ -176,6 +176,11 @@ namespace Cognite.OpcUa.Nodes
         public UADataPoint ToDataPoint(IUAClientAccess client, object value, DateTime timestamp, string id, StatusCode status, bool stringOverride = false)
         {
             if (timestamp == DateTime.MinValue) timestamp = DateTime.UtcNow;
+            if (value is null)
+            {
+                return new UADataPoint(timestamp, id, IsString, status);
+            }
+
             if (IsString || stringOverride)
             {
                 return new UADataPoint(timestamp, id, client.StringConverter.ConvertToString(value, EnumValues), status);

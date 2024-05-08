@@ -56,7 +56,7 @@ namespace Cognite.OpcUa
         public void UpdateMetricValue(Variant vt)
         {
             var dp = dt.ToDataPoint(client, vt, DateTime.UtcNow, Id, StatusCodes.Good);
-            if (dp.IsString) return;
+            if (dp.IsString || !dp.DoubleValue.HasValue) return;
             metric.Set(dp.DoubleValue.Value);
         }
     }

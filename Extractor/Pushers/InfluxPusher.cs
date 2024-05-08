@@ -94,7 +94,7 @@ namespace Cognite.OpcUa
             foreach (var lBuffer in points)
             {
                 var buffer = lBuffer;
-                if (buffer.Timestamp < minTs || buffer.Timestamp > maxTs)
+                if (buffer.Timestamp < minTs || buffer.Timestamp > maxTs || !buffer.DoubleValue.HasValue)
                 {
                     skippedDatapoints.Inc();
                     continue;

@@ -203,7 +203,7 @@ namespace Cognite.OpcUa.Pushers
                     continue;
                 }
 
-                if (!dp.IsString && (!double.IsFinite(dp.DoubleValue.Value)
+                if (!dp.IsString && (dp.DoubleValue.HasValue && !double.IsFinite(dp.DoubleValue.Value)
                     || dp.DoubleValue >= CogniteUtils.NumericValueMax
                     || dp.DoubleValue <= CogniteUtils.NumericValueMin))
                 {
@@ -483,42 +483,18 @@ namespace Cognite.OpcUa.Pushers
         private async Task<bool> PushDataPointsChunk(IDictionary<string, IEnumerable<UADataPoint>> dataPointList, CancellationToken token)
         {
             int count = 0;
-            var inserts = dataPointList.Select(kvp =>
+            var inserts = dataPointList.ToDictionary(
+                pair => Identity.Create(pair.Key),
+                pair => pair.Value.SelectNonNull(dp => dp.ToCDFDataPoint(fullConfig.Extraction.StatusCodes.IngestStatusCodes, log)));
+            var (points, errors) = Sanitation.CleanDataPointsRequest(inserts, SanitationMode.Clean, config.NonFiniteReplacement);
+            var req = inserts.ToInsertRequest();
+
+            foreach (var error in errors)
             {
-                (string externalId, var values) = kvp;
-                var item = new DataPointInsertionItem
-                {
-                    ExternalId = externalId
-                };
-                if (values.First().IsString)
-                {
-                    item.StringDatapoints = new StringDatapoints();
-                    item.StringDatapoints.Datapoints.AddRange(values.Select(ipoint =>
-                        new StringDatapoint
-                        {
-                            Timestamp = new DateTimeOffset(ipoint.Timestamp).ToUnixTimeMilliseconds(),
-                            Value = ipoint.StringValue
-                        }));
-                }
-                else
-                {
-                    item.NumericDatapoints = new NumericDatapoints();
-                    item.NumericDatapoints.Datapoints.AddRange(values.Select(ipoint =>
-                        new NumericDatapoint
-                        {
-                            Timestamp = new DateTimeOffset(ipoint.Timestamp).ToUnixTimeMilliseconds(),
-                            Value = ipoint.DoubleValue ?? 0.0
-                        }));
-                }
+                log.LogCogniteError(error, RequestType.CreateDatapoints, true);
+            }
 
-                count += values.Count();
-                return item;
-            });
-
-            var req = new DataPointInsertionRequest();
-            req.Items.AddRange(inserts);
             if (req.Items.Count == 0) return true;
-
 
             var data = req.ToByteArray();
             var msg = baseBuilder
