@@ -67,6 +67,11 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.29.0":
+    description: Full release of status codes on datapoints.
+    changelog:
+      changed:
+        - It is now possible to ingest null values for datapoints if the status is bad.
   "2.28.1":
     description: Fix bug causing the extractor to fail to retry token requests.
     changelog:
