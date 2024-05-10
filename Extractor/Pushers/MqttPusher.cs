@@ -482,7 +482,6 @@ namespace Cognite.OpcUa.Pushers
         /// <returns>True on success, false on failure</returns>
         private async Task<bool> PushDataPointsChunk(IDictionary<string, IEnumerable<UADataPoint>> dataPointList, CancellationToken token)
         {
-            int count = 0;
             var inserts = dataPointList.ToDictionary(
                 pair => Identity.Create(pair.Key),
                 pair => pair.Value.SelectNonNull(dp => dp.ToCDFDataPoint(fullConfig.Extraction.StatusCodes.IngestStatusCodes, log)));
@@ -513,6 +512,9 @@ namespace Cognite.OpcUa.Pushers
             }
 
             dataPointPushes.Inc();
+            int count = req.Items.Sum(
+                x => x.NumericDatapoints?.Datapoints?.Count ?? 0
+                + x.StringDatapoints?.Datapoints?.Count ?? 0);
             dataPointsCounter.Inc(count);
 
             return true;
