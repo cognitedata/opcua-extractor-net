@@ -2,7 +2,7 @@
     "$id": "failure_buffer_config.schema.json",
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
-    "description": "If the connection to CDF goes down, the OPC UA extractor supports buffering data points and events in a local file or InfluxDB. This is helpful if the connection is unstable, and the server does not provide its own historical data.",
+    "description": "If the connection to CDF goes down, the OPC UA extractor supports buffering data points and events in a local file. This is helpful if the connection is unstable, and the server does not provide its own historical data.",
     "unevaluatedProperties": false,
     "properties": {
         "enabled": {
@@ -24,16 +24,6 @@
         "max-buffer-size": {
             "type": "integer",
             "description": "Set the maximum size in bytes of the buffer file. If the size of the file exceeds this number, no new datapoints or events will be written to their respective buffer files, and any further ephemeral data is lost. Note that if both datapoint and event buffers are enabled, the potential disk usage is twice this number."
-        },
-        "influx-state-store": {
-            "type": "boolean",
-            "description": "Set to `true` to enable storing the state of the InfluxDB buffer. This makes the InfluxDB buffer persistent even if the OPC UA extractor stops before it is emptied. Requires [`state-storage`](#state-storage) to be configured.",
-            "default": false
-        },
-        "influx": {
-            "type": "boolean",
-            "description": "Set to `true` to enable buffering data in InfluxDB. This requires a configured influx pusher. See [`influx`](#influx). This serves as an alternative to a local file, but should only be used if pushing to InfluxDB is already an requirement.",
-            "default": false
         }
     }
 }
