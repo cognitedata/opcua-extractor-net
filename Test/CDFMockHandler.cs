@@ -18,7 +18,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using Cognite.OpcUa;
 using CogniteSdk;
 using CogniteSdk.Beta.DataModels;
-using Com.Cognite.V1.Timeseries.Proto.Alpha;
+using Com.Cognite.V1.Timeseries.Proto.Beta;
 using Google.Protobuf;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;

@@ -448,7 +448,7 @@ namespace Test.Unit
             Assert.Equal(2, summary.Events.NumEmitters);
             Assert.Equal(1, summary.Events.NumHistEmitters);
         }
-        [Fact(Timeout = 30000)]
+        [Fact]
         public void TestNamespaceMapping()
         {
             var namespaces = new List<string>

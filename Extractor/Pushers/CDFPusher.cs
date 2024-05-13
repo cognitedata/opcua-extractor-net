@@ -146,7 +146,7 @@ namespace Cognite.OpcUa.Pushers
                 CogniteResult<DataPointInsertError> result;
                 if (fullConfig.Extraction.StatusCodes.IngestStatusCodes)
                 {
-                    result = await destination.AlphaInsertDataPointsAsync(inserts, SanitationMode.Clean, RetryMode.OnError, token);
+                    result = await destination.BetaInsertDataPointsAsync(inserts, SanitationMode.Clean, RetryMode.OnError, token);
                 }
                 else
                 {
