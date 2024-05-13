@@ -24,16 +24,6 @@
             "type": "string",
             "description": "Name of raw table or litedb collection to store information about extracted events.",
             "default": "event_states"
-        },
-        "influx-variable-store": {
-            "type": "string",
-            "description": "Name of raw table or litedb collection to store information about variable ranges in the InfluxDB failure buffer.",
-            "default": "influx_variable_states"
-        },
-        "influx-event-store": {
-            "type": "string",
-            "description": "Name of raw table or litedb collection to store information about events in the InfluxDB failure buffer.",
-            "default": "influx_event_states"
         }
     }
 }
