@@ -69,7 +69,7 @@ namespace Cognite.OpcUa
             }
 
             if (string.IsNullOrEmpty(config.Extraction.IdPrefix)) log.LogWarning("No id-prefix specified in config file");
-            if (config.Cognite == null && config.Influx == null && config.Mqtt == null) log.LogWarning("No destination system specified");
+            if (config.Cognite == null && config.Mqtt == null) log.LogWarning("No destination system specified");
             if (config.Extraction.IdPrefix == "events.") return "Do not use events. as id-prefix, as it is used internally";
             if (!string.IsNullOrWhiteSpace(config.History?.StartTime))
             {
@@ -99,11 +99,6 @@ namespace Cognite.OpcUa
             if (config.Mqtt?.Debug ?? false)
             {
                 log.LogWarning("mqtt.debug is deprecated. Use dry-run instead.");
-                config.DryRun = true;
-            }
-            if (config.Influx?.Debug ?? false)
-            {
-                log.LogWarning("influx.debug is deprecated. Use dry-run instead.");
                 config.DryRun = true;
             }
             if (config.Cognite?.DataSetId != null)
@@ -364,13 +359,6 @@ namespace Cognite.OpcUa
                 var log = provider.GetRequiredService<ILogger<CDFPusher>>();
                 if (conf.Cognite == null || dest == null || dest.CogniteClient == null) return null!;
                 return new CDFPusher(log, conf, conf.Cognite, dest, provider);
-            });
-            services.AddSingleton<IPusher, InfluxPusher>(provider =>
-            {
-                var conf = provider.GetService<FullConfig>();
-                var log = provider.GetRequiredService<ILogger<InfluxPusher>>();
-                if (conf?.Influx == null) return null!;
-                return new InfluxPusher(log, conf);
             });
             services.AddSingleton<IPusher, MQTTPusher>(provider =>
             {

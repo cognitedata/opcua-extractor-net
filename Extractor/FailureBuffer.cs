@@ -36,20 +36,14 @@ namespace Cognite.OpcUa
     /// </summary>
     public sealed class FailureBuffer
     {
-        private readonly InfluxPusher? influxPusher;
         private readonly FailureBufferConfig config;
         private readonly FullConfig fullConfig;
         private readonly UAExtractor extractor;
 
-        private readonly Dictionary<string, InfluxBufferState>? nodeBufferStates;
-        private readonly Dictionary<string, InfluxBufferState>? eventBufferStates;
-
-        public bool AnyPoints => anyPoints || fileAnyPoints;
+        public bool AnyPoints => fileAnyPoints;
         private bool fileAnyPoints;
-        private bool anyPoints;
-        public bool AnyEvents => anyEvents || fileAnyEvents;
+        public bool AnyEvents => fileAnyEvents;
         private bool fileAnyEvents;
-        private bool anyEvents;
 
         private static readonly Gauge numPointsInBuffer = Metrics.CreateGauge(
             "opcua_buffer_num_points", "The number of datapoints in the local buffer file");
@@ -64,8 +58,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="fullConfig"></param>
         /// <param name="extractor"></param>
-        /// <param name="influxPusher">InfluxPusher to use when reading from influxdb</param>
-        public FailureBuffer(ILogger<FailureBuffer> log, FullConfig fullConfig, UAExtractor extractor, InfluxPusher? influxPusher)
+        public FailureBuffer(ILogger<FailureBuffer> log, FullConfig fullConfig, UAExtractor extractor)
         {
             this.log = log;
             config = fullConfig.FailureBuffer;
@@ -92,117 +85,6 @@ namespace Cognite.OpcUa
 
                 fileAnyEvents |= new FileInfo(config.EventPath).Length > 0;
             }
-
-            if (!config.Influx) return;
-            if (influxPusher == null) throw new ConfigurationException("FailureBuffer expecting influxpusher, but none is registered");
-            this.influxPusher = influxPusher;
-
-            nodeBufferStates = new Dictionary<string, InfluxBufferState>();
-            eventBufferStates = new Dictionary<string, InfluxBufferState>();
-        }
-
-        [MemberNotNullWhen(true, nameof(nodeBufferStates))]
-        [MemberNotNullWhen(true, nameof(eventBufferStates))]
-        [MemberNotNullWhen(true, nameof(influxPusher))]
-        private bool UseInflux()
-        {
-            if (influxPusher == null) return false;
-            if (!config.Influx) return false;
-#pragma warning disable CS8775 // Member must have a non-null value when exiting in some condition. Implicit
-            return true;
-#pragma warning restore CS8775 // Member must have a non-null value when exiting in some condition.
-        }
-
-        /// <summary>
-        /// Restore influx extraction states, called on startup if influxdb buffering is enabled.
-        /// </summary>
-        /// <param name="states">Active OPC-UA states to restore for.</param>
-        /// <param name="store">Name of store to restore from</param>
-        /// <param name="map">Output dictionary</param>
-        /// <returns>True if any were retrieved</returns>
-        private async Task<bool> RestoreStates(
-            IEnumerable<UAHistoryExtractionState> states,
-            string store,
-            Dictionary<string, InfluxBufferState> map,
-            CancellationToken token)
-        {
-            if (!states.Any()) return false;
-            if (extractor.StateStorage == null) return false;
-            var influxStates = states
-                .Where(state => !state.FrontfillEnabled)
-                .Select(state => new InfluxBufferState(state))
-                .ToList();
-
-            await extractor.StateStorage.RestoreExtractionState(
-                influxStates.ToDictionary(state => state.Id),
-                store,
-                false,
-                token);
-
-            bool any = false;
-
-            foreach (var state in influxStates)
-            {
-                if (state.DestinationExtractedRange == TimeRange.Empty) continue;
-                map[state.Id] = state;
-                any |= state.DestinationExtractedRange.First <= state.DestinationExtractedRange.Last;
-            }
-            return any;
-        }
-
-        /// <summary>
-        /// Load buffer states from state storage if influxdb buffering and state storage is enabled.
-        /// </summary>
-        /// <param name="states">Variable states to read into</param>
-        /// <param name="evtStates">Event emitter states to read into</param>
-        public async Task InitializeBufferStates(
-            IEnumerable<VariableExtractionState> states,
-            IEnumerable<EventExtractionState> evtStates,
-            CancellationToken token)
-        {
-            if (!UseInflux() || !config.InfluxStateStore) return;
-
-            var results = await Task.WhenAll(
-                RestoreStates(states, fullConfig.StateStorage.InfluxVariableStore, nodeBufferStates, token),
-                RestoreStates(evtStates, fullConfig.StateStorage.InfluxEventStore, eventBufferStates, token)
-            );
-
-            anyPoints |= results[0];
-            anyEvents |= results[1];
-        }
-        /// <summary>
-        /// Registred that the given datapoint ranges have been written to influxdb, and are now buffered.
-        /// </summary>
-        /// <param name="pointRanges">Written ranges</param>
-        private async Task WriteDatapointsInflux(IDictionary<string, TimeRange> pointRanges, CancellationToken token)
-        {
-            if (!UseInflux()) return;
-            if (influxPusher.DataFailing)
-            {
-                log.LogWarning("Influx pusher is failing, datapoints will not be buffered in influxdb");
-                return;
-            }
-
-            foreach ((string key, var value) in pointRanges)
-            {
-                if (!nodeBufferStates.TryGetValue(key, out var bufferState))
-                {
-                    var state = extractor.State.GetNodeState(key);
-                    if (state == null || state.FrontfillEnabled) continue;
-                    nodeBufferStates[key] = bufferState = new InfluxBufferState(state);
-                }
-                // Does not check "extractor.AllowUpdateState" since this reflects the
-                // state of data in the buffer, not the state of data in CDF.
-                bufferState.UpdateDestinationRange(value.First, value.Last);
-            }
-            if (config.InfluxStateStore && extractor.StateStorage != null && !fullConfig.DryRun)
-            {
-                log.LogInformation("Try to write {Count} states to state store", nodeBufferStates.Count);
-                await extractor.StateStorage.StoreExtractionState(nodeBufferStates.Values,
-                    fullConfig.StateStorage.InfluxVariableStore, token).ConfigureAwait(false);
-            }
-
-            anyPoints = true;
         }
 
         /// <summary>
@@ -223,11 +105,6 @@ namespace Cognite.OpcUa
             if (!points.Any()) return true;
 
             log.LogInformation("Push {Count} points to failurebuffer", points.Count());
-
-            if (config.Influx && influxPusher != null)
-            {
-                await WriteDatapointsInflux(pointRanges, token);
-            }
 
             if (!string.IsNullOrEmpty(config.DatapointPath))
             {
@@ -254,34 +131,6 @@ namespace Cognite.OpcUa
         {
             bool success = true;
 
-            if (UseInflux() && nodeBufferStates.Count != 0 && !fullConfig.DryRun)
-            {
-                try
-                {
-                    var dps = await influxPusher.ReadDataPoints(nodeBufferStates, token);
-                    log.LogInformation("Read {Count} points from influxdb failure buffer", dps.Count());
-                    var result = await Task.WhenAll(pushers
-                        .Where(pusher => pusher is not InfluxPusher)
-                        .Select(pusher => pusher.PushDataPoints(dps, token)));
-
-                    if (result.All(res => res ?? true))
-                    {
-                        if (config.InfluxStateStore && extractor.StateStorage != null)
-                        {
-                            await extractor.StateStorage.DeleteExtractionState(nodeBufferStates.Values,
-                                fullConfig.StateStorage.InfluxVariableStore, token);
-                        }
-                        nodeBufferStates.Clear();
-                        anyPoints = false;
-                    }
-                }
-                catch (Exception e)
-                {
-                    success = false;
-                    log.LogError(e, "Failed to read points from influxdb");
-                }
-            }
-
             if (!string.IsNullOrEmpty(config.DatapointPath))
             {
                 success &= await ReadDatapointsFromFile(pushers, token);
@@ -289,45 +138,6 @@ namespace Cognite.OpcUa
 
             return success;
         }
-        /// <summary>
-        /// Register that given list of events have been written to influxdb, and are now buffered.
-        /// </summary>
-        /// <param name="events">Events to register</param>
-        private async Task WriteEventsInflux(IEnumerable<UAEvent> events, CancellationToken token)
-        {
-            if (!UseInflux()) return;
-            if (influxPusher.EventsFailing)
-            {
-                log.LogWarning("Influx pusher is failing, events will not be buffered in influxdb");
-                return;
-            }
-
-            var ranges = events
-                .GroupBy(evt => evt.EmittingNode)
-                .Select(group => (Id: extractor.GetUniqueId(group.Key), Range: group.MinMax(evt => evt.Time)));
-
-            foreach (var group in ranges)
-            {
-                if (group.Id == null) continue;
-                if (!eventBufferStates.TryGetValue(group.Id, out var bufferState))
-                {
-                    var emitterState = extractor.State.GetEmitterState(group.Id);
-                    if (emitterState == null) continue;
-                    eventBufferStates[group.Id] = bufferState = new InfluxBufferState(emitterState);
-                }
-                // Does not check "extractor.AllowUpdateState" since this reflects the
-                // state of data in the buffer, not the state of data in CDF.
-                bufferState.UpdateDestinationRange(group.Range.Min, group.Range.Max);
-            }
-
-            if (config.InfluxStateStore && extractor.StateStorage != null && !fullConfig.DryRun)
-            {
-                await extractor.StateStorage.StoreExtractionState(eventBufferStates.Values,
-                    fullConfig.StateStorage.InfluxEventStore, token);
-            }
-            anyEvents = true;
-        }
-
 
         /// <summary>
         /// Write events to storage locations
@@ -346,11 +156,6 @@ namespace Cognite.OpcUa
             if (!events.Any()) return true;
 
             log.LogInformation("Push {Count} events to failurebuffer", events.Count());
-
-            if (config.Influx)
-            {
-                await WriteEventsInflux(events, token);
-            }
 
             if (!string.IsNullOrEmpty(config.EventPath))
             {
@@ -376,36 +181,6 @@ namespace Cognite.OpcUa
         public async Task<bool> ReadEvents(IEnumerable<IPusher> pushers, CancellationToken token)
         {
             bool success = true;
-
-            if (UseInflux() && eventBufferStates.Count != 0 && !fullConfig.DryRun)
-            {
-                try
-                {
-                    var events = await influxPusher.ReadEvents(eventBufferStates, token);
-
-                    log.LogInformation("Read {Count} events from influxdb failure buffer", events.Count());
-                    var result = await Task.WhenAll(pushers
-                        .Where(pusher => pusher is not InfluxPusher)
-                        .Select(pusher => pusher.PushEvents(events, token)));
-
-                    if (result.All(res => res ?? true))
-                    {
-                        if (config.InfluxStateStore && extractor.StateStorage != null)
-                        {
-                            await extractor.StateStorage.DeleteExtractionState(eventBufferStates.Values,
-                                fullConfig.StateStorage.InfluxEventStore, token);
-                        }
-                        eventBufferStates.Clear();
-                        anyEvents = false;
-                    }
-
-                }
-                catch (Exception e)
-                {
-                    success = false;
-                    log.LogError(e, "Failed to read events from influxdb");
-                }
-            }
 
             if (!string.IsNullOrEmpty(config.EventPath))
             {
