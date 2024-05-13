@@ -2,7 +2,7 @@
     "$id": "failure_buffer_config.schema.json",
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
-    "description": "If the connection to CDF goes down, the OPC UA extractor supports buffering data points and events in a local file or InfluxDB. This is helpful if the connection is unstable, and the server does not provide its own historical data.",
+    "description": "If the connection to CDF goes down, the OPC UA extractor supports buffering data points and events in a local file. This is helpful if the connection is unstable, and the server does not provide its own historical data.",
     "unevaluatedProperties": false,
     "properties": {
         "enabled": {
@@ -23,6 +23,7 @@
         },
         "max-buffer-size": {
             "type": "integer",
+<<<<<<< HEAD
             "description": "Set the maximum size in bytes of the buffer file. If the size of the file exceeds this number, no new datapoints or events will be written to their respective buffer files, and any further ephemeral data is lost. Note that if both datapoint and event buffers are enabled, the potential disk usage is twice this number. If set to 0, the buffer file has no upper limit, and will expand until the system is out of storage space, at which point the extractor will probably crash. It is highly recommended to set this if you expect the failure buffer to be used."
         },
         "influx-state-store": {
@@ -46,6 +47,9 @@
             "description": "Maximum number of events to read from the buffer and write to CDF in a single batch.",
             "default": 10000,
             "minimum": 1
+=======
+            "description": "Set the maximum size in bytes of the buffer file. If the size of the file exceeds this number, no new datapoints or events will be written to their respective buffer files, and any further ephemeral data is lost. Note that if both datapoint and event buffers are enabled, the potential disk usage is twice this number."
+>>>>>>> 3b1dbed (Remove influx (#631))
         }
     }
 }

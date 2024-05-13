@@ -412,27 +412,6 @@ cognite:
         # ExternalId of extraction pipeline
         # external-id:
 
-# Push to an influx-database. Data-variables are mapped to series with the given id.
-# Events are mapped to series with ids on the form [id].[eventId] where id is given by the source node.
-influx:
-    # Host URI, ex localhost:8086
-    host:
-    # Influx username
-    username:
-    # Influx password
-    password:
-    # Database to connect to, will not be created automatically
-    database:
-    # Replace all instances of NaN or Infinity with this floating point number. If left empty, ignore instead.
-    non-finite-replacement:
-    # Whether to read start/end-points on startup, where possible. At least one pusher should be able to do this,
-    # otherwise back/frontfill will run for the entire history every restart.
-    read-extracted-ranges: true
-    # Whether to read start/end-points for events on startup, where possible.
-    read-extracted-event-ranges: true
-    # Max number of points to send in each request to influx
-    point-chunk-size: 100000
-
 # Push to an MQTT broker. Requres a separate application to be running with access to CDF
 # that translates MQTT messages to requests to CDF and handles missing ids etc.
 # This setup allows the extractor to run in secure environments like zone 3.
@@ -518,14 +497,6 @@ mqtt:
 failure-buffer:
     # If false, buffering is disabled
     enabled: false
-    # Use an influxdb pusher as buffer. Requires an influxdb pusher.
-    # This is intended to be used if there is a local influxdb instance running.
-    # If points are received on non-historical points while the connection to CDF is down,
-    # they are read from influxdb once the connection is restored.
-    influx: false
-    # If state-storage is configured, this can be used to store the ranges of points buffered in influxdb, so that
-    # they can be recovered even if the extractor goes down.
-    influx-state-store: false
     # Store points to a binary file for datapoints. There is no safety, and a bad write can corrupt the file,
     # but it is very fast.
     # Path to a local binary buffer file for datapoints.
@@ -549,8 +520,6 @@ state-storage:
     # Names of the stores to use for each type of range. Raw tables or collections in litedb.
     variable-store: variable_states
     event-store: event_states
-    influx-variable-store: influx_variable_states
-    influx-event-store: influx_event_states
     # Interval between each write to the buffer file, in seconds. 0 or less disables the state storage.
     # Alternatively, use N[timeunit] where timeunit is w, d, h, m, s or ms.
     interval: 10

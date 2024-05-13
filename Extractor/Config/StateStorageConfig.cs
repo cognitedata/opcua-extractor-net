@@ -44,14 +44,6 @@ namespace Cognite.OpcUa.Config
         /// </summary>
         public string EventStore { get; set; } = "event_states";
         /// <summary>
-        /// Name of the raw table or litedb store for influxdb failurebuffer variable ranges.
-        /// </summary>
-        public string InfluxVariableStore { get; set; } = "influx_variable_states";
-        /// <summary>
-        /// Name of the raw table or litedb store for influxdb failurebuffer event ranges.
-        /// </summary>
-        public string InfluxEventStore { get; set; } = "influx_event_states";
-        /// <summary>
         /// Name of the raw table or litedb store for storing known object-type nodes, used for detecting deleted nodes.
         /// </summary>
         public string KnownObjectsStore { get; set; } = "known_objects";

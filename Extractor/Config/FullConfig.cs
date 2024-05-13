@@ -70,10 +70,6 @@ namespace Cognite.OpcUa.Config
         /// </summary>
         public MqttPusherConfig? Mqtt { get; set; }
         /// <summary>
-        /// Configuration for writing to an influxdb server.
-        /// </summary>
-        public InfluxPusherConfig? Influx { get; set; }
-        /// <summary>
         /// Configuration for how data should be extracted.
         /// </summary>
         public ExtractionConfig Extraction { get; set; } = null!;
