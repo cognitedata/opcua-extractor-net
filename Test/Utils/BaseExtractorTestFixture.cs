@@ -1,5 +1,4 @@
-﻿using AdysTech.InfluxDB.Client.Net;
-using Cognite.OpcUa.Pushers.Writers;
+﻿using Cognite.OpcUa.Pushers.Writers;
 using Cognite.Extractor.Configuration;
 using Cognite.Extractor.StateStorage;
 using Cognite.Extractor.Testing;
@@ -132,38 +131,6 @@ namespace Test.Utils
             ext.InitExternal(Source.Token);
 
             return ext;
-        }
-
-        public (InfluxPusher pusher, InfluxDBClient client) GetInfluxPusher(string dbName, bool clear = true)
-        {
-            if (Config.Influx == null)
-            {
-                Config.Influx = new InfluxPusherConfig();
-            }
-            Config.Influx.Database = dbName;
-            Config.Influx.Host ??= "http://localhost:8086";
-
-            var client = new InfluxDBClient(Config.Influx.Host, Config.Influx.Username, Config.Influx.Password);
-            if (clear)
-            {
-                ClearLiteDB(client).Wait();
-            }
-            var pusher = new InfluxPusher(Provider.GetRequiredService<ILogger<InfluxPusher>>(), Config);
-            return (pusher, client);
-        }
-
-        public async Task ClearLiteDB(InfluxDBClient client)
-        {
-            if (client == null) return;
-            try
-            {
-                await client.DropDatabaseAsync(new InfluxDatabase(Config.Influx.Database));
-            }
-            catch
-            {
-                Log.LogError("Failed to drop database: {DB}", Config.Influx.Database);
-            }
-            await client.CreateDatabaseAsync(Config.Influx.Database);
         }
 
         public (CDFMockHandler, CDFPusher) GetCDFPusher()

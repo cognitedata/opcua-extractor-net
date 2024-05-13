@@ -86,7 +86,6 @@ For testing metrics, a good solution is the prom-stack found [here](https://gith
 
 To run the tests locally, run `dotnet test`, or use the `test.sh` script.
 
-Some tests require an instance of influxdb 1.8 found [here](https://portal.influxdata.com/downloads/) running on port 8086,
 and some require a version of mosquitto, found [here](https://mosquitto.org/) running on port 4060. The tests now run their own OPC-UA servers.
 
 During development it is perfectly fine to just run a subset of the tests using `dotnet test --filter MyTestMethod`. All tests run as part of CI.
