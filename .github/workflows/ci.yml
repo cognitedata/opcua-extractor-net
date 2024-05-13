@@ -2,7 +2,7 @@ name: Build and test extractor
 
 on:
     pull_request:
-        branches: [ master ]
+        branches: [ master, v3-dev ]
 
 jobs:
     common:

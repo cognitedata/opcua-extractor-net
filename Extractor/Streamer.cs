@@ -492,13 +492,7 @@ namespace Cognite.OpcUa
 
                 // The event buffer is deprecated and will be removed soon.
                 // Until it is, it only does anything useful if writing to influxdb is enabled.
-                eventState.UpdateFromStream(buffEvent, config.Influx != null);
-
-                // Either backfill/frontfill is done, or we are not outside of each respective bound
-                if ((extractor.StateStorage == null || config.StateStorage.IntervalValue.Value == Timeout.InfiniteTimeSpan)
-                    && config.Influx != null
-                    && (eventState.IsFrontfilling && buffEvent.Time > eventState.SourceExtractedRange.Last
-                        || eventState.IsBackfilling && buffEvent.Time < eventState.SourceExtractedRange.First)) continue;
+                eventState.UpdateFromStream(buffEvent);
 
                 Enqueue(buffEvent);
             }
