@@ -61,7 +61,7 @@ namespace Cognite.OpcUa
         public IEnumerable<NodeId> RootNodes { get; private set; } = null!;
         private readonly IEnumerable<IPusher> pushers;
         private readonly ConcurrentQueue<NodeId> extraNodesToBrowse = new ConcurrentQueue<NodeId>();
-        public IEnumerable<NodeTransformation>? Transformations { get; private set; }
+        public TransformationCollection? Transformations { get; private set; }
         public StringConverter StringConverter => uaClient.StringConverter;
         private PubSubManager? pubSubManager;
         public NamespaceTable? NamespaceTable => uaClient.NamespaceTable;
@@ -772,8 +772,14 @@ namespace Cognite.OpcUa
                 log.LogDebug("{Transformation}", trans.ToString());
             }
 
-            uaClient.Browser.IgnoreFilters = transformations.Where(trans => trans.Type == TransformationType.Ignore).Select(trans => trans.Filter).ToList();
-            Transformations = transformations;
+            var tfs = new TransformationCollection(transformations);
+
+            if (tfs.NoEarlyFiltering)
+            {
+                log.LogWarning("Transformations contain a non-trivial include filter after an ignore filter, early filtering will not be possible.");
+            }
+            uaClient.Browser.Transformations = tfs;
+            Transformations = tfs;
         }
 
         /// <summary>

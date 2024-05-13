@@ -19,6 +19,9 @@ using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Nodes;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
+using Serilog.Debugging;
+using System;
+using System.Collections.Generic;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -96,6 +99,9 @@ namespace Cognite.OpcUa
             if (Description != null || IsArray != null || Parent != null || Historizing != null) return false;
             return MatchBasic(name, id ?? NodeId.Null, typeDefinition, namespaces, nc);
         }
+
+        public bool IsBasic => Description == null && IsArray == null && Parent == null && Historizing == null;
+
         /// <summary>
         /// Test for match using only basic properties available in when reading from the server.
         /// </summary>
@@ -240,8 +246,7 @@ namespace Cognite.OpcUa
 
         private bool ShouldSkip(BaseUANode node, FullConfig config)
         {
-            // No reason to transform ignored nodes.
-            if (node == null || node.Ignore) return true;
+            if (node == null) return true;
 
             switch (Type)
             {
@@ -276,6 +281,10 @@ namespace Cognite.OpcUa
             {
                 switch (Type)
                 {
+                    case TransformationType.Include:
+                        node.Ignore = false;
+                        log.LogTrace("Including node {Name} {Id} due to matching include filter {Idx}", node.Name, node.Id, index);
+                        break;
                     case TransformationType.Ignore:
                         node.Ignore = true;
                         log.LogTrace("Ignoring node {Name} {Id} due to matching ignore filter {Idx}", node.Name, node.Id, index);
@@ -322,12 +331,94 @@ namespace Cognite.OpcUa
         }
     }
 
+    public class TransformationCollection
+    {
+        private readonly List<NodeTransformation> transformations;
+        private readonly bool hasInclude;
+        private readonly bool hasNonBasicInclude;
+        private readonly bool hasNonBasicIncludeAfterIgnore;
+
+        public TransformationCollection(List<NodeTransformation> transformations)
+        {
+            bool seenIgnore = false;
+            foreach (var tf in transformations)
+            {
+                if (tf.Type == TransformationType.Include)
+                {
+                    hasInclude = true;
+                    if (!tf.Filter.IsBasic)
+                    {
+                        hasNonBasicInclude = true;
+                        if (seenIgnore)
+                        {
+                            hasNonBasicIncludeAfterIgnore = true;
+                        }
+                    }
+                }
+                else if (tf.Type == TransformationType.Ignore)
+                {
+                    seenIgnore = true;
+                }
+            }
+            this.transformations = transformations;
+        }
+
+        public void ApplyTransformations(ILogger log, BaseUANode node, NamespaceTable ns, FullConfig config)
+        {
+            if (hasInclude)
+            {
+                node.Ignore = true;
+            }
+
+            foreach (var tf in transformations)
+            {
+                tf.ApplyTransformation(log, node, ns, config);
+            }
+        }
+
+        public bool NoEarlyFiltering => hasInclude && hasNonBasicIncludeAfterIgnore;
+
+        public bool ShouldIncludeBasic(string displayName, NodeId id, NodeId typeDefinition, NamespaceTable namespaces, NodeClass nc)
+        {
+            bool include = true;
+            if (NoEarlyFiltering)
+            {
+                // Since we have a non-trivial include after an ignore filter we cannot actually
+                // ignore _any_ nodes here, since it may be un-ignored later on.
+                // We log a warning about this since it may make extraction orders of magnitude
+                // more expensive.
+                return true;
+            }
+            else if (hasInclude && !hasNonBasicInclude)
+            {
+                // We only ignore by default if all includes are trivial.
+                include = false;
+            }
+
+            foreach (var tf in transformations)
+            {
+                if (!tf.Filter.IsBasic) continue;
+
+                if (tf.Type == TransformationType.Include)
+                {
+                    include |= tf.Filter.IsBasicMatch(displayName, id, typeDefinition, namespaces, nc);
+                }
+                else if (tf.Type == TransformationType.Ignore)
+                {
+                    include &= !tf.Filter.IsBasicMatch(displayName, id, typeDefinition, namespaces, nc);
+                }
+            }
+            return include;
+        }
+    }
+
     public enum TransformationType
     {
         Ignore,
         Property,
         DropSubscriptions,
         TimeSeries,
-        AsEvents
+        AsEvents,
+        Include
     }
 }
