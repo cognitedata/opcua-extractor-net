@@ -57,3 +57,12 @@ extraction:
     #   "urn:cognite:net:server": cns
     #   "urn:freeopcua:python:server": fps
     #   "http://examples.freeopcua.github.io": efg
+
+    # Configuration for ingesting status codes to CDF timeseries.
+    status-codes:
+        # Which data points to ingest to CDF.
+        # `All` ingests all datapoints, including bad.
+        # `Uncertain` ingests good and uncertain data points.
+        # `GoodOnly` ingest only good datapoints.
+        status-codes-to-ingest: All
+        ingest-status-codes: true

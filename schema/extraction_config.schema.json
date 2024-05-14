@@ -178,6 +178,48 @@
                     "default": "deleted"
                 }
             }
+        },
+        "status-codes": {
+            "type": "object",
+            "unevaluatedProperties": false,
+            "description": "Configuration for ingesting status codes to CDF timeseries.",
+            "properties": {
+                "status-codes-to-ingest": {
+                    "type": "string",
+                    "enum": [
+                        "GoodOnly",
+                        "Uncertain",
+                        "All"
+                    ],
+                    "description": "Which data points to ingest to CDF. `All` ingests all datapoints, including bad. `Uncertain` ingests good and uncertain data points. `GoodOnly` ingest only good datapoints.",
+                    "default": "GoodOnly"
+                },
+                "ingest-status-codes": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Whether to ingest status codes into the time series API."
+                }
+            }
+        },
+        "rebrowse-triggers": {
+            "type": "object",
+            "unevaluatedProperties": false,
+            "description": "Configuration for triggering rebrowse based on changes to specific nodes.",
+            "properties": {
+                "namespace-publication-date": {
+                    "type": "boolean",
+                    "description": "Indicate if the extractor should subscribe to namespacePublicationDate on the Server node.",
+                    "default": false
+                },
+                "namespaces": {
+                    "type": "array",
+                    "description": "A list of namespace URIs used to filter which `namespace publication data` nodes the extractor will subscribe to.",
+                    "items": {
+                        "type": "string",
+                        "description": "A namespace URI."
+                    }
+                }
+            }
         }
     },
     "$defs": {
@@ -338,48 +380,6 @@
                 "parent": {
                     "$ref": "raw-node-filter",
                     "description": "Another filter instance which is applied to the parent node."
-                }
-            }
-        },
-        "rebrowse-triggers": {
-            "type": "object",
-            "unevaluatedProperties": false,
-            "description": "Configuration for triggering rebrowse based on changes to specific nodes.",
-            "properties": {
-                "namespace-publication-date": {
-                    "type": "boolean",
-                    "description": "Indicate if the extractor should subscribe to namespacePublicationDate on the Server node.",
-                    "default": false
-                },
-                "namespaces": {
-                    "type": "array",
-                    "description": "A list of namespace URIs used to filter which `namespace publication data` nodes the extractor will subscribe to.",
-                    "items": {
-                        "type": "string",
-                        "description": "A namespace URI."
-                    }
-                }
-            }
-        },
-        "status-codes": {
-            "type": "object",
-            "unevaluatedProperties": false,
-            "description": "ALPHA: Configuration for ingesting status codes to CDF timeseries.",
-            "properties": {
-                "status-codes-to-ingest": {
-                    "type": "string",
-                    "enum": [
-                        "GoodOnly",
-                        "Uncertain",
-                        "All"
-                    ],
-                    "description": "Which data points to ingest to CDF. `All` ingests all datapoints, including bad. `Uncertain` ingests good and uncertain data points. `GoodOnly` ingest only good datapoints.",
-                    "default": "GoodOnly"
-                },
-                "ingest-status-codes": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "Whether to ingest status codes into the time series API."
                 }
             }
         }

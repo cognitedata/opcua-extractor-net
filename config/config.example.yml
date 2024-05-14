@@ -834,7 +834,7 @@ extraction:
         # Added to metadata, or as a column in Raw.
         delete-marker: "deleted"
 
-    # ALPHA: Configuration for ingesting status codes to CDF timeseries.
+    # Configuration for ingesting status codes to CDF timeseries.
     status-codes:
         # Which data points to ingest to CDF.
         # `All` ingests all datapoints, including bad.

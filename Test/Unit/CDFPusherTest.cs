@@ -11,7 +11,7 @@ using Cognite.OpcUa.Pushers.Writers;
 using Cognite.OpcUa.Subscriptions;
 using Cognite.OpcUa.Types;
 using CogniteSdk;
-using Com.Cognite.V1.Timeseries.Proto.Beta;
+using Com.Cognite.V1.Timeseries.Proto;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
@@ -217,6 +217,32 @@ namespace Test.Unit
             Assert.Equal(StatusCodes.Uncertain, idps[2].Status.Code);
             Assert.Equal(StatusCodes.UncertainDataSubNormal, idps[3].Status.Code);
             Assert.Equal(StatusCodes.GoodClamped, idps[4].Status.Code);
+        }
+
+        [Fact]
+        public async Task TestPushDataPointsNull()
+        {
+            tester.Config.Extraction.StatusCodes.IngestStatusCodes = true;
+
+            handler.MockTimeseries("test-ts-double");
+
+            var start = DateTime.UnixEpoch;
+
+            var dps = new[] {
+                new UADataPoint(start, "test-ts-double", false, StatusCodes.Bad),
+                new UADataPoint(start + TimeSpan.FromSeconds(1), "test-ts-double", false, StatusCodes.Good),
+                new UADataPoint(start + TimeSpan.FromSeconds(2), "test-ts-double", false, StatusCodes.Uncertain),
+                new UADataPoint(start + TimeSpan.FromSeconds(3), "test-ts-double", false, StatusCodes.UncertainDataSubNormal),
+                new UADataPoint(start + TimeSpan.FromSeconds(4), "test-ts-double", false, StatusCodes.GoodClamped)
+            };
+
+            Assert.True(await pusher.PushDataPoints(dps, tester.Source.Token));
+
+            var idps = handler.Datapoints["test-ts-double"].NumericDatapoints;
+            Assert.Equal(5, idps.Count);
+
+            Assert.Equal(StatusCodes.Bad, idps[0].Status.Code);
+            Assert.True(idps[0].NullValue);
         }
 
         [Fact]

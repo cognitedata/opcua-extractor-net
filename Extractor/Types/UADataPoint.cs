@@ -21,10 +21,10 @@ using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.IO;
 using System.Text;
+using StatusCode = Opc.Ua.StatusCode;
 
 namespace Cognite.OpcUa.Types
 {
@@ -37,9 +37,8 @@ namespace Cognite.OpcUa.Types
         public string Id { get; }
         public double? DoubleValue { get; }
         public string? StringValue { get; }
-        [MemberNotNullWhen(false, nameof(DoubleValue))]
-        [MemberNotNullWhen(true, nameof(StringValue))]
-        public bool IsString => !DoubleValue.HasValue;
+
+        public bool IsString { get; }
 
         public StatusCode Status { get; }
         /// <param name="timestamp">Timestamp in ms since epoch</param>
@@ -51,6 +50,7 @@ namespace Cognite.OpcUa.Types
             Id = id;
             DoubleValue = value;
             Status = status;
+            IsString = false;
         }
         /// <param name="timestamp">Timestamp in ms since epoch</param>
         /// <param name="id">Converted id of node this belongs to, equal to externalId of timeseries in CDF</param>
@@ -61,6 +61,7 @@ namespace Cognite.OpcUa.Types
             Id = id;
             StringValue = value;
             Status = status;
+            IsString = true;
         }
         /// <summary>
         /// Copy given datapoint with given replacement value
@@ -73,6 +74,7 @@ namespace Cognite.OpcUa.Types
             Id = other.Id;
             StringValue = replacement;
             Status = other.Status;
+            IsString = true;
         }
         /// <summary>
         /// Copy given datapoint with given replacement value
@@ -85,15 +87,31 @@ namespace Cognite.OpcUa.Types
             Id = other.Id;
             DoubleValue = replacement;
             Status = other.Status;
+            IsString = false;
+        }
+
+        /// <summary>
+        /// Create a data point with null value.
+        /// </summary>
+        /// <param name="timestamp">Timestamp</param>
+        /// <param name="id">Converted id of node this belongs to</param>
+        /// <param name="isString">Whether this datapoint is for a string data type</param>
+        /// <param name="status">Status code</param>
+        public UADataPoint(DateTime timestamp, string id, bool isString, StatusCode status)
+        {
+            Timestamp = timestamp;
+            Id = id;
+            IsString = isString;
+            Status = status;
         }
 
 
         public Datapoint? ToCDFDataPoint(bool includeStatusCodes, ILogger logger)
         {
-            Extensions.Beta.StatusCode? status = null;
+            Extensions.StatusCode? status = null;
             if (includeStatusCodes)
             {
-                var res = Extensions.Beta.StatusCode.TryCreate(Status.Code, out status);
+                var res = Extensions.StatusCode.TryCreate(Status.Code, out status);
                 if (res != null)
                 {
                     logger.LogWarning("Invalid status code, skipping data point: {Status}", res);
@@ -101,17 +119,21 @@ namespace Cognite.OpcUa.Types
                 }
             }
 
-
-            Datapoint dp;
-            if (DoubleValue.HasValue)
+            if (!IsString)
             {
-                dp = new Datapoint(Timestamp, DoubleValue.Value, status);
+                if (DoubleValue.HasValue)
+                {
+                    return new Datapoint(Timestamp, DoubleValue.Value, status);
+                }
+                else
+                {
+                    return new Datapoint(Timestamp, false, status);
+                }
             }
             else
             {
-                dp = new Datapoint(Timestamp, StringValue);
+                return new Datapoint(Timestamp, StringValue);
             }
-            return dp;
         }
 
         /// <summary>
@@ -138,7 +160,15 @@ namespace Cognite.OpcUa.Types
             }
             else
             {
-                bytes.AddRange(BitConverter.GetBytes(DoubleValue.Value));
+                if (DoubleValue.HasValue)
+                {
+                    bytes.AddRange(BitConverter.GetBytes(true));
+                    bytes.AddRange(BitConverter.GetBytes(DoubleValue.Value));
+                }
+                else
+                {
+                    bytes.AddRange(BitConverter.GetBytes(false));
+                }
             }
 
             return bytes.ToArray();
@@ -169,9 +199,20 @@ namespace Cognite.OpcUa.Types
             }
             else
             {
-                if (stream.Read(buffer, 0, sizeof(double)) < sizeof(double)) return null;
-                var value = BitConverter.ToDouble(buffer, 0);
-                return new UADataPoint(ts, id, value, status);
+                if (stream.Read(buffer, 0, sizeof(bool)) < sizeof(bool)) return null;
+                var hasValue = BitConverter.ToBoolean(buffer, 0);
+
+                if (hasValue)
+                {
+                    if (stream.Read(buffer, 0, sizeof(double)) < sizeof(double)) return null;
+                    var value = BitConverter.ToDouble(buffer, 0);
+                    return new UADataPoint(ts, id, value, status);
+                }
+                else
+                {
+                    return new UADataPoint(ts, id, false, status);
+                }
+
             }
         }
         public override string ToString()
@@ -186,7 +227,7 @@ namespace Cognite.OpcUa.Types
             }
             else
             {
-                builder.AppendFormat("{0}", DoubleValue.Value);
+                builder.AppendFormat("{0}", DoubleValue);
             }
 
             builder.AppendFormat(" at {0}", Timestamp.ToString(CultureInfo.InvariantCulture));

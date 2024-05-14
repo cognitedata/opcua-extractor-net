@@ -119,7 +119,6 @@ namespace Cognite.OpcUa.Pushers
         {
             if (points == null) return null;
             Dictionary<string, List<UADataPoint>> dataPointList = points
-                .Where(dp => dp.Timestamp > DateTime.UnixEpoch)
                 .GroupBy(dp => dp.Id)
                 .Where(group => !cdfWriter.MismatchedTimeseries.Contains(group.Key)
                     && !missingTimeseries.Contains(group.Key))
@@ -144,14 +143,7 @@ namespace Cognite.OpcUa.Pushers
             try
             {
                 CogniteResult<DataPointInsertError> result;
-                if (fullConfig.Extraction.StatusCodes.IngestStatusCodes)
-                {
-                    result = await destination.BetaInsertDataPointsAsync(inserts, SanitationMode.Clean, RetryMode.OnError, token);
-                }
-                else
-                {
-                    result = await destination.InsertDataPointsAsync(inserts, SanitationMode.Clean, RetryMode.OnError, token);
-                }
+                result = await destination.InsertDataPointsAsync(inserts, SanitationMode.Clean, RetryMode.OnError, token);
 
                 int realCount = count;
 
@@ -203,7 +195,7 @@ namespace Cognite.OpcUa.Pushers
             }
             catch (Exception e)
             {
-                log.LogError("Failed to push {Count} points to CDF: {Message}", count, e.Message);
+                log.LogError(e, "Failed to push {Count} points to CDF: {Message}", count, e.Message);
                 dataPointPushFailures.Inc();
                 // Return false indicating unexpected failure if we want to buffer.
                 return false;

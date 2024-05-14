@@ -18,7 +18,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using Cognite.OpcUa;
 using CogniteSdk;
 using CogniteSdk.Beta.DataModels;
-using Com.Cognite.V1.Timeseries.Proto.Beta;
+using Com.Cognite.V1.Timeseries.Proto;
 using Google.Protobuf;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
@@ -602,6 +602,10 @@ namespace Test
                     value = (new List<NumericDatapoint>(), new List<StringDatapoint>());
                     Datapoints[item.ExternalId] = value;
                 }
+                log.LogInformation("Dps to {Id}: {Num} {Str}",
+                    item.ExternalId,
+                    item.NumericDatapoints?.Datapoints?.Count,
+                    item.StringDatapoints?.Datapoints?.Count);
                 if (item.DatapointTypeCase == DataPointInsertionItem.DatapointTypeOneofCase.NumericDatapoints)
                 {
                     log.LogInformation("{Count} numeric datapoints to {Id}", item.NumericDatapoints.Datapoints.Count, item.ExternalId);

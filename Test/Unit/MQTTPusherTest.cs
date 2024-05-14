@@ -152,7 +152,7 @@ namespace Test.Unit
             Assert.Equal("string", handler.Datapoints["test-ts-string"].StringDatapoints.First().Value);
 
             Assert.Equal(2, handler.Datapoints.Count);
-            Assert.True(CommonTestUtils.TestMetricValue("opcua_datapoints_pushed_mqtt", 5));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_datapoints_pushed_mqtt", 5, tester.Log));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_datapoint_pushes_mqtt", 1));
 
             // Mismatched timeseries, handled by bridge

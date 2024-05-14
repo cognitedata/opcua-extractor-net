@@ -94,13 +94,14 @@ namespace Cognite.OpcUa
             foreach (var lBuffer in points)
             {
                 var buffer = lBuffer;
-                if (buffer.Timestamp < minTs || buffer.Timestamp > maxTs)
+                if (buffer.Timestamp < minTs || buffer.Timestamp > maxTs
+                    || !buffer.DoubleValue.HasValue && buffer.StringValue is null)
                 {
                     skippedDatapoints.Inc();
                     continue;
                 }
 
-                if (!buffer.IsString && !double.IsFinite(buffer.DoubleValue.Value))
+                if (!buffer.IsString && buffer.DoubleValue.HasValue && !double.IsFinite(buffer.DoubleValue.Value))
                 {
                     if (config.NonFiniteReplacement != null)
                     {
