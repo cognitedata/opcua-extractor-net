@@ -30,7 +30,7 @@ namespace Cognite.OpcUa
 {
     internal class DirectoryBrowseParams
     {
-        public IEnumerable<NodeFilter>? Filters { get; set; }
+        public TransformationCollection? Transformations { get; set; }
         public Action<ReferenceDescription, NodeId, bool>? Callback { get; set; }
         public int NodesChunk { get; set; }
         public int MaxNodeParallelism { get; set; }
@@ -43,7 +43,7 @@ namespace Cognite.OpcUa
         private readonly UAClient client;
         private readonly DirectoryBrowseParams options;
 
-        private readonly IEnumerable<NodeFilter>? filters;
+        private readonly TransformationCollection? transformations;
 
         private readonly Action<ReferenceDescription, NodeId, bool>? callback;
         private readonly ISet<NodeId> localVisitedNodes = new HashSet<NodeId>();
@@ -85,7 +85,7 @@ namespace Cognite.OpcUa
 
             baseParams = options.InitialParams;
 
-            filters = options.Filters;
+            transformations = options.Transformations;
             if (baseParams.Nodes.Count != 0)
             {
                 foreach (var node in baseParams.Nodes)
@@ -139,9 +139,8 @@ namespace Cognite.OpcUa
         /// <returns>True if the node should be kept</returns>
         public bool NodeFilter(string displayName, NodeId id, NodeId typeDefinition, NodeClass nc)
         {
-            if (filters == null) return true;
-            if (filters.Any(filter => filter.IsBasicMatch(displayName, id, typeDefinition, client.NamespaceTable!, nc))) return false;
-            return true;
+            if (transformations == null) return true;
+            return transformations.ShouldIncludeBasic(displayName, id, typeDefinition, client.NamespaceTable, nc);
         }
 
         protected override IEnumerable<BrowseNode> HandleTaskResult(IChunk<BrowseNode> chunk, CancellationToken token)

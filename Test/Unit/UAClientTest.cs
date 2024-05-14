@@ -558,20 +558,23 @@ namespace Test.Unit
             CommonTestUtils.ResetMetricValues("opcua_browse_operations", "opcua_tree_depth");
             var (callback, nodes) = UAClientTestFixture.GetCallback();
 
-            tester.Client.Browser.IgnoreFilters = new List<NodeFilter>
+            tester.Client.Browser.Transformations = new TransformationCollection(new List<NodeTransformation>
             {
-                new NodeFilter(new RawNodeFilter
-                {
-                    Name = "WideRoot"
-                })
-            };
+                new NodeTransformation(new RawNodeTransformation {
+                    Filter = new RawNodeFilter
+                    {
+                        Name = "WideRoot"
+                    },
+                    Type = TransformationType.Ignore
+                }, 0)
+            });
             try
             {
                 await tester.Client.Browser.BrowseNodeHierarchy(tester.Server.Ids.Full.Root, callback, tester.Source.Token);
             }
             finally
             {
-                tester.Client.Browser.IgnoreFilters = null;
+                tester.Client.Browser.Transformations = null;
             }
             Assert.False(nodes.ContainsKey(tester.Server.Ids.Full.WideRoot));
             Assert.Equal(152, nodes.Aggregate(0, (seed, kvp) => seed + kvp.Value.Count));
@@ -584,13 +587,16 @@ namespace Test.Unit
             CommonTestUtils.ResetMetricValues("opcua_browse_operations", "opcua_tree_depth");
             var (callback, nodes) = UAClientTestFixture.GetCallback();
 
-            tester.Client.Browser.IgnoreFilters = new List<NodeFilter>
+            tester.Client.Browser.Transformations = new TransformationCollection(new List<NodeTransformation>
             {
-                new NodeFilter(new RawNodeFilter
-                {
-                    Name = "^Sub|^Deep"
-                })
-            };
+                new NodeTransformation(new RawNodeTransformation {
+                    Filter = new RawNodeFilter
+                    {
+                        Name = "^Sub|^Deep"
+                    },
+                    Type = TransformationType.Ignore
+                }, 0)
+            });
 
             try
             {
@@ -598,7 +604,7 @@ namespace Test.Unit
             }
             finally
             {
-                tester.Client.Browser.IgnoreFilters = null;
+                tester.Client.Browser.Transformations = null;
             }
             Assert.Equal(2, nodes.Aggregate(0, (seed, kvp) => seed + kvp.Value.Count));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_browse_operations", 4));

@@ -552,5 +552,40 @@ Filter:
         NodeClass: Object
 ".ReplaceLineEndings(), result.ReplaceLineEndings());
         }
+
+        [Fact]
+        public void TestIncludeTransformation()
+        {
+            var raw = new RawNodeTransformation
+            {
+                Filter = new RawNodeFilter
+                {
+                    Name = "Test"
+                },
+                Type = TransformationType.Include
+            };
+            var tf = new NodeTransformation(raw, 0);
+
+            var tfs = new TransformationCollection(new List<NodeTransformation> { tf });
+
+            var nodes = new BaseUANode[]
+            {
+                new UAVariable(new NodeId(1), null, null, null, new NodeId("parent", 0), null),
+                new UAVariable(new NodeId(2), "OtherTest", null, null, new NodeId("parent", 0), null),
+                new UAVariable(new NodeId(3), "Test", null, null, new NodeId("parent", 0), null),
+                new UAObject(new NodeId(4), "TestTest", null, null, new NodeId("parent", 0), null),
+            };
+
+            var cfg = new FullConfig();
+            cfg.GenerateDefaults();
+            foreach (var node in nodes)
+            {
+                tfs.ApplyTransformations(log, node, nss, cfg);
+            }
+            Assert.True(nodes[0].Ignore);
+            Assert.False(nodes[1].Ignore);
+            Assert.False(nodes[2].Ignore);
+            Assert.False(nodes[3].Ignore);
+        }
     }
 }

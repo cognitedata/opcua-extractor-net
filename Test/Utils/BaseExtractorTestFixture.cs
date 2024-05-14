@@ -126,7 +126,7 @@ namespace Test.Utils
                 RemoveSubscription(SubscriptionName.DataPoints).Wait();
                 RemoveSubscription(SubscriptionName.Audit).Wait();
                 RemoveSubscription(SubscriptionName.RebrowseTriggers).Wait();
-                Client.Browser.IgnoreFilters = null;
+                Client.Browser.Transformations = null;
             }
             var ext = new UAExtractor(Config, Provider, pushers, Client, stateStore);
             ext.InitExternal(Source.Token);
