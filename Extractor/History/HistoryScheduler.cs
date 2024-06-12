@@ -465,19 +465,23 @@ namespace Cognite.OpcUa.History
 
         private bool IsNodeCompleted(HistoryReadNode node, DateTime first, DateTime last, bool anyValues)
         {
-            if (node.Completed) return true;
-
             if (maxReadLength != null)
             {
-                if (Frontfill && (historyEndTime != null || node.EndTime < historyEndTime) && node.EndTime != DateTime.MinValue)
+                // When reading with maxReadLength, the absence of a continuation point or no more values is not sufficient
+                // to determine that we're done. We _also_ need to be reading data outside of the configured time range.
+                if (Frontfill)
                 {
-                    // Not completed no matter what because we haven't reached the end of frontfill
-                    return false;
+                    if (node.EndTime != DateTime.MinValue && (historyEndTime == null || node.EndTime < historyEndTime))
+                    {
+                        return false;
+                    }
                 }
-                else if (!Frontfill && (node.EndTime <= historyStartTime))
+                else
                 {
-                    // Not completed no matter what because we haven't reached the end of backfill
-                    return false;
+                    if (node.EndTime > historyStartTime)
+                    {
+                        return false;
+                    }
                 }
             }
 
@@ -488,7 +492,8 @@ namespace Cognite.OpcUa.History
                     log.LogDebug("Setting history node {Id} to completed because a history read request returned no values", node.Id);
                     return true;
                 }
-                else if (Frontfill && first == last && last == node.State.SourceExtractedRange.Last || !Frontfill && first == last && last == node.State.SourceExtractedRange.First)
+                else if (Frontfill && first == last && last == node.State.SourceExtractedRange.Last
+                    || !Frontfill && first == last && last == node.State.SourceExtractedRange.First)
                 {
                     log.LogDebug("Setting history node {Id} to completed because only a single value with timestamp equal to the end of the range was returned {Ts}",
                         node.Id, first);
@@ -500,6 +505,11 @@ namespace Cognite.OpcUa.History
                         node.Id, historyStartTime, historyEndTime);
                     return true;
                 }
+            }
+            else if (node.ContinuationPoint == null)
+            {
+                log.LogDebug("Setting history node {Id} to completed because it received no continuation point from the server", node.Id);
+                return true;
             }
 
             return false;
@@ -580,7 +590,7 @@ namespace Cognite.OpcUa.History
                 }
             }
 
-            node.Completed |= IsNodeCompleted(node, first, last, data?.DataValues == null || data.DataValues.Count == 0);
+            node.Completed = IsNodeCompleted(node, first, last, data?.DataValues != null && data.DataValues.Count > 0);
 
             if (Frontfill)
             {
@@ -705,7 +715,7 @@ namespace Cognite.OpcUa.History
                 }
             }
 
-            node.Completed |= IsNodeCompleted(node, first, last, any);
+            node.Completed = IsNodeCompleted(node, first, last, any);
 
             if (Frontfill)
             {
