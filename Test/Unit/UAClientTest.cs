@@ -977,7 +977,6 @@ namespace Test.Unit
                     var result = node.LastResult;
                     var historyData = result as HistoryData;
                     Assert.Equal(600, historyData.DataValues.Count);
-                    Assert.False(node.Completed);
                     Assert.NotNull(node.ContinuationPoint);
                 }
 
@@ -988,7 +987,7 @@ namespace Test.Unit
                     var result = node.LastResult;
                     var historyData = result as HistoryData;
                     Assert.Equal(400, historyData.DataValues.Count);
-                    Assert.True(node.Completed);
+                    Assert.Null(node.ContinuationPoint);
                 }
             }
             finally
