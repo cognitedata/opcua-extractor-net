@@ -22,6 +22,7 @@
     <PackageReference Include="MQTTnet" Version="4.3.3.952" />
     <PackageReference Include="System.Text.Json" Version="8.0.3" />
     <PackageReference Include="Google.Protobuf" Version="3.27.0" />
+    <PackageReference Include="Nito.AsyncEx" Version="5.1.2" />
   </ItemGroup>
   <!--ItemGroup>
     <None Include="$(SolutionDir)config\**" CopyToOutputDirectory="Always" LinkBase="config\" />
