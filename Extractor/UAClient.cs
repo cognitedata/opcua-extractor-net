@@ -660,6 +660,7 @@ namespace Cognite.OpcUa
                     NodeId = node.Id,
                     ContinuationPoint = node.ContinuationPoint
                 });
+                node.ContinuationPoint = null;
             }
             if (!ids.Any()) return;
 
@@ -681,12 +682,6 @@ namespace Cognite.OpcUa
                     true,
                     ids,
                     token);
-
-                foreach (var node in readParams.Nodes)
-                {
-                    node.ContinuationPoint = null;
-                    node.Completed = true;
-                }
             }
             catch (ServiceResultException ex)
             {
@@ -742,15 +737,7 @@ namespace Cognite.OpcUa
                 LogDump("HistoryRead data", data);
 
                 node.LastResult = ExtensionObject.ToEncodeable(data.HistoryData);
-                if (data.ContinuationPoint == null)
-                {
-                    node.Completed = true;
-                    node.ContinuationPoint = null;
-                }
-                else
-                {
-                    node.ContinuationPoint = data.ContinuationPoint;
-                }
+                node.ContinuationPoint = data.ContinuationPoint;
             }
 
             log.LogDebug("Fetched historical {Type} for {NodeCount} nodes",

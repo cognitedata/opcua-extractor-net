@@ -67,6 +67,11 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.29.1":
+    description: Log more related to continuation points.
+    changelog:
+      changed:
+        - Added more logging related to continuation point and history termination.
   "2.29.0":
     description: Full release of status codes on datapoints.
     changelog:
