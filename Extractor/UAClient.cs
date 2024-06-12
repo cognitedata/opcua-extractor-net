@@ -681,12 +681,6 @@ namespace Cognite.OpcUa
                     true,
                     ids,
                     token);
-
-                foreach (var node in readParams.Nodes)
-                {
-                    node.ContinuationPoint = null;
-                    node.Completed = true;
-                }
             }
             catch (ServiceResultException ex)
             {
@@ -744,11 +738,13 @@ namespace Cognite.OpcUa
                 node.LastResult = ExtensionObject.ToEncodeable(data.HistoryData);
                 if (data.ContinuationPoint == null)
                 {
+                    log.LogDebug("Node {Id} returned no continuation point, setting to completed", node.Id);
                     node.Completed = true;
                     node.ContinuationPoint = null;
                 }
                 else
                 {
+                    log.LogTrace("Node {Id} returned a history continuation point {Val}", node.Id, data.ContinuationPoint);
                     node.ContinuationPoint = data.ContinuationPoint;
                 }
             }

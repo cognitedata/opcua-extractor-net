@@ -190,6 +190,7 @@ namespace Cognite.OpcUa.History
             }
             foreach (var item in chunk.Items)
             {
+                log.LogDebug("Aborted history read for node {Id}", item.Id);
                 item.Completed = true;
                 item.ContinuationPoint = null;
             }
@@ -462,6 +463,48 @@ namespace Cognite.OpcUa.History
                 type, pending, operations, finished, total);
         }
 
+        private bool IsNodeCompleted(HistoryReadNode node, DateTime first, DateTime last, bool anyValues)
+        {
+            if (node.Completed) return true;
+
+            if (maxReadLength != null)
+            {
+                if (Frontfill && (historyEndTime != null || node.EndTime < historyEndTime) && node.EndTime != DateTime.MinValue)
+                {
+                    // Not completed no matter what because we haven't reached the end of frontfill
+                    return false;
+                }
+                else if (!Frontfill && (node.EndTime <= historyStartTime))
+                {
+                    // Not completed no matter what because we haven't reached the end of backfill
+                    return false;
+                }
+            }
+
+            if (Config.IgnoreContinuationPoints)
+            {
+                if (!anyValues)
+                {
+                    log.LogDebug("Setting history node {Id} to completed because a history read request returned no values", node.Id);
+                    return true;
+                }
+                else if (Frontfill && first == last && last == node.State.SourceExtractedRange.Last || !Frontfill && first == last && last == node.State.SourceExtractedRange.First)
+                {
+                    log.LogDebug("Setting history node {Id} to completed because only a single value with timestamp equal to the end of the range was returned {Ts}",
+                        node.Id, first);
+                    return true;
+                }
+                else if (!Frontfill && last <= historyStartTime || Frontfill && historyEndTime != null && first >= historyEndTime)
+                {
+                    log.LogDebug("Setting history node {Id} to completed because all values are outside of (start-time, end-time), ({St}, {Et})",
+                        node.Id, historyStartTime, historyEndTime);
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
 
         /// <summary>
         /// Handle the result of a historyReadRaw. Takes information about the read, updates states and sends datapoints to the streamer.
@@ -537,25 +580,7 @@ namespace Cognite.OpcUa.History
                 }
             }
 
-            if (Config.IgnoreContinuationPoints)
-            {
-                node.Completed = data?.DataValues == null || data.DataValues.Count == 0
-                    || Frontfill && first == last && last == node.State.SourceExtractedRange.Last
-                    || !Frontfill && first == last && last == node.State.SourceExtractedRange.First
-                    || !Frontfill && last <= historyStartTime;
-            }
-
-            if (maxReadLength != null)
-            {
-                if (Frontfill)
-                {
-                    node.Completed &= historyEndTime != null && node.EndTime >= historyEndTime || node.EndTime == DateTime.MinValue;
-                }
-                else
-                {
-                    node.Completed &= node.EndTime <= historyStartTime;
-                }
-            }
+            node.Completed |= IsNodeCompleted(node, first, last, data?.DataValues == null || data.DataValues.Count == 0);
 
             if (Frontfill)
             {
@@ -680,26 +705,7 @@ namespace Cognite.OpcUa.History
                 }
             }
 
-            if (Config.IgnoreContinuationPoints)
-            {
-                // If all the returned events are at the end point, then we are receiving duplicates.
-                node.Completed = !any
-                    || Frontfill && first == last && last == node.State.SourceExtractedRange.Last
-                    || !Frontfill && first == last && last == node.State.SourceExtractedRange.First
-                    || !Frontfill && last <= historyStartTime;
-            }
-
-            if (maxReadLength != null)
-            {
-                if (Frontfill)
-                {
-                    node.Completed &= historyEndTime != null && node.EndTime >= historyEndTime || node.EndTime == DateTime.MinValue;
-                }
-                else
-                {
-                    node.Completed &= node.EndTime <= historyStartTime;
-                }
-            }
+            node.Completed |= IsNodeCompleted(node, first, last, any);
 
             if (Frontfill)
             {
