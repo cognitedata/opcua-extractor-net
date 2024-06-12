@@ -31,7 +31,7 @@ namespace Test.Unit
         {
             await base.InitializeAsync();
 
-            Server.Server.PopulateHistory(Server.Ids.Custom.Array, 1000, HistoryStart, "custom", 10, (i => new int[] { i, i, i, i }));
+            Server.Server.PopulateHistory(Server.Ids.Custom.Array, 1000, HistoryStart, "custom", 10, i => new int[] { i, i, i, i });
             Server.Server.PopulateHistory(Server.Ids.Custom.MysteryVar, 1000, HistoryStart.AddSeconds(2), "int", 1);
             Server.Server.PopulateHistory(Server.Ids.Custom.StringyVar, 1000, HistoryStart.AddSeconds(4), "string", 5);
 
