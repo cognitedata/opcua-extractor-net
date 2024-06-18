@@ -158,8 +158,8 @@ namespace Test.Unit
             Assert.Empty(evts1);
             Assert.Empty(evts2);
 
-            extractor.Streamer.Enqueue(dps);
-            extractor.Streamer.Enqueue(evts);
+            await extractor.Streamer.EnqueueAsync(dps);
+            await extractor.Streamer.EnqueueAsync(evts);
 
             await extractor.Looper.WaitForNextPush(true);
 
@@ -170,8 +170,8 @@ namespace Test.Unit
 
             // Fail one
 
-            extractor.Streamer.Enqueue(dps);
-            extractor.Streamer.Enqueue(evts);
+            await extractor.Streamer.EnqueueAsync(dps);
+            await extractor.Streamer.EnqueueAsync(evts);
 
             pusher1.PushDataPointResult = false;
             pusher1.PushEventResult = false;
@@ -189,8 +189,8 @@ namespace Test.Unit
 
             // Allow points and events, but continue to fail connection test
 
-            extractor.Streamer.Enqueue(dps);
-            extractor.Streamer.Enqueue(evts);
+            await extractor.Streamer.EnqueueAsync(dps);
+            await extractor.Streamer.EnqueueAsync(evts);
 
             pusher1.PushDataPointResult = true;
             pusher1.PushEventResult = true;
@@ -206,8 +206,8 @@ namespace Test.Unit
 
             pusher1.TestConnectionResult = true;
 
-            extractor.Streamer.Enqueue(dps);
-            extractor.Streamer.Enqueue(evts);
+            await extractor.Streamer.EnqueueAsync(dps);
+            await extractor.Streamer.EnqueueAsync(evts);
 
             await extractor.Looper.WaitForNextPush(true);
 
@@ -254,8 +254,8 @@ namespace Test.Unit
             Assert.Empty(evts2);
             Assert.Empty(evts3);
 
-            extractor.Streamer.Enqueue(dps);
-            extractor.Streamer.Enqueue(evts);
+            await extractor.Streamer.EnqueueAsync(dps);
+            await extractor.Streamer.EnqueueAsync(evts);
 
             extractor.Looper.Run();
             var loopTask = extractor.Looper.Scheduler.WaitForAll();
@@ -300,8 +300,8 @@ namespace Test.Unit
             (pusher1 as IPusher).AddPendingNodes(input, new FullPushResult(), tester.Config);
             (pusher2 as IPusher).AddPendingNodes(input2, new FullPushResult(), tester.Config);
 
-            extractor.Streamer.Enqueue(dps);
-            extractor.Streamer.Enqueue(evts);
+            await extractor.Streamer.EnqueueAsync(dps);
+            await extractor.Streamer.EnqueueAsync(evts);
 
             pusher1.TestConnectionResult = true;
             pusher2.TestConnectionResult = true;

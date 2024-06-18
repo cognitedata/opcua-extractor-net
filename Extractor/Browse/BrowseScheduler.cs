@@ -100,11 +100,11 @@ namespace Cognite.OpcUa
 
 
 
-        protected override void AbortChunk(IChunk<BrowseNode> chunk, CancellationToken token)
+        protected override async Task AbortChunk(IChunk<BrowseNode> chunk, CancellationToken token)
         {
             try
             {
-                client.AbortBrowse(chunk.Items).Wait(CancellationToken.None);
+                await client.AbortBrowse(chunk.Items);
             }
             catch (Exception e)
             {
@@ -143,7 +143,7 @@ namespace Cognite.OpcUa
             return transformations.ShouldIncludeBasic(displayName, id, typeDefinition, client.NamespaceTable, nc);
         }
 
-        protected override IEnumerable<BrowseNode> HandleTaskResult(IChunk<BrowseNode> chunk, CancellationToken token)
+        protected override async Task<IEnumerable<BrowseNode>> HandleTaskResult(IChunk<BrowseNode> chunk, CancellationToken token)
         {
             var result = new List<BrowseNode>();
 
@@ -152,7 +152,7 @@ namespace Cognite.OpcUa
                 ExtractorUtils.LogException(log, chunk.Exception, $"Unexpected failure during browse{purpose}");
                 failed = true;
                 exceptions.Add(chunk.Exception);
-                AbortChunk(chunk, token);
+                await AbortChunk(chunk, token);
                 return Enumerable.Empty<BrowseNode>();
             }
 
