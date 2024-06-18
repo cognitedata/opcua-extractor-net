@@ -66,7 +66,7 @@ namespace Test.Unit
 
             Assert.False(evt.WaitOne(100));
 
-            extractor.Streamer.Enqueue(new UADataPoint(start, "id", -1, StatusCodes.Good));
+            await extractor.Streamer.EnqueueAsync(new UADataPoint(start, "id", -1, StatusCodes.Good));
             Assert.Single(queue);
             await extractor.Streamer.PushDataPoints(new[] { pusher }, Enumerable.Empty<IPusher>(), tester.Source.Token);
 
@@ -74,7 +74,7 @@ namespace Test.Unit
             Assert.Empty(queue);
 
             // Should block
-            var task = Task.Run(() => extractor.Streamer.Enqueue(Enumerable.Range(0, 2_000_000).Select(idx => new UADataPoint(start.AddMilliseconds(idx), "id", idx, StatusCodes.Good))));
+            var task = extractor.Streamer.EnqueueAsync(Enumerable.Range(0, 2_000_000).Select(idx => new UADataPoint(start.AddMilliseconds(idx), "id", idx, StatusCodes.Good)));
 
             var wait = Task.Delay(100);
             Assert.Equal(wait, await Task.WhenAny(wait, task));
@@ -93,12 +93,12 @@ namespace Test.Unit
             Assert.Equal(2_000_001, dps.Count);
             Assert.Empty(queue);
 
-            extractor.Streamer.Enqueue(Enumerable.Range(2000000, 999999).Select(idx => new UADataPoint(start.AddMilliseconds(idx), "id", idx, StatusCodes.Good)));
+            await extractor.Streamer.EnqueueAsync(Enumerable.Range(2000000, 999999).Select(idx => new UADataPoint(start.AddMilliseconds(idx), "id", idx, StatusCodes.Good)));
 
             Assert.False(evt.WaitOne(100));
             Assert.Equal(999_999, queue.Count);
 
-            extractor.Streamer.Enqueue(new UADataPoint(start.AddMilliseconds(3000000), "id", 300, StatusCodes.Good));
+            await extractor.Streamer.EnqueueAsync(new UADataPoint(start.AddMilliseconds(3000000), "id", 300, StatusCodes.Good));
             Assert.True(evt.WaitOne(10000));
             Assert.Equal(1_000_000, queue.Count);
 
@@ -139,7 +139,7 @@ namespace Test.Unit
 
             Assert.False(evt.WaitOne(100));
 
-            extractor.Streamer.Enqueue(new UAEvent { EmittingNode = id, Time = start });
+            await extractor.Streamer.EnqueueAsync(new UAEvent { EmittingNode = id, Time = start });
             Assert.Single(queue);
             await extractor.Streamer.PushEvents(new[] { pusher }, Enumerable.Empty<IPusher>(), tester.Source.Token);
 
@@ -149,8 +149,8 @@ namespace Test.Unit
             Assert.Empty(queue);
 
             // Should block
-            var task = Task.Run(() => extractor.Streamer.Enqueue(Enumerable.Range(0, 200_000).Select(idx =>
-                new UAEvent { EmittingNode = id, Time = start.AddMilliseconds(idx) })));
+            var task = extractor.Streamer.EnqueueAsync(Enumerable.Range(0, 200_000).Select(idx =>
+                new UAEvent { EmittingNode = id, Time = start.AddMilliseconds(idx) }));
 
             var wait = Task.Delay(100);
             Assert.Equal(wait, await Task.WhenAny(wait, task));
@@ -167,13 +167,13 @@ namespace Test.Unit
             Assert.Equal(200001, evts.Count);
             Assert.Empty(queue);
 
-            extractor.Streamer.Enqueue(Enumerable.Range(200000, 99999).Select(idx =>
+            await extractor.Streamer.EnqueueAsync(Enumerable.Range(200000, 99999).Select(idx =>
                 new UAEvent { EmittingNode = id, Time = start.AddMilliseconds(idx) }));
 
             Assert.False(evt.WaitOne(100));
             Assert.Equal(99999, queue.Count);
 
-            extractor.Streamer.Enqueue(new UAEvent { EmittingNode = id, Time = start.AddMilliseconds(300000) });
+            await extractor.Streamer.EnqueueAsync(new UAEvent { EmittingNode = id, Time = start.AddMilliseconds(300000) });
             Assert.True(evt.WaitOne(10000));
             Assert.Equal(100000, queue.Count);
 
@@ -212,7 +212,7 @@ namespace Test.Unit
 
             extractor.State.SetNodeState(state, "id");
             var toPush = Enumerable.Range(0, 1000).Select(idx => new UADataPoint(start.AddMilliseconds(idx), "id", idx, StatusCodes.Good)).ToList();
-            extractor.Streamer.Enqueue(toPush);
+            await extractor.Streamer.EnqueueAsync(toPush);
             await extractor.Streamer.PushDataPoints(new[] { pusher, pusher2 }, Enumerable.Empty<IPusher>(), tester.Source.Token);
             Assert.Equal(1000, dps.Count);
             Assert.Equal(1000, dps2.Count);
@@ -220,19 +220,19 @@ namespace Test.Unit
             Assert.Equal(dps, dps2);
 
             pusher.PushDataPointResult = false;
-            extractor.Streamer.Enqueue(toPush);
+            await extractor.Streamer.EnqueueAsync(toPush);
             await extractor.Streamer.PushDataPoints(new[] { pusher, pusher2 }, Enumerable.Empty<IPusher>(), tester.Source.Token);
             Assert.True(pusher.DataFailing);
             Assert.Equal(1000, dps.Count);
             Assert.Equal(2000, dps2.Count);
 
-            extractor.Streamer.Enqueue(toPush);
+            await extractor.Streamer.EnqueueAsync(toPush);
             await extractor.Streamer.PushDataPoints(new[] { pusher2 }, new[] { pusher }, tester.Source.Token);
             Assert.True(pusher.DataFailing);
             Assert.Equal(1000, dps.Count);
             Assert.Equal(3000, dps2.Count);
 
-            extractor.Streamer.Enqueue(toPush);
+            await extractor.Streamer.EnqueueAsync(toPush);
             pusher.PushDataPointResult = true;
             await extractor.Streamer.PushDataPoints(new[] { pusher2, pusher }, Enumerable.Empty<IPusher>(), tester.Source.Token);
             Assert.False(pusher.DataFailing);
@@ -262,7 +262,7 @@ namespace Test.Unit
 
             extractor.State.SetEmitterState(state);
             var toPush = Enumerable.Range(0, 1000).Select(idx => new UAEvent { Time = start.AddMilliseconds(idx), EmittingNode = id }).ToList();
-            extractor.Streamer.Enqueue(toPush);
+            await extractor.Streamer.EnqueueAsync(toPush);
             await extractor.Streamer.PushEvents(new[] { pusher, pusher2 }, Enumerable.Empty<IPusher>(), tester.Source.Token);
 
             var evts = pusher.Events[id];
@@ -274,19 +274,19 @@ namespace Test.Unit
             Assert.Equal(evts, evts2);
 
             pusher.PushEventResult = false;
-            extractor.Streamer.Enqueue(toPush);
+            await extractor.Streamer.EnqueueAsync(toPush);
             await extractor.Streamer.PushEvents(new[] { pusher, pusher2 }, Enumerable.Empty<IPusher>(), tester.Source.Token);
             Assert.True(pusher.EventsFailing);
             Assert.Equal(1000, evts.Count);
             Assert.Equal(2000, evts2.Count);
 
-            extractor.Streamer.Enqueue(toPush);
+            await extractor.Streamer.EnqueueAsync(toPush);
             await extractor.Streamer.PushEvents(new[] { pusher2 }, new[] { pusher }, tester.Source.Token);
             Assert.True(pusher.EventsFailing);
             Assert.Equal(1000, evts.Count);
             Assert.Equal(3000, evts2.Count);
 
-            extractor.Streamer.Enqueue(toPush);
+            await extractor.Streamer.EnqueueAsync(toPush);
             pusher.PushEventResult = true;
             await extractor.Streamer.PushEvents(new[] { pusher2, pusher }, Enumerable.Empty<IPusher>(), tester.Source.Token);
             Assert.False(pusher.EventsFailing);
