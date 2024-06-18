@@ -34,9 +34,6 @@ using System.Threading.Tasks;
 
 namespace Cognite.OpcUa.History
 {
-
-
-
     public sealed class HistoryReader : IDisposable
     {
         private readonly UAClient uaClient;
