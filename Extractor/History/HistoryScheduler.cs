@@ -177,12 +177,12 @@ namespace Cognite.OpcUa.History
         }
 
 
-        protected override void AbortChunk(IChunk<HistoryReadNode> chunk, CancellationToken token)
+        protected override async Task AbortChunk(IChunk<HistoryReadNode> chunk, CancellationToken token)
         {
             var readChunk = (HistoryReadParams)chunk;
             try
             {
-                uaClient.AbortHistoryRead(readChunk, CancellationToken.None).Wait(CancellationToken.None);
+                await uaClient.AbortHistoryRead(readChunk, CancellationToken.None);
             }
             catch (Exception ex)
             {
@@ -399,7 +399,7 @@ namespace Cognite.OpcUa.History
             log.LogDebug("Finish reading {Type}. Retrieved: {Data}", name, builder);
         }
 
-        protected override IEnumerable<HistoryReadNode> HandleTaskResult(IChunk<HistoryReadNode> chunk, CancellationToken token)
+        protected override async Task<IEnumerable<HistoryReadNode>> HandleTaskResult(IChunk<HistoryReadNode> chunk, CancellationToken token)
         {
             var readChunk = (HistoryReadParams)chunk;
 
@@ -413,7 +413,7 @@ namespace Cognite.OpcUa.History
                 {
                     thresholdManager.Failed(node.Id, chunk.Exception);
                 }
-                AbortChunk(chunk, token);
+                await AbortChunk(chunk, token);
                 return Enumerable.Empty<HistoryReadNode>();
             }
 
@@ -431,11 +431,11 @@ namespace Cognite.OpcUa.History
 
                 if (Data)
                 {
-                    HistoryDataHandler(node);
+                    await HistoryDataHandler(node);
                 }
                 else
                 {
-                    HistoryEventHandler(node, readChunk.Details);
+                    await HistoryEventHandler(node, readChunk.Details);
                 }
 
                 if (Config.IgnoreContinuationPoints)
@@ -521,7 +521,7 @@ namespace Cognite.OpcUa.History
         /// </summary>
         /// <param name="node">Active HistoryReadNode</param>
         /// <returns>Number of points read</returns>
-        private void HistoryDataHandler(HistoryReadNode node)
+        private async Task HistoryDataHandler(HistoryReadNode node)
         {
             var data = node.LastResult as HistoryData;
             node.LastResult = null;
@@ -614,7 +614,7 @@ namespace Cognite.OpcUa.History
                     log.LogTrace("History DataPoint {DataPoint}", buffDp);
                     cnt++;
                 }
-                extractor.Streamer.Enqueue(buffDps);
+                await extractor.Streamer.EnqueueAsync(buffDps);
             }
 
             node.LastRead = cnt;
@@ -627,7 +627,7 @@ namespace Cognite.OpcUa.History
             {
                 log.LogDebug("Read {Count} datapoints from buffer of state {Id}", buffered.Count(), node.State.Id);
                 nodeState.UpdateFromStream(buffered);
-                extractor.Streamer.Enqueue(buffered);
+                await extractor.Streamer.EnqueueAsync(buffered);
             }
         }
 
@@ -652,7 +652,7 @@ namespace Cognite.OpcUa.History
         /// <param name="node">Active HistoryReadNode</param>
         /// <param name="details">History read details used to generate this HistoryRead result</param>
         /// <returns>Number of events read</returns>
-        private void HistoryEventHandler(HistoryReadNode node, HistoryReadDetails details)
+        private async Task HistoryEventHandler(HistoryReadNode node, HistoryReadDetails details)
         {
             var evts = node.LastResult as HistoryEvent;
             node.LastResult = null;
@@ -726,7 +726,7 @@ namespace Cognite.OpcUa.History
                 node.State.UpdateFromBackfill(first, node.Completed);
             }
 
-            extractor.Streamer.Enqueue(createdEvents);
+            await extractor.Streamer.EnqueueAsync(createdEvents);
 
             node.LastRead = createdEvents.Count;
             node.TotalRead += createdEvents.Count;
@@ -741,7 +741,7 @@ namespace Cognite.OpcUa.History
                 var (smin, smax) = buffered.MinMax(dp => dp.Time);
                 emitterState.UpdateFromStream(smin, smax);
                 log.LogDebug("Read {Count} events from buffer of state {Id}", buffered.Count(), node.State.Id);
-                extractor.Streamer.Enqueue(buffered);
+                await extractor.Streamer.EnqueueAsync(buffered);
             }
         }
         #endregion
