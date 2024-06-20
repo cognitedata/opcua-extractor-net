@@ -414,6 +414,11 @@ namespace Cognite.OpcUa.Config
         }
 
         public string Raw => filter.ToString();
+
+        public override string ToString()
+        {
+            return Raw;
+        }
     }
 
     public class ListFieldFilter : IFieldFilter

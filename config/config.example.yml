@@ -400,32 +400,6 @@ cognite:
     extraction-pipeline:
         # ExternalId of extraction pipeline
         # external-id:
-    # Call a cognite function with the number of assets, timeseries and relationships created/updated
-    # after each browse/rebrowse operation.
-    # The function is called with the following object:
-    # {
-    #     "idPrefix": [Configured extraction.idPrefix],
-    #     "assetsCreated": [Number of new assets or raw rows in the assets table created],
-    #     "assetsUpdated": [Number of assets updated or raw rows in the asset table modified],
-    #     "timeSeriesCreated": [Number of new time series or raw rows in the time series table created],
-    #     "timeSeriesUpdated": [Number of time series updated or raw rows in the time series table modified],
-    #     "minimalTimeSeriesCreated": [Number of time series created, only used if timeseries are written to raw],
-    #     "relationshipsCreated": [Number of new relationships, or raw rows in the relationships table created],
-    #     "rawDatabase": [Name of the configured raw database],
-    #     "assetsTable": [Name of the configured raw table for assets],
-    #     "timeSeriesTable": [Name of the configured raw table for time series],
-    #     "relationshipsTable": [Name of the configured raw table for relationships]
-    # }
-    # "Minimal time series" here refers to timeseries that are created with no metadata when timeseries metadata is written to raw.
-    # This requires functions:WRITE scoped to the function given by external-id or id, and READ if external-id is used.
-    browse-callback:
-        # Function external id. If this is set the functions:read capability is required.
-        external-id:
-        # Function internal id.
-        id:
-        # True to always report, even if nothing was modified. The counts are always reported,
-        # so you can handle this logic yourself.
-        report-on-empty: false
 
 # Push to an influx-database. Data-variables are mapped to series with the given id.
 # Events are mapped to series with ids on the form [id].[eventId] where id is given by the source node.
