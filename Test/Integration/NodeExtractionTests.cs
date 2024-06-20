@@ -1068,9 +1068,9 @@ namespace Test.Integration
             {
                 new RawNodeTransformation
                 {
-                    Filter = new RawNodeFilter
+                    Filter = new NodeFilter
                     {
-                        Name = "^CustomRoot$"
+                        Name = new RegexFieldFilter("^CustomRoot$")
                     },
                     Type = TransformationType.Property
                 }
@@ -1115,9 +1115,9 @@ namespace Test.Integration
             {
                 new RawNodeTransformation
                 {
-                    Filter = new RawNodeFilter
+                    Filter = new NodeFilter
                     {
-                        Name = "^CustomRoot$"
+                        Name = new RegexFieldFilter("^CustomRoot$")
                     },
                     Type = TransformationType.Property
                 }
@@ -1162,11 +1162,11 @@ namespace Test.Integration
             {
                 new RawNodeTransformation
                 {
-                    Filter = new RawNodeFilter
+                    Filter = new NodeFilter
                     {
-                        Parent = new RawNodeFilter
+                        Parent = new NodeFilter
                         {
-                            Name = "^CustomRoot$"
+                            Name = new RegexFieldFilter("^CustomRoot$")
                         }
                     },
                     Type = TransformationType.Ignore

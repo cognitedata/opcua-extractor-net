@@ -237,9 +237,9 @@ namespace Test.Integration
             {
                 new RawNodeTransformation
                 {
-                    Filter = new RawNodeFilter
+                    Filter = new NodeFilter
                     {
-                        Id = $"i={ids.Obj1.Identifier}$"
+                        Id = new RegexFieldFilter($"i={ids.Obj1.Identifier}$")
                     },
                     Type = TransformationType.DropSubscriptions
                 }

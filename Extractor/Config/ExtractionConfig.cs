@@ -15,12 +15,21 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using Cognite.Extensions.DataModels.QueryBuilder;
 using Cognite.Extractor.Common;
+using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.NodeSources;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
+using Serilog.Debugging;
+using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Text;
+using System.Text.RegularExpressions;
+using YamlDotNet.Core;
+using YamlDotNet.Core.Events;
 using YamlDotNet.Serialization;
 
 namespace Cognite.OpcUa.Config
@@ -386,20 +395,152 @@ namespace Cognite.OpcUa.Config
 
         public List<string> GetTargets => ToBeSubscribed;
     }
-    public class RawNodeFilter
+    public interface IFieldFilter
+    {
+        bool IsMatch(string raw);
+    }
+
+    public class RegexFieldFilter : IFieldFilter
+    {
+        private readonly Regex filter;
+
+        public RegexFieldFilter(string regex)
+        {
+            filter = new Regex(regex, RegexOptions.Compiled | RegexOptions.Singleline | RegexOptions.CultureInvariant);
+        }
+        public bool IsMatch(string raw)
+        {
+            return filter.IsMatch(raw);
+        }
+
+        public string Raw => filter.ToString();
+    }
+
+    public class ListFieldFilter : IFieldFilter
+    {
+        private readonly HashSet<string> entries;
+        public string? OriginalFile { get; }
+
+        public ListFieldFilter(IEnumerable<string> items, string? originalFile)
+        {
+            entries = new HashSet<string>(items);
+            OriginalFile = originalFile;
+        }
+
+        public bool IsMatch(string raw)
+        {
+            return entries.Contains(raw);
+        }
+
+        public IEnumerable<string> Raw => entries;
+
+        public override string ToString()
+        {
+            var builder = new StringBuilder();
+            builder.Append("Any of: [");
+            var first = true;
+            foreach (var entry in entries)
+            {
+                if (!first)
+                {
+                    builder.Append(", ");
+                }
+                first = false;
+                builder.AppendFormat("\"{0}\"", entry);
+            }
+            builder.Append("]");
+            return base.ToString();
+        }
+    }
+
+    public class FieldFilterConverter : IYamlTypeConverter
+    {
+        public bool Accepts(Type type)
+        {
+            return typeof(IFieldFilter).IsAssignableFrom(type);
+        }
+
+        public object? ReadYaml(IParser parser, Type type)
+        {
+            if (parser.TryConsume<Scalar>(out var scalar))
+            {
+                return new RegexFieldFilter(scalar.Value);
+            }
+            if (parser.TryConsume<SequenceStart>(out _))
+            {
+                var items = new List<string>();
+                while (!parser.Accept<SequenceEnd>(out _))
+                {
+                    var seqScalar = parser.Consume<Scalar>();
+                    items.Add(seqScalar.Value);
+                }
+
+                parser.Consume<SequenceEnd>();
+
+                return new ListFieldFilter(items, null);
+            }
+            if (parser.TryConsume<MappingStart>(out _))
+            {
+                var key = parser.Consume<Scalar>();
+                if (key.Value != "file")
+                {
+                    throw new YamlException("Expected object containing \"file\"");
+                }
+                var value = parser.Consume<Scalar>();
+                var lines = File.ReadAllLines(value.Value);
+                parser.Consume<MappingEnd>();
+                return new ListFieldFilter(lines.Where(line => !string.IsNullOrWhiteSpace(line)), value.Value);
+            }
+
+            throw new YamlException("Expected a string, object, or list of strings");
+        }
+
+        public void WriteYaml(IEmitter emitter, object? value, Type type)
+        {
+            if (value is RegexFieldFilter regexFilter)
+            {
+                emitter.Emit(new Scalar(AnchorName.Empty, TagName.Empty, regexFilter.Raw, ScalarStyle.DoubleQuoted, false, true));
+            }
+            else if (value is ListFieldFilter listFilter)
+            {
+                if (listFilter.OriginalFile != null)
+                {
+                    emitter.Emit(new MappingStart());
+                    emitter.Emit(new Scalar("file"));
+                    emitter.Emit(new Scalar(AnchorName.Empty, TagName.Empty, listFilter.OriginalFile, ScalarStyle.DoubleQuoted, false, true));
+                    emitter.Emit(new MappingEnd());
+                }
+                else
+                {
+                    emitter.Emit(new SequenceStart(AnchorName.Empty, TagName.Empty, true, SequenceStyle.Block, Mark.Empty, Mark.Empty));
+                    foreach (var entry in listFilter.Raw)
+                    {
+                        emitter.Emit(new Scalar(AnchorName.Empty, TagName.Empty, entry, ScalarStyle.DoubleQuoted, false, true));
+                    }
+                    emitter.Emit(new SequenceEnd());
+                }
+            }
+            else
+            {
+                emitter.Emit(new Scalar(AnchorName.Empty, TagName.Empty, "", ScalarStyle.DoubleQuoted, false, true));
+            }
+        }
+    }
+
+    public class NodeFilter
     {
         /// <summary>
         /// Regex on node DisplayName.
         /// </summary>
-        public string? Name { get; set; }
+        public IFieldFilter? Name { get; set; }
         /// <summary>
         /// Regex on node Description.
         /// </summary>
-        public string? Description { get; set; }
+        public IFieldFilter? Description { get; set; }
         /// <summary>
         /// Regex on node id. Ids on the form "i=123" or "s=string" are matched.
         /// </summary>
-        public string? Id { get; set; }
+        public IFieldFilter? Id { get; set; }
         /// <summary>
         /// Whether the node is an array. If this is set, the filter only matches varables.
         /// </summary>
@@ -407,11 +548,11 @@ namespace Cognite.OpcUa.Config
         /// <summary>
         /// Regex on the full namespace of the node id.
         /// </summary>
-        public string? Namespace { get; set; }
+        public IFieldFilter? Namespace { get; set; }
         /// <summary>
         /// Regex on the id of the type definition. On the form "i=123" or "s=string".
         /// </summary>
-        public string? TypeDefinition { get; set; }
+        public IFieldFilter? TypeDefinition { get; set; }
         /// <summary>
         /// The "historizing" attribute on variables. If this is set, the filter only matches variables.
         /// </summary>
@@ -424,7 +565,165 @@ namespace Cognite.OpcUa.Config
         /// <summary>
         /// Another instance of NodeFilter which is applied to the parent node.
         /// </summary>
-        public RawNodeFilter? Parent { get; set; }
+        public NodeFilter? Parent { get; set; }
+
+        /// <summary>
+        /// Return a representation if the identifier of <paramref name="id"/>, 
+        /// on the form i=123, or s=string, etc.
+        /// </summary>
+        /// <param name="id">Identifier to get representation of</param>
+        /// <returns>String representation of identifier of <paramref name="id"/></returns>
+        private static string GetIdString(NodeId id)
+        {
+            var builder = new StringBuilder();
+            NodeId.Format(builder, id.Identifier, id.IdType, 0);
+            return builder.ToString();
+        }
+
+        /// <summary>
+        /// Test for match using only basic properties available in when reading from the server.
+        /// Will always return false if there are filters on not yet available fields.
+        /// </summary>
+        /// <param name="name">DisplayName</param>
+        /// <param name="id">Raw NodeId</param>
+        /// <param name="typeDefinition">TypeDefinition Id</param>
+        /// <param name="namespaces">Source namespacetable</param>
+        /// <param name="nc">NodeClass</param>
+        /// <returns>True if match</returns>
+        public bool IsBasicMatch(string name, NodeId id, NodeId typeDefinition, NamespaceTable namespaces, NodeClass nc)
+        {
+            if (Description != null || IsArray != null || Parent != null || Historizing != null) return false;
+            return MatchBasic(name, id ?? NodeId.Null, typeDefinition, namespaces, nc);
+        }
+
+        /// <summary>
+        /// Test for match using only basic properties available in when reading from the server.
+        /// </summary>
+        /// <param name="name">DisplayName</param>
+        /// <param name="id">Raw NodeId</param>
+        /// <param name="typeDefinition">TypeDefinition Id</param>
+        /// <param name="namespaces">Source namespacetable</param>
+        /// <param name="nc">NodeClass</param>
+        /// <returns>True if match</returns>
+        private bool MatchBasic(string? name, NodeId id, NodeId? typeDefinition, NamespaceTable namespaces, NodeClass nc)
+        {
+            if (Name != null && (string.IsNullOrEmpty(name) || !Name.IsMatch(name))) return false;
+            if (Id != null)
+            {
+                if (id == null || id.IsNullNodeId) return false;
+                var idstr = GetIdString(id);
+                if (!Id.IsMatch(idstr)) return false;
+            }
+            if (Namespace != null && namespaces != null)
+            {
+                var ns = namespaces.GetString(id.NamespaceIndex);
+                if (string.IsNullOrEmpty(ns)) return false;
+                if (!Namespace.IsMatch(ns)) return false;
+            }
+            if (TypeDefinition != null)
+            {
+                if (typeDefinition == null || typeDefinition.IsNullNodeId) return false;
+                var tdStr = GetIdString(typeDefinition);
+                if (!TypeDefinition.IsMatch(tdStr)) return false;
+            }
+            if (NodeClass != null)
+            {
+                if (nc != NodeClass.Value) return false;
+            }
+            return true;
+        }
+        /// <summary>
+        /// Return true if the given node matches the filter.
+        /// </summary>
+        /// <param name="node">Node to test</param>
+        /// <param name="ns">Currently active namespace table</param>
+        /// <returns>True if match</returns>
+        public bool IsMatch(BaseUANode node, NamespaceTable ns)
+        {
+            if (node == null || !MatchBasic(node.Name, node.Id, node.TypeDefinition, ns, node.NodeClass)) return false;
+            if (Description != null && (string.IsNullOrEmpty(node.Attributes.Description) || !Description.IsMatch(node.Attributes.Description))) return false;
+            if (node is UAVariable variable)
+            {
+                if (IsArray != null && variable.IsArray != IsArray) return false;
+                if (Historizing != null && variable.FullAttributes.Historizing != Historizing) return false;
+            }
+            else if (IsArray != null || Historizing != null) return false;
+            if (Parent != null && (node.Parent == null || !Parent.IsMatch(node.Parent, ns))) return false;
+            return true;
+        }
+
+        public bool IsBasic => Description == null && IsArray == null && Parent == null && Historizing == null;
+
+        /// <summary>
+        /// Create string representation, for logging.
+        /// </summary>
+        /// <param name="builder">StringBuilder to write to</param>
+        /// <param name="idx">Level of nesting, for clean indentation.</param>
+        public void Format(StringBuilder builder, int idx)
+        {
+            if (Name != null)
+            {
+                builder.Append(' ', (idx + 1) * 4);
+                builder.AppendFormat("Name: {0}", Name);
+                builder.AppendLine();
+            }
+            if (Description != null)
+            {
+                builder.Append(' ', (idx + 1) * 4);
+                builder.AppendFormat("Description: {0}", Description);
+                builder.AppendLine();
+            }
+            if (Id != null)
+            {
+                builder.Append(' ', (idx + 1) * 4);
+                builder.AppendFormat("Id: {0}", Id);
+                builder.AppendLine();
+            }
+            if (IsArray != null)
+            {
+                builder.Append(' ', (idx + 1) * 4);
+                builder.AppendFormat("IsArray: {0}", IsArray);
+                builder.AppendLine();
+            }
+            if (Historizing != null)
+            {
+                builder.Append(' ', (idx + 1) * 4);
+                builder.AppendFormat("Historizing: {0}", Historizing);
+                builder.AppendLine();
+            }
+            if (Namespace != null)
+            {
+                builder.Append(' ', (idx + 1) * 4);
+                builder.AppendFormat("Namespace: {0}", Namespace);
+                builder.AppendLine();
+            }
+            if (TypeDefinition != null)
+            {
+                builder.Append(' ', (idx + 1) * 4);
+                builder.AppendFormat("TypeDefinition: {0}", TypeDefinition);
+                builder.AppendLine();
+            }
+            if (NodeClass != null)
+            {
+                builder.Append(' ', (idx + 1) * 4);
+                builder.AppendFormat("NodeClass: {0}", NodeClass);
+                builder.AppendLine();
+            }
+            if (Parent != null)
+            {
+                builder.Append(' ', (idx + 1) * 4);
+                builder.Append("Parent:");
+                builder.AppendLine();
+                Parent.Format(builder, idx + 1);
+            }
+        }
+
+        public override string ToString()
+        {
+            var builder = new StringBuilder();
+            Format(builder, 0);
+            return builder.ToString();
+        }
     }
     public class RawNodeTransformation
     {
@@ -435,7 +734,7 @@ namespace Cognite.OpcUa.Config
         /// <summary>
         /// NodeFilter. All non-null filters must match each node for the transformation to be applied.
         /// </summary>
-        public RawNodeFilter? Filter { get; set; }
+        public NodeFilter? Filter { get; set; }
     }
 
     public enum StatusCodeMode
