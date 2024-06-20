@@ -33,7 +33,11 @@ namespace Test.Unit
             var services = new ServiceCollection();
             services.AddTestLogging(output);
             log = services.BuildServiceProvider().GetRequiredService<ILogger<NodeTransformation>>();
-            ConfigurationUtils.AddTypeConverter(new FieldFilterConverter());
+            try
+            {
+                ConfigurationUtils.AddTypeConverter(new FieldFilterConverter());
+            }
+            catch { }
         }
         [Fact]
         public void TestNameFilter()

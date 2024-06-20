@@ -44,7 +44,11 @@ namespace Test.Utils
             // Set higher min thread count, this is required due to running both server and client in the same process.
             // The server uses the threadPool in a weird way that can cause starvation if this is set too low.
             ThreadPool.SetMinThreads(20, 20);
-            ConfigurationUtils.AddTypeConverter(new FieldFilterConverter());
+            try
+            {
+                ConfigurationUtils.AddTypeConverter(new FieldFilterConverter());
+            }
+            catch { }
             Services = new ServiceCollection();
             Config = Services.AddConfig<FullConfig>("config.test.yml", 1);
             Config.Source.EndpointUrl = $"opc.tcp://localhost:{Port}";

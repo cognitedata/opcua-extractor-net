@@ -95,7 +95,11 @@ namespace Cognite.OpcUa
         public static CancellationToken? RootToken { get; set; }
         public static async Task<int> Main(string[] args)
         {
-            ConfigurationUtils.AddTypeConverter(new FieldFilterConverter());
+            try
+            {
+                ConfigurationUtils.AddTypeConverter(new FieldFilterConverter());
+            }
+            catch { }
 
             return await GetCommandLineOptions().InvokeAsync(args);
         }
