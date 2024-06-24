@@ -15,6 +15,7 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using Cognite.Extractor.Configuration;
 using Cognite.Extractor.Utils.CommandLine;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Service;
@@ -94,6 +95,12 @@ namespace Cognite.OpcUa
         public static CancellationToken? RootToken { get; set; }
         public static async Task<int> Main(string[] args)
         {
+            try
+            {
+                ConfigurationUtils.AddTypeConverter(new FieldFilterConverter());
+            }
+            catch { }
+
             return await GetCommandLineOptions().InvokeAsync(args);
         }
 
