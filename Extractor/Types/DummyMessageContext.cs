@@ -23,12 +23,14 @@ namespace Cognite.OpcUa.Types
 
         public int MaxMessageSize => 100_000;
 
-        public uint MaxEncodingNestingLevels => 100;
-
         public NamespaceTable NamespaceUris { get; }
 
         public StringTable ServerUris { get; } = new StringTable();
 
         public IEncodeableFactory Factory { get; } = new EncodeableFactory();
+
+        public int MaxDecoderRecoveries => 0;
+
+        public int MaxEncodingNestingLevels => 200;
     }
 }
