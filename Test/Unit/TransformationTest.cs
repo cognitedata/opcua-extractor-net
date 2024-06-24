@@ -1,14 +1,21 @@
-﻿using Cognite.Extractor.Testing;
+﻿using Cognite.Extractor.Configuration;
+using Cognite.Extractor.Testing;
 using Cognite.OpcUa;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Nodes;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
+using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using Xunit;
 using Xunit.Abstractions;
+using YamlDotNet.Serialization;
+using YamlDotNet.Serialization.NamingConventions;
+using YamlDotNet.Serialization.TypeInspectors;
 
 namespace Test.Unit
 {
@@ -26,13 +33,18 @@ namespace Test.Unit
             var services = new ServiceCollection();
             services.AddTestLogging(output);
             log = services.BuildServiceProvider().GetRequiredService<ILogger<NodeTransformation>>();
+            try
+            {
+                ConfigurationUtils.AddTypeConverter(new FieldFilterConverter());
+            }
+            catch { }
         }
         [Fact]
         public void TestNameFilter()
         {
-            var raw = new RawNodeFilter
+            var filter = new NodeFilter
             {
-                Name = "Test"
+                Name = new RegexFieldFilter("Test")
             };
             var nodes = new[]
             {
@@ -41,7 +53,6 @@ namespace Test.Unit
                 new UAObject(new NodeId(3), "Test", null, null, new NodeId("parent", 0), null),
                 new UAObject(new NodeId(4), "Other", null, null, new NodeId("parent", 0), null),
             };
-            var filter = new NodeFilter(raw);
             var matched = nodes.Where(node => filter.IsMatch(node, nss)).ToList();
             var matchedBasic = nodes.Where(node =>
                 filter.IsBasicMatch(node.Name, node.Id, node.FullAttributes.TypeDefinition?.Id, nss, node.NodeClass)).ToList();
@@ -55,9 +66,9 @@ namespace Test.Unit
         [Fact]
         public void TestDescriptionFilter()
         {
-            var raw = new RawNodeFilter
+            var filter = new NodeFilter
             {
-                Description = "Test"
+                Description = new RegexFieldFilter("Test")
             };
             var nodes = new[]
             {
@@ -70,7 +81,6 @@ namespace Test.Unit
             nodes[1].Attributes.Description = "Some Other test";
             nodes[2].Attributes.Description = null;
             nodes[3].Attributes.Description = "";
-            var filter = new NodeFilter(raw);
             var matched = nodes.Where(node => filter.IsMatch(node, nss)).ToList();
             var matchedBasic = nodes.Where(node =>
                 filter.IsBasicMatch(node.Name, node.Id, node.FullAttributes.TypeDefinition?.Id, nss, node.NodeClass)).ToList();
@@ -84,9 +94,9 @@ namespace Test.Unit
         [Fact]
         public void TestIdFilter()
         {
-            var raw = new RawNodeFilter
+            var filter = new NodeFilter
             {
-                Id = "id|1|i=3|s=4"
+                Id = new RegexFieldFilter("id|1|i=3|s=4")
             };
             var nodes = new[]
             {
@@ -95,7 +105,6 @@ namespace Test.Unit
                 new UAObject(new NodeId(3), "Test", null, null, new NodeId("parent", 0), null),
                 new UAObject(new NodeId(4), "Other", null, null, new NodeId("parent", 0), null),
             };
-            var filter = new NodeFilter(raw);
             var matched = nodes.Where(node => filter.IsMatch(node, nss)).ToList();
             var matchedBasic = nodes.Where(node =>
                             filter.IsBasicMatch(node.Name, node.Id, node.FullAttributes.TypeDefinition?.Id, nss, node.NodeClass)).ToList();
@@ -108,9 +117,9 @@ namespace Test.Unit
         [Fact]
         public void TestNamespaceFilter()
         {
-            var raw = new RawNodeFilter
+            var filter = new NodeFilter
             {
-                Namespace = "test-|uri"
+                Namespace = new RegexFieldFilter("test-|uri")
             };
             var nodes = new[]
             {
@@ -119,7 +128,6 @@ namespace Test.Unit
                 new UAObject(new NodeId(3, 2), "Test", null, null, new NodeId("parent", 0), null),
                 new UAObject(new NodeId(4, 3), "Other", null, null, new NodeId("parent", 0), null),
             };
-            var filter = new NodeFilter(raw);
             var matched = nodes.Where(node => filter.IsMatch(node, nss)).ToList();
             var matchedBasic = nodes.Where(node =>
                 filter.IsBasicMatch(node.Name, node.Id, node.FullAttributes.TypeDefinition?.Id, nss, node.NodeClass)).ToList();
@@ -133,9 +141,9 @@ namespace Test.Unit
         [Fact]
         public void TestTypeDefinitionFilter()
         {
-            var raw = new RawNodeFilter
+            var filter = new NodeFilter
             {
-                TypeDefinition = "i=1|test"
+                TypeDefinition = new RegexFieldFilter("i=1|test")
             };
 
             var nodes = new[]
@@ -145,7 +153,6 @@ namespace Test.Unit
                 new UAObject(new NodeId(3), "Test", null, null, new NodeId("parent", 0), null),
                 new UAObject(new NodeId(4), "Other", null, null, new NodeId("parent", 0), new UAObjectType(new NodeId("test", 0))),
             };
-            var filter = new NodeFilter(raw);
             var matched = nodes.Where(node => filter.IsMatch(node, nss)).ToList();
             var matchedBasic = nodes.Where(node =>
                 filter.IsBasicMatch(node.Name, node.Id, node.FullAttributes.TypeDefinition?.Id, nss, node.NodeClass)).ToList();
@@ -169,7 +176,7 @@ namespace Test.Unit
         [InlineData(false)]
         public void TestIsArrayFilter(bool isArray)
         {
-            var raw = new RawNodeFilter
+            var filter = new NodeFilter
             {
                 IsArray = isArray
             };
@@ -185,7 +192,6 @@ namespace Test.Unit
             (nodes[2].Attributes as Cognite.OpcUa.Nodes.VariableAttributes).ArrayDimensions = new[] { 4 };
             (nodes[4].Attributes as Cognite.OpcUa.Nodes.VariableAttributes).ArrayDimensions = new[] { 4 };
 
-            var filter = new NodeFilter(raw);
             var matched = nodes.Where(node => filter.IsMatch(node, nss)).ToList();
             var matchedBasic = nodes.Where(node =>
                 filter.IsBasicMatch(node.Name, node.Id, GetTypeDefinition(node), nss, node.NodeClass)).ToList();
@@ -207,11 +213,11 @@ namespace Test.Unit
         [Fact]
         public void TestParentFilter()
         {
-            var raw = new RawNodeFilter
+            var filter = new NodeFilter
             {
-                Parent = new RawNodeFilter
+                Parent = new NodeFilter
                 {
-                    Name = "parent1"
+                    Name = new RegexFieldFilter("parent1")
                 }
             };
 
@@ -225,7 +231,6 @@ namespace Test.Unit
                 new UAObject(new NodeId(3, 2), "Test", null, parent2, new NodeId("parent2", 0), null) { Parent = parent2 },
                 new UAObject(new NodeId(4, 3), "Other", null, parent2, new NodeId("parent2", 0), null) { Parent = parent2 },
             };
-            var filter = new NodeFilter(raw);
             var matched = nodes.Where(node => filter.IsMatch(node, nss)).ToList();
             var matchedBasic = nodes.Where(node =>
                 filter.IsBasicMatch(node.Name, node.Id, node.FullAttributes.TypeDefinition?.Id, nss, node.NodeClass)).ToList();
@@ -239,7 +244,7 @@ namespace Test.Unit
         [Fact]
         public void TestNodeClassFilter()
         {
-            var raw = new RawNodeFilter
+            var filter = new NodeFilter
             {
                 NodeClass = NodeClass.Object
             };
@@ -251,7 +256,6 @@ namespace Test.Unit
                 new UAObject(new NodeId(3), "Test", null, null, new NodeId("parent", 0), null),
                 new UAObjectType(new NodeId(4), "Other", null, null, new NodeId("parent", 0)),
             };
-            var filter = new NodeFilter(raw);
             var matched = nodes.Where(node => filter.IsMatch(node, nss)).ToList();
             var matchedBasic = nodes.Where(node =>
                 filter.IsBasicMatch(node.Name, node.Id, GetTypeDefinition(node), nss, node.NodeClass)).ToList();
@@ -267,7 +271,7 @@ namespace Test.Unit
         [InlineData(false)]
         public void TestHistorizingFilter(bool historizing)
         {
-            var raw = new RawNodeFilter
+            var filter = new NodeFilter
             {
                 Historizing = historizing
             };
@@ -283,7 +287,6 @@ namespace Test.Unit
             (nodes[2].Attributes as Cognite.OpcUa.Nodes.VariableAttributes).Historizing = true;
             (nodes[4].Attributes as Cognite.OpcUa.Nodes.VariableAttributes).Historizing = true;
 
-            var filter = new NodeFilter(raw);
             var matched = nodes.Where(node => filter.IsMatch(node, nss)).ToList();
             var matchedBasic = nodes.Where(node =>
                 filter.IsBasicMatch(node.Name, node.Id, GetTypeDefinition(node), nss, node.NodeClass)).ToList();
@@ -305,19 +308,19 @@ namespace Test.Unit
         [Fact]
         public void TestMultipleFilter()
         {
-            var raw = new RawNodeFilter
+            var filter = new NodeFilter
             {
-                Id = "i=1",
-                Description = "target",
-                TypeDefinition = "i=1",
+                Id = new RegexFieldFilter("i=1"),
+                Description = new RegexFieldFilter("target"),
+                TypeDefinition = new RegexFieldFilter("i=1"),
                 IsArray = true,
                 Historizing = true,
-                Name = "target",
-                Parent = new RawNodeFilter
+                Name = new RegexFieldFilter("target"),
+                Parent = new NodeFilter
                 {
-                    Name = "parent1"
+                    Name = new RegexFieldFilter("parent1")
                 },
-                Namespace = "test-",
+                Namespace = new RegexFieldFilter("test-"),
                 NodeClass = NodeClass.Variable
             };
             var parent1 = new UAObject(new NodeId("parent1", 0), "parent1", null, null, NodeId.Null, null);
@@ -358,7 +361,6 @@ namespace Test.Unit
                 nodes.Add(node);
             }
 
-            var filter = new NodeFilter(raw);
             var matched = nodes.Where(node => filter.IsMatch(node, nss)).ToList();
             var matchedBasic = nodes.Where(node =>
                 filter.IsBasicMatch(node.Name, node.Id, GetTypeDefinition(node), nss, node.NodeClass)).ToList();
@@ -371,9 +373,9 @@ namespace Test.Unit
         {
             var raw = new RawNodeTransformation
             {
-                Filter = new RawNodeFilter
+                Filter = new NodeFilter
                 {
-                    Name = "Test"
+                    Name = new RegexFieldFilter("Test")
                 },
                 Type = TransformationType.Ignore
             };
@@ -402,9 +404,9 @@ namespace Test.Unit
         {
             var raw = new RawNodeTransformation
             {
-                Filter = new RawNodeFilter
+                Filter = new NodeFilter
                 {
-                    Name = "Test"
+                    Name = new RegexFieldFilter("Test")
                 },
                 Type = TransformationType.Property
             };
@@ -432,17 +434,17 @@ namespace Test.Unit
         {
             var raw = new RawNodeTransformation
             {
-                Filter = new RawNodeFilter
+                Filter = new NodeFilter
                 {
-                    Name = "Test"
+                    Name = new RegexFieldFilter("Test")
                 },
                 Type = TransformationType.Property
             };
             var raw2 = new RawNodeTransformation
             {
-                Filter = new RawNodeFilter
+                Filter = new NodeFilter
                 {
-                    Name = "Other"
+                    Name = new RegexFieldFilter("Other")
                 },
                 Type = TransformationType.TimeSeries
             };
@@ -473,9 +475,9 @@ namespace Test.Unit
         {
             var raw = new RawNodeTransformation
             {
-                Filter = new RawNodeFilter
+                Filter = new NodeFilter
                 {
-                    Name = "Test"
+                    Name = new RegexFieldFilter("Test")
                 },
                 Type = TransformationType.AsEvents
             };
@@ -504,24 +506,24 @@ namespace Test.Unit
         {
             var raw = new RawNodeTransformation
             {
-                Filter = new RawNodeFilter
+                Filter = new NodeFilter
                 {
-                    Name = "name",
-                    Namespace = "namespace",
+                    Name = new RegexFieldFilter("name"),
+                    Namespace = new RegexFieldFilter("namespace"),
                     NodeClass = NodeClass.Variable,
-                    Description = "description",
-                    TypeDefinition = "typeDefinition",
-                    Id = "id",
+                    Description = new RegexFieldFilter("description"),
+                    TypeDefinition = new RegexFieldFilter("typeDefinition"),
+                    Id = new RegexFieldFilter("id"),
                     IsArray = true,
                     Historizing = true,
-                    Parent = new RawNodeFilter
+                    Parent = new NodeFilter
                     {
-                        Name = "name2",
-                        Namespace = "namespace2",
+                        Name = new RegexFieldFilter("name2"),
+                        Namespace = new RegexFieldFilter("namespace2"),
                         NodeClass = NodeClass.Object,
-                        Description = "description2",
-                        TypeDefinition = "typeDefinition2",
-                        Id = "id2",
+                        Description = new RegexFieldFilter("description2"),
+                        TypeDefinition = new RegexFieldFilter("typeDefinition2"),
+                        Id = new RegexFieldFilter("id2"),
                         IsArray = false,
                         Historizing = false
                     }
@@ -558,9 +560,9 @@ Filter:
         {
             var raw = new RawNodeTransformation
             {
-                Filter = new RawNodeFilter
+                Filter = new NodeFilter
                 {
-                    Name = "Test"
+                    Name = new RegexFieldFilter("Test")
                 },
                 Type = TransformationType.Include
             };
@@ -586,6 +588,64 @@ Filter:
             Assert.False(nodes[1].Ignore);
             Assert.False(nodes[2].Ignore);
             Assert.False(nodes[3].Ignore);
+        }
+
+        [Fact]
+        public void TestFromYaml()
+        {
+            var extFile = "transform_entries.txt";
+            File.WriteAllLines(extFile, new[] {
+                "foo",
+                "bar",
+                "",
+                "   ",
+                "baz"
+            });
+            var data = @"
+                transformations:
+                    - type: Property
+                      filter:
+                        name: ""regex""
+                        description:
+                          - desc1
+                          - desc2
+                        id:
+                          file: transform_entries.txt
+            ";
+            var conf = ConfigurationUtils.ReadString<ExtractionConfig>(data, false);
+
+            Assert.Single(conf.Transformations);
+            var tf = conf.Transformations.First();
+            var desc = Assert.IsType<ListFieldFilter>(tf.Filter.Description);
+            Assert.Equal(2, desc.Raw.Count());
+            Assert.Null(desc.OriginalFile);
+            Assert.Contains("desc1", desc.Raw);
+            Assert.Contains("desc2", desc.Raw);
+            var name = Assert.IsType<RegexFieldFilter>(tf.Filter.Name);
+            Assert.Equal("regex", name.Raw);
+            var nodeId = Assert.IsType<ListFieldFilter>(tf.Filter.Id);
+            Assert.Equal(3, nodeId.Raw.Count());
+            Assert.Contains("foo", nodeId.Raw);
+            Assert.Contains("bar", nodeId.Raw);
+            Assert.Contains("baz", nodeId.Raw);
+
+            //var str = serializer.Serialize(conf.Transformations);
+            var str = ConfigurationUtils.ConfigToString(
+                conf.Transformations,
+                Enumerable.Empty<string>(),
+                Enumerable.Empty<string>(),
+                Enumerable.Empty<string>(),
+                false);
+            Assert.Equal(
+@"- type: ""Property""
+    filter:
+        name: ""regex""
+        description:
+          - ""desc1""
+          - ""desc2""
+        id:
+            file: ""transform_entries.txt""
+", str);
         }
     }
 }

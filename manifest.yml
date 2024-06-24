@@ -67,6 +67,11 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.30.0":
+    description: Add support for configuring filters from a list of values.
+    changelog:
+      added:
+        - Add support for configuring filters from a list of values contained either directly in config, or in a local file.
   "2.29.1":
     description: Log more related to continuation points.
     changelog:
