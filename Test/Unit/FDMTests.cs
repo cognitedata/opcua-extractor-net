@@ -171,9 +171,9 @@ namespace Test.Unit
                 .Append(new RawNodeTransformation
                 {
                     Type = Cognite.OpcUa.TransformationType.Ignore,
-                    Filter = new RawNodeFilter
+                    Filter = new NodeFilter
                     {
-                        Name = "DeviceThree"
+                        Name = new RegexFieldFilter("DeviceThree")
                     }
                 });
 

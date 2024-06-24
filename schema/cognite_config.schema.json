@@ -254,26 +254,6 @@
                 }
             }
         },
-        "browse-callback": {
-            "type": "object",
-            "unevaluatedProperties": false,
-            "description": "Specify a CDF function that is called after nodes are pushed to CDF, reporting the number of changed and created nodes. The function is called with a JSON object. \nThe counts for assets, time series, and relationships also include rows created in CDF Raw tables if raw is enabled as a metadata target.",
-            "properties": {
-                "id": {
-                    "type": "integer",
-                    "description": "Internal ID of function to call."
-                },
-                "external-id": {
-                    "type": "string",
-                    "description": "External ID of function to call"
-                },
-                "report-on-empty": {
-                    "type": "boolean",
-                    "description": "Call callback even if zero items are created or updated."
-                }
-            },
-            "$extraDescription": "The function will be called with the following JSON object:\n\n```json\n{\n    \"idPrefix\": \"Configured ID prefix\",\n    \"assetsCreated\": \"The number of assets reported to CDF\",\n    \"assetsUpdated\": \"The number of assets updated in CDF\",\n    \"timeSeriesCreated\": \"The number of time series created in CDF\",\n    \"timeSeriesUpdated\": \"The number of time series created in CDF\",\n    \"minimalTimeSeriesCreated\": \"The number of time series created with no metadata. Only used if time series metadata is not written to CDF clean\",\n    \"relationshipsCreated\": \"The number of new relationships created in CDF\",\n    \"rawDatabase\": \"Name of the configured CDF RAW database\",\n    \"assetsTable\": \"Name of the configured CDF RAW table for assets\",\n    \"timeSeriesTable\": \"Name of the configured CDF RAW table for time series\",\n    \"relationshipsTable\": \"Name of the configured CDF RAW table for relationships.\"\n}\n```"
-        },
         "delete-relationships": {
             "type": "boolean",
             "description": "If this is set to `true`, relationships deleted from the source will be hard-deleted in CDF. Relationships do not have metadata, so soft-deleting them is not possible."

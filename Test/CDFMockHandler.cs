@@ -60,7 +60,6 @@ namespace Test
         public Dictionary<string, JsonObject> Views { get; } = new();
         public Dictionary<string, JsonObject> Containers { get; } = new();
         public Dictionary<string, JsonObject> Instances { get; } = new();
-        public List<BrowseReport> Callbacks { get; } = new List<BrowseReport>();
 
         private long assetIdCounter = 1;
         private long timeseriesIdCounter = 1;
@@ -120,15 +119,6 @@ namespace Test
             if (BlockAllConnections)
             {
                 return GetFailedRequest(HttpStatusCode.InternalServerError);
-            }
-
-            if (req.RequestUri.AbsolutePath == $"/api/playground/projects/{project}/functions/1234/call")
-            {
-                var funcContent = await req.Content.ReadAsStringAsync(cancellationToken);
-                var res = HandleCallFunction(funcContent);
-                res.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
-                res.Headers.Add("x-request-id", (requestIdCounter++).ToString(CultureInfo.InvariantCulture));
-                return res;
             }
 
             string reqPath = req.RequestUri.AbsolutePath.Replace($"/api/v1/projects/{project}", "", StringComparison.InvariantCulture);
@@ -979,27 +969,6 @@ namespace Test
             {
                 Relationships.Remove(id.ExternalId);
             }
-            return new HttpResponseMessage
-            {
-                StatusCode = HttpStatusCode.OK,
-                Content = new StringContent("{}")
-            };
-        }
-
-
-        private HttpResponseMessage HandleCallFunction(string content)
-        {
-            var options = new JsonSerializerSettings
-            {
-                ContractResolver = new DefaultContractResolver
-                {
-                    NamingStrategy = new CamelCaseNamingStrategy()
-                }
-            };
-            var data = JsonConvert.DeserializeObject<FunctionCallWrapper<BrowseReport>>(content, options);
-
-            Callbacks.Add(data.Data);
-
             return new HttpResponseMessage
             {
                 StatusCode = HttpStatusCode.OK,
