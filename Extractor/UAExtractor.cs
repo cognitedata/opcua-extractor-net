@@ -722,9 +722,9 @@ namespace Cognite.OpcUa
                 log.LogWarning("Property Id filter is deprecated, use transformations instead");
                 transformations.Add(new NodeTransformation(new RawNodeTransformation
                 {
-                    Filter = new RawNodeFilter
+                    Filter = new NodeFilter
                     {
-                        Id = Config.Extraction.PropertyIdFilter
+                        Id = new RegexFieldFilter(Config.Extraction.PropertyIdFilter)
                     },
                     Type = TransformationType.Property
                 }, idx++));
@@ -734,9 +734,9 @@ namespace Cognite.OpcUa
                 log.LogWarning("Property Name filter is deprecated, use transformations instead");
                 transformations.Add(new NodeTransformation(new RawNodeTransformation
                 {
-                    Filter = new RawNodeFilter
+                    Filter = new NodeFilter
                     {
-                        Name = Config.Extraction.PropertyNameFilter
+                        Name = new RegexFieldFilter(Config.Extraction.PropertyNameFilter)
                     },
                     Type = TransformationType.Property
                 }, idx++));
@@ -744,12 +744,11 @@ namespace Cognite.OpcUa
             if (Config.Extraction.IgnoreName != null && Config.Extraction.IgnoreName.Any())
             {
                 log.LogWarning("Ignore name is deprecated, use transformations instead");
-                var filterStr = string.Join('|', Config.Extraction.IgnoreName.Select(str => $"^{str}$"));
                 transformations.Add(new NodeTransformation(new RawNodeTransformation
                 {
-                    Filter = new RawNodeFilter
+                    Filter = new NodeFilter
                     {
-                        Name = filterStr
+                        Name = new ListFieldFilter(Config.Extraction.IgnoreName, null)
                     },
                     Type = TransformationType.Ignore
                 }, idx++));
@@ -760,9 +759,9 @@ namespace Cognite.OpcUa
                 var filterStr = string.Join('|', Config.Extraction.IgnoreNamePrefix.Select(str => $"^{str}"));
                 transformations.Add(new NodeTransformation(new RawNodeTransformation
                 {
-                    Filter = new RawNodeFilter
+                    Filter = new NodeFilter
                     {
-                        Name = filterStr
+                        Name = new RegexFieldFilter(filterStr)
                     },
                     Type = TransformationType.Ignore
                 }, idx++));
