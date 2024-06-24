@@ -13,7 +13,7 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="AdysTech.InfluxDB.Client.Net.Core" Version="0.25.0" />
-    <PackageReference Include="Cognite.ExtractorUtils" Version="1.24.0" />
+    <PackageReference Include="Cognite.ExtractorUtils" Version="1.24.3" />
     <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
     <PackageReference Include="OPCFoundation.NetStandard.Opc.Ua.Client" Version="1.5.374.36" />
     <PackageReference Include="OPCFoundation.NetStandard.Opc.Ua.Configuration" Version="1.5.374.36" />

@@ -561,9 +561,9 @@ namespace Test.Unit
             tester.Client.Browser.Transformations = new TransformationCollection(new List<NodeTransformation>
             {
                 new NodeTransformation(new RawNodeTransformation {
-                    Filter = new RawNodeFilter
+                    Filter = new NodeFilter
                     {
-                        Name = "WideRoot"
+                        Name = new RegexFieldFilter("WideRoot")
                     },
                     Type = TransformationType.Ignore
                 }, 0)
@@ -590,9 +590,9 @@ namespace Test.Unit
             tester.Client.Browser.Transformations = new TransformationCollection(new List<NodeTransformation>
             {
                 new NodeTransformation(new RawNodeTransformation {
-                    Filter = new RawNodeFilter
+                    Filter = new NodeFilter
                     {
-                        Name = "^Sub|^Deep"
+                        Name = new RegexFieldFilter("^Sub|^Deep")
                     },
                     Type = TransformationType.Ignore
                 }, 0)
