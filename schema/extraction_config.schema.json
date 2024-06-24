@@ -338,28 +338,28 @@
             "unevaluatedProperties": false,
             "properties": {
                 "name": {
-                    "type": "string",
-                    "description": "Regex on node `DisplayName`."
+                    "$ref": "field-filter",
+                    "description": "Regex or list of values matching node `DisplayName`."
                 },
                 "description": {
-                    "type": "string",
-                    "description": "Regex on node `Description`."
+                    "$ref": "field-filter",
+                    "description": "Regex or list of values matching node `Description`."
                 },
                 "id": {
-                    "type": "string",
-                    "description": "Regex on node ID. IDs on the form `i=123` or `s=string` are matched."
+                    "$ref": "field-filter",
+                    "description": "Regex or list of values matching node ID. IDs on the form `i=123` or `s=string` are matched."
                 },
                 "is-array": {
                     "type": "boolean",
                     "description": "Match on whether a node is an array. If this is set to `true` or `false`, the filter will only match variables."
                 },
                 "namespace": {
-                    "type": "string",
-                    "description": "Regex on the full namespace of the node ID."
+                    "$ref": "field-filter",
+                    "description": "Regex or list of values matching the full namespace of the node ID."
                 },
                 "type-definition": {
-                    "type": "string",
-                    "description": "Regex on the node ID of the type definition. On the form `i=123` or `s=string`."
+                    "$ref": "field-filter",
+                    "description": "Regex or list of values matching the node ID of the type definition. On the form `i=123` or `s=string`."
                 },
                 "historizing": {
                     "type": "boolean",
@@ -382,6 +382,37 @@
                     "description": "Another filter instance which is applied to the parent node."
                 }
             }
+        },
+        "field-filter": {
+            "$id": "field-filter",
+            "oneOf": [
+                {
+                    "type": "object",
+                    "unevaluatedProperties": false,
+                    "title": "File",
+                    "description": "Match field exactly from a list of values read from a local file",
+                    "properties": {
+                        "file": {
+                            "type": "string",
+                            "description": "Path to a local file containing a new-line separated list of values."
+                        }
+                    }
+                },
+                {
+                    "type": "array",
+                    "title": "Values",
+                    "description": "Match field exactly from a list of values",
+                    "items": {
+                        "type": "string",
+                        "description": "Value to match"
+                    }
+                },
+                {
+                    "type": "string",
+                    "title": "Regex",
+                    "description": "Regex on the value."
+                }
+            ]
         }
     }
 }
