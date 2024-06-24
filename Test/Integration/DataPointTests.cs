@@ -322,9 +322,9 @@ namespace Test.Integration
             {
                 new RawNodeTransformation
                 {
-                    Filter = new RawNodeFilter
+                    Filter = new NodeFilter
                     {
-                        Name = "Variable bool"
+                        Name = new RegexFieldFilter("Variable bool")
                     },
                     Type = TransformationType.AsEvents
                 }
@@ -832,9 +832,9 @@ namespace Test.Integration
             {
                 new RawNodeTransformation
                 {
-                    Filter = new RawNodeFilter
+                    Filter = new NodeFilter
                     {
-                        Id = $"i={ids.DoubleVar1.Identifier}$"
+                        Id = new RegexFieldFilter($"i={ids.DoubleVar1.Identifier}$")
                     },
                     Type = TransformationType.DropSubscriptions
                 }
