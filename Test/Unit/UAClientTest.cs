@@ -23,6 +23,7 @@ using System.Threading.Tasks;
 using Test.Utils;
 using Xunit;
 using Xunit.Abstractions;
+using Cognite.Extractor.Configuration;
 
 namespace Test.Unit
 {
@@ -38,6 +39,13 @@ namespace Test.Unit
         public UAClientTestFixture()
         {
             var services = new ServiceCollection();
+
+            try
+            {
+                ConfigurationUtils.AddTypeConverter(new FieldFilterConverter());
+            }
+            catch { }
+
             Config = services.AddConfig<FullConfig>("config.test.yml", 1);
             Config.Source.EndpointUrl = $"opc.tcp://localhost:62000";
             Configure(services);
@@ -147,7 +155,7 @@ namespace Test.Unit
             try
             {
                 var exc = await Assert.ThrowsAsync<SilentServiceException>(() => tester.Client.Run(tester.Source.Token, 0));
-                Assert.Equal(StatusCodes.BadNotConnected, exc.StatusCode);
+                Assert.Equal(StatusCodes.BadNoCommunication, exc.StatusCode);
                 Assert.Equal(ExtractorUtils.SourceOp.SelectEndpoint, exc.Operation);
             }
             finally
