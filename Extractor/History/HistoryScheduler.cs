@@ -72,7 +72,7 @@ namespace Cognite.OpcUa.History
 
         private readonly HistoryReadType type;
         private readonly DateTime historyStartTime;
-        private readonly DateTime? historyEndTime;
+        private readonly DateTime historyEndTime;
         private readonly TimeSpan historyGranularity;
         private readonly ILogger log;
 
@@ -130,7 +130,23 @@ namespace Cognite.OpcUa.History
             });
 
             historyStartTime = GetStartTime(config.History.StartTime);
-            if (!string.IsNullOrWhiteSpace(config.History.EndTime)) historyEndTime = CogniteTime.ParseTimestampString(config.History.EndTime)!;
+            if (!string.IsNullOrWhiteSpace(config.History.EndTime))
+            {
+                var endTime = CogniteTime.ParseTimestampString(config.History.EndTime)!;
+                if (endTime.HasValue)
+                {
+                    historyEndTime = endTime.Value;
+                }
+                else
+                {
+                    log.LogWarning("Failed to parse timestamp from end-time string {Conf}", config.History.EndTime);
+                    historyEndTime = DefaultEndTime();
+                }
+            }
+            else
+            {
+                historyEndTime = DefaultEndTime();
+            }
 
             if (historyStartTime != null && historyEndTime != null && historyStartTime >= historyEndTime)
             {
@@ -141,6 +157,19 @@ namespace Cognite.OpcUa.History
             historyGranularity = config.History.GranularityValue.Value;
 
             metrics = new HistoryMetrics(type);
+        }
+
+        private DateTime DefaultEndTime()
+        {
+            // Need to avoid reading far into the future if maxReadLength is specified, since that can cause crazy issues.
+            // If users want to use maxReadLength properly they just have to set their own end time.
+            if (maxReadLength.HasValue)
+            {
+                log.LogWarning("max-read-length is set without setting end-time. End time is set to current time + max-read-length, "
+                    + "but it is strongly recommended to explicitly configure end-time when using max-read-length.");
+                return DateTime.UtcNow.Add(maxReadLength.Value);
+            }
+            return DateTime.UtcNow.AddDays(1);
         }
 
         private static DateTime GetStartTime(string? start)
@@ -207,11 +236,11 @@ namespace Cognite.OpcUa.History
             if (Frontfill)
             {
                 min = Max(nodes.First().Time, historyStartTime);
-                if (maxReadLength == null) max = historyEndTime ?? DateTime.MinValue;
+                if (maxReadLength == null) max = historyEndTime;
                 else
                 {
                     max = min + maxReadLength.Value;
-                    if (max > (historyEndTime ?? DateTime.UtcNow)) max = historyEndTime ?? DateTime.MinValue;
+                    if (max > historyEndTime) max = historyEndTime;
                 }
             }
             else

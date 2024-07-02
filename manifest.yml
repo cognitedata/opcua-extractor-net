@@ -67,6 +67,11 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.30.1":
+    description: Always set history end time.
+    changelog:
+      changed:
+        - History end time is now always set in read requests to the server, even if history.end-time is not configured.
   "2.30.0":
     description: Add support for configuring filters from a list of values.
     changelog:
