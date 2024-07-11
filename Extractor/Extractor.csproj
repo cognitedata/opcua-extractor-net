@@ -15,7 +15,7 @@
     <PackageReference Include="AdysTech.InfluxDB.Client.Net.Core" Version="0.25.0" />
     <PackageReference Include="Cognite.ExtractorUtils" Version="1.24.3" />
     <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
-    <PackageReference Include="OPCFoundation.NetStandard.Opc.Ua.Client" Version="1.5.374.70" />
+    <PackageReference Include="OPCFoundation.NetStandard.Opc.Ua.Client" Version="1.5.374.78" />
     <PackageReference Include="OPCFoundation.NetStandard.Opc.Ua.Configuration" Version="1.5.374.70" />
     <PackageReference Include="OPCFoundation.NetStandard.Opc.Ua.PubSub" Version="1.5.374.70-beta" />
     <PackageReference Include="System.ComponentModel.Annotations" Version="5.0.0" />
