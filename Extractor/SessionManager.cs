@@ -227,7 +227,7 @@ namespace Cognite.OpcUa
                         log.LogError("Reverse connect failed, no connection established");
                         throw new ExtractorFailureException("Failed to obtain reverse connection from server");
                     }
-                    await Task.Run(() => oldSession.Reconnect(reconn), liveToken);
+                    await oldSession.ReconnectAsync(reconn, liveToken);
                     return oldSession;
                 }
                 catch (Exception ex)
@@ -337,7 +337,7 @@ namespace Cognite.OpcUa
                 log.LogInformation("Attempting to reconnect to the server, before creating a new connection");
                 try
                 {
-                    await Task.Run(() => oldSession.Reconnect(), liveToken);
+                    await oldSession.ReconnectAsync(liveToken);
                     return oldSession;
                 }
                 catch (Exception ex)
