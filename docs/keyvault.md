@@ -6,7 +6,7 @@ The OPC UA extractor also supports loading values from Azure Key Vault. To load 
 password: !keyvault my-secret-name
 ```
 
-To use Key Vault, you also need to include the `azure-keyvault` section in your configuration, with the following parameters:
+To use Key Vault, you also need to include the `key-vault` section in your configuration, with the following parameters:
 
 | Parameter | Description |
 | - | - |
