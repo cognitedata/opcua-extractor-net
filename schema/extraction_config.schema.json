@@ -28,8 +28,17 @@
         },
         "node-map": {
             "type": "object",
-            "description": "Map from external IDs to OPC UA node IDs. This can, for example, be used to place the node hierarchy as a child of a specific asset in the asset hierarchy.",
+            "description": "Map from external IDs to OPC UA node IDs. This can, for example, be used to place the node hierarchy as a child of a specific asset in the asset hierarchy, or to manually rename certain nodes.",
             "unevaluatedProperties": false,
+            "$includeExamplesInTable": false,
+            "examples": [
+                {
+                    "myCustomExternalId": {
+                        "node-id": "i=15",
+                        "namespace-uri": "urn:mynamespace"
+                    }
+                }
+            ],
             "patternProperties": {
                 ".*": {
                     "$ref": "proto_node_id.schema.json",

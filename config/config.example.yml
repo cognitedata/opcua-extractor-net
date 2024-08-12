@@ -614,8 +614,8 @@ extraction:
 
     # Override mappings between OPC UA node id and externalId, allowing e.g. the RootNode to be mapped to
     # a particular asset in CDF. Applies to both assets and time series.
-    # NodeMap:
-    #   "externalId": { NamespaceUri: "uri", NodeId: "i=123" }
+    # node-map:
+    #   "externalId": { namespace-uri: "uri", node-id: "i=123" }
     node-map:
 
     # Map OPC-UA namespaces to prefixes in CDF. If not mapped, the full namespace URI is used.
