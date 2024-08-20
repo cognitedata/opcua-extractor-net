@@ -266,7 +266,8 @@ namespace Cognite.OpcUa.History
                         IsReadModified = false,
                         StartTime = min,
                         EndTime = max,
-                        NumValuesPerNode = (uint)Config.DataChunk
+                        NumValuesPerNode = (uint)Config.DataChunk,
+                        ReturnBounds = false,
                     };
                     break;
                 case HistoryReadType.BackfillData:
@@ -275,7 +276,8 @@ namespace Cognite.OpcUa.History
                         IsReadModified = false,
                         StartTime = min,
                         EndTime = max,
-                        NumValuesPerNode = (uint)Config.DataChunk
+                        NumValuesPerNode = (uint)Config.DataChunk,
+                        ReturnBounds = false,
                     };
                     break;
                 case HistoryReadType.FrontfillEvents:
@@ -284,7 +286,7 @@ namespace Cognite.OpcUa.History
                         StartTime = min,
                         EndTime = max,
                         NumValuesPerNode = (uint)Config.EventChunk,
-                        Filter = uaClient.BuildEventFilter(typeManager.EventFields)
+                        Filter = uaClient.BuildEventFilter(typeManager.EventFields),
                     };
                     break;
                 case HistoryReadType.BackfillEvents:
