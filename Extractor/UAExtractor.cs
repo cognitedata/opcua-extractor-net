@@ -959,6 +959,14 @@ namespace Cognite.OpcUa
 
             bool initial = input.Variables.Count() + input.Objects.Count() >= State.NumActiveNodes;
 
+            if (initial && input.Variables.Any() && Config.Subscriptions.DataPoints)
+            {
+                log.LogWarning("No variables found, the extractor can run without any variables, but will not read history. " +
+                    "There may be issues reported at the debug log level, or this may be a configuration issue. " +
+                    "If this is intentional, and you do not want to read datapoints at all, you should disable " +
+                    "data point subscriptions by setting `subscriptions.data-points` to false");
+            }
+
             var pushTasks = pushers.Select(pusher => PushNodes(input, pusher, initial));
 
             if (Config.DryRun)
@@ -1017,6 +1025,7 @@ namespace Cognite.OpcUa
                         Source.Token));
                 }
             }
+
 
             pushTasks = pushTasks.ToList();
             log.LogInformation("Waiting for pushes on pushers");
