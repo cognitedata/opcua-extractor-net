@@ -1053,7 +1053,7 @@ namespace Test.Integration
         }
         #endregion
 
-        [Fact]
+        [Fact(Timeout = 20000)]
         public async Task TestReadHistoryOnRecreateSub()
         {
             tester.Config.History.Enabled = true;
