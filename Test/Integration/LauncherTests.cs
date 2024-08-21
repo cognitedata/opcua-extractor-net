@@ -63,6 +63,10 @@ namespace Test.Integration
             Program.OnLaunch = (s, o) => CommonBuild(s);
             ExtractorStarter.OnCreateExtractor = (d, e) =>
             {
+                if (extractor != null)
+                {
+                    extractor.Dispose();
+                }
                 extractor = e;
             };
         }
@@ -71,6 +75,7 @@ namespace Test.Integration
         {
             pusher?.Dispose();
             extractor?.Close().Wait();
+            extractor?.Dispose();
         }
 
         private void CommonBuild(ServiceCollection services)

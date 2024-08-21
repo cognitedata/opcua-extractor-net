@@ -457,10 +457,10 @@ namespace Cognite.OpcUa
                     {
                         if (current != null)
                         {
-                            await current.Session.CloseAsync();
                             current.Session.KeepAlive -= ClientKeepAlive;
                             current.Session.PublishError -= OnPublishError;
                             current.Session.Dispose();
+                            await current.Session.CloseAsync();
                         }
                         current = new SessionRedundancyResult(session, url, serviceLevel);
                     }
