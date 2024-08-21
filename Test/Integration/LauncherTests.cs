@@ -3,6 +3,7 @@ using Cognite.Extractor.Testing;
 using Cognite.Extractor.Utils;
 using Cognite.OpcUa;
 using Cognite.OpcUa.Config;
+using Cognite.OpcUa.Subscriptions;
 using Microsoft.Extensions.DependencyInjection;
 using Server;
 using System;
@@ -158,7 +159,7 @@ version: 1
             {
                 await TestUtils.WaitForCondition(() => extractor != null, 10);
 
-                await extractor.WaitForSubscriptions();
+                await extractor.WaitForSubscription(SubscriptionName.DataPoints);
 
                 await TestUtils.WaitForCondition(() => pusher.PushedNodes.Count != 0, 10);
                 Assert.Equal(167, pusher.PushedNodes.Count);
@@ -189,7 +190,7 @@ version: 1
             {
                 await TestUtils.WaitForCondition(() => extractor != null, 10);
 
-                await extractor.WaitForSubscriptions();
+                await extractor.WaitForSubscription(SubscriptionName.DataPoints);
 
                 await TestUtils.WaitForCondition(() => pusher.PushedNodes.Count != 0, 10);
                 Assert.Equal(172, pusher.PushedNodes.Count);
@@ -225,7 +226,7 @@ version: 1
             {
                 await TestUtils.WaitForCondition(() => extractor != null, 10);
 
-                await extractor.WaitForSubscriptions();
+                await extractor.WaitForSubscription(SubscriptionName.DataPoints);
 
                 await TestUtils.WaitForCondition(() => pusher.PushedNodes.Count != 0, 10);
                 Assert.Equal(172, pusher.PushedNodes.Count);

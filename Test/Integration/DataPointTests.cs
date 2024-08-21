@@ -69,7 +69,7 @@ namespace Test.Integration
 
             var runTask = extractor.RunExtractor();
 
-            await extractor.WaitForSubscriptions();
+            await extractor.WaitForSubscription(SubscriptionName.DataPoints);
 
             await TestUtils.WaitForCondition(() => pusher.DataPoints.Any(kvp => kvp.Value.Count != 0), 5);
             foreach (var kvp in pusher.DataPoints)
@@ -146,7 +146,7 @@ namespace Test.Integration
 
             var runTask = extractor.RunExtractor();
 
-            await extractor.WaitForSubscriptions();
+            await extractor.WaitForSubscription(SubscriptionName.DataPoints);
 
             try
             {
@@ -214,7 +214,7 @@ namespace Test.Integration
 
             var runTask = extractor.RunExtractor();
 
-            await extractor.WaitForSubscriptions();
+            await extractor.WaitForSubscription(SubscriptionName.DataPoints);
 
             await TestUtils.WaitForCondition(() => pusher.DataPoints.Any(kvp => kvp.Value.Count != 0), 5);
             foreach (var kvp in pusher.DataPoints)
@@ -293,7 +293,7 @@ namespace Test.Integration
 
             pusher.DataPoints[(ids.DoubleVar1, -1)] = new List<UADataPoint>();
 
-            await extractor.WaitForSubscriptions();
+            await extractor.WaitForSubscription(SubscriptionName.DataPoints);
             // Middle value is skipped due to deadband
             tester.Server.UpdateNode(ids.DoubleVar1, 0.0);
             await Task.Delay(100);
@@ -332,7 +332,7 @@ namespace Test.Integration
 
             var runTask = extractor.RunExtractor();
 
-            await extractor.WaitForSubscriptions();
+            await extractor.WaitForSubscription(SubscriptionName.DataPoints);
 
             tester.Server.UpdateNode(ids.BoolVar, true);
             tester.Server.UpdateNode(ids.DoubleVar1, 1.0);
@@ -370,7 +370,7 @@ namespace Test.Integration
 
             var runTask = extractor.RunExtractor();
 
-            await extractor.WaitForSubscriptions();
+            await extractor.WaitForSubscription(SubscriptionName.DataPoints);
 
             tester.Server.UpdateNode(ids.DoubleVar1, 1.0, StatusCodes.Uncertain);
             await Task.Delay(100);
@@ -419,7 +419,7 @@ namespace Test.Integration
 
             pusher.DataPoints[(ids.DoubleVar1, -1)] = new List<UADataPoint>();
 
-            await extractor.WaitForSubscriptions();
+            await extractor.WaitForSubscription(SubscriptionName.DataPoints);
             // Middle value is skipped due to deadband, but only on DoubleVar1
             tester.Server.UpdateNode(ids.DoubleVar1, 0.0);
             tester.Server.UpdateNode(ids.DoubleVar2, 0.0);
@@ -507,7 +507,7 @@ namespace Test.Integration
             tester.Server.PopulateCustomHistory(start);
 
             var runTask = extractor.RunExtractor();
-            await extractor.WaitForSubscriptions();
+            await extractor.WaitForSubscription(SubscriptionName.DataPoints);
 
             await TestUtils.WaitForCondition(() => extractor.State.NodeStates.All(node =>
                 !node.IsFrontfilling && !node.IsBackfilling), 10);
@@ -560,7 +560,7 @@ namespace Test.Integration
 
             var runTask = extractor.RunExtractor();
 
-            await extractor.WaitForSubscriptions();
+            await extractor.WaitForSubscription(SubscriptionName.DataPoints);
 
             await TestUtils.WaitForCondition(() => extractor.State.NodeStates.All(node =>
                 !node.IsFrontfilling && !node.IsBackfilling), 10);
@@ -638,7 +638,7 @@ namespace Test.Integration
             {
                 var runTask = extractor.RunExtractor();
 
-                await extractor.WaitForSubscriptions();
+                await extractor.WaitForSubscription(SubscriptionName.DataPoints);
 
                 await TestUtils.WaitForCondition(() => extractor.State.NodeStates.All(node =>
                     !node.IsFrontfilling && !node.IsBackfilling), 10);
@@ -668,7 +668,7 @@ namespace Test.Integration
             {
                 var runTask = extractor.RunExtractor();
 
-                await extractor.WaitForSubscriptions();
+                await extractor.WaitForSubscription(SubscriptionName.DataPoints);
 
                 await TestUtils.WaitForCondition(() => extractor.State.NodeStates.All(node =>
                     !node.IsFrontfilling && !node.IsBackfilling), 10);
@@ -715,7 +715,7 @@ namespace Test.Integration
             {
                 var runTask = extractor.RunExtractor();
 
-                await extractor.WaitForSubscriptions();
+                await extractor.WaitForSubscription(SubscriptionName.DataPoints);
 
                 await TestUtils.WaitForCondition(() => extractor.State.NodeStates.All(node =>
                     !node.IsFrontfilling && !node.IsBackfilling), 10);
@@ -742,7 +742,7 @@ namespace Test.Integration
             {
                 var runTask = extractor.RunExtractor();
 
-                await extractor.WaitForSubscriptions();
+                await extractor.WaitForSubscription(SubscriptionName.DataPoints);
 
                 await TestUtils.WaitForCondition(() => extractor.State.NodeStates.All(node =>
                     !node.IsFrontfilling && !node.IsBackfilling), 10);
@@ -806,7 +806,7 @@ namespace Test.Integration
             // Test everything normal
             await extractor.RunExtractor(true);
             Assert.All(extractor.State.NodeStates, state => { Assert.True(state.ShouldSubscribe); });
-            await extractor.WaitForSubscriptions();
+            await extractor.WaitForSubscription(SubscriptionName.DataPoints);
             Assert.Equal(4u, session.Subscriptions.First(sub => sub.DisplayName.StartsWith(SubscriptionName.DataPoints.Name(), StringComparison.InvariantCulture)).MonitoredItemCount);
             await TestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 1), 5);
 
@@ -820,7 +820,7 @@ namespace Test.Integration
             Assert.False(state.ShouldSubscribe);
             state = extractor.State.GetNodeState(ids.IntVar);
             Assert.False(state.ShouldSubscribe);
-            await extractor.WaitForSubscriptions();
+            await extractor.WaitForSubscription(SubscriptionName.DataPoints);
             Assert.DoesNotContain(session.Subscriptions, sub => sub.DisplayName.StartsWith(SubscriptionName.DataPoints.Name(), StringComparison.InvariantCulture));
             await TestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 2, tester.Log), 5);
 
@@ -846,7 +846,7 @@ namespace Test.Integration
             Assert.False(state.ShouldSubscribe);
             state = extractor.State.GetNodeState(ids.IntVar);
             Assert.True(state.ShouldSubscribe);
-            await extractor.WaitForSubscriptions();
+            await extractor.WaitForSubscription(SubscriptionName.DataPoints);
             Assert.Equal(3u, session.Subscriptions.First(sub => sub.DisplayName.StartsWith(SubscriptionName.DataPoints.Name(), StringComparison.InvariantCulture)).MonitoredItemCount);
             await TestUtils.WaitForCondition(() => CommonTestUtils.GetMetricValue("opcua_frontfill_data_count") >= 3, 5);
         }
@@ -880,7 +880,7 @@ namespace Test.Integration
             try
             {
                 var runTask = extractor.RunExtractor();
-                await extractor.WaitForSubscriptions();
+                await extractor.WaitForSubscription(SubscriptionName.DataPoints);
 
                 var state = extractor.State.GetNodeState(ids.DoubleVar1);
                 // Range should be empty
@@ -955,7 +955,7 @@ namespace Test.Integration
 
             // First start the extractor and read the first half of history.
             var runTask = extractor.RunExtractor();
-            await extractor.WaitForSubscriptions();
+            await extractor.WaitForSubscription(SubscriptionName.DataPoints);
 
             await TestUtils.WaitForCondition(() => extractor.State.NodeStates.All(node =>
                 !node.IsFrontfilling && !node.IsBackfilling) && pusher.DataPoints[(ids.DoubleVar1, -1)].Count == 500, 10);
@@ -1011,7 +1011,7 @@ namespace Test.Integration
             pusher.PushDataPointResult = false;
 
             var runTask = extractor.RunExtractor();
-            await extractor.WaitForSubscriptions();
+            await extractor.WaitForSubscription(SubscriptionName.DataPoints);
 
             Assert.False(runTask.IsFaulted, $"Faulted! {runTask.Exception}");
 
@@ -1071,7 +1071,7 @@ namespace Test.Integration
             using var extractor = tester.BuildExtractor(true, null, pusher);
 
             var runTask = extractor.RunExtractor();
-            await extractor.WaitForSubscriptions();
+            await extractor.WaitForSubscription(SubscriptionName.DataPoints);
 
             Assert.False(runTask.IsFaulted, $"Faulted! {runTask.Exception}");
 

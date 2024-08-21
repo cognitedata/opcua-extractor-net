@@ -44,7 +44,7 @@ namespace Test.Integration
 
             // Act
             var runTask = extractor.RunExtractor();
-            await extractor.WaitForSubscriptions();
+            await extractor.WaitForSubscription(SubscriptionName.RebrowseTriggers);
 
             // Assert
             Assert.True(tester.TryGetSubscription(SubscriptionName.RebrowseTriggers, out var _));
@@ -63,7 +63,7 @@ namespace Test.Integration
 
             // Act
             var runTask = extractor.RunExtractor();
-            await extractor.WaitForSubscriptions();
+            await extractor.WaitForSubscription(SubscriptionName.RebrowseTriggers);
 
             // Assert
             Assert.False(tester.TryGetSubscription(SubscriptionName.RebrowseTriggers, out var _));
@@ -114,7 +114,7 @@ namespace Test.Integration
                 tester.Source.Token
             );
             var runTask = extractor.RunExtractor();
-            await extractor.WaitForSubscriptions();
+            await extractor.WaitForSubscription(SubscriptionName.RebrowseTriggers);
             var initialCount = cdfPusher.PushedNodes.Count;
             var addedId = tester.Server.Server.AddObject(
                 tester.Ids.Audit.Root,

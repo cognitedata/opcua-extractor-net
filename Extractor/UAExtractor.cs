@@ -77,9 +77,6 @@ namespace Cognite.OpcUa
 
         public bool Started { get; private set; }
 
-        private int subscribed;
-        private bool subscribeFlag;
-
         private static readonly Gauge startTime = Metrics
             .CreateGauge("opcua_start_time", "Start time for the extractor");
 
@@ -107,6 +104,9 @@ namespace Cognite.OpcUa
         public bool AllowUpdateState =>
             !Config.Source.Redundancy.MonitorServiceLevel
             || uaClient.SessionManager.CurrentServiceLevel >= Config.Source.Redundancy.ServiceLevelThreshold;
+
+        // Active subscriptions, used in tests for WaitForSubscription().
+        private HashSet<SubscriptionName> activeSubscriptions = new();
 
         /// <summary>
         /// Construct extractor with list of pushers
@@ -384,8 +384,10 @@ namespace Cognite.OpcUa
         /// </summary>
         public async Task RestartExtractor()
         {
-            subscribed = 0;
-            subscribeFlag = false;
+            lock (activeSubscriptions)
+            {
+                activeSubscriptions.Clear();
+            }
 
             historyReader?.AddIssue(HistoryReader.StateIssue.NodeHierarchyRead);
 
@@ -506,15 +508,23 @@ namespace Cognite.OpcUa
         /// Used for testing, wait for subscriptions to be created, with given timeout.
         /// </summary>
         /// <param name="timeout">Timeout in 10ths of a second</param>
-        public async Task WaitForSubscriptions(int timeout = 100)
+        public async Task WaitForSubscription(SubscriptionName name, int timeout = 100)
         {
             int time = 0;
-            while (!subscribeFlag && subscribed < 2 && time++ < timeout) await Task.Delay(100);
-            if (time >= timeout && !subscribeFlag && subscribed < 2)
+            while (time++ < timeout)
             {
-                throw new TimeoutException("Waiting for push timed out");
+                lock (activeSubscriptions)
+                {
+                    if (activeSubscriptions.Contains(name))
+                    {
+                        log.LogDebug("Waited {TimeS} milliseconds for subscriptions", time * 100);
+
+                        return;
+                    }
+                }
+                await Task.Delay(100);
             }
-            log.LogDebug("Waited {TimeS} milliseconds for subscriptions", time * 100);
+            throw new TimeoutException("Waiting for subscriptions timed out");
         }
 
         public void TriggerHistoryRestart()
@@ -545,6 +555,10 @@ namespace Cognite.OpcUa
 
         public void OnCreatedSubscription(SubscriptionName subscription)
         {
+            lock (activeSubscriptions)
+            {
+                activeSubscriptions.Add(subscription);
+            }
             switch (subscription)
             {
                 case SubscriptionName.Events:
@@ -1066,9 +1080,6 @@ namespace Cognite.OpcUa
                     this),
                     Source.Token);
             }
-
-            Interlocked.Increment(ref subscribed);
-            if (!State.NodeStates.Any() || subscribed > 1) subscribeFlag = true;
         }
 
         /// <summary>
@@ -1089,9 +1100,6 @@ namespace Cognite.OpcUa
                     this),
                     Source.Token);
             }
-
-            Interlocked.Increment(ref subscribed);
-            if (!State.EmitterStates.Any() || subscribed > 1) subscribeFlag = true;
         }
 
         /// <summary>

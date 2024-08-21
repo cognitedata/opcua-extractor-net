@@ -1113,7 +1113,7 @@ namespace Test.Unit
             Assert.True(handler.Timeseries.Count != 0);
             Assert.Empty(handler.Assets);
 
-            await extractor.WaitForSubscriptions();
+            await extractor.WaitForSubscription(SubscriptionName.DataPoints);
             await tester.RemoveSubscription(SubscriptionName.DataPoints);
 
             extractor.State.Clear();
@@ -1137,7 +1137,7 @@ namespace Test.Unit
             Assert.Equal(oldAssets, newAssets);
             Assert.Equal(oldTimeseries, newTimeseries);
 
-            await extractor.WaitForSubscriptions();
+            await extractor.WaitForSubscription(SubscriptionName.DataPoints);
 
             try
             {
@@ -1206,7 +1206,7 @@ namespace Test.Unit
             Assert.True(handler.Timeseries.Count != 0);
             Assert.Empty(handler.Assets);
 
-            await extractor.WaitForSubscriptions();
+            await extractor.WaitForSubscription(SubscriptionName.Events);
             await tester.RemoveSubscription(SubscriptionName.Events);
 
             extractor.State.Clear();
@@ -1228,7 +1228,7 @@ namespace Test.Unit
             Assert.Equal(oldAssets, newAssets);
             Assert.Equal(oldTimeseries, newTimeseries);
 
-            await extractor.WaitForSubscriptions();
+            await extractor.WaitForSubscription(SubscriptionName.Events);
 
             tester.Server.TriggerEvents(0);
 
@@ -1280,7 +1280,7 @@ namespace Test.Unit
             Assert.True(handler.Timeseries.Count != 0);
             Assert.Empty(handler.Assets);
 
-            await extractor.WaitForSubscriptions();
+            await extractor.WaitForSubscription(SubscriptionName.Events);
             await tester.RemoveSubscription(SubscriptionName.Events);
 
             extractor.State.Clear();

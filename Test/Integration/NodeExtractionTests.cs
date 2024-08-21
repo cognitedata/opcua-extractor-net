@@ -2,6 +2,7 @@
 using Cognite.OpcUa;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Nodes;
+using Cognite.OpcUa.Subscriptions;
 using Cognite.OpcUa.Types;
 using CogniteSdk;
 using Microsoft.Extensions.DependencyInjection;
@@ -769,7 +770,7 @@ namespace Test.Integration
             dataTypes.AutoIdentifyTypes = true;
 
             var runTask = extractor.RunExtractor();
-            await extractor.WaitForSubscriptions();
+            await extractor.WaitForSubscription(SubscriptionName.DataPoints);
 
             Assert.Empty(pusher.PushedNodes);
             Assert.Empty(pusher.PushedVariables);
@@ -820,7 +821,7 @@ namespace Test.Integration
             dataTypes.AutoIdentifyTypes = true;
 
             var runTask = extractor.RunExtractor();
-            await extractor.WaitForSubscriptions();
+            await extractor.WaitForSubscription(SubscriptionName.DataPoints);
 
             if (failNodes)
             {
