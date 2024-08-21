@@ -221,7 +221,7 @@ namespace Cognite.OpcUa
 
             if (options != null)
             {
-                options.Restart |= config.Source.ExitOnFailure;
+                options.Restart &= !config.Source.ExitOnFailure;
             }
 
             string? configResult = VerifyConfig(log, config);
@@ -368,6 +368,7 @@ namespace Cognite.OpcUa
 
             services.AddSingleton<UAClient>();
 
+            log.LogInformation("Start extractor: {R}", setup.Exit);
             var options = new ExtractorRunnerParams<FullConfig, UAExtractor>
             {
                 ConfigPath = setup.ConfigFile ?? Path.Join(configDir, "config.yml"),

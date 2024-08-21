@@ -569,6 +569,22 @@ namespace Cognite.OpcUa
                     break;
             }
         }
+
+        public void RemoveKnownSubscription(SubscriptionName name)
+        {
+            lock (activeSubscriptions)
+            {
+                activeSubscriptions.Remove(name);
+            }
+        }
+
+        public void ClearKnownSubscriptions()
+        {
+            lock (activeSubscriptions)
+            {
+                activeSubscriptions.Clear();
+            }
+        }
         #endregion
 
         #region Mapping

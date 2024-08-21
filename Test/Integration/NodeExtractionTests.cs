@@ -823,6 +823,10 @@ namespace Test.Integration
             var runTask = extractor.RunExtractor();
             await extractor.WaitForSubscription(SubscriptionName.DataPoints);
 
+            await TestUtils.WaitForCondition(() =>
+                pusher.PendingNodes.Objects != null
+                && pusher.PendingNodes.Variables != null, 10);
+
             if (failNodes)
             {
                 Assert.Empty(pusher.PushedNodes);

@@ -49,7 +49,6 @@ namespace Cognite.OpcUa
 
         public SessionContext Context { get; }
 
-
         public SessionManager(FullConfig config, UAClient parent, ILogger log)
         {
             client = parent;

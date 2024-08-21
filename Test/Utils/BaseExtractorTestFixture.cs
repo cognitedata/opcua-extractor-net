@@ -127,10 +127,10 @@ namespace Test.Utils
         {
             if (clear)
             {
-                RemoveSubscription(SubscriptionName.Events).Wait();
-                RemoveSubscription(SubscriptionName.DataPoints).Wait();
-                RemoveSubscription(SubscriptionName.Audit).Wait();
-                RemoveSubscription(SubscriptionName.RebrowseTriggers).Wait();
+                RemoveSubscription(null, SubscriptionName.Events).Wait();
+                RemoveSubscription(null, SubscriptionName.DataPoints).Wait();
+                RemoveSubscription(null, SubscriptionName.Audit).Wait();
+                RemoveSubscription(null, SubscriptionName.RebrowseTriggers).Wait();
                 Client.Browser.Transformations = null;
             }
             var ext = new UAExtractor(Config, Provider, pushers, Client, stateStore);
@@ -286,13 +286,14 @@ namespace Test.Utils
             }
         }
 
-        public async Task RemoveSubscription(SubscriptionName name)
+        public async Task RemoveSubscription(UAExtractor extractor, SubscriptionName name)
         {
             if (TryGetSubscription(name, out var subscription) && subscription!.Created)
             {
                 try
                 {
                     await Client.SessionManager.Session!.RemoveSubscriptionAsync(subscription);
+                    extractor?.RemoveKnownSubscription(name);
                 }
                 catch
                 {

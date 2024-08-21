@@ -783,11 +783,9 @@ namespace Test.Integration
             async Task Reset()
             {
                 extractor.State.Clear();
-                extractor.GetType().GetField("subscribed", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(extractor, 0);
-                extractor.GetType().GetField("subscribeFlag", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(extractor, false);
                 var reader = (HistoryReader)extractor.GetType().GetField("historyReader", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(extractor);
                 reader.AddIssue(HistoryReader.StateIssue.NodeHierarchyRead);
-                await tester.RemoveSubscription(SubscriptionName.DataPoints);
+                await tester.RemoveSubscription(extractor, SubscriptionName.DataPoints);
             }
 
             tester.Config.History.Enabled = true;
@@ -820,7 +818,7 @@ namespace Test.Integration
             Assert.False(state.ShouldSubscribe);
             state = extractor.State.GetNodeState(ids.IntVar);
             Assert.False(state.ShouldSubscribe);
-            await extractor.WaitForSubscription(SubscriptionName.DataPoints);
+            await Assert.ThrowsAsync<TimeoutException>(async () => await extractor.WaitForSubscription(SubscriptionName.Events, 20));
             Assert.DoesNotContain(session.Subscriptions, sub => sub.DisplayName.StartsWith(SubscriptionName.DataPoints.Name(), StringComparison.InvariantCulture));
             await TestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 2, tester.Log), 5);
 
@@ -955,9 +953,9 @@ namespace Test.Integration
 
             // First start the extractor and read the first half of history.
             var runTask = extractor.RunExtractor();
-            await extractor.WaitForSubscription(SubscriptionName.DataPoints);
 
-            await TestUtils.WaitForCondition(() => extractor.State.NodeStates.All(node =>
+            await TestUtils.WaitForCondition(() => extractor.State.NodeStates.Count > 0
+                && extractor.State.NodeStates.All(node =>
                 !node.IsFrontfilling && !node.IsBackfilling) && pusher.DataPoints[(ids.DoubleVar1, -1)].Count == 500, 10);
             var state = extractor.State.GetNodeState(ids.DoubleVar1);
 

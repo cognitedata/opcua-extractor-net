@@ -24,6 +24,8 @@ namespace Test.Integration
         public ServerController Server { get; }
         public string EndpointUrl => $"opc.tcp://localhost:{Port}";
 
+        public CancellationTokenSource Source { get; } = new CancellationTokenSource();
+
         public LauncherTestFixture()
         {
             Port = CommonTestUtils.NextPort;
@@ -44,13 +46,15 @@ namespace Test.Integration
             await Server.Start();
         }
 
-        public Task DisposeAsync()
+        public async Task DisposeAsync()
         {
             Server?.Dispose();
-            return Task.CompletedTask;
+            await Source.CancelAsync();
+            Source.Dispose();
         }
     }
 
+    [Collection("Program tests")]
     public sealed class LauncherTests : IClassFixture<LauncherTestFixture>, IDisposable
     {
         private readonly LauncherTestFixture tester;
@@ -62,13 +66,17 @@ namespace Test.Integration
             tester.Init(output);
             Program.CommandDryRun = false;
             Program.OnLaunch = (s, o) => CommonBuild(s);
+            Program.RootToken = tester.Source.Token;
             ExtractorStarter.OnCreateExtractor = (d, e) =>
             {
-                if (extractor != null)
+                lock (tester)
                 {
-                    extractor.Dispose();
+                    if (extractor != null)
+                    {
+                        extractor.Dispose();
+                    }
+                    extractor = e;
                 }
-                extractor = e;
             };
         }
 
@@ -76,7 +84,11 @@ namespace Test.Integration
         {
             pusher?.Dispose();
             extractor?.Close().Wait();
-            extractor?.Dispose();
+            lock (tester)
+            {
+                extractor?.Dispose();
+            }
+
         }
 
         private void CommonBuild(ServiceCollection services)
@@ -172,7 +184,7 @@ version: 1
             }
         }
 
-        [Fact(Timeout = 30000)]
+        [Fact]
         public async Task TestRunExtractorToolConfig()
         {
             var args = new[]
@@ -199,7 +211,6 @@ version: 1
             finally
             {
                 await extractor?.Close();
-                await Task.WhenAny(task, Task.Delay(5000));
             }
         }
 

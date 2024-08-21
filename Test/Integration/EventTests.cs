@@ -195,11 +195,9 @@ namespace Test.Integration
             async Task Reset()
             {
                 extractor.State.Clear();
-                extractor.GetType().GetField("subscribed", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(extractor, 0);
-                extractor.GetType().GetField("subscribeFlag", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(extractor, false);
                 var reader = (HistoryReader)extractor.GetType().GetField("historyReader", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(extractor);
                 reader.AddIssue(HistoryReader.StateIssue.NodeHierarchyRead);
-                await tester.RemoveSubscription(SubscriptionName.Events);
+                await tester.RemoveSubscription(extractor, SubscriptionName.Events);
             }
 
             tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(ids.Root, tester.Client);
@@ -226,7 +224,7 @@ namespace Test.Integration
             Assert.False(state.ShouldSubscribe);
             state = extractor.State.GetEmitterState(ObjectIds.Server);
             Assert.False(state.ShouldSubscribe);
-            await extractor.WaitForSubscription(SubscriptionName.Events);
+            await extractor.WaitForSubscription(SubscriptionName.DataPoints);
             Assert.DoesNotContain(session.Subscriptions, sub => sub.DisplayName.StartsWith(SubscriptionName.Events.Name(), StringComparison.InvariantCulture));
             await TestUtils.WaitForCondition(() => extractor.State.EmitterStates.All(s => !s.IsFrontfilling), 10);
 

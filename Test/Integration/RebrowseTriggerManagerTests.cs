@@ -63,7 +63,7 @@ namespace Test.Integration
 
             // Act
             var runTask = extractor.RunExtractor();
-            await extractor.WaitForSubscription(SubscriptionName.RebrowseTriggers);
+            await extractor.WaitForSubscription(SubscriptionName.DataPoints);
 
             // Assert
             Assert.False(tester.TryGetSubscription(SubscriptionName.RebrowseTriggers, out var _));
