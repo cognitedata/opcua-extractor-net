@@ -368,7 +368,6 @@ namespace Cognite.OpcUa
 
             services.AddSingleton<UAClient>();
 
-            log.LogInformation("Start extractor: {R}", setup.Exit);
             var options = new ExtractorRunnerParams<FullConfig, UAExtractor>
             {
                 ConfigPath = setup.ConfigFile ?? Path.Join(configDir, "config.yml"),

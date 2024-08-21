@@ -824,7 +824,8 @@ namespace Test.Integration
             await extractor.WaitForSubscription(SubscriptionName.DataPoints);
 
             await TestUtils.WaitForCondition(() =>
-                pusher.PendingNodes.Objects != null
+                pusher.PendingNodes != null
+                && pusher.PendingNodes.Objects != null
                 && pusher.PendingNodes.Variables != null, 10);
 
             if (failNodes)

@@ -477,7 +477,7 @@ version: 1
             Assert.Equal("logs2", config.Logger.File.Path);
             Assert.Equal("debug", config.Logger.File.Level);
             Assert.True(config.Source.ExitOnFailure);
-            Assert.True(options.Restart);
+            Assert.False(options.Restart);
             Assert.Equal("information", config.Logger.Console.Level);
 
             // Invalid configs
