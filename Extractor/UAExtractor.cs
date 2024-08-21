@@ -1257,8 +1257,15 @@ namespace Cognite.OpcUa
             await base.DisposeAsyncCore();
         }
 
+        private int disposed = 0;
+
         protected override void Dispose(bool disposing)
         {
+            // Only run dispose once...
+            if (Interlocked.CompareExchange(ref disposed, 1, 0) == 0)
+            {
+                return;
+            }
             if (disposing)
             {
                 Starting.Set(0);
