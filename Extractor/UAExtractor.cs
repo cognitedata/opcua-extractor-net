@@ -959,7 +959,7 @@ namespace Cognite.OpcUa
 
             bool initial = input.Variables.Count() + input.Objects.Count() >= State.NumActiveNodes;
 
-            if (initial && input.Variables.Any() && Config.Subscriptions.DataPoints)
+            if (initial && !input.Variables.Any() && Config.Subscriptions.DataPoints)
             {
                 log.LogWarning("No variables found, the extractor can run without any variables, but will not read history. " +
                     "There may be issues reported at the debug log level, or this may be a configuration issue. " +
