@@ -597,7 +597,7 @@ namespace Test.Integration
             tester.ResetCustomServerValues();
         }
 
-        [Theory]
+        [Theory(Timeout = 20000)]
         [InlineData(true)]
         [InlineData(false)]
         public async Task TestLiteDbStateRestart(bool backfill)
