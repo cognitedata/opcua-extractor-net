@@ -16,8 +16,9 @@ ENV OPCUA_CERTIFICATE_DIR="/certificates"
 ENV OPCUA_OWN_CERTIFICATE_DIR="/certificates/pki/own"
 ENV OPCUA_CERTIFICATE_SUBJECT="CN=Opcua-extractor, C=NO, S=Oslo, O=Cognite, DC=docker.opcua"
 
-RUN mkdir -p /logs
+RUN mkdir -p /logs /certificates
 RUN chmod -R a+rw /logs
+RUN chmod -R a+rw /certificates
 
 RUN groupadd -g 1000 extractor && useradd -m -u 1000 -g extractor extractor
 USER extractor
