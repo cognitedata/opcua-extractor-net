@@ -70,12 +70,29 @@ namespace Test.Utils
         {
             Server = new ServerController(Setups, Provider, Port);
             await Server.Start();
-
-            Client = new UAClient(Provider, Config);
             Source = new CancellationTokenSource();
             Callbacks = new DummyClientCallbacks(Source.Token);
-            Client.Callbacks = Callbacks;
-            await Client.Run(Source.Token, 0);
+
+            for (int i = 0; i < 10; i++)
+            {
+                Client = new UAClient(Provider, Config)
+                {
+                    Callbacks = Callbacks
+                };
+                try
+                {
+                    await Client.Run(Source.Token, 0);
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    Log.LogError(ex, "Failed to start OPC-UA client");
+                    await Task.Delay(1000);
+                    if (i >= 9) throw;
+                    continue;
+                }
+            }
+
         }
 
         private static void ResetType(object obj, object reference)
