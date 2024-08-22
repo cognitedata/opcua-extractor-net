@@ -237,6 +237,7 @@ namespace Test.Utils
                 await runTask;
             }
             catch (TaskCanceledException) { }
+            catch (OperationCanceledException) { }
         }
         public void ResetCustomServerValues()
         {
