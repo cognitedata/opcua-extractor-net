@@ -221,7 +221,7 @@ namespace Cognite.OpcUa
 
             if (options != null)
             {
-                options.Restart |= config.Source.ExitOnFailure;
+                options.Restart &= !config.Source.ExitOnFailure;
             }
 
             string? configResult = VerifyConfig(log, config);

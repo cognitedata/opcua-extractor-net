@@ -66,7 +66,7 @@ namespace Test.Integration
 
             var ids = tester.Server.Ids.Event;
 
-            await extractor.WaitForSubscriptions();
+            await extractor.WaitForSubscription(SubscriptionName.Events);
 
             tester.Server.TriggerEvents(0);
 
@@ -106,7 +106,7 @@ namespace Test.Integration
 
             var ids = tester.Server.Ids.Event;
 
-            await extractor.WaitForSubscriptions();
+            await extractor.WaitForSubscription(SubscriptionName.Events);
 
             tester.Server.TriggerEvents(0);
 
@@ -150,7 +150,7 @@ namespace Test.Integration
             var ids = tester.Server.Ids.Event;
 
 
-            await extractor.WaitForSubscriptions();
+            await extractor.WaitForSubscription(SubscriptionName.Events);
 
             tester.Server.Server.TriggerEvent<DeepEvent>(ids.DeepType, ObjectIds.Server, ids.Root, "TestMessage",
                 evt =>
@@ -195,11 +195,9 @@ namespace Test.Integration
             async Task Reset()
             {
                 extractor.State.Clear();
-                extractor.GetType().GetField("subscribed", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(extractor, 0);
-                extractor.GetType().GetField("subscribeFlag", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(extractor, false);
                 var reader = (HistoryReader)extractor.GetType().GetField("historyReader", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(extractor);
                 reader.AddIssue(HistoryReader.StateIssue.NodeHierarchyRead);
-                await tester.RemoveSubscription(SubscriptionName.Events);
+                await tester.RemoveSubscription(extractor, SubscriptionName.Events);
             }
 
             tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(ids.Root, tester.Client);
@@ -214,7 +212,7 @@ namespace Test.Integration
             // Test everything normal
             await extractor.RunExtractor(true);
             Assert.All(extractor.State.EmitterStates, state => { Assert.True(state.ShouldSubscribe); });
-            await extractor.WaitForSubscriptions();
+            await extractor.WaitForSubscription(SubscriptionName.Events);
             Assert.Equal(3u, session.Subscriptions.First(sub => sub.DisplayName.StartsWith(SubscriptionName.Events.Name(), StringComparison.InvariantCulture)).MonitoredItemCount);
             await TestUtils.WaitForCondition(() => extractor.State.EmitterStates.All(s => !s.IsFrontfilling), 10);
 
@@ -226,7 +224,7 @@ namespace Test.Integration
             Assert.False(state.ShouldSubscribe);
             state = extractor.State.GetEmitterState(ObjectIds.Server);
             Assert.False(state.ShouldSubscribe);
-            await extractor.WaitForSubscriptions();
+            await extractor.WaitForSubscription(SubscriptionName.DataPoints);
             Assert.DoesNotContain(session.Subscriptions, sub => sub.DisplayName.StartsWith(SubscriptionName.Events.Name(), StringComparison.InvariantCulture));
             await TestUtils.WaitForCondition(() => extractor.State.EmitterStates.All(s => !s.IsFrontfilling), 10);
 
@@ -251,7 +249,7 @@ namespace Test.Integration
             Assert.False(state.ShouldSubscribe);
             state = extractor.State.GetEmitterState(ObjectIds.Server);
             Assert.True(state.ShouldSubscribe);
-            await extractor.WaitForSubscriptions();
+            await extractor.WaitForSubscription(SubscriptionName.Events);
             Assert.Equal(2u, session.Subscriptions.First(sub => sub.DisplayName.StartsWith(SubscriptionName.Events.Name(), StringComparison.InvariantCulture)).MonitoredItemCount);
             await TestUtils.WaitForCondition(() => extractor.State.EmitterStates.All(s => !s.IsFrontfilling), 10);
         }
@@ -281,7 +279,7 @@ namespace Test.Integration
             var runTask = extractor.RunExtractor();
             var ids = tester.Server.Ids.Event;
 
-            await extractor.WaitForSubscriptions();
+            await extractor.WaitForSubscription(SubscriptionName.Events);
 
             await TestUtils.WaitForCondition(() => extractor.State.EmitterStates.All(state => !state.IsFrontfilling
                             && !state.IsBackfilling), 5);
@@ -331,7 +329,7 @@ namespace Test.Integration
             var runTask = extractor.RunExtractor();
             var ids = tester.Server.Ids.Event;
 
-            await extractor.WaitForSubscriptions();
+            await extractor.WaitForSubscription(SubscriptionName.Events);
 
             await TestUtils.WaitForCondition(() => extractor.State.EmitterStates.All(state => !state.IsFrontfilling
                 && !state.IsBackfilling), 5);
@@ -396,7 +394,7 @@ namespace Test.Integration
             {
                 var runTask = extractor.RunExtractor();
 
-                await extractor.WaitForSubscriptions();
+                await extractor.WaitForSubscription(SubscriptionName.Events);
 
                 await TestUtils.WaitForCondition(() => extractor.State.EmitterStates.All(node =>
                     !node.IsFrontfilling && !node.IsBackfilling), 10);
@@ -427,7 +425,7 @@ namespace Test.Integration
             {
                 var runTask = extractor.RunExtractor();
 
-                await extractor.WaitForSubscriptions();
+                await extractor.WaitForSubscription(SubscriptionName.Events);
 
                 await TestUtils.WaitForCondition(() => extractor.State.EmitterStates.All(node =>
                     !node.IsFrontfilling && !node.IsBackfilling), 10);
@@ -473,7 +471,7 @@ namespace Test.Integration
             {
                 var runTask = extractor.RunExtractor();
 
-                await extractor.WaitForSubscriptions();
+                await extractor.WaitForSubscription(SubscriptionName.Events);
 
                 await TestUtils.WaitForCondition(() => extractor.State.EmitterStates.All(node =>
                     !node.IsFrontfilling && !node.IsBackfilling), 10);
@@ -502,7 +500,7 @@ namespace Test.Integration
             {
                 var runTask = extractor.RunExtractor();
 
-                await extractor.WaitForSubscriptions();
+                await extractor.WaitForSubscription(SubscriptionName.Events);
 
                 await TestUtils.WaitForCondition(() => extractor.State.EmitterStates.All(node =>
                     !node.IsFrontfilling && !node.IsBackfilling), 10);
@@ -566,7 +564,7 @@ namespace Test.Integration
             pusher.TestConnectionResult = false;
 
             var runTask = extractor.RunExtractor();
-            await extractor.WaitForSubscriptions();
+            await extractor.WaitForSubscription(SubscriptionName.Events);
 
             Assert.False(runTask.IsFaulted, $"Faulted! {runTask.Exception}");
 
@@ -611,7 +609,7 @@ namespace Test.Integration
             tester.Config.Extraction.EnableAuditDiscovery = true;
 
             var runTask = extractor.RunExtractor();
-            await extractor.WaitForSubscriptions();
+            await extractor.WaitForSubscription(SubscriptionName.Audit);
 
             Assert.Equal(3, pusher.PushedNodes.Count);
 

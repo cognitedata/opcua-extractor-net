@@ -3,6 +3,7 @@ using Cognite.OpcUa;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.NodeSources;
+using Cognite.OpcUa.Subscriptions;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -73,7 +74,7 @@ namespace Test.Unit
             using var extractor = tester.BuildExtractor(pushers: pusher);
 
             var task = extractor.RunExtractor();
-            await extractor.WaitForSubscriptions();
+            await extractor.WaitForSubscription(SubscriptionName.DataPoints);
             Assert.True(pusher.PushedNodes.Count != 0);
             pusher.PushedNodes.Clear();
             await extractor.OnServerReconnect(tester.Client);

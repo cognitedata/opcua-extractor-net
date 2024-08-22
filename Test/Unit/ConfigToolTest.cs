@@ -25,6 +25,11 @@ namespace Test.Unit
         public ServiceProvider Provider { get; }
         public ConfigToolTestFixture()
         {
+            try
+            {
+                ConfigurationUtils.AddTypeConverter(new FieldFilterConverter());
+            }
+            catch { }
             var services = new ServiceCollection();
             Config = services.AddConfig<FullConfig>("config.test.yml", 1);
             Config.Source.Retries = new UARetryConfig

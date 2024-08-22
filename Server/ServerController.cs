@@ -45,6 +45,7 @@ namespace Server
         private readonly IServiceProvider provider;
         private bool running;
         private IEnumerable<string> nodeSetFiles;
+        private readonly string certPath;
 
         public ServerController(
             IEnumerable<PredefinedSetup> setups,
@@ -53,7 +54,8 @@ namespace Server
             string mqttUrl = "mqtt://localhost:4060",
             string endpointUrl = "opc.tcp://localhost",
             bool logTrace = false,
-            IEnumerable<string> nodeSetFiles = null)
+            IEnumerable<string> nodeSetFiles = null,
+            string certPath = null)
         {
             this.setups = setups;
             this.port = port;
@@ -63,6 +65,7 @@ namespace Server
             log = provider.GetRequiredService<ILogger<ServerController>>();
             this.provider = provider;
             this.nodeSetFiles = nodeSetFiles;
+            this.certPath = certPath;
         }
 
         public void Dispose()
@@ -83,6 +86,13 @@ namespace Server
             {
                 var cfg = await app.LoadApplicationConfiguration(Path.Join("config", $"{ConfigRoot}.Config.xml"), false);
                 var address = cfg.ServerConfiguration.BaseAddresses[0] = $"{endpointUrl}:{port}";
+                if (certPath != null)
+                {
+                    cfg.SecurityConfiguration.ApplicationCertificate.StorePath = $"{certPath}/pki/own";
+                    cfg.SecurityConfiguration.TrustedIssuerCertificates.StorePath = $"{certPath}/pki/issuer";
+                    cfg.SecurityConfiguration.TrustedPeerCertificates.StorePath = $"{certPath}/pki/trusted";
+                    cfg.SecurityConfiguration.RejectedCertificateStore.StorePath = $"{certPath}/pki/rejected";
+                }
                 await app.CheckApplicationInstanceCertificate(false, 0);
                 Server = new TestServer(setups, mqttUrl, provider, logTrace, nodeSetFiles);
                 await Task.Run(async () => await app.Start(Server));
