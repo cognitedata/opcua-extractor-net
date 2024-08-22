@@ -1024,7 +1024,7 @@ namespace Test.Unit
             Assert.Empty(result.SourceObjects);
             Assert.Equal(3, result.SourceVariables.Count());
 
-            Assert.Equal(3, extractor.State.NodeStates.Count());
+            Assert.Equal(3, extractor.State.NodeStates.Count);
             extractor.State.Clear();
 
             // Events
@@ -1107,14 +1107,14 @@ namespace Test.Unit
             Assert.Empty(extractor.State.NodeStates);
             tester.Config.Cognite.RawNodeBuffer.BrowseOnEmpty = true;
             await extractor.RunExtractor(true);
-            Assert.True(extractor.State.NodeStates.Any());
+            Assert.True(extractor.State.NodeStates.Count > 0);
             Assert.True(handler.AssetsRaw.Count != 0);
             Assert.True(handler.TimeseriesRaw.Count != 0);
             Assert.True(handler.Timeseries.Count != 0);
             Assert.Empty(handler.Assets);
 
-            await extractor.WaitForSubscriptions();
-            await tester.RemoveSubscription(SubscriptionName.DataPoints);
+            await extractor.WaitForSubscription(SubscriptionName.DataPoints);
+            await tester.RemoveSubscription(extractor, SubscriptionName.DataPoints);
 
             extractor.State.Clear();
 
@@ -1123,12 +1123,11 @@ namespace Test.Unit
             string oldAssets = System.Text.Json.JsonSerializer.Serialize(handler.AssetsRaw);
             string oldTimeseries = System.Text.Json.JsonSerializer.Serialize(handler.TimeseriesRaw);
             handler.Timeseries.Clear();
-            extractor.GetType().GetField("subscribed", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(extractor, 0);
-            extractor.GetType().GetField("subscribeFlag", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(extractor, false);
+            extractor.ClearKnownSubscriptions();
             var reader = (HistoryReader)extractor.GetType().GetField("historyReader", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(extractor);
             reader.AddIssue(HistoryReader.StateIssue.NodeHierarchyRead);
             await extractor.RunExtractor(true);
-            Assert.True(extractor.State.NodeStates.Any());
+            Assert.True(extractor.State.NodeStates.Count > 0);
 
             string newAssets = System.Text.Json.JsonSerializer.Serialize(handler.AssetsRaw);
             string newTimeseries = System.Text.Json.JsonSerializer.Serialize(handler.TimeseriesRaw);
@@ -1137,7 +1136,7 @@ namespace Test.Unit
             Assert.Equal(oldAssets, newAssets);
             Assert.Equal(oldTimeseries, newTimeseries);
 
-            await extractor.WaitForSubscriptions();
+            await extractor.WaitForSubscription(SubscriptionName.DataPoints);
 
             try
             {
@@ -1200,14 +1199,14 @@ namespace Test.Unit
             Assert.Empty(extractor.State.NodeStates);
             tester.Config.Cognite.RawNodeBuffer.BrowseOnEmpty = true;
             await extractor.RunExtractor(true);
-            Assert.True(extractor.State.NodeStates.Any());
+            Assert.True(extractor.State.NodeStates.Count > 0);
             Assert.True(handler.AssetsRaw.Count != 0);
             Assert.True(handler.TimeseriesRaw.Count != 0);
             Assert.True(handler.Timeseries.Count != 0);
             Assert.Empty(handler.Assets);
 
-            await extractor.WaitForSubscriptions();
-            await tester.RemoveSubscription(SubscriptionName.Events);
+            await extractor.WaitForSubscription(SubscriptionName.Events);
+            await tester.RemoveSubscription(extractor, SubscriptionName.Events);
 
             extractor.State.Clear();
 
@@ -1216,10 +1215,9 @@ namespace Test.Unit
             string oldAssets = JsonSerializer.Serialize(handler.AssetsRaw);
             string oldTimeseries = JsonSerializer.Serialize(handler.TimeseriesRaw);
             handler.Timeseries.Clear();
-            extractor.GetType().GetField("subscribed", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(extractor, 0);
-            extractor.GetType().GetField("subscribeFlag", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(extractor, false);
+            extractor.ClearKnownSubscriptions();
             await extractor.RunExtractor(true);
-            Assert.True(extractor.State.NodeStates.Any());
+            Assert.True(extractor.State.NodeStates.Count > 0);
 
             string newAssets = JsonSerializer.Serialize(handler.AssetsRaw);
             string newTimeseries = JsonSerializer.Serialize(handler.TimeseriesRaw);
@@ -1228,7 +1226,7 @@ namespace Test.Unit
             Assert.Equal(oldAssets, newAssets);
             Assert.Equal(oldTimeseries, newTimeseries);
 
-            await extractor.WaitForSubscriptions();
+            await extractor.WaitForSubscription(SubscriptionName.Events);
 
             tester.Server.TriggerEvents(0);
 
@@ -1274,14 +1272,14 @@ namespace Test.Unit
             // Populate data in Raw
             tester.Config.Cognite.RawNodeBuffer.BrowseOnEmpty = true;
             await extractor.RunExtractor(true);
-            Assert.True(extractor.State.NodeStates.Any());
+            Assert.True(extractor.State.NodeStates.Count > 0);
             Assert.True(handler.AssetsRaw.Count != 0);
             Assert.True(handler.TimeseriesRaw.Count != 0);
             Assert.True(handler.Timeseries.Count != 0);
             Assert.Empty(handler.Assets);
 
-            await extractor.WaitForSubscriptions();
-            await tester.RemoveSubscription(SubscriptionName.Events);
+            await extractor.WaitForSubscription(SubscriptionName.Events);
+            await tester.RemoveSubscription(extractor, SubscriptionName.Events);
 
             extractor.State.Clear();
 

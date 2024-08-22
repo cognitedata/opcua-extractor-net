@@ -3,6 +3,7 @@ using Cognite.Extractor.Testing;
 using Cognite.Extractor.Utils;
 using Cognite.OpcUa;
 using Cognite.OpcUa.Config;
+using Cognite.OpcUa.Subscriptions;
 using Microsoft.Extensions.DependencyInjection;
 using Server;
 using System;
@@ -22,6 +23,8 @@ namespace Test.Integration
         public int Port { get; }
         public ServerController Server { get; }
         public string EndpointUrl => $"opc.tcp://localhost:{Port}";
+
+        public CancellationTokenSource Source { get; } = new CancellationTokenSource();
 
         public LauncherTestFixture()
         {
@@ -43,13 +46,15 @@ namespace Test.Integration
             await Server.Start();
         }
 
-        public Task DisposeAsync()
+        public async Task DisposeAsync()
         {
             Server?.Dispose();
-            return Task.CompletedTask;
+            await Source.CancelAsync();
+            Source.Dispose();
         }
     }
 
+    [Collection("Program tests")]
     public sealed class LauncherTests : IClassFixture<LauncherTestFixture>, IDisposable
     {
         private readonly LauncherTestFixture tester;
@@ -61,9 +66,17 @@ namespace Test.Integration
             tester.Init(output);
             Program.CommandDryRun = false;
             Program.OnLaunch = (s, o) => CommonBuild(s);
+            Program.RootToken = tester.Source.Token;
             ExtractorStarter.OnCreateExtractor = (d, e) =>
             {
-                extractor = e;
+                lock (tester)
+                {
+                    if (extractor != null)
+                    {
+                        extractor.Dispose();
+                    }
+                    extractor = e;
+                }
             };
         }
 
@@ -71,6 +84,11 @@ namespace Test.Integration
         {
             pusher?.Dispose();
             extractor?.Close().Wait();
+            lock (tester)
+            {
+                extractor?.Dispose();
+            }
+
         }
 
         private void CommonBuild(ServiceCollection services)
@@ -153,7 +171,7 @@ version: 1
             {
                 await TestUtils.WaitForCondition(() => extractor != null, 10);
 
-                await extractor.WaitForSubscriptions();
+                await extractor.WaitForSubscription(SubscriptionName.DataPoints);
 
                 await TestUtils.WaitForCondition(() => pusher.PushedNodes.Count != 0, 10);
                 Assert.Equal(167, pusher.PushedNodes.Count);
@@ -166,7 +184,7 @@ version: 1
             }
         }
 
-        [Fact(Timeout = 30000)]
+        [Fact]
         public async Task TestRunExtractorToolConfig()
         {
             var args = new[]
@@ -184,7 +202,7 @@ version: 1
             {
                 await TestUtils.WaitForCondition(() => extractor != null, 10);
 
-                await extractor.WaitForSubscriptions();
+                await extractor.WaitForSubscription(SubscriptionName.DataPoints);
 
                 await TestUtils.WaitForCondition(() => pusher.PushedNodes.Count != 0, 10);
                 Assert.Equal(172, pusher.PushedNodes.Count);
@@ -193,7 +211,6 @@ version: 1
             finally
             {
                 await extractor?.Close();
-                await Task.WhenAny(task, Task.Delay(5000));
             }
         }
 
@@ -220,7 +237,7 @@ version: 1
             {
                 await TestUtils.WaitForCondition(() => extractor != null, 10);
 
-                await extractor.WaitForSubscriptions();
+                await extractor.WaitForSubscription(SubscriptionName.DataPoints);
 
                 await TestUtils.WaitForCondition(() => pusher.PushedNodes.Count != 0, 10);
                 Assert.Equal(172, pusher.PushedNodes.Count);
@@ -460,7 +477,7 @@ version: 1
             Assert.Equal("logs2", config.Logger.File.Path);
             Assert.Equal("debug", config.Logger.File.Level);
             Assert.True(config.Source.ExitOnFailure);
-            Assert.True(options.Restart);
+            Assert.False(options.Restart);
             Assert.Equal("information", config.Logger.Console.Level);
 
             // Invalid configs

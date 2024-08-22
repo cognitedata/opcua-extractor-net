@@ -77,9 +77,6 @@ namespace Cognite.OpcUa
 
         public bool Started { get; private set; }
 
-        private int subscribed;
-        private bool subscribeFlag;
-
         private static readonly Gauge startTime = Metrics
             .CreateGauge("opcua_start_time", "Start time for the extractor");
 
@@ -107,6 +104,9 @@ namespace Cognite.OpcUa
         public bool AllowUpdateState =>
             !Config.Source.Redundancy.MonitorServiceLevel
             || uaClient.SessionManager.CurrentServiceLevel >= Config.Source.Redundancy.ServiceLevelThreshold;
+
+        // Active subscriptions, used in tests for WaitForSubscription().
+        private HashSet<SubscriptionName> activeSubscriptions = new();
 
         /// <summary>
         /// Construct extractor with list of pushers
@@ -384,8 +384,10 @@ namespace Cognite.OpcUa
         /// </summary>
         public async Task RestartExtractor()
         {
-            subscribed = 0;
-            subscribeFlag = false;
+            lock (activeSubscriptions)
+            {
+                activeSubscriptions.Clear();
+            }
 
             historyReader?.AddIssue(HistoryReader.StateIssue.NodeHierarchyRead);
 
@@ -506,15 +508,23 @@ namespace Cognite.OpcUa
         /// Used for testing, wait for subscriptions to be created, with given timeout.
         /// </summary>
         /// <param name="timeout">Timeout in 10ths of a second</param>
-        public async Task WaitForSubscriptions(int timeout = 100)
+        public async Task WaitForSubscription(SubscriptionName name, int timeout = 100)
         {
             int time = 0;
-            while (!subscribeFlag && subscribed < 2 && time++ < timeout) await Task.Delay(100);
-            if (time >= timeout && !subscribeFlag && subscribed < 2)
+            while (time++ < timeout)
             {
-                throw new TimeoutException("Waiting for push timed out");
+                lock (activeSubscriptions)
+                {
+                    if (activeSubscriptions.Contains(name))
+                    {
+                        log.LogDebug("Waited {TimeS} milliseconds for subscriptions", time * 100);
+
+                        return;
+                    }
+                }
+                await Task.Delay(100);
             }
-            log.LogDebug("Waited {TimeS} milliseconds for subscriptions", time * 100);
+            throw new TimeoutException("Waiting for subscriptions timed out");
         }
 
         public void TriggerHistoryRestart()
@@ -545,6 +555,10 @@ namespace Cognite.OpcUa
 
         public void OnCreatedSubscription(SubscriptionName subscription)
         {
+            lock (activeSubscriptions)
+            {
+                activeSubscriptions.Add(subscription);
+            }
             switch (subscription)
             {
                 case SubscriptionName.Events:
@@ -553,6 +567,22 @@ namespace Cognite.OpcUa
                 case SubscriptionName.DataPoints:
                     historyReader?.RemoveIssue(HistoryReader.StateIssue.DataPointSubscription);
                     break;
+            }
+        }
+
+        public void RemoveKnownSubscription(SubscriptionName name)
+        {
+            lock (activeSubscriptions)
+            {
+                activeSubscriptions.Remove(name);
+            }
+        }
+
+        public void ClearKnownSubscriptions()
+        {
+            lock (activeSubscriptions)
+            {
+                activeSubscriptions.Clear();
             }
         }
         #endregion
@@ -959,6 +989,14 @@ namespace Cognite.OpcUa
 
             bool initial = input.Variables.Count() + input.Objects.Count() >= State.NumActiveNodes;
 
+            if (initial && !input.Variables.Any() && Config.Subscriptions.DataPoints)
+            {
+                log.LogWarning("No variables found, the extractor can run without any variables, but will not read history. " +
+                    "There may be issues reported at the debug log level, or this may be a configuration issue. " +
+                    "If this is intentional, and you do not want to read datapoints at all, you should disable " +
+                    "data point subscriptions by setting `subscriptions.data-points` to false");
+            }
+
             var pushTasks = pushers.Select(pusher => PushNodes(input, pusher, initial));
 
             if (Config.DryRun)
@@ -1018,6 +1056,7 @@ namespace Cognite.OpcUa
                 }
             }
 
+
             pushTasks = pushTasks.ToList();
             log.LogInformation("Waiting for pushes on pushers");
             await Task.WhenAll(pushTasks);
@@ -1057,9 +1096,6 @@ namespace Cognite.OpcUa
                     this),
                     Source.Token);
             }
-
-            Interlocked.Increment(ref subscribed);
-            if (!State.NodeStates.Any() || subscribed > 1) subscribeFlag = true;
         }
 
         /// <summary>
@@ -1080,9 +1116,6 @@ namespace Cognite.OpcUa
                     this),
                     Source.Token);
             }
-
-            Interlocked.Increment(ref subscribed);
-            if (!State.EmitterStates.Any() || subscribed > 1) subscribeFlag = true;
         }
 
         /// <summary>
@@ -1248,8 +1281,15 @@ namespace Cognite.OpcUa
             await base.DisposeAsyncCore();
         }
 
+        private int disposed = 0;
+
         protected override void Dispose(bool disposing)
         {
+            // Only run dispose once...
+            if (Interlocked.CompareExchange(ref disposed, 1, 0) == 0)
+            {
+                return;
+            }
             if (disposing)
             {
                 Starting.Set(0);

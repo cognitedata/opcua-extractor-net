@@ -4,6 +4,7 @@ using Cognite.Extractor.StateStorage;
 using Cognite.Extractor.Testing;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
+using Cognite.OpcUa.Subscriptions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System;
@@ -121,7 +122,7 @@ namespace Test.Integration
             {
                 var runTask = extractor.RunExtractor();
 
-                await extractor.WaitForSubscriptions();
+                await extractor.WaitForSubscription(SubscriptionName.DataPoints);
                 await extractor.Looper.WaitForNextPush();
 
                 handler.AllowPush = false;
@@ -160,7 +161,7 @@ namespace Test.Integration
 
                 var runTask = extractor.RunExtractor();
 
-                await extractor.WaitForSubscriptions();
+                await extractor.WaitForSubscription(SubscriptionName.DataPoints);
                 await extractor.Looper.WaitForNextPush();
 
                 foreach (var state in states) state.ClearRanges();
@@ -209,7 +210,7 @@ namespace Test.Integration
             using (var extractor = tester.BuildExtractor(true, stateStore, pusher, cdfPusher))
             {
                 var runTask = extractor.RunExtractor();
-                await extractor.WaitForSubscriptions();
+                await extractor.WaitForSubscription(SubscriptionName.Events);
                 await extractor.Looper.WaitForNextPush();
 
                 handler.AllowPush = false;
@@ -244,7 +245,7 @@ namespace Test.Integration
 
                 var runTask = extractor.RunExtractor();
 
-                await extractor.WaitForSubscriptions();
+                await extractor.WaitForSubscription(SubscriptionName.Events);
                 await extractor.Looper.WaitForNextPush();
 
                 foreach (var state in states) state.ClearRanges();
@@ -286,7 +287,7 @@ namespace Test.Integration
             handler.AllowEvents = false;
             handler.AllowPush = false;
 
-            await extractor.WaitForSubscriptions();
+            await extractor.WaitForSubscription(SubscriptionName.Events);
             await TestUtils.WaitForCondition(() => cdfPusher.EventsFailing, 10, "Expected pusher to start failing");
 
             tester.Server.TriggerEvents(100);
