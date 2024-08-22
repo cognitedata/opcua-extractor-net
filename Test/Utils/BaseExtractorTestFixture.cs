@@ -70,12 +70,29 @@ namespace Test.Utils
         {
             Server = new ServerController(Setups, Provider, Port);
             await Server.Start();
-
-            Client = new UAClient(Provider, Config);
             Source = new CancellationTokenSource();
             Callbacks = new DummyClientCallbacks(Source.Token);
-            Client.Callbacks = Callbacks;
-            await Client.Run(Source.Token, 0);
+
+            for (int i = 0; i < 10; i++)
+            {
+                Client = new UAClient(Provider, Config)
+                {
+                    Callbacks = Callbacks
+                };
+                try
+                {
+                    await Client.Run(Source.Token, 0);
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    Log.LogError(ex, "Failed to start OPC-UA client");
+                    await Task.Delay(1000);
+                    if (i >= 9) throw;
+                    continue;
+                }
+            }
+
         }
 
         private static void ResetType(object obj, object reference)
@@ -127,10 +144,10 @@ namespace Test.Utils
         {
             if (clear)
             {
-                RemoveSubscription(SubscriptionName.Events).Wait();
-                RemoveSubscription(SubscriptionName.DataPoints).Wait();
-                RemoveSubscription(SubscriptionName.Audit).Wait();
-                RemoveSubscription(SubscriptionName.RebrowseTriggers).Wait();
+                RemoveSubscription(null, SubscriptionName.Events).Wait();
+                RemoveSubscription(null, SubscriptionName.DataPoints).Wait();
+                RemoveSubscription(null, SubscriptionName.Audit).Wait();
+                RemoveSubscription(null, SubscriptionName.RebrowseTriggers).Wait();
                 Client.Browser.Transformations = null;
             }
             var ext = new UAExtractor(Config, Provider, pushers, Client, stateStore);
@@ -286,13 +303,14 @@ namespace Test.Utils
             }
         }
 
-        public async Task RemoveSubscription(SubscriptionName name)
+        public async Task RemoveSubscription(UAExtractor extractor, SubscriptionName name)
         {
             if (TryGetSubscription(name, out var subscription) && subscription!.Created)
             {
                 try
                 {
                     await Client.SessionManager.Session!.RemoveSubscriptionAsync(subscription);
+                    extractor?.RemoveKnownSubscription(name);
                 }
                 catch
                 {

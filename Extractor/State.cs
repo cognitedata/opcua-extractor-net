@@ -52,8 +52,8 @@ namespace Cognite.OpcUa
         private readonly ConcurrentDictionary<NodeId, MappedNode> mappedNodes =
             new ConcurrentDictionary<NodeId, MappedNode>();
 
-        public IEnumerable<VariableExtractionState> NodeStates => nodeStates.Values;
-        public IEnumerable<EventExtractionState> EmitterStates => emitterStates.Values;
+        public ICollection<VariableExtractionState> NodeStates => nodeStates.Values;
+        public ICollection<EventExtractionState> EmitterStates => emitterStates.Values;
 
         /// <summary>
         /// Return a NodeExtractionState by externalId

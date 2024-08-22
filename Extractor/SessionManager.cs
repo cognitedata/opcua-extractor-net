@@ -49,7 +49,6 @@ namespace Cognite.OpcUa
 
         public SessionContext Context { get; }
 
-
         public SessionManager(FullConfig config, UAClient parent, ILogger log)
         {
             client = parent;
@@ -457,9 +456,9 @@ namespace Cognite.OpcUa
                     {
                         if (current != null)
                         {
-                            await current.Session.CloseAsync();
                             current.Session.KeepAlive -= ClientKeepAlive;
                             current.Session.PublishError -= OnPublishError;
+                            await current.Session.CloseAsync();
                             current.Session.Dispose();
                         }
                         current = new SessionRedundancyResult(session, url, serviceLevel);

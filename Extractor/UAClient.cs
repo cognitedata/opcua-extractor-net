@@ -574,6 +574,8 @@ namespace Cognite.OpcUa
                     $"Too few results in ReadNodeData, this is a bug in the OPC-UA server implementation, total : {total}, expected: {expected}");
             }
 
+            token.ThrowIfCancellationRequested();
+
             int idx = 0;
             foreach (var node in nodes)
             {
