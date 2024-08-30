@@ -67,6 +67,11 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.30.3":
+    description: Fix issue causing error when updating parent IDs.
+    changelog:
+      fixed:
+        - Fix error when updating parent IDs.
   "2.30.2":
     description: Set `ReturnBounds` to false in history read requests.
     changelog:
