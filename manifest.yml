@@ -68,10 +68,11 @@ schema:
 
 versions:
   "2.30.3":
-    description: Fix issue causing error when updating parent IDs.
+    description: Fix various issues.
     changelog:
       fixed:
         - Fix error when updating parent IDs.
+        - Avoid broken state when the local config buffer cannot be written to.
   "2.30.2":
     description: Set `ReturnBounds` to false in history read requests.
     changelog:
