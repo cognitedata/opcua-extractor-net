@@ -920,6 +920,9 @@ namespace Cognite.OpcUa
                 return;
             }
 
+            if (input.Deletes != null) result.Deletes = false;
+            if (pusher.BaseConfig.ReadExtractedRanges) result.Ranges = false;
+
             log.LogInformation("Executing pushes on pusher {Type}", pusher.GetType());
 
             if (input.Objects.Any() || input.Variables.Any() || input.References.Any())

@@ -118,17 +118,17 @@ namespace Cognite.OpcUa.NodeSources
     /// </summary>
     public class FullPushResult
     {
-        public bool Objects { get; set; }
-        public bool Variables { get; set; }
-        public bool References { get; set; }
-        public bool Deletes { get; set; }
-        public bool Ranges { get; set; }
+        public bool Objects { get; set; } = true;
+        public bool Variables { get; set; } = true;
+        public bool References { get; set; } = true;
+        public bool Deletes { get; set; } = true;
+        public bool Ranges { get; set; } = true;
 
         public void Apply(PushResult result)
         {
-            Objects = result.Objects;
-            Variables = result.Variables;
-            References = result.References;
+            Objects = result.Objects && result.RawObjects;
+            Variables = result.Variables && result.RawVariables;
+            References = result.References && result.RawReferences;
         }
     }
 }
