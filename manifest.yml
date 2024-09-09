@@ -67,6 +67,12 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.30.4":
+    description: Fix some minor issues related to retrying failed pushes to CDF.
+    changelog:
+      fixed:
+        - Avoid unnecessarily repeating pushes of timeseries and references.
+        - Improve logging when the upload queue is full.
   "2.30.3":
     description: Fix various issues.
     changelog:
