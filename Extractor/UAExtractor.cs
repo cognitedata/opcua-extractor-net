@@ -920,8 +920,8 @@ namespace Cognite.OpcUa
                 return;
             }
 
-            if (input.Deletes != null) result.Deletes = false;
-            if (pusher.BaseConfig.ReadExtractedRanges) result.Ranges = false;
+            if (input.Deletes == null) result.Deletes = true;
+            if (!pusher.BaseConfig.ReadExtractedRanges) result.Ranges = true;
 
             log.LogInformation("Executing pushes on pusher {Type}", pusher.GetType());
 
@@ -935,6 +935,12 @@ namespace Cognite.OpcUa
                     PushNodesFailure(input, result, pusher);
                     return;
                 }
+            }
+            else
+            {
+                result.Variables = true;
+                result.Objects = true;
+                result.References = true;
             }
 
             if (pusher.BaseConfig.ReadExtractedRanges)

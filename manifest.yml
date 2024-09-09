@@ -73,6 +73,7 @@ versions:
       fixed:
         - Avoid unnecessarily repeating pushes of timeseries and references.
         - Improve logging when the upload queue is full.
+        - Do not update whether or not an asset is a root node.
   "2.30.3":
     description: Fix various issues.
     changelog:
