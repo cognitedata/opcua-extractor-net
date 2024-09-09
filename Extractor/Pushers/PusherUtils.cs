@@ -182,7 +182,8 @@ namespace Cognite.OpcUa.Pushers
             {
                 var parentId = extractor.GetUniqueId(newAsset.ParentId);
                 // Do not move an asset from root to non-root or the other way around.
-                if (parentId is null == old.ParentExternalId is null
+                if (parentId != null
+                    && old.ParentExternalId != null
                     && parentId != old.ParentExternalId)
                 {
                     assetUpdate.ParentExternalId = new UpdateNullable<string?>(parentId);
