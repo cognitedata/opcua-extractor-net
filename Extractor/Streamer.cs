@@ -83,6 +83,7 @@ namespace Cognite.OpcUa
             {
                 while (dataPointQueue.Count >= maxDpCount)
                 {
+                    log.LogDebug("Data point queue is full, waiting for push");
                     dataPointMutex.Wait();
                 }
                 dataPointQueue.Enqueue(dp);
@@ -102,6 +103,7 @@ namespace Cognite.OpcUa
                 {
                     while (dataPointQueue.Count >= maxDpCount)
                     {
+                        log.LogDebug("Data point queue is full, waiting for push");
                         dataPointMutex.Wait();
                     }
                     dataPointQueue.Enqueue(dp);
@@ -119,6 +121,7 @@ namespace Cognite.OpcUa
             {
                 while (eventQueue.Count >= maxEventCount)
                 {
+                    log.LogDebug("Event queue is full, waiting for push");
                     eventMutex.Wait();
                 }
                 eventQueue.Enqueue(evt);
@@ -138,6 +141,7 @@ namespace Cognite.OpcUa
                 {
                     while (eventQueue.Count >= maxEventCount)
                     {
+                        log.LogDebug("Event queue is full, waiting for push");
                         eventMutex.Wait();
                     }
                     eventQueue.Enqueue(evt);
@@ -157,6 +161,7 @@ namespace Cognite.OpcUa
             {
                 while (dataPointQueue.Count >= maxDpCount)
                 {
+                    log.LogDebug("Data point queue is full, waiting for push");
                     await dataPointMutex.WaitAsync();
                 }
                 dataPointQueue.Enqueue(dp);
@@ -176,8 +181,8 @@ namespace Cognite.OpcUa
                 {
                     while (dataPointQueue.Count >= maxDpCount)
                     {
+                        log.LogDebug("Data point queue is full, waiting for push");
                         await dataPointMutex.WaitAsync();
-                        log.LogDebug("Wait for dp queue");
                     }
                     dataPointQueue.Enqueue(dp);
                     if (dataPointQueue.Count >= maxDpCount) extractor.Looper.Scheduler.TryTriggerTask("Pushers");
@@ -194,6 +199,7 @@ namespace Cognite.OpcUa
             {
                 while (eventQueue.Count >= maxEventCount)
                 {
+                    log.LogDebug("Event queue is full, waiting for push");
                     await eventMutex.WaitAsync();
                 }
                 eventQueue.Enqueue(evt);
@@ -213,6 +219,7 @@ namespace Cognite.OpcUa
                 {
                     while (eventQueue.Count >= maxEventCount)
                     {
+                        log.LogDebug("Event queue is full, waiting for push");
                         await eventMutex.WaitAsync();
                     }
                     eventQueue.Enqueue(evt);

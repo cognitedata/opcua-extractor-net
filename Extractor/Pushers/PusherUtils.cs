@@ -181,11 +181,11 @@ namespace Cognite.OpcUa.Pushers
             if (update.Context && !newAsset.ParentId.IsNullNodeId)
             {
                 var parentId = extractor.GetUniqueId(newAsset.ParentId);
-                if (parentId != old.ParentExternalId)
+                // Do not move an asset from root to non-root or the other way around.
+                if (parentId is null == old.ParentExternalId is null
+                    && parentId != old.ParentExternalId)
                 {
-#pragma warning disable CS8604 // Possible null reference argument.
-                    assetUpdate.ParentExternalId = new UpdateNullable<string>(parentId);
-#pragma warning restore CS8604 // Possible null reference argument.
+                    assetUpdate.ParentExternalId = new UpdateNullable<string?>(parentId);
                 }
             }
 

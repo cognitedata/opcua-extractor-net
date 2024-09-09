@@ -147,8 +147,9 @@ namespace Cognite.OpcUa
                 foreach (var pusher in toInit)
                 {
                     pusher.NoInit = false;
-                    tasks.Add(extractor.PushNodes(pusher.PendingNodes, pusher, true));
+                    var pending = pusher.PendingNodes;
                     pusher.PendingNodes = null;
+                    tasks.Add(extractor.PushNodes(pending, pusher, true));
                 }
 
                 await Task.WhenAll(tasks);
