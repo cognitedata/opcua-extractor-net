@@ -126,9 +126,9 @@ namespace Cognite.OpcUa.NodeSources
 
         public void Apply(PushResult result)
         {
-            Objects = result.Objects;
-            Variables = result.Variables;
-            References = result.References;
+            Objects = result.Objects && result.RawObjects;
+            Variables = result.Variables && result.RawVariables;
+            References = result.References && result.RawReferences;
         }
     }
 }
