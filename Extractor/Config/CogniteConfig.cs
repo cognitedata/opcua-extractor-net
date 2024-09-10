@@ -155,6 +155,11 @@ namespace Cognite.OpcUa.Config
         /// FDM destination config
         /// </summary>
         public FdmDestinationConfig? DataModels { get; set; }
+        /// <summary>
+        /// Core DM destination config
+        /// </summary>
+        public CoreDMDestinationConfig? CoreDataModels { get; set; }
+
     }
     public class RawMetadataTargetConfig
     {
@@ -168,6 +173,9 @@ namespace Cognite.OpcUa.Config
         public bool Assets { get; set; }
         public bool Timeseries { get; set; }
         public bool Relationships { get; set; }
+
+        public string? Space { get; set; }
+        public string Source { get; set; } = "OPC-UA";
     }
     public class MetadataMapConfig
     {
@@ -313,5 +321,13 @@ namespace Cognite.OpcUa.Config
         /// Number of views and containers per create request.
         /// </summary>
         public int ModelChunk { get; set; } = 100;
+    }
+
+    public class CoreDMDestinationConfig
+    {
+        /// <summary>
+        /// Space to ingest core data models into.
+        /// </summary>
+        public string? Space { get; set; }
     }
 }

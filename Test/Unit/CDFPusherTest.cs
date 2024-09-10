@@ -11,6 +11,7 @@ using Cognite.OpcUa.Pushers.Writers;
 using Cognite.OpcUa.Subscriptions;
 using Cognite.OpcUa.Types;
 using CogniteSdk;
+using CogniteSdk.Beta.DataModels;
 using Com.Cognite.V1.Timeseries.Proto;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -686,6 +687,57 @@ namespace Test.Unit
             Assert.Contains(handler.TimeseriesRaw, ts => ts.Value.GetProperty("description").GetString() == "description");
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_node_ensure_failures_cdf", 1));
+        }
+        [Fact]
+        public async Task TestIdmTimeSeries()
+        {
+            tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
+            {
+                Clean = new CleanMetadataTargetConfig
+                {
+                    Timeseries = true,
+                    Assets = false,
+                    Relationships = false,
+                    Space = "space",
+                    Source = "mysource"
+                }
+            };
+
+            (handler, pusher) = tester.GetCDFPusher();
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+            extractor.SourceInfo.Uri = "some-source-uri";
+
+            var rels = Enumerable.Empty<UAReference>();
+            var assets = Enumerable.Empty<BaseUANode>();
+
+            var dt = new UADataType(DataTypeIds.Double);
+            var id = extractor.GetUniqueId(tester.Server.Ids.Base.DoubleVar1);
+            var node = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", null, null, new NodeId("parent", 0), null);
+            node.FullAttributes.DataType = dt;
+            node.FullAttributes.TypeDefinition = new UAVariableType(new NodeId("typedef", 0));
+
+            // Successfully insert one
+            handler.FailedRoutes.Clear();
+            Assert.True((await pusher.PushNodes(assets, new[] { node }, rels, new UpdateConfig(), tester.Source.Token)).Variables);
+            var variable = handler.Instances[id];
+            tester.Log.LogInformation("{Help}", variable.ToJsonString());
+            var data = handler.Instances[id]["sources"][0]["properties"];
+            Assert.Equal("Variable 1", data["name"].ToString());
+            Assert.Equal("i=36", data["sourceId"].ToString());
+            Assert.Equal("opc.tcp://test.localhost", data["sourceContext"].ToString());
+            Assert.Equal("mysource", data["source"]["externalId"].ToString());
+            Assert.Equal("numeric", data["type"].ToString());
+            Assert.Equal("gp.base:s=typedef", handler.Instances[id]["type"]["externalId"].ToString());
+
+            // Insert some datapoints
+            var dps = new[] {
+                new UADataPoint(DateTime.UtcNow, id, 123.45, StatusCodes.Good),
+                new UADataPoint(DateTime.UtcNow.AddSeconds(1), id, 123.45, StatusCodes.Good),
+            };
+            Assert.True(await pusher.PushDataPoints(dps, tester.Source.Token));
+            Assert.Equal(2, handler.DatapointsByInstanceId[new InstanceIdentifier(
+                "space", id
+            )].NumericDatapoints.Count);
         }
         #endregion
 

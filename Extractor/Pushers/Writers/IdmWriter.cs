@@ -1,0 +1,191 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using AdysTech.InfluxDB.Client.Net.DataContracts;
+using Cognite.Extensions;
+using Cognite.Extensions.DataModels.CogniteExtractorExtensions;
+using Cognite.Extractor.Common;
+using Cognite.Extractor.Utils.Beta;
+using Cognite.OpcUa.Config;
+using Cognite.OpcUa.Nodes;
+using Cognite.OpcUa.Types;
+using CogniteSdk.Beta.DataModels;
+using CogniteSdk.Beta.DataModels.Core;
+using CogniteSdk.Resources.Beta;
+using CogniteSdk.Resources.DataModels;
+using Microsoft.Extensions.Logging;
+using Opc.Ua;
+
+namespace Cognite.OpcUa.Pushers.Writers
+{
+
+    class SourceSystemResource : BaseDataModelResource<SourceSystem>
+    {
+
+        public SourceSystemResource(DataModelsResource resource) : base(resource)
+        {
+        }
+
+        public override ViewIdentifier View => new ViewIdentifier("cdf_cdm", "CogniteSourceSystem", "v1");
+    }
+
+    class SourceSystem : CogniteSourceSystem { }
+
+    public class IdmWriter
+    {
+        private readonly ILogger log;
+        private readonly FullConfig config;
+        private readonly CogniteDestinationWithIDM destination;
+        private readonly CleanMetadataTargetConfig cleanConfig;
+        private readonly string space;
+
+        public bool Assets => cleanConfig.Assets;
+        public bool Timeseries => cleanConfig.Timeseries;
+        public bool Relationships => cleanConfig.Relationships;
+
+        private readonly BaseDataModelResource<SourceSystem> sources;
+
+        public IdmWriter(ILogger<IdmWriter> logger, CogniteDestinationWithIDM destination, FullConfig config)
+        {
+            log = logger;
+            this.config = config;
+            this.destination = destination;
+            cleanConfig = config.Cognite?.MetadataTargets?.Clean ?? throw new ArgumentException("Initialize IDM writer without clean config");
+            if (cleanConfig.Space == null) throw new ArgumentException("Initialize IDM writer without space ID");
+            space = cleanConfig.Space;
+            sources = new SourceSystemResource(destination.CogniteClient.Beta.DataModels);
+        }
+
+        public async Task Init(
+            IUAClientAccess client,
+            CancellationToken token
+        )
+        {
+            var buildInfo = client.SourceInfo;
+            // Initialize source system
+            var source = new SourceSystem
+            {
+                Name = buildInfo.Name,
+                Manufacturer = buildInfo.Manufacturer,
+                Version = buildInfo.Version,
+                Description = buildInfo.ToString(),
+            };
+            var item = new SourcedNodeWrite<SourceSystem>
+            {
+                ExternalId = cleanConfig.Source,
+                Space = cleanConfig.Space,
+                Properties = source
+            };
+            await sources.UpsertAsync(new[] { item }, new UpsertOptions(), token);
+        }
+
+        public Task<bool> PushAssets(
+            IUAClientAccess client,
+            IDictionary<string, BaseUANode> nodes,
+            TypeUpdateConfig update,
+            BrowseReport report,
+            CancellationToken token
+        )
+        {
+            if (!cleanConfig.Assets) return Task.FromResult(true);
+            log.LogWarning("Writing assets to the core data models is not yet implemented");
+            return Task.FromResult(true);
+        }
+
+        public Task<bool> PushReferences(
+            IUAClientAccess client,
+            IEnumerable<UAReference> references,
+            BrowseReport report,
+            CancellationToken token
+        )
+        {
+            if (!cleanConfig.Relationships) return Task.FromResult(true);
+            log.LogWarning("Writing references to the core data models is not yet implemented");
+            return Task.FromResult(true);
+        }
+
+        public async Task<bool> PushTimeseries(
+            IUAClientAccess client,
+            IDictionary<string, UAVariable> nodes,
+            BrowseReport report,
+            CancellationToken token
+        )
+        {
+            if (!cleanConfig.Timeseries) throw new ConfigurationException("If space is set, clean.timeseries must also be true");
+            var timeseries = nodes.Values.Select(v => v.ToIdmTimeSeries(client, space, cleanConfig.Source, config, config.Cognite?.MetadataMapping?.Timeseries));
+
+            try
+            {
+                var res = await destination.UpsertTimeSeriesAsync(timeseries, RetryMode.OnError, SanitationMode.Clean, token);
+
+                log.LogResult(res, RequestType.CreateTimeSeries, false);
+                res.ThrowOnFatal();
+
+                report.AssetsCreated += nodes.Count;
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                log.LogError(ex, "Failed to push timeseries to data models: {Message}", ex.Message);
+                return false;
+            }
+        }
+
+        public async Task DeleteIdmNodes(
+            DeletedNodes deletes,
+            CancellationToken token
+        )
+        {
+            var toDelete = new List<InstanceIdentifierWithType>();
+            if (Assets)
+            {
+                foreach (var obj in deletes.Objects)
+                {
+                    toDelete.Add(new InstanceIdentifierWithType(InstanceType.node, new InstanceIdentifier(space, obj.Id)));
+                }
+            }
+            if (Timeseries)
+            {
+                foreach (var vr in deletes.Variables)
+                {
+                    toDelete.Add(new InstanceIdentifierWithType(InstanceType.node, new InstanceIdentifier(space, vr.Id)));
+                }
+            }
+            if (Relationships)
+            {
+                foreach (var rf in deletes.References)
+                {
+                    toDelete.Add(new InstanceIdentifierWithType(InstanceType.edge, new InstanceIdentifier(space, rf.Id)));
+                }
+            }
+
+            // TODO: Use config
+            var chunks = toDelete.ChunkBy(1000).ToList();
+
+            var generators = chunks
+                .Select<IEnumerable<InstanceIdentifierWithType>, Func<Task>>((c, idx) => async () =>
+                {
+                    await destination.CogniteClient.CoreDataModel.TimeSeries<CogniteExtractorTimeSeries>()
+                        .DeleteAsync(c, token);
+                });
+
+            int taskNum = 0;
+            await generators.RunThrottled(
+                4,
+                (_) =>
+                {
+                    if (chunks.Count > 1)
+                    {
+                        log.LogDebug("{MethodName} completed {NumDone}/{TotalNum} tasks",
+                            nameof(DeleteIdmNodes), ++taskNum, chunks.Count);
+                    }
+                },
+                token
+            );
+
+        }
+    }
+}

@@ -20,6 +20,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using System.Linq;
 using Opc.Ua.Client;
 using Cognite.OpcUa.Subscriptions;
+using Cognite.Extractor.Utils.Beta;
 
 namespace Test.Utils
 {
@@ -199,7 +200,7 @@ namespace Test.Utils
             newServices.AddCogniteClient("appid", null, true, true, false);
             newServices.AddWriters(Config);
             var provider = newServices.BuildServiceProvider();
-            var destination = provider.GetRequiredService<CogniteDestination>();
+            var destination = provider.GetRequiredService<CogniteDestinationWithIDM>();
             var pusher = new CDFPusher(Provider.GetRequiredService<ILogger<CDFPusher>>(),
                 Config, Config.Cognite, destination, provider);
             var handler = provider.GetRequiredService<CDFMockHandler>();
