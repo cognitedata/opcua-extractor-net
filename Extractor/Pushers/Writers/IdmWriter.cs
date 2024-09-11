@@ -163,7 +163,7 @@ namespace Cognite.OpcUa.Pushers.Writers
             }
 
             // TODO: Use config
-            var chunks = toDelete.ChunkBy(1000).ToList();
+            var chunks = toDelete.ChunkBy(config.Cognite!.CdfChunking.Instances).ToList();
 
             var generators = chunks
                 .Select<IEnumerable<InstanceIdentifierWithType>, Func<Task>>((c, idx) => async () =>
@@ -174,7 +174,7 @@ namespace Cognite.OpcUa.Pushers.Writers
 
             int taskNum = 0;
             await generators.RunThrottled(
-                4,
+                config.Cognite!.CdfThrottling.Instances,
                 (_) =>
                 {
                     if (chunks.Count > 1)

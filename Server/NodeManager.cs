@@ -1,4 +1,4 @@
-﻿/* Cognite Extractor for OPC-UA
+/* Cognite Extractor for OPC-UA
 Copyright (C) 2021 Cognite AS
 
 This program is free software; you can redistribute it and/or
@@ -589,6 +589,9 @@ namespace Server
                             case PredefinedSetup.Types:
                                 CreateTypeAddressSpace(externalReferences);
                                 break;
+                            case PredefinedSetup.VeryManyTimeseries:
+                                CreateVeryManyTimeseriesSpace(externalReferences);
+                                break;
                         }
                     }
                 }
@@ -1102,6 +1105,34 @@ namespace Server
                     }
                 }
 
+            }
+        }
+
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification =
+            "NodeStates are disposed in CustomNodeManager2, so long as they are added to the list of predefined nodes")]
+        private void CreateVeryManyTimeseriesSpace(IDictionary<NodeId, IList<IReference>> externalReferences)
+        {
+            log.LogInformation("Create address space with very many variables");
+            uint counter = 0;
+            lock (Lock)
+            {
+                var root = CreateObject("VeryManyVariablesRoot");
+                AddNodeToExt(root, ObjectIds.ObjectsFolder, ReferenceTypeIds.Organizes, externalReferences);
+                AddPredefinedNode(SystemContext, root);
+                for (int i = 0; i < 100; i++)
+                {
+                    var obj1 = CreateObject($"Object {i}");
+                    AddNodeRelation(obj1, root, ReferenceTypeIds.Organizes);
+                    AddPredefinedNode(SystemContext, obj1);
+                    for (int j = 0; j < 2000; j++)
+                    {
+                        var vb = CreateVariable($"Variable {counter}", DataTypeIds.Double);
+                        vb.NodeId = new NodeId($"c_{counter}", NamespaceIndex);
+                        counter++;
+                        AddNodeRelation(vb, obj1, ReferenceTypeIds.HasComponent);
+                        AddPredefinedNode(SystemContext, vb);
+                    }
+                }
             }
         }
 
@@ -2124,7 +2155,8 @@ namespace Server
         Wrong,
         VeryLarge,
         PubSub,
-        Types
+        Types,
+        VeryManyTimeseries
     }
 
     #region nodeid_reference
