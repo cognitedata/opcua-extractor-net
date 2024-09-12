@@ -15,10 +15,7 @@ namespace Cognite.Bridge
         private static void Main(string[] args)
         {
             var configPath = Environment.GetEnvironmentVariable("MQTT_BRIDGE_CONFIG_DIR");
-            if (configPath == null)
-            {
-                configPath = args.Length > 0 ? args[0] : "config/config.bridge.yml";
-            }
+            configPath ??= args.Length > 0 ? args[0] : "config/config.bridge.yml";
             var services = new ServiceCollection();
             var config = services.AddConfig<BridgeConfig>(configPath, 1);
             services.AddCogniteClient("MQTT-CDF Bridge");

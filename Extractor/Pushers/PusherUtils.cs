@@ -76,7 +76,7 @@ namespace Cognite.OpcUa.Pushers
             var fields = new HashSet<string>();
             foreach (var row in newObj.RootElement.EnumerateObject())
             {
-                if (!raw.Columns.ContainsKey(row.Name) || raw.Columns[row.Name].ToString() != row.Value.ToString())
+                if (!raw.Columns.TryGetValue(row.Name, out JsonElement value) || value.ToString() != row.Value.ToString())
                 {
                     return newObj.RootElement;
                 }

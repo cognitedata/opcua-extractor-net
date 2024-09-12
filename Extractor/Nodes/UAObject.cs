@@ -143,10 +143,7 @@ namespace Cognite.OpcUa.Nodes
                 builder.AppendFormat(CultureInfo.InvariantCulture, "{0}EventNotifier: {1}", indt, FullAttributes.EventNotifier);
                 builder.AppendLine();
             }
-            if (FullAttributes.TypeDefinition != null)
-            {
-                FullAttributes.TypeDefinition.Format(builder, indent + 4, false, false);
-            }
+            FullAttributes.TypeDefinition?.Format(builder, indent + 4, false, false);
         }
     }
 }

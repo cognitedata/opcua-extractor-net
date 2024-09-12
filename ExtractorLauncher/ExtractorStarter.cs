@@ -134,7 +134,7 @@ namespace Cognite.OpcUa
                 {
                     return "cognite.raw-metadata and cognite.metadata-targets cannot be set at the same time.";
                 }
-                if (config.Cognite == null) config.Cognite = new CognitePusherConfig();
+                config.Cognite ??= new CognitePusherConfig();
                 var rawMetadata = config.Cognite.RawMetadata;
                 var useCleanAssets = (rawMetadata?.Database == null || rawMetadata?.AssetsTable == null) || config.Cognite.SkipMetadata;
                 var useCleanTimeseries = rawMetadata?.Database == null || rawMetadata?.TimeseriesTable == null;
@@ -165,7 +165,7 @@ namespace Cognite.OpcUa
                 else
                 {
                     log.LogWarning("Default writing to clean is deprecated, in the future not setting a metadata target will not write metadata to CDF at all");
-                    if (config.Cognite == null) config.Cognite = new CognitePusherConfig();
+                    config.Cognite ??= new CognitePusherConfig();
                     if (config.Cognite.MetadataTargets == null) config.Cognite.MetadataTargets = new MetadataTargetsConfig();
                     if (config.Cognite.MetadataTargets.Clean == null) config.Cognite.MetadataTargets.Clean = new CleanMetadataTargetConfig();
                     config.Cognite.MetadataTargets.Clean.Timeseries = true;
@@ -264,10 +264,7 @@ namespace Cognite.OpcUa
 
             SetWorkingDir(setup);
 
-            if (log == null)
-            {
-                log = LoggingUtils.GetDefault();
-            }
+            log ??= LoggingUtils.GetDefault();
 
             if (setup.NoConfig)
             {
@@ -305,15 +302,12 @@ namespace Cognite.OpcUa
 
         private static Serilog.ILogger BuildConfigToolLogger(LoggerConfig config)
         {
-            if (config == null) config = new LoggerConfig();
-            if (config.Console == null)
+            config ??= new LoggerConfig();
+            config.Console ??= new ConsoleConfig
             {
-                config.Console = new ConsoleConfig
-                {
-                    Level = "information"
-                };
-            }
-            var path = $"config-tool-{DateTime.Now.ToString("yyyy-MM-dd-HHmmss")}.log";
+                Level = "information"
+            };
+            var path = $"config-tool-{DateTime.Now:yyyy-MM-dd-HHmmss}.log";
             return LoggingUtils.GetConfiguration(config)
                 .WriteTo.Async(p => p.File(
                     path: path,
@@ -328,10 +322,7 @@ namespace Cognite.OpcUa
 
             SetWorkingDir(setup);
 
-            if (log == null)
-            {
-                log = LoggingUtils.GetDefault();
-            }
+            log ??= LoggingUtils.GetDefault();
 
             version.Set(0);
             var ver = Extractor.Metrics.Version.GetVersion(Assembly.GetExecutingAssembly());
@@ -372,7 +363,7 @@ namespace Cognite.OpcUa
             var options = new ExtractorRunnerParams<FullConfig, UAExtractor>
             {
                 ConfigPath = setup.ConfigFile ?? Path.Join(configDir, "config.yml"),
-                AcceptedConfigVersions = new[] { 1 },
+                AcceptedConfigVersions = [1],
                 AppId = $"OPC-UA Extractor:{ver}",
                 UserAgent = $"CogniteOPCUAExtractor/{ver}",
                 AddStateStore = true,

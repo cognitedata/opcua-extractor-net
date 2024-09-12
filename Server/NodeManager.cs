@@ -472,8 +472,10 @@ namespace Server
             var serverNamespacesNode = Server.NodeManager.ConfigurationNodeManager
                     .FindPredefinedNode(ObjectIds.Server_Namespaces, typeof(NamespacesState)) as NamespacesState;
             var namespaceUri = "opc.tcp://test.localhost";
-            var namespaceMetadataState = new NamespaceMetadataState(serverNamespacesNode);
-            namespaceMetadataState.BrowseName = new QualifiedName(namespaceUri, NamespaceIndex);
+            var namespaceMetadataState = new NamespaceMetadataState(serverNamespacesNode)
+            {
+                BrowseName = new QualifiedName(namespaceUri, NamespaceIndex)
+            };
             namespaceMetadataState.Create(SystemContext, null, namespaceMetadataState.BrowseName, null, true);
             namespaceMetadataState.DisplayName = namespaceUri;
             namespaceMetadataState.SymbolicName = namespaceUri;

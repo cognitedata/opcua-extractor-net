@@ -119,7 +119,7 @@ namespace Cognite.OpcUa
             }
 
             var newStates = states.Values.Where(s => !oldStates.ContainsKey(s.Id)).ToList();
-            if (newStates.Any())
+            if (newStates.Count != 0)
             {
                 logger.LogInformation("Found {New} new nodes in {Tab}, adding to state store...", newStates.Count, tableName);
                 if (!config.DryRun) await stateStore.StoreExtractionState(newStates, tableName,
@@ -136,10 +136,10 @@ namespace Cognite.OpcUa
             var time = DateTime.UtcNow.AddSeconds(-1);
             var newVariables = result.DestinationVariables.Select(v => (v.Id, v.GetUniqueId(context)!)).ToDictionary(
                 i => i.Item2,
-                i => new NodeExistsState(i.Item2, i.Item1, context, time));
+                i => new NodeExistsState(i.Item2, i.Id, context, time));
             var newObjects = result.DestinationObjects.Select(o => (o.Id, o.GetUniqueId(context)!)).ToDictionary(
                 i => i.Item2,
-                i => new NodeExistsState(i.Item2, i.Item1, context, time));
+                i => new NodeExistsState(i.Item2, i.Id, context, time));
             var newReferences = result.DestinationReferences.Select(r => client.GetRelationshipId(r)!).ToDictionary(
                 i => i,
                 i => new NodeExistsState(i, null, null, time));

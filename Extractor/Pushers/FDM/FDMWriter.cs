@@ -38,12 +38,12 @@ namespace Cognite.OpcUa.Pushers.FDM
 {
     public class FDMWriter
     {
-        private CogniteDestination destination;
-        private FullConfig config;
-        private ILogger<FDMWriter> log;
+        private readonly CogniteDestination destination;
+        private readonly FullConfig config;
+        private readonly ILogger<FDMWriter> log;
         private NodeIdContext? context;
-        private FdmDestinationConfig.ModelInfo modelInfo;
-        private FdmDestinationConfig fdmConfig;
+        private readonly FdmDestinationConfig.ModelInfo modelInfo;
+        private readonly FdmDestinationConfig fdmConfig;
         public FDMWriter(FullConfig config, CogniteDestination destination, ILogger<FDMWriter> log)
         {
             this.config = config;
@@ -103,7 +103,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             await destination.CogniteClient.Beta.DataModels.UpsertViews(new[] { serverMetaContainer.ToView(modelInfo.ModelVersion) }, token);
         }
 
-        private bool IsConnectionDefEqual(ConnectionDefinition lh, ConnectionDefinition rh)
+        private static bool IsConnectionDefEqual(ConnectionDefinition lh, ConnectionDefinition rh)
         {
             if (lh.Name != rh.Name) return false;
             if (lh.Description != rh.Description) return false;
@@ -116,7 +116,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             return true;
         }
 
-        private bool IsViewPropertyEqual(ViewPropertyDefinition lh, ViewPropertyCreate rh)
+        private static bool IsViewPropertyEqual(ViewPropertyDefinition lh, ViewPropertyCreate rh)
         {
             if (lh.Name != rh.Name) return false;
             if (lh.Container.Space != rh.Container.Space

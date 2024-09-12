@@ -215,7 +215,7 @@ namespace Test
         {
             ArgumentNullException.ThrowIfNull(assets);
             ArgumentNullException.ThrowIfNull(timeseries);
-            if (upd == null) upd = new UpdateConfig();
+            upd ??= new UpdateConfig();
             ArgumentNullException.ThrowIfNull(client);
             ArgumentNullException.ThrowIfNull(ids);
             Assert.Equal(6, assets.Count);
@@ -287,7 +287,7 @@ namespace Test
         {
             ArgumentNullException.ThrowIfNull(assets);
             ArgumentNullException.ThrowIfNull(timeseries);
-            if (upd == null) upd = new UpdateConfig();
+            upd ??= new UpdateConfig();
             ArgumentNullException.ThrowIfNull(client);
             ArgumentNullException.ThrowIfNull(ids);
             Assert.Equal(6, assets.Count);

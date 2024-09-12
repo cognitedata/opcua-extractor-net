@@ -1,6 +1,5 @@
 ﻿using Cognite.Extractor.Common;
 using Cognite.OpcUa.Config;
-using Cognite.OpcUa.History;
 using Microsoft.Extensions.Logging;
 using Opc.Ua.Client;
 using System;
@@ -104,7 +103,7 @@ namespace Cognite.OpcUa.Subscriptions
                 tasks = taskQueue.Select(t => CommonUtils.WaitAsync(t.TaskFinishedEvent, Timeout.InfiniteTimeSpan, token)).ToArray();
             }
 
-            if (!tasks.Any()) return;
+            if (tasks.Length == 0) return;
             await Task.WhenAll(tasks);
         }
 

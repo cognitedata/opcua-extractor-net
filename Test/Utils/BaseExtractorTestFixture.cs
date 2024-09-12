@@ -58,12 +58,9 @@ namespace Test.Utils
 
             Log = Provider.GetRequiredService<ILogger<BaseExtractorTestFixture>>();
 
-            if (setups == null)
-            {
-                setups = new[] {
+            setups ??= new[] {
                     PredefinedSetup.Custom, PredefinedSetup.Base, PredefinedSetup.Events,
                     PredefinedSetup.Wrong, PredefinedSetup.Full, PredefinedSetup.Auditing };
-            }
             Setups = setups;
         }
 

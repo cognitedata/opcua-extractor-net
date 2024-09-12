@@ -18,17 +18,12 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using Cognite.Extractor.Common;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.TypeCollectors;
-using Google.Protobuf.WellKnownTypes;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.ObjectPool;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
-using System.CommandLine.Parsing;
 using System.Linq;
 using System.Runtime.ExceptionServices;
-using System.Text;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -209,7 +204,7 @@ namespace Cognite.OpcUa.History
 
         class State
         {
-            private HashSet<StateIssue> issues = new();
+            private readonly HashSet<StateIssue> issues = new();
 
             public bool AddIssue(StateIssue issue)
             {
