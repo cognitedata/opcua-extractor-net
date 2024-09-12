@@ -81,6 +81,8 @@ namespace Cognite.OpcUa
         public StringConverter StringConverter { get; }
         public Browser Browser { get; }
 
+        public SourceInformation SourceInfo { get; private set; } = SourceInformation.Default();
+
         public SessionContext Context => SessionManager.Context;
 
         /// <summary>
@@ -240,6 +242,10 @@ namespace Cognite.OpcUa
             }
 
             await SessionManager.Connect();
+
+            SourceInfo = await SourceInformation.LoadFromServer(this, log, liveToken) ?? SourceInfo;
+
+            log.LogInformation("Server BuildInfo: {Info}", SourceInfo);
 
             liveToken.ThrowIfCancellationRequested();
 

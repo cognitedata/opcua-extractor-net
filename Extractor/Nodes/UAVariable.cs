@@ -15,16 +15,20 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using Cognite.Extensions.DataModels.CogniteExtractorExtensions;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.Pushers;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
 using CogniteSdk;
+using CogniteSdk.Beta.DataModels;
+using CogniteSdk.Beta.DataModels.Core;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Linq;
@@ -516,6 +520,68 @@ namespace Cognite.OpcUa.Nodes
                 IsStep = FullAttributes.DataType.IsStep,
                 DataSetId = dataSetId
             };
+        }
+
+        public SourcedNodeWrite<CogniteExtractorTimeSeries> ToIdmTimeSeries(
+            IUAClientAccess client,
+            string space,
+            string source,
+            FullConfig config,
+            Dictionary<string, string>? metaMap)
+        {
+            var write = new CogniteExtractorTimeSeries
+            {
+                Name = Name,
+                Description = FullAttributes.Description,
+                SourceId = Id.IdType switch
+                {
+                    IdType.Numeric => $"i={Id.Identifier}",
+                    IdType.String => $"s={Id.Identifier}",
+                    IdType.Guid => $"g={Id.Identifier}",
+                    IdType.Opaque => $"o={Id.Identifier}",
+                    _ => Id.ToString(),
+                },
+                SourceContext = client.Context.NamespaceTable.GetString(Id.NamespaceIndex),
+                Source = new DirectRelationIdentifier(space, source),
+                IsStep = FullAttributes.DataType.IsStep,
+                Type = FullAttributes.DataType.IsString switch
+                {
+                    true => TimeSeriesType.String,
+                    false => TimeSeriesType.Numeric
+                },
+                extractedData = BuildMetadata(config, client, true),
+            };
+
+            if (Properties != null && Properties.Any() && metaMap != null && metaMap.Count != 0)
+            {
+                foreach (var prop in Properties)
+                {
+                    if (prop is not UAVariable propVar) continue;
+                    if (metaMap.TryGetValue(prop.Name ?? "", out var mapped))
+                    {
+                        var value = client.StringConverter.ConvertToString(propVar.Value, propVar.FullAttributes.DataType.EnumValues);
+                        if (string.IsNullOrWhiteSpace(value)) continue;
+                        switch (mapped)
+                        {
+                            case "description": write.Description = value; break;
+                            case "name": write.Name = value; break;
+                            case "unit": write.SourceUnit = value; break;
+                        }
+                    }
+                }
+            }
+
+            var res = new SourcedNodeWrite<CogniteExtractorTimeSeries>
+            {
+                Space = space,
+                ExternalId = GetUniqueId(client.Context),
+                Properties = write,
+                Type = FullAttributes.TypeDefinition == null
+                    ? null
+                    : new DirectRelationIdentifier(space, FullAttributes.TypeDefinition.GetUniqueId(client.Context))
+            };
+
+            return res;
         }
         #endregion
     }

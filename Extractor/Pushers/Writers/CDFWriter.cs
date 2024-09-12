@@ -17,9 +17,10 @@ namespace Cognite.OpcUa.Pushers.Writers
     public class CDFWriter
     {
         private readonly RawWriter? raw;
-        private readonly BaseTimeseriesWriter timeseries;
+        private readonly BaseTimeseriesWriter? timeseries;
         private readonly CleanWriter? clean;
         private readonly FDMWriter? fdm;
+        private readonly IdmWriter? idm;
 
         private readonly FullConfig config;
         public Dictionary<NodeId, long> NodeToAssetIds { get; } = new();
@@ -27,10 +28,11 @@ namespace Cognite.OpcUa.Pushers.Writers
 
         private readonly ILogger log;
         public CDFWriter(
-            BaseTimeseriesWriter timeseriesWriter,
+            BaseTimeseriesWriter? timeseriesWriter,
             RawWriter? rawWriter,
             CleanWriter? cleanWriter,
             FDMWriter? fdmWriter,
+            IdmWriter? idmWriter,
             FullConfig config,
             ILogger log
         )
@@ -39,6 +41,7 @@ namespace Cognite.OpcUa.Pushers.Writers
             timeseries = timeseriesWriter;
             clean = cleanWriter;
             fdm = fdmWriter;
+            idm = idmWriter;
             this.config = config;
             this.log = log;
         }
@@ -63,6 +66,11 @@ namespace Cognite.OpcUa.Pushers.Writers
                 return;
             }
 
+            if (idm != null)
+            {
+                await idm.Init(extractor, token);
+            }
+
             var assetMap = objects
                 .Where(node => node.Source != NodeSources.NodeSource.CDF)
                 .ToDictionary(obj => obj.GetUniqueId(extractor.Context)!);
@@ -70,55 +78,76 @@ namespace Cognite.OpcUa.Pushers.Writers
                 .ToDictionary(obj => obj.GetUniqueId(extractor.Context)!);
 
             // Start by initializing clean assets, if necessary.
-            if (clean != null)
+            if (clean != null && clean.Assets)
             {
                 result.Objects &= await clean.PushAssets(extractor, assetMap, NodeToAssetIds,
                     update.Objects, report, token);
             }
 
-            // Next, push timeseries
-            result.Variables &= await timeseries.PushVariables(extractor, timeseriesMap, NodeToAssetIds,
-                MismatchedTimeseries, update.Variables, report, token);
+            // Next, push timeseries. If we're pushing to FDM, this happens later.
+            if (timeseries != null)
+            {
+                result.Variables &= await timeseries.PushVariables(extractor, timeseriesMap, NodeToAssetIds,
+                    MismatchedTimeseries, update.Variables, report, token);
+            }
 
             // Finally, push the various other resources as needed.
             var tasks = new List<Task>();
 
             // Relationships
-            if (references.Any() && (clean != null || raw != null))
+            if (references.Any())
             {
-                var relationships = references
-                    .Select(rf => rf.ToRelationship(config.Cognite?.DataSet?.Id, extractor))
-                    .DistinctBy(rel => rel.ExternalId);
-                if (clean != null)
+                if (clean != null && clean.Relationships)
                 {
                     tasks.Add(Task.Run(async () =>
                     {
-                        result.References &= await clean.PushReferences(relationships, report, token);
+                        result.References &= await clean.PushReferences(extractor, references, report, token);
                     }));
                 }
-                if (raw != null)
+                if (raw != null && raw.Relationships)
                 {
                     tasks.Add(Task.Run(async () =>
                     {
-                        result.RawReferences &= await raw.PushReferences(relationships, report, token);
+                        result.RawReferences &= await raw.PushReferences(extractor, references, report, token);
+                    }));
+                }
+                if (idm != null && idm.Relationships)
+                {
+                    tasks.Add(Task.Run(async () =>
+                    {
+                        result.References &= await idm.PushReferences(extractor, references, report, token);
                     }));
                 }
             }
 
             // Raw assets and timeseries
-            if (assetMap.Count != 0 && raw != null)
+            if (assetMap.Count != 0 && raw != null && raw.Assets)
             {
                 tasks.Add(Task.Run(async () =>
                 {
                     result.RawObjects &= await raw.PushAssets(extractor, assetMap, update.Objects, report, token);
                 }));
             }
+            if (assetMap.Count != 0 && idm != null && idm.Assets)
+            {
+                tasks.Add(Task.Run(async () =>
+                {
+                    result.Objects &= await idm.PushAssets(extractor, assetMap, update.Objects, report, token);
+                }));
+            }
 
-            if (timeseriesMap.Count != 0 && raw != null)
+            if (timeseriesMap.Count != 0 && raw != null && raw.Timeseries)
             {
                 tasks.Add(Task.Run(async () =>
                 {
                     result.RawVariables &= await raw.PushTimeseries(extractor, timeseriesMap, update.Variables, report, token);
+                }));
+            }
+            if (timeseriesMap.Count != 0 && idm != null)
+            {
+                tasks.Add(Task.Run(async () =>
+                {
+                    result.Variables &= await idm.PushTimeseries(extractor, timeseriesMap, report, token);
                 }));
             }
 
@@ -143,7 +172,15 @@ namespace Cognite.OpcUa.Pushers.Writers
             {
                 tasks.Add(clean.MarkDeleted(deletes, token));
             }
-            tasks.Add(timeseries.MarkTimeseriesDeleted(deletes.Variables.Select(d => d.Id), token));
+            if (idm != null)
+            {
+                tasks.Add(idm.DeleteIdmNodes(deletes, token));
+            }
+            else
+            {
+                // If IDM is not specified, timeseries must be specified.
+                tasks.Add(timeseries!.MarkTimeseriesDeleted(deletes.Variables.Select(d => d.Id), token));
+            }
             if (fdm != null)
             {
                 tasks.Add(fdm.DeleteInFdm(deletes, extractor.Context, token));

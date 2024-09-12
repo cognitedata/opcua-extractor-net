@@ -19,6 +19,7 @@ using Cognite.Extractor.Common;
 using Cognite.Extractor.Configuration;
 using Cognite.Extractor.Logging;
 using Cognite.Extractor.Utils;
+using Cognite.Extractor.Utils.Beta;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Pushers;
 using Cognite.OpcUa.Pushers.Writers;
@@ -346,7 +347,7 @@ namespace Cognite.OpcUa
             services.AddSingleton<IPusher, CDFPusher>(provider =>
             {
                 var conf = provider.GetRequiredService<FullConfig>();
-                var dest = provider.GetService<CogniteDestination>();
+                var dest = provider.GetService<CogniteDestinationWithIDM>();
                 var log = provider.GetRequiredService<ILogger<CDFPusher>>();
                 if (conf.Cognite == null || dest == null || dest.CogniteClient == null) return null!;
                 return new CDFPusher(log, conf, conf.Cognite, dest, provider);

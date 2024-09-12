@@ -50,6 +50,9 @@ namespace Test
         public Dictionary<string, (List<NumericDatapoint> NumericDatapoints, List<StringDatapoint> StringDatapoints)> Datapoints { get; } =
             new Dictionary<string, (List<NumericDatapoint> NumericDatapoints, List<StringDatapoint> StringDatapoints)>();
 
+        public Dictionary<InstanceIdentifier, (List<NumericDatapoint> NumericDatapoints, List<StringDatapoint> StringDatapoints)> DatapointsByInstanceId { get; } =
+            new Dictionary<InstanceIdentifier, (List<NumericDatapoint> NumericDatapoints, List<StringDatapoint> StringDatapoints)>();
+
         public Dictionary<string, JsonElement> AssetsRaw { get; } = new Dictionary<string, JsonElement>();
         public Dictionary<string, JsonElement> TimeseriesRaw { get; } = new Dictionary<string, JsonElement>();
         public Dictionary<string, RelationshipDummy> Relationships { get; } = new Dictionary<string, RelationshipDummy>();
@@ -522,6 +525,30 @@ namespace Test
             };
         }
 
+        private void HandleTimeseriesDataByInstanceId(DataPointInsertionItem item)
+        {
+            var id = new InstanceIdentifier(item.InstanceId.Space, item.InstanceId.ExternalId);
+            if (!DatapointsByInstanceId.TryGetValue(id, out var value))
+            {
+                value = (new List<NumericDatapoint>(), new List<StringDatapoint>());
+                DatapointsByInstanceId[id] = value;
+            }
+            log.LogInformation("Dps to {Id}: {Num} {Str}",
+                id,
+                item.NumericDatapoints?.Datapoints?.Count,
+                item.StringDatapoints?.Datapoints?.Count);
+            if (item.DatapointTypeCase == DataPointInsertionItem.DatapointTypeOneofCase.NumericDatapoints)
+            {
+                log.LogInformation("{Count} numeric datapoints to {Id}", item.NumericDatapoints.Datapoints.Count, id);
+                value.NumericDatapoints.AddRange(item.NumericDatapoints.Datapoints);
+            }
+            else
+            {
+                log.LogInformation("{Count} string datapoints to {Id}", item.StringDatapoints.Datapoints.Count, id);
+                value.StringDatapoints.AddRange(item.StringDatapoints.Datapoints);
+            }
+        }
+
         private HttpResponseMessage HandleTimeseriesData(DataPointInsertionRequest req)
         {
             if (!AllowPush)
@@ -541,6 +568,18 @@ namespace Test
 
             if (req == null)
             {
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("{}")
+                };
+            }
+
+            if (req.Items.FirstOrDefault()?.InstanceId != null)
+            {
+                foreach (var item in req.Items)
+                {
+                    HandleTimeseriesDataByInstanceId(item);
+                }
                 return new HttpResponseMessage(HttpStatusCode.OK)
                 {
                     Content = new StringContent("{}")

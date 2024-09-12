@@ -26,6 +26,7 @@ using Cognite.Extractor.Utils;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.Pushers.Writers.Dtos;
+using Cognite.OpcUa.Types;
 using CogniteSdk;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
@@ -39,12 +40,17 @@ namespace Cognite.OpcUa.Pushers.Writers
         private readonly CogniteDestination destination;
         private readonly CleanMetadataTargetConfig cleanConfig;
 
+        public bool Assets => cleanConfig.Assets;
+        public bool Timeseries => cleanConfig.Timeseries;
+        public bool Relationships => cleanConfig.Relationships;
+
         public CleanWriter(ILogger<CleanWriter> logger, CogniteDestination destination, FullConfig config)
         {
             log = logger;
             this.config = config;
             this.destination = destination;
             cleanConfig = config.Cognite?.MetadataTargets?.Clean ?? throw new ArgumentException("Initialize clean writer without clean config");
+
         }
 
         /// <summary>
@@ -58,8 +64,7 @@ namespace Cognite.OpcUa.Pushers.Writers
         /// <returns>Operation result</returns>
         public async Task<bool> PushAssets(
             UAExtractor extractor,
-            IDictionary<string,
-            BaseUANode> nodes,
+            IDictionary<string, BaseUANode> nodes,
             IDictionary<NodeId, long> nodeToAssetIds,
             TypeUpdateConfig update,
             BrowseReport report,
@@ -94,9 +99,13 @@ namespace Cognite.OpcUa.Pushers.Writers
         /// <param name="relationships">List of sanitized references</param>
         /// <param name="token">Cancellation token</param>
         /// <returns>A result reporting items created/updated</returns>
-        public async Task<bool> PushReferences(IEnumerable<RelationshipCreate> relationships, BrowseReport report, CancellationToken token)
+        public async Task<bool> PushReferences(IUAClientAccess client, IEnumerable<UAReference> references, BrowseReport report, CancellationToken token)
         {
             if (!cleanConfig.Relationships) return true;
+
+            var relationships = references
+                .Select(rf => rf.ToRelationship(config.Cognite?.DataSet?.Id, client))
+                .DistinctBy(rel => rel.ExternalId);
 
             try
             {
