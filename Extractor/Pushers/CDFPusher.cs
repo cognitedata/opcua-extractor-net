@@ -16,7 +16,9 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using Cognite.Extensions;
+using Cognite.Extensions.DataModels;
 using Cognite.Extractor.Utils;
+using Cognite.Extractor.Utils.Beta;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.Nodes;
@@ -24,6 +26,9 @@ using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.Pushers.Writers;
 using Cognite.OpcUa.Types;
 using CogniteSdk;
+using CogniteSdk.Alpha;
+using CogniteSdk.Beta.DataModels;
+using CogniteSdk.Beta.DataModels.Core;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
@@ -58,7 +63,7 @@ namespace Cognite.OpcUa.Pushers
         public IPusherConfig BaseConfig { get; }
 
         private readonly HashSet<string> missingTimeseries = new HashSet<string>();
-        private readonly CogniteDestination destination;
+        private readonly CogniteDestinationWithIDM destination;
 
         private readonly BrowseCallback? callback;
         private RawMetadataTargetConfig? RawMetadataTargetConfig => fullConfig.Cognite?.MetadataTargets?.Raw;
@@ -69,7 +74,7 @@ namespace Cognite.OpcUa.Pushers
             ILogger<CDFPusher> log,
             FullConfig fullConfig,
             CognitePusherConfig config,
-            CogniteDestination destination,
+            CogniteDestinationWithIDM destination,
             IServiceProvider provider)
         {
             Extractor = null!;
@@ -128,80 +133,28 @@ namespace Cognite.OpcUa.Pushers
 
             if (count == 0) return null;
 
-            var inserts = dataPointList.ToDictionary(kvp =>
-                Identity.Create(kvp.Key),
-                kvp => kvp.Value.SelectNonNull(
-                    dp => dp.ToCDFDataPoint(fullConfig.Extraction.StatusCodes.IngestStatusCodes, log))
-                );
-
             if (fullConfig.DryRun)
             {
-                log.LogInformation("Dry run enabled. Would insert {Count} datapoints over {C2} timeseries to CDF", count, inserts.Count);
+                log.LogInformation("Dry run enabled. Would insert {Count} datapoints over {C2} timeseries to CDF", count, dataPointList.Count);
                 return null;
             }
 
-            try
+            if (config.MetadataTargets?.Clean?.Space != null)
             {
-                CogniteResult<DataPointInsertError> result;
-                result = await destination.InsertDataPointsAsync(inserts, SanitationMode.Clean, RetryMode.OnError, token);
-
-                int realCount = count;
-
-                log.LogResult(result, RequestType.CreateDatapoints, false, LogLevel.Debug);
-
-                if (result.Errors != null)
-                {
-                    var missing = result.Errors.FirstOrDefault(err => err.Type == ErrorType.ItemMissing);
-                    if (missing?.Skipped != null)
-                    {
-                        log.LogError("Failed to push datapoints to CDF, missing ids: {Ids}", missing.Skipped.Select(ms => ms.Id));
-                        foreach (var skipped in missing.Skipped)
-                        {
-                            missingTimeseries.Add(skipped.Id.ExternalId);
-                        }
-                        missingTimeseriesCnt.Set(missing.Skipped.Count());
-                    }
-
-                    var mismatched = result.Errors.FirstOrDefault(err => err.Type == ErrorType.MismatchedType);
-                    if (mismatched?.Skipped != null)
-                    {
-                        log.LogError("Failed to push datapoints to CDF, mismatched timeseries: {Ids}", mismatched.Skipped.Select(ms => ms.Id));
-                        foreach (var skipped in mismatched.Skipped)
-                        {
-                            cdfWriter.MismatchedTimeseries.Add(skipped.Id.ExternalId);
-                        }
-                        mismatchedTimeseriesCnt.Set(mismatched.Skipped.Count());
-                    }
-
-                    foreach (var err in result.Errors)
-                    {
-                        if (err.Skipped != null)
-                        {
-                            foreach (var skipped in err.Skipped)
-                            {
-                                realCount -= skipped.DataPoints.Count();
-                            }
-                        }
-                    }
-                }
-
-                result.ThrowOnFatal();
-                log.LogDebug("Successfully pushed {Real} / {Total} points to CDF", realCount, count);
-
-                dataPointPushes.Inc();
-                dataPointsCounter.Inc(realCount);
-
-                if (realCount == 0) return null;
+                var inserts = dataPointList.ToDictionary(
+                    kvp => IdentityWithInstanceId.Create(new InstanceIdentifier(config.MetadataTargets.Clean.Space, kvp.Key)),
+                    kvp => kvp.Value.SelectNonNull(dp => dp.ToCDFDataPoint(fullConfig.Extraction.StatusCodes.IngestStatusCodes, log))
+                );
+                return await PushDataPointsIdm(inserts, count, token);
             }
-            catch (Exception e)
+            else
             {
-                log.LogError(e, "Failed to push {Count} points to CDF: {Message}", count, e.Message);
-                dataPointPushFailures.Inc();
-                // Return false indicating unexpected failure if we want to buffer.
-                return false;
+                var inserts = dataPointList.ToDictionary(
+                    kvp => Identity.Create(kvp.Key),
+                    kvp => kvp.Value.SelectNonNull(dp => dp.ToCDFDataPoint(fullConfig.Extraction.StatusCodes.IngestStatusCodes, log))
+                );
+                return await PushDataPointsClassic(inserts, count, token);
             }
-
-            return true;
         }
         /// <summary>
         /// Attempts to push the given list of events to CDF.
@@ -570,6 +523,137 @@ namespace Cognite.OpcUa.Pushers
         {
             return await WriterUtils.GetRawRows(dbName, tableName, destination, columns, log, token);
         }
+        #endregion
+
+        #region datapoints
+        private async Task<bool?> PushDataPointsIdm(Dictionary<IdentityWithInstanceId, IEnumerable<Datapoint>> inserts, int totalCount, CancellationToken token)
+        {
+            try
+            {
+                var result = await destination.InsertDataPointsAsync(inserts, SanitationMode.Clean, RetryMode.OnError, token);
+
+                int realCount = totalCount;
+
+                log.LogResult(result, RequestType.CreateDatapoints, false, LogLevel.Debug);
+
+                if (result.Errors != null)
+                {
+                    var missing = result.Errors.FirstOrDefault(err => err.Type == ErrorType.ItemMissing);
+                    if (missing?.Skipped != null)
+                    {
+                        log.LogError("Failed to push datapoints to CDF, missing ids: {Ids}", missing.Skipped.Select(ms => ms.Id));
+                        foreach (var skipped in missing.Skipped)
+                        {
+                            missingTimeseries.Add(skipped.Id.ExternalId);
+                        }
+                        missingTimeseriesCnt.Set(missing.Skipped.Count());
+                    }
+
+                    var mismatched = result.Errors.FirstOrDefault(err => err.Type == ErrorType.MismatchedType);
+                    if (mismatched?.Skipped != null)
+                    {
+                        log.LogError("Failed to push datapoints to CDF, mismatched timeseries: {Ids}", mismatched.Skipped.Select(ms => ms.Id));
+                        foreach (var skipped in mismatched.Skipped)
+                        {
+                            cdfWriter.MismatchedTimeseries.Add(skipped.Id.ExternalId);
+                        }
+                        mismatchedTimeseriesCnt.Set(mismatched.Skipped.Count());
+                    }
+
+                    foreach (var err in result.Errors)
+                    {
+                        if (err.Skipped != null)
+                        {
+                            foreach (var skipped in err.Skipped)
+                            {
+                                realCount -= skipped.DataPoints.Count();
+                            }
+                        }
+                    }
+                }
+
+                result.ThrowOnFatal();
+                log.LogDebug("Successfully pushed {Real} / {Total} points to CDF", realCount, totalCount);
+
+                dataPointPushes.Inc();
+                dataPointsCounter.Inc(realCount);
+
+                if (realCount == 0) return null;
+            }
+            catch (Exception e)
+            {
+                log.LogError(e, "Failed to push {Count} points to CDF: {Message}", totalCount, e.Message);
+                dataPointPushFailures.Inc();
+                // Return false indicating unexpected failure if we want to buffer.
+                return false;
+            }
+            return true;
+        }
+
+        private async Task<bool?> PushDataPointsClassic(Dictionary<Identity, IEnumerable<Datapoint>> inserts, int totalCount, CancellationToken token)
+        {
+            try
+            {
+                var result = await destination.InsertDataPointsAsync(inserts, SanitationMode.Clean, RetryMode.OnError, token);
+
+                int realCount = totalCount;
+
+                log.LogResult(result, RequestType.CreateDatapoints, false, LogLevel.Debug);
+
+                if (result.Errors != null)
+                {
+                    var missing = result.Errors.FirstOrDefault(err => err.Type == ErrorType.ItemMissing);
+                    if (missing?.Skipped != null)
+                    {
+                        log.LogError("Failed to push datapoints to CDF, missing ids: {Ids}", missing.Skipped.Select(ms => ms.Id));
+                        foreach (var skipped in missing.Skipped)
+                        {
+                            missingTimeseries.Add(skipped.Id.ExternalId);
+                        }
+                        missingTimeseriesCnt.Set(missing.Skipped.Count());
+                    }
+
+                    var mismatched = result.Errors.FirstOrDefault(err => err.Type == ErrorType.MismatchedType);
+                    if (mismatched?.Skipped != null)
+                    {
+                        log.LogError("Failed to push datapoints to CDF, mismatched timeseries: {Ids}", mismatched.Skipped.Select(ms => ms.Id));
+                        foreach (var skipped in mismatched.Skipped)
+                        {
+                            cdfWriter.MismatchedTimeseries.Add(skipped.Id.ExternalId);
+                        }
+                        mismatchedTimeseriesCnt.Set(mismatched.Skipped.Count());
+                    }
+
+                    foreach (var err in result.Errors)
+                    {
+                        if (err.Skipped != null)
+                        {
+                            foreach (var skipped in err.Skipped)
+                            {
+                                realCount -= skipped.DataPoints.Count();
+                            }
+                        }
+                    }
+                }
+
+                result.ThrowOnFatal();
+                log.LogDebug("Successfully pushed {Real} / {Total} points to CDF", realCount, totalCount);
+
+                dataPointPushes.Inc();
+                dataPointsCounter.Inc(realCount);
+
+                if (realCount == 0) return null;
+            }
+            catch (Exception e)
+            {
+                log.LogError(e, "Failed to push {Count} points to CDF: {Message}", totalCount, e.Message);
+                dataPointPushFailures.Inc();
+                // Return false indicating unexpected failure if we want to buffer.
+                return false;
+            }
+            return true;
+        }
+
         #endregion
 
         /// <summary>

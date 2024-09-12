@@ -385,6 +385,28 @@ namespace Server
                 ? new[] { 123, 123, 321, 123 } : new[] { 123, 123, 123, 321 }, code);
         }
 
+        private static Random random = new Random();
+        public void UpdateVeryManyVariables(int idx)
+        {
+            var num = (double)idx;
+            for (uint i = 0; i < 100 * 2000; i++)
+            {
+#pragma warning disable CA5394 // Do not use insecure randomness
+                if (random.Next(0, 10) != 0) continue;
+#pragma warning restore CA5394 // Do not use insecure randomness
+                double value = (i % 5u) switch
+                {
+                    0u => num,
+                    1u => -num,
+                    2u => Math.Sin(num / 100),
+                    3u => Math.Cos(num / 100),
+                    4u => Math.Sqrt(num),
+                    _ => 0
+                };
+                UpdateNode(new NodeId($"c_{i}", Ids.Base.Root.NamespaceIndex), value);
+            }
+        }
+
         public void SetServerRedundancyStatus(byte serviceLevel, RedundancySupport support)
         {
             Server.SetServerRedundancyStatus(serviceLevel, support);
