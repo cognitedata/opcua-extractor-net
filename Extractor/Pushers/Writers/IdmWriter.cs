@@ -47,6 +47,8 @@ namespace Cognite.OpcUa.Pushers.Writers
 
         private readonly BaseDataModelResource<SourceSystem> sources;
 
+        private readonly string sourceId;
+
         public IdmWriter(ILogger<IdmWriter> logger, CogniteDestinationWithIDM destination, FullConfig config)
         {
             log = logger;
@@ -56,6 +58,25 @@ namespace Cognite.OpcUa.Pushers.Writers
             if (cleanConfig.Space == null) throw new ArgumentException("Attempted to initialize IDM writer without space ID");
             space = cleanConfig.Space;
             sources = new SourceSystemResource(destination.CogniteClient.Beta.DataModels);
+            var sourceId = cleanConfig.Source;
+            if (sourceId == null)
+            {
+                if (config.Source.EndpointUrl != null)
+                {
+                    sourceId = $"OPC_UA:{config.Source.EndpointUrl}";
+                }
+                else if (config.Source.NodeSetSource?.NodeSets?.Any() ?? false)
+                {
+                    var lastNs = config.Source.NodeSetSource.NodeSets.Last();
+                    sourceId = $"OPC_UA_NODESET:{lastNs.FileName ?? lastNs.Url?.ToString()}";
+                }
+                else
+                {
+                    // Should be impossible, currently.
+                    sourceId = "OPC_UA";
+                }
+            }
+            this.sourceId = sourceId.TruncateBytes(256);
         }
 
         public async Task Init(
@@ -72,9 +93,10 @@ namespace Cognite.OpcUa.Pushers.Writers
                 Version = buildInfo.Version,
                 Description = buildInfo.ToString(),
             };
+
             var item = new SourcedNodeWrite<SourceSystem>
             {
-                ExternalId = cleanConfig.Source,
+                ExternalId = sourceId,
                 Space = cleanConfig.Space,
                 Properties = source
             };
@@ -114,7 +136,7 @@ namespace Cognite.OpcUa.Pushers.Writers
         )
         {
             if (!cleanConfig.Timeseries) throw new ConfigurationException("If space is set, clean.timeseries must also be true");
-            var timeseries = nodes.Values.Select(v => v.ToIdmTimeSeries(client, space, cleanConfig.Source, config, config.Cognite?.MetadataMapping?.Timeseries));
+            var timeseries = nodes.Values.Select(v => v.ToIdmTimeSeries(client, space, sourceId, config, config.Cognite?.MetadataMapping?.Timeseries));
 
             try
             {
