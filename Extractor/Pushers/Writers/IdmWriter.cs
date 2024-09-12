@@ -52,8 +52,8 @@ namespace Cognite.OpcUa.Pushers.Writers
             log = logger;
             this.config = config;
             this.destination = destination;
-            cleanConfig = config.Cognite?.MetadataTargets?.Clean ?? throw new ArgumentException("Initialize IDM writer without clean config");
-            if (cleanConfig.Space == null) throw new ArgumentException("Initialize IDM writer without space ID");
+            cleanConfig = config.Cognite?.MetadataTargets?.Clean ?? throw new ArgumentException("Attempted to initialize IDM writer without clean config");
+            if (cleanConfig.Space == null) throw new ArgumentException("Attempted to initialize IDM writer without space ID");
             space = cleanConfig.Space;
             sources = new SourceSystemResource(destination.CogniteClient.Beta.DataModels);
         }
