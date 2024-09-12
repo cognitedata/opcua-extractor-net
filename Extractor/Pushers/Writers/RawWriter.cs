@@ -21,6 +21,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Cognite.Extractor.Common;
 using Cognite.Extractor.Utils;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Nodes;
@@ -38,6 +39,10 @@ namespace Cognite.OpcUa.Pushers.Writers
         private readonly CogniteDestination destination;
 
         private readonly RawMetadataTargetConfig rawConfig;
+
+        public bool Assets => rawConfig.AssetsTable != null;
+        public bool Timeseries => rawConfig.TimeseriesTable != null;
+        public bool Relationships => rawConfig.RelationshipsTable != null;
 
         public RawWriter(ILogger<RawWriter> log, CogniteDestination destination, FullConfig config)
         {
@@ -89,9 +94,17 @@ namespace Cognite.OpcUa.Pushers.Writers
         }
 
 
-        public async Task<bool> PushReferences(IEnumerable<RelationshipCreate> relationships, BrowseReport report, CancellationToken token)
+        public async Task<bool> PushReferences(
+            IUAClientAccess client,
+            IEnumerable<UAReference> references,
+            BrowseReport report,
+            CancellationToken token)
         {
             if (rawConfig.RelationshipsTable == null || rawConfig.Database == null) return true;
+
+            var relationships = references
+                    .Select(rf => rf.ToRelationship(config.Cognite?.DataSet?.Id, client))
+                    .DistinctBy(rel => rel.ExternalId);
 
             try
             {

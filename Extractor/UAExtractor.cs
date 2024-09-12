@@ -101,6 +101,8 @@ namespace Cognite.OpcUa
 
         public static readonly DateTime StartTime = DateTime.UtcNow;
 
+        public SourceInformation SourceInfo => uaClient?.SourceInfo ?? SourceInformation.Default();
+
         public bool AllowUpdateState =>
             !Config.Source.Redundancy.MonitorServiceLevel
             || uaClient.SessionManager.CurrentServiceLevel >= Config.Source.Redundancy.ServiceLevelThreshold;
@@ -1317,5 +1319,6 @@ namespace Cognite.OpcUa
         string GetRelationshipId(UAReference reference);
         NamespaceTable? NamespaceTable { get; }
         public SessionContext Context { get; }
+        public SourceInformation SourceInfo { get; }
     }
 }

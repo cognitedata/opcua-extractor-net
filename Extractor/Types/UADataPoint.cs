@@ -108,10 +108,10 @@ namespace Cognite.OpcUa.Types
 
         public Datapoint? ToCDFDataPoint(bool includeStatusCodes, ILogger logger)
         {
-            Extensions.StatusCode? status = null;
+            CogniteSdk.StatusCode? status = null;
             if (includeStatusCodes)
             {
-                var res = Extensions.StatusCode.TryCreate(Status.Code, out status);
+                var res = CogniteSdk.StatusCode.TryCreate(Status.Code, out status);
                 if (res != null)
                 {
                     logger.LogWarning("Invalid status code, skipping data point: {Status}", res);
