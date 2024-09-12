@@ -64,6 +64,8 @@ namespace Server
         public bool VeryLargeHierarchy { get; set; }
         [CommandLineOption("Create nodes with complex object and variable types")]
         public bool Types { get; set; }
+        [CommandLineOption("Create a node hierarchy with 200k variables being updated every second")]
+        public bool ManyVariablesHierarchy { get; set; }
         [CommandLineOption("Create nodes for and load the 'PubSub' node hierarchy, and write to MQTT")]
         public bool Pubsub { get; set; }
         [CommandLineOption("Enable server diagnostics")]
@@ -146,6 +148,7 @@ namespace Server
             if (opt.LargeHierarchy) setups.Add(PredefinedSetup.Full);
             if (opt.VeryLargeHierarchy) setups.Add(PredefinedSetup.VeryLarge);
             if (opt.Types) setups.Add(PredefinedSetup.Types);
+            if (opt.ManyVariablesHierarchy) setups.Add(PredefinedSetup.VeryManyTimeseries);
 
             int port = opt.Port ?? 62546;
             string endpointUrl = opt.EndpointUrl ?? "opc.tcp://localhost";
@@ -204,6 +207,7 @@ namespace Server
                 if (opt.BasePeriodic || opt.CoreProfile) server.UpdateBaseNodes(idx, code);
                 if (opt.CustomPeriodic || opt.CoreProfile) server.UpdateCustomNodes(idx, code);
                 if (opt.EventsPeriodic || opt.CoreProfile) server.TriggerEvents(idx);
+                if (opt.ManyVariablesHierarchy) server.UpdateVeryManyVariables(idx);
 
                 if (opt.GrowthPeriodic)
                 {

@@ -32,11 +32,7 @@ using Cognite.OpcUa.Nodes;
 using CogniteSdk;
 using System.Text.Json.Serialization;
 using Cognite.Extensions.DataModels;
-using System.Text.Json.Nodes;
-using System.ComponentModel.Design;
 using Cognite.Extensions.DataModels.QueryBuilder;
-using System.Net;
-using Microsoft.Extensions.ObjectPool;
 
 namespace Cognite.OpcUa.Pushers.FDM
 {
@@ -525,11 +521,11 @@ namespace Cognite.OpcUa.Pushers.FDM
         }
 
 
-        private async Task DeleteInstances(IEnumerable<InstanceIdentifier> instances, int chunkSize, CancellationToken token)
+        private async Task DeleteInstances(IEnumerable<InstanceIdentifierWithType> instances, int chunkSize, CancellationToken token)
         {
             var chunks = instances.ChunkBy(chunkSize).ToList();
             var generators = chunks
-                .Select<IEnumerable<InstanceIdentifier>, Func<Task>>(c => async () =>
+                .Select<IEnumerable<InstanceIdentifierWithType>, Func<Task>>(c => async () =>
                 {
                     await destination.CogniteClient.Beta.DataModels.DeleteInstances(
                         instances,
@@ -550,12 +546,12 @@ namespace Cognite.OpcUa.Pushers.FDM
                 );
         }
 
-        private async Task<IEnumerable<InstanceIdentifier>> GetAllReferencingEdges(IEnumerable<NodeId> nodes, NodeIdContext context, CancellationToken token)
+        private async Task<IEnumerable<InstanceIdentifierWithType>> GetAllReferencingEdges(IEnumerable<NodeId> nodes, NodeIdContext context, CancellationToken token)
         {
             var chunks = nodes.Select(n => context.NodeIdToString(n)).ChunkBy(1000).ToList();
-            if (chunks.Count == 0) return Enumerable.Empty<InstanceIdentifier>();
+            if (chunks.Count == 0) return Enumerable.Empty<InstanceIdentifierWithType>();
 
-            var edgeIds = new IEnumerable<InstanceIdentifier>[chunks.Count];
+            var edgeIds = new IEnumerable<InstanceIdentifierWithType>[chunks.Count];
             var generators = chunks
                 .Select<IEnumerable<string>, Func<Task>>((c, idx) => async () =>
                 {
@@ -564,7 +560,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                         Filter.In(values, "edge", "startNode"),
                         Filter.In(values, "edge", "endNode")
                     );
-                    var res = new List<InstanceIdentifier>();
+                    var res = new List<InstanceIdentifierWithType>();
                     string? cursor = null;
                     do
                     {
@@ -576,7 +572,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                             Limit = 1000,
                             Cursor = cursor
                         }, token);
-                        res.AddRange(r.Items.Select(it => new InstanceIdentifier(InstanceType.edge, it.Space, it.ExternalId)));
+                        res.AddRange(r.Items.Select(it => new InstanceIdentifierWithType(InstanceType.edge, it.Space, it.ExternalId)));
                         cursor = r.NextCursor;
                     } while (cursor != null);
 
@@ -616,7 +612,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             await DeleteInstances(edges, 1000, token);
             log.LogInformation("Deleting {Count} nodes", nodes.Count);
             await DeleteInstances(nodes.Select(id =>
-                new InstanceIdentifier(InstanceType.node, modelInfo.InstanceSpace, context!.NodeIdToString(id))
+                new InstanceIdentifierWithType(InstanceType.node, modelInfo.InstanceSpace, context!.NodeIdToString(id))
             ), 1000, token);
         }
     }
