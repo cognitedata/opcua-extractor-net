@@ -483,10 +483,11 @@ namespace Cognite.OpcUa.Pushers
         private async Task<bool> PushDataPointsChunk(IDictionary<string, IEnumerable<UADataPoint>> dataPointList, CancellationToken token)
         {
             var inserts = dataPointList.ToDictionary(
-                pair => Identity.Create(pair.Key),
+                pair => (IIdentity)Identity.Create(pair.Key),
                 pair => pair.Value.SelectNonNull(dp => dp.ToCDFDataPoint(fullConfig.Extraction.StatusCodes.IngestStatusCodes, log)));
             var (points, errors) = Sanitation.CleanDataPointsRequest(inserts, SanitationMode.Clean, config.NonFiniteReplacement);
-            var req = inserts.ToInsertRequest();
+            var cleaned = points.ToDictionary(pair => (Identity)pair.Key, pair => pair.Value);
+            var req = cleaned.ToInsertRequest();
 
             foreach (var error in errors)
             {

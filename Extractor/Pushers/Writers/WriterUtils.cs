@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Cognite.Extractor.Utils;
+using Cognite.Extractor.Utils.Beta;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Pushers.FDM;
 using CogniteSdk;
@@ -15,25 +16,44 @@ namespace Cognite.OpcUa.Pushers.Writers
     {
         public static void AddWriters(this IServiceCollection services, FullConfig config)
         {
-            services.AddSingleton<BaseTimeseriesWriter>(provider =>
+            if (config.Cognite?.MetadataTargets?.Clean?.Space == null)
             {
-                var destination = provider.GetRequiredService<CogniteDestination>();
-                var config = provider.GetRequiredService<FullConfig>();
-                return (config.Cognite?.MetadataTargets?.Clean?.Timeseries ?? false)
-                    ? new TimeseriesWriter(provider.GetRequiredService<ILogger<TimeseriesWriter>>(), destination, config)
-                    : new MinimalTimeseriesWriter(provider.GetRequiredService<ILogger<MinimalTimeseriesWriter>>(), destination, config);
-            });
-            if (config.Cognite?.MetadataTargets?.Clean is not null)
-            {
-                services.AddSingleton(provider =>
+                services.AddSingleton<BaseTimeseriesWriter>(provider =>
                 {
                     var destination = provider.GetRequiredService<CogniteDestination>();
-                    return new CleanWriter(
-                        provider.GetRequiredService<ILogger<CleanWriter>>(),
-                        destination,
-                        config
-                    );
+                    var config = provider.GetRequiredService<FullConfig>();
+                    return (config.Cognite?.MetadataTargets?.Clean?.Timeseries ?? false)
+                        ? new TimeseriesWriter(provider.GetRequiredService<ILogger<TimeseriesWriter>>(), destination, config)
+                        : new MinimalTimeseriesWriter(provider.GetRequiredService<ILogger<MinimalTimeseriesWriter>>(), destination, config);
                 });
+            }
+
+            if (config.Cognite?.MetadataTargets?.Clean is not null)
+            {
+                if (config.Cognite.MetadataTargets.Clean.Space != null)
+                {
+                    services.AddSingleton(provider =>
+                    {
+                        var destination = provider.GetRequiredService<CogniteDestinationWithIDM>();
+                        return new IdmWriter(
+                            provider.GetRequiredService<ILogger<IdmWriter>>(),
+                            destination,
+                            config
+                        );
+                    });
+                }
+                else
+                {
+                    services.AddSingleton(provider =>
+                    {
+                        var destination = provider.GetRequiredService<CogniteDestination>();
+                        return new CleanWriter(
+                            provider.GetRequiredService<ILogger<CleanWriter>>(),
+                            destination,
+                            config
+                        );
+                    });
+                }
             }
             if (config.Cognite?.MetadataTargets?.Raw is not null)
             {
@@ -59,10 +79,11 @@ namespace Cognite.OpcUa.Pushers.Writers
             services.AddSingleton(provider =>
             {
                 return new CDFWriter(
-                    provider.GetRequiredService<BaseTimeseriesWriter>(),
+                    provider.GetService<BaseTimeseriesWriter>(),
                     provider.GetService<RawWriter>(),
                     provider.GetService<CleanWriter>(),
                     provider.GetService<FDMWriter>(),
+                    provider.GetService<IdmWriter>(),
                     provider.GetRequiredService<FullConfig>(),
                     provider.GetRequiredService<ILogger<CDFWriter>>()
                 );

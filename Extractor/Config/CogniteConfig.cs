@@ -168,6 +168,9 @@ namespace Cognite.OpcUa.Config
         public bool Assets { get; set; }
         public bool Timeseries { get; set; }
         public bool Relationships { get; set; }
+
+        public string? Space { get; set; }
+        public string Source { get; set; } = "OPC-UA";
     }
     public class MetadataMapConfig
     {
