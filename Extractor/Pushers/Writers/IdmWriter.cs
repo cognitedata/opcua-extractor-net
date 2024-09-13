@@ -59,9 +59,9 @@ namespace Cognite.OpcUa.Pushers.Writers
             space = cleanConfig.Space;
             sources = new SourceSystemResource(destination.CogniteClient.Beta.DataModels);
             var sourceId = cleanConfig.Source;
-            if (sourceId == null)
+            if (string.IsNullOrWhiteSpace(sourceId))
             {
-                if (config.Source.EndpointUrl != null)
+                if (!string.IsNullOrWhiteSpace(config.Source.EndpointUrl))
                 {
                     sourceId = $"OPC_UA:{config.Source.EndpointUrl}";
                 }
