@@ -170,7 +170,7 @@ namespace Cognite.OpcUa.Config
         public bool Relationships { get; set; }
 
         public string? Space { get; set; }
-        public string Source { get; set; } = "OPC-UA";
+        public string? Source { get; set; }
     }
     public class MetadataMapConfig
     {
