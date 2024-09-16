@@ -241,8 +241,8 @@ namespace Cognite.OpcUa.Types
 
             var finalMetaData = new Dictionary<string, string>
             {
-                ["Emitter"] = client.GetUniqueId(EmittingNode) ?? "null",
-                ["TypeName"] = EventType?.Name ?? "null"
+                { "Emitter", client.GetUniqueId(EmittingNode) ?? "null" },
+                { "TypeName", EventType?.Name ?? "null" }
             };
             if (MetaData == null)
             {
