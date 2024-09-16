@@ -476,7 +476,7 @@ namespace Cognite.OpcUa
             if (index < 0) return baseId;
             string idxStr = $"[{index}]";
             if (baseId.Length + idxStr.Length < 255) return baseId + idxStr;
-            return baseId[..(255 - idxStr.Length)] + idxStr;
+            return baseId.Substring(0, 255 - idxStr.Length) + idxStr;
         }
 
         private UAEvent DpAsEvent(DataValue datapoint, VariableExtractionState node)

@@ -270,7 +270,7 @@ namespace Cognite.OpcUa.Nodes
             if (node.InternalInfo.ArrayDimensions != null && node.InternalInfo.Index >= 0)
             {
                 var postfix = $"[{node.InternalInfo.Index}]";
-                name = name[..^postfix.Length];
+                name = name.Substring(0, name.Length - postfix.Length);
             }
             var id = node.NodeId;
 

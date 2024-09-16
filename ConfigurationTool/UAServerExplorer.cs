@@ -173,7 +173,7 @@ namespace Cognite.OpcUa.Config
             int pos = nodeidstr.IndexOf(nsstr, StringComparison.CurrentCulture);
             if (pos == 0)
             {
-                nodeidstr = nodeidstr[..pos] + nodeidstr[(pos + nsstr.Length)..];
+                nodeidstr = nodeidstr.Substring(0, pos) + nodeidstr.Substring(pos + nsstr.Length);
             }
             return new ProtoNodeId
             {

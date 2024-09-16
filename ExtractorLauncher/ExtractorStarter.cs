@@ -363,7 +363,7 @@ namespace Cognite.OpcUa
             var options = new ExtractorRunnerParams<FullConfig, UAExtractor>
             {
                 ConfigPath = setup.ConfigFile ?? Path.Join(configDir, "config.yml"),
-                AcceptedConfigVersions = [1],
+                AcceptedConfigVersions = new[] { 1 },
                 AppId = $"OPC-UA Extractor:{ver}",
                 UserAgent = $"CogniteOPCUAExtractor/{ver}",
                 AddStateStore = true,
