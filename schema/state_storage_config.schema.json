@@ -6,7 +6,7 @@
     "unevaluatedProperties": false,
     "allOf": [
         {
-            "$ref": "https://raw.githubusercontent.com/cognitedata/dotnet-extractor-utils/v1.19.0/schema/state_store_config.schema.json"
+            "$ref": "https://raw.githubusercontent.com/cognitedata/dotnet-extractor-utils/v1.26.0/schema/state_store_config.schema.json"
         }
     ],
     "properties": {
