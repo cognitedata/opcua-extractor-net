@@ -5,7 +5,7 @@
     "description": "Configuration for pushing data to Cognite Data Fusion (CDF)",
     "allOf": [
         {
-            "$ref": "https://raw.githubusercontent.com/cognitedata/dotnet-extractor-utils/v1.26.0/schema/cognite_config.schema.json"
+            "$ref": "https://raw.githubusercontent.com/cognitedata/dotnet-extractor-utils/v1.26.1/schema/cognite_config.schema.json"
         }
     ],
     "unevaluatedProperties": false,

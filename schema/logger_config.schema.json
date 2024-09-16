@@ -4,7 +4,7 @@
     "description": "Configure logging to console or file",
     "allOf": [
         {
-            "$ref": "https://raw.githubusercontent.com/cognitedata/dotnet-extractor-utils/v1.26.0/schema/logger_config.schema.json"
+            "$ref": "https://raw.githubusercontent.com/cognitedata/dotnet-extractor-utils/v1.26.1/schema/logger_config.schema.json"
         }
     ],
     "unevaluatedProperties": false,
