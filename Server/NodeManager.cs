@@ -467,7 +467,7 @@ namespace Server
 
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification =
             "NodeStates are disposed in CustomNodeManager2, so long as they are added to the list of predefined nodes")]
-        private void CreateNamespaceMetadataNode(IDictionary<NodeId, IList<IReference>> externalReferences)
+        private void CreateNamespaceMetadataNode()
         {
             var serverNamespacesNode = Server.NodeManager.ConfigurationNodeManager
                     .FindPredefinedNode(ObjectIds.Server_Namespaces, typeof(NamespacesState)) as NamespacesState;
@@ -600,7 +600,7 @@ namespace Server
 
                 LoadAddressSpaceFiles(externalReferences);
 
-                CreateNamespaceMetadataNode(externalReferences);
+                CreateNamespaceMetadataNode();
             }
             catch (Exception ex)
             {
