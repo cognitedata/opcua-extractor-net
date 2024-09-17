@@ -67,6 +67,11 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.31.0":
+    description: Support for writing timeseries to the core data models.
+    changelog:
+      added:
+        - Support for writing time series to the core data models.
   "2.30.4":
     description: Fix some minor issues related to retrying failed pushes to CDF.
     changelog:
