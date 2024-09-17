@@ -113,9 +113,9 @@ namespace Cognite.OpcUa.Config
         public bool DryRun { get; set; }
         public override void GenerateDefaults()
         {
-            if (Source == null) Source = new SourceConfig();
-            if (Logger == null) Logger = new UALoggerConfig();
-            if (Metrics == null) Metrics = new UAMetricsConfig();
+            Source ??= new SourceConfig();
+            Logger ??= new UALoggerConfig();
+            Metrics ??= new UAMetricsConfig();
             if (Cognite != null)
             {
                 if (Cognite.CdfChunking == null) Cognite.CdfChunking = new ChunkingConfig();
@@ -123,14 +123,14 @@ namespace Cognite.OpcUa.Config
                 if (Cognite.CdfRetries == null) Cognite.CdfRetries = new RetryConfig();
                 if (Cognite.SdkLogging == null) Cognite.SdkLogging = new SdkLoggingConfig();
             }
-            if (Extraction == null) Extraction = new ExtractionConfig();
-            if (Events == null) Events = new EventConfig();
-            if (FailureBuffer == null) FailureBuffer = new FailureBufferConfig();
-            if (History == null) History = new HistoryConfig();
-            if (StateStorage == null) StateStorage = new StateStorageConfig();
-            if (Subscriptions == null) Subscriptions = new SubscriptionConfig();
-            if (PubSub == null) PubSub = new PubSubConfig();
-            if (HighAvailability == null) HighAvailability = new HighAvailabilityConfig();
+            Extraction ??= new ExtractionConfig();
+            Events ??= new EventConfig();
+            FailureBuffer ??= new FailureBufferConfig();
+            History ??= new HistoryConfig();
+            StateStorage ??= new StateStorageConfig();
+            Subscriptions ??= new SubscriptionConfig();
+            PubSub ??= new PubSubConfig();
+            HighAvailability ??= new HighAvailabilityConfig();
         }
     }
     public class UAMetricsConfig : MetricsConfig

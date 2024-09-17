@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Cognite.Extractor.Common;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.Pushers.FDM;
@@ -102,21 +101,21 @@ namespace Cognite.OpcUa.Pushers.Writers
                     tasks.Add(Task.Run(async () =>
                     {
                         result.References &= await clean.PushReferences(extractor, references, report, token);
-                    }));
+                    }, token));
                 }
                 if (raw != null && raw.Relationships)
                 {
                     tasks.Add(Task.Run(async () =>
                     {
                         result.RawReferences &= await raw.PushReferences(extractor, references, report, token);
-                    }));
+                    }, token));
                 }
                 if (idm != null && idm.Relationships)
                 {
                     tasks.Add(Task.Run(async () =>
                     {
                         result.References &= await idm.PushReferences(extractor, references, report, token);
-                    }));
+                    }, token));
                 }
             }
 
@@ -126,14 +125,14 @@ namespace Cognite.OpcUa.Pushers.Writers
                 tasks.Add(Task.Run(async () =>
                 {
                     result.RawObjects &= await raw.PushAssets(extractor, assetMap, update.Objects, report, token);
-                }));
+                }, token));
             }
             if (assetMap.Count != 0 && idm != null && idm.Assets)
             {
                 tasks.Add(Task.Run(async () =>
                 {
                     result.Objects &= await idm.PushAssets(extractor, assetMap, update.Objects, report, token);
-                }));
+                }, token));
             }
 
             if (timeseriesMap.Count != 0 && raw != null && raw.Timeseries)
@@ -141,14 +140,14 @@ namespace Cognite.OpcUa.Pushers.Writers
                 tasks.Add(Task.Run(async () =>
                 {
                     result.RawVariables &= await raw.PushTimeseries(extractor, timeseriesMap, update.Variables, report, token);
-                }));
+                }, token));
             }
             if (timeseriesMap.Count != 0 && idm != null)
             {
                 tasks.Add(Task.Run(async () =>
                 {
                     result.Variables &= await idm.PushTimeseries(extractor, timeseriesMap, report, token);
-                }));
+                }, token));
             }
 
             // FDM

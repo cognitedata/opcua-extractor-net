@@ -44,7 +44,7 @@ namespace Server
         private readonly bool logTrace;
         private readonly IServiceProvider provider;
         private bool running;
-        private IEnumerable<string> nodeSetFiles;
+        private readonly IEnumerable<string> nodeSetFiles;
         private readonly string certPath;
 
         public ServerController(
@@ -385,7 +385,7 @@ namespace Server
                 ? new[] { 123, 123, 321, 123 } : new[] { 123, 123, 123, 321 }, code);
         }
 
-        private static Random random = new Random();
+        private static readonly Random random = new Random();
         public void UpdateVeryManyVariables(int idx)
         {
             var num = (double)idx;

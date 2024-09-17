@@ -43,24 +43,15 @@ namespace Cognite.OpcUa
         {
             if (node == null) return true;
 
-            switch (Type)
+            return Type switch
             {
-                case TransformationType.Property:
-                    // Already a property
-                    return node.IsRawProperty;
-                case TransformationType.TimeSeries:
-                    // No need to transform to timeseries if node is not property, or node cannot be a timeseries.
-                    return !node.IsRawProperty || node.NodeClass != NodeClass.Variable;
-                case TransformationType.DropSubscriptions:
-                    // No need to drop subscriptions if we are not subscribing to this node.
-                    return !(node is UAVariable variable && variable.FullAttributes.ShouldSubscribe(config))
-                        && !(node is UAObject obj && obj.FullAttributes.ShouldSubscribeToEvents(config));
-                case TransformationType.AsEvents:
-                    // If not a variable or already publishing values as events we skip here.
-                    return node is not UAVariable evtvariable || evtvariable.AsEvents;
-            }
-
-            return false;
+                TransformationType.Property => node.IsRawProperty,// Already a property
+                TransformationType.TimeSeries => !node.IsRawProperty || node.NodeClass != NodeClass.Variable,// No need to transform to timeseries if node is not property, or node cannot be a timeseries.
+                TransformationType.DropSubscriptions => !(node is UAVariable variable && variable.FullAttributes.ShouldSubscribe(config))
+                                        && !(node is UAObject obj && obj.FullAttributes.ShouldSubscribeToEvents(config)),// No need to drop subscriptions if we are not subscribing to this node.
+                TransformationType.AsEvents => node is not UAVariable evtvariable || evtvariable.AsEvents,// If not a variable or already publishing values as events we skip here.
+                _ => false,
+            };
         }
 
         /// <summary>

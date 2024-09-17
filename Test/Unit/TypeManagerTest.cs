@@ -190,8 +190,10 @@ namespace Test.Unit
             Assert.True(node.AllowTSMap(tester.Log, config));
 
             // Ignored datatype
-            node.FullAttributes.DataType = new UADataType(new NodeId("ignore", 0));
-            node.FullAttributes.DataType.ShouldIgnore = true;
+            node.FullAttributes.DataType = new UADataType(new NodeId("ignore", 0))
+            {
+                ShouldIgnore = true
+            };
             Assert.False(node.AllowTSMap(tester.Log, config));
 
             // Non-scalar value rank

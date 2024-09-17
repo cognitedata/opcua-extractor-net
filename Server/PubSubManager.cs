@@ -32,7 +32,7 @@ namespace Server
         private readonly PublishedDataItemsDataType[] items = new PublishedDataItemsDataType[2];
 
         private UaPubSubApplication app;
-        private ILogger log;
+        private readonly ILogger log;
 
         public PubSubManager(string mqttUrl, ILogger log)
         {

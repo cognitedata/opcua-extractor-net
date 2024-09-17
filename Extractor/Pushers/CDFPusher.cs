@@ -16,8 +16,6 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using Cognite.Extensions;
-using Cognite.Extensions.DataModels;
-using Cognite.Extractor.Utils;
 using Cognite.Extractor.Utils.Beta;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
@@ -28,10 +26,8 @@ using Cognite.OpcUa.Types;
 using CogniteSdk;
 using CogniteSdk.Alpha;
 using CogniteSdk.Beta.DataModels;
-using CogniteSdk.Beta.DataModels.Core;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Opc.Ua;
 using Prometheus;
 using System;
 using System.Collections.Generic;
@@ -67,8 +63,6 @@ namespace Cognite.OpcUa.Pushers
 
         private readonly BrowseCallback? callback;
         private RawMetadataTargetConfig? RawMetadataTargetConfig => fullConfig.Cognite?.MetadataTargets?.Raw;
-        private CleanMetadataTargetConfig? CleanMetadataTargetConfig => fullConfig.Cognite?.MetadataTargets?.Clean;
-
 
         public CDFPusher(
             ILogger<CDFPusher> log,

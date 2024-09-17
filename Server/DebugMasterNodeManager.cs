@@ -37,7 +37,7 @@ namespace Server
 
         private readonly TestServer server;
 
-        private IServerRequestCallbacks callbacks => server.Callbacks;
+        private IServerRequestCallbacks Callbacks => server.Callbacks;
 
         public DebugMasterNodeManager(
             IServerInternal server,
@@ -60,7 +60,7 @@ namespace Server
         {
             ArgumentNullException.ThrowIfNull(nodesToRead);
 
-            callbacks.OnRead(context, nodesToRead);
+            Callbacks.OnRead(context, nodesToRead);
 
             base.Read(context, maxAge, timestampsToReturn, nodesToRead, out values, out diagnosticInfos);
         }
@@ -78,7 +78,7 @@ namespace Server
             ArgumentNullException.ThrowIfNull(itemsToCreate);
             ArgumentNullException.ThrowIfNull(errors);
 
-            callbacks.OnCreateMonitoredItems(context, subscriptionId, itemsToCreate);
+            Callbacks.OnCreateMonitoredItems(context, subscriptionId, itemsToCreate);
 
             base.CreateMonitoredItems(context, subscriptionId, publishingInterval, timestampsToReturn, itemsToCreate, errors, filterResults, monitoredItems);
         }
@@ -94,7 +94,7 @@ namespace Server
         {
             ArgumentNullException.ThrowIfNull(nodesToRead);
 
-            callbacks.OnHistoryRead(context, historyReadDetails, nodesToRead);
+            Callbacks.OnHistoryRead(context, historyReadDetails, nodesToRead);
 
             base.HistoryRead(context, historyReadDetails, timestampsToReturn, releaseContinuationPoints, nodesToRead, out results, out diagnosticInfos);
         }
@@ -110,7 +110,7 @@ namespace Server
             ArgumentNullException.ThrowIfNull(context);
             ArgumentNullException.ThrowIfNull(nodesToBrowse);
 
-            callbacks.OnBrowse(context, nodesToBrowse);
+            Callbacks.OnBrowse(context, nodesToBrowse);
 
             base.Browse(context, view, maxReferencesPerNode, nodesToBrowse, out results, out diagnosticInfos);
 
@@ -137,7 +137,7 @@ namespace Server
 
         public override void BrowseNext(OperationContext context, bool releaseContinuationPoints, ByteStringCollection continuationPoints, out BrowseResultCollection results, out DiagnosticInfoCollection diagnosticInfos)
         {
-            callbacks.OnBrowseNext(context, continuationPoints);
+            Callbacks.OnBrowseNext(context, continuationPoints);
 
             base.BrowseNext(context, releaseContinuationPoints, continuationPoints, out results, out diagnosticInfos);
         }

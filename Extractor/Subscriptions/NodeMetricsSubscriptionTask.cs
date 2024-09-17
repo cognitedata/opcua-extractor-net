@@ -1,12 +1,9 @@
 ﻿using Cognite.OpcUa.Config;
 using Opc.Ua.Client;
 using Opc.Ua;
-using System;
 using System.Collections.Generic;
-using System.Text;
 using System.Threading.Tasks;
 using System.Threading;
-using System.Linq;
 using Microsoft.Extensions.Logging;
 
 namespace Cognite.OpcUa.Subscriptions

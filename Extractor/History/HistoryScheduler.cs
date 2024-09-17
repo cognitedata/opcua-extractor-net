@@ -175,9 +175,8 @@ namespace Cognite.OpcUa.History
         private static DateTime GetStartTime(string? start)
         {
             if (string.IsNullOrWhiteSpace(start)) return CogniteTime.DateTimeEpoch;
-            var parsed = CogniteTime.ParseTimestampString(start);
-            if (parsed == null) throw new ArgumentException($"Invalid history start time: {start}");
-            return parsed!.Value;
+            var parsed = CogniteTime.ParseTimestampString(start) ?? throw new ArgumentException($"Invalid history start time: {start}");
+            return parsed;
         }
 
         private static IEnumerable<HistoryReadNode> GetNodes(
@@ -254,53 +253,43 @@ namespace Cognite.OpcUa.History
 
         private (HistoryReadDetails, DateTime, DateTime) GetReadDetails(IEnumerable<HistoryReadNode> nodes)
         {
-            HistoryReadDetails details;
             var (min, max) = GetReadRange(nodes);
             log.LogDebug("Read {Type} history chunk for {Count} nodes from {Min} to {Max}",
                 type, nodes.Count(), min, max);
-            switch (type)
+            HistoryReadDetails details = type switch
             {
-                case HistoryReadType.FrontfillData:
-                    details = new ReadRawModifiedDetails
-                    {
-                        IsReadModified = false,
-                        StartTime = min,
-                        EndTime = max,
-                        NumValuesPerNode = (uint)Config.DataChunk,
-                        ReturnBounds = false,
-                    };
-                    break;
-                case HistoryReadType.BackfillData:
-                    details = new ReadRawModifiedDetails
-                    {
-                        IsReadModified = false,
-                        StartTime = min,
-                        EndTime = max,
-                        NumValuesPerNode = (uint)Config.DataChunk,
-                        ReturnBounds = false,
-                    };
-                    break;
-                case HistoryReadType.FrontfillEvents:
-                    details = new ReadEventDetails
-                    {
-                        StartTime = min,
-                        EndTime = max,
-                        NumValuesPerNode = (uint)Config.EventChunk,
-                        Filter = uaClient.BuildEventFilter(typeManager.EventFields),
-                    };
-                    break;
-                case HistoryReadType.BackfillEvents:
-                    details = new ReadEventDetails
-                    {
-                        StartTime = min,
-                        EndTime = max,
-                        NumValuesPerNode = (uint)Config.EventChunk,
-                        Filter = uaClient.BuildEventFilter(typeManager.EventFields)
-                    };
-                    break;
-                default:
-                    throw new InvalidOperationException();
-            }
+                HistoryReadType.FrontfillData => new ReadRawModifiedDetails
+                {
+                    IsReadModified = false,
+                    StartTime = min,
+                    EndTime = max,
+                    NumValuesPerNode = (uint)Config.DataChunk,
+                    ReturnBounds = false,
+                },
+                HistoryReadType.BackfillData => new ReadRawModifiedDetails
+                {
+                    IsReadModified = false,
+                    StartTime = min,
+                    EndTime = max,
+                    NumValuesPerNode = (uint)Config.DataChunk,
+                    ReturnBounds = false,
+                },
+                HistoryReadType.FrontfillEvents => new ReadEventDetails
+                {
+                    StartTime = min,
+                    EndTime = max,
+                    NumValuesPerNode = (uint)Config.EventChunk,
+                    Filter = uaClient.BuildEventFilter(typeManager.EventFields),
+                },
+                HistoryReadType.BackfillEvents => new ReadEventDetails
+                {
+                    StartTime = min,
+                    EndTime = max,
+                    NumValuesPerNode = (uint)Config.EventChunk,
+                    Filter = uaClient.BuildEventFilter(typeManager.EventFields)
+                },
+                _ => throw new InvalidOperationException(),
+            };
             return (details, min, max);
         }
 
@@ -557,10 +546,7 @@ namespace Cognite.OpcUa.History
             var data = node.LastResult as HistoryData;
             node.LastResult = null;
 
-            if (node.State == null)
-            {
-                node.State = extractor.State.GetNodeState(node.Id);
-            }
+            node.State ??= extractor.State.GetNodeState(node.Id);
 
             if (node.State == null)
             {
@@ -699,10 +685,7 @@ namespace Cognite.OpcUa.History
                 log.LogWarning("No event filter when reading from history, ignoring");
                 return;
             }
-            if (node.State == null)
-            {
-                node.State = extractor.State.GetEmitterState(node.Id);
-            }
+            node.State ??= extractor.State.GetEmitterState(node.Id);
 
             if (node.State == null)
             {

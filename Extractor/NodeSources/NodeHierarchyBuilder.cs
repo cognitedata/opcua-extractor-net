@@ -3,7 +3,6 @@ using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.Types;
-using CogniteSdk;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using System;
@@ -279,7 +278,7 @@ namespace Cognite.OpcUa.NodeSources
             }
         }
 
-        private void CheckParentShouldBeObject(BaseUANode node)
+        private static void CheckParentShouldBeObject(BaseUANode node)
         {
             if (node.Parent == null) return;
             if (node.Parent.NodeClass != NodeClass.Variable) return;
@@ -289,12 +288,12 @@ namespace Cognite.OpcUa.NodeSources
             varParent.IsObject = true;
         }
 
-        private bool IsDescendantOfType(BaseUANode node)
+        private static bool IsDescendantOfType(BaseUANode node)
         {
             return node.Parent != null && (node.Parent.IsType || node.Parent.IsChildOfType);
         }
 
-        private (int Length, bool IsCollection) GetLengthOfCollection(object value)
+        private static (int Length, bool IsCollection) GetLengthOfCollection(object value)
         {
             int size = 0;
             if (value is ICollection coll)
@@ -316,7 +315,7 @@ namespace Cognite.OpcUa.NodeSources
         private async Task EstimateArraySizes(IEnumerable<UAVariable> nodes, CancellationToken token)
         {
             nodes = nodes.Where(node =>
-                (node.ArrayDimensions == null || !node.ArrayDimensions.Any() || node.ArrayDimensions[0] == 0)
+                (node.ArrayDimensions == null || node.ArrayDimensions.Length == 0 || node.ArrayDimensions[0] == 0)
                 && (node.ValueRank == ValueRanks.OneDimension
                     || node.ValueRank == ValueRanks.ScalarOrOneDimension
                     || node.ValueRank == ValueRanks.OneOrMoreDimensions

@@ -23,7 +23,7 @@ namespace Server
 
     public class AggregateCallbacks : IServerRequestCallbacks
     {
-        private IEnumerable<IServerRequestCallbacks> children;
+        private readonly IEnumerable<IServerRequestCallbacks> children;
 
         public AggregateCallbacks(params IServerRequestCallbacks[] children)
         {
