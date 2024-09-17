@@ -18,7 +18,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -100,7 +99,7 @@ namespace Cognite.OpcUa.TypeCollectors
             }
         }
 
-        public bool IsTypeNodeClass(NodeClass nodeClass)
+        public static bool IsTypeNodeClass(NodeClass nodeClass)
         {
             return nodeClass == NodeClass.ObjectType
                 || nodeClass == NodeClass.VariableType
@@ -287,7 +286,7 @@ namespace Cognite.OpcUa.TypeCollectors
             }
             var excludeProperties = new HashSet<string>(config.Events.ExcludeProperties);
             var baseExcludeProperties = new HashSet<string>(config.Events.BaseExcludeProperties);
-            var whitelist = config.Events.GetWhitelist(client.Context, log);
+            var whitelist = config.Events.GetWhitelist(client.Context);
 
             foreach (var type in NodeMap.Values.OfType<UAObjectType>())
             {

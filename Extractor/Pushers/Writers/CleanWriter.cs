@@ -163,7 +163,7 @@ namespace Cognite.OpcUa.Pushers.Writers
                         }
                     }
 
-                    result.Created += creates.Count();
+                    result.Created += creates.Count;
                     return creates;
                 }, RetryMode.OnError, SanitationMode.Clean, token);
 

@@ -39,11 +39,11 @@ namespace Cognite.OpcUa.Pushers.Writers
             : base(logger, destination, config) { }
 
         protected override IEnumerable<TimeSeriesCreate> BuildTimeseries(IDictionary<string, UAVariable> tsMap,
-                IEnumerable<string> ids, UAExtractor extractor,  IDictionary<NodeId, long> nodeToAssetIds, Result result)
+                IEnumerable<string> ids, UAExtractor extractor, IDictionary<NodeId, long> nodeToAssetIds, Result result)
         {
             var tss = ids.Select(id => tsMap[id]);
-                var creates = tss.Select(ts => ts.ToMinimalTimeseries(extractor, config.Cognite?.DataSet?.Id))
-                    .Where(ts => ts != null);
+            var creates = tss.Select(ts => ts.ToMinimalTimeseries(extractor, config.Cognite?.DataSet?.Id))
+                .Where(ts => ts != null);
             result.Created += creates.Count();
             return creates;
         }

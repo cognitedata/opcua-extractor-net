@@ -32,7 +32,6 @@ namespace Cognite.OpcUa.Browse
         private readonly ILogger<Browser> log;
         private readonly UAClient uaClient;
         private readonly FullConfig config;
-        private readonly object visitedNodesLock = new object();
 
         private readonly ContinuationPointThrottlingConfig throttling;
         private readonly TaskThrottler throttler;
@@ -190,7 +189,7 @@ namespace Cognite.OpcUa.Browse
             return roots.Values;
         }
 
-        public async Task GetRootNodes(IEnumerable<NodeId> ids, Action<ReferenceDescription, NodeId, bool> callback, CancellationToken token, string purpose = "")
+        public async Task GetRootNodes(IEnumerable<NodeId> ids, Action<ReferenceDescription, NodeId, bool> callback, CancellationToken token)
         {
             var refs = await GetRootNodes(ids, token);
             foreach (var rf in refs)

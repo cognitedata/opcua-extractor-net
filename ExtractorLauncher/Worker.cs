@@ -28,11 +28,12 @@ namespace Cognite.OpcUa.Service
         private readonly ExtractorParams setup;
         private readonly ILogger eventLog;
         private readonly ServiceCollection services;
+
         public Worker(ILogger<Worker> eventLog, ServiceCollection services, ExtractorParams setup)
         {
             this.setup = setup;
-            this.eventLog = eventLog;
             this.services = services;
+            this.eventLog = eventLog;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)

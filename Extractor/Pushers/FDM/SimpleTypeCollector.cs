@@ -27,6 +27,8 @@ namespace Cognite.OpcUa.Pushers.FDM
         private readonly HashSet<UAReference> mappedReferences = new();
 
         private readonly NodeHierarchy typeHierarchy;
+
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("CodeQuality", "IDE0052:Remove unread private members", Justification = "Logger is handy")]
         private readonly ILogger log;
         public SimpleTypeCollector(ILogger log, IEnumerable<BaseUANode> nodes, IEnumerable<UAReference> references, NodeHierarchy typeHierarchy)
         {

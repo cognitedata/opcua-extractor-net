@@ -19,7 +19,6 @@ using Cognite.Extractor.Logging;
 using Cognite.Extractor.Utils.CommandLine;
 using Microsoft.Extensions.DependencyInjection;
 using Opc.Ua;
-using Serilog;
 using System;
 using System.Collections.Generic;
 using System.CommandLine;

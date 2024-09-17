@@ -1,6 +1,4 @@
-using System;
 using System.Collections.Generic;
-using System.Linq;
 using Cognite.Extensions.DataModels;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Pushers.FDM.Types;
@@ -33,7 +31,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             Views.Add(container.Name,
                 container.ToView(modelInfo.ModelVersion,
                     baseView == null
-                    ? new ViewIdentifier[0]
+                    ? System.Array.Empty<ViewIdentifier>()
                     : new[] { modelInfo.ViewIdentifier(baseView) }
                 )
             );
@@ -273,7 +271,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             return batch;
         }
 
-        private bool IsEventType(FullUANodeType node)
+        private static bool IsEventType(FullUANodeType node)
         {
             if (node.Node.Id == ObjectTypeIds.BaseEventType) return true;
             if (node.Parent != null)

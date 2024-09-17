@@ -32,7 +32,6 @@ using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using Opc.Ua.Client;
 using Prometheus;
-using Serilog.Debugging;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -108,7 +107,7 @@ namespace Cognite.OpcUa
             || uaClient.SessionManager.CurrentServiceLevel >= Config.Source.Redundancy.ServiceLevelThreshold;
 
         // Active subscriptions, used in tests for WaitForSubscription().
-        private HashSet<SubscriptionName> activeSubscriptions = new();
+        private readonly HashSet<SubscriptionName> activeSubscriptions = new();
 
         /// <summary>
         /// Construct extractor with list of pushers
@@ -247,10 +246,7 @@ namespace Cognite.OpcUa
         protected override void Init(CancellationToken token)
         {
             base.Init(token);
-            if (historyReader != null)
-            {
-                historyReader.Dispose();
-            }
+            historyReader?.Dispose();
             Looper = new Looper(Provider.GetRequiredService<ILogger<Looper>>(), Scheduler, this, Config, pushers);
             historyReader = new HistoryReader(Provider.GetRequiredService<ILogger<HistoryReader>>(),
                 uaClient, this, TypeManager, Config, Source.Token);
@@ -431,7 +427,7 @@ namespace Cognite.OpcUa
         /// </summary>
         public async Task PushExtraNodes()
         {
-            if (extraNodesToBrowse.Any())
+            if (!extraNodesToBrowse.IsEmpty)
             {
                 var nodesToBrowse = new List<NodeId>();
                 while (extraNodesToBrowse.TryDequeue(out NodeId id))
@@ -682,7 +678,7 @@ namespace Cognite.OpcUa
         {
             if (result == null) return Enumerable.Empty<Func<CancellationToken, Task>>();
 
-            Streamer.AllowData = State.NodeStates.Any();
+            Streamer.AllowData = State.NodeStates.Count != 0;
 
             var toPush = await PusherInput.FromNodeSourceResult(result, Context, deletesManager, Source.Token);
 
@@ -840,8 +836,8 @@ namespace Cognite.OpcUa
                 if (Config.Events.EmitterIds != null && Config.Events.EmitterIds.Any()
                     || Config.Events.HistorizingEmitterIds != null && Config.Events.HistorizingEmitterIds.Any())
                 {
-                    var histEmitterIds = Config.Events.GetHistorizingEmitterIds(uaClient.Context, log);
-                    var emitterIds = Config.Events.GetEmitterIds(uaClient.Context, log);
+                    var histEmitterIds = Config.Events.GetHistorizingEmitterIds(uaClient.Context);
+                    var emitterIds = Config.Events.GetEmitterIds(uaClient.Context);
                     var eventEmitterIds = new HashSet<NodeId>(histEmitterIds.Concat(emitterIds));
 
                     foreach (var id in eventEmitterIds)
@@ -854,8 +850,7 @@ namespace Cognite.OpcUa
                 }
                 if (Config.Events.ReadServer)
                 {
-                    var serverNode = await uaClient.GetServerNode(Source.Token) as UAObject;
-                    if (serverNode == null) throw new ExtractorFailureException("Server node is not an object, or does not exist");
+                    var serverNode = await uaClient.GetServerNode(Source.Token) as UAObject ?? throw new ExtractorFailureException("Server node is not an object, or does not exist");
                     if (serverNode.FullAttributes.EventNotifier != 0)
                     {
                         var history = serverNode.FullAttributes.ShouldReadEventHistory(Config);
@@ -1105,7 +1100,7 @@ namespace Cognite.OpcUa
                     subscribeStates,
                     uaClient.BuildEventFilter(TypeManager.EventFields),
                     this),
-                    Source.Token);
+                    token);
             }
         }
 
@@ -1125,7 +1120,7 @@ namespace Cognite.OpcUa
                     Streamer.DataSubscriptionHandler,
                     subscribeStates,
                     this),
-                    Source.Token);
+                    token);
             }
         }
 
@@ -1147,7 +1142,7 @@ namespace Cognite.OpcUa
             {
                 tasks.Add(token => SubscribeToDataPoints(states, token));
             }
-            if (State.EmitterStates.Any())
+            if (State.EmitterStates.Count != 0)
             {
                 tasks.Add(SubscribeToEvents);
             }

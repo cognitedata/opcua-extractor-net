@@ -157,7 +157,7 @@ namespace Cognite.OpcUa
                         int droppedIdx = iex.Message.LastIndexOf("dropped=", StringComparison.InvariantCulture);
                         if (droppedIdx != -1)
                         {
-                            string droppedRaw = iex.Message.Substring(droppedIdx + 8).Trim();
+                            string droppedRaw = iex.Message[(droppedIdx + 8)..].Trim();
                             if (int.TryParse(droppedRaw, out int num) && num > 0)
                             {
                                 skippedDatapoints.Inc(num);
@@ -663,7 +663,7 @@ namespace Cognite.OpcUa
             {
                 if (res is not IDictionary<string, object> values) continue;
                 var sourceNode = Extractor.State.GetNodeId((string)values["Source"]);
-                var type = Extractor.State.GetNodeId(name.Substring(state.Id.Length + 1));
+                var type = Extractor.State.GetNodeId(name[(state.Id.Length + 1)..]);
                 var evt = new UAEvent
                 {
                     Time = (DateTime)values["Time"],
@@ -713,7 +713,7 @@ namespace Cognite.OpcUa
             {
                 if (!series.Entries.Any()) continue;
 
-                var name = series.SeriesName.Substring(7);
+                var name = series.SeriesName[7..];
 
                 var state = states.Values.FirstOrDefault(state => name.StartsWith(state.Id, StringComparison.InvariantCulture));
                 if (state == null) continue;

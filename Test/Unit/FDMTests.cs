@@ -3,10 +3,8 @@ using Cognite.OpcUa.Config;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
-using Serilog;
 using Server;
 using System;
-using System.CommandLine;
 using System.IO;
 using System.Linq;
 using System.Text.Json.Nodes;
@@ -111,7 +109,7 @@ namespace Test.Unit
             // 4 total variable types (1 custom + property type + data variable type + base)
             // 11 total reference types
             // 7 (?) data types
-            uint? GetNodeClass(JsonNode node)
+            static uint? GetNodeClass(JsonNode node)
             {
                 return GetPropertyStruct<uint>(node, "NodeClass", "BaseNode");
             }

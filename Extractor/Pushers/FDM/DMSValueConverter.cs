@@ -75,28 +75,19 @@ namespace Cognite.OpcUa.Pushers.FDM
         {
             if (value.Value is not IEnumerable enm) return ConvertArrayVariant(variant, new Variant(new[] { value.Value }), context);
 
-            switch (variant)
+            return variant switch
             {
-                case PropertyTypeVariant.int32:
-                    return new RawPropertyValue<int[]>(enm.Cast<object>().Select(v => Convert.ToInt32(v)).ToArray());
-                case PropertyTypeVariant.int64:
-                    return new RawPropertyValue<long[]>(enm.Cast<object>().Select(v => Convert.ToInt64(v)).ToArray());
-                case PropertyTypeVariant.float32:
-                    return new RawPropertyValue<float[]>(enm.Cast<object>().Select(v => Convert.ToSingle(v)).ToArray());
-                case PropertyTypeVariant.float64:
-                    return new RawPropertyValue<double[]>(enm.Cast<object>().Select(v => Convert.ToDouble(v)).ToArray());
-                case PropertyTypeVariant.timestamp:
-                case PropertyTypeVariant.date:
-                    return new RawPropertyValue<DateTime[]>(enm.Cast<object>().Select(v => Convert.ToDateTime(v)).ToArray());
-                case PropertyTypeVariant.text:
-                    return new RawPropertyValue<string[]>(enm.Cast<object>()
-                        .Select(v => converter.ConvertToString(value.Value, null, null, StringConverterMode.Simple, context))
-                        .ToArray());
-                case PropertyTypeVariant.boolean:
-                    return new RawPropertyValue<bool>(Convert.ToBoolean(value.Value));
-            }
-
-            return null;
+                PropertyTypeVariant.int32 => new RawPropertyValue<int[]>(enm.Cast<object>().Select(v => Convert.ToInt32(v)).ToArray()),
+                PropertyTypeVariant.int64 => new RawPropertyValue<long[]>(enm.Cast<object>().Select(v => Convert.ToInt64(v)).ToArray()),
+                PropertyTypeVariant.float32 => new RawPropertyValue<float[]>(enm.Cast<object>().Select(v => Convert.ToSingle(v)).ToArray()),
+                PropertyTypeVariant.float64 => new RawPropertyValue<double[]>(enm.Cast<object>().Select(v => Convert.ToDouble(v)).ToArray()),
+                PropertyTypeVariant.timestamp or PropertyTypeVariant.date => new RawPropertyValue<DateTime[]>(enm.Cast<object>().Select(v => Convert.ToDateTime(v)).ToArray()),
+                PropertyTypeVariant.text => new RawPropertyValue<string[]>(enm.Cast<object>()
+                                        .Select(v => converter.ConvertToString(value.Value, null, null, StringConverterMode.Simple, context))
+                                        .ToArray()),
+                PropertyTypeVariant.boolean => new RawPropertyValue<bool>(Convert.ToBoolean(value.Value)),
+                _ => null,
+            };
         }
     }
 }
