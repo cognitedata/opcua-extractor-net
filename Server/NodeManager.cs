@@ -467,13 +467,15 @@ namespace Server
 
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification =
             "NodeStates are disposed in CustomNodeManager2, so long as they are added to the list of predefined nodes")]
-        private void CreateNamespaceMetadataNode(IDictionary<NodeId, IList<IReference>> externalReferences)
+        private void CreateNamespaceMetadataNode()
         {
             var serverNamespacesNode = Server.NodeManager.ConfigurationNodeManager
                     .FindPredefinedNode(ObjectIds.Server_Namespaces, typeof(NamespacesState)) as NamespacesState;
             var namespaceUri = "opc.tcp://test.localhost";
-            var namespaceMetadataState = new NamespaceMetadataState(serverNamespacesNode);
-            namespaceMetadataState.BrowseName = new QualifiedName(namespaceUri, NamespaceIndex);
+            var namespaceMetadataState = new NamespaceMetadataState(serverNamespacesNode)
+            {
+                BrowseName = new QualifiedName(namespaceUri, NamespaceIndex)
+            };
             namespaceMetadataState.Create(SystemContext, null, namespaceMetadataState.BrowseName, null, true);
             namespaceMetadataState.DisplayName = namespaceUri;
             namespaceMetadataState.SymbolicName = namespaceUri;
@@ -598,7 +600,7 @@ namespace Server
 
                 LoadAddressSpaceFiles(externalReferences);
 
-                CreateNamespaceMetadataNode(externalReferences);
+                CreateNamespaceMetadataNode();
             }
             catch (Exception ex)
             {

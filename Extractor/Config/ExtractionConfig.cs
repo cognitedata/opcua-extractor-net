@@ -15,13 +15,10 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
-using Cognite.Extensions.DataModels.QueryBuilder;
 using Cognite.Extractor.Common;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.NodeSources;
-using Microsoft.Extensions.Logging;
 using Opc.Ua;
-using Serilog.Debugging;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -373,7 +370,7 @@ namespace Cognite.OpcUa.Config
 
     public class RebrowseTriggerTargets
     {
-        private List<string> ToBeSubscribed = new List<string>();
+        private readonly List<string> ToBeSubscribed = new List<string>();
 
         public bool NamespacePublicationDate
         {
@@ -453,7 +450,7 @@ namespace Cognite.OpcUa.Config
                 first = false;
                 builder.AppendFormat("\"{0}\"", entry);
             }
-            builder.Append("]");
+            builder.Append(']');
             return base.ToString();
         }
     }

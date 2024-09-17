@@ -22,7 +22,7 @@ namespace Test.Integration
     {
         private readonly StaticServerTestFixture tester;
         private readonly ITestOutputHelper _output;
-        private Dictionary<string, NamespacePublicationDateState> _extractionStates = new();
+        private readonly Dictionary<string, NamespacePublicationDateState> _extractionStates = new();
 
         public RebrowseTriggerManagerTests(ITestOutputHelper output, StaticServerTestFixture tester)
         {

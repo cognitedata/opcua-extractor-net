@@ -280,7 +280,7 @@ namespace Cognite.OpcUa.Config
 
         public FullConfig FinalConfig => baseConfig;
 
-        private PeriodicScheduler scheduler = null!;
+        private readonly PeriodicScheduler scheduler = null!;
         public PeriodicScheduler TaskScheduler => scheduler;
     }
 }

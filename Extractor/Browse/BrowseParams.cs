@@ -93,7 +93,7 @@ namespace Cognite.OpcUa
         public BrowseResult? Result { get; private set; }
         public void AddReferences(ReferenceDescriptionCollection references)
         {
-            if (references == null) references = new ReferenceDescriptionCollection();
+            references ??= new ReferenceDescriptionCollection();
             if (Result == null)
             {
                 Result = new BrowseResult(this, references);

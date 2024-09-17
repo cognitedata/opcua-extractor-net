@@ -10,7 +10,7 @@ namespace Cognite.OpcUa.Subscriptions
 {
     internal class RebrowseTriggerSubscriptionTask : BaseCreateSubscriptionTask<(NodeId, string)>
     {
-        private MonitoredItemNotificationEventHandler handler;
+        private readonly MonitoredItemNotificationEventHandler handler;
 
         public RebrowseTriggerSubscriptionTask(
             MonitoredItemNotificationEventHandler handler,

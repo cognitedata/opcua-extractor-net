@@ -97,7 +97,7 @@ namespace Cognite.OpcUa.Config
         public Dictionary<string, string> DestinationNameMap { get => destinationNameMap; set => destinationNameMap = value ?? destinationNameMap; }
         private Dictionary<string, string> destinationNameMap = new Dictionary<string, string>();
 
-        public HashSet<NodeId>? GetWhitelist(SessionContext context, ILogger logger)
+        public HashSet<NodeId>? GetWhitelist(SessionContext context)
         {
             if (EventIds == null || !EventIds.Any()) return null;
             var whitelist = new HashSet<NodeId>();
@@ -114,7 +114,7 @@ namespace Cognite.OpcUa.Config
             return whitelist;
         }
 
-        public HashSet<NodeId> GetEmitterIds(SessionContext context, ILogger logger)
+        public HashSet<NodeId> GetEmitterIds(SessionContext context)
         {
             if (EmitterIds == null || !EmitterIds.Any()) return new HashSet<NodeId>();
             var ids = new HashSet<NodeId>();
@@ -131,7 +131,7 @@ namespace Cognite.OpcUa.Config
             return ids;
         }
 
-        public HashSet<NodeId> GetHistorizingEmitterIds(SessionContext context, ILogger logger)
+        public HashSet<NodeId> GetHistorizingEmitterIds(SessionContext context)
         {
             if (HistorizingEmitterIds == null || !HistorizingEmitterIds.Any()) return new HashSet<NodeId>();
             var ids = new HashSet<NodeId>();

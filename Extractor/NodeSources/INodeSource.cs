@@ -59,7 +59,7 @@ namespace Cognite.OpcUa.NodeSources
             CancellationToken token);
     }
 
-    public interface ITypeAndNodeSource: INodeSource
+    public interface ITypeAndNodeSource : INodeSource
     {
         Task LoadTypeMetadata(IEnumerable<BaseUANode> nodes, DataTypeConfig config, CancellationToken token);
     }

@@ -1,8 +1,4 @@
 ﻿using Opc.Ua;
-using System;
-using System.Collections.Generic;
-using System.Net.Http.Headers;
-using System.Text;
 
 namespace Cognite.OpcUa.Types
 {
@@ -13,7 +9,7 @@ namespace Cognite.OpcUa.Types
             NamespaceUris = namespaces;
         }
 
-        public object SyncRoot => new object();
+        public static object SyncRoot => new object();
 
         public int MaxStringLength => 10_000;
 

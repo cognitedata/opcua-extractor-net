@@ -2,9 +2,7 @@
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using Opc.Ua.Client;
-using System;
 using System.Collections.Generic;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -12,7 +10,7 @@ namespace Cognite.OpcUa.Subscriptions
 {
     internal class ServiceLevelSubscriptionTask : BaseCreateSubscriptionTask<NodeId>
     {
-        private MonitoredItemNotificationEventHandler handler;
+        private readonly MonitoredItemNotificationEventHandler handler;
         public ServiceLevelSubscriptionTask(MonitoredItemNotificationEventHandler handler, IClientCallbacks callbacks)
             : base(SubscriptionName.ServiceLevel, new Dictionary<NodeId, NodeId> { { VariableIds.Server_ServiceLevel, VariableIds.Server_ServiceLevel } }, callbacks)
         {
