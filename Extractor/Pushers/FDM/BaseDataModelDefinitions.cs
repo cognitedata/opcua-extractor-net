@@ -76,7 +76,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                         Nullable = true
                     } },
                     { "ArrayDimensions", new ContainerPropertyDefinition
-                    { 
+                    {
                         Type = BasePropertyType.Create(PropertyTypeVariant.int32, true),
                         Nullable = true,
                         Name = "ArrayDimensions"

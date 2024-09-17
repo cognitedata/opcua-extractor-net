@@ -7,15 +7,11 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Xunit;
 using Xunit.Abstractions;
-using YamlDotNet.Serialization;
-using YamlDotNet.Serialization.NamingConventions;
-using YamlDotNet.Serialization.TypeInspectors;
 
 namespace Test.Unit
 {
@@ -350,7 +346,7 @@ namespace Test.Unit
                 {
                     node = new UAVariable(id, i == 4 ? "not" : "target", null, i == 5 ? parent2 : parent1, NodeId.Null, new UAVariableType(i == 2 ? new NodeId(2) : new NodeId(1)));
                     (node as UAVariable).FullAttributes.ArrayDimensions = i == 3 ? null : new[] { 4 };
-                    (node as UAVariable).FullAttributes.Historizing = i == 8 ? true : false;
+                    (node as UAVariable).FullAttributes.Historizing = i == 8;
                 }
                 else
                 {

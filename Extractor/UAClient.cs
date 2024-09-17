@@ -308,11 +308,8 @@ namespace Cognite.OpcUa
         /// <returns></returns>
         public async Task<BaseUANode> GetServerNode(CancellationToken token)
         {
-            var desc = (await Browser.GetRootNodes(new[] { ObjectIds.Server }, token)).FirstOrDefault();
-            if (desc == null) throw new ExtractorFailureException("Server node is null. Invalid server configuration");
-
-            var node = BaseUANode.Create(desc, NodeId.Null, null, this, TypeManager);
-            if (node == null) throw new ExtractorFailureException($"Root node {desc.NodeId} is unexpected node class: {desc.NodeClass}");
+            var desc = (await Browser.GetRootNodes(new[] { ObjectIds.Server }, token)).FirstOrDefault() ?? throw new ExtractorFailureException("Server node is null. Invalid server configuration");
+            var node = BaseUANode.Create(desc, NodeId.Null, null, this, TypeManager) ?? throw new ExtractorFailureException($"Root node {desc.NodeId} is unexpected node class: {desc.NodeClass}");
             await ReadNodeData(new[] { node }, token, "the server node");
             return node;
         }
@@ -834,9 +831,9 @@ namespace Cognite.OpcUa
                 var operand = new SimpleAttributeOperand
                 {
                     AttributeId = Attributes.Value,
-                    TypeDefinitionId = ObjectTypeIds.BaseEventType
+                    TypeDefinitionId = ObjectTypeIds.BaseEventType,
+                    BrowsePath = field.BrowsePath
                 };
-                operand.BrowsePath = field.BrowsePath;
                 selectClauses.Add(operand);
             }
 

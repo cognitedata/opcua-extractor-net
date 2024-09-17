@@ -101,18 +101,22 @@ namespace Test.Unit
 
             historyData.DataValues = frontfillDataValues;
 
-            node = new HistoryReadNode(HistoryReadType.FrontfillData, new NodeId("badstate", 0));
-            node.LastResult = historyData;
-            node.ContinuationPoint = null;
+            node = new HistoryReadNode(HistoryReadType.FrontfillData, new NodeId("badstate", 0))
+            {
+                LastResult = historyData,
+                ContinuationPoint = null
+            };
             historyDataHandler.Invoke(reader, new object[] { node });
             Assert.Equal(0, node.TotalRead);
             Assert.False(state1.IsFrontfilling);
             state1.RestartHistory();
 
             // Test frontfill OK
-            node = new HistoryReadNode(HistoryReadType.FrontfillData, new NodeId("state1", 0));
-            node.LastResult = historyData;
-            node.ContinuationPoint = null;
+            node = new HistoryReadNode(HistoryReadType.FrontfillData, new NodeId("state1", 0))
+            {
+                LastResult = historyData,
+                ContinuationPoint = null
+            };
             historyDataHandler.Invoke(reader, new object[] { node });
             Assert.Equal(100, node.TotalRead);
             Assert.Equal(start.AddSeconds(99), state1.SourceExtractedRange.Last);
@@ -124,9 +128,11 @@ namespace Test.Unit
                 .Select(idx => new DataValue(idx, StatusCodes.Good, start.AddSeconds(-idx))));
             historyData.DataValues = backfillDataValues;
             Assert.True(state1.IsBackfilling);
-            node = new HistoryReadNode(HistoryReadType.BackfillData, new NodeId("state1", 0));
-            node.LastResult = historyData;
-            node.ContinuationPoint = null;
+            node = new HistoryReadNode(HistoryReadType.BackfillData, new NodeId("state1", 0))
+            {
+                LastResult = historyData,
+                ContinuationPoint = null
+            };
             historyDataHandler.Invoke(backfillReader, new object[] { node });
             Assert.Equal(100, node.TotalRead);
             Assert.Equal(new TimeRange(start.AddSeconds(-99), start.AddSeconds(99)), state1.SourceExtractedRange);
@@ -140,9 +146,11 @@ namespace Test.Unit
             historyData.DataValues = badDps;
             state1.RestartHistory();
             queue.Clear();
-            node = new HistoryReadNode(HistoryReadType.FrontfillData, new NodeId("state1", 0));
-            node.LastResult = historyData;
-            node.ContinuationPoint = new byte[] { 1, 2, 3 };
+            node = new HistoryReadNode(HistoryReadType.FrontfillData, new NodeId("state1", 0))
+            {
+                LastResult = historyData,
+                ContinuationPoint = new byte[] { 1, 2, 3 }
+            };
             historyDataHandler.Invoke(reader, new object[] { node });
             Assert.Equal(100, node.TotalRead);
             Assert.Equal(start.AddSeconds(99), state1.SourceExtractedRange.Last);
@@ -157,9 +165,11 @@ namespace Test.Unit
             // Get a datapoint from stream that happened after the last history point was read from the server, but arrived
             // at the extractor before the history data was parsed. This is an edge-case, but a potential lost datapoint 
             state1.UpdateFromStream(new[] { new UADataPoint(start.AddSeconds(100), "state1", 1.0, StatusCodes.Good) });
-            node = new HistoryReadNode(HistoryReadType.FrontfillData, new NodeId("state1", 0));
-            node.LastResult = historyData;
-            node.ContinuationPoint = null;
+            node = new HistoryReadNode(HistoryReadType.FrontfillData, new NodeId("state1", 0))
+            {
+                LastResult = historyData,
+                ContinuationPoint = null
+            };
             historyDataHandler.Invoke(reader, new object[] { node });
             Assert.Equal(100, node.TotalRead);
             Assert.False(state1.IsFrontfilling);
@@ -171,8 +181,10 @@ namespace Test.Unit
             state1.RestartHistory();
             queue.Clear();
             cfg.IgnoreContinuationPoints = true;
-            node = new HistoryReadNode(HistoryReadType.FrontfillData, new NodeId("state1", 0));
-            node.LastResult = historyData;
+            node = new HistoryReadNode(HistoryReadType.FrontfillData, new NodeId("state1", 0))
+            {
+                LastResult = historyData
+            };
             historyDataHandler.Invoke(reader, new object[] { node });
             Assert.Equal(100, node.TotalRead);
             Assert.True(state1.IsFrontfilling);
@@ -180,9 +192,11 @@ namespace Test.Unit
             Assert.Equal(start.AddSeconds(99), state1.SourceExtractedRange.Last);
 
             historyData.DataValues = null;
-            node = new HistoryReadNode(HistoryReadType.FrontfillData, new NodeId("state1", 0));
-            node.LastResult = historyData;
-            node.ContinuationPoint = new byte[] { 1, 2, 3 };
+            node = new HistoryReadNode(HistoryReadType.FrontfillData, new NodeId("state1", 0))
+            {
+                LastResult = historyData,
+                ContinuationPoint = new byte[] { 1, 2, 3 }
+            };
             historyDataHandler.Invoke(reader, new object[] { node });
             Assert.Equal(0, node.TotalRead);
             Assert.False(state1.IsFrontfilling);
@@ -237,21 +251,27 @@ namespace Test.Unit
                 .Select(idx => EventUtils.GetEventValues(start.AddSeconds(idx)))
                 .Select(values => new HistoryEventFieldList { EventFields = values }));
             var historyEvents = new HistoryEvent { Events = frontfillEvents };
-            node = new HistoryReadNode(HistoryReadType.FrontfillEvents, new NodeId("emitter", 0));
-            node.LastResult = historyEvents;
+            node = new HistoryReadNode(HistoryReadType.FrontfillEvents, new NodeId("emitter", 0))
+            {
+                LastResult = historyEvents
+            };
             historyEventHandler.Invoke(reader, new object[] { node, null });
             Assert.Equal(0, node.TotalRead);
 
             // Test bad emitter
             historyEvents.Events = frontfillEvents;
-            node = new HistoryReadNode(HistoryReadType.FrontfillEvents, new NodeId("bademitter", 0));
-            node.LastResult = historyEvents;
+            node = new HistoryReadNode(HistoryReadType.FrontfillEvents, new NodeId("bademitter", 0))
+            {
+                LastResult = historyEvents
+            };
             historyEventHandler.Invoke(reader, new object[] { node, details });
             Assert.Equal(0, node.TotalRead);
 
             // Test frontfill OK
-            node = new HistoryReadNode(HistoryReadType.FrontfillEvents, new NodeId("emitter", 0));
-            node.LastResult = historyEvents;
+            node = new HistoryReadNode(HistoryReadType.FrontfillEvents, new NodeId("emitter", 0))
+            {
+                LastResult = historyEvents
+            };
             historyEventHandler.Invoke(reader, new object[] { node, details });
             Assert.Equal(100, node.TotalRead);
             Assert.Equal(start.AddSeconds(99), state.SourceExtractedRange.Last);
@@ -264,8 +284,10 @@ namespace Test.Unit
                 .Select(values => new HistoryEventFieldList { EventFields = values }));
             historyEvents.Events = backfillEvents;
             Assert.True(state.IsBackfilling);
-            node = new HistoryReadNode(HistoryReadType.BackfillEvents, new NodeId("emitter", 0));
-            node.LastResult = historyEvents;
+            node = new HistoryReadNode(HistoryReadType.BackfillEvents, new NodeId("emitter", 0))
+            {
+                LastResult = historyEvents
+            };
             historyEventHandler.Invoke(backfillReader, new object[] { node, details });
             Assert.Equal(100, node.TotalRead);
             Assert.Equal(new TimeRange(start.AddSeconds(-99), start.AddSeconds(99)), state.SourceExtractedRange);
@@ -286,9 +308,11 @@ namespace Test.Unit
             historyEvents.Events = badEvts;
             state.RestartHistory();
             queue.Clear();
-            node = new HistoryReadNode(HistoryReadType.FrontfillEvents, new NodeId("emitter", 0));
-            node.LastResult = historyEvents;
-            node.ContinuationPoint = new byte[] { 1, 2, 3 };
+            node = new HistoryReadNode(HistoryReadType.FrontfillEvents, new NodeId("emitter", 0))
+            {
+                LastResult = historyEvents,
+                ContinuationPoint = new byte[] { 1, 2, 3 }
+            };
             historyEventHandler.Invoke(reader, new object[] { node, details });
             Assert.Equal(0, node.TotalRead);
             Assert.Equal(start.AddSeconds(99), state.SourceExtractedRange.Last);
@@ -301,8 +325,10 @@ namespace Test.Unit
             state.RestartHistory();
             queue.Clear();
             state.UpdateFromStream(new UAEvent { Time = start.AddSeconds(100) });
-            node = new HistoryReadNode(HistoryReadType.FrontfillEvents, new NodeId("emitter", 0));
-            node.LastResult = historyEvents;
+            node = new HistoryReadNode(HistoryReadType.FrontfillEvents, new NodeId("emitter", 0))
+            {
+                LastResult = historyEvents
+            };
             historyEventHandler.Invoke(reader, new object[] { node, details });
             Assert.Equal(100, node.TotalRead);
             Assert.False(state.IsFrontfilling);
@@ -314,8 +340,10 @@ namespace Test.Unit
             state.RestartHistory();
             queue.Clear();
             cfg.IgnoreContinuationPoints = true;
-            node = new HistoryReadNode(HistoryReadType.FrontfillEvents, new NodeId("emitter", 0));
-            node.LastResult = historyEvents;
+            node = new HistoryReadNode(HistoryReadType.FrontfillEvents, new NodeId("emitter", 0))
+            {
+                LastResult = historyEvents
+            };
             historyEventHandler.Invoke(reader, new object[] { node, details });
             Assert.Equal(100, node.TotalRead);
             Assert.True(state.IsFrontfilling);
@@ -323,8 +351,11 @@ namespace Test.Unit
             Assert.Equal(start.AddSeconds(99), state.SourceExtractedRange.Last);
 
             historyEvents.Events = null;
-            node = new HistoryReadNode(HistoryReadType.FrontfillEvents, new NodeId("emitter", 0)) { Completed = false };
-            node.LastResult = historyEvents;
+            node = new HistoryReadNode(HistoryReadType.FrontfillEvents, new NodeId("emitter", 0))
+            {
+                Completed = false,
+                LastResult = historyEvents
+            };
             historyEventHandler.Invoke(reader, new object[] { node, details });
             Assert.Equal(0, node.TotalRead);
             Assert.False(state.IsFrontfilling);

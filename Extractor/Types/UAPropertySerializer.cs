@@ -206,10 +206,10 @@ namespace Cognite.OpcUa.Types
                 if (mode == StringConverterMode.ReversibleJson)
                 {
                     var builder = new StringBuilder();
-                    builder.Append("{");
+                    builder.Append('{');
                     builder.Append(@"""value"":");
                     builder.Append(uintVal);
-                    builder.Append("}");
+                    builder.Append('}');
                     return builder.ToString();
                 }
                 else
@@ -397,7 +397,7 @@ namespace Cognite.OpcUa.Types
             if (getExtras)
             {
                 extras = node.GetExtraMetadata(config, context, converter);
-                if (extras != null) extras.Remove("Value");
+                extras?.Remove("Value");
             }
             // If we should treat this as a key/value pair, or write it as an object
             if (extras != null && extras.Count != 0 || node.Properties != null && node.Properties.Any())

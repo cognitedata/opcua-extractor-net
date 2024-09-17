@@ -39,7 +39,7 @@ namespace Cognite.OpcUa
         private readonly RebrowseTriggersConfig _config;
         private readonly UAExtractor _extractor;
         private readonly string _npdStore;
-        private IDictionary<string, NamespacePublicationDateState> _extractionStates =
+        private readonly IDictionary<string, NamespacePublicationDateState> _extractionStates =
             new Dictionary<string, NamespacePublicationDateState>();
 
         public RebrowseTriggerManager(

@@ -22,23 +22,16 @@ namespace Cognite.Bridge
     /// <summary>
     /// Contains methods for pushing contents of MQTT payload to CDF.
     /// </summary>
-    public sealed class Destination
+    public sealed class Destination(CogniteDestConfig config, IServiceProvider provider)
     {
-        private readonly CogniteDestConfig config;
+        private readonly CogniteDestConfig config = config;
 
         private readonly ConcurrentDictionary<string, long?> assetIds = new ConcurrentDictionary<string, long?>();
         private readonly ConcurrentDictionary<string, bool> tsIsString = new ConcurrentDictionary<string, bool>();
 
-        private readonly ILogger log;
+        private readonly ILogger log = provider.GetRequiredService<ILogger<Destination>>();
 
-        private readonly CogniteDestination destination;
-
-        public Destination(CogniteDestConfig config, IServiceProvider provider)
-        {
-            this.config = config;
-            destination = provider.GetRequiredService<CogniteDestination>();
-            log = provider.GetRequiredService<ILogger<Destination>>();
-        }
+        private readonly CogniteDestination destination = provider.GetRequiredService<CogniteDestination>();
 
         /// <summary>
         /// Create an asset update from a new asset and an old.

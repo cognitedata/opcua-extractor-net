@@ -1,14 +1,11 @@
-﻿using Serilog;
-using System;
-using System.Collections.Generic;
-using System.Text;
+﻿using System;
 using System.Text.RegularExpressions;
 
 namespace Cognite.OpcUa.Pushers.FDM
 {
     public static class FDMUtils
     {
-        private static Regex extIdRegex = new Regex("^[a-zA-Z]([a-zA-Z0-9_]{0,253}[a-zA-Z0-9])?$", RegexOptions.Compiled);
+        private static readonly Regex extIdRegex = new Regex("^[a-zA-Z]([a-zA-Z0-9_]{0,253}[a-zA-Z0-9])?$", RegexOptions.Compiled);
 
         public static string SanitizeExternalId(string raw)
         {

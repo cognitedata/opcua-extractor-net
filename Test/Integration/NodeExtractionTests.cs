@@ -4,7 +4,6 @@ using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.Subscriptions;
 using Cognite.OpcUa.Types;
-using CogniteSdk;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
@@ -30,7 +29,6 @@ namespace Test.Integration
     public class NodeExtractionTests : IClassFixture<NodeExtractionTestFixture>
     {
         private readonly NodeExtractionTestFixture tester;
-        private readonly ITestOutputHelper _output;
 
         public NodeExtractionTests(ITestOutputHelper output, NodeExtractionTestFixture tester)
         {
@@ -39,7 +37,6 @@ namespace Test.Integration
             tester.ResetConfig();
             tester.Config.History.Enabled = false;
             tester.Client.TypeManager.Reset();
-            _output = output;
         }
         #region datatypeconfig
         [Fact]

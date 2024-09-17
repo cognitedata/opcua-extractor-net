@@ -318,14 +318,14 @@ namespace Cognite.OpcUa.Config
             }
         }
 
-        private static HashSet<Type> retryExceptions = new HashSet<Type>
+        private static readonly HashSet<Type> retryExceptions = new HashSet<Type>
         {
             typeof(ArgumentNullException),
             typeof(NullReferenceException),
             typeof(InvalidOperationException)
         };
 
-        public bool ShouldRetryException(Exception ex, IEnumerable<uint> statusCodes)
+        public static bool ShouldRetryException(Exception ex, IEnumerable<uint> statusCodes)
         {
             if (ex is ServiceResultException serviceExc)
             {

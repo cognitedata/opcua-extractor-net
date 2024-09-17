@@ -23,7 +23,6 @@ using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.Types;
 using CogniteSdk;
-using Com.Cognite.V1.Timeseries.Proto;
 using Google.Protobuf;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -224,11 +223,13 @@ namespace Cognite.OpcUa.Pushers
                 }
 
                 count++;
-                if (!dataPointList.ContainsKey(dp.Id))
+                if (!dataPointList.TryGetValue(dp.Id, out List<UADataPoint>? value))
                 {
-                    dataPointList[dp.Id] = new List<UADataPoint>();
+                    value = new List<UADataPoint>();
+                    dataPointList[dp.Id] = value;
                 }
-                dataPointList[dp.Id].Add(dp);
+
+                value.Add(dp);
             }
 
             if (count == 0) return null;

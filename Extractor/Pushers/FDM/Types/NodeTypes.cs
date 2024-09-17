@@ -1,11 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Xml.Linq;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.Types;
 using Opc.Ua;
-using Serilog;
 
 namespace Cognite.OpcUa.Pushers.FDM.Types
 {
@@ -42,8 +40,8 @@ namespace Cognite.OpcUa.Pushers.FDM.Types
                 pathEnum.MoveNext();
                 while (node.Id != NodeId)
                 {
-                    var pair = pathEnum.Current;
-                    collectedNodes.Add((node, kvp.Value.ModellingRule == ModellingRule.Mandatory, pair.Reference));
+                    var (Reference, Name) = pathEnum.Current;
+                    collectedNodes.Add((node, kvp.Value.ModellingRule == ModellingRule.Mandatory, Reference));
                     pathEnum.MoveNext();
                     node = node.Parent;
                     if (node == null) throw new InvalidOperationException("Expected property to be proper child of type, followed parents to nothing");
@@ -91,7 +89,7 @@ namespace Cognite.OpcUa.Pushers.FDM.Types
             }
         }
 
-        private string GetPath(IEnumerable<(UAReference Reference, QualifiedName Name)> path, string name)
+        private static string GetPath(IEnumerable<(UAReference Reference, QualifiedName Name)> path, string name)
         {
             if (path.Any())
             {

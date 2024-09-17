@@ -192,7 +192,7 @@ namespace Cognite.OpcUa
 
             numPushes.Inc();
 
-            if (pushWaiterSource != null) pushWaiterSource.TrySetResult(true);
+            pushWaiterSource?.TrySetResult(true);
         }
 
 

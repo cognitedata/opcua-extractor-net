@@ -186,10 +186,12 @@ namespace Cognite.OpcUa.Types
         /// <returns>Converted event</returns>
         public static UAEvent? FromStream(Stream stream, UAExtractor extractor)
         {
-            var evt = new UAEvent();
-            evt.Message = CogniteUtils.StringFromStream(stream);
-            evt.EventId = CogniteUtils.StringFromStream(stream);
-            evt.SourceNode = extractor.State.GetNodeId(CogniteUtils.StringFromStream(stream));
+            var evt = new UAEvent
+            {
+                Message = CogniteUtils.StringFromStream(stream),
+                EventId = CogniteUtils.StringFromStream(stream),
+                SourceNode = extractor.State.GetNodeId(CogniteUtils.StringFromStream(stream))
+            };
             var buffer = new byte[sizeof(long)];
 
             if (stream.Read(buffer, 0, sizeof(long)) < sizeof(long)) return null;
@@ -237,9 +239,11 @@ namespace Cognite.OpcUa.Types
                 : client.GetUniqueId(EventType?.Id);
             evt.DataSetId = dataSetId;
 
-            var finalMetaData = new Dictionary<string, string>();
-            finalMetaData["Emitter"] = client.GetUniqueId(EmittingNode) ?? "null";
-            finalMetaData["TypeName"] = EventType?.Name ?? "null";
+            var finalMetaData = new Dictionary<string, string>
+            {
+                { "Emitter", client.GetUniqueId(EmittingNode) ?? "null" },
+                { "TypeName", EventType?.Name ?? "null" }
+            };
             if (MetaData == null)
             {
                 evt.Metadata = finalMetaData;

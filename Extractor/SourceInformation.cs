@@ -36,8 +36,7 @@ namespace Cognite.OpcUa
                 ), 1, token);
                 var buildInfoValue = res[0];
                 if (StatusCode.IsNotGood(buildInfoValue.StatusCode)) return null;
-                var buildInfo = buildInfoValue.GetValue<ExtensionObject?>(null)?.Body as BuildInfo;
-                if (buildInfo == null) return null;
+                if (buildInfoValue.GetValue<ExtensionObject?>(null)?.Body is not BuildInfo buildInfo) return null;
                 return new SourceInformation(buildInfo.ManufacturerName ?? "unknown", buildInfo.ProductName ?? "unknown", buildInfo.SoftwareVersion ?? "unknown")
                 {
                     Uri = buildInfo.ProductUri,
