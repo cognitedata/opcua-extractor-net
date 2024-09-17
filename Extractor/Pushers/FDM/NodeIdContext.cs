@@ -1,5 +1,4 @@
 ﻿using Opc.Ua;
-using Serilog;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -9,11 +8,11 @@ namespace Cognite.OpcUa.Pushers.FDM
 {
     public class NodeIdContext
     {
-        private Dictionary<ushort, ushort> namespaceIndexMap { get; }
+        private Dictionary<ushort, ushort> NamespaceIndexMap { get; }
 
         public NodeIdContext(Dictionary<ushort, ushort> namespaceIndexMap)
         {
-            this.namespaceIndexMap = namespaceIndexMap;
+            NamespaceIndexMap = namespaceIndexMap;
         }
 
         public NodeIdContext(List<string> finalNamespaces, IEnumerable<string> serverNamespaces)
@@ -26,14 +25,14 @@ namespace Cognite.OpcUa.Pushers.FDM
                 if (mappedIndex == -1) throw new InvalidOperationException("Failed to map namespace indices");
                 namespaceIndexMap.Add((ushort)idx, (ushort)mappedIndex);
             }
-            this.namespaceIndexMap = namespaceIndexMap;
+            NamespaceIndexMap = namespaceIndexMap;
         }
 
 
         public string NodeIdToString(NodeId id)
         {
             var buf = new StringBuilder();
-            var idx = namespaceIndexMap[id.NamespaceIndex];
+            var idx = NamespaceIndexMap[id.NamespaceIndex];
             NodeId.Format(buf, id.Identifier, id.IdType, idx);
             return buf.ToString();
         }

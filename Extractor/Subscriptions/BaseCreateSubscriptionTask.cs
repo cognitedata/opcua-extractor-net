@@ -44,7 +44,7 @@ namespace Cognite.OpcUa.Subscriptions
                 {
                     throw ExtractorUtils.HandleServiceResult(logger, ex, ExtractorUtils.SourceOp.CreateMonitoredItems);
                 }
-            }, retries, ex => retries.ShouldRetryException(
+            }, retries, ex => UARetryConfig.ShouldRetryException(
                 ex,
                 // Do not retry on certain errors here.
                 // If we actually lose connection to the server the subscription will probably be invalidated,
@@ -150,7 +150,7 @@ namespace Cognite.OpcUa.Subscriptions
                 {
                     try
                     {
-                        await session.RemoveSubscriptionAsync(subscription);
+                        await session.RemoveSubscriptionAsync(subscription, token);
                     }
                     finally
                     {
@@ -169,7 +169,7 @@ namespace Cognite.OpcUa.Subscriptions
                 $"ensure subscription {SubscriptionName.Name()}",
                 () => EnsureSubscriptionExists(logger, sessionManager, config, subManager, token),
                 config.Source.Retries,
-                ex => config.Source.Retries.ShouldRetryException(
+                ex => UARetryConfig.ShouldRetryException(
                     ex,
                     config.Source.Retries.FinalRetryStatusCodes.Except(outerStatusCodes)
                 ),
@@ -202,7 +202,7 @@ namespace Cognite.OpcUa.Subscriptions
                 $"create subscription {SubscriptionName.Name()}",
                 () => RunInternal(logger, sessionManager, config, subManager, token),
                 config.Source.Retries,
-                ex => config.Source.Retries.ShouldRetryException(ex, outerStatusCodes),
+                ex => UARetryConfig.ShouldRetryException(ex, outerStatusCodes),
                 logger,
                 token);
             Callbacks.OnCreatedSubscription(SubscriptionName);

@@ -15,21 +15,18 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
-using Cognite.Extensions.DataModels.QueryBuilder;
 using Cognite.Extractor.Common;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.Logging;
-using MQTTnet.Internal;
 using Opc.Ua;
 using Opc.Ua.Client;
 using Prometheus;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.RegularExpressions;
 using System.Threading;
 using Nito.AsyncEx;
 using System.Threading.Tasks;
@@ -241,7 +238,7 @@ namespace Cognite.OpcUa
             var dataPointList = new List<UADataPoint>();
             var pointRanges = new Dictionary<string, TimeRange>();
 
-            using (await dataPointMutex.EnterAsync())
+            using (await dataPointMutex.EnterAsync(token))
             {
                 while (dataPointQueue.TryDequeue(out UADataPoint dp))
                 {
@@ -324,7 +321,7 @@ namespace Cognite.OpcUa
             var eventList = new List<UAEvent>();
             var eventRanges = new Dictionary<NodeId, TimeRange>();
 
-            using (await eventMutex.EnterAsync())
+            using (await eventMutex.EnterAsync(token))
             {
                 while (eventQueue.TryDequeue(out UAEvent evt))
                 {

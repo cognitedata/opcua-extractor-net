@@ -1,5 +1,4 @@
 ﻿using Cognite.OpcUa.Config;
-using Cognite.OpcUa.History;
 using Cognite.OpcUa.Subscriptions;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
@@ -18,12 +17,11 @@ namespace Cognite.OpcUa
     public class SessionManager : IDisposable
     {
         private readonly SourceConfig config;
-        private readonly FullConfig fullConfig;
         private readonly UAClient client;
         private ReverseConnectManager? reverseConnectManager;
         // Initialized late, will be non-null after Initialize is called.
         private ApplicationConfiguration appConfig = null!;
-        private ILogger log;
+        private readonly ILogger log;
 
         public byte CurrentServiceLevel { get; private set; } = 255;
         private DateTime? lastLowSLConnectAttempt = null;
@@ -53,7 +51,6 @@ namespace Cognite.OpcUa
         {
             client = parent;
             this.config = config.Source;
-            fullConfig = config;
             this.log = log;
             Context = new SessionContext(config, log);
         }
@@ -138,7 +135,7 @@ namespace Cognite.OpcUa
 
         public async Task Connect()
         {
-            Func<Task> generator = async () =>
+            async Task generator()
             {
                 ISession newSession;
                 if (!string.IsNullOrEmpty(config.ReverseConnectUrl))
@@ -170,7 +167,7 @@ namespace Cognite.OpcUa
                     EndpointUrl = config.EndpointUrl;
                 }
                 SetNewSession(newSession);
-            };
+            }
             await TryWithBackoff(generator, 6, liveToken);
             if (!liveToken.IsCancellationRequested)
             {
@@ -310,13 +307,13 @@ namespace Cognite.OpcUa
             }
         }
 
-        private static uint[] statusCodesToAbandon = new[] {
+        private static readonly uint[] statusCodesToAbandon = new[] {
             StatusCodes.BadSessionIdInvalid,
             StatusCodes.BadSessionNotActivated,
             StatusCodes.BadSessionClosed
         };
 
-        private bool ShouldAbandonReconnect(Exception ex)
+        private static bool ShouldAbandonReconnect(Exception ex)
         {
             if (ex is AggregateException aex)
             {

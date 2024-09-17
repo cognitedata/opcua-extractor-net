@@ -1357,13 +1357,15 @@ namespace Test.Unit
         [Fact]
         public void TestRetryConfig()
         {
-            var retryConfig = new UARetryConfig();
-            retryConfig.RetryStatusCodes = new[]
+            var retryConfig = new UARetryConfig
+            {
+                RetryStatusCodes = new[]
             {
                 "BadNotConnected",
                 "BadWouldBlock",
                 0x80B60000.ToString(),
                 "0x80890000"
+            }
             };
 
             Assert.Contains(StatusCodes.BadNotConnected, retryConfig.FinalRetryStatusCodes);

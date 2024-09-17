@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using AdysTech.InfluxDB.Client.Net.DataContracts;
 using Cognite.Extensions;
 using Cognite.Extensions.DataModels.CogniteExtractorExtensions;
 using Cognite.Extractor.Common;
@@ -16,7 +15,6 @@ using CogniteSdk.Beta.DataModels.Core;
 using CogniteSdk.Resources.Beta;
 using CogniteSdk.Resources.DataModels;
 using Microsoft.Extensions.Logging;
-using Opc.Ua;
 
 namespace Cognite.OpcUa.Pushers.Writers
 {
@@ -103,6 +101,7 @@ namespace Cognite.OpcUa.Pushers.Writers
             await sources.UpsertAsync(new[] { item }, new UpsertOptions(), token);
         }
 
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Style", "IDE0060:Remove unused parameter", Justification = "Temp interface until implemented")]
         public Task<bool> PushAssets(
             IUAClientAccess client,
             IDictionary<string, BaseUANode> nodes,
@@ -116,6 +115,7 @@ namespace Cognite.OpcUa.Pushers.Writers
             return Task.FromResult(true);
         }
 
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Style", "IDE0060:Remove unused parameter", Justification = "Temp interface until implemented")]
         public Task<bool> PushReferences(
             IUAClientAccess client,
             IEnumerable<UAReference> references,

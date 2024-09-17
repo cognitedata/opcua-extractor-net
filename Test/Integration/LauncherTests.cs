@@ -71,10 +71,7 @@ namespace Test.Integration
             {
                 lock (tester)
                 {
-                    if (extractor != null)
-                    {
-                        extractor.Dispose();
-                    }
+                    extractor?.Dispose();
                     extractor = e;
                 }
             };
@@ -466,10 +463,12 @@ version: 1
             config.GenerateDefaults();
             config.Logger.File = new FileConfig { Level = "debug" };
             config.Source.EndpointUrl = tester.EndpointUrl;
-            setup = new ExtractorParams();
-            setup.NoConfig = true;
-            setup.LogDir = "logs2";
-            setup.Exit = true;
+            setup = new ExtractorParams
+            {
+                NoConfig = true,
+                LogDir = "logs2",
+                Exit = true
+            };
             var options = new ExtractorRunnerParams<FullConfig, UAExtractor>();
 
             method.Invoke(typeof(ExtractorStarter), new object[] { log, config, setup, options, "config", services });
