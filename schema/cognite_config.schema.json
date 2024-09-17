@@ -5,7 +5,7 @@
     "description": "Configuration for pushing data to Cognite Data Fusion (CDF)",
     "allOf": [
         {
-            "$ref": "https://raw.githubusercontent.com/cognitedata/dotnet-extractor-utils/v1.19.0/schema/cognite_config.schema.json"
+            "$ref": "https://raw.githubusercontent.com/cognitedata/dotnet-extractor-utils/v1.26.1/schema/cognite_config.schema.json"
         }
     ],
     "unevaluatedProperties": false,
@@ -89,6 +89,14 @@
                         "relationships": {
                             "type": "boolean",
                             "description": "Set to `true` to enable creating relationships from OPC UA references. Requires [`extraction.relationships`](#extraction.relationships) to be enabled."
+                        },
+                        "space": {
+                            "type": "string",
+                            "description": "Data modeling space to write to. If this is set, metadata is written to the core data models instead of to CDF Clean. Note that only timeseries are currently supported. Nodes will be created in the CogniteExtractorTimeSeries view in the industrial data models."
+                        },
+                        "source": {
+                            "type": "string",
+                            "description": "External ID of the `source` that created core data model time series will be tied to. If this is not specified, it defaults to either `OPC_UA:[source.endpoint-url]` or `OPC_UA_NODESET:[source.node-set-source.nodesets[LAST].[file-name or url]`"
                         }
                     }
                 },
