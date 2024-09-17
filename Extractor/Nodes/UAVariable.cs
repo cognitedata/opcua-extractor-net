@@ -28,7 +28,6 @@ using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Linq;
@@ -153,7 +152,7 @@ namespace Cognite.OpcUa.Nodes
             ValueRank = state.ValueRank;
             DataType = typeManager.GetDataType(state.DataType);
             ArrayDimensions = state.ArrayDimensions.Select(Convert.ToInt32).ToArray();
-            if (!ArrayDimensions.Any())
+            if (ArrayDimensions.Length == 0)
             {
                 ArrayDimensions = null;
             }
@@ -214,10 +213,7 @@ namespace Cognite.OpcUa.Nodes
             }
             else if (IsObject)
             {
-                if (TimeSeries == null)
-                {
-                    TimeSeries = new UAVariableMember(this, -1);
-                }
+                TimeSeries ??= new UAVariableMember(this, -1);
                 return new[] { TimeSeries };
             }
             else
@@ -253,7 +249,7 @@ namespace Cognite.OpcUa.Nodes
             public bool IsDestinationObject;
             public bool IsDestinationVariable;
 
-            public bool Any()
+            public readonly bool Any()
             {
                 return IsSourceObject || IsSourceVariable || IsDestinationObject || IsDestinationVariable;
             }
@@ -360,10 +356,7 @@ namespace Cognite.OpcUa.Nodes
             base.Format(builder, indent + 4, writeParent);
 
             var indt = new string(' ', indent + 4);
-            if (FullAttributes.DataType != null)
-            {
-                FullAttributes.DataType.Format(builder, indent + 4, false);
-            }
+            FullAttributes.DataType?.Format(builder, indent + 4, false);
             if (FullAttributes.ValueRank != ValueRanks.Scalar)
             {
                 builder.AppendFormat(CultureInfo.InvariantCulture, "{0}ValueRank: {1}", indt, FullAttributes.ValueRank);
@@ -453,9 +446,9 @@ namespace Cognite.OpcUa.Nodes
                 LegacyName = externalId,
                 IsString = FullAttributes.DataType.IsString,
                 IsStep = FullAttributes.DataType.IsStep,
-                DataSetId = dataSetId
+                DataSetId = dataSetId,
+                Metadata = BuildMetadata(config, client, true)
             };
-            writePoco.Metadata = BuildMetadata(config, client, true);
 
             HandleMetaMap(metaMap, writePoco, value => writePoco.AssetExternalId = value, client.StringConverter);
 

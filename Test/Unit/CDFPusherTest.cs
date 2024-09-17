@@ -37,7 +37,6 @@ namespace Test.Unit
     public sealed class CDFPusherTest : IClassFixture<CDFPusherTestFixture>, IDisposable
     {
         private readonly CDFPusherTestFixture tester;
-        private readonly ITestOutputHelper _output;
         private CDFMockHandler handler;
         private CDFPusher pusher;
         public CDFPusherTest(ITestOutputHelper output, CDFPusherTestFixture tester)
@@ -47,7 +46,6 @@ namespace Test.Unit
             tester.ResetConfig();
             (handler, pusher) = tester.GetCDFPusher();
             tester.Client.TypeManager.Reset();
-            _output = output;
         }
 
         public void Dispose()
@@ -1160,9 +1158,9 @@ namespace Test.Unit
             tester.Config.Cognite.RawNodeBuffer.BrowseOnEmpty = true;
             await extractor.RunExtractor(true);
             Assert.True(extractor.State.NodeStates.Count > 0);
-            Assert.True(handler.AssetsRaw.Count != 0);
-            Assert.True(handler.TimeseriesRaw.Count != 0);
-            Assert.True(handler.Timeseries.Count != 0);
+            Assert.NotEmpty(handler.AssetsRaw);
+            Assert.NotEmpty(handler.TimeseriesRaw);
+            Assert.NotEmpty(handler.Timeseries);
             Assert.Empty(handler.Assets);
 
             await extractor.WaitForSubscription(SubscriptionName.DataPoints);
@@ -1252,9 +1250,9 @@ namespace Test.Unit
             tester.Config.Cognite.RawNodeBuffer.BrowseOnEmpty = true;
             await extractor.RunExtractor(true);
             Assert.True(extractor.State.NodeStates.Count > 0);
-            Assert.True(handler.AssetsRaw.Count != 0);
-            Assert.True(handler.TimeseriesRaw.Count != 0);
-            Assert.True(handler.Timeseries.Count != 0);
+            Assert.NotEmpty(handler.AssetsRaw);
+            Assert.NotEmpty(handler.TimeseriesRaw);
+            Assert.NotEmpty(handler.Timeseries);
             Assert.Empty(handler.Assets);
 
             await extractor.WaitForSubscription(SubscriptionName.Events);
@@ -1325,9 +1323,9 @@ namespace Test.Unit
             tester.Config.Cognite.RawNodeBuffer.BrowseOnEmpty = true;
             await extractor.RunExtractor(true);
             Assert.True(extractor.State.NodeStates.Count > 0);
-            Assert.True(handler.AssetsRaw.Count != 0);
-            Assert.True(handler.TimeseriesRaw.Count != 0);
-            Assert.True(handler.Timeseries.Count != 0);
+            Assert.NotEmpty(handler.AssetsRaw);
+            Assert.NotEmpty(handler.TimeseriesRaw);
+            Assert.NotEmpty(handler.Timeseries);
             Assert.Empty(handler.Assets);
 
             await extractor.WaitForSubscription(SubscriptionName.Events);

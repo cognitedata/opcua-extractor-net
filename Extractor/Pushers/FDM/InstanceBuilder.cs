@@ -1,12 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
-using System.Runtime.CompilerServices;
-using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Xml.Linq;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.Pushers.FDM.Types;
@@ -356,7 +352,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             }
         }
 
-        private string SerializeStoreSize(BaseInstanceWrite data, JsonSerializerOptions options, ref long size)
+        private static string SerializeStoreSize(BaseInstanceWrite data, JsonSerializerOptions options, ref long size)
         {
             var res = JsonSerializer.Serialize(data, options);
             if (res.Length > size)

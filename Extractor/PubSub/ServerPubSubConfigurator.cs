@@ -438,7 +438,7 @@ namespace Cognite.OpcUa.PubSub
             NodeId = id;
             TypeDefinition = typeDefinitionId;
             ReferenceType = referenceTypeId;
-            if (parent != null) parent.AddChild(this);
+            parent?.AddChild(this);
         }
 
         public void AddChild(InternalNode node)

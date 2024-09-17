@@ -15,7 +15,6 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
-using Cognite.OpcUa;
 using CogniteSdk;
 using CogniteSdk.Beta.DataModels;
 using Com.Cognite.V1.Timeseries.Proto;
@@ -888,10 +887,7 @@ namespace Test
                     {
                         old.metadata = upd.metadata.set;
                     }
-                    else if (old.metadata == null)
-                    {
-                        old.metadata = new Dictionary<string, string>();
-                    }
+                    else old.metadata ??= new Dictionary<string, string>();
                     if (upd.metadata.remove != null)
                     {
                         foreach (var field in upd.metadata.remove)
@@ -968,10 +964,7 @@ namespace Test
                     {
                         old.metadata = upd.metadata.set;
                     }
-                    else if (old.metadata == null)
-                    {
-                        old.metadata = new Dictionary<string, string>();
-                    }
+                    else old.metadata ??= new Dictionary<string, string>();
                     if (upd.metadata.remove != null)
                     {
                         foreach (var field in upd.metadata.remove)

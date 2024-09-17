@@ -125,7 +125,7 @@ namespace Cognite.OpcUa
 
         public static void LogException(ILogger log, Exception? e, string message, string? silentMessage = null)
         {
-            if (silentMessage == null) silentMessage = message;
+            silentMessage ??= message;
             if (e == null)
             {
                 log.LogError("Unknown error: {Message}", message);

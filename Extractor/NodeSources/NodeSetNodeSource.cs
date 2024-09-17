@@ -19,10 +19,8 @@ using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
-using CogniteSdk.Beta.DataModels;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
-using Serilog.Core;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -87,7 +85,7 @@ namespace Cognite.OpcUa.NodeSources
                     logger.LogInformation("Server built, resulted in a total of {Nodes} nodes", nodes.Count);
                     isInitialized = true;
                 }
-            });
+            }, token);
         }
 
         public Task<NodeLoadResult> LoadNodes(IEnumerable<NodeId> nodesToBrowse, uint nodeClassMask, HierarchicalReferenceMode hierarchicalReferences, string purpose, CancellationToken token)
@@ -341,8 +339,10 @@ namespace Cognite.OpcUa.NodeSources
         }
         private void BrowseHierarchy(IEnumerable<NodeId> rootIds, uint nodeClassMask)
         {
-            var visitedNodes = new HashSet<NodeId>();
-            visitedNodes.Add(ObjectIds.Server);
+            var visitedNodes = new HashSet<NodeId>
+            {
+                ObjectIds.Server
+            };
 
             var nextIds = new HashSet<NodeId>();
             foreach (var id in rootIds)

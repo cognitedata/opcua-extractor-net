@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -88,7 +87,7 @@ namespace Cognite.OpcUa.Subscriptions
             {
                 logger.LogWarning("Server is available, but subscription {Name} is not responding to notifications. Attempting to recreate.", SubscriptionName);
                 Callbacks.OnSubscriptionFailure(SubscriptionName);
-                await session.RemoveSubscriptionAsync(oldSubscription);
+                await session.RemoveSubscriptionAsync(oldSubscription, token);
             }
             catch (ServiceResultException serviceEx)
             {
@@ -97,7 +96,7 @@ namespace Cognite.OpcUa.Subscriptions
                 // Second attempt shouldn't fail, and doesn't seem to, keeping this here as a backup.
                 try
                 {
-                    await session.RemoveSubscriptionAsync(oldSubscription);
+                    await session.RemoveSubscriptionAsync(oldSubscription, token);
                 }
                 catch
                 {

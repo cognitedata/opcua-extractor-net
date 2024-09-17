@@ -26,7 +26,6 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
 
 namespace Cognite.OpcUa.Nodes
 {
@@ -95,7 +94,7 @@ namespace Cognite.OpcUa.Nodes
             ValueRank = state.ValueRank;
             DataType = typeManager.GetDataType(state.DataType);
             ArrayDimensions = state.ArrayDimensions.Select(Convert.ToInt32).ToArray();
-            if (!ArrayDimensions.Any())
+            if (ArrayDimensions.Length == 0)
             {
                 ArrayDimensions = null;
             }
@@ -183,10 +182,7 @@ namespace Cognite.OpcUa.Nodes
             base.Format(builder, indent + 4, writeParent);
 
             var indt = new string(' ', indent + 4);
-            if (FullAttributes.DataType != null)
-            {
-                FullAttributes.DataType.Format(builder, indent + 4, false);
-            }
+            FullAttributes.DataType?.Format(builder, indent + 4, false);
             if (FullAttributes.ValueRank != ValueRanks.Scalar && FullAttributes.ValueRank > 0)
             {
                 builder.AppendFormat(CultureInfo.InvariantCulture, "{0}ValueRank: {1}", indt, FullAttributes.ValueRank);
