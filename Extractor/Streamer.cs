@@ -482,18 +482,18 @@ namespace Cognite.OpcUa
         private UAEvent DpAsEvent(DataValue datapoint, VariableExtractionState node)
         {
             var value = extractor.StringConverter.ConvertToString(datapoint.WrappedValue);
-            return new UAEvent
+            var evt = new UAEvent
             {
                 EmittingNode = node.SourceId,
                 EventId = $"{node.Id}-{datapoint.SourceTimestamp.Ticks}",
                 Message = value,
                 SourceNode = node.SourceId,
                 Time = datapoint.SourceTimestamp,
-                MetaData = new Dictionary<string, string>
-                {
-                    { "Status", StatusCode.LookupSymbolicId((uint)datapoint.StatusCode) }
-                }
             };
+            evt.SetMetadata(extractor.StringConverter, new[] {
+                new EventFieldValue(new RawTypeField(new QualifiedName("Status")), new Variant(datapoint.StatusCode))
+            }, log);
+            return evt;
         }
 
         /// <summary>
@@ -654,8 +654,7 @@ namespace Cognite.OpcUa
                 return null;
             }
 
-            var finalProperties = extractedProperties.Where(kvp => kvp.Key != "Message" && kvp.Key != "EventId"
-                && kvp.Key != "SourceNode" && kvp.Key != "Time" && kvp.Key != "EventType").Select(kvp => kvp.Value);
+            var finalProperties = extractedProperties.Select(kvp => kvp.Value);
             var buffEvent = new UAEvent
             {
                 Message = extractor.StringConverter.ConvertToString(extractedProperties.GetValueOrDefault("Message")?.Value),

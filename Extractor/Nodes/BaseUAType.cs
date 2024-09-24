@@ -15,9 +15,11 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using Cognite.Extensions;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 
 namespace Cognite.OpcUa.Nodes
@@ -38,6 +40,8 @@ namespace Cognite.OpcUa.Nodes
 
 
         public HashSet<TypeField> AllCollectedFields { get; set; } = null!;
+
+        public HashSet<TypeField> OwnCollectedFields { get; set; } = new HashSet<TypeField>();
 
         public IEnumerable<TypeField> CollectedFields =>
             AllCollectedFields.Where(f => f.Node.NodeClass == NodeClass.Variable);
@@ -90,6 +94,34 @@ namespace Cognite.OpcUa.Nodes
             }
 
             return true;
+        }
+
+        public void ToStorableBytes(List<byte> bytes)
+        {
+            bytes.AddRange(BitConverter.GetBytes(BrowsePath.Count));
+            foreach (var name in BrowsePath)
+            {
+                bytes.AddRange(BitConverter.GetBytes(name.NamespaceIndex));
+                bytes.AddRange(CogniteUtils.StringToStorable(name.Name));
+            }
+        }
+
+        public static RawTypeField? FromStream(Stream stream)
+        {
+            var buffer = new byte[sizeof(int)];
+            if (stream.Read(buffer, 0, sizeof(int)) < sizeof(int)) return null;
+            int count = BitConverter.ToInt32(buffer, 0);
+            var res = new QualifiedNameCollection(count);
+            for (int i = 0; i < count; i++)
+            {
+                if (stream.Read(buffer, 0, sizeof(ushort)) < sizeof(ushort)) return null;
+                ushort namespaceIndex = BitConverter.ToUInt16(buffer, 0);
+                string? name = CogniteUtils.StringFromStream(stream);
+                if (name == null) return null;
+                res.Add(new QualifiedName(name, namespaceIndex));
+            }
+
+            return new RawTypeField(res);
         }
     }
 

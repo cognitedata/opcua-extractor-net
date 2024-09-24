@@ -23,11 +23,15 @@
   </ItemGroup-->
 
   <ItemGroup>
+    <ProjectReference Include="../../dotnet-extractor-utils/Cognite.Testing/Cognite.Testing.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Include="$(SolutionDir)config\**" CopyToOutputDirectory="Always" LinkBase="config" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Cognite.Extractor.Testing" Version="1.26.1" />
+    <!--PackageReference Include="Cognite.Extractor.Testing" Version="1.26.1" /-->
     <PackageReference Include="coverlet.msbuild" Version="6.0.2">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>

@@ -1,4 +1,4 @@
-﻿/* Cognite Extractor for OPC-UA
+/* Cognite Extractor for OPC-UA
 Copyright (C) 2021 Cognite AS
 
 This program is free software; you can redistribute it and/or
@@ -60,13 +60,28 @@ namespace Cognite.OpcUa.Types
         /// </summary>
         public UAObjectType? EventType { get; set; }
         /// <summary>
-        /// Metadata fields
-        /// </summary>
-        public Dictionary<string, string>? MetaData { get; set; }
-        /// <summary>
         /// Id of the node that emitted the event in opc-ua
         /// </summary>
         public NodeId EmittingNode { get; set; } = null!;
+
+        public Dictionary<RawTypeField, EventFieldValue>? Values { get; private set; }
+
+        private StringConverter? valuesConverter;
+        private ILogger? valuesLogger;
+
+        private Dictionary<string, string>? cachedMetadata;
+        public Dictionary<string, string>? MetaData
+        {
+            get
+            {
+                if (cachedMetadata == null && valuesConverter != null && valuesLogger != null && Values != null)
+                {
+                    cachedMetadata = GetMetadata(valuesConverter, Values.Values, valuesLogger);
+                }
+                return cachedMetadata;
+            }
+            set => cachedMetadata = value;
+        }
 
         public override string ToString()
         {
@@ -89,6 +104,7 @@ namespace Cognite.OpcUa.Types
                 builder.AppendFormat(CultureInfo.InvariantCulture, "SourceNode: {0}", SourceNode);
                 builder.AppendLine();
             }
+
             if (MetaData != null && MetaData.Count != 0)
             {
                 builder.Append("MetaData: {");
@@ -105,7 +121,9 @@ namespace Cognite.OpcUa.Types
         }
         public void SetMetadata(StringConverter converter, IEnumerable<EventFieldValue> values, ILogger log)
         {
-            MetaData = GetMetadata(converter, values, log);
+            Values = values.ToDictionary(v => v.Field);
+            valuesConverter = converter;
+            valuesLogger = log;
         }
         [return: NotNullIfNotNull("values")]
         private static Dictionary<string, string>? GetMetadata(StringConverter converter, IEnumerable<EventFieldValue> values, ILogger log)
@@ -114,6 +132,7 @@ namespace Cognite.OpcUa.Types
             var parents = new Dictionary<string, EventFieldNode>();
             foreach (var field in values)
             {
+                if (field.IsBuiltIn) continue;
                 IDictionary<string, EventFieldNode> next = parents;
                 EventFieldNode? current = null;
                 for (int i = 0; i < field.Field.BrowsePath.Count; i++)
@@ -162,20 +181,18 @@ namespace Cognite.OpcUa.Types
             bytes.AddRange(BitConverter.GetBytes(Time.ToBinary()));
             bytes.AddRange(CogniteUtils.StringToStorable(extractor.GetUniqueId(EventType?.Id)));
             bytes.AddRange(CogniteUtils.StringToStorable(extractor.GetUniqueId(EmittingNode)));
-            var metaDataBytes = new List<byte>();
-            ushort count = 0;
-            if (MetaData != null)
+            if (Values == null)
             {
-                foreach (var kvp in MetaData)
+                bytes.AddRange(BitConverter.GetBytes(0));
+            }
+            else
+            {
+                bytes.AddRange(BitConverter.GetBytes(Values.Count()));
+                foreach (var v in Values.Values)
                 {
-                    count++;
-                    metaDataBytes.AddRange(CogniteUtils.StringToStorable(kvp.Key));
-                    metaDataBytes.AddRange(CogniteUtils.StringToStorable(extractor.StringConverter.ConvertToString(kvp.Value)));
+                    v.ToStorableBytes(bytes, extractor);
                 }
             }
-
-            bytes.AddRange(BitConverter.GetBytes(count));
-            bytes.AddRange(metaDataBytes);
             return bytes.ToArray();
         }
         /// <summary>
@@ -201,18 +218,16 @@ namespace Cognite.OpcUa.Types
             evt.EventType = extractor.State.ActiveEvents.GetValueOrDefault(typeId);
             evt.EmittingNode = extractor.State.GetNodeId(CogniteUtils.StringFromStream(stream));
 
-            if (stream.Read(buffer, 0, sizeof(ushort)) < sizeof(ushort)) return null;
-            ushort count = BitConverter.ToUInt16(buffer, 0);
-
-            evt.MetaData = new Dictionary<string, string>();
-
+            if (stream.Read(buffer, 0, sizeof(int)) < sizeof(int)) return null;
+            int count = BitConverter.ToInt32(buffer, 0);
+            var values = new List<EventFieldValue>(count);
             for (int i = 0; i < count; i++)
             {
-                string? key = CogniteUtils.StringFromStream(stream);
-                string? value = CogniteUtils.StringFromStream(stream);
-                if (key == null) continue;
-                evt.MetaData[key] = value ?? "";
+                var r = EventFieldValue.FromStream(stream, extractor);
+                if (r == null) return null;
+                values.Add(r);
             }
+            evt.Values = values.ToDictionary(v => v.Field);
 
             return evt;
         }
@@ -339,10 +354,44 @@ namespace Cognite.OpcUa.Types
     {
         public RawTypeField Field { get; }
         public Variant Value { get; }
+
+        public bool IsBuiltIn
+        {
+            get
+            {
+                return Field.Name == "Message" || Field.Name == "EventId"
+                    || Field.Name == "SourceNode" || Field.Name == "Time"
+                    || Field.Name == "EventType";
+            }
+        }
         public EventFieldValue(RawTypeField field, Variant value)
         {
             Field = field;
             Value = value;
+        }
+
+        public void ToStorableBytes(List<byte> bytes, UAExtractor extractor)
+        {
+            Field.ToStorableBytes(bytes);
+            var encoder = new BinaryEncoder(extractor.Context.MessageContext);
+            encoder.WriteVariant(null, Value);
+            bytes.AddRange(encoder.CloseAndReturnBuffer());
+        }
+
+        public static EventFieldValue? FromStream(Stream stream, UAExtractor extractor)
+        {
+            var field = RawTypeField.FromStream(stream);
+            if (field == null) return null;
+            try
+            {
+                var decoder = new BinaryDecoder(stream, extractor.Context.MessageContext);
+                var variant = decoder.ReadVariant(null);
+                return new EventFieldValue(field, variant);
+            }
+            catch
+            {
+                return null;
+            }
         }
     }
     internal class EventFieldNode

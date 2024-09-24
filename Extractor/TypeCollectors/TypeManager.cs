@@ -327,6 +327,7 @@ namespace Cognite.OpcUa.TypeCollectors
                         if (type.Id == ObjectTypeIds.BaseEventType && baseExcludeProperties.Contains(field.Node.Attributes.BrowseName!.Name)
                             || excludeProperties.Contains(field.Node.Attributes.BrowseName!.Name)) continue;
                         type.AllCollectedFields.Add(field);
+                        type.OwnCollectedFields.Add(field);
                     }
                 }
             }

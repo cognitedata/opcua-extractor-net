@@ -120,6 +120,11 @@ namespace Cognite.OpcUa.Config
         /// This is the implementation of the metadata targets 
         /// </summary>
         public MetadataTargetsConfig? MetadataTargets { get; set; }
+
+        /// <summary>
+        /// Configuration for writing events to industrial log analytics.
+        /// </summary>
+        public LogAnalyticsConfig? LogAnalytics { get; set; }
     }
     public class RawMetadataConfig
     {
@@ -317,4 +322,12 @@ namespace Cognite.OpcUa.Config
         /// </summary>
         public int ModelChunk { get; set; } = 100;
     }
+
+    public class LogAnalyticsConfig
+    {
+        public string? ModelSpace { get; set; }
+        public string? LogSpace { get; set; }
+        public string? Stream { get; set; }
+    }
+
 }
