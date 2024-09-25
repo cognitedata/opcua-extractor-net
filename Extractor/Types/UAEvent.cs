@@ -201,7 +201,7 @@ namespace Cognite.OpcUa.Types
         /// <param name="stream">Stream to read from</param>
         /// <param name="extractor">Extractor to use for nodeId conversions</param>
         /// <returns>Converted event</returns>
-        public static UAEvent? FromStream(Stream stream, UAExtractor extractor)
+        public static UAEvent? FromStream(Stream stream, UAExtractor extractor, ILogger log)
         {
             var evt = new UAEvent
             {
@@ -227,6 +227,7 @@ namespace Cognite.OpcUa.Types
                 if (r == null) return null;
                 values.Add(r);
             }
+            evt.SetMetadata(extractor.StringConverter, values, log);
             evt.Values = values.ToDictionary(v => v.Field);
 
             return evt;
