@@ -6,13 +6,13 @@ using System.Threading.Tasks;
 using Cognite.Extensions;
 using Cognite.Extensions.DataModels.CogniteExtractorExtensions;
 using Cognite.Extractor.Common;
-using Cognite.Extractor.Utils.Beta;
+using Cognite.Extractor.Utils;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.Types;
-using CogniteSdk.Beta.DataModels;
-using CogniteSdk.Beta.DataModels.Core;
-using CogniteSdk.Resources.Beta;
+using CogniteSdk.DataModels;
+using CogniteSdk.DataModels.Core;
+using CogniteSdk.Resources;
 using CogniteSdk.Resources.DataModels;
 using Microsoft.Extensions.Logging;
 
@@ -55,7 +55,7 @@ namespace Cognite.OpcUa.Pushers.Writers
             cleanConfig = config.Cognite?.MetadataTargets?.Clean ?? throw new ArgumentException("Attempted to initialize IDM writer without clean config");
             if (cleanConfig.Space == null) throw new ArgumentException("Attempted to initialize IDM writer without space ID");
             space = cleanConfig.Space;
-            sources = new SourceSystemResource(destination.CogniteClient.Beta.DataModels);
+            sources = new SourceSystemResource(destination.CogniteClient.DataModels);
             var sourceId = cleanConfig.Source;
             if (string.IsNullOrWhiteSpace(sourceId))
             {

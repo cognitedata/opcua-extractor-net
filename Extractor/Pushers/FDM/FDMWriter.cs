@@ -25,7 +25,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Cognite.OpcUa.Config;
-using CogniteSdk.Beta.DataModels;
+using CogniteSdk.DataModels;
 using System.Text.Json;
 using System;
 using Cognite.OpcUa.Nodes;
@@ -69,7 +69,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                     };
                     try
                     {
-                        results[idx] = await destination.CogniteClient.Beta.DataModels.UpsertInstances(req, token);
+                        results[idx] = await destination.CogniteClient.DataModels.UpsertInstances(req, token);
                     }
                     catch (ResponseException rex)
                     {
@@ -96,11 +96,11 @@ namespace Cognite.OpcUa.Pushers.FDM
 
             var spaces = new[] { modelInfo.InstanceSpace, modelInfo.ModelSpace }.Distinct();
 
-            await destination.CogniteClient.Beta.DataModels.UpsertSpaces(spaces.Select(s => new SpaceCreate { Space = s, Name = s }), token);
+            await destination.CogniteClient.DataModels.UpsertSpaces(spaces.Select(s => new SpaceCreate { Space = s, Name = s }), token);
 
             var serverMetaContainer = BaseDataModelDefinitions.ServerMeta(modelInfo.ModelSpace);
-            await destination.CogniteClient.Beta.DataModels.UpsertContainers(new[] { serverMetaContainer }, token);
-            await destination.CogniteClient.Beta.DataModels.UpsertViews(new[] { serverMetaContainer.ToView(modelInfo.ModelVersion) }, token);
+            await destination.CogniteClient.DataModels.UpsertContainers(new[] { serverMetaContainer }, token);
+            await destination.CogniteClient.DataModels.UpsertViews(new[] { serverMetaContainer.ToView(modelInfo.ModelVersion) }, token);
         }
 
         private static bool IsConnectionDefEqual(ConnectionDefinition lh, ConnectionDefinition rh)
@@ -209,7 +209,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             // Check if the data model exists
             try
             {
-                var existingModels = await destination.CogniteClient.Beta.DataModels.RetrieveDataModels(new[] { modelInfo.FDMExternalId("OPC_UA") }, true, token);
+                var existingModels = await destination.CogniteClient.DataModels.RetrieveDataModels(new[] { modelInfo.FDMExternalId("OPC_UA") }, true, token);
 
                 if (existingModels.Any())
                 {
@@ -242,7 +242,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             foreach (var chunk in containersToInsert.ChunkBy(fdmConfig.ModelChunk))
             {
                 log.LogDebug("Creating {Count} containers", chunk.Count());
-                await destination.CogniteClient.Beta.DataModels.UpsertContainers(chunk, token);
+                await destination.CogniteClient.DataModels.UpsertContainers(chunk, token);
             }
 
             foreach (var level in viewsToInsert.ChunkByHierarchy(fdmConfig.ModelChunk, v => v.ExternalId, v => v.Implements?.FirstOrDefault()?.ExternalId!))
@@ -250,7 +250,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                 foreach (var chunk in level.ChunkBy(fdmConfig.ModelChunk))
                 {
                     log.LogDebug("Creating {Count} views", chunk.Count());
-                    await destination.CogniteClient.Beta.DataModels.UpsertViews(chunk, token);
+                    await destination.CogniteClient.DataModels.UpsertViews(chunk, token);
                 }
             }
 
@@ -264,7 +264,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                     .Select(v => modelInfo.ViewIdentifier(v.ExternalId))
                     .Append(modelInfo.ViewIdentifier("ServerMeta"))
             };
-            await destination.CogniteClient.Beta.DataModels.UpsertDataModels(new[] { model }, token);
+            await destination.CogniteClient.DataModels.UpsertDataModels(new[] { model }, token);
         }
 
         public async Task<bool> PushNodes(
@@ -456,7 +456,7 @@ namespace Cognite.OpcUa.Pushers.FDM
 
             List<string>? finalNamespaces = null;
 
-            await destination.CogniteClient.Beta.DataModels.UpsertAtomic<Dictionary<string, Dictionary<string, ServerMeta>>>(
+            await destination.CogniteClient.DataModels.UpsertAtomic<Dictionary<string, Dictionary<string, ServerMeta>>>(
                 new[] { externalId },
                 modelInfo.InstanceSpace,
                 InstanceType.node,
@@ -527,7 +527,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             var generators = chunks
                 .Select<IEnumerable<InstanceIdentifierWithType>, Func<Task>>(c => async () =>
                 {
-                    await destination.CogniteClient.Beta.DataModels.DeleteInstances(
+                    await destination.CogniteClient.DataModels.DeleteInstances(
                         instances,
                         token
                     );
@@ -564,7 +564,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                     string? cursor = null;
                     do
                     {
-                        var r = await destination.CogniteClient.Beta.DataModels.FilterInstances<JsonElement>(new InstancesFilter
+                        var r = await destination.CogniteClient.DataModels.FilterInstances<JsonElement>(new InstancesFilter
                         {
                             IncludeTyping = false,
                             InstanceType = InstanceType.edge,
