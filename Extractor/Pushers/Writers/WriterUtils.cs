@@ -3,7 +3,6 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Cognite.Extractor.Utils;
-using Cognite.Extractor.Utils.Beta;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Pushers.FDM;
 using CogniteSdk;

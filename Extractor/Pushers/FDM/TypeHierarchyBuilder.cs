@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using Cognite.Extensions.DataModels;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Pushers.FDM.Types;
-using CogniteSdk.Beta.DataModels;
+using CogniteSdk.DataModels;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 
