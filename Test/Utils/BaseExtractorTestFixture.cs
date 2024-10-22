@@ -20,7 +20,6 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using System.Linq;
 using Opc.Ua.Client;
 using Cognite.OpcUa.Subscriptions;
-using Cognite.Extractor.Utils.Beta;
 
 namespace Test.Utils
 {

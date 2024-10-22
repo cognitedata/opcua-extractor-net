@@ -7,7 +7,7 @@ using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.Pushers.FDM.Types;
 using Cognite.OpcUa.Types;
-using CogniteSdk.Beta.DataModels;
+using CogniteSdk.DataModels;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 

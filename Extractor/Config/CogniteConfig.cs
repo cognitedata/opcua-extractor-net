@@ -18,7 +18,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using Cognite.Extensions;
 using Cognite.Extractor.Common;
 using Cognite.Extractor.Utils;
-using CogniteSdk.Beta.DataModels;
+using CogniteSdk.DataModels;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;

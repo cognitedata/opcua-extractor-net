@@ -1,6 +1,6 @@
 ﻿using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Types;
-using CogniteSdk.Beta.DataModels;
+using CogniteSdk.DataModels;
 using Opc.Ua;
 using System;
 using System.Collections;
