@@ -16,7 +16,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using Cognite.Extensions;
-using Cognite.Extractor.Utils.Beta;
+using Cognite.Extractor.Utils;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.Nodes;
@@ -24,8 +24,7 @@ using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.Pushers.Writers;
 using Cognite.OpcUa.Types;
 using CogniteSdk;
-using CogniteSdk.Alpha;
-using CogniteSdk.Beta.DataModels;
+using CogniteSdk.DataModels;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Prometheus;
@@ -136,7 +135,7 @@ namespace Cognite.OpcUa.Pushers
             if (config.MetadataTargets?.Clean?.Space != null)
             {
                 var inserts = dataPointList.ToDictionary(
-                    kvp => IdentityWithInstanceId.Create(new InstanceIdentifier(config.MetadataTargets.Clean.Space, kvp.Key)),
+                    kvp => Identity.Create(new InstanceIdentifier(config.MetadataTargets.Clean.Space, kvp.Key)),
                     kvp => kvp.Value.SelectNonNull(dp => dp.ToCDFDataPoint(fullConfig.Extraction.StatusCodes.IngestStatusCodes, log))
                 );
                 return await PushDataPointsIdm(inserts, count, token);
@@ -520,7 +519,7 @@ namespace Cognite.OpcUa.Pushers
         #endregion
 
         #region datapoints
-        private async Task<bool?> PushDataPointsIdm(Dictionary<IdentityWithInstanceId, IEnumerable<Datapoint>> inserts, int totalCount, CancellationToken token)
+        private async Task<bool?> PushDataPointsIdm(Dictionary<Identity, IEnumerable<Datapoint>> inserts, int totalCount, CancellationToken token)
         {
             try
             {
