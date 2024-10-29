@@ -520,6 +520,10 @@ namespace Cognite.OpcUa
                     }
                 });
             }
+            else
+            {
+                log.LogWarning("Session manager is closed, not attempting to reconnect");
+            }
             client.Callbacks.TaskScheduler.ScheduleTask(null, async (_) => await client.Callbacks.OnServerDisconnect(client));
         }
 

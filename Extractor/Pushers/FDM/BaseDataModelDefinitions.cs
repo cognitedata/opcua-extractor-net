@@ -1,4 +1,4 @@
-﻿using CogniteSdk.Beta.DataModels;
+﻿using CogniteSdk.DataModels;
 using System.Collections.Generic;
 
 namespace Cognite.OpcUa.Pushers.FDM
