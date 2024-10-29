@@ -6,7 +6,7 @@ using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.Pushers.FDM;
 using Cognite.OpcUa.Types;
 using CogniteSdk.Alpha;
-using CogniteSdk.Beta.DataModels;
+using CogniteSdk.DataModels;
 using Opc.Ua;
 
 namespace Cognite.OpcUa.Pushers.ILA
@@ -55,7 +55,7 @@ namespace Cognite.OpcUa.Pushers.ILA
             identifier = new ContainerIdentifier(container.Space, container.ExternalId);
         }
 
-        private InstanceData InstanceDataForEvent(UAEvent evt, ILAValueConverter converter)
+        private InstanceData InstanceDataForEvent(UAEvent evt, DMSValueConverter converter, INodeIdConverter context)
         {
             // No metadata, send an empty object.
             var res = new Dictionary<string, IDMSValue>();
@@ -69,7 +69,7 @@ namespace Cognite.OpcUa.Pushers.ILA
             {
                 if (evt.Values.TryGetValue(new RawTypeField(prop.BrowsePath), out var value))
                 {
-                    var r = converter.ConvertVariant(prop.Property.Type, value.Value);
+                    var r = converter.ConvertVariant(prop.Property.Type, value.Value, context);
                     if (r != null)
                     {
                         res.Add(name, r);
@@ -85,14 +85,14 @@ namespace Cognite.OpcUa.Pushers.ILA
             };
         }
 
-        public LogItem InstantiateFromEvent(UAEvent evt, string space, ILAValueConverter converter)
+        public LogItem InstantiateFromEvent(UAEvent evt, string space, DMSValueConverter converter, INodeIdConverter context)
         {
             var sources = new List<InstanceData>();
             var ty = this;
 
             while (ty != null)
             {
-                sources.Add(ty.InstanceDataForEvent(evt, converter));
+                sources.Add(ty.InstanceDataForEvent(evt, converter, context));
                 ty = ty.Parent;
             }
 

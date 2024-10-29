@@ -81,10 +81,8 @@ namespace Cognite.OpcUa.Types
             IDictionary<long, string>? enumValues = null,
             TypeInfo? typeInfo = null,
             StringConverterMode mode = StringConverterMode.Simple,
-            NodeIdContext? context = null)
+            INodeIdConverter? context = null)
         {
-
-
             if (mode == StringConverterMode.ReversibleJson && uaClient != null && value is Variant variant)
             {
                 using var encoder = new JsonEncoder(uaClient.MessageContext, true, null, false);

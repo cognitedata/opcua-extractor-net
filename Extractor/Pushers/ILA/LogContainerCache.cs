@@ -8,7 +8,7 @@ using Cognite.Extractor.Utils;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.Pushers.FDM;
-using CogniteSdk.Beta.DataModels;
+using CogniteSdk.DataModels;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 
@@ -35,7 +35,7 @@ namespace Cognite.OpcUa.Pushers.ILA
             string? cursor = null;
             do
             {
-                var containers = await destination.CogniteClient.Beta.DataModels.ListContainers(new ContainersQuery
+                var containers = await destination.CogniteClient.DataModels.ListContainers(new ContainersQuery
                 {
                     Space = config.ModelSpace!,
                     Cursor = cursor,
@@ -160,7 +160,7 @@ namespace Cognite.OpcUa.Pushers.ILA
             foreach (var chunk in containers.ChunkBy(100))
             {
                 log.LogDebug("Create {Count} new containers for events", chunk.Count());
-                var res = await destination.CogniteClient.Beta.DataModels.UpsertContainers(chunk, token);
+                var res = await destination.CogniteClient.DataModels.UpsertContainers(chunk, token);
                 foreach (var c in res)
                 {
                     cache.TryAdd(c.ExternalId, c);

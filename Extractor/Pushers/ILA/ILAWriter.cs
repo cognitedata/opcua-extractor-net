@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Cognite.Extractor.Common;
 using Cognite.Extractor.Utils;
 using Cognite.OpcUa.Config;
+using Cognite.OpcUa.Pushers.FDM;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
 using CogniteSdk;
@@ -26,7 +27,8 @@ namespace Cognite.OpcUa.Pushers.ILA
         private readonly LogContainerCache containerCache;
         private readonly string stream;
 
-        private ILAValueConverter? converter;
+        private DMSValueConverter? converter;
+        private INodeIdConverter? context;
 
         public ILAWriter(FullConfig config, CogniteDestination destination, ILogger<ILAWriter> log)
         {
@@ -43,7 +45,8 @@ namespace Cognite.OpcUa.Pushers.ILA
         private async Task Initialize(UAExtractor extractor, CancellationToken token)
         {
             await containerCache.Initialize(token);
-            converter = new ILAValueConverter(extractor.StringConverter);
+            converter = new DMSValueConverter(extractor.StringConverter, logSpace);
+            context = new NodeIdExternalIdConverter(extractor);
         }
 
         public async Task<bool?> PushEvents(UAExtractor extractor, List<UAEvent> events, CancellationToken token)
@@ -76,7 +79,7 @@ namespace Cognite.OpcUa.Pushers.ILA
                 }
 
                 var type = containerCache.ResolveEventType(evt.EventType, token);
-                logs.Add(type.InstantiateFromEvent(evt, logSpace, converter!));
+                logs.Add(type.InstantiateFromEvent(evt, logSpace, converter!, context!));
             }
 
             var generators = logs.ChunkBy(10_000).Select<IEnumerable<LogItem>, Func<Task>>(c => async () =>
