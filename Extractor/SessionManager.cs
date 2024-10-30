@@ -13,7 +13,11 @@ using Metrics = Prometheus.Metrics;
 
 namespace Cognite.OpcUa
 {
-
+    enum SessionManagerState
+    {
+        Connecting,
+        Connected
+    }
     public class SessionManager : IDisposable
     {
         private readonly SourceConfig config;
@@ -28,10 +32,12 @@ namespace Cognite.OpcUa
         private readonly SemaphoreSlim redundancyReconnectLock = new SemaphoreSlim(1);
 
         private ISession? session;
-        private bool currentSessionIsDead;
         private CancellationToken liveToken;
         private bool disposedValue;
         private int timeout;
+
+        private SessionManagerState state = SessionManagerState.Connecting;
+        private object stateLock = new object();
 
         private static readonly Counter connects = Metrics
             .CreateCounter("opcua_connects", "Number of times the client has connected to and mapped the opcua server");
@@ -114,10 +120,34 @@ namespace Cognite.OpcUa
             session.KeepAlive += ClientKeepAlive;
             session.PublishError -= OnPublishError;
             session.PublishError += OnPublishError;
+            log.LogInformation("Registered new session with ID: {Id}", session.SessionId);
+            if (session.SubscriptionCount > 0)
+            {
+                foreach (var sub in session.Subscriptions)
+                {
+                    log.LogDebug("Session already has subscription: {Sub} with {Count} monitored items", sub.DisplayName, sub.MonitoredItemCount);
+                }
+            }
+            lock (stateLock)
+            {
+                state = SessionManagerState.Connected;
+            }
             lock (sessionWaitExtLock)
             {
+                if (this.session != session && this.session != null)
+                {
+                    try
+                    {
+                        this.session.KeepAlive -= ClientKeepAlive;
+                        this.session.PublishError -= OnPublishError;
+                        this.session.Dispose();
+                    }
+                    catch (Exception ex)
+                    {
+                        log.LogError(ex, "Failed to dispose old session: {M}", ex.Message);
+                    }
+                }
                 this.session = session;
-                currentSessionIsDead = false;
                 Context.UpdateFromSession(session);
                 for (; sessionWaiters > 0; sessionWaiters--)
                 {
@@ -420,11 +450,8 @@ namespace Cognite.OpcUa
             {
                 try
                 {
-                    if (currentSessionIsDead)
-                    {
-                        log.LogInformation("Attempting to reconnect to the current server before switching to another");
-                        initial.Session = await CreateSessionDirect(initial.EndpointUrl, initial.Session);
-                    }
+                    log.LogInformation("Attempting to reconnect to the current server before switching to another");
+                    initial.Session = await CreateSessionDirect(initial.EndpointUrl, initial.Session);
                     initial.ServiceLevel = await ReadServiceLevel(initial.Session);
                     if (initial.ServiceLevel >= config.Redundancy.ServiceLevelThreshold)
                     {
@@ -501,13 +528,21 @@ namespace Cognite.OpcUa
             client.LogDump("Keep Alive", eventArgs);
             if (eventArgs.Status == null || !ServiceResult.IsNotGood(eventArgs.Status)) return;
             log.LogWarning("Keep alive failed: {Status}", eventArgs.Status);
+            lock (stateLock)
+            {
+                if (state == SessionManagerState.Connecting)
+                {
+                    log.LogTrace("Session already connecting, skipping");
+                    return;
+                }
+                state = SessionManagerState.Connecting;
+            }
             if (liveToken.IsCancellationRequested) return;
             connected.Set(0);
 
             log.LogWarning("--- RECONNECTING ---");
             if (!liveToken.IsCancellationRequested)
             {
-                currentSessionIsDead = true;
                 client.Callbacks.TaskScheduler.ScheduleTask(null, async (_) =>
                 {
                     log.LogInformation("Attempting to reconnect to server");
