@@ -67,6 +67,11 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.31.1":
+    description: Minor improvements to reconnect reliability with large, unstable servers.
+    changelog:
+      fixed:
+        - Avoid a potential race condition when reconnecting to the server.
   "2.31.0":
     description: Support for writing timeseries to the core data models.
     changelog:
