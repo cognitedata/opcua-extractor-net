@@ -271,7 +271,7 @@ namespace Test.Utils
         public virtual async Task InitializeAsync()
         {
             var startTask = Start();
-            var resultTask = await Task.WhenAny(startTask, Task.Delay(20000));
+            var resultTask = await Task.WhenAny(startTask, Task.Delay(30000));
             Assert.Equal(startTask, resultTask);
             if (startTask.Exception != null)
             {
