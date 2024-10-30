@@ -11,6 +11,14 @@ namespace Cognite.OpcUa.Pushers.FDM
         string NodeIdToString(NodeId id);
     }
 
+    public class NodeIdDirectStringConverter : INodeIdConverter
+    {
+        public string NodeIdToString(NodeId id)
+        {
+            return id.ToString();
+        }
+    }
+
     public class NodeIdExternalIdConverter : INodeIdConverter
     {
         private IUAClientAccess client;

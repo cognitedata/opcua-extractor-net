@@ -46,7 +46,14 @@ namespace Cognite.OpcUa.Pushers.ILA
         {
             await containerCache.Initialize(token);
             converter = new DMSValueConverter(extractor.StringConverter, logSpace);
-            context = new NodeIdExternalIdConverter(extractor);
+            if (logAnalyticsConfig.UseRawNodeId)
+            {
+                context = new NodeIdDirectStringConverter();
+            }
+            else
+            {
+                context = new NodeIdExternalIdConverter(extractor);
+            }
         }
 
         public async Task<bool?> PushEvents(UAExtractor extractor, List<UAEvent> events, CancellationToken token)

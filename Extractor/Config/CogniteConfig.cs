@@ -325,9 +325,23 @@ namespace Cognite.OpcUa.Config
 
     public class LogAnalyticsConfig
     {
+        /// <summary>
+        /// The space any containers will be created in.
+        /// </summary>
         public string? ModelSpace { get; set; }
+        /// <summary>
+        /// The space set on the created logs.
+        /// </summary>
         public string? LogSpace { get; set; }
+        /// <summary>
+        /// The stream logs are written to.
+        /// </summary>
         public string? Stream { get; set; }
+        /// <summary>
+        /// Write node ID properties directly, on the form `ns=2;i=123`, instead of converting them
+        /// to external IDs on the form `[prefix][namespace][identifier]`
+        /// </summary>
+        public bool UseRawNodeId { get; set; }
     }
 
 }
