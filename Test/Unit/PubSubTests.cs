@@ -1,4 +1,7 @@
-﻿using Cognite.Extractor.Common;
+﻿/* 
+PubSub is currently broken in the SDK, see https://github.com/OPCFoundation/UA-.NETStandard/issues/2827
+
+using Cognite.Extractor.Common;
 using Cognite.Extractor.Testing;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.PubSub;
@@ -49,7 +52,7 @@ namespace Test.Unit
             tester.Client.TypeManager.Reset();
         }
 
-        [Theory(Timeout = 20000)]
+        [Theory(Timeout = 30000)]
         [InlineData(true)]
         [InlineData(false)]
         public async Task TestPubSubConfiguration(bool uadp)
@@ -100,7 +103,7 @@ namespace Test.Unit
                 Assert.Equal(Attributes.Value, vb.AttributeId);
             }
         }
-        [Theory(Timeout = 20000)]
+        [Theory(Timeout = 30000)]
         [InlineData(true)]
         [InlineData(false)]
         public async Task TestPubSubData(bool uadp)
@@ -131,3 +134,4 @@ namespace Test.Unit
         }
     }
 }
+*/
