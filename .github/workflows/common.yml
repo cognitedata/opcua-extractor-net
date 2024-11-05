@@ -239,9 +239,7 @@ jobs:
 
         - id: image_tags
           run: |
-            echo extractor="eu.gcr.io/cognite-registry/opcua-extractor-net:${{ needs.prerequisites.outputs.version }}" >> "$GITHUB_OUTPUT"
             echo extractor_dockerhub="cognite/opcua-extractor-net:${{ needs.prerequisites.outputs.version }}" >> "$GITHUB_OUTPUT"
-            echo bridge="eu.gcr.io/cognite-registry/mqtt-cdf-bridge:${{ needs.prerequisites.outputs.version }}" >> "$GITHUB_OUTPUT"
             echo bridge_dockerhub="cognite/mqtt-cdf-bridge:${{ needs.prerequisites.outputs.version }}" >> "$GITHUB_OUTPUT"
             echo desc="$(git describe --tags --dirty) $(git log -1  --format=%ai)" >> "$GITHUB_OUTPUT"
 
@@ -251,8 +249,7 @@ jobs:
             id=$(docker create $image)
             docker cp $id:/build/deploy .
             docker rm -v $id
-            docker build -t ${{ steps.image_tags.outputs.extractor }} .
-            docker tag ${{ steps.image_tags.outputs.extractor }} ${{ steps.image_tags.outputs.extractor_dockerhub }}
+            docker build -t ${{ steps.image_tags.outputs.extractor_dockerhub }} .
 
         - name: Build bridge image
           run: |
@@ -260,16 +257,7 @@ jobs:
             id=$(docker create $image)
             docker cp $id:/build/deploy .
             docker rm -v $id
-            docker build -f Dockerfile.bridge -t ${{ steps.image_tags.outputs.bridge }} .
-            docker tag ${{ steps.image_tags.outputs.bridge }} ${{ steps.image_tags.outputs.bridge_dockerhub }}
-
-        - name: Push images
-          if: ${{ needs.prerequisites.outputs.should-release == 0 && needs.prerequisites.outputs.branch == 'master' }}
-          run: |
-            echo "Images being pushed as ${{ steps.image_tags.outputs.extractor }}, ${{ steps.image_tags.outputs.bridge }}"
-            echo ${{ secrets.COGNITE_REGISTRY_KEY }} | base64 -d | docker login -u _json_key --password-stdin https://eu.gcr.io
-            docker push ${{ steps.image_tags.outputs.extractor }}
-            docker push ${{ steps.image_tags.outputs.bridge }}
+            docker build -f Dockerfile.bridge -t ${{ steps.image_tags.outputs.bridge_dockerhub }} .
 
         - name: "Log in to the Dockerhub"
           if: ${{ needs.prerequisites.outputs.should-release == 0 && needs.prerequisites.outputs.branch == 'master' }}

@@ -32,11 +32,11 @@ See the [example configuration](config/config.example.yml) for a config template
 
 ### Using Docker
 
-There are docker images of each release at eu.gcr.io/cognite-registry/opcua-extractor-net.
+There are docker images of each release at dockerhub: opcua-extractor-net.
 
 Config, both opcua config `opc.ua.extractor.Config.xml` and `config.yml` are located in a volume /config and certificates are located in subfolders of the volume /certificates. Example:
 
-`docker run -v "$(pwd)/config:/config" -v "$(pwd)/certificates:/certificates eu.gcr.io/cognite-registry/opcua-extractor-net:tag`
+`docker run -v "$(pwd)/config:/config" -v "$(pwd)/certificates:/certificates opcua-extractor-net:tag`
 
 which would run the build tagged with `tag` using config stored in `current_dir/config`.
 
@@ -94,7 +94,7 @@ During development it is perfectly fine to just run a subset of the tests using 
 ### Releasing
 
 Update `manifest.yaml` with the new release`. Merging to master will automatically
-deploy binaries to github releases and docker images to eu.gcr.io/cognite-registry/. For
+deploy binaries to github releases and docker images to dockerhub. For
 the MSI to build, the version must be simple, i.e. on the form "a.b.c".
 
 ## Contributing
