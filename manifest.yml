@@ -68,7 +68,7 @@ schema:
 
 versions:
   "2.31.2":
-    description: Try to avoid race condition on rapid service level changes.
+    description: Improve handling of rapid service level changes.
     changelog:
       fixed:
         - Fixed a potential race condition when service level rapidly changes from good to bad and back.
