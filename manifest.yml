@@ -67,6 +67,11 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.31.2":
+    description: Improve handling of rapid service level changes.
+    changelog:
+      fixed:
+        - Fixed a potential race condition when service level rapidly changes from good to bad and back.
   "2.31.1":
     description: Minor improvements to reconnect reliability with large, unstable servers.
     changelog:
