@@ -102,9 +102,7 @@ namespace Cognite.OpcUa
 
         public SourceInformation SourceInfo => uaClient?.SourceInfo ?? SourceInformation.Default();
 
-        public bool AllowUpdateState =>
-            !Config.Source.Redundancy.MonitorServiceLevel
-            || uaClient.SessionManager.CurrentServiceLevel >= Config.Source.Redundancy.ServiceLevelThreshold;
+        public bool AllowUpdateState => GetAllowUpdateState();
 
         // Active subscriptions, used in tests for WaitForSubscription().
         private readonly HashSet<SubscriptionName> activeSubscriptions = new();
@@ -187,6 +185,14 @@ namespace Cognite.OpcUa
             log.LogInformation("New remote configuration file obtained, restarting extractor");
             // Trigger close, we can just fire-and-forget this.
             _ = Close();
+        }
+
+        private bool GetAllowUpdateState()
+        {
+            if (historyReader != null && historyReader.CurrentHistoryRunIsBad) return false;
+            if (!Config.Source.Redundancy.MonitorServiceLevel) return true;
+
+            return uaClient.SessionManager.CurrentServiceLevel >= Config.Source.Redundancy.ServiceLevelThreshold;
         }
 
         /// <summary>

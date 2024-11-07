@@ -49,6 +49,18 @@ namespace Cognite.OpcUa.History
 
         public bool IsRunning => runTaskSource != null;
 
+        /// <summary>
+        /// This flag is set when the history reader state goes bad, and
+        /// is cleared when we start a new history run with good state.
+        /// This helps prevent race conditions like
+        ///  - State is good, history starts
+        ///  - State goes bad
+        ///  - Before history has been able to shut down fully, state goes good again.
+        ///  - Now live data was ingested that wasn't actually ready due to unfinished history.
+        /// </summary>
+        public bool CurrentHistoryRunIsBad { get; private set; }
+
+
         public HistoryReader(ILogger<HistoryReader> log,
             UAClient uaClient, UAExtractor extractor, TypeManager typeManager, FullConfig config, CancellationToken token)
         {
@@ -145,16 +157,22 @@ namespace Cognite.OpcUa.History
 
                 RestartHistoryInStates();
 
-                if (state.IsGood)
-                {
-                    log.LogInformation("State is good: {State}, starting history read", state);
 
-                    activeTask = RunAllHistory();
-                }
-                else
+                lock (statesLock)
                 {
-                    log.LogInformation("State is bad: {State}, starting history once status improves", state);
+                    if (state.IsGood)
+                    {
+                        log.LogInformation("State is good: {State}, starting history read", state);
+
+                        CurrentHistoryRunIsBad = false;
+                        activeTask = RunAllHistory();
+                    }
+                    else
+                    {
+                        log.LogInformation("State is bad: {State}, starting history once status improves", state);
+                    }
                 }
+
             }
             await Terminate(token);
             runTaskSource = null;
@@ -296,6 +314,7 @@ namespace Cognite.OpcUa.History
                 if (state.AddIssue(issue))
                 {
                     log.LogDebug("Added history issue: {Issue}. New state: {State}", issue, state);
+                    CurrentHistoryRunIsBad = true;
                 }
 
                 if (stateOk != state.IsGood)
