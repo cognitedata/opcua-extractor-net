@@ -17,13 +17,13 @@ namespace Cognite.OpcUa.Pushers.ILA
     public class LogContainerCache
     {
         private readonly Dictionary<string, Container> cache = new();
-        private readonly LogAnalyticsConfig config;
+        private readonly StreamRecordsConfig config;
         private readonly CogniteDestination destination;
         private readonly ILogger log;
 
         private readonly Dictionary<NodeId, EventContainer> resolvedEventTypes = new();
 
-        public LogContainerCache(CogniteDestination destination, LogAnalyticsConfig config, ILogger log)
+        public LogContainerCache(CogniteDestination destination, StreamRecordsConfig config, ILogger log)
         {
             this.config = config;
             this.destination = destination;
@@ -49,7 +49,7 @@ namespace Cognite.OpcUa.Pushers.ILA
             } while (cursor != null);
         }
 
-        private BasePropertyType GetPropertyType(UAVariable prop)
+        private BasePropertyType GetPropertyType(UAVariable prop, bool useRawNodeId)
         {
             if (prop.FullAttributes.DataType == null)
             {
@@ -74,20 +74,27 @@ namespace Cognite.OpcUa.Pushers.ILA
                 || !dt.IsString) return BasePropertyType.Create(PropertyTypeVariant.float64, isArray);
             if (dt.Id == DataTypeIds.LocalizedText
                 || dt.Id == DataTypeIds.QualifiedName
-                || dt.Id == DataTypeIds.String) return BasePropertyType.Text(isArray);
+                || dt.Id == DataTypeIds.String
+                || dt.Id == DataTypeIds.ByteString) return BasePropertyType.Text(isArray);
             if (dt.Id == DataTypeIds.DateTime
                 || dt.Id == DataTypeIds.UtcTime) return BasePropertyType.Create(PropertyTypeVariant.timestamp, isArray);
 
             if (dt.Id == DataTypeIds.NodeId || dt.Id == DataTypeIds.ExpandedNodeId)
             {
-                // ILA may support direct relations in the future.
-                return BasePropertyType.Create(PropertyTypeVariant.json);
+                if (useRawNodeId)
+                {
+                    return BasePropertyType.Text(isArray);
+                }
+                else
+                {
+                    return BasePropertyType.Create(PropertyTypeVariant.direct);
+                }
             }
 
             return BasePropertyType.Create(PropertyTypeVariant.json);
         }
 
-        private ContainerCreate? BuildFromEventType(UAObjectType eventType)
+        private ContainerCreate? BuildFromEventType(UAObjectType eventType, bool useRawNodeId)
         {
             var properties = new Dictionary<string, ContainerPropertyDefinition>();
             foreach (var field in eventType.OwnCollectedFields)
@@ -103,7 +110,7 @@ namespace Cognite.OpcUa.Pushers.ILA
                     Nullable = true,
                     Description = field.Node.Attributes.Description,
                     Name = field.Node.Attributes.DisplayName,
-                    Type = GetPropertyType(vbProp)
+                    Type = GetPropertyType(vbProp, useRawNodeId)
                 });
             }
 
@@ -122,7 +129,7 @@ namespace Cognite.OpcUa.Pushers.ILA
             };
         }
 
-        public async Task EnsureContainers(IEnumerable<UAObjectType> types, CancellationToken token)
+        public async Task EnsureContainers(IEnumerable<UAObjectType> types, bool useRawNodeId, CancellationToken token)
         {
             var missing = new Dictionary<NodeId, UAObjectType>();
 
@@ -149,7 +156,7 @@ namespace Cognite.OpcUa.Pushers.ILA
 
                 if (ty.Name == null || !cache.ContainsKey(ty.Name))
                 {
-                    var c = BuildFromEventType(ty);
+                    var c = BuildFromEventType(ty, useRawNodeId);
                     if (c != null)
                     {
                         containers.Add(c);

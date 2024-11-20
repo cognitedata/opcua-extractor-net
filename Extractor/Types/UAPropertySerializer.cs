@@ -21,6 +21,7 @@ using Cognite.OpcUa.Pushers.FDM;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using System;
+using System.Buffers.Text;
 using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -121,11 +122,11 @@ namespace Cognite.OpcUa.Types
             if (value is Variant variantValue)
             {
                 // This helps reduce code duplication, by making it possible to call ConvertToString with both variants and non-variants.
-                return ConvertToString(variantValue.Value, enumValues, variantValue.TypeInfo, mode);
+                return ConvertToString(variantValue.Value, enumValues, variantValue.TypeInfo, mode, context);
             }
 
             // If the type is enumerable we can write it to a JSON array.
-            if (value is IEnumerable enumerableVal && value is not System.Xml.XmlElement)
+            if (value is IEnumerable enumerableVal && value is not System.Xml.XmlElement && value is not byte[])
             {
                 var builder = new StringBuilder("[");
                 int count = 0;
@@ -135,7 +136,7 @@ namespace Cognite.OpcUa.Types
                     {
                         builder.Append(',');
                     }
-                    builder.Append(ConvertToString(dvalue, enumValues, typeInfo, jsonMode));
+                    builder.Append(ConvertToString(dvalue, enumValues, typeInfo, jsonMode, context));
                 }
                 builder.Append(']');
                 return builder.ToString();
@@ -172,7 +173,7 @@ namespace Cognite.OpcUa.Types
                     returnStr = uaClient?.GetUniqueId(nodeId) ?? nodeId.ToString();
                 }
             }
-            else if (value is DataValue dv) return ConvertToString(dv.WrappedValue, enumValues, null, mode);
+            else if (value is DataValue dv) return ConvertToString(dv.WrappedValue, enumValues, null, mode, context);
             else if (value is ExpandedNodeId expandedNodeId)
             {
                 if (context != null && uaClient != null)
@@ -226,9 +227,9 @@ namespace Cognite.OpcUa.Types
                 builder.Append(@",""AdditionalInfo"":");
                 builder.Append(diagInfo.AdditionalInfo == null ? "null" : JsonSerializer.Serialize(diagInfo.AdditionalInfo));
                 builder.Append(@",""InnerStatusCode"":");
-                builder.Append(ConvertToString(diagInfo.InnerStatusCode, null, null, jsonMode));
+                builder.Append(ConvertToString(diagInfo.InnerStatusCode, null, null, jsonMode, context));
                 builder.Append(@",""InnerDiagnosticInfo"":");
-                builder.Append(ConvertToString(diagInfo.InnerDiagnosticInfo, null, null, jsonMode));
+                builder.Append(ConvertToString(diagInfo.InnerDiagnosticInfo, null, null, jsonMode, context));
                 builder.Append('}');
                 return builder.ToString();
             }
@@ -243,10 +244,11 @@ namespace Cognite.OpcUa.Types
                     || customHandledTypes.Contains(body.GetType())
                     || typeInfo == null)
                 {
-                    return ConvertToString(extensionObject.Body, enumValues, null, mode);
+                    return ConvertToString(extensionObject.Body, enumValues, null, mode, context);
                 }
                 returnStr = value.ToString();
             }
+            else if (value is byte[] byteArr) returnStr = Convert.ToBase64String(byteArr);
             else if (IsNumber(value)) return value.ToString();
             else returnStr = value.ToString();
 

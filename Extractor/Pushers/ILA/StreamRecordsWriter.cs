@@ -11,31 +11,33 @@ using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
 using CogniteSdk;
 using CogniteSdk.Alpha;
+using CogniteSdk.Beta;
+using CogniteSdk.DataModels;
 using Microsoft.Extensions.Logging;
 
 namespace Cognite.OpcUa.Pushers.ILA
 {
-    public class ILAWriter
+    public class StreamRecordsWriter
     {
-        private readonly ILogger<ILAWriter> log;
+        private readonly ILogger<StreamRecordsWriter> log;
 
         private readonly string logSpace;
 
         private readonly CogniteDestination destination;
 
-        private readonly LogAnalyticsConfig logAnalyticsConfig;
+        private readonly StreamRecordsConfig logAnalyticsConfig;
         private readonly LogContainerCache containerCache;
         private readonly string stream;
 
         private DMSValueConverter? converter;
         private INodeIdConverter? context;
 
-        public ILAWriter(FullConfig config, CogniteDestination destination, ILogger<ILAWriter> log)
+        public StreamRecordsWriter(FullConfig config, CogniteDestination destination, ILogger<StreamRecordsWriter> log)
         {
             // this.config = config;
             this.destination = destination;
             this.log = log;
-            logAnalyticsConfig = config.Cognite!.LogAnalytics!;
+            logAnalyticsConfig = config.Cognite!.StreamRecords!;
             // modelSpace = logAnalyticsConfig.ModelSpace ?? throw new ConfigurationException("log-analytics.model-space is required when writing to log analytics is enabled");
             logSpace = logAnalyticsConfig.LogSpace ?? throw new ConfigurationException("log-analytics.log-space is required when writing to log analytics is enabled");
             stream = logAnalyticsConfig.Stream ?? throw new ConfigurationException("log-analytics.stream is required when writing to log analytics is enabled");
@@ -44,6 +46,10 @@ namespace Cognite.OpcUa.Pushers.ILA
 
         private async Task Initialize(UAExtractor extractor, CancellationToken token)
         {
+            var spaces = new[] { logAnalyticsConfig.ModelSpace, logAnalyticsConfig.LogSpace }.Distinct();
+
+            await destination.CogniteClient.DataModels.UpsertSpaces(spaces.Select(s => new SpaceCreate { Space = s, Name = s }), token);
+
             await containerCache.Initialize(token);
             converter = new DMSValueConverter(extractor.StringConverter, logSpace);
             if (logAnalyticsConfig.UseRawNodeId)
@@ -54,6 +60,10 @@ namespace Cognite.OpcUa.Pushers.ILA
             {
                 context = new NodeIdExternalIdConverter(extractor);
             }
+            await destination.GetOrCreateStreamAsync(new StreamWrite
+            {
+                ExternalId = stream
+            }, token);
         }
 
         public async Task<bool?> PushEvents(UAExtractor extractor, List<UAEvent> events, CancellationToken token)
@@ -66,46 +76,39 @@ namespace Cognite.OpcUa.Pushers.ILA
                 }
                 catch (Exception ex)
                 {
-                    log.LogError(ex, "Failed to initialize log analytics writer: {Message}", ex.Message);
+                    log.LogError(ex, "Failed to initialize stream records writer: {Message}", ex.Message);
                     return false;
                 }
             }
 
-            await containerCache.EnsureContainers(events.SelectNonNull(e => e.EventType), token);
+            await containerCache.EnsureContainers(events.SelectNonNull(e => e.EventType), logAnalyticsConfig.UseRawNodeId, token);
 
-            log.LogDebug("Writing {Count} events to industrial log analytics", events.Count);
+            log.LogDebug("Writing {Count} events to stream records", events.Count);
 
-            var logs = new List<LogItem>();
+            var logs = new List<StreamRecordWrite>();
 
             foreach (var evt in events)
             {
                 if (evt.EventType == null)
                 {
-                    log.LogWarning("Cannot ingest event to ILA, event type is not set");
+                    log.LogWarning("Cannot ingest event to stream records, event type is not set");
                     continue;
                 }
 
                 var type = containerCache.ResolveEventType(evt.EventType, token);
-                logs.Add(type.InstantiateFromEvent(evt, logSpace, converter!, context!));
+                logs.Add(type.InstantiateFromEvent(evt, logSpace, converter!, context!, logAnalyticsConfig.UseReversibleJson));
             }
 
-            var generators = logs.ChunkBy(10_000).Select<IEnumerable<LogItem>, Func<Task>>(c => async () =>
-            {
-                log.LogInformation("Send request to ILA");
-                await destination.CogniteClient.Alpha.LogAnalytics.IngestAsync(stream, c, token);
-                log.LogInformation("Finished writing logs to ILA");
-            });
             try
             {
-                await generators.RunThrottled(5, token);
+                await destination.InsertRecordsAsync(stream, logs, token);
+                return true;
             }
             catch (Exception ex)
             {
                 log.LogError(ex, "Failed to push events to log analytics: {Message}", ex.Message);
                 return ex is ResponseException rex && (rex.Code == 400 || rex.Code == 409);
             }
-
-            return true;
         }
     }
 }

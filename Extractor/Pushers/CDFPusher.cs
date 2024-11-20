@@ -64,7 +64,7 @@ namespace Cognite.OpcUa.Pushers
         private readonly BrowseCallback? callback;
         private RawMetadataTargetConfig? RawMetadataTargetConfig => fullConfig.Cognite?.MetadataTargets?.Raw;
 
-        private ILAWriter? ilaWriter;
+        private StreamRecordsWriter? recordsWriter;
 
         public CDFPusher(
             ILogger<CDFPusher> log,
@@ -85,9 +85,9 @@ namespace Cognite.OpcUa.Pushers
                 callback = new BrowseCallback(destination, config.BrowseCallback, log);
             }
 
-            if (fullConfig.Cognite?.LogAnalytics != null)
+            if (fullConfig.Cognite?.StreamRecords != null)
             {
-                ilaWriter = new ILAWriter(fullConfig, destination, provider.GetRequiredService<ILogger<ILAWriter>>());
+                recordsWriter = new StreamRecordsWriter(fullConfig, destination, provider.GetRequiredService<ILogger<StreamRecordsWriter>>());
             }
         }
 
@@ -185,9 +185,9 @@ namespace Cognite.OpcUa.Pushers
                 return null;
             }
 
-            if (ilaWriter != null)
+            if (recordsWriter != null)
             {
-                return await ilaWriter.PushEvents(Extractor, eventList, token);
+                return await recordsWriter.PushEvents(Extractor, eventList, token);
             }
             else
             {

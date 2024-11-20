@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.Pushers.FDM;
 using Cognite.OpcUa.Types;
-using CogniteSdk.Alpha;
+using CogniteSdk.Beta;
 using CogniteSdk.DataModels;
 using Opc.Ua;
 
@@ -55,7 +55,7 @@ namespace Cognite.OpcUa.Pushers.ILA
             identifier = new ContainerIdentifier(container.Space, container.ExternalId);
         }
 
-        private InstanceData InstanceDataForEvent(UAEvent evt, DMSValueConverter converter, INodeIdConverter context)
+        private InstanceData InstanceDataForEvent(UAEvent evt, DMSValueConverter converter, INodeIdConverter context, bool reversibleJson)
         {
             // No metadata, send an empty object.
             var res = new Dictionary<string, IDMSValue>();
@@ -69,7 +69,7 @@ namespace Cognite.OpcUa.Pushers.ILA
             {
                 if (evt.Values.TryGetValue(new RawTypeField(prop.BrowsePath), out var value))
                 {
-                    var r = converter.ConvertVariant(prop.Property.Type, value.Value, context);
+                    var r = converter.ConvertVariant(prop.Property.Type, value.Value, context, reversibleJson);
                     if (r != null)
                     {
                         res.Add(name, r);
@@ -85,18 +85,18 @@ namespace Cognite.OpcUa.Pushers.ILA
             };
         }
 
-        public LogItem InstantiateFromEvent(UAEvent evt, string space, DMSValueConverter converter, INodeIdConverter context)
+        public StreamRecordWrite InstantiateFromEvent(UAEvent evt, string space, DMSValueConverter converter, INodeIdConverter context, bool reversibleJson)
         {
             var sources = new List<InstanceData>();
             var ty = this;
 
             while (ty != null)
             {
-                sources.Add(ty.InstanceDataForEvent(evt, converter, context));
+                sources.Add(ty.InstanceDataForEvent(evt, converter, context, reversibleJson));
                 ty = ty.Parent;
             }
 
-            return new LogItem
+            return new StreamRecordWrite
             {
                 Space = space,
                 Sources = sources

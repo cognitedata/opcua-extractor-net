@@ -122,9 +122,9 @@ namespace Cognite.OpcUa.Config
         public MetadataTargetsConfig? MetadataTargets { get; set; }
 
         /// <summary>
-        /// Configuration for writing events to industrial log analytics.
+        /// Configuration for writing events to stream records.
         /// </summary>
-        public LogAnalyticsConfig? LogAnalytics { get; set; }
+        public StreamRecordsConfig? StreamRecords { get; set; }
     }
     public class RawMetadataConfig
     {
@@ -323,7 +323,7 @@ namespace Cognite.OpcUa.Config
         public int ModelChunk { get; set; } = 100;
     }
 
-    public class LogAnalyticsConfig
+    public class StreamRecordsConfig
     {
         /// <summary>
         /// The space any containers will be created in.
@@ -338,10 +338,14 @@ namespace Cognite.OpcUa.Config
         /// </summary>
         public string? Stream { get; set; }
         /// <summary>
-        /// Write node ID properties directly, on the form `ns=2;i=123`, instead of converting them
-        /// to external IDs on the form `[prefix][namespace][identifier]`
+        /// Write node ID properties directly, on the form `ns=2;i=123`, instead of
+        /// creating direct relations with external IDs on the form `[prefix][namespace][identifier]`
         /// </summary>
         public bool UseRawNodeId { get; set; }
+        /// <summary>
+        /// Use reversible JSON encoding.
+        /// </summary>
+        public bool UseReversibleJson { get; set; }
     }
 
 }
