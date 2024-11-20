@@ -72,6 +72,16 @@ versions:
     changelog:
       added:
         - Beta support for writing events to data modeling records, enable by configuring `cognite.stream-records`.
+  "2.31.2":
+    description: Improve handling of rapid service level changes.
+    changelog:
+      fixed:
+        - Fixed a potential race condition when service level rapidly changes from good to bad and back.
+  "2.31.1":
+    description: Minor improvements to reconnect reliability with large, unstable servers.
+    changelog:
+      fixed:
+        - Avoid a potential race condition when reconnecting to the server.
   "2.31.0":
     description: Support for writing timeseries to the core data models.
     changelog:

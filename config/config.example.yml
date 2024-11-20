@@ -786,7 +786,7 @@ extraction:
       # Type, either "Ignore", "Property", "DropSubscriptions", "TimeSeries", "AsEvents", or "Include"
       # - type:
       #  NodeFilter. All non-null filters must match each node for the transformation to be applied.
-      #  filter:
+      #   filter:
             # Regex on node DisplayName
             # name:
             # Regex on node Description. If this is set, requires description to be non-null.
