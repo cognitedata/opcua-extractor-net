@@ -1,7 +1,5 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.Pushers.FDM;
 using Cognite.OpcUa.Types;
@@ -9,7 +7,7 @@ using CogniteSdk.Beta;
 using CogniteSdk.DataModels;
 using Opc.Ua;
 
-namespace Cognite.OpcUa.Pushers.ILA
+namespace Cognite.OpcUa.Pushers.Records
 {
     public class EventContainerProperty
     {

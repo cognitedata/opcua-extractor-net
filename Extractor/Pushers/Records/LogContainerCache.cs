@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -12,7 +11,7 @@ using CogniteSdk.DataModels;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 
-namespace Cognite.OpcUa.Pushers.ILA
+namespace Cognite.OpcUa.Pushers.Records
 {
     public class LogContainerCache
     {

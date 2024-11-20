@@ -21,7 +21,7 @@ using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.NodeSources;
-using Cognite.OpcUa.Pushers.ILA;
+using Cognite.OpcUa.Pushers.Records;
 using Cognite.OpcUa.Pushers.Writers;
 using Cognite.OpcUa.Types;
 using CogniteSdk;

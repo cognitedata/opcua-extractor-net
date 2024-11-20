@@ -7,15 +7,13 @@ using Cognite.Extractor.Common;
 using Cognite.Extractor.Utils;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Pushers.FDM;
-using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
 using CogniteSdk;
-using CogniteSdk.Alpha;
 using CogniteSdk.Beta;
 using CogniteSdk.DataModels;
 using Microsoft.Extensions.Logging;
 
-namespace Cognite.OpcUa.Pushers.ILA
+namespace Cognite.OpcUa.Pushers.Records
 {
     public class StreamRecordsWriter
     {
