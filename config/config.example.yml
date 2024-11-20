@@ -236,26 +236,6 @@ cognite:
         id:
         # Data set external id. Requires the capability datasets:read for the given data set.
         external-id:
-    # Do not push any metadata at all. If this is true, plain timeseries without metadata will be created,
-    # similarly to raw-metadata, and datapoints will be pushed. Nothing will be written to raw, and no assets will be created.
-    # Events will be created, but without asset context.
-    skip-metadata: false
-
-    # Default empty. Store assets and/or timeseries data in raw. Assets will not be created at all,
-    # timeseries will be created with just externalId, isStep and isString.
-    # Both timeseries and assets will be persisted in their entirety to raw.
-    # Datapoints are not affected, events will be created, but without asset context. The externalId
-    # of the source node is added to metadata if applicable.
-    # Use different table names for assets and timeseries.
-    raw-metadata:
-        # Database to store data in, required.
-        database:
-        # Table to store assets in.
-        assets-table:
-        # Table to store timeseries in.
-        timeseries-table:
-        # Table to store relationships in
-        relationships-table:
 
     # CDF target configurations. Regardless of the configuration here, a form of timeseries is always created (either full or minimal) for now.
     # In the future however, users are expected to create target specific destinations.
@@ -283,8 +263,8 @@ cognite:
     # Read from CDF instead of OPC-UA when starting, to speed up start on slow servers.
     # Requires extraction.data-types.expand-node-ids and append-internal-values to be set to true.
 
-    # This should generally be enabled along with skip-metadata or raw-metadata
-    # If browse-on-empty is set to true, and raw-metadata is configured with the same
+    # This should generally be enabled along with metadata-targets.raw
+    # If browse-on-empty is set to true, and metadata-targets.raw is configured with the same
     # database and tables, the extractor will read into raw on first run, then use raw later,
     # and the raw database can be deleted to reset on next read.
     raw-node-buffer:
@@ -347,6 +327,29 @@ cognite:
         implementation: MSAL
         # Minimum time-to-live in seconds for the token (optional)
         min-ttl: 30
+
+    # BETA:
+    # Write events to data modeling stream records.
+    # Containers corresponding to OPC-UA event types will be created as needed in the configured
+    # model-space. Note that if your server produces a lot of different event types, this can create
+    # a large number of containers.
+    stream-records:
+        # Data modeling space to write the records to. The space will be created if it
+        # does not already exist. Required.
+        log-space:
+        # Data modeling space to write containers to. The space will be created if it
+        # does not already exist. Required.
+        model-space:
+        # Stream to write the records to. The stream will be created if it
+        # does not already exist. Required.
+        stream:
+        # Use a raw string representation of node IDs, on the form ns=NS;[i/s/o/g]=IDENTIFIER.
+        # If this is not enabled, node IDs will be created as direct relations.
+        use-raw-node-id: false
+        # Use OPC-UA reversible encoding for OPC-UA structures. This will make it possible
+        # to convert them back into OPC-UA types later, but it sacrifices human readability.
+        use-reversible-encoding: false
+
     # Configure automatic retries on requests to CDF. Can be left out to keep default values.
     cdf-retries:
         # Timeout in ms for each individual try
@@ -374,6 +377,10 @@ cognite:
         raw-rows: 10000
         # Maximum number of events per get/create events request
         events: 1000
+        # Maximum number of data modeling nodes/edges per ingestion request
+        instances: 1000
+        # Maximum number of data modeling records per ingest request
+        stream-records: 1000
     # Configure how requests to CDF should be throttled
     cdf-throttling:
         # Maximum number of parallel requests per timeseries operation
@@ -388,6 +395,10 @@ cognite:
         ranges: 20
         # Maximum number of parallel requests per events operation
         events: 20
+        # Maximum number of parallel requests per data modeling instances operation
+        instances: 4
+        # Maximum number of parallel requests per data modeling records operation
+        stream-records: 4
     # Configure if the SDK should do logging of requests
     sdk-logging:
         # True to disable logging from the SDK
