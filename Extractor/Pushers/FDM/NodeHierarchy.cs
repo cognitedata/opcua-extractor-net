@@ -1,5 +1,6 @@
 ﻿using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.Types;
+using Cognite.OpcUa.Utils;
 using Opc.Ua;
 using System.Collections.Generic;
 using System.Linq;

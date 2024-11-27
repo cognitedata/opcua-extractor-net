@@ -25,6 +25,7 @@ using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.Types;
+using Cognite.OpcUa.Utils;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 

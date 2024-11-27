@@ -22,6 +22,7 @@ using Cognite.Extractor.Utils;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Pushers;
 using Cognite.OpcUa.Pushers.Writers;
+using Cognite.OpcUa.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Prometheus;
