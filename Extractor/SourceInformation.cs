@@ -33,7 +33,7 @@ namespace Cognite.OpcUa
                             AttributeId = Attributes.Value,
                         }
                     }
-                ), 1, token);
+                ), 1, token, "server source information");
                 var buildInfoValue = res[0];
                 if (StatusCode.IsNotGood(buildInfoValue.StatusCode)) return null;
                 if (buildInfoValue.GetValue<ExtensionObject?>(null)?.Body is not BuildInfo buildInfo) return null;

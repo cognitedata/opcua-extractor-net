@@ -67,6 +67,11 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.31.3":
+    description: Fix some instability when reconnecting without redundancy.
+    changelog:
+      fixed:
+        - Fixed some bad behavior when connection was lost without redundancy being enabled.
   "2.31.2":
     description: Improve handling of rapid service level changes.
     changelog:

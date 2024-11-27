@@ -1076,6 +1076,9 @@ namespace Server
             }
         }
 
+        public const int VERY_LARGE_NUM_FOLDERS = 100;
+        public const int VERY_LARGE_PER_FOLDER = 2000;
+
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification =
             "NodeStates are disposed in CustomNodeManager2, so long as they are added to the list of predefined nodes")]
         private void CreateVeryLargeAddressSpace(IDictionary<NodeId, IList<IReference>> externalReferences)
@@ -1087,12 +1090,12 @@ namespace Server
                 var root = CreateObject("VeryLargeRoot");
                 AddNodeToExt(root, ObjectIds.ObjectsFolder, ReferenceTypeIds.Organizes, externalReferences);
                 AddPredefinedNode(SystemContext, root);
-                for (int i = 0; i < 100; i++)
+                for (int i = 0; i < VERY_LARGE_NUM_FOLDERS; i++)
                 {
                     var obj1 = CreateObject($"Object {i}");
                     AddNodeRelation(obj1, root, ReferenceTypeIds.Organizes);
                     AddPredefinedNode(SystemContext, obj1);
-                    for (int j = 0; j < 2000; j++)
+                    for (int j = 0; j < VERY_LARGE_PER_FOLDER; j++)
                     {
                         var obj2 = CreateObject($"Object {i} {j}");
                         var prop1 = obj2.AddProperty<string>($"Property {i} {j}", DataTypeIds.String, ValueRanks.Scalar);
@@ -1110,6 +1113,9 @@ namespace Server
             }
         }
 
+        public const int VERY_MANY_TIME_SERIES_NUM_FOLDERS = 10;
+        public const int VERY_MANY_TIME_SERIES_PER_FOLDER = 2000;
+
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification =
             "NodeStates are disposed in CustomNodeManager2, so long as they are added to the list of predefined nodes")]
         private void CreateVeryManyTimeseriesSpace(IDictionary<NodeId, IList<IReference>> externalReferences)
@@ -1121,12 +1127,12 @@ namespace Server
                 var root = CreateObject("VeryManyVariablesRoot");
                 AddNodeToExt(root, ObjectIds.ObjectsFolder, ReferenceTypeIds.Organizes, externalReferences);
                 AddPredefinedNode(SystemContext, root);
-                for (int i = 0; i < 100; i++)
+                for (int i = 0; i < VERY_MANY_TIME_SERIES_NUM_FOLDERS; i++)
                 {
                     var obj1 = CreateObject($"Object {i}");
                     AddNodeRelation(obj1, root, ReferenceTypeIds.Organizes);
                     AddPredefinedNode(SystemContext, obj1);
-                    for (int j = 0; j < 2000; j++)
+                    for (int j = 0; j < VERY_MANY_TIME_SERIES_PER_FOLDER; j++)
                     {
                         var vb = CreateVariable($"Variable {counter}", DataTypeIds.Double);
                         vb.NodeId = new NodeId($"c_{counter}", NamespaceIndex);

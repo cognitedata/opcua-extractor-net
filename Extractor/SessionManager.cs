@@ -182,10 +182,18 @@ namespace Cognite.OpcUa
                     var result = await CreateSessionWithRedundancy(config.AltEndpointUrls!.Prepend(config.EndpointUrl!),
                         session == null || EndpointUrl == null
                         ? null
-                        : new SessionRedundancyResult(session, EndpointUrl, 0));
+                        : new SessionRedundancyResult(session, EndpointUrl, 0, false));
                     newSession = result.Session;
                     EndpointUrl = result.EndpointUrl;
-                    await UpdateServiceLevel(result.ServiceLevel, true);
+                    try
+                    {
+                        await UpdateServiceLevel(result.ServiceLevel, true);
+                    }
+                    catch
+                    {
+                        await CloseSession(newSession, liveToken);
+                        throw;
+                    }
                 }
                 else
                 {
@@ -356,25 +364,33 @@ namespace Cognite.OpcUa
             return false;
         }
 
+        private async Task<bool> ReconnectDirect(string endpointUrl, ISession oldSession)
+        {
+            try
+            {
+                await oldSession.ReconnectAsync(liveToken);
+                log.LogInformation("Successfully reconnected to the server");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                log.LogError(ex, "Failed to reconnect to server at {Url}: {Message}", endpointUrl, ex.Message);
+                if (ShouldAbandonReconnect(ex) || config.ForceRestart)
+                {
+                    await CloseSession(oldSession, liveToken);
+                }
+                else throw;
+            }
+
+            return false;
+        }
+
         private async Task<ISession> CreateSessionDirect(string endpointUrl, ISession? oldSession)
         {
             if (oldSession != null)
             {
-                log.LogInformation("Attempting to reconnect to the server, before creating a new connection");
-                try
-                {
-                    await oldSession.ReconnectAsync(liveToken);
-                    return oldSession;
-                }
-                catch (Exception ex)
-                {
-                    log.LogError(ex, "Failed to reconnect to server at {Url}: {Message}", endpointUrl, ex.Message);
-                    if (ShouldAbandonReconnect(ex) || config.ForceRestart)
-                    {
-                        await Close(liveToken);
-                    }
-                    else throw;
-                }
+                var reconnectRes = await ReconnectDirect(endpointUrl, oldSession);
+                if (reconnectRes) return oldSession;
             }
 
             log.LogInformation("Attempt to select endpoint from: {EndpointURL}", CoreClientUtils.GetDiscoveryUrl(endpointUrl));
@@ -430,11 +446,13 @@ namespace Cognite.OpcUa
             public ISession Session { get; set; }
             public string EndpointUrl { get; }
             public byte ServiceLevel { get; set; }
-            public SessionRedundancyResult(ISession session, string endpointUrl, byte serviceLevel)
+            public bool NewConnection { get; set; }
+            public SessionRedundancyResult(ISession session, string endpointUrl, byte serviceLevel, bool newConnection)
             {
                 Session = session;
                 EndpointUrl = endpointUrl;
                 ServiceLevel = serviceLevel;
+                NewConnection = newConnection;
             }
         }
 
@@ -451,12 +469,29 @@ namespace Cognite.OpcUa
                 try
                 {
                     log.LogInformation("Attempting to reconnect to the current server before switching to another");
-                    initial.Session = await CreateSessionDirect(initial.EndpointUrl, initial.Session);
-                    initial.ServiceLevel = await ReadServiceLevel(initial.Session);
-                    if (initial.ServiceLevel >= config.Redundancy.ServiceLevelThreshold)
+                    bool isConnected = false;
+                    lock (stateLock)
                     {
-                        log.LogInformation("Service level on current server is above threshold ({Val}), not switching", initial.ServiceLevel);
-                        return initial;
+                        isConnected = state == SessionManagerState.Connected;
+                    }
+                    if (!isConnected)
+                    {
+                        isConnected = await ReconnectDirect(initial.EndpointUrl, initial.Session);
+                        initial.NewConnection = true;
+                    }
+                    if (isConnected)
+                    {
+                        initial.ServiceLevel = await ReadServiceLevel(initial.Session);
+                        if (initial.ServiceLevel >= config.Redundancy.ServiceLevelThreshold)
+                        {
+                            log.LogInformation("Service level on current server is above threshold ({Val}), not switching", initial.ServiceLevel);
+                            return initial;
+                        }
+                    }
+                    else
+                    {
+                        await CloseSession(initial.Session, liveToken);
+                        initial = null;
                     }
                 }
                 catch (Exception ex)
@@ -474,18 +509,24 @@ namespace Cognite.OpcUa
                     if (initial != null && url == initial.EndpointUrl) continue;
 
                     var session = await CreateSessionDirect(url, null);
-                    var serviceLevel = await ReadServiceLevel(session);
+                    byte serviceLevel;
+                    try
+                    {
+                        serviceLevel = await ReadServiceLevel(session);
+                    }
+                    catch
+                    {
+                        await CloseSession(session, liveToken);
+                        throw;
+                    }
 
                     if (serviceLevel > (current?.ServiceLevel ?? 0))
                     {
                         if (current != null)
                         {
-                            current.Session.KeepAlive -= ClientKeepAlive;
-                            current.Session.PublishError -= OnPublishError;
-                            await current.Session.CloseAsync();
-                            current.Session.Dispose();
+                            await CloseSession(current.Session, liveToken);
                         }
-                        current = new SessionRedundancyResult(session, url, serviceLevel);
+                        current = new SessionRedundancyResult(session, url, serviceLevel, true);
                     }
                 }
                 catch (Exception ex)
@@ -562,31 +603,39 @@ namespace Cognite.OpcUa
             client.Callbacks.TaskScheduler.ScheduleTask(null, async (_) => await client.Callbacks.OnServerDisconnect(client));
         }
 
+        private async Task CloseSession(ISession toClose, CancellationToken token)
+        {
+            if (toClose == null) return;
+            var closeTask = toClose.CloseAsync(token);
+            var resultTask = await Task.WhenAny(Task.Delay(5000, token), closeTask);
+            if (closeTask != resultTask)
+            {
+                log.LogWarning("Failed to close session, timed out");
+            }
+            else
+            {
+                log.LogInformation("Successfully closed connection to server");
+            }
+
+            lock (toClose)
+            {
+                if (!toClose.Disposed)
+                {
+                    toClose.KeepAlive -= ClientKeepAlive;
+                    toClose.PublishError -= OnPublishError;
+                    toClose.Dispose();
+                }
+            }
+        }
+
         public async Task Close(CancellationToken token)
         {
             try
             {
                 if (session != null && !session.Disposed)
                 {
-                    var closeTask = session.CloseAsync(token);
-                    var resultTask = await Task.WhenAny(Task.Delay(5000, token), closeTask);
-                    if (closeTask != resultTask)
-                    {
-                        log.LogWarning("Failed to close session, timed out");
-                    }
-                    else
-                    {
-                        log.LogInformation("Successfully closed connection to server");
-                    }
-#pragma warning disable CA1508 // Avoid dead conditional code. Threading may cause this method to be called multiple times in parallel...
-                    if (session != null)
-                    {
-                        session.KeepAlive -= ClientKeepAlive;
-                        session.PublishError -= OnPublishError;
-                        session.Dispose();
-                        session = null;
-                    }
-#pragma warning restore CA1508 // Avoid dead conditional code
+                    await CloseSession(session, token);
+                    session = null;
                 }
             }
             finally
@@ -670,16 +719,12 @@ namespace Cognite.OpcUa
                 {
                     await TryWithBackoff(async () =>
                     {
-                        var current = session != null ? new SessionRedundancyResult(session, EndpointUrl!, CurrentServiceLevel) : null;
+                        var current = session != null ? new SessionRedundancyResult(session, EndpointUrl!, CurrentServiceLevel, false) : null;
                         var result = await CreateSessionWithRedundancy(config.AltEndpointUrls!.Prepend(config.EndpointUrl!), current);
-                        if (result.EndpointUrl == EndpointUrl)
+                        if (!result.NewConnection)
                         {
                             log.LogWarning("Attempted reconnect due to low service level resulted in same server {Url}. Proceeding with ServiceLevel {Level}", result.EndpointUrl, result.ServiceLevel);
-                            await UpdateServiceLevel(result.ServiceLevel, false);
-                            if (result.Session != session)
-                            {
-                                log.LogError("Error! Returned endpoint was the same, but session had changed. This is a bug!");
-                            }
+                            await UpdateServiceLevel(result.ServiceLevel, true);
                         }
                         else
                         {

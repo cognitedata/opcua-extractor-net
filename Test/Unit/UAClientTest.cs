@@ -707,7 +707,7 @@ namespace Test.Unit
             tester.Config.History.Data = true;
             tester.Config.Extraction.DataTypes.MaxArraySize = -1;
             tester.Config.Events.Enabled = true;
-            await tester.Client.ReadNodeData(nodes, tester.Source.Token);
+            await tester.Client.ReadNodeData(nodes, tester.Source.Token, "test");
 
             Assert.Equal("FullRoot Description", nodes[0].Attributes.Description);
             Assert.Equal(EventNotifiers.SubscribeToEvents | EventNotifiers.HistoryRead, (nodes[1] as UAObject).FullAttributes.EventNotifier);
@@ -745,7 +745,7 @@ namespace Test.Unit
             tester.Config.Events.Enabled = true;
 
             // Read everything
-            await tester.Client.ReadNodeData(nodes, tester.Source.Token);
+            await tester.Client.ReadNodeData(nodes, tester.Source.Token, "test");
 
             Assert.Equal("FullRoot Description", nodes[0].Attributes.Description);
             Assert.Equal(EventNotifiers.SubscribeToEvents | EventNotifiers.HistoryRead, (nodes[1] as UAObject).FullAttributes.EventNotifier);
@@ -764,7 +764,7 @@ namespace Test.Unit
             tester.Config.History.Enabled = false;
 
             nodes = GetNodes();
-            await tester.Client.ReadNodeData(nodes, tester.Source.Token);
+            await tester.Client.ReadNodeData(nodes, tester.Source.Token, "test");
 
             Assert.Equal(EventNotifiers.SubscribeToEvents | EventNotifiers.HistoryRead, (nodes[1] as UAObject).FullAttributes.EventNotifier);
             Assert.True((nodes[1] as UAObject).FullAttributes.ShouldSubscribeToEvents(tester.Config));
@@ -777,7 +777,7 @@ namespace Test.Unit
             tester.Config.Events.DiscoverEmitters = false;
 
             nodes = GetNodes();
-            await tester.Client.ReadNodeData(nodes, tester.Source.Token);
+            await tester.Client.ReadNodeData(nodes, tester.Source.Token, "test");
 
             Assert.Equal(0, (nodes[1] as UAObject).FullAttributes.EventNotifier);
             Assert.False((nodes[1] as UAObject).FullAttributes.ShouldSubscribeToEvents(tester.Config));
@@ -790,7 +790,7 @@ namespace Test.Unit
             tester.Config.History.Data = false;
 
             nodes = GetNodes();
-            await tester.Client.ReadNodeData(nodes, tester.Source.Token);
+            await tester.Client.ReadNodeData(nodes, tester.Source.Token, "test");
 
             Assert.Equal(EventNotifiers.SubscribeToEvents | EventNotifiers.HistoryRead, (nodes[1] as UAObject).FullAttributes.EventNotifier);
             Assert.True((nodes[1] as UAObject).FullAttributes.ShouldSubscribeToEvents(tester.Config));
@@ -804,7 +804,7 @@ namespace Test.Unit
             tester.Config.History.RequireHistorizing = true;
 
             nodes = GetNodes();
-            await tester.Client.ReadNodeData(nodes, tester.Source.Token);
+            await tester.Client.ReadNodeData(nodes, tester.Source.Token, "test");
 
             Assert.Equal(EventNotifiers.SubscribeToEvents | EventNotifiers.HistoryRead, (nodes[1] as UAObject).FullAttributes.EventNotifier);
             Assert.True((nodes[1] as UAObject).FullAttributes.ShouldSubscribeToEvents(tester.Config));
@@ -817,7 +817,7 @@ namespace Test.Unit
             tester.Config.Subscriptions.IgnoreAccessLevel = true;
 
             nodes = GetNodes();
-            await tester.Client.ReadNodeData(nodes, tester.Source.Token);
+            await tester.Client.ReadNodeData(nodes, tester.Source.Token, "test");
 
             Assert.Equal(EventNotifiers.SubscribeToEvents | EventNotifiers.HistoryRead, (nodes[1] as UAObject).FullAttributes.EventNotifier);
             Assert.True((nodes[1] as UAObject).FullAttributes.ShouldSubscribeToEvents(tester.Config));
@@ -841,7 +841,7 @@ namespace Test.Unit
             tester.Config.History.Enabled = true;
             try
             {
-                await tester.Client.ReadNodeData(nodes, tester.Source.Token);
+                await tester.Client.ReadNodeData(nodes, tester.Source.Token, "test");
             }
             finally
             {
@@ -919,7 +919,7 @@ namespace Test.Unit
             nodes[4].IsRawProperty = true;
 
             // Need to read attributes first for this, to get proper conversion we need the datatype.
-            await tester.Client.ReadNodeData(nodes, tester.Source.Token);
+            await tester.Client.ReadNodeData(nodes, tester.Source.Token, "test");
             await tester.Client.ReadNodeValues(nodes, tester.Source.Token);
 
             Assert.Equal(new Variant(0.0), nodes[0].Value);
@@ -939,7 +939,7 @@ namespace Test.Unit
                 new UAVariable(new NodeId("missing-node2", 0), "MissingNode2", null, null, tester.Server.Ids.Base.Root, null),
             };
 
-            await tester.Client.ReadNodeData(nodes, tester.Source.Token);
+            await tester.Client.ReadNodeData(nodes, tester.Source.Token, "test");
 
             Assert.NotNull(nodes[0].FullAttributes.DataType);
             Assert.False(nodes[0].Ignore);

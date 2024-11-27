@@ -493,7 +493,7 @@ namespace Cognite.OpcUa
         public async Task<IList<DataValue>> ReadAttributes(ReadValueIdCollection readValueIds,
             int distinctNodeCount,
             CancellationToken token,
-            string purpose = "")
+            string purpose)
         {
             var values = new List<DataValue>();
             if (readValueIds == null || !readValueIds.Any()) return values;
@@ -550,7 +550,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="nodes">Nodes to be updated with data from the opcua server</param>
         /// <param name="purpose">Purpose, for logging</param>
-        public async Task ReadNodeData(IEnumerable<BaseUANode> nodes, CancellationToken token, string purpose = "")
+        public async Task ReadNodeData(IEnumerable<BaseUANode> nodes, CancellationToken token, string purpose)
         {
             nodes = nodes.DistinctBy(node => node.Attributes).Where(node => !node.Attributes.IsDataRead).ToList();
             if (!nodes.Any()) return;

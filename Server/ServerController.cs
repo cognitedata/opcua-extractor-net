@@ -389,7 +389,7 @@ namespace Server
         public void UpdateVeryManyVariables(int idx)
         {
             var num = (double)idx;
-            for (uint i = 0; i < 100 * 2000; i++)
+            for (uint i = 0; i < TestNodeManager.VERY_MANY_TIME_SERIES_NUM_FOLDERS * TestNodeManager.VERY_MANY_TIME_SERIES_PER_FOLDER; i++)
             {
 #pragma warning disable CA5394 // Do not use insecure randomness
                 if (random.Next(0, 10) != 0) continue;
