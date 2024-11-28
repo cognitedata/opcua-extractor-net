@@ -40,7 +40,7 @@ namespace Cognite.OpcUa.Connect
         }
     }
 
-    public interface IConnectionSource
+    public interface IConnectionSource : IDisposable
     {
         public Task<ConnectResult> Connect(
             Connection? oldConnection,
@@ -49,7 +49,7 @@ namespace Cognite.OpcUa.Connect
             CancellationToken token
         );
 
-        public static IConnectionSource FromConfig(SessionManager2 manager, SourceConfig config, ILogger log)
+        public static IConnectionSource FromConfig(SessionManager manager, SourceConfig config, ILogger log)
         {
             if (!string.IsNullOrEmpty(config.ReverseConnectUrl))
             {

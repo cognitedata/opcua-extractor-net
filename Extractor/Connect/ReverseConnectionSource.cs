@@ -15,11 +15,12 @@ namespace Cognite.OpcUa.Connect
     {
         private readonly string endpointUrl;
         private ReverseConnectManager? connectManager;
+        private bool disposedValue;
         private readonly SourceConfig config;
         private readonly ILogger log;
-        private readonly SessionManager2 sessionManager;
+        private readonly SessionManager sessionManager;
 
-        public ReverseConnectionSource(string endpointUrl, SourceConfig config, ILogger log, SessionManager2 sessionManager)
+        public ReverseConnectionSource(string endpointUrl, SourceConfig config, ILogger log, SessionManager sessionManager)
         {
             this.endpointUrl = endpointUrl;
             this.config = config;
@@ -41,7 +42,7 @@ namespace Cognite.OpcUa.Connect
                         oldConnection.Session.Endpoint.Server.ApplicationUri,
                         token
                     );
-                    SessionManager2.IncConnects();
+                    SessionManager.IncConnects();
 
                     if (reconn == null)
                     {
@@ -54,7 +55,7 @@ namespace Cognite.OpcUa.Connect
                 catch (Exception ex)
                 {
                     log.LogError(ex, "Failed to reconnect to server at {Url}: {Message}", oldConnection.Session.Endpoint.EndpointUrl, ex.Message);
-                    if (SessionManager2.ShouldAbandonReconnect(ex) || config.ForceRestart)
+                    if (SessionManager.ShouldAbandonReconnect(ex) || config.ForceRestart)
                     {
                         await sessionManager.CloseSession(oldConnection.Session, token);
                     }
@@ -122,7 +123,7 @@ namespace Cognite.OpcUa.Connect
                     0,
                     identity,
                     null);
-                SessionManager2.IncConnects();
+                SessionManager.IncConnects();
                 session.DeleteSubscriptionsOnClose = true;
                 return new ConnectResult(new Connection(session, endpointUrl), ConnectType.NewSession);
             }
@@ -130,6 +131,27 @@ namespace Cognite.OpcUa.Connect
             {
                 throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.CreateSession);
             }
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!disposedValue)
+            {
+                if (disposing)
+                {
+                    connectManager?.Dispose();
+                    connectManager = null;
+                }
+
+                disposedValue = true;
+            }
+        }
+
+        public void Dispose()
+        {
+            // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+            Dispose(disposing: true);
+            GC.SuppressFinalize(this);
         }
     }
 }

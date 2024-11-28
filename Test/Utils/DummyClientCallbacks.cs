@@ -22,11 +22,10 @@ namespace Test.Utils
             TaskScheduler = new PeriodicScheduler(token);
         }
 
-        public Task OnServerDisconnect(UAClient source)
+        public void OnServerDisconnect(UAClient source)
         {
             Connected = false;
             DisconnectCbCount++;
-            return Task.CompletedTask;
         }
 
         public Task OnServerReconnect(UAClient source)

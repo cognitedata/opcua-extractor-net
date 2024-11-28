@@ -16,7 +16,8 @@ namespace Cognite.OpcUa.Connect
     enum SessionManagerState
     {
         Connecting,
-        Connected
+        Connected,
+        Closed
     }
 
     abstract class SessionManagerEvent
@@ -47,19 +48,6 @@ namespace Cognite.OpcUa.Connect
         public bool TriggerReconnect { get; set; }
     }
 
-    class DeferredCallbackActions
-    {
-        public TransitionType? Transition { get; set; }
-        public bool Reconnected { get; set; }
-
-        public async Task Call(UAClient client)
-        {
-            if (Reconnected) await client.Callbacks.OnServerReconnect(client);
-            if (Transition == TransitionType.High) await client.Callbacks.OnServiceLevelAboveThreshold(client);
-            else if (Transition == TransitionType.Low) await client.Callbacks.OnServicelevelBelowThreshold(client);
-        }
-    }
-
     class ManagerActions
     {
         public SessionManagerState? StateChange { get; set; }
@@ -75,7 +63,7 @@ namespace Cognite.OpcUa.Connect
     }
 
 
-    public class SessionManager2
+    public class SessionManager : IDisposable
     {
         private readonly ManagerActions pendingActions = new ManagerActions();
 
@@ -87,17 +75,19 @@ namespace Cognite.OpcUa.Connect
         private readonly UAClient client;
         public UAClient Client => client;
         private readonly SourceConfig config;
-        private readonly IConnectionSource connectionSource;
+        private IConnectionSource connectionSource = null!;
 
         private static readonly Counter connects = Metrics
             .CreateCounter("opcua_connects", "Number of times the client has connected to and mapped the opcua server");
         private static readonly Gauge connected = Metrics
             .CreateGauge("opcua_connected", "Whether or not the client is currently connected to the opcua server");
 
-        private SessionManagerState state = SessionManagerState.Connecting;
-        private bool running;
+        private SessionManagerState state = SessionManagerState.Closed;
 
-        private DateTime? lastLowSLConnectAttempt = null;
+        public bool Running { get; private set; }
+        public Task? RunningTask { get; private set; }
+
+        private DateTime? lastConnectionSwitch = null;
 
         public byte CurrentServiceLevel { get; private set; } = 255;
         public SessionContext Context { get; }
@@ -105,14 +95,15 @@ namespace Cognite.OpcUa.Connect
         private Connection? connection;
 
         public ISession? Session => connection?.Session;
+        public string? EndpointUrl => connection?.EndpointUrl;
 
         private int timeout;
 
         // Initialized late, will be non-null after Initialize is called.
         private ApplicationConfiguration appConfig = null!;
+        private bool disposedValue;
 
-
-        public SessionManager2(UAClient client, FullConfig config, ILogger logger)
+        public SessionManager(UAClient client, FullConfig config, ILogger logger)
         {
             Context = new SessionContext(config, logger);
             log = logger;
@@ -120,8 +111,6 @@ namespace Cognite.OpcUa.Connect
             onNewPendingActions = new AsyncConditionVariable(stateLock);
             this.client = client;
             this.config = config.Source;
-
-            connectionSource = IConnectionSource.FromConfig(this, this.config, logger);
         }
 
         public static void IncConnects()
@@ -141,9 +130,9 @@ namespace Cognite.OpcUa.Connect
             }
         }
 
-        public async Task RegisterExternalNamespaces(string[] table, CancellationToken token = default)
+        public void RegisterExternalNamespaces(string[] table, CancellationToken token = default)
         {
-            using (await stateLock.LockAsync(token))
+            using (stateLock.Lock(token))
             {
                 Context.AddExternalNamespaces(table);
             }
@@ -153,10 +142,15 @@ namespace Cognite.OpcUa.Connect
         {
             try
             {
-                if (connection != null && !connection.Session.Disposed)
+                using (await stateLock.LockAsync(token))
                 {
-                    await CloseSession(connection.Session, token);
-                    connection = null;
+                    if (connection != null && !connection.Session.Disposed)
+                    {
+                        await CloseSession(connection.Session, token);
+                        connection = null;
+                    }
+                    pendingActions.StateChange = SessionManagerState.Closed;
+                    onNewPendingActions.NotifyAll();
                 }
             }
             finally
@@ -169,23 +163,33 @@ namespace Cognite.OpcUa.Connect
         {
             this.timeout = timeout;
             this.appConfig = appConfig;
+            connectionSource = IConnectionSource.FromConfig(this, config, log);
         }
 
 
         public async Task Run(CancellationToken token)
         {
-            if (running) throw new ExtractorFailureException("Session manager has already been started");
-            running = true;
+            if (Running) throw new ExtractorFailureException("Session manager has already been started");
+            Running = true;
             pendingActions.Reset();
-            state = SessionManagerState.Connecting;
+            pendingActions.StateChange = SessionManagerState.Connecting;
+
+            log.LogInformation("Starting session manager");
 
             try
             {
-                await RunInner(token);
+                RunningTask = RunInner(token);
+                await RunningTask;
+            }
+            catch (Exception ex)
+            {
+                log.LogError("Session manager failed fatall: {Message}", ex.Message);
+                throw;
             }
             finally
             {
-                running = false;
+                state = SessionManagerState.Closed;
+                Running = false;
             }
         }
 
@@ -200,32 +204,46 @@ namespace Cognite.OpcUa.Connect
             {
                 using (await stateLock.LockAsync(token))
                 {
+                    bool isInitial = state == SessionManagerState.Closed;
+
                     // First check if the state has changed.
-                    if (pendingActions.StateChange != null)
+                    if (pendingActions.StateChange == SessionManagerState.Connecting)
                     {
-                        state = pendingActions.StateChange.Value;
+                        state = SessionManagerState.Connecting;
+                    }
+                    else if (pendingActions.StateChange == SessionManagerState.Closed)
+                    {
+                        state = SessionManagerState.Closed;
+                        pendingActions.Reset();
+                        break;
                     }
 
+                    byte? updateServiceLevel = pendingActions.ServiceLevelUpdate;
+                    if (pendingActions.RecheckServiceLevel)
+                    {
+                        updateServiceLevel = CurrentServiceLevel;
+                    }
+
+                    pendingActions.Reset();
+
+                    bool newConnection = false;
                     // Next, if we aren't connected, ensure that we are.
-                    DeferredCallbackActions? actions = null;
                     if (state == SessionManagerState.Connecting)
                     {
-                        actions = await TryWithBackoff(() => EnsureConnected(token), 6, token);
+                        newConnection = await TryWithBackoff(() => EnsureConnected(token), 6, token);
+                        lastConnectionSwitch = DateTime.UtcNow;
                     }
-                    // If we're not recently connected, 
-                    else if (pendingActions.ServiceLevelUpdate != null || pendingActions.RecheckServiceLevel)
+                    // Attempt to update the service level.
+                    else if (updateServiceLevel != null)
                     {
-                        var res = UpdateServiceLevel(pendingActions.ServiceLevelUpdate ?? CurrentServiceLevel);
-                        actions = new DeferredCallbackActions
-                        {
-                            Transition = res.Transition
-                        };
-                        if (res.TriggerReconnect)
+                        var res = await UpdateServiceLevel(updateServiceLevel.Value, false);
+                        if (res)
                         {
                             ConnectResult r;
                             try
                             {
                                 r = await connectionSource.Connect(connection, true, appConfig, token);
+                                lastConnectionSwitch = DateTime.UtcNow;
                             }
                             catch (Exception ex)
                             {
@@ -236,7 +254,7 @@ namespace Cognite.OpcUa.Connect
 
                             try
                             {
-                                actions = await HandleConnectResult(r, actions, token);
+                                newConnection = await HandleConnectResult(r, token);
                             }
                             catch (Exception ex)
                             {
@@ -247,12 +265,12 @@ namespace Cognite.OpcUa.Connect
                             }
                         }
                     }
-                    if (actions != null)
+                    if (newConnection && !isInitial)
                     {
                         // Don't run the callbacks inside the session manager loop, since
                         // if we lose connection while the callbacks are running,
                         // we need the loop to recover.
-                        client.Callbacks.TaskScheduler.ScheduleTask(null, token => actions.Call(client));
+                        client.Callbacks.TaskScheduler.ScheduleTask(null, _ => client.Callbacks.OnServerReconnect(client));
                     }
 
                     await onNewPendingActions.WaitAsync(token);
@@ -304,16 +322,15 @@ namespace Cognite.OpcUa.Connect
             return dv.GetValue<byte>(0);
         }
 
-        private async Task<DeferredCallbackActions> EnsureConnected(CancellationToken token)
+        private async Task<bool> EnsureConnected(CancellationToken token)
         {
-            bool isConnected = state == SessionManagerState.Connecting;
-            if (isConnected) return new DeferredCallbackActions();
+            if (state == SessionManagerState.Connected) return false;
 
-            var result = await connectionSource.Connect(connection, isConnected, appConfig, token);
+            var result = await connectionSource.Connect(connection, false, appConfig, token);
 
             try
             {
-                return await HandleConnectResult(result, new DeferredCallbackActions(), token);
+                return await HandleConnectResult(result, token);
             }
             catch
             {
@@ -324,7 +341,7 @@ namespace Cognite.OpcUa.Connect
             }
         }
 
-        private ServiceLevelUpdateResult UpdateServiceLevel(byte newLevel)
+        private async Task<bool> UpdateServiceLevel(byte newLevel, bool fromConnection)
         {
             var oldServiceLevel = CurrentServiceLevel;
 
@@ -333,47 +350,52 @@ namespace Cognite.OpcUa.Connect
                 log.LogDebug("Server ServiceLevel updated {From} -> {To}", oldServiceLevel, newLevel);
             }
 
-            var result = new ServiceLevelUpdateResult();
-
+            bool triggerReconnect = false;
             if (newLevel < config.Redundancy.ServiceLevelThreshold)
             {
-                result.TriggerReconnect = true;
+                triggerReconnect = true;
+
+                if (fromConnection)
+                {
+                    triggerReconnect = false;
+                }
 
                 // We don't want to reconnect too frequently
-                if (lastLowSLConnectAttempt != null)
+                if (lastConnectionSwitch != null && !fromConnection)
                 {
-                    var timeSinceLastAttempt = DateTime.UtcNow - lastLowSLConnectAttempt.Value + TimeSpan.FromSeconds(5);
+                    var timeSinceLastAttempt = DateTime.UtcNow - lastConnectionSwitch.Value + TimeSpan.FromSeconds(5);
                     if (config.Redundancy.ReconnectIntervalValue.Value != Timeout.InfiniteTimeSpan
                         && timeSinceLastAttempt < config.Redundancy.ReconnectIntervalValue.Value)
                     {
-                        result.TriggerReconnect = false;
+                        triggerReconnect = false;
+                        log.LogDebug(
+                            "Last switch was too recent ({Last}), waiting until the next trigger after {Next}",
+                            lastConnectionSwitch.Value, lastConnectionSwitch + config.Redundancy.ReconnectIntervalValue.Value);
                     }
                 }
 
                 if (oldServiceLevel >= config.Redundancy.ServiceLevelThreshold)
                 {
                     log.LogWarning("Service level dropped below threshold. Until it is recovered, the extractor will not update history state");
-                    result.Transition = TransitionType.Low;
+                    await client.Callbacks.OnServicelevelBelowThreshold(client);
                 }
             }
             else if (oldServiceLevel < config.Redundancy.ServiceLevelThreshold)
             {
                 log.LogInformation("New service level {Level} is a above threshold {Threshold}, triggering callback", newLevel, config.Redundancy.ServiceLevelThreshold);
-                result.Transition = TransitionType.High;
+                await client.Callbacks.OnServiceLevelAboveThreshold(client);
             }
 
             CurrentServiceLevel = newLevel;
 
-            return result;
+            return triggerReconnect;
         }
 
-        private async Task<DeferredCallbackActions> HandleConnectResult(ConnectResult result, DeferredCallbackActions actions, CancellationToken token)
+        private async Task<bool> HandleConnectResult(ConnectResult result, CancellationToken token)
         {
             // No reconnect, do nothing here.
-            if (result.Type == ConnectType.None) return actions;
-
-            actions.Reconnected = true;
-
+            if (result.Type == ConnectType.None) return false;
+            connected.Set(1);
 
             // Ensure that we're correctly monitoring service level.
             if (config.Redundancy.MonitorServiceLevel)
@@ -400,10 +422,7 @@ namespace Cognite.OpcUa.Connect
             if (config.IsRedundancyEnabled || config.Redundancy.MonitorServiceLevel)
             {
                 var sl = await ReadServiceLevel(result.Connection.Session, token);
-                var slResult = UpdateServiceLevel(sl);
-                // Ignore trigger reconnect here, we never want to reconnect off the back of a
-                // connection change.
-                actions.Transition = slResult.Transition;
+                var slResult = UpdateServiceLevel(sl, true);
             }
 
             if (connection?.Session != result.Connection.Session)
@@ -436,7 +455,7 @@ namespace Cognite.OpcUa.Connect
             Context.UpdateFromSession(connection.Session);
             onStateChange.NotifyAll();
 
-            return actions;
+            return true;
         }
 
 
@@ -515,7 +534,7 @@ namespace Cognite.OpcUa.Connect
                     log.LogTrace("Session already connecting, skipping");
                     return;
                 }
-                if (!running)
+                if (!Running)
                 {
                     log.LogWarning("Session manager is closed, not attempting to reconnect");
                     return;
@@ -551,6 +570,37 @@ namespace Cognite.OpcUa.Connect
             {
                 log.LogError(ex, "Unexpected error handling ServiceLevel trigger");
             }
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!disposedValue)
+            {
+                if (disposing)
+                {
+                    connectionSource?.Dispose();
+                    if (connection?.Session != null)
+                    {
+                        try
+                        {
+                            connection.Session.Close();
+                        }
+                        catch { }
+                        connection.Session.KeepAlive -= ClientKeepAlive;
+                        connection.Session.PublishError -= OnPublishError;
+                        connection.Session.Dispose();
+                    }
+                    connection = null;
+                }
+                disposedValue = true;
+            }
+        }
+
+        public void Dispose()
+        {
+            // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+            Dispose(disposing: true);
+            GC.SuppressFinalize(this);
         }
     }
 }

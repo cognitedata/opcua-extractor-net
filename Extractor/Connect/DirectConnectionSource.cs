@@ -17,13 +17,13 @@ namespace Cognite.OpcUa.Connect
         public string EndpointUrl => endpointUrl;
         private readonly SourceConfig config;
         private readonly ILogger log;
-        private readonly SessionManager2 sessionManager;
+        private readonly SessionManager sessionManager;
 
         public DirectConnectionSource(
             string endpointUrl,
             SourceConfig config,
             ILogger log,
-            SessionManager2 sessionManager)
+            SessionManager sessionManager)
         {
             this.endpointUrl = endpointUrl;
             this.config = config;
@@ -36,14 +36,14 @@ namespace Cognite.OpcUa.Connect
             try
             {
                 await oldConnection.Session.ReconnectAsync(token);
-                SessionManager2.IncConnects();
+                SessionManager.IncConnects();
                 log.LogInformation("Successfully reconnected to the server");
                 return true;
             }
             catch (Exception ex)
             {
                 log.LogError(ex, "Failed to reconnect to server at {Url}: {Message}", oldConnection.EndpointUrl, ex.Message);
-                if (SessionManager2.ShouldAbandonReconnect(ex) || config.ForceRestart)
+                if (SessionManager.ShouldAbandonReconnect(ex) || config.ForceRestart)
                 {
                     await sessionManager.CloseSession(oldConnection.Session, token);
                 }
@@ -105,7 +105,7 @@ namespace Cognite.OpcUa.Connect
                     identity,
                     null
                 );
-                SessionManager2.IncConnects();
+                SessionManager.IncConnects();
                 session.DeleteSubscriptionsOnClose = true;
                 return new ConnectResult(new Connection(session, endpointUrl), ConnectType.NewSession);
             }
@@ -113,6 +113,10 @@ namespace Cognite.OpcUa.Connect
             {
                 throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.CreateSession);
             }
+        }
+
+        public void Dispose()
+        {
         }
     }
 }

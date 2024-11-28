@@ -15,14 +15,14 @@ namespace Cognite.OpcUa.Connect
     {
         private readonly SourceConfig config;
         private readonly ILogger log;
-        private readonly SessionManager2 sessionManager;
+        private readonly SessionManager sessionManager;
 
         private readonly Dictionary<string, DirectConnectionSource> sources;
 
         public RedundantConnectionSource(
             SourceConfig config,
             ILogger log,
-            SessionManager2 sessionManager)
+            SessionManager sessionManager)
         {
             var endpointUrls = config.AltEndpointUrls!.Prepend(config.EndpointUrl!).Distinct().ToList();
             sources = endpointUrls.Select(v => new DirectConnectionSource(v, config, log, sessionManager)).ToDictionary(v => v.EndpointUrl);
@@ -42,7 +42,7 @@ namespace Cognite.OpcUa.Connect
             byte sl;
             try
             {
-                sl = await SessionManager2.ReadServiceLevel(res.Connection.Session, token);
+                sl = await SessionManager.ReadServiceLevel(res.Connection.Session, token);
             }
             catch
             {
@@ -54,28 +54,37 @@ namespace Cognite.OpcUa.Connect
 
         public async Task<ConnectResult> Connect(Connection? oldConnection, bool isConnected, ApplicationConfiguration appConfig, CancellationToken token)
         {
-            log.LogInformation("Create session with redundant connections to {Urls}", string.Join(", ", sources.Keys));
 
             IEnumerable<string> endpointUrlsOrdered = sources.Keys;
 
             byte bestServiceLevel = 0;
             Connection? currentConnection = oldConnection;
             var exceptions = new List<Exception>();
+
+            var oldResultType = ConnectType.NewSession;
             if (oldConnection != null)
             {
                 endpointUrlsOrdered = endpointUrlsOrdered
                     .Except(new[] { oldConnection.EndpointUrl });
 
-                log.LogInformation("Attempting to reconnect to the current server before switching to another");
+                if (!isConnected)
+                {
+                    log.LogInformation("Attempting to reconnect to the current server before switching to another");
+                }
 
                 try
                 {
                     var (sl, res) = await TrySession(oldConnection, isConnected, appConfig, sources[oldConnection.EndpointUrl], token);
                     bestServiceLevel = sl;
+                    oldResultType = res.Type;
                     if (sl >= config.Redundancy.ServiceLevelThreshold)
                     {
                         log.LogInformation("Service level on current server is above threshold ({Val}), not switching", sl);
                         return res;
+                    }
+                    else
+                    {
+                        log.LogInformation("Service level on current server is below threshold, trying other servers");
                     }
                 }
                 catch (Exception ex)
@@ -87,6 +96,7 @@ namespace Cognite.OpcUa.Connect
                 }
             }
 
+            log.LogInformation("Create session with redundant connections to {Urls}", string.Join(", ", sources.Keys));
 
 
             foreach (var url in endpointUrlsOrdered)
@@ -118,9 +128,24 @@ namespace Cognite.OpcUa.Connect
             }
 
             token.ThrowIfCancellationRequested();
-            log.LogInformation("Successfully connected to server with endpoint: {Endpoint}, ServiceLevel: {Level}", currentConnection.EndpointUrl, bestServiceLevel);
+            if (currentConnection == oldConnection)
+            {
+                log.LogInformation("Keeping connection to current server at {Endpoint}, ServiceLevel: {Level}, no better options", currentConnection.EndpointUrl, bestServiceLevel);
+                return new ConnectResult(oldConnection, oldResultType);
+            }
+            else
+            {
+                log.LogInformation("Successfully connected to server with endpoint: {Endpoint}, ServiceLevel: {Level}", currentConnection.EndpointUrl, bestServiceLevel);
+                return new ConnectResult(currentConnection, ConnectType.NewSession);
+            }
+        }
 
-            return new ConnectResult(currentConnection, ConnectType.NewSession);
+        public void Dispose()
+        {
+            foreach (var source in sources.Values)
+            {
+                source.Dispose();
+            }
         }
     }
 }
