@@ -36,14 +36,14 @@ namespace Cognite.OpcUa.Connect
             try
             {
                 await oldConnection.Session.ReconnectAsync(token);
-                SessionManager.IncConnects();
+                ConnectionUtils.Connects.Inc();
                 log.LogInformation("Successfully reconnected to the server");
                 return true;
             }
             catch (Exception ex)
             {
                 log.LogError(ex, "Failed to reconnect to server at {Url}: {Message}", oldConnection.EndpointUrl, ex.Message);
-                if (SessionManager.ShouldAbandonReconnect(ex) || config.ForceRestart)
+                if (ConnectionUtils.ShouldAbandonReconnect(ex) || config.ForceRestart)
                 {
                     await sessionManager.CloseSession(oldConnection.Session, token);
                 }
@@ -105,7 +105,7 @@ namespace Cognite.OpcUa.Connect
                     identity,
                     null
                 );
-                SessionManager.IncConnects();
+                ConnectionUtils.Connects.Inc();
                 session.DeleteSubscriptionsOnClose = true;
                 return new ConnectResult(new Connection(session, endpointUrl), ConnectType.NewSession);
             }

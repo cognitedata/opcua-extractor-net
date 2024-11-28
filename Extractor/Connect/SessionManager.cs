@@ -9,7 +9,6 @@ using Microsoft.Extensions.Logging;
 using Nito.AsyncEx;
 using Opc.Ua;
 using Opc.Ua.Client;
-using Prometheus;
 
 namespace Cognite.OpcUa.Connect
 {
@@ -18,34 +17,6 @@ namespace Cognite.OpcUa.Connect
         Connecting,
         Connected,
         Closed
-    }
-
-    abstract class SessionManagerEvent
-    {
-    }
-
-    class InitialEvent : SessionManagerEvent { }
-    class KeepAliveFailedEvent : SessionManagerEvent { }
-    class NotifyServiceLevel : SessionManagerEvent
-    {
-        public byte? ServiceLevel { get; }
-        public NotifyServiceLevel(byte? sl)
-        {
-            ServiceLevel = sl;
-        }
-    }
-
-
-    enum TransitionType
-    {
-        High,
-        Low
-    }
-
-    class ServiceLevelUpdateResult
-    {
-        public TransitionType? Transition { get; set; }
-        public bool TriggerReconnect { get; set; }
     }
 
     class ManagerActions
@@ -65,10 +36,25 @@ namespace Cognite.OpcUa.Connect
 
     public class SessionManager : IDisposable
     {
+        /// <summary>
+        /// Actions the main session manager loop should execute once
+        /// resumed.
+        /// </summary>
         private readonly ManagerActions pendingActions = new ManagerActions();
 
+        /// <summary>
+        /// Lock covering `pendingActions`, `state`, and `CurrentServiceLevel`.
+        /// `onStateChange` and `onNewPendingActions` are tied to this lock.
+        /// </summary>
         private readonly AsyncLock stateLock = new AsyncLock();
+        private SessionManagerState state = SessionManagerState.Closed;
+        /// <summary>
+        /// Notified when the state has changed, and a new session is available.
+        /// </summary>
         private readonly AsyncConditionVariable onStateChange;
+        /// <summary>
+        /// Notified when pendingActions have been updated.
+        /// </summary>
         private readonly AsyncConditionVariable onNewPendingActions;
 
         private readonly ILogger log;
@@ -77,12 +63,6 @@ namespace Cognite.OpcUa.Connect
         private readonly SourceConfig config;
         private IConnectionSource connectionSource = null!;
 
-        private static readonly Counter connects = Metrics
-            .CreateCounter("opcua_connects", "Number of times the client has connected to and mapped the opcua server");
-        private static readonly Gauge connected = Metrics
-            .CreateGauge("opcua_connected", "Whether or not the client is currently connected to the opcua server");
-
-        private SessionManagerState state = SessionManagerState.Closed;
 
         public bool Running { get; private set; }
         public Task? RunningTask { get; private set; }
@@ -113,11 +93,11 @@ namespace Cognite.OpcUa.Connect
             this.config = config.Source;
         }
 
-        public static void IncConnects()
-        {
-            connects.Inc();
-        }
-
+        /// <summary>
+        /// Wait for a session to be available, guaranteed to
+        /// return a non-null connected session. Of course, the
+        /// returned session may immediately lose connection again.
+        /// </summary>
         public async Task<ISession> WaitForSession(CancellationToken token = default)
         {
             using (await stateLock.LockAsync(token))
@@ -130,12 +110,9 @@ namespace Cognite.OpcUa.Connect
             }
         }
 
-        public void RegisterExternalNamespaces(string[] table, CancellationToken token = default)
+        public void RegisterExternalNamespaces(string[] table)
         {
-            using (stateLock.Lock(token))
-            {
-                Context.AddExternalNamespaces(table);
-            }
+            Context.AddExternalNamespaces(table);
         }
 
         public async Task Close(CancellationToken token)
@@ -155,7 +132,7 @@ namespace Cognite.OpcUa.Connect
             }
             finally
             {
-                connected.Set(0);
+                ConnectionUtils.Connected.Set(0);
             }
         }
 
@@ -211,6 +188,7 @@ namespace Cognite.OpcUa.Connect
                     {
                         state = SessionManagerState.Connecting;
                     }
+                    // If the target state is set to Closed, exit the session manager cleanly.
                     else if (pendingActions.StateChange == SessionManagerState.Closed)
                     {
                         state = SessionManagerState.Closed;
@@ -224,13 +202,18 @@ namespace Cognite.OpcUa.Connect
                         updateServiceLevel = CurrentServiceLevel;
                     }
 
+                    // Reset the pending actions here so that
+                    // any errant "continue;"'s in the following code won't
+                    // cause us to end up in a state where it isn't clean at the start
+                    // of the loop.
                     pendingActions.Reset();
 
                     bool newConnection = false;
                     // Next, if we aren't connected, ensure that we are.
                     if (state == SessionManagerState.Connecting)
                     {
-                        newConnection = await TryWithBackoff(() => EnsureConnected(token), 6, token);
+                        newConnection = await ConnectionUtils.TryWithBackoff(
+                            () => EnsureConnected(token), 6, timeout, log, token);
                         lastConnectionSwitch = DateTime.UtcNow;
                     }
                     // Attempt to update the service level.
@@ -276,36 +259,6 @@ namespace Cognite.OpcUa.Connect
                     await onNewPendingActions.WaitAsync(token);
                 }
             }
-        }
-
-        private async Task<T> TryWithBackoff<T>(Func<Task<T>> method, int maxBackoff, CancellationToken token)
-        {
-            int iter = 0;
-            var start = DateTime.UtcNow;
-            TimeSpan backoff;
-            while (true)
-            {
-                token.ThrowIfCancellationRequested();
-                try
-                {
-                    return await method();
-                }
-                catch
-                {
-                    iter++;
-                    iter = Math.Min(iter, maxBackoff);
-                    backoff = TimeSpan.FromSeconds(Math.Pow(2, iter));
-
-                    if (timeout >= 0 && (DateTime.UtcNow - start).TotalSeconds > timeout)
-                    {
-                        throw;
-                    }
-                    if (!token.IsCancellationRequested)
-                        log.LogWarning("Failed to connect, retrying in {Backoff}", backoff);
-                    try { await Task.Delay(backoff, token); } catch (TaskCanceledException) { }
-                }
-            }
-
         }
 
         public static async Task<byte> ReadServiceLevel(ISession session, CancellationToken token)
@@ -395,7 +348,7 @@ namespace Cognite.OpcUa.Connect
         {
             // No reconnect, do nothing here.
             if (result.Type == ConnectType.None) return false;
-            connected.Set(1);
+            ConnectionUtils.Connected.Set(1);
 
             // Ensure that we're correctly monitoring service level.
             if (config.Redundancy.MonitorServiceLevel)
@@ -458,7 +411,6 @@ namespace Cognite.OpcUa.Connect
             return true;
         }
 
-
         public async Task CloseSession(ISession toClose, CancellationToken token)
         {
             try
@@ -490,26 +442,6 @@ namespace Cognite.OpcUa.Connect
             }
         }
 
-        private static readonly uint[] statusCodesToAbandon = new[] {
-            StatusCodes.BadSessionIdInvalid,
-            StatusCodes.BadSessionNotActivated,
-            StatusCodes.BadSessionClosed
-        };
-
-        public static bool ShouldAbandonReconnect(Exception ex)
-        {
-            if (ex is AggregateException aex)
-            {
-                return ShouldAbandonReconnect(aex.InnerException);
-            }
-            if (ex is ServiceResultException e)
-            {
-                return statusCodesToAbandon.Contains(e.StatusCode);
-            }
-            return false;
-        }
-
-
         private void OnPublishError(ISession session, PublishErrorEventArgs e)
         {
             string symId = StatusCode.LookupSymbolicId(e.Status.Code);
@@ -527,6 +459,8 @@ namespace Cognite.OpcUa.Connect
             client.LogDump("Keep Alive", eventArgs);
             if (eventArgs.Status == null || !ServiceResult.IsNotGood(eventArgs.Status)) return;
             log.LogWarning("Keep alive failed: {Status}", eventArgs.Status);
+            // Using a sync lock is safe here since we're in a thread spawned by
+            // the OPC-UA SDK, not the main task loop.
             using (stateLock.Lock())
             {
                 if (state == SessionManagerState.Connecting || pendingActions.StateChange == SessionManagerState.Connecting)
@@ -540,10 +474,16 @@ namespace Cognite.OpcUa.Connect
                     return;
                 }
 
+                if (sender != connection?.Session)
+                {
+                    log.LogDebug("Keep alive on dead session, ignoring");
+                    return;
+                }
+
                 pendingActions.StateChange = SessionManagerState.Connecting;
                 log.LogWarning("--- RECONNECTING ---");
                 client.Callbacks.OnServerDisconnect(client);
-                connected.Set(0);
+                ConnectionUtils.Connected.Set(0);
                 onNewPendingActions.NotifyAll();
             }
         }
@@ -560,6 +500,8 @@ namespace Cognite.OpcUa.Connect
                     log.LogWarning("Received null or invalid ServiceLevel");
                     return;
                 }
+                // Using a sync lock is safe here since we're in a thread spawned by
+                // the OPC-UA SDK, not the main task loop.
                 using (stateLock.Lock())
                 {
                     pendingActions.ServiceLevelUpdate = value;
