@@ -347,7 +347,7 @@ cognite:
         # If this is not enabled, node IDs will be created as direct relations.
         use-raw-node-id: false
         # Use OPC-UA reversible encoding for OPC-UA structures. This will make it possible
-        # to convert them back into OPC-UA types later, but it sacrifices human readability.
+        # to convert them back into OPC-UA types later, at expense of human readability.
         use-reversible-encoding: false
 
     # Configure automatic retries on requests to CDF. Can be left out to keep default values.

@@ -187,7 +187,7 @@ namespace Cognite.OpcUa.Types
             }
             else
             {
-                bytes.AddRange(BitConverter.GetBytes(Values.Count()));
+                bytes.AddRange(BitConverter.GetBytes(Values.Count));
                 foreach (var v in Values.Values)
                 {
                     v.ToStorableBytes(bytes, extractor);
