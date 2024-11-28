@@ -201,11 +201,9 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="sender">UAClient that generated this event</param>
         /// <param name="e">EventArgs for this event</param>
-        public Task OnServerDisconnect(UAClient source)
+        public void OnServerDisconnect(UAClient source)
         {
             historyReader?.AddIssue(HistoryReader.StateIssue.ServerConnection);
-
-            return Task.CompletedTask;
         }
 
         public Task OnServiceLevelAboveThreshold(UAClient source)
