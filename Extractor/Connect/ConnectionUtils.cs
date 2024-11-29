@@ -16,6 +16,8 @@ namespace Cognite.OpcUa.Connect
             .CreateCounter("opcua_connects", "Number of times the client has connected to and mapped the opcua server");
         public static Gauge Connected { get; } = Metrics
             .CreateGauge("opcua_connected", "Whether or not the client is currently connected to the opcua server");
+        public static Gauge ServiceLevel { get; } = Metrics
+            .CreateGauge("opcua_service_level", "Value of the ServiceLevel on the server");
 
         private static readonly uint[] statusCodesToAbandon = new[] {
             StatusCodes.BadSessionIdInvalid,

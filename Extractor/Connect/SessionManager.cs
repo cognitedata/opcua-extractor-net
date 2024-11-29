@@ -160,7 +160,10 @@ namespace Cognite.OpcUa.Connect
             }
             catch (Exception ex)
             {
-                log.LogError("Session manager failed fatall: {Message}", ex.Message);
+                if (ex is not OperationCanceledException)
+                {
+                    log.LogError("Session manager failed fatally: {Message}", ex.Message);
+                }
                 throw;
             }
             finally
@@ -186,6 +189,10 @@ namespace Cognite.OpcUa.Connect
                     // First check if the state has changed.
                     if (pendingActions.StateChange == SessionManagerState.Connecting)
                     {
+                        if (state == SessionManagerState.Connected)
+                        {
+                            client.Callbacks.OnServerDisconnect(client);
+                        }
                         state = SessionManagerState.Connecting;
                     }
                     // If the target state is set to Closed, exit the session manager cleanly.
@@ -216,7 +223,8 @@ namespace Cognite.OpcUa.Connect
                             () => EnsureConnected(token), 6, timeout, log, token);
                         lastConnectionSwitch = DateTime.UtcNow;
                     }
-                    // Attempt to update the service level.
+                    // Attempt to update the service level, but only if we're not also reconnecting.
+                    // If we reconnect we fetch the service level anyway.
                     else if (updateServiceLevel != null)
                     {
                         var res = await UpdateServiceLevel(updateServiceLevel.Value, false);
@@ -230,7 +238,7 @@ namespace Cognite.OpcUa.Connect
                             }
                             catch (Exception ex)
                             {
-                                log.LogError(ex, "Unexpected error attempting reconnect after service level change");
+                                ExtractorUtils.LogException(log, ex, "Unexpected error attempting reconnect after service level change");
                                 state = SessionManagerState.Connecting;
                                 continue;
                             }
@@ -241,7 +249,7 @@ namespace Cognite.OpcUa.Connect
                             }
                             catch (Exception ex)
                             {
-                                log.LogError(ex, "Unexpected error when handling connect result after service level change");
+                                ExtractorUtils.LogException(log, ex, "Unexpected error when handling connect result after service level change");
                                 await CloseSession(r.Connection.Session, token);
                                 state = SessionManagerState.Connecting;
                                 continue;
@@ -340,6 +348,7 @@ namespace Cognite.OpcUa.Connect
             }
 
             CurrentServiceLevel = newLevel;
+            ConnectionUtils.ServiceLevel.Set(CurrentServiceLevel);
 
             return triggerReconnect;
         }
@@ -458,7 +467,6 @@ namespace Cognite.OpcUa.Connect
         {
             client.LogDump("Keep Alive", eventArgs);
             if (eventArgs.Status == null || !ServiceResult.IsNotGood(eventArgs.Status)) return;
-            log.LogWarning("Keep alive failed: {Status}", eventArgs.Status);
             // Using a sync lock is safe here since we're in a thread spawned by
             // the OPC-UA SDK, not the main task loop.
             using (stateLock.Lock())
@@ -473,6 +481,7 @@ namespace Cognite.OpcUa.Connect
                     log.LogWarning("Session manager is closed, not attempting to reconnect");
                     return;
                 }
+                log.LogWarning("Keep alive failed: {Status}", eventArgs.Status);
 
                 if (sender != connection?.Session)
                 {
@@ -482,7 +491,6 @@ namespace Cognite.OpcUa.Connect
 
                 pendingActions.StateChange = SessionManagerState.Connecting;
                 log.LogWarning("--- RECONNECTING ---");
-                client.Callbacks.OnServerDisconnect(client);
                 ConnectionUtils.Connected.Set(0);
                 onNewPendingActions.NotifyAll();
             }
