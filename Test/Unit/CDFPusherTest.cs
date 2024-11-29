@@ -1420,8 +1420,7 @@ namespace Test.Unit
             // Add a custom structure to the event type
             var prop = new UAVariable(new NodeId("test", 2), "TestStruct", "TestStruct", null, null, null);
             prop.FullAttributes.DataType = new UADataType(DataTypeIds.Argument, "EUInformat", "EUInformation", null, null);
-            customEventType.AllCollectedFields.Add(new TypeField(prop));
-            customEventType.OwnCollectedFields.Add(new TypeField(prop));
+            customEventType.AddOwnField(new TypeField(prop));
 
             var fieldsByName = customEventType.AllCollectedFields.ToDictionary(d => d.Name);
 
@@ -1491,8 +1490,7 @@ namespace Test.Unit
             // Add a custom structure to the event type
             var prop = new UAVariable(new NodeId("test", 2), "TestStruct", "TestStruct", null, null, null);
             prop.FullAttributes.DataType = new UADataType(DataTypeIds.Argument, "EUInformat", "EUInformation", null, null);
-            customEventType.AllCollectedFields.Add(new TypeField(prop));
-            customEventType.OwnCollectedFields.Add(new TypeField(prop));
+            customEventType.AddOwnField(new TypeField(prop));
 
             var fieldsByName = customEventType.AllCollectedFields.ToDictionary(d => d.Name);
 
@@ -1562,8 +1560,7 @@ namespace Test.Unit
             // Add a custom structure to the event type
             var prop = new UAVariable(new NodeId("test", 2), "TestStruct", "TestStruct", null, null, null);
             prop.FullAttributes.DataType = new UADataType(DataTypeIds.Argument, "EUInformat", "EUInformation", null, null);
-            customEventType.AllCollectedFields.Add(new TypeField(prop));
-            customEventType.OwnCollectedFields.Add(new TypeField(prop));
+            customEventType.AddOwnField(new TypeField(prop));
 
             var fieldsByName = customEventType.AllCollectedFields.ToDictionary(d => d.Name);
 

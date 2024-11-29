@@ -174,26 +174,26 @@ namespace Cognite.OpcUa.Types
         /// <returns>Array of converted bytes</returns>
         public byte[] ToStorableBytes(UAExtractor extractor)
         {
-            var bytes = new List<byte>();
-            bytes.AddRange(CogniteUtils.StringToStorable(Message));
-            bytes.AddRange(CogniteUtils.StringToStorable(EventId));
-            bytes.AddRange(CogniteUtils.StringToStorable(extractor.GetUniqueId(SourceNode)));
-            bytes.AddRange(BitConverter.GetBytes(Time.ToBinary()));
-            bytes.AddRange(CogniteUtils.StringToStorable(extractor.GetUniqueId(EventType?.Id)));
-            bytes.AddRange(CogniteUtils.StringToStorable(extractor.GetUniqueId(EmittingNode)));
+            var outputBuffer = new List<byte>();
+            outputBuffer.AddRange(CogniteUtils.StringToStorable(Message));
+            outputBuffer.AddRange(CogniteUtils.StringToStorable(EventId));
+            outputBuffer.AddRange(CogniteUtils.StringToStorable(extractor.GetUniqueId(SourceNode)));
+            outputBuffer.AddRange(BitConverter.GetBytes(Time.ToBinary()));
+            outputBuffer.AddRange(CogniteUtils.StringToStorable(extractor.GetUniqueId(EventType?.Id)));
+            outputBuffer.AddRange(CogniteUtils.StringToStorable(extractor.GetUniqueId(EmittingNode)));
             if (Values == null)
             {
-                bytes.AddRange(BitConverter.GetBytes(0));
+                outputBuffer.AddRange(BitConverter.GetBytes(0));
             }
             else
             {
-                bytes.AddRange(BitConverter.GetBytes(Values.Count));
+                outputBuffer.AddRange(BitConverter.GetBytes(Values.Count));
                 foreach (var v in Values.Values)
                 {
-                    v.ToStorableBytes(bytes, extractor);
+                    v.ToStorableBytes(outputBuffer, extractor);
                 }
             }
-            return bytes.ToArray();
+            return outputBuffer.ToArray();
         }
         /// <summary>
         /// Read event from given stream. See BufferedEvent.ToStorableBytes for details.
@@ -371,12 +371,12 @@ namespace Cognite.OpcUa.Types
             Value = value;
         }
 
-        public void ToStorableBytes(List<byte> bytes, UAExtractor extractor)
+        public void ToStorableBytes(List<byte> outputBuffer, UAExtractor extractor)
         {
-            Field.ToStorableBytes(bytes);
+            Field.ToStorableBytes(outputBuffer);
             var encoder = new BinaryEncoder(extractor.Context.MessageContext);
             encoder.WriteVariant(null, Value);
-            bytes.AddRange(encoder.CloseAndReturnBuffer());
+            outputBuffer.AddRange(encoder.CloseAndReturnBuffer());
         }
 
         public static EventFieldValue? FromStream(Stream stream, UAExtractor extractor)

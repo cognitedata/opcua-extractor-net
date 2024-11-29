@@ -29,10 +29,11 @@ namespace Test.Utils
 
             var fields = baseFields.Select(field => new TypeField(new UAVariable(new NodeId(field, 0), field, new QualifiedName(field), null, null, null)));
             fields = fields.Append(new TypeField(new UAVariable(new NodeId("EUProp", 0), "EUProp", new QualifiedName("EUProp"), null, null, null)));
-            var type = new UAObjectType(new NodeId("test", 0), "TestEvent", null, null, null)
+            var type = new UAObjectType(new NodeId("test", 0), "TestEvent", null, null, null);
+            foreach (var field in fields)
             {
-                AllCollectedFields = fields.ToHashSet()
-            };
+                type.AddOwnField(field);
+            }
             extractor.State.ActiveEvents[new NodeId("test", 0)] = type;
 
             return state;

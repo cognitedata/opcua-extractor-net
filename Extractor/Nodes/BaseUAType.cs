@@ -38,13 +38,30 @@ namespace Cognite.OpcUa.Nodes
             Attributes.BrowseName = browseName ?? Attributes.BrowseName;
         }
 
+        private HashSet<TypeField> allCollectedFields = new HashSet<TypeField>();
+        private HashSet<TypeField> ownCollectedFields = new HashSet<TypeField>();
 
-        public HashSet<TypeField> AllCollectedFields { get; set; } = null!;
+        public IEnumerable<TypeField> AllCollectedFields => allCollectedFields;
+        public IEnumerable<TypeField> OwnCollectedFields => ownCollectedFields;
 
-        public HashSet<TypeField> OwnCollectedFields { get; set; } = new HashSet<TypeField>();
+        public void AddOwnField(TypeField field)
+        {
+            allCollectedFields.Add(field);
+            ownCollectedFields.Add(field);
+        }
+
+        public void AddParentField(TypeField field)
+        {
+            allCollectedFields.Add(field);
+        }
+
+
+        //public HashSet<TypeField> AllCollectedFields { get; set; } = null!;
+
+        //public HashSet<TypeField> OwnCollectedFields { get; set; } = new HashSet<TypeField>();
 
         public IEnumerable<TypeField> CollectedFields =>
-            AllCollectedFields.Where(f => f.Node.NodeClass == NodeClass.Variable);
+            allCollectedFields.Where(f => f.Node.NodeClass == NodeClass.Variable);
 
         public bool IsCollected { get; set; }
 
@@ -96,13 +113,13 @@ namespace Cognite.OpcUa.Nodes
             return true;
         }
 
-        public void ToStorableBytes(List<byte> bytes)
+        public void ToStorableBytes(List<byte> outputBuffer)
         {
-            bytes.AddRange(BitConverter.GetBytes(BrowsePath.Count));
+            outputBuffer.AddRange(BitConverter.GetBytes(BrowsePath.Count));
             foreach (var name in BrowsePath)
             {
-                bytes.AddRange(BitConverter.GetBytes(name.NamespaceIndex));
-                bytes.AddRange(CogniteUtils.StringToStorable(name.Name));
+                outputBuffer.AddRange(BitConverter.GetBytes(name.NamespaceIndex));
+                outputBuffer.AddRange(CogniteUtils.StringToStorable(name.Name));
             }
         }
 
