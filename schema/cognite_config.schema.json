@@ -92,7 +92,7 @@
                         },
                         "space": {
                             "type": "string",
-                            "description": "Data modeling space to write to. If this is set, metadata is written to the core data models instead of to CDF Clean. Note that only timeseries are currently supported. Nodes will be created in the CogniteExtractorTimeSeries view in the industrial data models."
+                            "description": "The Data Modeling `space` the extractor will create a Core Data Model compliant Time Series in. The space must have scoped access to the `CogniteExtractorTimeSeries` view. When defined, the extractor will write metadata to the Core Data Model CogniteExtractorTimeSeries view, backed by the CogniteTimeSeries container found in the Data Modeling space specified as an external ID. The Time Series data will also be avaialble from the CDF TimeSeries API using the 'instanceId' - `space.externalId` - of the Data Modeling Time Series instance. Note that at this time, the OPC UA extractor only supports the CogniteTimeSeries Core Data Model type\n\nThis capability is Generally Available."
                         },
                         "source": {
                             "type": "string",
@@ -102,7 +102,7 @@
                 },
                 "data-models": {
                     "unevaluatedProperties": false,
-                    "description": "ALPHA: Write metadata to CDF Data Models.\n\nThis will create CDF data models based on the OPC UA type hierarchy, then populate them with data from the OPC UA node hierarchy. Note that this _requires_ [`extraction.relationships.enabled`](#extraction.relationships) and [`extraction.relationships.hierarchical`](#extraction.relationships) to be set to `true`, and there must be exactly one root node with ID `i=84`.\n\nNote that this feature is in _alpha_ there may be changes that require you to delete the data model from CDF, and breaking changes to the configuration schema. These changes will not be considered breaking changes to the extractor.",
+                    "description": "ALPHA: Write metadata to ANY CDF Data Models. Please see the [`clean.space`](#clean.space) section of this configuration description for simplified Core Data Model Time Series support!\n\nThis will create CDF data models based on the OPC UA type hierarchy, then populate them with data from the OPC UA node hierarchy. Note that this _requires_ [`extraction.relationships.enabled`](#extraction.relationships) and [`extraction.relationships.hierarchical`](#extraction.relationships) to be set to `true`, and there must be exactly one root node with ID `i=84`.\n\nNote that this feature is in _alpha_ there may be changes that require you to delete the data model from CDF, and breaking changes to the configuration schema. These changes will not be considered breaking changes to the extractor.",
                     "type": "object",
                     "required": [
                         "enabled",
