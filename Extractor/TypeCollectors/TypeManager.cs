@@ -307,7 +307,6 @@ namespace Cognite.OpcUa.TypeCollectors
         {
             if (type.IsCollected) return;
 
-            type.AllCollectedFields = new HashSet<TypeField>();
             // Initialize with any children in parent, or collect parent if it has not yet been collected
             if (type.Parent is BaseUAType parentType)
             {
@@ -315,7 +314,7 @@ namespace Cognite.OpcUa.TypeCollectors
 
                 foreach (var field in parentType.AllCollectedFields)
                 {
-                    type.AllCollectedFields.Add(field);
+                    type.AddParentField(field);
                 }
             }
 
@@ -327,7 +326,7 @@ namespace Cognite.OpcUa.TypeCollectors
                     {
                         if (type.Id == ObjectTypeIds.BaseEventType && baseExcludeProperties.Contains(field.Node.Attributes.BrowseName!.Name)
                             || excludeProperties.Contains(field.Node.Attributes.BrowseName!.Name)) continue;
-                        type.AllCollectedFields.Add(field);
+                        type.AddOwnField(field);
                     }
                 }
             }

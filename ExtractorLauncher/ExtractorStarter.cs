@@ -182,7 +182,29 @@ namespace Cognite.OpcUa
                 }
                 if (rawMetaTarget.AssetsTable == null || rawMetaTarget.RelationshipsTable == null || rawMetaTarget.TimeseriesTable == null)
                 {
-                    return "Atlease one of assets-table, relationships-table or timeseries-table is required when setting cognite.metadata-targets.raw";
+                    return "At least one of assets-table, relationships-table or timeseries-table is required when setting cognite.metadata-targets.raw";
+                }
+            }
+
+            if (config.Cognite?.MetadataTargets?.DataModels?.Enabled ?? false)
+            {
+                log.LogWarning("Data modeling support is enabled. This feature is in Alpha, any may change at any time.");
+            }
+
+            if (config.Cognite?.StreamRecords != null)
+            {
+                log.LogWarning("Writing events to stream records is enabled. This feature is in Beta, and may change in the future.");
+                if (string.IsNullOrWhiteSpace(config.Cognite.StreamRecords.Stream))
+                {
+                    return "Missing required field cognite.stream-records.stream";
+                }
+                if (string.IsNullOrWhiteSpace(config.Cognite.StreamRecords.LogSpace))
+                {
+                    return "Missing required field cognite.stream-records.log-space";
+                }
+                if (string.IsNullOrWhiteSpace(config.Cognite.StreamRecords.ModelSpace))
+                {
+                    return "Missing required field cognite.stream-records.model-space";
                 }
             }
 

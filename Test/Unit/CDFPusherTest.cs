@@ -1396,5 +1396,217 @@ namespace Test.Unit
             Assert.Single(handler.RelationshipsRaw);
         }
         #endregion
+
+        #region ila
+        [Fact]
+        public async Task TestILABasic()
+        {
+            // Plain config.
+            tester.Config.Cognite.StreamRecords = new StreamRecordsConfig
+            {
+                Stream = "test-stream",
+                LogSpace = "ila-space",
+                ModelSpace = "ila-space",
+            };
+            tester.Config.Events.Enabled = true;
+
+            (handler, pusher) = tester.GetCDFPusher();
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+
+            // Run the extractor to get a type hierarchy.
+            await extractor.RunExtractor(true);
+
+            var customEventType = extractor.State.ActiveEvents[tester.Server.Ids.Event.CustomType];
+            // Add a custom structure to the event type
+            var prop = new UAVariable(new NodeId("test", 2), "TestStruct", "TestStruct", null, null, null);
+            prop.FullAttributes.DataType = new UADataType(DataTypeIds.Argument, "EUInformat", "EUInformation", null, null);
+            customEventType.AddOwnField(new TypeField(prop));
+
+            var fieldsByName = customEventType.AllCollectedFields.ToDictionary(d => d.Name);
+
+            var evt = new UAEvent();
+            evt.Time = new DateTime(2024, 01, 01, 00, 00, 00, DateTimeKind.Utc);
+            evt.EventType = customEventType;
+            evt.SetMetadata(extractor.StringConverter, new[] {
+                new EventFieldValue(fieldsByName["Message"], new LocalizedText("Some message")),
+                new EventFieldValue(fieldsByName["EventType"], customEventType.Id),
+                new EventFieldValue(fieldsByName["EventId"], new byte[] { 1, 2, 3, 4 }),
+                new EventFieldValue(fieldsByName["SourceNode"], tester.Ids.Event.Root),
+                new EventFieldValue(fieldsByName["Severity"], (ushort)5),
+                new EventFieldValue(fieldsByName["Time"], new DateTime(2024, 01, 01, 00, 00, 00, DateTimeKind.Utc)),
+                new EventFieldValue(fieldsByName["TypeProp"], "Some custom property"),
+                new EventFieldValue(fieldsByName["TestStruct"], new ExtensionObject(new Argument {
+                    Name = "Test name",
+                    DataType = DataTypeIds.Int64,
+                    ValueRank = -1,
+                    Description = "Test desc"
+                }))
+            }, tester.Log);
+
+            await pusher.PushEvents(new[] { evt }, tester.Source.Token);
+
+            Assert.Single(handler.Records);
+
+            var record = handler.Records[0];
+
+            Assert.Equal(2, record.Sources.Count());
+            var baseData = record.Sources.Last().Properties;
+            Assert.Equal(6, baseData.Count);
+            Assert.Equal("Some message", baseData["Message"].GetValue<string>());
+            Assert.Equal(extractor.GetUniqueId(customEventType.Id), baseData["EventType"]["externalId"].GetValue<string>());
+            Assert.Equal("AQIDBA==", baseData["EventId"].GetValue<string>());
+            Assert.Equal(extractor.GetUniqueId(tester.Ids.Event.Root), baseData["SourceNode"]["externalId"].GetValue<string>());
+            Assert.Equal(5, baseData["Severity"].GetValue<int>());
+            Assert.Equal("2024-01-01T00:00:00.000Z", baseData["Time"].GetValue<string>());
+
+            var customData = record.Sources.First().Properties;
+            Assert.Equal(2, customData.Count);
+            Assert.Equal("Some custom property", customData["TypeProp"].GetValue<string>());
+            Assert.Equal("Test name", customData["TestStruct"]["Name"].GetValue<string>());
+            Assert.Equal(8, customData["TestStruct"]["DataType"]["Id"].GetValue<int>());
+            Assert.Equal(-1, customData["TestStruct"]["ValueRank"].GetValue<int>());
+            Assert.Equal("Test desc", customData["TestStruct"]["Description"].GetValue<string>());
+        }
+
+        [Fact]
+        public async Task TestILAReversibleEncoding()
+        {
+            // Plain config.
+            tester.Config.Cognite.StreamRecords = new StreamRecordsConfig
+            {
+                Stream = "test-stream",
+                LogSpace = "ila-space",
+                ModelSpace = "ila-space",
+                UseReversibleJson = true,
+            };
+            tester.Config.Events.Enabled = true;
+
+            (handler, pusher) = tester.GetCDFPusher();
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+            // Run the extractor to get a type hierarchy.
+            await extractor.RunExtractor(true);
+
+            var customEventType = extractor.State.ActiveEvents[tester.Server.Ids.Event.CustomType];
+            // Add a custom structure to the event type
+            var prop = new UAVariable(new NodeId("test", 2), "TestStruct", "TestStruct", null, null, null);
+            prop.FullAttributes.DataType = new UADataType(DataTypeIds.Argument, "EUInformat", "EUInformation", null, null);
+            customEventType.AddOwnField(new TypeField(prop));
+
+            var fieldsByName = customEventType.AllCollectedFields.ToDictionary(d => d.Name);
+
+            var evt = new UAEvent();
+            evt.Time = new DateTime(2024, 01, 01, 00, 00, 00, DateTimeKind.Utc);
+            evt.EventType = customEventType;
+            evt.SetMetadata(extractor.StringConverter, new[] {
+                new EventFieldValue(fieldsByName["Message"], new LocalizedText("Some message")),
+                new EventFieldValue(fieldsByName["EventType"], customEventType.Id),
+                new EventFieldValue(fieldsByName["EventId"], new byte[] { 1, 2, 3, 4 }),
+                new EventFieldValue(fieldsByName["SourceNode"], tester.Ids.Event.Root),
+                new EventFieldValue(fieldsByName["Severity"], (ushort)5),
+                new EventFieldValue(fieldsByName["Time"], new DateTime(2024, 01, 01, 00, 00, 00, DateTimeKind.Utc)),
+                new EventFieldValue(fieldsByName["TypeProp"], "Some custom property"),
+                new EventFieldValue(fieldsByName["TestStruct"], new ExtensionObject(new Argument {
+                    Name = "Test name",
+                    DataType = DataTypeIds.Int64,
+                    ValueRank = -1,
+                    Description = "Test desc"
+                }))
+            }, tester.Log);
+
+            await pusher.PushEvents(new[] { evt }, tester.Source.Token);
+
+            Assert.Single(handler.Records);
+
+            var record = handler.Records[0];
+
+            Assert.Equal(2, record.Sources.Count());
+            var baseData = record.Sources.Last().Properties;
+            Assert.Equal(6, baseData.Count);
+            Assert.Equal("Some message", baseData["Message"].GetValue<string>());
+            Assert.Equal(extractor.GetUniqueId(customEventType.Id), baseData["EventType"]["externalId"].GetValue<string>());
+            Assert.Equal("AQIDBA==", baseData["EventId"].GetValue<string>());
+            Assert.Equal(extractor.GetUniqueId(tester.Ids.Event.Root), baseData["SourceNode"]["externalId"].GetValue<string>());
+            Assert.Equal(5, baseData["Severity"].GetValue<int>());
+            Assert.Equal("2024-01-01T00:00:00.000Z", baseData["Time"].GetValue<string>());
+
+            var customData = record.Sources.First().Properties;
+            Assert.Equal(2, customData.Count);
+            Assert.Equal("Some custom property", customData["TypeProp"].GetValue<string>());
+            Assert.Equal("Test name", customData["TestStruct"]["Body"]["Body"]["Name"].GetValue<string>());
+            Assert.Equal(8, customData["TestStruct"]["Body"]["Body"]["DataType"]["Id"].GetValue<int>());
+            Assert.Equal(-1, customData["TestStruct"]["Body"]["Body"]["ValueRank"].GetValue<int>());
+            Assert.Equal("Test desc", customData["TestStruct"]["Body"]["Body"]["Description"]["Text"].GetValue<string>());
+        }
+
+        [Fact]
+        public async Task TestILARawNodeId()
+        {
+            // Plain config.
+            tester.Config.Cognite.StreamRecords = new StreamRecordsConfig
+            {
+                Stream = "test-stream",
+                LogSpace = "ila-space",
+                ModelSpace = "ila-space",
+                UseRawNodeId = true,
+            };
+            tester.Config.Events.Enabled = true;
+
+            (handler, pusher) = tester.GetCDFPusher();
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+            // Run the extractor to get a type hierarchy.
+            await extractor.RunExtractor(true);
+
+            var customEventType = extractor.State.ActiveEvents[tester.Server.Ids.Event.CustomType];
+            // Add a custom structure to the event type
+            var prop = new UAVariable(new NodeId("test", 2), "TestStruct", "TestStruct", null, null, null);
+            prop.FullAttributes.DataType = new UADataType(DataTypeIds.Argument, "EUInformat", "EUInformation", null, null);
+            customEventType.AddOwnField(new TypeField(prop));
+
+            var fieldsByName = customEventType.AllCollectedFields.ToDictionary(d => d.Name);
+
+            var evt = new UAEvent();
+            evt.Time = new DateTime(2024, 01, 01, 00, 00, 00, DateTimeKind.Utc);
+            evt.EventType = customEventType;
+            evt.SetMetadata(extractor.StringConverter, new[] {
+                new EventFieldValue(fieldsByName["Message"], new LocalizedText("Some message")),
+                new EventFieldValue(fieldsByName["EventType"], customEventType.Id),
+                new EventFieldValue(fieldsByName["EventId"], new byte[] { 1, 2, 3, 4 }),
+                new EventFieldValue(fieldsByName["SourceNode"], tester.Ids.Event.Root),
+                new EventFieldValue(fieldsByName["Severity"], (ushort)5),
+                new EventFieldValue(fieldsByName["Time"], new DateTime(2024, 01, 01, 00, 00, 00, DateTimeKind.Utc)),
+                new EventFieldValue(fieldsByName["TypeProp"], "Some custom property"),
+                new EventFieldValue(fieldsByName["TestStruct"], new ExtensionObject(new Argument {
+                    Name = "Test name",
+                    DataType = DataTypeIds.Int64,
+                    ValueRank = -1,
+                    Description = "Test desc"
+                }))
+            }, tester.Log);
+
+            await pusher.PushEvents(new[] { evt }, tester.Source.Token);
+
+            Assert.Single(handler.Records);
+
+            var record = handler.Records[0];
+
+            Assert.Equal(2, record.Sources.Count());
+            var baseData = record.Sources.Last().Properties;
+            Assert.Equal(6, baseData.Count);
+            Assert.Equal("Some message", baseData["Message"].GetValue<string>());
+            Assert.Equal(customEventType.Id.ToString(), baseData["EventType"].GetValue<string>());
+            Assert.Equal("AQIDBA==", baseData["EventId"].GetValue<string>());
+            Assert.Equal(tester.Ids.Event.Root.ToString(), baseData["SourceNode"].GetValue<string>());
+            Assert.Equal(5, baseData["Severity"].GetValue<int>());
+            Assert.Equal("2024-01-01T00:00:00.000Z", baseData["Time"].GetValue<string>());
+
+            var customData = record.Sources.First().Properties;
+            Assert.Equal(2, customData.Count);
+            Assert.Equal("Some custom property", customData["TypeProp"].GetValue<string>());
+            Assert.Equal("Test name", customData["TestStruct"]["Name"].GetValue<string>());
+            Assert.Equal(8, customData["TestStruct"]["DataType"]["Id"].GetValue<int>());
+            Assert.Equal(-1, customData["TestStruct"]["ValueRank"].GetValue<int>());
+            Assert.Equal("Test desc", customData["TestStruct"]["Description"].GetValue<string>());
+        }
+        #endregion
     }
 }

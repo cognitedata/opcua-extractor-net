@@ -4,6 +4,7 @@ using CogniteSdk.DataModels;
 using Opc.Ua;
 using System;
 using System.Collections;
+using System.Globalization;
 using System.Linq;
 using System.Text.Json;
 
@@ -14,14 +15,14 @@ namespace Cognite.OpcUa.Pushers.FDM
         private readonly StringConverter converter;
 
         public StringConverter Converter => converter;
-        private readonly FdmDestinationConfig.ModelInfo modelInfo;
-        public DMSValueConverter(StringConverter converter, FdmDestinationConfig.ModelInfo modelInfo)
+        private readonly string instanceSpace;
+        public DMSValueConverter(StringConverter converter, string instanceSpace)
         {
             this.converter = converter;
-            this.modelInfo = modelInfo;
+            this.instanceSpace = instanceSpace;
         }
 
-        public IDMSValue? ConvertVariant(BasePropertyType? type, Variant? value, NodeIdContext context)
+        public IDMSValue? ConvertVariant(BasePropertyType? type, Variant? value, INodeIdConverter context, bool reversibleJson = true)
         {
             if (value?.Value is null) return null;
 
@@ -34,11 +35,21 @@ namespace Cognite.OpcUa.Pushers.FDM
             }
             else
             {
-                return ConvertScalarVariant(variant, value.Value, context);
+                return ConvertScalarVariant(variant, value.Value, context, reversibleJson);
             }
         }
 
-        private IDMSValue? ConvertScalarVariant(PropertyTypeVariant variant, Variant value, NodeIdContext context)
+        private string ConvertDateTime(DateTime dt)
+        {
+            return dt.ToString("yyyy-MM-ddTHH:mm:ss.fffK", CultureInfo.InvariantCulture);
+        }
+
+        class WrappedJson
+        {
+            public JsonElement Value { get; set; }
+        }
+
+        private IDMSValue? ConvertScalarVariant(PropertyTypeVariant variant, Variant value, INodeIdConverter context, bool reversibleJson = true)
         {
             switch (variant)
             {
@@ -52,18 +63,28 @@ namespace Cognite.OpcUa.Pushers.FDM
                     return new RawPropertyValue<double>(Convert.ToDouble(value.Value));
                 case PropertyTypeVariant.timestamp:
                 case PropertyTypeVariant.date:
-                    return new RawPropertyValue<DateTime>(Convert.ToDateTime(value.Value));
+                    return new RawPropertyValue<string>(ConvertDateTime(Convert.ToDateTime(value.Value)));
                 case PropertyTypeVariant.text:
-                    return new RawPropertyValue<string>(converter.ConvertToString(value.Value, null, null, StringConverterMode.Simple, context));
+                    return new RawPropertyValue<string>(converter.ConvertToString(value, null, null, StringConverterMode.Simple, context));
                 case PropertyTypeVariant.direct:
                     if (value.Value is NodeId id && !id.IsNullNodeId)
                     {
-                        return new RawPropertyValue<DirectRelationIdentifier>(new DirectRelationIdentifier(modelInfo.InstanceSpace, context.NodeIdToString(id)));
+                        return new RawPropertyValue<DirectRelationIdentifier>(new DirectRelationIdentifier(instanceSpace, context.NodeIdToString(id)));
                     }
                     return null;
                 case PropertyTypeVariant.json:
-                    var val = converter.ConvertToString(value, null, null, StringConverterMode.ReversibleJson);
+                    var val = converter.ConvertToString(value, null, null, reversibleJson ? StringConverterMode.ReversibleJson : StringConverterMode.Json, context);
                     var json = JsonDocument.Parse(val);
+                    if (json.RootElement.ValueKind != JsonValueKind.Object)
+                    {
+                        return new RawPropertyValue<WrappedJson>
+                        {
+                            Value = new WrappedJson
+                            {
+                                Value = json.RootElement
+                            }
+                        };
+                    }
                     return new RawPropertyValue<JsonElement>(json.RootElement);
                 case PropertyTypeVariant.boolean:
                     return new RawPropertyValue<bool>(Convert.ToBoolean(value.Value));
@@ -71,7 +92,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             return null;
         }
 
-        private IDMSValue? ConvertArrayVariant(PropertyTypeVariant variant, Variant value, NodeIdContext context)
+        private IDMSValue? ConvertArrayVariant(PropertyTypeVariant variant, Variant value, INodeIdConverter context)
         {
             if (value.Value is not IEnumerable enm) return ConvertArrayVariant(variant, new Variant(new[] { value.Value }), context);
 
@@ -81,11 +102,13 @@ namespace Cognite.OpcUa.Pushers.FDM
                 PropertyTypeVariant.int64 => new RawPropertyValue<long[]>(enm.Cast<object>().Select(v => Convert.ToInt64(v)).ToArray()),
                 PropertyTypeVariant.float32 => new RawPropertyValue<float[]>(enm.Cast<object>().Select(v => Convert.ToSingle(v)).ToArray()),
                 PropertyTypeVariant.float64 => new RawPropertyValue<double[]>(enm.Cast<object>().Select(v => Convert.ToDouble(v)).ToArray()),
-                PropertyTypeVariant.timestamp or PropertyTypeVariant.date => new RawPropertyValue<DateTime[]>(enm.Cast<object>().Select(v => Convert.ToDateTime(v)).ToArray()),
+                PropertyTypeVariant.timestamp or PropertyTypeVariant.date => new RawPropertyValue<string[]>(enm.Cast<object>().Select(v => ConvertDateTime(Convert.ToDateTime(v))).ToArray()),
                 PropertyTypeVariant.text => new RawPropertyValue<string[]>(enm.Cast<object>()
-                                        .Select(v => converter.ConvertToString(value.Value, null, null, StringConverterMode.Simple, context))
+                                        .Select(v => converter.ConvertToString(value, null, null, StringConverterMode.Simple, context))
                                         .ToArray()),
-                PropertyTypeVariant.boolean => new RawPropertyValue<bool>(Convert.ToBoolean(value.Value)),
+                PropertyTypeVariant.direct => new RawPropertyValue<DirectRelationIdentifier[]>(enm.Cast<object>().OfType<NodeId>().Where(v => !v.IsNullNodeId)
+                    .Select(v => new DirectRelationIdentifier(instanceSpace, context.NodeIdToString(v))).ToArray()),
+                PropertyTypeVariant.boolean => new RawPropertyValue<bool>(Convert.ToBoolean(value)),
                 _ => null,
             };
         }

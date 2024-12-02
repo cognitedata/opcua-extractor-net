@@ -16,6 +16,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using CogniteSdk;
+using CogniteSdk.Beta;
 using CogniteSdk.DataModels;
 using Com.Cognite.V1.Timeseries.Proto;
 using Google.Protobuf;
@@ -62,6 +63,8 @@ namespace Test
         public Dictionary<string, JsonObject> Views { get; } = new();
         public Dictionary<string, JsonObject> Containers { get; } = new();
         public Dictionary<string, JsonObject> Instances { get; } = new();
+
+        public List<DynamicRecord> Records { get; } = new();
 
         private long assetIdCounter = 1;
         private long timeseriesIdCounter = 1;
@@ -227,7 +230,9 @@ namespace Test
                             res = HandleCreateSpaces(content);
                             break;
                         case "/models/containers":
-                            res = HandleCreateContainers(content);
+                            res = req.Method == HttpMethod.Get
+                                ? HandleListContainers()
+                                : HandleCreateContainers(content);
                             break;
                         case "/models/views":
                             res = HandleCreateViews(content);
@@ -243,6 +248,15 @@ namespace Test
                             break;
                         case "/models/instances/delete":
                             res = HandleDeleteInstances(content);
+                            break;
+                        case "/streams/test-stream":
+                            res = HandleRetrieveStream();
+                            break;
+                        case "/streams":
+                            res = HandleCreateStream(content);
+                            break;
+                        case "/streams/test-stream/records":
+                            res = HandleIngestRecords(content);
                             break;
                         default:
                             log.LogWarning("Unknown path: {DummyFactoryUnknownPath}", reqPath);
@@ -1148,6 +1162,14 @@ namespace Test
             };
         }
 
+        private static HttpResponseMessage HandleListContainers()
+        {
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("{\"items\":[]}")
+            };
+        }
+
         private HttpResponseMessage HandleCreateDataModels(string content)
         {
             var data = System.Text.Json.JsonSerializer.Deserialize<ItemsWithoutCursor<JsonObject>>(content,
@@ -1233,6 +1255,52 @@ namespace Test
                 Content = new StringContent("{}")
             };
         }
+
+        private static HttpResponseMessage HandleCreateStream(string content)
+        {
+            var req = System.Text.Json.JsonSerializer.Deserialize<ItemsWithoutCursor<StreamWrite>>(content, Oryx.Cognite.Common.jsonOptions);
+            Assert.Single(req.Items);
+
+            // Only support the configured stream for now.
+            Assert.Equal("test-stream", req.Items.First().ExternalId);
+
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("{\"items\":[{\"externalId\": \"test-stream\", \"createdTime\": 123}]}")
+            };
+        }
+
+        private static HttpResponseMessage HandleRetrieveStream()
+        {
+            return new HttpResponseMessage(HttpStatusCode.NotFound)
+            {
+                Content = new StringContent("{\"error\":{\"message\":\"Missing\",\"code\":404}}")
+            };
+        }
+
+        private HttpResponseMessage HandleIngestRecords(string content)
+        {
+            var req = System.Text.Json.JsonSerializer.Deserialize<ItemsWithoutCursor<DynamicRecord>>(content, Oryx.Cognite.Common.jsonOptions);
+
+            Records.AddRange(req.Items);
+
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("{}")
+            };
+        }
+    }
+
+    public class DynamicRecord
+    {
+        public string Space { get; set; }
+        public IEnumerable<DynamicRecordSource> Sources { get; set; }
+    }
+
+    public class DynamicRecordSource
+    {
+        public ContainerIdentifier Source { get; set; }
+        public JsonObject Properties { get; set; }
     }
     public class AssetDummy
     {

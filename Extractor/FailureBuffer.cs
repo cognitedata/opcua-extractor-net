@@ -497,7 +497,7 @@ namespace Cognite.OpcUa
                     int count = 0;
                     while (!token.IsCancellationRequested && count < 10_000)
                     {
-                        var evt = UAEvent.FromStream(stream, extractor);
+                        var evt = UAEvent.FromStream(stream, extractor, log);
                         if (evt == null)
                         {
                             final = true;

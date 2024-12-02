@@ -5,7 +5,7 @@
     "description": "Configuration for pushing data to Cognite Data Fusion (CDF)",
     "allOf": [
         {
-            "$ref": "https://raw.githubusercontent.com/cognitedata/dotnet-extractor-utils/v1.26.1/schema/cognite_config.schema.json"
+            "$ref": "https://raw.githubusercontent.com/cognitedata/dotnet-extractor-utils/v1.29.0/schema/cognite_config.schema.json"
         }
     ],
     "unevaluatedProperties": false,
@@ -265,6 +265,40 @@
         "delete-relationships": {
             "type": "boolean",
             "description": "If this is set to `true`, relationships deleted from the source will be hard-deleted in CDF. Relationships do not have metadata, so soft-deleting them is not possible."
+        },
+        "stream-records": {
+            "type": "object",
+            "description": "BETA: Write events to data modeling stream records. Containers corresponding to OPC-UA event types will be created as needed in the configured model-space. Note that if your server produces a lot of different event types, this can create a large number of containers.",
+            "unevaluatedProperties": false,
+            "required": [
+                "log-space",
+                "model-space",
+                "stream"
+            ],
+            "properties": {
+                "log-space": {
+                    "type": "string",
+                    "description": "Data modeling space to write the records to. The space will be created if it does not already exist."
+                },
+                "model-space": {
+                    "type": "string",
+                    "description": "Data modeling space to write containers to. The space will be created if it does not already exist."
+                },
+                "stream": {
+                    "type": "string",
+                    "description": "Stream to write the records to. The stream will be created if it does not already exist."
+                },
+                "use-raw-node-id": {
+                    "type": "boolean",
+                    "description": "Use a raw string representation of node IDs, on the form `ns=NS;[i/s/o/g]=IDENTIFIER`. If this is not enabled, node IDs will be created as direct relations.",
+                    "default": false
+                },
+                "use-reversible-encoding": {
+                    "type": "boolean",
+                    "description": "Use OPC-UA reversible encoding for OPC-UA structures. This will make it possible to convert them back into OPC-UA types later, but it sacrifices human readability.",
+                    "default": false
+                }
+            }
         }
     }
 }

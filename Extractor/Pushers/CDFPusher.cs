@@ -21,6 +21,7 @@ using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.NodeSources;
+using Cognite.OpcUa.Pushers.Records;
 using Cognite.OpcUa.Pushers.Writers;
 using Cognite.OpcUa.Types;
 using Cognite.OpcUa.Utils;
@@ -64,6 +65,8 @@ namespace Cognite.OpcUa.Pushers
         private readonly BrowseCallback? callback;
         private RawMetadataTargetConfig? RawMetadataTargetConfig => fullConfig.Cognite?.MetadataTargets?.Raw;
 
+        private StreamRecordsWriter? recordsWriter;
+
         public CDFPusher(
             ILogger<CDFPusher> log,
             FullConfig fullConfig,
@@ -81,6 +84,11 @@ namespace Cognite.OpcUa.Pushers
             if (config.BrowseCallback != null && (config.BrowseCallback.Id.HasValue || !string.IsNullOrEmpty(config.BrowseCallback.ExternalId)))
             {
                 callback = new BrowseCallback(destination, config.BrowseCallback, log);
+            }
+
+            if (fullConfig.Cognite?.StreamRecords != null)
+            {
+                recordsWriter = new StreamRecordsWriter(fullConfig, destination, provider.GetRequiredService<ILogger<StreamRecordsWriter>>());
             }
         }
 
@@ -178,9 +186,21 @@ namespace Cognite.OpcUa.Pushers
                 return null;
             }
 
+            if (recordsWriter != null)
+            {
+                return await recordsWriter.PushEvents(Extractor, eventList, token);
+            }
+            else
+            {
+                return await PushClassicEvents(eventList, count, token);
+            }
+        }
+
+        private async Task<bool?> PushClassicEvents(IEnumerable<UAEvent> events, int count, CancellationToken token)
+        {
             try
             {
-                var result = await destination.EnsureEventsExistsAsync(eventList
+                var result = await destination.EnsureEventsExistsAsync(events
                     .Select(evt => evt.ToCDFEvent(Extractor, config.DataSet?.Id, cdfWriter.NodeToAssetIds))
                     .Where(evt => evt != null), RetryMode.OnError, SanitationMode.Clean, token);
 
@@ -272,6 +292,8 @@ namespace Cognite.OpcUa.Pushers
                     return result;
                 }
             }
+
+
 
             await cdfWriter.PushNodesAndReferences(
                 objects,
