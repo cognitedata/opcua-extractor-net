@@ -6,7 +6,34 @@ using System.Text;
 
 namespace Cognite.OpcUa.Pushers.FDM
 {
-    public class NodeIdContext
+    public interface INodeIdConverter
+    {
+        string NodeIdToString(NodeId id);
+    }
+
+    public class NodeIdDirectStringConverter : INodeIdConverter
+    {
+        public string NodeIdToString(NodeId id)
+        {
+            return id.ToString();
+        }
+    }
+
+    public class NodeIdExternalIdConverter : INodeIdConverter
+    {
+        private IUAClientAccess client;
+        public NodeIdExternalIdConverter(IUAClientAccess client)
+        {
+            this.client = client;
+        }
+
+        public string NodeIdToString(NodeId nodeId)
+        {
+            return client.GetUniqueId(nodeId) ?? "i=0";
+        }
+    }
+
+    public class NodeIdContext : INodeIdConverter
     {
         private Dictionary<ushort, ushort> NamespaceIndexMap { get; }
 

@@ -67,6 +67,11 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.32.0":
+    description: Beta support for writing events to data modeling records.
+    changelog:
+      added:
+        - Beta support for writing events to data modeling records, enable by configuring `cognite.stream-records`.
   "2.31.2":
     description: Improve handling of rapid service level changes.
     changelog:

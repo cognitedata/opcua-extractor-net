@@ -1045,12 +1045,12 @@ namespace Test.Unit
             var bytes = evt.ToStorableBytes(extractor);
             using (var stream = new MemoryStream(bytes))
             {
-                var convEvt = UAEvent.FromStream(stream, extractor);
+                var convEvt = UAEvent.FromStream(stream, extractor, tester.Log);
                 Assert.Equal(convEvt.EventId, evt.EventId);
                 Assert.Equal(convEvt.Time, evt.Time);
                 Assert.Equal(convEvt.EmittingNode, evt.EmittingNode);
                 Assert.Equal(convEvt.EventType, evt.EventType);
-                Assert.Empty(convEvt.MetaData);
+                Assert.Empty(convEvt.Values);
                 Assert.Equal(convEvt.Message, evt.Message);
                 Assert.Equal(convEvt.SourceNode, evt.SourceNode);
             }
@@ -1063,21 +1063,22 @@ namespace Test.Unit
             evt.SetMetadata(extractor.StringConverter, new[]
             {
                 new EventFieldValue(new RawTypeField("key1"), "value1"),
-                new EventFieldValue(new RawTypeField("key1"), 123),
-                new EventFieldValue(new RawTypeField("key1"), Variant.Null),
-                new EventFieldValue(new RawTypeField("key1"), new NodeId("meta", 0)),
+                new EventFieldValue(new RawTypeField("key2"), 123),
+                new EventFieldValue(new RawTypeField("key3"), Variant.Null),
+                new EventFieldValue(new RawTypeField("key4"), new NodeId("meta", 0)),
             }, log);
 
             bytes = evt.ToStorableBytes(extractor);
             using (var stream = new MemoryStream(bytes))
             {
-                var convEvt = UAEvent.FromStream(stream, extractor);
+                var convEvt = UAEvent.FromStream(stream, extractor, tester.Log);
                 Assert.Equal(convEvt.EventId, evt.EventId);
                 Assert.Equal(convEvt.Time, evt.Time);
                 Assert.Equal(convEvt.EmittingNode, evt.EmittingNode);
                 Assert.Equal(convEvt.EventType, evt.EventType);
                 Assert.Equal(convEvt.Message, evt.Message);
                 Assert.Equal(convEvt.SourceNode, evt.SourceNode);
+                Assert.Equal(convEvt.Values.Count, evt.Values.Count);
                 Assert.Equal(convEvt.MetaData.Count, evt.MetaData.Count);
                 foreach (var kvp in convEvt.MetaData)
                 {
