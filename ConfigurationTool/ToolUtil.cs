@@ -20,6 +20,7 @@ using Cognite.OpcUa.History;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
+using Cognite.OpcUa.Utils;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using Opc.Ua.Client;

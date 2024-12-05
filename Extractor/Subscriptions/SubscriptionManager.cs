@@ -1,5 +1,6 @@
 ﻿using Cognite.Extractor.Common;
 using Cognite.OpcUa.Config;
+using Cognite.OpcUa.Utils;
 using Microsoft.Extensions.Logging;
 using Opc.Ua.Client;
 using System;
@@ -120,7 +121,6 @@ namespace Cognite.OpcUa.Subscriptions
             {
                 task.TaskFinishedEvent.Set();
             }
-
         }
 
         public async Task RunTaskLoop(CancellationToken token)

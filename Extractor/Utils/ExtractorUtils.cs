@@ -26,7 +26,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 
-namespace Cognite.OpcUa
+namespace Cognite.OpcUa.Utils
 {
     public static class ExtractorUtils
     {

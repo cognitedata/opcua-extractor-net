@@ -22,6 +22,7 @@ using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.Types;
+using Cognite.OpcUa.Utils;
 using CogniteSdk;
 using Google.Protobuf;
 using Microsoft.Extensions.DependencyInjection;
