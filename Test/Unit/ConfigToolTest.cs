@@ -3,6 +3,7 @@ using Cognite.Extractor.Testing;
 using Cognite.Extractor.Utils;
 using Cognite.OpcUa;
 using Cognite.OpcUa.Config;
+using Cognite.OpcUa.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Server;
 using System;

@@ -1,13 +1,14 @@
 ﻿using Cognite.Extractor.Common;
 using Cognite.OpcUa;
 using Cognite.OpcUa.Nodes;
+using Cognite.OpcUa.Utils;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using Xunit;
-using SourceOp = Cognite.OpcUa.ExtractorUtils.SourceOp;
+using SourceOp = Cognite.OpcUa.Utils.ExtractorUtils.SourceOp;
 
 
 namespace Test.Unit

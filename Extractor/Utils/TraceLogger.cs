@@ -1,7 +1,7 @@
 ﻿using Microsoft.Extensions.Logging;
 using System.Text.Json;
 
-namespace Cognite.OpcUa
+namespace Cognite.OpcUa.Utils
 {
     internal static class TraceLogger
     {
