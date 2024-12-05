@@ -19,7 +19,7 @@ using Cognite.OpcUa.Config;
 using Opc.Ua;
 using System.Security.Cryptography.X509Certificates;
 
-namespace Cognite.OpcUa
+namespace Cognite.OpcUa.Utils
 {
     internal static class AuthenticationUtils
     {

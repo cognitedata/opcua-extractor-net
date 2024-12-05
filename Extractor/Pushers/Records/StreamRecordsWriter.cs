@@ -8,6 +8,7 @@ using Cognite.Extractor.Utils;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Pushers.FDM;
 using Cognite.OpcUa.Types;
+using Cognite.OpcUa.Utils;
 using CogniteSdk;
 using CogniteSdk.Beta;
 using CogniteSdk.DataModels;

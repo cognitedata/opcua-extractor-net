@@ -5,6 +5,7 @@ using Cognite.OpcUa.History;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.Types;
+using Cognite.OpcUa.Utils;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;

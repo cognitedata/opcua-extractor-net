@@ -24,6 +24,7 @@ using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.Pushers.Records;
 using Cognite.OpcUa.Pushers.Writers;
 using Cognite.OpcUa.Types;
+using Cognite.OpcUa.Utils;
 using CogniteSdk;
 using CogniteSdk.DataModels;
 using Microsoft.Extensions.DependencyInjection;

@@ -1,9 +1,11 @@
-﻿using Cognite.Extractor.Common;
+﻿using Cognite.Extensions;
+using Cognite.Extractor.Common;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.Types;
+using Cognite.OpcUa.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
@@ -147,7 +149,7 @@ namespace Test.Unit
                 extractor.State.SetNodeState(state);
             }
 
-            var queue = (Queue<UADataPoint>)extractor.Streamer.GetType()
+            var queue = (AsyncBlockingQueue<UADataPoint>)extractor.Streamer.GetType()
                 .GetField("dataPointQueue", BindingFlags.NonPublic | BindingFlags.Instance)
                 .GetValue(extractor.Streamer);
 
@@ -158,7 +160,7 @@ namespace Test.Unit
                 await CommonTestUtils.RunHistory(reader, states, HistoryReadType.BackfillData);
             }
 
-            var distinct = queue.ToList().DistinctBy(dp => (dp.Id, dp.Timestamp)).GroupBy(dp => dp.Id)
+            var distinct = (await queue.DrainAsync().ToListAsync(default)).DistinctBy(dp => (dp.Id, dp.Timestamp)).GroupBy(dp => dp.Id)
                 .ToDictionary(group => group.Key, group => group.ToArray());
 
             Assert.Equal(6, distinct.Count);
@@ -224,7 +226,7 @@ namespace Test.Unit
 
             var uaSource = new UANodeSource(tester.Log, extractor, tester.Client, tester.Client.TypeManager);
 
-            var queue = (Queue<UAEvent>)extractor.Streamer.GetType()
+            var queue = (AsyncBlockingQueue<UAEvent>)extractor.Streamer.GetType()
                 .GetField("eventQueue", BindingFlags.NonPublic | BindingFlags.Instance)
                 .GetValue(extractor.Streamer);
 
@@ -241,7 +243,7 @@ namespace Test.Unit
                 await CommonTestUtils.RunHistory(reader, states, HistoryReadType.BackfillEvents);
             }
 
-            var distinct = queue.ToList().DistinctBy(evt => evt.Message).GroupBy(evt => evt.EmittingNode)
+            var distinct = (await queue.DrainAsync().ToListAsync(default)).DistinctBy(evt => evt.Message).GroupBy(evt => evt.EmittingNode)
                 .ToDictionary(group => group.Key, group => group.ToArray());
 
             Assert.Equal(2, distinct.Count);
