@@ -2,7 +2,7 @@
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Cognite.OpcUa
+namespace Cognite.OpcUa.Utils
 {
     /// <summary>
     /// Essentially an inverse semaphore, blocks if and only if the counter is not at 0.

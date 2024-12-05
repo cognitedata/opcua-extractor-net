@@ -30,6 +30,7 @@ using System.Linq;
 using System.Threading;
 using Nito.AsyncEx;
 using System.Threading.Tasks;
+using Cognite.OpcUa.Utils;
 
 namespace Cognite.OpcUa
 {
@@ -42,14 +43,11 @@ namespace Cognite.OpcUa
         private readonly UAExtractor extractor;
         private readonly FullConfig config;
 
-        private readonly Queue<UADataPoint> dataPointQueue = new Queue<UADataPoint>();
-        private readonly Queue<UAEvent> eventQueue = new Queue<UAEvent>();
+        private readonly AsyncBlockingQueue<UADataPoint> dataPointQueue;
+        private readonly AsyncBlockingQueue<UAEvent> eventQueue;
 
         private const int maxEventCount = 100_000;
         private const int maxDpCount = 1_000_000;
-
-        private readonly AsyncMonitor dataPointMutex = new AsyncMonitor();
-        private readonly AsyncMonitor eventMutex = new AsyncMonitor();
 
         private readonly ILogger<Streamer> log;
 
@@ -68,6 +66,17 @@ namespace Cognite.OpcUa
             this.log = log;
             this.extractor = extractor;
             this.config = config;
+
+            dataPointQueue = new AsyncBlockingQueue<UADataPoint>(maxDpCount, "Datapoints", log);
+            eventQueue = new AsyncBlockingQueue<UAEvent>(maxEventCount, "Events", log);
+
+            dataPointQueue.OnQueueOverflow += OnQueueOverflow;
+            eventQueue.OnQueueOverflow += OnQueueOverflow;
+        }
+
+        private void OnQueueOverflow(object sender, EventArgs e)
+        {
+            extractor.Looper.Scheduler.TryTriggerTask("Pushers");
         }
 
         /// <summary>
@@ -76,16 +85,7 @@ namespace Cognite.OpcUa
         /// <param name="dp">Datapoint to enqueue.</param>
         public void Enqueue(UADataPoint dp)
         {
-            using (dataPointMutex.Enter())
-            {
-                while (dataPointQueue.Count >= maxDpCount)
-                {
-                    log.LogDebug("Data point queue is full, waiting for push");
-                    dataPointMutex.Wait();
-                }
-                dataPointQueue.Enqueue(dp);
-                if (dataPointQueue.Count >= maxDpCount) extractor.Looper.Scheduler.TryTriggerTask("Pushers");
-            }
+            dataPointQueue.Enqueue(dp);
         }
         /// <summary>
         /// Enqueue a list of datapoints, pushes if this exceeds the maximum.
@@ -94,19 +94,7 @@ namespace Cognite.OpcUa
         public void Enqueue(IEnumerable<UADataPoint> dps)
         {
             if (dps == null) return;
-            using (dataPointMutex.Enter())
-            {
-                foreach (var dp in dps)
-                {
-                    while (dataPointQueue.Count >= maxDpCount)
-                    {
-                        log.LogDebug("Data point queue is full, waiting for push");
-                        dataPointMutex.Wait();
-                    }
-                    dataPointQueue.Enqueue(dp);
-                    if (dataPointQueue.Count >= maxDpCount) extractor.Looper.Scheduler.TryTriggerTask("Pushers");
-                }
-            }
+            dataPointQueue.Enqueue(dps);
         }
         /// <summary>
         /// Enqueues an event, pushes if this exceeds the maximum.
@@ -114,16 +102,7 @@ namespace Cognite.OpcUa
         /// <param name="evt">Event to enqueue.</param>
         public void Enqueue(UAEvent evt)
         {
-            using (eventMutex.Enter())
-            {
-                while (eventQueue.Count >= maxEventCount)
-                {
-                    log.LogDebug("Event queue is full, waiting for push");
-                    eventMutex.Wait();
-                }
-                eventQueue.Enqueue(evt);
-                if (eventQueue.Count >= maxEventCount) extractor.Looper.Scheduler.TryTriggerTask("Pushers");
-            }
+            eventQueue.Enqueue(evt);
         }
         /// <summary>
         /// Enqueues a list of events, pushes if this exceeds the maximum.
@@ -132,19 +111,7 @@ namespace Cognite.OpcUa
         public void Enqueue(IEnumerable<UAEvent> events)
         {
             if (events == null) return;
-            using (eventMutex.Enter())
-            {
-                foreach (var evt in events)
-                {
-                    while (eventQueue.Count >= maxEventCount)
-                    {
-                        log.LogDebug("Event queue is full, waiting for push");
-                        eventMutex.Wait();
-                    }
-                    eventQueue.Enqueue(evt);
-                    if (eventQueue.Count >= maxEventCount) extractor.Looper.Scheduler.TryTriggerTask("Pushers");
-                }
-            }
+            eventQueue.Enqueue(events);
         }
 
 
@@ -154,16 +121,7 @@ namespace Cognite.OpcUa
         /// <param name="dp">Datapoint to enqueue.</param>
         public async Task EnqueueAsync(UADataPoint dp)
         {
-            using (await dataPointMutex.EnterAsync())
-            {
-                while (dataPointQueue.Count >= maxDpCount)
-                {
-                    log.LogDebug("Data point queue is full, waiting for push");
-                    await dataPointMutex.WaitAsync();
-                }
-                dataPointQueue.Enqueue(dp);
-                if (dataPointQueue.Count >= maxDpCount) extractor.Looper.Scheduler.TryTriggerTask("Pushers");
-            }
+            await dataPointQueue.EnqueueAsync(dp);
         }
         /// <summary>
         /// Enqueue a list of datapoints, pushes if this exceeds the maximum.
@@ -172,19 +130,7 @@ namespace Cognite.OpcUa
         public async Task EnqueueAsync(IEnumerable<UADataPoint> dps)
         {
             if (dps == null) return;
-            using (await dataPointMutex.EnterAsync())
-            {
-                foreach (var dp in dps)
-                {
-                    while (dataPointQueue.Count >= maxDpCount)
-                    {
-                        log.LogDebug("Data point queue is full, waiting for push");
-                        await dataPointMutex.WaitAsync();
-                    }
-                    dataPointQueue.Enqueue(dp);
-                    if (dataPointQueue.Count >= maxDpCount) extractor.Looper.Scheduler.TryTriggerTask("Pushers");
-                }
-            }
+            await dataPointQueue.EnqueueAsync(dps);
         }
         /// <summary>
         /// Enqueues an event, pushes if this exceeds the maximum.
@@ -192,16 +138,7 @@ namespace Cognite.OpcUa
         /// <param name="evt">Event to enqueue.</param>
         public async Task EnqueueAsync(UAEvent evt)
         {
-            using (await eventMutex.EnterAsync())
-            {
-                while (eventQueue.Count >= maxEventCount)
-                {
-                    log.LogDebug("Event queue is full, waiting for push");
-                    await eventMutex.WaitAsync();
-                }
-                eventQueue.Enqueue(evt);
-                if (eventQueue.Count >= maxEventCount) extractor.Looper.Scheduler.TryTriggerTask("Pushers");
-            }
+            await eventQueue.EnqueueAsync(evt);
         }
         /// <summary>
         /// Enqueues a list of events, pushes if this exceeds the maximum.
@@ -210,19 +147,7 @@ namespace Cognite.OpcUa
         public async Task EnqueueAsync(IEnumerable<UAEvent> events)
         {
             if (events == null) return;
-            using (await eventMutex.EnterAsync())
-            {
-                foreach (var evt in events)
-                {
-                    while (eventQueue.Count >= maxEventCount)
-                    {
-                        log.LogDebug("Event queue is full, waiting for push");
-                        await eventMutex.WaitAsync();
-                    }
-                    eventQueue.Enqueue(evt);
-                    if (eventQueue.Count >= maxEventCount) extractor.Looper.Scheduler.TryTriggerTask("Pushers");
-                }
-            }
+            await eventQueue.EnqueueAsync(events);
         }
         /// <summary>
         /// Push data points to destinations
@@ -238,21 +163,16 @@ namespace Cognite.OpcUa
             var dataPointList = new List<UADataPoint>();
             var pointRanges = new Dictionary<string, TimeRange>();
 
-            using (await dataPointMutex.EnterAsync(token))
+            await foreach (var dp in dataPointQueue.DrainAsync(token))
             {
-                while (dataPointQueue.TryDequeue(out UADataPoint dp))
+                dataPointList.Add(dp);
+                if (!pointRanges.TryGetValue(dp.Id, out var range))
                 {
-                    dataPointList.Add(dp);
-                    if (!pointRanges.TryGetValue(dp.Id, out var range))
-                    {
-                        pointRanges[dp.Id] = new TimeRange(dp.Timestamp, dp.Timestamp);
-                        continue;
-                    }
-                    pointRanges[dp.Id] = range.Extend(dp.Timestamp, dp.Timestamp);
+                    pointRanges[dp.Id] = new TimeRange(dp.Timestamp, dp.Timestamp);
+                    continue;
                 }
-                dataPointMutex.PulseAll();
+                pointRanges[dp.Id] = range.Extend(dp.Timestamp, dp.Timestamp);
             }
-
 
             var results = await Task.WhenAll(passingPushers.Select(pusher => pusher.PushDataPoints(dataPointList, token)));
 
@@ -321,20 +241,16 @@ namespace Cognite.OpcUa
             var eventList = new List<UAEvent>();
             var eventRanges = new Dictionary<NodeId, TimeRange>();
 
-            using (await eventMutex.EnterAsync(token))
+            await foreach (var evt in eventQueue.DrainAsync(token))
             {
-                while (eventQueue.TryDequeue(out UAEvent evt))
+                eventList.Add(evt);
+                if (!eventRanges.TryGetValue(evt.EmittingNode, out var range))
                 {
-                    eventList.Add(evt);
-                    if (!eventRanges.TryGetValue(evt.EmittingNode, out var range))
-                    {
-                        eventRanges[evt.EmittingNode] = new TimeRange(evt.Time, evt.Time);
-                        continue;
-                    }
-
-                    eventRanges[evt.EmittingNode] = range.Extend(evt.Time, evt.Time);
+                    eventRanges[evt.EmittingNode] = new TimeRange(evt.Time, evt.Time);
+                    continue;
                 }
-                eventMutex.PulseAll();
+
+                eventRanges[evt.EmittingNode] = range.Extend(evt.Time, evt.Time);
             }
 
             var results = await Task.WhenAll(passingPushers.Select(pusher => pusher.PushEvents(eventList, token)));

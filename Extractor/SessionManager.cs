@@ -1,5 +1,6 @@
 ﻿using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Subscriptions;
+using Cognite.OpcUa.Utils;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using Opc.Ua.Client;

@@ -5,6 +5,7 @@ using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.Subscriptions;
 using Cognite.OpcUa.Types;
+using Cognite.OpcUa.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
