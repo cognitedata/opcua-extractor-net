@@ -361,6 +361,7 @@ namespace Test.Unit
             await tester.Client.Close(tester.Source.Token);
             tester.Server.SetServerRedundancyStatus(230, RedundancySupport.Hot);
             tester.Config.Source.Redundancy.MonitorServiceLevel = true;
+            tester.Config.Source.Redundancy.ReconnectInterval = "500ms";
             tester.Callbacks.Reset();
             tester.Client.Callbacks = tester.Callbacks;
             var altServer = new ServerController(new[] {
@@ -389,6 +390,13 @@ namespace Test.Unit
                 await TestUtils.WaitForCondition(() => sm.CurrentServiceLevel == 230, 10, "Expected session to reconnect to original server");
 
                 Assert.Equal(230, sm.CurrentServiceLevel);
+                await TestUtils.WaitForCondition(() =>
+                    tester.Callbacks.ServiceLevelCbCount == 1
+                    && tester.Callbacks.LowServiceLevelCbCount == 1
+                    && tester.Callbacks.ReconnectCbCount == 1,
+                    5,
+                    () => $"Expected callbacks to be invoked: {tester.Callbacks.ServiceLevelCbCount}, {tester.Callbacks.LowServiceLevelCbCount}, {tester.Callbacks.ReconnectCbCount}"
+                );
                 Assert.Equal(1, tester.Callbacks.ServiceLevelCbCount);
                 Assert.Equal(1, tester.Callbacks.LowServiceLevelCbCount);
                 Assert.Equal(1, tester.Callbacks.ReconnectCbCount);

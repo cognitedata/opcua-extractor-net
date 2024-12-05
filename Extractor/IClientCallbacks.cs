@@ -11,7 +11,7 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Invoked when client loses connection to server.
         /// </summary>
-        Task OnServerDisconnect(UAClient source);
+        void OnServerDisconnect(UAClient source);
 
         /// <summary>
         /// Invoked whenever the session reconnects to the server.

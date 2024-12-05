@@ -966,7 +966,7 @@ namespace Test.Integration
             tester.Config.History.EndTime = null;
 
             // Call the restart callback. Making the client call this is painful, and tested elsewhere
-            await extractor.OnServerDisconnect(tester.Client);
+            extractor.OnServerDisconnect(tester.Client);
             await extractor.OnServerReconnect(tester.Client);
             await TestUtils.WaitForCondition(() => extractor.State.NodeStates.All(node =>
                 !node.IsFrontfilling && !node.IsBackfilling) && pusher.DataPoints[(ids.DoubleVar1, -1)].Count >= 1000, 10);

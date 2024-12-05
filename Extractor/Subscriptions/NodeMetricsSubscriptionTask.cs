@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Threading;
 using Microsoft.Extensions.Logging;
+using Cognite.OpcUa.Connect;
 
 namespace Cognite.OpcUa.Subscriptions
 {
