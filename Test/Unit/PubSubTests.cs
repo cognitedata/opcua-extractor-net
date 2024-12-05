@@ -119,7 +119,7 @@ namespace Test.Unit
 
             await extractor.RunExtractor(true);
 
-            var queue = (Queue<UADataPoint>)extractor.Streamer.GetType()
+            var queue = (AsyncBlockingQueue<UADataPoint>)extractor.Streamer.GetType()
                 .GetField("dataPointQueue", BindingFlags.NonPublic | BindingFlags.Instance)
                 .GetValue(extractor.Streamer);
 

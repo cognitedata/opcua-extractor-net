@@ -33,6 +33,7 @@ using CogniteSdk;
 using System.Text.Json.Serialization;
 using Cognite.Extensions.DataModels;
 using Cognite.Extensions.DataModels.QueryBuilder;
+using Cognite.OpcUa.Utils;
 
 namespace Cognite.OpcUa.Pushers.FDM
 {

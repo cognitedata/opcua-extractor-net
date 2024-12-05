@@ -24,6 +24,7 @@ using Test.Utils;
 using Xunit;
 using Xunit.Abstractions;
 using Cognite.Extractor.Configuration;
+using Cognite.OpcUa.Utils;
 
 namespace Test.Unit
 {

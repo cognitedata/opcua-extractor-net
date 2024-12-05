@@ -25,6 +25,7 @@ using Cognite.Extractor.Common;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
+using Cognite.OpcUa.Utils;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using Prometheus;

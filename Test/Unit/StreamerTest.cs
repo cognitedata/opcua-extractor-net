@@ -2,6 +2,7 @@
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.Types;
+using Cognite.OpcUa.Utils;
 using Opc.Ua;
 using Opc.Ua.Client;
 using System;
@@ -40,7 +41,7 @@ namespace Test.Unit
 
             using var evt = new ManualResetEvent(false);
 
-            var queue = (Queue<UADataPoint>)extractor.Streamer.GetType()
+            var queue = (AsyncBlockingQueue<UADataPoint>)extractor.Streamer.GetType()
                 .GetField("dataPointQueue", BindingFlags.NonPublic | BindingFlags.Instance)
                 .GetValue(extractor.Streamer);
 
@@ -67,11 +68,11 @@ namespace Test.Unit
             Assert.False(evt.WaitOne(100));
 
             await extractor.Streamer.EnqueueAsync(new UADataPoint(start, "id", -1, StatusCodes.Good));
-            Assert.Single(queue);
+            Assert.Equal(1, queue.Count);
             await extractor.Streamer.PushDataPoints(new[] { pusher }, Enumerable.Empty<IPusher>(), tester.Source.Token);
 
             Assert.Single(dps);
-            Assert.Empty(queue);
+            Assert.Equal(0, queue.Count);
 
             // Should block
             var task = extractor.Streamer.EnqueueAsync(Enumerable.Range(0, 2_000_000).Select(idx => new UADataPoint(start.AddMilliseconds(idx), "id", idx, StatusCodes.Good)));
@@ -91,7 +92,7 @@ namespace Test.Unit
             await extractor.Streamer.PushDataPoints(new[] { pusher }, Enumerable.Empty<IPusher>(), tester.Source.Token);
 
             Assert.Equal(2_000_001, dps.Count);
-            Assert.Empty(queue);
+            Assert.Equal(0, queue.Count);
 
             await extractor.Streamer.EnqueueAsync(Enumerable.Range(2000000, 999999).Select(idx => new UADataPoint(start.AddMilliseconds(idx), "id", idx, StatusCodes.Good)));
 
@@ -114,7 +115,7 @@ namespace Test.Unit
 
             var id = new NodeId("id", 0);
 
-            var queue = (Queue<UAEvent>)extractor.Streamer.GetType()
+            var queue = (AsyncBlockingQueue<UAEvent>)extractor.Streamer.GetType()
                 .GetField("eventQueue", BindingFlags.NonPublic | BindingFlags.Instance)
                 .GetValue(extractor.Streamer);
 
@@ -140,13 +141,13 @@ namespace Test.Unit
             Assert.False(evt.WaitOne(100));
 
             await extractor.Streamer.EnqueueAsync(new UAEvent { EmittingNode = id, Time = start });
-            Assert.Single(queue);
+            Assert.Equal(1, queue.Count);
             await extractor.Streamer.PushEvents(new[] { pusher }, Enumerable.Empty<IPusher>(), tester.Source.Token);
 
             var evts = pusher.Events[id];
 
             Assert.Single(evts);
-            Assert.Empty(queue);
+            Assert.Equal(0, queue.Count);
 
             // Should block
             var task = extractor.Streamer.EnqueueAsync(Enumerable.Range(0, 200_000).Select(idx =>
@@ -165,7 +166,7 @@ namespace Test.Unit
             await extractor.Streamer.PushEvents(new[] { pusher }, Enumerable.Empty<IPusher>(), tester.Source.Token);
 
             Assert.Equal(200001, evts.Count);
-            Assert.Empty(queue);
+            Assert.Equal(0, queue.Count);
 
             await extractor.Streamer.EnqueueAsync(Enumerable.Range(200000, 99999).Select(idx =>
                 new UAEvent { EmittingNode = id, Time = start.AddMilliseconds(idx) }));
@@ -302,7 +303,7 @@ namespace Test.Unit
             var node = new VariableExtractionState(tester.Client, var1, true, true, true);
             extractor.State.SetNodeState(node, "id");
 
-            var queue = (Queue<UADataPoint>)extractor.Streamer.GetType()
+            var queue = (AsyncBlockingQueue<UADataPoint>)extractor.Streamer.GetType()
                 .GetField("dataPointQueue", BindingFlags.NonPublic | BindingFlags.Instance)
                 .GetValue(extractor.Streamer);
 
@@ -329,7 +330,7 @@ namespace Test.Unit
             foreach (var not in notifications) item.SaveValueInCache(not);
             extractor.Streamer.DataSubscriptionHandler(item, null);
 
-            Assert.Single(queue);
+            Assert.Equal(1, queue.Count);
 
             node.UpdateFromFrontfill(DateTime.MinValue, true);
             foreach (var not in notifications) item.SaveValueInCache(not);
@@ -449,7 +450,7 @@ namespace Test.Unit
             using var extractor = tester.BuildExtractor();
             var state = EventUtils.PopulateEventData(extractor, tester, true);
 
-            var queue = (Queue<UAEvent>)extractor.Streamer.GetType()
+            var queue = (AsyncBlockingQueue<UAEvent>)extractor.Streamer.GetType()
                 .GetField("eventQueue", BindingFlags.NonPublic | BindingFlags.Instance)
                 .GetValue(extractor.Streamer);
 
@@ -459,39 +460,39 @@ namespace Test.Unit
             var values = EventUtils.GetEventValues(DateTime.UtcNow);
             var rawEvt = new EventFieldList { EventFields = values };
             item.SaveValueInCache(rawEvt);
-            Assert.Empty(queue);
+            Assert.Equal(0, queue.Count);
 
             // Test no filter
             extractor.Streamer.EventSubscriptionHandler(item, null);
-            Assert.Empty(queue);
+            Assert.Equal(0, queue.Count);
 
 
             // Test no state
             var filter = new EventFilter { SelectClauses = EventUtils.GetSelectClause(tester) };
             item2.Filter = filter;
             extractor.Streamer.EventSubscriptionHandler(item2, null);
-            Assert.Empty(queue);
+            Assert.Equal(0, queue.Count);
 
             // Test null eventFields
             var rawEvt2 = new EventFieldList { EventFields = null };
             item2.StartNodeId = new NodeId("emitter", 0);
             item2.SaveValueInCache(rawEvt2);
             extractor.Streamer.EventSubscriptionHandler(item2, null);
-            Assert.Empty(queue);
+            Assert.Equal(0, queue.Count);
 
             // Test bad event
             values[0] = Variant.Null;
             item.SaveValueInCache(rawEvt);
             item.Filter = filter;
             extractor.Streamer.EventSubscriptionHandler(item, null);
-            Assert.Empty(queue);
+            Assert.Equal(0, queue.Count);
             Assert.Empty(item.DequeueEvents());
 
             // Test OK event
             values[0] = new byte[] { 0, 0, 0, 0, 2 };
             item.SaveValueInCache(rawEvt);
             extractor.Streamer.EventSubscriptionHandler(item, null);
-            Assert.Single(queue);
+            Assert.Equal(1, queue.Count);
             var generated = queue.Dequeue();
             Assert.Single(generated.MetaData);
 
@@ -510,7 +511,7 @@ namespace Test.Unit
             item.SaveValueInCache(evt2);
             item.SaveValueInCache(evt3);
             extractor.Streamer.EventSubscriptionHandler(item, null);
-            Assert.Single(queue);
+            Assert.Equal(1, queue.Count);
 
             // Again after frontfill
             state.UpdateFromFrontfill(DateTime.MinValue, true);
@@ -606,13 +607,13 @@ namespace Test.Unit
 
             var now = new DateTime(1000);
 
-            var queue = (Queue<UAEvent>)extractor.Streamer.GetType()
+            var queue = (AsyncBlockingQueue<UAEvent>)extractor.Streamer.GetType()
                 .GetField("eventQueue", BindingFlags.NonPublic | BindingFlags.Instance)
                 .GetValue(extractor.Streamer);
 
             extractor.Streamer.HandleStreamedDatapoint(new DataValue(new Variant("some-string"), StatusCodes.Good, now), node1);
 
-            Assert.Single(queue);
+            Assert.Equal(1, queue.Count);
 
             var evt = queue.Dequeue();
 

@@ -22,6 +22,7 @@ using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.Subscriptions;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
+using Cognite.OpcUa.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
@@ -132,7 +133,7 @@ namespace Cognite.OpcUa
         private void ConfigureUtilsTrace()
         {
             if (Config.Logger?.UaTraceLevel == null) return;
-            Utils.SetTraceMask(Utils.TraceMasks.All);
+            Opc.Ua.Utils.SetTraceMask(Opc.Ua.Utils.TraceMasks.All);
             if (traceLevel != null) return;
             traceLevel = Config.Logger.UaTraceLevel switch
             {
@@ -144,8 +145,8 @@ namespace Cognite.OpcUa
                 "fatal" => LogLevel.Critical,
                 _ => LogLevel.Trace
             };
-            Utils.SetLogger(traceLog);
-            Utils.SetLogLevel(traceLevel.Value);
+            Opc.Ua.Utils.SetLogger(traceLog);
+            Opc.Ua.Utils.SetLogLevel(traceLevel.Value);
         }
 
         public void LogDump<T>(string message, T item)
