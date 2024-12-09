@@ -25,17 +25,17 @@ namespace Cognite.OpcUa.Connect
             StatusCodes.BadSessionClosed
         };
 
-        public static bool ShouldAbandonReconnect(Exception ex)
+        public static bool ShouldReconnect(Exception ex)
         {
             if (ex is AggregateException aex)
             {
-                return ShouldAbandonReconnect(aex.InnerException);
+                return ShouldReconnect(aex.InnerException);
             }
             if (ex is ServiceResultException e)
             {
-                return statusCodesToAbandon.Contains(e.StatusCode);
+                return !statusCodesToAbandon.Contains(e.StatusCode);
             }
-            return false;
+            return true;
         }
 
         public static async Task<T> TryWithBackoff<T>(Func<Task<T>> method, int maxBackoff, int timeoutSeconds, ILogger log, CancellationToken token)

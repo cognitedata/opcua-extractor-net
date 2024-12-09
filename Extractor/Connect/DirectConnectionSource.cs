@@ -43,7 +43,7 @@ namespace Cognite.OpcUa.Connect
             catch (Exception ex)
             {
                 log.LogError(ex, "Failed to reconnect to server at {Url}: {Message}", oldConnection.EndpointUrl, ex.Message);
-                if (ConnectionUtils.ShouldAbandonReconnect(ex) || config.ForceRestart)
+                if (!ConnectionUtils.ShouldReconnect(ex) || config.ForceRestart)
                 {
                     await sessionManager.CloseSession(oldConnection.Session, token);
                 }
@@ -78,7 +78,7 @@ namespace Cognite.OpcUa.Connect
             {
                 throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.SelectEndpoint);
             }
-            if (config.EndpointDetails != null && !string.IsNullOrWhiteSpace(config.EndpointDetails.OverrideEndpointUrl))
+            if (!string.IsNullOrWhiteSpace(config.EndpointDetails?.OverrideEndpointUrl))
             {
                 log.LogInformation("Discovered endpoint is {Url}, using override {Override} instead",
                     selectedEndpoint.EndpointUrl, config.EndpointDetails.OverrideEndpointUrl);
@@ -103,7 +103,8 @@ namespace Cognite.OpcUa.Connect
                     ".NET OPC-UA Extractor Client",
                     0,
                     identity,
-                    null
+                    null,
+                    token
                 );
                 ConnectionUtils.Connects.Inc();
                 session.DeleteSubscriptionsOnClose = true;

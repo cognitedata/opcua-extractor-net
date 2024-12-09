@@ -55,7 +55,7 @@ namespace Cognite.OpcUa.Connect
                 catch (Exception ex)
                 {
                     log.LogError(ex, "Failed to reconnect to server at {Url}: {Message}", oldConnection.Session.Endpoint.EndpointUrl, ex.Message);
-                    if (ConnectionUtils.ShouldAbandonReconnect(ex) || config.ForceRestart)
+                    if (!ConnectionUtils.ShouldReconnect(ex) || config.ForceRestart)
                     {
                         await sessionManager.CloseSession(oldConnection.Session, token);
                     }

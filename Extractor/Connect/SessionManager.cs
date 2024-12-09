@@ -279,7 +279,20 @@ namespace Cognite.OpcUa.Connect
                     AttributeId = Attributes.Value
                 }
             }, token);
+            if (res.Results.Count != 1)
+            {
+                throw new ExtractorFailureException(
+                    "Incorrect number of results returned when reading service level, this is a bug in the server"
+                );
+            }
             var dv = res.Results[0];
+            if (!StatusCode.IsGood(dv.StatusCode))
+            {
+                var sym = StatusCode.LookupSymbolicId(dv.StatusCode.Code);
+                throw new ExtractorFailureException(
+                    $"Service level has a bad status code: {sym}"
+                );
+            }
             return dv.GetValue<byte>(0);
         }
 
@@ -309,6 +322,10 @@ namespace Cognite.OpcUa.Connect
             if (newLevel != oldServiceLevel)
             {
                 log.LogDebug("Server ServiceLevel updated {From} -> {To}", oldServiceLevel, newLevel);
+            }
+            else
+            {
+                return false;
             }
 
             bool triggerReconnect = false;
