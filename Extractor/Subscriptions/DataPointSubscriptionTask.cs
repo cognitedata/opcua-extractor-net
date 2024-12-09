@@ -1,4 +1,5 @@
 ﻿using Cognite.OpcUa.Config;
+using Cognite.OpcUa.Connect;
 using Cognite.OpcUa.History;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
