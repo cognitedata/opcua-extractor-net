@@ -250,9 +250,8 @@ namespace Cognite.OpcUa.Config
             baseConfig.Extraction.NamespaceMap = namespaceMap;
         }
 
-        public Task OnServerDisconnect(UAClient source)
+        public void OnServerDisconnect(UAClient source)
         {
-            return Task.CompletedTask;
         }
 
         public Task OnServerReconnect(UAClient source)
