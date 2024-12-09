@@ -67,6 +67,11 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.32.1-beta1":
+    description: Experimental changes to connection logic.
+    changelog:
+      fixed:
+        - Revamped connection logic to potentially fix a memory leak and a few issues related to connections not being properly reestablished.
   "2.32.0":
     description: Beta support for writing events to data modeling records.
     changelog:
