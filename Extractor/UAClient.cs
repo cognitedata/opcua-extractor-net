@@ -17,6 +17,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using Cognite.Extractor.Common;
 using Cognite.OpcUa.Config;
+using Cognite.OpcUa.Connect;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.Subscriptions;
@@ -35,6 +36,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Runtime.ExceptionServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Browser = Cognite.OpcUa.Browse.Browser;
@@ -102,7 +104,7 @@ namespace Cognite.OpcUa
             StringConverter = new StringConverter(provider.GetRequiredService<ILogger<StringConverter>>(), this, config);
             Browser = new Browser(provider.GetRequiredService<ILogger<Browser>>(), this, config);
             TypeManager = new TypeManager(config, this, provider.GetRequiredService<ILogger<TypeManager>>());
-            SessionManager = new SessionManager(Config, this, provider.GetRequiredService<ILogger<SessionManager>>());
+            SessionManager = new SessionManager(this, Config, provider.GetRequiredService<ILogger<SessionManager>>());
         }
         #region Session management
         /// <summary>
@@ -234,7 +236,7 @@ namespace Cognite.OpcUa
 
             var appConfig = await LoadAppConfig();
 
-            SessionManager.Initialize(appConfig, liveToken, timeout);
+            SessionManager.Initialize(appConfig, timeout);
 
             if (SubscriptionManager == null)
             {
@@ -242,7 +244,26 @@ namespace Cognite.OpcUa
                 Callbacks.TaskScheduler.ScheduleTask("SubscriptionManager", SubscriptionManager.RunTaskLoop);
             }
 
-            await SessionManager.Connect();
+            if (SessionManager.RunningTask != null)
+            {
+                await SessionManager.Close(liveToken);
+                try
+                {
+                    await SessionManager.RunningTask;
+                }
+                catch { }
+            }
+
+            Callbacks.TaskScheduler.ScheduleTask(null, SessionManager.Run);
+            await Task.WhenAny(SessionManager.WaitForSession(liveToken), SessionManager.RunningTask);
+
+            var mgrExc = SessionManager.RunningTask?.Exception;
+            if (mgrExc != null)
+            {
+                ExceptionDispatchInfo.Capture(
+                    ExtractorUtils.HandleServiceResult(log, mgrExc, ExtractorUtils.SourceOp.CreateSession)
+                ).Throw();
+            }
 
             SourceInfo = await SourceInformation.LoadFromServer(this, log, liveToken) ?? SourceInfo;
 
