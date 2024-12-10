@@ -67,6 +67,11 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.32.1-beta2":
+    description: Fix issue causing the extractor to not properly change redundant server in some cases.
+    changelog:
+      fixed:
+        - Fix issue causing extractor not to properly switch between redundant servers when service level is bad without changing.
   "2.32.1-beta1":
     description: Experimental changes to connection logic.
     changelog:
