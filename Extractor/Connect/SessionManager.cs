@@ -323,10 +323,8 @@ namespace Cognite.OpcUa.Connect
             {
                 log.LogDebug("Server ServiceLevel updated {From} -> {To}", oldServiceLevel, newLevel);
             }
-            else
-            {
-                return false;
-            }
+            // If service level equals old service level, we may still need to check
+            // for reconnect, if this is part of the periodic re-check.
 
             bool triggerReconnect = false;
             if (newLevel < config.Redundancy.ServiceLevelThreshold)
