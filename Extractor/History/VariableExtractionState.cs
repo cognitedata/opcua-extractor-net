@@ -45,6 +45,7 @@ namespace Cognite.OpcUa.History
         public string DisplayName { get; }
         public bool AsEvents { get; }
 
+        private readonly int publishingInterval;
         private readonly List<UADataPoint>? buffer;
 
         [MemberNotNullWhen(true, nameof(ArrayDimensions))]
@@ -62,6 +63,7 @@ namespace Cognite.OpcUa.History
             DisplayName = variable.Name ?? "";
             ShouldSubscribe = subscription;
             AsEvents = variable.AsEvents;
+            publishingInterval = client.PublishingInterval;
             if (frontfill)
             {
                 buffer = new List<UADataPoint>();
@@ -77,9 +79,13 @@ namespace Cognite.OpcUa.History
             UpdateFromStream(DateTime.MaxValue, points.Max(pt => pt.Timestamp));
             lock (Mutex)
             {
-                if (IsFrontfilling)
+                if (IsFrontfilling && buffer != null)
                 {
-                    buffer?.AddRange(points);
+                    // Only keep datapoints with timestamps that are reasonably recent.
+                    var nextThreshold = DateTime.UtcNow - TimeSpan.FromMilliseconds(publishingInterval * 4);
+                    buffer.RemoveAll(dp => dp.Timestamp < nextThreshold);
+                    // Only add datapoints that are outside the current extracted range, others we don't need to buffer.
+                    buffer.AddRange(points.Where(dp => dp.Timestamp >= nextThreshold && !DestinationExtractedRange.Contains(dp.Timestamp)));
                 }
             }
         }
@@ -116,6 +122,18 @@ namespace Cognite.OpcUa.History
                 var result = buffer.Where(pt => pt.Timestamp > SourceExtractedRange.Last).ToList();
                 buffer.Clear();
                 return result;
+            }
+        }
+
+        public override void RestartHistory()
+        {
+            base.RestartHistory();
+
+            // We're going to be re-reading history, so clear the buffer
+            // to avoid caching too much data.
+            lock (Mutex)
+            {
+                buffer?.Clear();
             }
         }
     }
