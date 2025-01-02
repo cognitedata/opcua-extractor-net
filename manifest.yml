@@ -67,6 +67,11 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.32.1-beta3":
+    description: Fix possible memory leak from live data when history is suspended.
+    changelog:
+      fixed:
+        - Fix possible memory leak related to datapoints being buffered to avoid data loss on history end.
   "2.32.1-beta2":
     description: Fix issue causing the extractor to not properly change redundant server in some cases.
     changelog:
