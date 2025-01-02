@@ -10,7 +10,7 @@
   <ItemGroup>
     <PackageReference Include="Cognite.ExtractorUtils" Version="1.29.0" />
     <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
-    <PackageReference Include="MQTTnet" Version="4.3.7.1207" />
+    <PackageReference Include="MQTTnet" Version="5.0.0.1405" />
     <PackageReference Include="Google.Protobuf" Version="3.29.2" />
   </ItemGroup>
 </Project>
