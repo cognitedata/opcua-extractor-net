@@ -68,6 +68,7 @@ namespace Cognite.OpcUa
 
         public TypeManager TypeManager => uaClient.TypeManager;
         public SessionContext Context => uaClient.Context;
+        public int PublishingInterval => Config.Source.PublishingInterval;
 
         private NodeSetNodeSource? nodeSetSource;
 
@@ -1320,5 +1321,6 @@ namespace Cognite.OpcUa
         NamespaceTable? NamespaceTable { get; }
         public SessionContext Context { get; }
         public SourceInformation SourceInfo { get; }
+        public int PublishingInterval { get; }
     }
 }

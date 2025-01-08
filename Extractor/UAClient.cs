@@ -87,6 +87,7 @@ namespace Cognite.OpcUa
         public SourceInformation SourceInfo { get; private set; } = SourceInformation.Default();
 
         public SessionContext Context => SessionManager.Context;
+        public int PublishingInterval => Config.Source.PublishingInterval;
 
         /// <summary>
         /// Constructor, does not start the client.
