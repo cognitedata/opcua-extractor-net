@@ -67,6 +67,11 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.32.1-beta4":
+    description: Abandon reconnect attempts on unknown exceptions.
+    changelog:
+      fixed:
+        - Fixed an issue where the extractor would get stuck in a reconnect loop.
   "2.32.1-beta3":
     description: Fix possible memory leak from live data when history is suspended.
     changelog:

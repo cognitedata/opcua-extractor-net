@@ -22,7 +22,9 @@ namespace Cognite.OpcUa.Connect
         private static readonly uint[] statusCodesToAbandon = new[] {
             StatusCodes.BadSessionIdInvalid,
             StatusCodes.BadSessionNotActivated,
-            StatusCodes.BadSessionClosed
+            StatusCodes.BadSessionClosed,
+            StatusCodes.BadServiceUnsupported,
+            StatusCodes.BadInternalError,
         };
 
         public static bool ShouldReconnect(Exception ex)
@@ -35,7 +37,7 @@ namespace Cognite.OpcUa.Connect
             {
                 return !statusCodesToAbandon.Contains(e.StatusCode);
             }
-            return true;
+            return false;
         }
 
         public static async Task<T> TryWithBackoff<T>(Func<Task<T>> method, int maxBackoff, int timeoutSeconds, ILogger log, CancellationToken token)
