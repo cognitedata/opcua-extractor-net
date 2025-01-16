@@ -228,6 +228,26 @@ namespace Cognite.OpcUa
             return Task.CompletedTask;
         }
 
+        public void OnDataPushFailure()
+        {
+            historyReader?.AddIssue(HistoryReader.StateIssue.DataPushFailing);
+        }
+
+        public void OnEventsPushFailure()
+        {
+            historyReader?.AddIssue(HistoryReader.StateIssue.EventsPushFailing);
+        }
+
+        public void OnDataPushRecovery()
+        {
+            historyReader?.RemoveIssue(HistoryReader.StateIssue.DataPushFailing);
+        }
+
+        public void OnEventsPushRecovery()
+        {
+            historyReader?.RemoveIssue(HistoryReader.StateIssue.EventsPushFailing);
+        }
+
         /// <summary>
         /// Event handler for UAClient reconnect
         /// </summary>

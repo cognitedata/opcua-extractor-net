@@ -269,7 +269,9 @@ namespace Cognite.OpcUa.History
             ServerConnection,
             DataPointSubscription,
             EventSubscription,
-            NodeHierarchyRead
+            NodeHierarchyRead,
+            DataPushFailing,
+            EventsPushFailing,
         }
 
         private void RestartHistoryInStates()
