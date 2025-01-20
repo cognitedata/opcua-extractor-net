@@ -44,7 +44,7 @@
         },
         "metadata-targets": {
             "type": "object",
-            "description": "Configure targets for node metadata. This configures which resources other than time series datapoints are created. By default, if this is left out, data is written to assets and time series metadata. Note that this behavior is deprecated, in the future leaving this section out will result in no metadata being written at all.",
+            "description": "Configure targets for node metadata. This configures which resources other than time series datapoints are created. By default, if this is left out, no metadata is written at all.",
             "unevaluatedProperties": false,
             "properties": {
                 "raw": {
