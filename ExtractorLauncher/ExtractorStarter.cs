@@ -72,38 +72,7 @@ namespace Cognite.OpcUa
             if (string.IsNullOrEmpty(config.Extraction.IdPrefix)) log.LogWarning("No id-prefix specified in config file");
             if (config.Cognite == null && config.Mqtt == null) log.LogWarning("No destination system specified");
             if (config.Extraction.IdPrefix == "events.") return "Do not use events. as id-prefix, as it is used internally";
-            if (config.Source.SamplingInterval != null)
-            {
-                log.LogWarning("source.sampling-interval is deprecated. Use subscriptions.sampling-interval instead.");
-                config.Subscriptions.SamplingInterval = config.Source.SamplingInterval.Value;
-            }
-            if (config.Source.QueueLength != null)
-            {
-                log.LogWarning("source.queue-length is deprecated. Use subscriptions.queue-length instead.");
-                config.Subscriptions.QueueLength = config.Source.QueueLength.Value;
-            }
-            if (config.Cognite?.Debug ?? false)
-            {
-                log.LogWarning("cognite.debug is deprecated. Use dry-run instead.");
-                config.DryRun = true;
-            }
-            if (config.Mqtt?.Debug ?? false)
-            {
-                log.LogWarning("mqtt.debug is deprecated. Use dry-run instead.");
-                config.DryRun = true;
-            }
-            if (config.Cognite?.DataSetId != null)
-            {
-                log.LogWarning("cognite.data-set-id is deprecated. Use cognite.data-set.id instead");
-                if (config.Cognite.DataSet == null) config.Cognite.DataSet = new Extensions.DataSetConfig();
-                config.Cognite.DataSet.Id = config.Cognite.DataSetId.Value;
-            }
-            if (config.Cognite?.DataSetExternalId != null)
-            {
-                log.LogWarning("cognite.data-set-external-id is deprecated. Use cognite.data-set.external-id instead");
-                if (config.Cognite.DataSet == null) config.Cognite.DataSet = new Extensions.DataSetConfig();
-                config.Cognite.DataSet.ExternalId = config.Cognite.DataSetExternalId;
-            }
+
             if (config.Subscriptions.LifetimeCount <= 0 || config.Subscriptions.LifetimeCount < 3 * config.Subscriptions.KeepAliveCount)
             {
                 return "subscriptions.lifetime-count must be greater than 0 and at least 3 * subscriptions.keep-alive-count";
@@ -112,52 +81,10 @@ namespace Cognite.OpcUa
             {
                 return "subscriptions.keep-alive-count must be greater than 0";
             }
-#pragma warning disable 0618
-            if (config.Cognite?.RawMetadata != null)
+            if (config.Cognite?.MetadataTargets == null)
             {
-                log.LogWarning("cognite.raw-metadata is deprecated. Use cognite.metadata-targets instead");
-                if (config.Cognite.MetadataTargets != null)
-                {
-                    return "cognite.raw-metadata and cognite.metadata-targets cannot be set at the same time.";
-                }
-                config.Cognite ??= new CognitePusherConfig();
-                var rawMetadata = config.Cognite.RawMetadata;
-                var useCleanAssets = (rawMetadata?.Database == null || rawMetadata?.AssetsTable == null) || config.Cognite.SkipMetadata;
-                var useCleanTimeseries = rawMetadata?.Database == null || rawMetadata?.TimeseriesTable == null;
-                var useCleanRelationships = rawMetadata?.Database == null || rawMetadata?.RelationshipsTable == null;
-                config.Cognite.MetadataTargets = new MetadataTargetsConfig
-                {
-                    Clean = new CleanMetadataTargetConfig
-                    {
-                        Assets = useCleanAssets,
-                        Timeseries = useCleanTimeseries,
-                        Relationships = useCleanRelationships
-                    },
-                    Raw = new RawMetadataTargetConfig
-                    {
-                        Database = rawMetadata?.Database,
-                        AssetsTable = rawMetadata?.AssetsTable,
-                        TimeseriesTable = rawMetadata?.TimeseriesTable,
-                        RelationshipsTable = rawMetadata?.RelationshipsTable
-                    }
-                };
+                log.LogWarning("The extractor has not been configured with any metadata target. No metadata will be written to CDF.");
             }
-            else if (config.Cognite?.MetadataTargets == null)
-            {
-                if (config.Cognite?.SkipMetadata ?? false)
-                {
-                    log.LogWarning("Use of skip-metadata has been deprecated. use cognite.metadata-targets instead");
-                }
-                else
-                {
-                    log.LogWarning("Default writing to clean is deprecated, in the future not setting a metadata target will not write metadata to CDF at all");
-                    config.Cognite ??= new CognitePusherConfig();
-                    if (config.Cognite.MetadataTargets == null) config.Cognite.MetadataTargets = new MetadataTargetsConfig();
-                    if (config.Cognite.MetadataTargets.Clean == null) config.Cognite.MetadataTargets.Clean = new CleanMetadataTargetConfig();
-                    config.Cognite.MetadataTargets.Clean.Timeseries = true;
-                }
-            }
-#pragma warning restore 0618
 
             if (config.Cognite?.MetadataTargets?.Raw != null)
             {
