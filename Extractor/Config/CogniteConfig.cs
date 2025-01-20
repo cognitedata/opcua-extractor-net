@@ -29,21 +29,9 @@ namespace Cognite.OpcUa.Config
     public class CognitePusherConfig : CogniteConfig, IPusherConfig
     {
         /// <summary>
-        /// DEPRECATED. Data set to use for new objects. Existing objects will not be updated.
-        /// </summary>
-        public long? DataSetId { get; set; }
-        /// <summary>
-        /// DEPRECATED. Data set to use for new objects, overridden by data-set-id. Requires the capability datasets:read for the given data set.
-        /// </summary>
-        public string? DataSetExternalId { get; set; }
-        /// <summary>
         /// Data set to use for new objects. Requires the capability datasets:read if external-id is used.
         /// </summary>
         public DataSetConfig? DataSet { get; set; }
-        /// <summary>
-        /// DEPRECATED. Debug mode, if true, Extractor will not push to target
-        /// </summary>
-        public bool Debug { get; set; }
         /// <summary>
         /// Whether to read start/end-points on startup, where possible. At least one pusher should be able to do this,
         /// otherwise back/frontfill will run for the entire history every restart.
@@ -54,23 +42,6 @@ namespace Cognite.OpcUa.Config
         /// </summary>
         [DefaultValue(true)]
         public bool ReadExtractedRanges { get; set; } = true;
-        /// <summary>
-        /// Do not push any metadata at all. If this is true, plain timeseries without metadata will be created,
-        /// similarly to raw-metadata, and datapoints will be pushed. Nothing will be written to raw, and no assets will be created.
-        /// Events will be created, but without asset context.
-        /// </summary>
-        [Obsolete("Deprecated!")]
-        public bool SkipMetadata { get; set; }
-        /// <summary>
-        /// Store assets and/or timeseries data in raw. Assets will not be created at all,
-        /// timeseries will be created with just externalId, isStep and isString.
-        /// Both timeseries and assets will be persisted in their entirety to raw.
-        /// Datapoints are not affected, events will be created, but without asset context. The externalId
-        /// of the source node is added to metadata if applicable.
-        /// Use different table names for assets and timeseries.
-        /// </summary>
-        [Obsolete("Deprecated! Use MetadataTargetsConfig.RawMetadataTargetConfig instead.")]
-        public RawMetadataConfig? RawMetadata { get; set; }
         /// <summary>
         /// Map metadata to asset/timeseries attributes. Each of "assets" and "timeseries" is a map from property DisplayName to
         /// CDF attribute. Legal attributes are "name, description, parentId" and "unit" for timeseries. "parentId" must somehow refer to
@@ -103,12 +74,6 @@ namespace Cognite.OpcUa.Config
                 && value.Value > CogniteUtils.NumericValueMin
                 && value.Value < CogniteUtils.NumericValueMax ? value : null;
         }
-        /// <summary>
-        /// Specification for a CDF function that is called after nodes are pushed to CDF,
-        /// reporting the number changed.
-        /// </summary>
-        public BrowseCallbackConfig? BrowseCallback { get; set; }
-
         /// <summary>
         /// There is no good way to mark relationships as deleted, so they are hard-deleted.
         /// This has to be enabled to delete relationships deleted from OPC-UA. This requires extraction.deletes to be enabled.

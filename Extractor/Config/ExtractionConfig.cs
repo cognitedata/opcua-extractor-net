@@ -40,14 +40,6 @@ namespace Cognite.OpcUa.Config
         /// </summary>
         public string? IdPrefix { get; set; }
         /// <summary>
-        /// DEPRECATED. Specify a list of prefixes on DisplayName to ignore.
-        /// </summary>
-        public IEnumerable<string>? IgnoreNamePrefix { get; set; }
-        /// <summary>
-        /// DEPRECATED. Specify a list of DisplayNames to ignore.
-        /// </summary>
-        public IEnumerable<string>? IgnoreName { get; set; }
-        /// <summary>
         /// Root node. Defaults to the Objects node.
         /// </summary>
         public ProtoNodeId? RootNode { get; set; }
@@ -108,14 +100,6 @@ namespace Cognite.OpcUa.Config
         /// </summary>
         public DataTypeConfig DataTypes { get => dataTypes; set => dataTypes = value ?? dataTypes; }
         private DataTypeConfig dataTypes = new DataTypeConfig();
-        /// <summary>
-        /// DEPRECATED. Regex filter on DisplayName to treat variables as properties.
-        /// </summary>
-        public string? PropertyNameFilter { get; set; }
-        /// <summary>
-        /// DEPRECATED. Regex filter on id to treat variables as properties.
-        /// </summary>
-        public string? PropertyIdFilter { get; set; }
         /// <summary>
         /// Configuration for translating OPC-UA references to relationships in CDF.
         /// </summary>
