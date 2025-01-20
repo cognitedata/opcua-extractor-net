@@ -17,6 +17,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using Cognite.Extractor.Common;
 using Cognite.Extractor.StateStorage;
+using YamlDotNet.Serialization;
 
 namespace Cognite.OpcUa.Config
 {
@@ -55,5 +56,9 @@ namespace Cognite.OpcUa.Config
         /// Name of the raw table or litedb store for storing known reference-type nodes, used for detecting deleted nodes.
         /// </summary>
         public string KnownReferencesStore { get; set; } = "known_references";
+
+
+        [YamlIgnore]
+        public bool IsEnabled => Location != null && Database != StorageType.None;
     }
 }

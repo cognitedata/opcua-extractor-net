@@ -129,6 +129,11 @@ namespace Cognite.OpcUa
                 }
             }
 
+            if (config.History?.Enabled ?? false && !config.StateStorage.IsEnabled)
+            {
+                return "When history is enabled, you must configure state-storage.";
+            }
+
             return null;
         }
 

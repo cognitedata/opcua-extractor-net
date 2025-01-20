@@ -121,11 +121,6 @@ extraction:
         auto-identify-types: true
 events:
     enabled: true
-    history: true
-history:
-    enabled: true
-    throttling:
-        max-node-parallelism: 1000
 version: 1
 ";
         }
