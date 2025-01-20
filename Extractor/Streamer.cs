@@ -192,6 +192,7 @@ namespace Cognite.OpcUa
                     }
                     log.LogWarning("Pushers of types {Types} failed while pushing datapoints",
                         string.Concat(failedPushers.Select(pusher => pusher.GetType().ToString())));
+                    extractor.OnDataPushFailure();
                 }
                 if (config.FailureBuffer.Enabled && extractor.FailureBuffer != null)
                 {
@@ -204,12 +205,7 @@ namespace Cognite.OpcUa
             if (reconnectedPushers.Count != 0)
             {
                 log.LogInformation("{Count} failing pushers were able to push data, reconnecting", reconnectedPushers.Count);
-
-                if (config.History.Enabled && extractor.State.NodeStates.Any(state => state.FrontfillEnabled))
-                {
-                    log.LogInformation("Restarting history for {Count} states", extractor.State.NodeStates.Count(state => state.FrontfillEnabled));
-                    await extractor.RestartHistoryWaitForStop();
-                }
+                extractor.OnDataPushRecovery();
 
                 foreach (var pusher in reconnectedPushers)
                 {
@@ -271,6 +267,7 @@ namespace Cognite.OpcUa
                     }
                     log.LogWarning("Pushers of types {Types} failed while pushing events",
                         failedPushers.Select(pusher => pusher.GetType().ToString()).Aggregate((src, val) => src + ", " + val));
+                    extractor.OnEventsPushFailure();
                 }
 
                 if (config.FailureBuffer.Enabled && extractor.FailureBuffer != null)
@@ -284,12 +281,7 @@ namespace Cognite.OpcUa
             if (reconnectedPushers.Count != 0)
             {
                 log.LogInformation("{Count} failing pushers were able to push events, reconnecting", reconnectedPushers.Count);
-
-                if (config.Events.History && extractor.State.EmitterStates.Any(state => state.FrontfillEnabled))
-                {
-                    log.LogInformation("Restarting event history for {Count} states", extractor.State.EmitterStates.Count(state => state.FrontfillEnabled));
-                    await extractor.RestartHistoryWaitForStop();
-                }
+                extractor.OnEventsPushRecovery();
 
                 foreach (var pusher in reconnectedPushers)
                 {

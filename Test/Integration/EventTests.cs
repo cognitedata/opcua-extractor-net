@@ -569,8 +569,7 @@ namespace Test.Integration
             Assert.False(runTask.IsFaulted, $"Faulted! {runTask.Exception}");
 
             await TestUtils.WaitForCondition(
-                () => pusher.DataFailing
-                && extractor.State.EmitterStates.All(state => !state.IsFrontfilling), 5,
+                () => pusher.DataFailing, 5,
                 () => $"Pusher is dataFailing: {pusher.DataFailing}");
 
             Assert.True(pusher.DataPoints.All(dps => dps.Value.Count == 0));
