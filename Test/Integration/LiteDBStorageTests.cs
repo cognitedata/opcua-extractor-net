@@ -125,7 +125,7 @@ namespace Test.Integration
                 await extractor.WaitForSubscription(SubscriptionName.DataPoints);
                 await extractor.Looper.WaitForNextPush();
 
-                handler.AllowPush = false;
+                handler.BlockAllConnections = true;
 
                 tester.Server.UpdateNode(tester.Server.Ids.Base.IntVar, 1);
                 tester.Server.UpdateNode(tester.Server.Ids.Base.DoubleVar1, 1);
@@ -157,7 +157,7 @@ namespace Test.Integration
             using (var stateStore = new LiteDBStateStore(tester.Config.StateStorage, tester.Provider.GetRequiredService<ILogger<LiteDBStateStore>>()))
             using (var extractor = tester.BuildExtractor(true, stateStore, pusher, cdfPusher))
             {
-                handler.AllowPush = true;
+                handler.BlockAllConnections = false;
 
                 var runTask = extractor.RunExtractor();
 
@@ -213,8 +213,7 @@ namespace Test.Integration
                 await extractor.WaitForSubscription(SubscriptionName.Events);
                 await extractor.Looper.WaitForNextPush();
 
-                handler.AllowPush = false;
-                handler.AllowEvents = false;
+                handler.BlockAllConnections = true;
 
                 tester.Server.TriggerEvents(1);
 
@@ -240,8 +239,7 @@ namespace Test.Integration
             using (var stateStore = new LiteDBStateStore(tester.Config.StateStorage, tester.Provider.GetRequiredService<ILogger<LiteDBStateStore>>()))
             using (var extractor = tester.BuildExtractor(true, stateStore, pusher, cdfPusher))
             {
-                handler.AllowPush = true;
-                handler.AllowEvents = true;
+                handler.BlockAllConnections = false;
 
                 var runTask = extractor.RunExtractor();
 
@@ -304,7 +302,7 @@ namespace Test.Integration
                 10, "Expected FailureBuffer to be emptied");
 
             await TestUtils.WaitForCondition(() => handler.Events.Count == 1022, 10,
-                () => $"Expected to receive 920 events, but got {handler.Events.Count}");
+                () => $"Expected to receive 1022 events, but got {handler.Events.Count}");
 
             await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
         }

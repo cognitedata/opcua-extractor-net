@@ -191,7 +191,9 @@ namespace Cognite.OpcUa
                     if (state == null || state.FrontfillEnabled) continue;
                     nodeBufferStates[key] = bufferState = new InfluxBufferState(state);
                 }
-                if (extractor.AllowUpdateState) bufferState.UpdateDestinationRange(value.First, value.Last);
+                // Does not check "extractor.AllowUpdateState" since this reflects the
+                // state of data in the buffer, not the state of data in CDF.
+                bufferState.UpdateDestinationRange(value.First, value.Last);
             }
             if (config.InfluxStateStore && extractor.StateStorage != null && !fullConfig.DryRun)
             {
@@ -313,7 +315,9 @@ namespace Cognite.OpcUa
                     if (emitterState == null) continue;
                     eventBufferStates[group.Id] = bufferState = new InfluxBufferState(emitterState);
                 }
-                if (extractor.AllowUpdateState) bufferState.UpdateDestinationRange(group.Range.Min, group.Range.Max);
+                // Does not check "extractor.AllowUpdateState" since this reflects the
+                // state of data in the buffer, not the state of data in CDF.
+                bufferState.UpdateDestinationRange(group.Range.Min, group.Range.Max);
             }
 
             if (config.InfluxStateStore && extractor.StateStorage != null && !fullConfig.DryRun)

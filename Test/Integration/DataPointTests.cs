@@ -1007,6 +1007,7 @@ namespace Test.Integration
             tester.Server.PopulateBaseHistory(now.AddSeconds(-20));
 
             pusher.PushDataPointResult = false;
+            pusher.TestConnectionResult = false;
 
             var runTask = extractor.RunExtractor();
             await extractor.WaitForSubscription(SubscriptionName.DataPoints);
@@ -1016,8 +1017,7 @@ namespace Test.Integration
             // expect no data to arrive in pusher
 
             await TestUtils.WaitForCondition(
-                () => pusher.DataFailing
-                && extractor.State.NodeStates.All(state => !state.IsFrontfilling), 5,
+                () => pusher.DataFailing, 5,
                 () => $"Pusher is dataFailing: {pusher.DataFailing}");
 
             Assert.True(pusher.DataPoints.All(dps => dps.Value.Count == 0));
@@ -1039,6 +1039,7 @@ namespace Test.Integration
                 () => $"Expected at least 4 points to arrive in buffer, but got {CommonTestUtils.GetMetricValue("opcua_buffer_num_points")}");
 
             pusher.PushDataPointResult = true;
+            pusher.TestConnectionResult = true;
 
             await TestUtils.WaitForCondition(() => pusher.DataPoints[(ids.DoubleVar1, -1)].Count >= 1002, 10);
 
