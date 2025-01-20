@@ -23,7 +23,7 @@ namespace Cognite.OpcUa.Config
 {
     public class StateStorageConfig : StateStoreConfig
     {
-        public TimeSpanWrapper IntervalValue { get; } = new TimeSpanWrapper(false, "s", "0");
+        public TimeSpanWrapper IntervalValue { get; } = new TimeSpanWrapper(false, "s", "30s");
         /// <summary>
         /// Interval between each write to the buffer file, in seconds. 0 or less disables the state storage.
         /// Alternatively, use N[timeunit] where timeunit is w, d, h, m, s or ms.

@@ -515,7 +515,7 @@ state-storage:
     event-store: event_states
     # Interval between each write to the buffer file, in seconds. 0 or less disables the state storage.
     # Alternatively, use N[timeunit] where timeunit is w, d, h, m, s or ms.
-    interval: 10
+    interval: 30s
 
 logger:
     # Writes log events at this level to the Console. One of verbose, debug, information, warning, error, fatal.

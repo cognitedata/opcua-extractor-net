@@ -13,7 +13,7 @@
         "interval": {
             "type": "string",
             "description": "Interval between each write to the buffer file, in seconds. 0 or less disables the state store. Format is as given in [Timestamps and intervals](#timestamps-and-intervals).",
-            "default": "0s"
+            "default": "30s"
         },
         "variable-store": {
             "type": "string",

@@ -365,11 +365,10 @@ namespace Test.Integration
                 File.Delete("history-event-test-1.db");
             }
             catch { }
-            using var stateStore = new LiteDBStateStore(new StateStoreConfig
-            {
-                Database = StateStoreConfig.StorageType.LiteDb,
-                Location = "history-event-test-1.db"
-            }, tester.Provider.GetRequiredService<ILogger<LiteDBStateStore>>());
+            tester.Config.StateStorage.Interval = "1000000";
+            tester.Config.StateStorage.Location = "history-event-test-1.db";
+            tester.Config.StateStorage.Database = StateStoreConfig.StorageType.LiteDb;
+            using var stateStore = new LiteDBStateStore(tester.Config.StateStorage, tester.Provider.GetRequiredService<ILogger<LiteDBStateStore>>());
 
             using var pusher = new DummyPusher(new DummyPusherConfig());
             var extractor = tester.BuildExtractor(true, stateStore, pusher);
@@ -377,7 +376,7 @@ namespace Test.Integration
             var ids = tester.Server.Ids.Event;
 
             tester.Config.History.Enabled = true;
-            tester.Config.StateStorage.Interval = "1000000";
+
             tester.Config.History.Backfill = backfill;
             tester.Config.Events.History = true;
             tester.Config.Events.ExcludeEventFilter = "2$";

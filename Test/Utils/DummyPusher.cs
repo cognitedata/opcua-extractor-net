@@ -27,8 +27,6 @@ namespace Test.Utils
 
         public bool? TestConnectionResult { get; set; } = true;
         public bool PushNodesResult { get; set; } = true;
-        public bool InitDpRangesResult { get; set; } = true;
-        public bool InitEventRangesResult { get; set; } = true;
         public bool? PushDataPointResult { get; set; } = true;
         public bool? PushEventResult { get; set; } = true;
         public bool PushReferenceResult { get; set; } = true;

@@ -988,7 +988,7 @@ namespace Cognite.OpcUa
                 }
             }
 
-            if (StateStorage != null && Config.StateStorage.IntervalValue.Value != Timeout.InfiniteTimeSpan)
+            if (Config.StateStorage.IsEnabled && StateStorage != null)
             {
                 if (Streamer.AllowEvents)
                 {
