@@ -62,7 +62,6 @@ namespace Cognite.OpcUa.Pushers
         private readonly HashSet<string> missingTimeseries = new HashSet<string>();
         private readonly CogniteDestinationWithIDM destination;
 
-        private readonly BrowseCallback? callback;
         private RawMetadataTargetConfig? RawMetadataTargetConfig => fullConfig.Cognite?.MetadataTargets?.Raw;
 
         private StreamRecordsWriter? recordsWriter;
@@ -81,10 +80,6 @@ namespace Cognite.OpcUa.Pushers
             this.destination = destination;
             this.fullConfig = fullConfig;
             cdfWriter = provider.GetRequiredService<CDFWriter>();
-            if (config.BrowseCallback != null && (config.BrowseCallback.Id.HasValue || !string.IsNullOrEmpty(config.BrowseCallback.ExternalId)))
-            {
-                callback = new BrowseCallback(destination, config.BrowseCallback, log);
-            }
 
             if (fullConfig.Cognite?.Records != null)
             {
@@ -260,10 +255,6 @@ namespace Cognite.OpcUa.Pushers
 
             if (!variables.Any() && !objects.Any() && !references.Any())
             {
-                if (callback != null && !fullConfig.DryRun)
-                {
-                    await callback.Call(report, token);
-                }
                 log.LogDebug("Testing 0 nodes against CDF");
                 return result;
             }
@@ -311,20 +302,13 @@ namespace Cognite.OpcUa.Pushers
             log.LogInformation("Finish pushing nodes to CDF");
 
             if (
-                result.Objects
-                && result.References
-                && result.Variables
-                && result.RawObjects
-                && result.RawVariables
-                && result.RawReferences
+                !result.Objects
+                || !result.References
+                || !result.Variables
+                || !result.RawObjects
+                || !result.RawVariables
+                || !result.RawReferences
             )
-            {
-                if (callback != null)
-                {
-                    await callback.Call(report, token);
-                }
-            }
-            else
             {
                 nodeEnsuringFailures.Inc();
             }
