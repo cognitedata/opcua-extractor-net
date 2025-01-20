@@ -42,28 +42,4 @@ namespace Cognite.OpcUa
         public string? TimeSeriesTable { get; set; }
         public string? RelationshipsTable { get; set; }
     }
-
-    internal class BrowseCallback : FunctionCallWrapper<BrowseReport>
-    {
-        private readonly bool callOnEmpty;
-        public BrowseCallback(CogniteDestination destination, BrowseCallbackConfig config, ILogger log)
-            : base(destination, config, log)
-        {
-            callOnEmpty = config.ReportOnEmpty;
-        }
-
-        public async Task Call(BrowseReport report, CancellationToken token)
-        {
-            if (report == null) return;
-            if (!callOnEmpty
-                && report.AssetsCreated == 0
-                && report.AssetsUpdated == 0
-                && report.TimeSeriesCreated == 0
-                && report.TimeSeriesUpdated == 0
-                && report.RelationshipsCreated == 0
-                && report.MinimalTimeSeriesCreated == 0) return;
-
-            await TryCall(report, token);
-        }
-    }
 }
