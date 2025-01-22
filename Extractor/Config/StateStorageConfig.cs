@@ -59,6 +59,6 @@ namespace Cognite.OpcUa.Config
 
 
         [YamlIgnore]
-        public bool IsEnabled => Location != null && Database != StorageType.None;
+        public bool IsEnabled => Database != StorageType.None;
     }
 }
