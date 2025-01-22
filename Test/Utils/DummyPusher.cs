@@ -16,7 +16,6 @@ namespace Test.Utils
     public class DummyPusherConfig : IPusherConfig
     {
         public bool Debug { get; set; }
-        public bool ReadExtractedRanges { get; set; } = true;
         public double? NonFiniteReplacement { get; set; }
     }
     public sealed class DummyPusher : IPusher
@@ -28,8 +27,6 @@ namespace Test.Utils
 
         public bool? TestConnectionResult { get; set; } = true;
         public bool PushNodesResult { get; set; } = true;
-        public bool InitDpRangesResult { get; set; } = true;
-        public bool InitEventRangesResult { get; set; } = true;
         public bool? PushDataPointResult { get; set; } = true;
         public bool? PushEventResult { get; set; } = true;
         public bool PushReferenceResult { get; set; } = true;
@@ -122,74 +119,6 @@ namespace Test.Utils
             }
 
             return Task.FromResult(result);
-        }
-
-        public Task<bool> InitExtractedRanges(
-            IEnumerable<VariableExtractionState> states,
-            bool backfillEnabled,
-            CancellationToken token)
-        {
-            if (!config.ReadExtractedRanges) return Task.FromResult(true);
-            if (!InitDpRangesResult) return Task.FromResult(InitDpRangesResult);
-            if (states == null || !states.Any()) return Task.FromResult(true);
-            lock (dpLock)
-            {
-                foreach (var state in states)
-                {
-                    int idx = state.IsArray ? 0 : -1;
-
-                    if (DataPoints.TryGetValue((state.SourceId, idx), out var dps) && dps.Count != 0)
-                    {
-                        var (min, max) = dps.MinMax(dp => dp.Timestamp);
-                        if (backfillEnabled)
-                        {
-                            state.InitExtractedRange(min, max);
-                        }
-                        else
-                        {
-                            state.InitExtractedRange(CogniteTime.DateTimeEpoch, max);
-                        }
-                    }
-                    else
-                    {
-                        state.InitToEmpty();
-                    }
-                }
-            }
-            return Task.FromResult(InitDpRangesResult);
-        }
-
-        public Task<bool> InitExtractedEventRanges(
-            IEnumerable<EventExtractionState> states,
-            bool backfillEnabled,
-            CancellationToken token)
-        {
-            if (!config.ReadExtractedRanges) return Task.FromResult(true);
-            if (!InitEventRangesResult) return Task.FromResult(InitEventRangesResult);
-            if (states == null || !states.Any()) return Task.FromResult(true);
-            lock (eventLock)
-            {
-                foreach (var state in states)
-                {
-                    if (Events.TryGetValue(state.SourceId, out var events))
-                    {
-                        var (min, max) = events.MinMax(evt => evt.Time);
-                        if (backfillEnabled)
-                        {
-                            state.InitExtractedRange(min, max);
-                        }
-                        else
-                        {
-                            state.InitExtractedRange(CogniteTime.DateTimeEpoch, max);
-                        }
-                    }
-                    else
-                    {
-                        state.InitToEmpty();
-                    }
-                }
-            }
-            return Task.FromResult(InitEventRangesResult);
         }
 
         public Task<bool?> PushEvents(IEnumerable<UAEvent> events, CancellationToken token)
