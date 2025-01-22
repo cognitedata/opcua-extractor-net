@@ -1,8 +1,0 @@
-FROM mcr.microsoft.com/dotnet/sdk:10.0
-
-WORKDIR /build
-COPY . .
-
-RUN dotnet build MQTTCDFBridge/
-
-RUN dotnet publish -c Release -o /build/deploy /p:PublishTrimmed="false" MQTTCDFBridge/

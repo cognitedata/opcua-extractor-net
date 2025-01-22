@@ -47,8 +47,6 @@ jobs:
                 files: |
                     artifacts/opcua-extractor.win-x64.${{ needs.common.outputs.version }}.zip
                     artifacts/opcua-extractor.linux-x64.${{ needs.common.outputs.version }}.zip
-                    artifacts/mqtt-cdf-bridge.win-x64.${{ needs.common.outputs.version }}.zip
-                    artifacts/mqtt-cdf-bridge.linux-x64.${{ needs.common.outputs.version }}.zip
                     artifacts/test-server.win-x64.${{ needs.common.outputs.version }}.zip
                     artifacts/test-server.linux-x64.${{ needs.common.outputs.version }}.zip
                     artifacts/opcua-extractor-${{ needs.common.outputs.rpmver }}-1.x86_64.rpm

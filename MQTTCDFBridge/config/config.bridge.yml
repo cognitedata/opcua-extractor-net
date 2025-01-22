@@ -1,8 +1,0 @@
-﻿MQTT:
-    Host: localhost
-    Port: 4060
-
-CDF:
-    Project: einar-test
-    ApiKey: MzQzNzJkNjMtMjAwMi00Yjk1LWJiZDktNzFlNjRiOTBkMmE2
-    Host: "https://api.cognitedata.com"
