@@ -27,9 +27,6 @@
         "cognite": {
             "$ref": "cognite_config.schema.json"
         },
-        "mqtt": {
-            "$ref": "mqtt_config.schema.json"
-        },
         "extraction": {
             "$ref": "extraction_config.schema.json"
         },

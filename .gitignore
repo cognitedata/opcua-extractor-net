@@ -37,7 +37,6 @@ config/*
 !config.remote.yml
 !opc.ua.net.extractor.Config.xml
 !Server.Test.Config.xml
-!config.bridge.example.yml
 !Server.Test.UAClient.Config.xml
 
 # MSI Setup
