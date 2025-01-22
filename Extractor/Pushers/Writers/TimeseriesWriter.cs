@@ -71,7 +71,7 @@ namespace Cognite.OpcUa.Pushers.Writers
         /// <param name="token">Cancellation token</param>
         /// <returns>Operation result</returns>
         protected override async Task UpdateTimeseries(UAExtractor extractor, IDictionary<string, UAVariable> tsMap,
-                IEnumerable<TimeSeries> timeseries, IDictionary<NodeId, long> nodeToAssetIds, TypeUpdateConfig update, Result result, CancellationToken token)
+                IEnumerable<TimeSeries> timeseries, IDictionary<NodeId, long> nodeToAssetIds, Result result, CancellationToken token)
         {
             var updates = new List<TimeSeriesUpdateItem>();
             var existing = timeseries.ToDictionary(asset => asset.ExternalId);
@@ -79,7 +79,7 @@ namespace Cognite.OpcUa.Pushers.Writers
             {
                 if (existing.TryGetValue(kvp.Key, out var ts))
                 {
-                    var tsUpdate = PusherUtils.GetTSUpdate(config, extractor, ts, kvp.Value, update, nodeToAssetIds);
+                    var tsUpdate = PusherUtils.GetTSUpdate(config, extractor, ts, kvp.Value, nodeToAssetIds);
                     if (tsUpdate == null) continue;
                     if (tsUpdate.AssetId != null || tsUpdate.Description != null
                         || tsUpdate.Name != null || tsUpdate.Metadata != null)

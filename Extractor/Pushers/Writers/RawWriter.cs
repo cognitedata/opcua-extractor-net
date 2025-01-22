@@ -52,14 +52,14 @@ namespace Cognite.OpcUa.Pushers.Writers
             rawConfig = config.Cognite?.MetadataTargets?.Raw ?? throw new ArgumentException("Attempted to create RawWriter without valid raw config");
         }
 
-        public async Task<bool> PushAssets(UAExtractor extractor, IReadOnlyDictionary<string, BaseUANode> assets, TypeUpdateConfig update, BrowseReport report, CancellationToken token)
+        public async Task<bool> PushAssets(UAExtractor extractor, IDictionary<string, BaseUANode> assets, BrowseReport report, CancellationToken token)
         {
             if (rawConfig.AssetsTable == null || rawConfig.Database == null) return true;
 
             try
             {
                 var result = await PushRows(extractor, rawConfig.Database, rawConfig.AssetsTable,
-                                assets, ConverterType.Node, update.AnyUpdate, token);
+                                assets, ConverterType.Node, token);
 
                 report.RawAssetsCreated += result.Created;
                 report.RawAssetsUpdated += result.Updated;
@@ -72,15 +72,15 @@ namespace Cognite.OpcUa.Pushers.Writers
             }
         }
 
-        public async Task<bool> PushTimeseries(UAExtractor extractor, IReadOnlyDictionary<string, UAVariable> timeseries,
-            TypeUpdateConfig update, BrowseReport report, CancellationToken token)
+        public async Task<bool> PushTimeseries(UAExtractor extractor, IDictionary<string, UAVariable> timeseries,
+            BrowseReport report, CancellationToken token)
         {
             if (rawConfig.TimeseriesTable == null || rawConfig.Database == null) return true;
 
             try
             {
                 var result = await PushRows(extractor, rawConfig.Database, rawConfig.TimeseriesTable,
-                    timeseries, ConverterType.Variable, update.AnyUpdate, token);
+                    timeseries, ConverterType.Variable, token);
 
                 report.RawTimeseriesCreated += result.Created;
                 report.RawTimeseriesUpdated += result.Updated;
@@ -108,24 +108,9 @@ namespace Cognite.OpcUa.Pushers.Writers
 
             try
             {
-                var result = new Result { Created = 0, Updated = 0 };
-                await EnsureRows(
-                    rawConfig.Database,
-                    rawConfig.RelationshipsTable,
-                    relationships.Select(rel => rel.ExternalId),
-                    ids =>
-                    {
-                        var idSet = ids.ToHashSet();
-                        var creates = relationships
-                            .Where(rel => idSet.Contains(rel.ExternalId))
-                            .ToDictionary(rel => rel.ExternalId);
-                        result.Created += creates.Count;
-                        return creates;
-                    },
-                    new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase },
-                    token
-                );
-                report.RawRelationshipsCreated += result.Created;
+                var json = relationships.ToDictionary(rel => rel.ExternalId);
+                await destination.InsertRawRowsAsync(rawConfig.Database, rawConfig.RelationshipsTable, json, token);
+                report.RawRelationshipsCreated += json.Count;
                 return true;
             }
             catch (Exception ex)
@@ -168,88 +153,12 @@ namespace Cognite.OpcUa.Pushers.Writers
         /// <param name="token">Cancellation token</param>
         /// <returns>Operation result</returns>
         private async Task<Result> PushRows<T>(UAExtractor extractor, string database, string table,
-                IReadOnlyDictionary<string, T> rows, ConverterType converter, bool shouldUpdate, CancellationToken token) where T : BaseUANode
+                IDictionary<string, T> rows, ConverterType converter, CancellationToken token) where T : BaseUANode
         {
             var result = new Result { Created = 0, Updated = 0 };
 
-            if (shouldUpdate)
-            {
-                await UpdateRows(extractor, database, table, rows, converter, result, token);
-            }
-            else
-            {
-                await CreateRows(extractor, database, table, rows, converter, result, token);
-            }
+            await CreateRows(extractor, database, table, rows, converter, result, token);
             return result;
-        }
-
-        /// <summary>
-        /// Updates all BaseUANode to CDF raw
-        /// </summary>
-        /// <param name="extractor">UAExtractor instance<param>
-        /// <param name="database">Name of metadata database in CDF</param>
-        /// <param name="table">Name of metadata table in CDF</param>
-        /// <param name="rowsToUpsert">Dictionary map of BaseUANode of their keys</param>
-        /// <param name="converter">Converter</param>
-        /// <param name="result">Operation result</param>
-        /// <param name="shouldUpdate">Indicates if it is an update operation</param>
-        /// <param name="token">Cancellation token</param>
-        /// <returns>Task</returns>
-        private async Task UpdateRows<T>(UAExtractor extractor, string database, string table,
-                IReadOnlyDictionary<string, T> rowsToUpsert, ConverterType converter, Result result, CancellationToken token) where T : BaseUANode
-        {
-            await UpsertRows(
-                database,
-                table,
-                rows =>
-                {
-                    if (rows == null)
-                    {
-                        return rowsToUpsert
-                            .Select(
-                                kvp =>
-                                    (kvp.Key, update: PusherUtils.CreateRawUpdate(log, extractor.StringConverter, kvp.Value, null, converter))
-                            )
-                            .Where(elem => elem.update != null)
-                            .ToDictionary(pair => pair.Key, pair => pair.update!.Value);
-                    }
-
-                    var toWrite =
-                        new List<(string key, RawRow<Dictionary<string, JsonElement>> row, T node)>();
-
-                    foreach (var row in rows)
-                    {
-                        if (rowsToUpsert.TryGetValue(row.Key, out var node))
-                        {
-                            toWrite.Add((row.Key, row, node));
-                        }
-                    }
-
-                    var updates = new Dictionary<string, JsonElement>();
-
-                    foreach (var (key, row, node) in toWrite)
-                    {
-                        var update = PusherUtils.CreateRawUpdate(log, extractor.StringConverter, node, row, converter);
-
-                        if (update != null)
-                        {
-                            updates[key] = update.Value;
-                            if (row == null)
-                            {
-                                result.Created++;
-                            }
-                            else
-                            {
-                                result.Updated++;
-                            }
-                        }
-                    }
-
-                    return updates;
-                },
-                null,
-                token
-            );
         }
 
         /// <summary>
@@ -265,109 +174,16 @@ namespace Cognite.OpcUa.Pushers.Writers
         /// <param name="token">Cancellation token</param>
         /// <returns>Task</returns>
         private async Task CreateRows<T>(UAExtractor extractor, string database, string table,
-                IReadOnlyDictionary<string, T> dataMap, ConverterType converter, Result result, CancellationToken token) where T : BaseUANode
+                IDictionary<string, T> dataMap, ConverterType converter, Result result, CancellationToken token) where T : BaseUANode
         {
-            await EnsureRows(
-                database,
-                table,
-                dataMap.Keys,
-                ids =>
-                {
-                    var rows = ids.Select(id => (dataMap[id], id));
-                    var creates = rows
-                        .Select(pair => (pair.Item1.ToJson(log, extractor.StringConverter, converter), pair.id))
-                        .Where(pair => pair.Item1 != null)
-                        .ToDictionary(pair => pair.id, pair => pair.Item1!.RootElement);
-                    result.Created += creates.Count;
-                    return creates;
-                },
-                new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase },
-                token
-            );
-        }
+            var json = dataMap
+                .Where(pair => pair.Value.Source != NodeSources.NodeSource.CDF)
+                .Select(pair => (pair.Key, pair.Value.ToJson(log, extractor.StringConverter, converter)))
+                .Where(pair => pair.Item2 != null)
+                .ToDictionary(pair => pair.Key, pair => pair.Item2!.RootElement);
 
-        /// <summary>
-        /// Upserts all BaseUANode to CDF raw
-        /// </summary>
-        /// <param name="dbName">Name of metadata database in CDF</param>
-        /// <param name="tableName">Name of metadata table in CDF</param>
-        /// <param name="dtoBuilder">Callback to build the dto</param>
-        /// <param name="options">Json serialization options</param>
-        /// <param name="token">Cancellation token</param>
-        /// <returns>Task</returns>
-        private async Task UpsertRows<T>(
-            string dbName,
-            string tableName,
-            Func<
-                IEnumerable<RawRow<Dictionary<string, JsonElement>>>?,
-                IDictionary<string, T>
-            > dtoBuilder,
-            JsonSerializerOptions? options,
-            CancellationToken token
-        )
-        {
-            int count = 0;
-            async Task CallAndCreate(IEnumerable<RawRow<Dictionary<string, JsonElement>>>? rows)
-            {
-                var toUpsert = dtoBuilder(rows);
-                count += toUpsert.Count;
-                await destination.InsertRawRowsAsync(dbName, tableName, toUpsert, options, token);
-            }
-
-            string? cursor = null;
-            do
-            {
-                try
-                {
-                    var result = await destination.CogniteClient.Raw.ListRowsAsync<
-                        Dictionary<string, JsonElement>
-                    >(
-                        dbName,
-                        tableName,
-                        new RawRowQuery { Cursor = cursor, Limit = 10_000 },
-                        null,
-                        token
-                    );
-                    cursor = result.NextCursor;
-
-                    await CallAndCreate(result.Items);
-                }
-                catch (ResponseException ex) when (ex.Code == 404)
-                {
-                    log.LogWarning("Table or database not found: {Message}", ex.Message);
-                    break;
-                }
-            } while (cursor != null);
-
-            await CallAndCreate(null);
-
-            log.LogInformation("Updated or created {Count} rows in CDF Raw", count);
-        }
-
-        /// <summary>
-        /// Ensure all rows in CDF
-        /// </summary>
-        /// <param name="dbName">Name of metadata database in CDF</param>
-        /// <param name="tableName">Name of metadata table in CDF</param>
-        /// <param name="keys">keys</param>
-        /// <param name="dtoBuilder">Callback to build the dto</param>
-        /// <param name="options">Json serialization options</param>
-        /// <param name="token">Cancellation token</param>
-        /// <returns>Task</returns>
-        private async Task EnsureRows<T>(string dbName, string tableName, IEnumerable<string> keys,
-                Func<IEnumerable<string>, IDictionary<string, T>> dtoBuilder, JsonSerializerOptions options, CancellationToken token)
-        {
-            var rows = await WriterUtils.GetRawRows(dbName, tableName, destination, new[] { "," }, log, token);
-            var existing = rows.Select(row => row.Key);
-
-            var toCreate = keys.Except(existing);
-            if (!toCreate.Any())
-                return;
-            log.LogInformation("Creating {Count} raw rows in CDF", toCreate.Count());
-
-            var createDtos = dtoBuilder(toCreate);
-
-            await destination.InsertRawRowsAsync(dbName, tableName, createDtos, options, token);
+            await destination.InsertRawRowsAsync(database, table, json, token);
+            result.Created += dataMap.Count;
         }
 
         private async Task MarkRawRowsAsDeleted(

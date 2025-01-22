@@ -66,7 +66,6 @@ namespace Cognite.OpcUa.Pushers.Writers
             UAExtractor extractor,
             IDictionary<string, BaseUANode> nodes,
             IDictionary<NodeId, long> nodeToAssetIds,
-            TypeUpdateConfig update,
             BrowseReport report,
             CancellationToken token)
         {
@@ -76,11 +75,7 @@ namespace Cognite.OpcUa.Pushers.Writers
             {
                 var result = new Result { Created = 0, Updated = 0 };
                 var assets = await CreateAssets(extractor, nodes, nodeToAssetIds, result, token);
-
-                if (update.AnyUpdate)
-                {
-                    await UpdateAssets(extractor, nodes, assets, update, result, token);
-                }
+                await UpdateAssets(extractor, nodes, assets, result, token);
 
                 report.AssetsUpdated += result.Updated;
                 report.AssetsCreated += result.Created;
@@ -195,7 +190,7 @@ namespace Cognite.OpcUa.Pushers.Writers
         /// <param name="token">Cancellation token</param>
         /// <returns>Future list of assets</returns>
         private async Task UpdateAssets(UAExtractor extractor, IDictionary<string, BaseUANode> assetMap,
-                IEnumerable<Asset> assets, TypeUpdateConfig update, Result result, CancellationToken token)
+                IEnumerable<Asset> assets, Result result, CancellationToken token)
         {
             var updates = new List<AssetUpdateItem>();
             var existing = assets.ToDictionary(asset => asset.ExternalId);
@@ -203,7 +198,7 @@ namespace Cognite.OpcUa.Pushers.Writers
             {
                 if (existing.TryGetValue(kvp.Key, out var asset))
                 {
-                    var assetUpdate = PusherUtils.GetAssetUpdate(config, asset, kvp.Value, extractor, update);
+                    var assetUpdate = PusherUtils.GetAssetUpdate(config, asset, kvp.Value, extractor);
 
                     if (assetUpdate == null)
                         continue;

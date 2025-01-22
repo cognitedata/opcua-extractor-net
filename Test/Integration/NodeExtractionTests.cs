@@ -731,17 +731,8 @@ namespace Test.Integration
         #endregion
 
         #region updates
-        [Theory]
-        [InlineData(true, true, true, true, false, false, false, false)]
-        [InlineData(false, false, false, false, true, true, true, true)]
-        [InlineData(true, false, true, false, true, false, true, false)]
-        [InlineData(false, true, false, true, false, true, false, true)]
-        [InlineData(true, true, true, true, true, true, true, true)]
-        public async Task TestUpdateFields(
-            bool assetName, bool variableName,
-            bool assetDesc, bool variableDesc,
-            bool assetContext, bool variableContext,
-            bool assetMeta, bool variableMeta)
+        [Fact]
+        public async Task TestUpdateFields()
         {
             tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
             {
@@ -754,16 +745,6 @@ namespace Test.Integration
             var (handler, pusher) = tester.GetCDFPusher();
             using var extractor = tester.BuildExtractor(true, null, pusher);
 
-            var upd = tester.Config.Extraction.Update;
-            upd.Objects.Name = assetName;
-            upd.Objects.Description = assetDesc;
-            upd.Objects.Context = assetContext;
-            upd.Objects.Metadata = assetMeta;
-            upd.Variables.Name = variableName;
-            upd.Variables.Description = variableDesc;
-            upd.Variables.Context = variableContext;
-            upd.Variables.Metadata = variableMeta;
-
             tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Custom.Root, tester.Client);
 
             tester.Config.Extraction.DataTypes.AllowStringVariables = true;
@@ -774,7 +755,7 @@ namespace Test.Integration
 
             await TestUtils.WaitForCondition(() => handler.Assets.Count != 0 && handler.Timeseries.Count != 0, 5);
 
-            CommonTestUtils.VerifyStartingConditions(handler.Assets, handler.Timeseries, null, extractor, tester.Server.Ids.Custom, false);
+            CommonTestUtils.VerifyStartingConditions(handler.Assets, handler.Timeseries, extractor, tester.Server.Ids.Custom, false);
 
             tester.Server.ModifyCustomServer();
 
@@ -782,32 +763,17 @@ namespace Test.Integration
             await Task.WhenAny(rebrowseTask, Task.Delay(10000));
             Assert.True(rebrowseTask.IsCompleted);
 
-            CommonTestUtils.VerifyStartingConditions(handler.Assets, handler.Timeseries, upd, extractor, tester.Server.Ids.Custom, false);
-            CommonTestUtils.VerifyModified(handler.Assets, handler.Timeseries, upd, extractor, tester.Server.Ids.Custom, false);
+            CommonTestUtils.VerifyModified(handler.Assets, handler.Timeseries, extractor, tester.Server.Ids.Custom, false);
 
             tester.Server.ResetCustomServer();
-            tester.Config.Extraction.Update = new UpdateConfig();
             tester.Config.Extraction.DataTypes.AllowStringVariables = false;
             tester.Config.Extraction.DataTypes.MaxArraySize = 0;
 
             await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
         }
-        [Theory]
-        [InlineData(true, false)]
-        // [InlineData(false, true)]
-        // [InlineData(true, true)]
-        public async Task TestUpdateFieldsRaw(bool assets, bool timeseries)
+        [Fact]
+        public async Task TestUpdateFieldsRaw()
         {
-            var upd = tester.Config.Extraction.Update;
-            upd.Objects.Name = assets;
-            upd.Objects.Description = assets;
-            upd.Objects.Context = assets;
-            upd.Objects.Metadata = assets;
-            upd.Variables.Name = timeseries;
-            upd.Variables.Description = timeseries;
-            upd.Variables.Context = timeseries;
-            upd.Variables.Metadata = timeseries;
-
             tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Custom.Root, tester.Client);
 
             tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
@@ -841,27 +807,20 @@ namespace Test.Integration
                 .ToDictionary(kvp => kvp.Key, kvp => (AssetDummy)JsonSerializer.Deserialize<AssetDummyJson>(kvp.Value.ToString())),
                 handler.TimeseriesRaw
                 .ToDictionary(kvp => kvp.Key, kvp => (TimeseriesDummy)
-                    JsonSerializer.Deserialize<StatelessTimeseriesDummy>(kvp.Value.ToString())), null, extractor, tester.Server.Ids.Custom, true);
+                    JsonSerializer.Deserialize<StatelessTimeseriesDummy>(kvp.Value.ToString())), extractor, tester.Server.Ids.Custom, true);
 
             tester.Server.ModifyCustomServer();
 
             await extractor.Rebrowse();
 
-            CommonTestUtils.VerifyStartingConditions(
-                handler.AssetsRaw
-                .ToDictionary(kvp => kvp.Key, kvp => (AssetDummy)JsonSerializer.Deserialize<AssetDummyJson>(kvp.Value.ToString())),
-                handler.TimeseriesRaw
-                .ToDictionary(kvp => kvp.Key, kvp => (TimeseriesDummy)
-                    JsonSerializer.Deserialize<StatelessTimeseriesDummy>(kvp.Value.ToString())), upd, extractor, tester.Server.Ids.Custom, true);
             CommonTestUtils.VerifyModified(
                 handler.AssetsRaw
                 .ToDictionary(kvp => kvp.Key, kvp => (AssetDummy)JsonSerializer.Deserialize<AssetDummyJson>(kvp.Value.ToString())),
                 handler.TimeseriesRaw
                 .ToDictionary(kvp => kvp.Key, kvp => (TimeseriesDummy)
-                    JsonSerializer.Deserialize<StatelessTimeseriesDummy>(kvp.Value.ToString())), upd, extractor, tester.Server.Ids.Custom, true);
+                    JsonSerializer.Deserialize<StatelessTimeseriesDummy>(kvp.Value.ToString())), extractor, tester.Server.Ids.Custom, true);
 
             tester.Server.ResetCustomServer();
-            tester.Config.Extraction.Update = new UpdateConfig();
             tester.Config.Extraction.DataTypes.AllowStringVariables = false;
             tester.Config.Extraction.DataTypes.MaxArraySize = 0;
 
@@ -874,17 +833,6 @@ namespace Test.Integration
             tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Wrong.Root, tester.Client);
 
             tester.Config.Extraction.DataTypes.MaxArraySize = 4;
-            tester.Config.Extraction.Update = new UpdateConfig
-            {
-                Objects = new TypeUpdateConfig
-                {
-                    Metadata = true
-                },
-                Variables = new TypeUpdateConfig
-                {
-                    Metadata = true
-                }
-            };
             tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
             {
                 Clean = new CleanMetadataTargetConfig
@@ -1221,6 +1169,7 @@ namespace Test.Integration
             // Enable types only
             tester.Log.LogInformation("BEGIN TYPE RUN");
             tester.Client.TypeManager.Reset();
+            extractor.State.Clear();
             tester.Config.Source.NodeSetSource.Types = true;
             await extractor.RunExtractor(true);
             Compare(pusher.PushedNodes.Values, pusher.PushedVariables.Values, pusher.PushedReferences);
@@ -1230,6 +1179,7 @@ namespace Test.Integration
             pusher.Wipe();
             tester.Log.LogInformation("BEGIN INSTANCE RUN");
             tester.Client.TypeManager.Reset();
+            extractor.State.Clear();
             tester.Config.Source.NodeSetSource.Instance = true;
             await extractor.RunExtractor(true);
             foreach (var node in pusher.PushedNodes.Values)
