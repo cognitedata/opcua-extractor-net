@@ -100,7 +100,6 @@ namespace Cognite.OpcUa.Config
         /// They will not be deleted or updated.
         /// </summary>
         public long InvalidateBefore { get; set; }
-        public bool ReadExtractedRanges { get; set; }
         /// <summary>
         /// Do not push any metadata at all. If this is true, plain timeseries without metadata will be created,
         /// similarly to raw-metadata, and datapoints will be pushed. Nothing will be written to raw, and no assets will be created.

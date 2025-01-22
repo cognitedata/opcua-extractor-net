@@ -608,18 +608,16 @@ namespace Test.Integration
                 File.Delete("history-data-test-1.db");
             }
             catch { }
-            using var stateStore = new LiteDBStateStore(new StateStoreConfig
-            {
-                Database = StateStoreConfig.StorageType.LiteDb,
-                Location = "history-data-test-1.db"
-            }, tester.Provider.GetRequiredService<ILogger<LiteDBStateStore>>());
+            tester.Config.StateStorage.Interval = "1000000";
+            tester.Config.StateStorage.Location = "history-data-test-1.db";
+            tester.Config.StateStorage.Database = StateStoreConfig.StorageType.LiteDb;
+            using var stateStore = new LiteDBStateStore(tester.Config.StateStorage, tester.Provider.GetRequiredService<ILogger<LiteDBStateStore>>());
 
-            using var pusher = new DummyPusher(new DummyPusherConfig() { ReadExtractedRanges = false });
+            using var pusher = new DummyPusher(new DummyPusherConfig());
 
             var ids = tester.Ids.Custom;
 
             tester.Config.History.Enabled = true;
-            tester.Config.StateStorage.Interval = "1000000";
             tester.Config.History.Data = true;
             tester.Config.History.Backfill = backfill;
             var dataTypes = tester.Config.Extraction.DataTypes;
@@ -676,82 +674,10 @@ namespace Test.Integration
                 pusher.Wipe();
             }
         }
-        [Theory]
-        [InlineData(true)]
-        [InlineData(false)]
-        public async Task TestPusherStateRestart(bool backfill)
-        {
-            using var pusher = new DummyPusher(new DummyPusherConfig() { ReadExtractedRanges = true });
-            tester.Config.History.Enabled = true;
-            tester.Config.History.Data = true;
-            tester.Config.History.Backfill = backfill;
-            var dataTypes = tester.Config.Extraction.DataTypes;
-            dataTypes.AllowStringVariables = true;
-            dataTypes.AutoIdentifyTypes = true;
-            dataTypes.MaxArraySize = 4;
-
-            var now = DateTime.UtcNow;
-
-            tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Custom.Root, tester.Client);
-
-            tester.WipeCustomHistory();
-            tester.Server.PopulateCustomHistory(now.AddSeconds(-5));
-            await using (var extractor = tester.BuildExtractor(true, null, pusher))
-            {
-                var runTask = extractor.RunExtractor();
-
-                await extractor.WaitForSubscription(SubscriptionName.DataPoints);
-
-                await TestUtils.WaitForCondition(() => extractor.State.NodeStates.All(node =>
-                    !node.IsFrontfilling && !node.IsBackfilling), 10);
-
-                await extractor.Looper.WaitForNextPush();
-
-                await TestUtils.WaitForCondition(() => pusher.DataPoints.Values.Any(dps => dps.Count >= 1000), 5);
-
-                await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
-
-                CountCustomValues(pusher, 1000);
-
-            }
-            var ids = tester.Ids.Custom;
-
-
-
-            tester.Server.PopulateCustomHistory(now.AddSeconds(-15));
-            tester.Server.PopulateCustomHistory(now.AddSeconds(5));
-
-            await using (var extractor = tester.BuildExtractor(true, null, pusher))
-            {
-                var runTask = extractor.RunExtractor();
-
-                await extractor.WaitForSubscription(SubscriptionName.DataPoints);
-
-                await TestUtils.WaitForCondition(() => extractor.State.NodeStates.All(node =>
-                    !node.IsFrontfilling && !node.IsBackfilling), 10);
-
-                await extractor.Looper.WaitForNextPush();
-
-                await TestUtils.WaitForCondition(() => pusher.DataPoints.Values.Any(dps => dps.Count >= 2000), 5);
-
-                await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
-
-                if (backfill)
-                {
-                    // We cannot know if backfill has finished or not based on the pusher state
-                    CountCustomValues(pusher, 3000);
-                }
-                else
-                {
-                    CountCustomValues(pusher, 2000);
-                }
-            }
-        }
         [Fact(Timeout = 10000)]
         public async Task TestDisableSubscriptions()
         {
-            using var pusher = new DummyPusher(new DummyPusherConfig() { ReadExtractedRanges = true });
-
+            using var pusher = new DummyPusher(new DummyPusherConfig());
             tester.Config.Subscriptions.RecreateSubscriptionGracePeriod = "100ms";
 
             var ids = tester.Ids.Base;
@@ -966,7 +892,7 @@ namespace Test.Integration
             tester.Config.FailureBuffer.DatapointPath = "datapoint-buffer-test.bin";
             tester.Config.FailureBuffer.Enabled = true;
 
-            using var pusher = new DummyPusher(new DummyPusherConfig() { ReadExtractedRanges = true });
+            using var pusher = new DummyPusher(new DummyPusherConfig());
             await using var extractor = tester.BuildExtractor(true, null, pusher);
 
             var ids = tester.Server.Ids.Base;
@@ -1042,7 +968,7 @@ namespace Test.Integration
 
             tester.Server.PopulateBaseHistory(now.AddSeconds(-20));
 
-            using var pusher = new DummyPusher(new DummyPusherConfig() { ReadExtractedRanges = true });
+            using var pusher = new DummyPusher(new DummyPusherConfig());
             await using var extractor = tester.BuildExtractor(true, null, pusher);
 
             var runTask = extractor.RunExtractor();

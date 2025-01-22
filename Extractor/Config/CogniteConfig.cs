@@ -33,16 +33,6 @@ namespace Cognite.OpcUa.Config
         /// </summary>
         public DataSetConfig? DataSet { get; set; }
         /// <summary>
-        /// Whether to read start/end-points on startup, where possible. At least one pusher should be able to do this,
-        /// otherwise back/frontfill will run for the entire history every restart.
-        /// The CDF pusher is not able to read start/end points for events, so if reading historical events is enabled, one other pusher
-        /// able to do this should be enabled.
-        /// The state-store can do all this, if the state-store is enabled this can still be enabled if timeseries have been deleted from CDF
-        /// and need to be re-read from history.
-        /// </summary>
-        [DefaultValue(true)]
-        public bool ReadExtractedRanges { get; set; } = true;
-        /// <summary>
         /// Map metadata to asset/timeseries attributes. Each of "assets" and "timeseries" is a map from property DisplayName to
         /// CDF attribute. Legal attributes are "name, description, parentId" and "unit" for timeseries. "parentId" must somehow refer to
         /// an existing asset. For timeseries it must be a mapped asset, for assets it can be any asset.

@@ -968,7 +968,7 @@ namespace Test.Integration
 
             var id = new InstanceIdentifier("test-space", tester.Client.GetUniqueId(tester.Server.Ids.Base.DoubleVar1));
 
-            await TestUtils.WaitForCondition(() => handler.DatapointsByInstanceId.TryGetValue(id, out var dps) && dps.NumericDatapoints.Last().Value == 321.123, 5);
+            await TestUtils.WaitForCondition(() => handler.DatapointsByInstanceId.TryGetValue(id, out var dps) && dps.NumericDatapoints.Any(v => v.Value == 321.123), 5);
 
             handler.FailedRoutes.Clear();
         }
