@@ -96,16 +96,11 @@ namespace Cognite.OpcUa.NodeSources
             return new PusherInput(objects, variables, references, deleted);
         }
 
-        public PusherInput Filter(FullPushResult result, FullConfig config)
+        public PusherInput Filter(FullPushResult result)
         {
             var objects = result.Objects ? Enumerable.Empty<BaseUANode>() : Objects;
             var variables = result.Variables ? Enumerable.Empty<UAVariable>() : Variables;
             var references = result.References ? Enumerable.Empty<UAReference>() : References;
-
-            if (result.Variables && !result.Ranges)
-            {
-                variables = Variables.Where(v => v.FullAttributes.ShouldReadHistory(config)).DistinctBy(n => n.Id).ToList();
-            }
 
             var deleted = result.Deletes ? null : Deletes;
 
@@ -122,7 +117,6 @@ namespace Cognite.OpcUa.NodeSources
         public bool Variables { get; set; }
         public bool References { get; set; }
         public bool Deletes { get; set; }
-        public bool Ranges { get; set; }
 
         public void Apply(PushResult result)
         {

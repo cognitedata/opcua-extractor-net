@@ -126,6 +126,9 @@ history:
     enabled: true
     throttling:
         max-node-parallelism: 1000
+state-storage:
+    location: state_store.db
+    database: ""LiteDb""
 version: 1
 ";
         }

@@ -1,4 +1,5 @@
-﻿using Cognite.Extractor.Testing;
+﻿using Cognite.Extractor.Common;
+using Cognite.Extractor.Testing;
 using Cognite.OpcUa;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
@@ -88,9 +89,7 @@ namespace Test.Unit
         [Theory]
         [InlineData(0, 2, 2, 1, 0, 0)]
         [InlineData(1, 0, 0, 1, 4, 0)]
-        [InlineData(2, 2, 2, 0, 1, 1)]
-        [InlineData(3, 2, 2, 1, 1, 0)]
-        [InlineData(4, 2, 2, 1, 0, 0)]
+        [InlineData(2, 2, 2, 0, 0, 1)]
         [InlineData(5, 0, 0, 0, 4, 1)]
         public async Task TestPushNodes(int failAt, int pushedObjects, int pushedVariables, int pushedRefs, int failedNodes, int failedRefs)
         {
@@ -105,12 +104,6 @@ namespace Test.Unit
                     break;
                 case 2:
                     pusher.PushReferenceResult = false;
-                    break;
-                case 3:
-                    pusher.InitDpRangesResult = false;
-                    break;
-                case 4:
-                    pusher.InitEventRangesResult = false;
                     break;
                 case 5:
                     pusher.NoInit = true;
@@ -292,7 +285,7 @@ namespace Test.Unit
             {
                 Interval = "100",
                 VariableStore = "test-variables",
-                EventStore = "test-events"
+                EventStore = "test-events",
             };
             tester.Config.History.Enabled = true;
             tester.Config.History.Data = true;
@@ -305,17 +298,23 @@ namespace Test.Unit
             using var pusher = new DummyPusher(new DummyPusherConfig());
             using var extractor = tester.BuildExtractor(true, stateStore, pusher);
 
+            extractor.StateStoreRetryConfig = new RetryUtilConfig
+            {
+                MaxTries = 0,
+                Timeout = "0s",
+                InitialDelay = "100ms",
+                MaxDelay = "200ms"
+            };
+
             var extractorTask = extractor.RunExtractor(true);
 
             // Wait for initial push to complete
             await TestUtils.WaitForCondition(() => pusher.Initialized, 10,
                 () => $"Extractor should be initialized");
 
-            var expectedWaitTime = failureCount == 0 ? 2 : (int)Math.Pow(2, failureCount + 1) + 5;
-
             await TestUtils.WaitForCondition(
                 () => stateStore.NumRestoreState >= failureCount + 1,
-                expectedWaitTime,
+                10,
                 () => $"Expected {failureCount + 1} restore attempts, got {stateStore.NumRestoreState}");
 
             Assert.Equal(failureCount + 1, stateStore.NumRestoreState);
