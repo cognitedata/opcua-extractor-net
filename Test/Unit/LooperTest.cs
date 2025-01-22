@@ -39,7 +39,7 @@ namespace Test.Unit
                 Interval = "1000000"
             };
             using var stateStore = new DummyStateStore();
-            using var extractor = tester.BuildExtractor(true, stateStore, new DummyPusher(new DummyPusherConfig()));
+            using var extractor = tester.BuildExtractor(null, true, stateStore);
             bool synch1 = false;
             bool synch2 = false;
             using var source = CancellationTokenSource.CreateLinkedTokenSource(tester.Source.Token);
@@ -102,7 +102,7 @@ namespace Test.Unit
             Assert.Equal("SomeException", ex.InnerException.Message);
         }
 
-        private void InitPusherLoopTest(UAExtractor extractor, params DummyPusher[] pushers)
+        private void InitPusherLoopTest(UAExtractor extractor, DummyPusher pusher)
         {
             var evtState = new EventExtractionState(tester.Client, new NodeId("id", 0), false, false, true);
             evtState.InitToEmpty();
@@ -118,18 +118,14 @@ namespace Test.Unit
             extractor.Streamer.AllowData = true;
             extractor.Streamer.AllowEvents = true;
 
-            foreach (var pusher in pushers)
-            {
-                pusher.UniqueToNodeId["id"] = (new NodeId("id", 0), -1);
-            }
+            pusher.UniqueToNodeId["id"] = (new NodeId("id", 0), -1);
         }
 
         [Fact]
         public async Task TestPusherLoop()
         {
-            var pusher1 = new DummyPusher(new DummyPusherConfig());
-            var pusher2 = new DummyPusher(new DummyPusherConfig());
-            using var extractor = tester.BuildExtractor(true, null, pusher1, pusher2);
+            using var pusher = new DummyPusher(new DummyPusherConfig());
+            using var extractor = tester.BuildExtractor(pusher);
 
             var start = DateTime.UtcNow;
 
@@ -137,16 +133,13 @@ namespace Test.Unit
             var evts = Enumerable.Range(0, 100).Select(idx =>
                 new UAEvent { EmittingNode = new NodeId("id", 0), Time = start.AddMilliseconds(idx) });
 
-            InitPusherLoopTest(extractor, pusher1, pusher2);
+            InitPusherLoopTest(extractor, pusher);
 
-            pusher1.Initialized = true;
-            pusher2.Initialized = true;
+            pusher.Initialized = true;
 
             // Test all OK
-            var dps1 = pusher1.DataPoints[(new NodeId("id", 0), -1)] = new List<UADataPoint>();
-            var dps2 = pusher2.DataPoints[(new NodeId("id", 0), -1)] = new List<UADataPoint>();
-            var evts1 = pusher1.Events[new NodeId("id", 0)] = new List<UAEvent>();
-            var evts2 = pusher2.Events[new NodeId("id", 0)] = new List<UAEvent>();
+            var dpsw = pusher.DataPoints[(new NodeId("id", 0), -1)] = new List<UADataPoint>();
+            var evtsw = pusher.Events[new NodeId("id", 0)] = new List<UAEvent>();
 
             tester.Config.Extraction.DataPushDelay = "100";
             extractor.Looper.Run();
@@ -154,77 +147,54 @@ namespace Test.Unit
 
             await extractor.Looper.WaitForNextPush(false);
 
-            Assert.Empty(dps1);
-            Assert.Empty(dps2);
-            Assert.Empty(evts1);
-            Assert.Empty(evts2);
+            Assert.Empty(dpsw);
+            Assert.Empty(evtsw);
 
             await extractor.Streamer.EnqueueAsync(dps);
             await extractor.Streamer.EnqueueAsync(evts);
 
             await extractor.Looper.WaitForNextPush(true);
 
-            Assert.Equal(100, dps1.Count);
-            Assert.Equal(100, dps2.Count);
-            Assert.Equal(100, evts1.Count);
-            Assert.Equal(100, evts2.Count);
+            Assert.Equal(100, dpsw.Count);
+            Assert.Equal(100, evtsw.Count);
 
-            // Fail one
+            // Fail
 
             await extractor.Streamer.EnqueueAsync(dps);
             await extractor.Streamer.EnqueueAsync(evts);
 
-            pusher1.PushDataPointResult = false;
-            pusher1.PushEventResult = false;
-            pusher1.TestConnectionResult = false;
+            pusher.PushDataPointResult = false;
+            pusher.PushEventResult = false;
+            pusher.TestConnectionResult = false;
 
             await extractor.Looper.WaitForNextPush(true);
 
-            Assert.Equal(100, dps1.Count);
-            Assert.Equal(200, dps2.Count);
-            Assert.Equal(100, evts1.Count);
-            Assert.Equal(200, evts2.Count);
+            Assert.Equal(100, dpsw.Count);
+            Assert.Equal(100, evtsw.Count);
 
-            Assert.True(pusher1.DataFailing);
-            Assert.True(pusher1.EventsFailing);
+            Assert.True(pusher.DataFailing);
+            Assert.True(pusher.EventsFailing);
 
-            // Allow points and events, but continue to fail connection test
+            // Reconnected
 
             await extractor.Streamer.EnqueueAsync(dps);
             await extractor.Streamer.EnqueueAsync(evts);
 
-            pusher1.PushDataPointResult = true;
-            pusher1.PushEventResult = true;
+            pusher.PushDataPointResult = true;
+            pusher.PushEventResult = true;
+            pusher.TestConnectionResult = true;
 
             await extractor.Looper.WaitForNextPush(true);
 
-            Assert.Equal(100, dps1.Count);
-            Assert.Equal(300, dps2.Count);
-            Assert.Equal(100, evts1.Count);
-            Assert.Equal(300, evts2.Count);
-
-            // Re-allow connection test, verify reconnect
-
-            pusher1.TestConnectionResult = true;
-
-            await extractor.Streamer.EnqueueAsync(dps);
-            await extractor.Streamer.EnqueueAsync(evts);
-
-            await extractor.Looper.WaitForNextPush(true);
-
-            Assert.Equal(200, dps1.Count);
-            Assert.Equal(400, dps2.Count);
-            Assert.Equal(200, evts1.Count);
-            Assert.Equal(400, evts2.Count);
+            Assert.Equal(200, dpsw.Count);
+            Assert.Equal(200, evtsw.Count);
         }
         [Fact]
         public async Task TestLateInit()
         {
-            var pusher1 = new DummyPusher(new DummyPusherConfig());
-            var pusher2 = new DummyPusher(new DummyPusherConfig());
-            var pusher3 = new DummyPusher(new DummyPusherConfig());
+            using var pusher = new DummyPusher(new DummyPusherConfig());
             tester.Config.Extraction.Relationships.Enabled = true;
-            using var extractor = tester.BuildExtractor(true, null, pusher1, pusher2, pusher3);
+            using var extractor = tester.BuildExtractor(pusher);
             tester.Config.Extraction.Relationships.Enabled = false;
 
             var start = DateTime.UtcNow;
@@ -233,27 +203,16 @@ namespace Test.Unit
             var evts = Enumerable.Range(0, 100).Select(idx =>
                 new UAEvent { EmittingNode = new NodeId("id", 0), Time = start.AddMilliseconds(idx) });
 
-            InitPusherLoopTest(extractor, pusher1, pusher2, pusher3);
+            InitPusherLoopTest(extractor, pusher);
 
-            pusher1.Initialized = false;
-            pusher2.Initialized = false;
-            pusher1.TestConnectionResult = false;
-            pusher2.TestConnectionResult = false;
-            pusher3.Initialized = true;
+            pusher.Initialized = false;
+            pusher.TestConnectionResult = false;
 
-            var dps1 = pusher1.DataPoints[(new NodeId("id", 0), -1)] = new List<UADataPoint>();
-            var dps2 = pusher2.DataPoints[(new NodeId("id", 0), -1)] = new List<UADataPoint>();
-            var dps3 = pusher3.DataPoints[(new NodeId("id", 0), -1)] = new List<UADataPoint>();
-            var evts1 = pusher1.Events[new NodeId("id", 0)] = new List<UAEvent>();
-            var evts2 = pusher2.Events[new NodeId("id", 0)] = new List<UAEvent>();
-            var evts3 = pusher3.Events[new NodeId("id", 0)] = new List<UAEvent>();
+            var dpsw = pusher.DataPoints[(new NodeId("id", 0), -1)] = new List<UADataPoint>();
+            var evtsw = pusher.Events[new NodeId("id", 0)] = new List<UAEvent>();
 
-            Assert.Empty(dps1);
-            Assert.Empty(dps2);
-            Assert.Empty(dps3);
-            Assert.Empty(evts1);
-            Assert.Empty(evts2);
-            Assert.Empty(evts3);
+            Assert.Empty(dpsw);
+            Assert.Empty(evtsw);
 
             await extractor.Streamer.EnqueueAsync(dps);
             await extractor.Streamer.EnqueueAsync(evts);
@@ -261,19 +220,14 @@ namespace Test.Unit
             extractor.Looper.Run();
             var loopTask = extractor.Looper.Scheduler.WaitForAll();
 
-            // Verify that the two un-initialized pushers are set to failing
+            // Verify that the pusher is failing
 
-            pusher1.TestConnectionResult = false;
-            pusher2.TestConnectionResult = false;
+            pusher.TestConnectionResult = false;
 
             await extractor.Looper.WaitForNextPush(true);
 
-            Assert.Empty(dps1);
-            Assert.Empty(dps2);
-            Assert.Equal(100, dps3.Count);
-            Assert.Empty(evts1);
-            Assert.Empty(evts2);
-            Assert.Equal(100, evts3.Count);
+            Assert.Empty(dpsw);
+            Assert.Empty(evtsw);
 
             // Add some missing nodes to each of the pushers, and verify that they are pushed on recovery
             var refManager = extractor.TypeManager;
@@ -298,36 +252,25 @@ namespace Test.Unit
                 Enumerable.Empty<UAVariable>(),
                 new[] { reference }, null);
 
-            (pusher1 as IPusher).AddPendingNodes(input, new FullPushResult(), tester.Config);
-            (pusher2 as IPusher).AddPendingNodes(input2, new FullPushResult(), tester.Config);
+            (pusher as IPusher).AddPendingNodes(input, new FullPushResult(), tester.Config);
 
             await extractor.Streamer.EnqueueAsync(dps);
             await extractor.Streamer.EnqueueAsync(evts);
 
-            pusher1.TestConnectionResult = true;
-            pusher2.TestConnectionResult = true;
+            pusher.TestConnectionResult = true;
 
             await extractor.Looper.WaitForNextPush(true);
 
-            Assert.Equal(100, dps1.Count);
-            Assert.Equal(100, dps2.Count);
-            Assert.Equal(200, dps3.Count);
-            Assert.Equal(100, evts1.Count);
-            Assert.Equal(100, evts2.Count);
-            Assert.Equal(200, evts3.Count);
+            Assert.Equal(100, dpsw.Count);
+            Assert.Equal(100, evtsw.Count);
 
-            Assert.Single(pusher1.PushedReferences);
-            Assert.Single(pusher2.PushedReferences);
-            Assert.Single(pusher1.PushedVariables);
-            Assert.Empty(pusher2.PushedVariables);
-            Assert.Single(pusher1.PushedNodes);
-            Assert.Single(pusher2.PushedNodes);
+            Assert.Single(pusher.PushedReferences);
+            Assert.Single(pusher.PushedVariables);
+            Assert.Single(pusher.PushedNodes);
 
-            Assert.True(pusher1.Initialized);
-            Assert.True(pusher2.Initialized);
+            Assert.True(pusher.Initialized);
 
-            Assert.Null(pusher1.PendingNodes);
-            Assert.Null(pusher2.PendingNodes);
+            Assert.Null(pusher.PendingNodes);
         }
     }
 }

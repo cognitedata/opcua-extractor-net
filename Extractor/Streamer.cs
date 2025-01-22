@@ -152,11 +152,9 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Push data points to destinations
         /// </summary>
-        /// <param name="passingPushers">Succeeding pushers, data will be pushed to these.</param>
-        /// <param name="failingPushers">Failing pushers, data will not be pushed to these.</param>
+        /// <param name="pushers">Pushers to write data to, if it is live.</param>
         /// <returns>True if history should be restarted after this</returns>
-        public async Task PushDataPoints(IEnumerable<IPusher> passingPushers,
-            IEnumerable<IPusher> failingPushers, CancellationToken token)
+        public async Task PushDataPoints(IPusher pusher, CancellationToken token)
         {
             if (!AllowData) return;
 
@@ -174,49 +172,40 @@ namespace Cognite.OpcUa
                 pointRanges[dp.Id] = range.Extend(dp.Timestamp, dp.Timestamp);
             }
 
-            var results = await Task.WhenAll(passingPushers.Select(pusher => pusher.PushDataPoints(dataPointList, token)));
 
-            bool anyFailed = results.Any(status => status == false);
-
-            if (anyFailed || failingPushers.Any())
+            bool? result = false;
+            if (pusher.Initialized)
             {
-                List<IPusher> failedPushers = new List<IPusher>();
-                if (anyFailed)
-                {
-                    var failed = results.Select((res, idx) => (result: res, Index: idx)).Where(x => x.result == false).ToList();
-                    foreach (var pair in failed)
-                    {
-                        var pusher = passingPushers.ElementAt(pair.Index);
-                        pusher.DataFailing = true;
-                        failedPushers.Add(pusher);
-                    }
-                    log.LogWarning("Pushers of types {Types} failed while pushing datapoints",
-                        string.Concat(failedPushers.Select(pusher => pusher.GetType().ToString())));
-                    extractor.OnDataPushFailure();
-                }
+                result = await pusher.PushDataPoints(dataPointList, token);
+            }
+
+            if (result == false)
+            {
+                pusher.DataFailing = true;
+                extractor.OnDataPushFailure();
+
                 if (config.FailureBuffer.Enabled && extractor.FailureBuffer != null)
                 {
                     await extractor.FailureBuffer.WriteDatapoints(dataPointList, pointRanges, token);
                 }
-
-                return;
             }
-            var reconnectedPushers = passingPushers.Where(pusher => pusher.DataFailing).ToList();
-            if (reconnectedPushers.Count != 0)
-            {
-                log.LogInformation("{Count} failing pushers were able to push data, reconnecting", reconnectedPushers.Count);
-                extractor.OnDataPushRecovery();
 
-                foreach (var pusher in reconnectedPushers)
-                {
-                    pusher.DataFailing = false;
-                }
+            if (pusher.DataFailing && result == true)
+            {
+                pusher.DataFailing = false;
+                log.LogInformation("Pusher was able to push data, reconnecting");
+                extractor.OnDataPushRecovery();
+            }
+            else if (pusher.DataFailing)
+            {
+                return;
             }
 
             if (config.FailureBuffer.Enabled && extractor.FailureBuffer != null && extractor.FailureBuffer.AnyPoints)
             {
-                await extractor.FailureBuffer.ReadDatapoints(passingPushers, token);
+                await extractor.FailureBuffer.ReadDatapoints(pusher, token);
             }
+
             foreach ((string id, var range) in pointRanges)
             {
                 var state = extractor.State.GetNodeState(id);
@@ -226,11 +215,7 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Push events to destinations
         /// </summary>
-        /// <param name="passingPushers">Succeeding pushers, events will be pushed to these.</param>
-        /// <param name="failingPushers">Failing pushers, events will not be pushed to these.</param>
-        /// <returns>True if history should be restarted after this</returns>
-        public async Task PushEvents(IEnumerable<IPusher> passingPushers,
-            IEnumerable<IPusher> failingPushers, CancellationToken token)
+        public async Task PushEvents(IPusher pusher, CancellationToken token)
         {
             if (!AllowEvents) return;
 
@@ -249,53 +234,42 @@ namespace Cognite.OpcUa
                 eventRanges[evt.EmittingNode] = range.Extend(evt.Time, evt.Time);
             }
 
-            var results = await Task.WhenAll(passingPushers.Select(pusher => pusher.PushEvents(eventList, token)));
-
-            var anyFailed = results.Any(status => status == false);
-
-            if (anyFailed || failingPushers.Any())
+            bool? result = null;
+            if (pusher.Initialized)
             {
-                var failedPushers = new List<IPusher>();
-                if (anyFailed)
-                {
-                    var failed = results.Select((res, idx) => (result: res, Index: idx)).Where(x => x.result == false).ToList();
-                    foreach (var pair in failed)
-                    {
-                        var pusher = passingPushers.ElementAt(pair.Index);
-                        pusher.EventsFailing = true;
-                        failedPushers.Add(pusher);
-                    }
-                    log.LogWarning("Pushers of types {Types} failed while pushing events",
-                        failedPushers.Select(pusher => pusher.GetType().ToString()).Aggregate((src, val) => src + ", " + val));
-                    extractor.OnEventsPushFailure();
-                }
+                result = await pusher.PushEvents(eventList, token);
+            }
+
+            if (result == false)
+            {
+                pusher.EventsFailing = true;
+                extractor.OnEventsPushFailure();
 
                 if (config.FailureBuffer.Enabled && extractor.FailureBuffer != null)
                 {
                     await extractor.FailureBuffer.WriteEvents(eventList, token);
                 }
+            }
 
+            if (pusher.EventsFailing && result == true)
+            {
+                pusher.EventsFailing = false;
+                log.LogInformation("Pusher was able to push events, reconnecting");
+                extractor.OnEventsPushRecovery();
+            }
+            else if (pusher.EventsFailing)
+            {
                 return;
             }
-            var reconnectedPushers = passingPushers.Where(pusher => pusher.EventsFailing).ToList();
-            if (reconnectedPushers.Count != 0)
-            {
-                log.LogInformation("{Count} failing pushers were able to push events, reconnecting", reconnectedPushers.Count);
-                extractor.OnEventsPushRecovery();
 
-                foreach (var pusher in reconnectedPushers)
-                {
-                    pusher.EventsFailing = false;
-                }
-            }
             if (config.FailureBuffer.Enabled && extractor.FailureBuffer != null && extractor.FailureBuffer.AnyEvents)
             {
-                await extractor.FailureBuffer.ReadEvents(passingPushers, token);
+                await extractor.FailureBuffer.ReadEvents(pusher, token);
             }
-            foreach (var (id, range) in eventRanges)
+            foreach ((var id, var range) in eventRanges)
             {
                 var state = extractor.State.GetEmitterState(id);
-                if (state != null && (extractor.AllowUpdateState || !state.FrontfillEnabled && !state.BackfillEnabled)) state?.UpdateDestinationRange(range.First, range.Last);
+                if (state != null && (extractor.AllowUpdateState || !state.FrontfillEnabled && !state.BackfillEnabled)) state.UpdateDestinationRange(range.First, range.Last);
             }
         }
         /// <summary>

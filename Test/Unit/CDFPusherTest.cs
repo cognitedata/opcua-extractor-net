@@ -247,7 +247,7 @@ namespace Test.Unit
         [Fact]
         public async Task TestPushEvents()
         {
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            using var extractor = tester.BuildExtractor(pusher);
 
             CommonTestUtils.ResetMetricValues("opcua_event_push_failures_cdf",
                 "opcua_events_pushed_cdf", "opcua_event_pushes_cdf",
@@ -341,7 +341,7 @@ namespace Test.Unit
                 }
             };
             (handler, pusher) = tester.GetCDFPusher();
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            using var extractor = tester.BuildExtractor(pusher);
 
             var rels = Enumerable.Empty<UAReference>();
             var tss = Enumerable.Empty<UAVariable>();
@@ -401,7 +401,7 @@ namespace Test.Unit
                 }
             };
             (handler, pusher) = tester.GetCDFPusher();
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            using var extractor = tester.BuildExtractor(pusher);
 
             var node = new UAObject(tester.Server.Ids.Base.Root, "BaseRoot", null, null, NodeId.Null, null);
             var rels = Enumerable.Empty<UAReference>();
@@ -448,7 +448,7 @@ namespace Test.Unit
                 }
             };
             (handler, pusher) = tester.GetCDFPusher();
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            using var extractor = tester.BuildExtractor(pusher);
             var node = new UAObject(tester.Server.Ids.Base.Root, "BaseRoot", null, null, NodeId.Null, null);
             var rels = Enumerable.Empty<UAReference>();
             var tss = Enumerable.Empty<UAVariable>();
@@ -487,7 +487,7 @@ namespace Test.Unit
                 },
             };
             (handler, pusher) = tester.GetCDFPusher();
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            using var extractor = tester.BuildExtractor(pusher);
 
             var dt = new UADataType(DataTypeIds.Double);
 
@@ -566,7 +566,7 @@ namespace Test.Unit
                 }
             };
             (handler, pusher) = tester.GetCDFPusher();
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            using var extractor = tester.BuildExtractor(pusher);
 
             var dt = new UADataType(DataTypeIds.Double);
 
@@ -619,7 +619,7 @@ namespace Test.Unit
             };
 
             (handler, pusher) = tester.GetCDFPusher();
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            using var extractor = tester.BuildExtractor(pusher);
             var dt = new UADataType(DataTypeIds.Double);
 
             var writer = (CDFWriter)pusher.GetType()
@@ -670,7 +670,7 @@ namespace Test.Unit
             };
 
             (handler, pusher) = tester.GetCDFPusher();
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            using var extractor = tester.BuildExtractor(pusher);
             extractor.SourceInfo.Uri = "some-source-uri";
 
             var rels = Enumerable.Empty<UAReference>();
@@ -732,7 +732,7 @@ namespace Test.Unit
             var targetVar = new UAVariable(new NodeId("target2", 0), "Target", "Target", null, NodeId.Null, null);
 
             (handler, pusher) = tester.GetCDFPusher();
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            using var extractor = tester.BuildExtractor(pusher);
 
             var uaSource = new UANodeSource(tester.Log, extractor, tester.Client, tester.Client.TypeManager);
 
@@ -809,7 +809,7 @@ namespace Test.Unit
 
             tester.Config.Extraction.Relationships.Enabled = true;
             (handler, pusher) = tester.GetCDFPusher();
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            using var extractor = tester.BuildExtractor(pusher);
 
             var uaSource = new UANodeSource(tester.Log, extractor, tester.Client, tester.Client.TypeManager);
 
@@ -1024,7 +1024,7 @@ namespace Test.Unit
             tester.Config.History.Enabled = true;
 
             (handler, pusher) = tester.GetCDFPusher();
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            using var extractor = tester.BuildExtractor(pusher);
 
             // Nothing in CDF
             await extractor.RunExtractor(true);
@@ -1081,7 +1081,7 @@ namespace Test.Unit
             await TestUtils.WaitForCondition(async () =>
             {
                 tester.Server.UpdateNode(tester.Server.Ids.Custom.MysteryVar, idx++);
-                await extractor.Streamer.PushDataPoints(new[] { pusher }, Enumerable.Empty<IPusher>(), tester.Source.Token);
+                await extractor.Streamer.PushDataPoints(pusher, tester.Source.Token);
                 return handler.Datapoints.ContainsKey(id) && handler.Datapoints[id].NumericDatapoints.Count != 0;
             }, 10);
 
@@ -1116,7 +1116,7 @@ namespace Test.Unit
             tester.Config.Extraction.RootNode = tester.Ids.Event.Root.ToProtoNodeId(tester.Client);
 
             (handler, pusher) = tester.GetCDFPusher();
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            using var extractor = tester.BuildExtractor(pusher);
 
             // Nothing in CDF
             await extractor.RunExtractor(true);
@@ -1157,7 +1157,7 @@ namespace Test.Unit
 
             await TestUtils.WaitForCondition(async () =>
             {
-                await extractor.Streamer.PushEvents(new[] { pusher }, Enumerable.Empty<IPusher>(), tester.Source.Token);
+                await extractor.Streamer.PushEvents(pusher, tester.Source.Token);
                 return handler.Events.Count != 0;
             }, 10);
 
@@ -1192,7 +1192,7 @@ namespace Test.Unit
             tester.Config.Source.AltSourceBackgroundBrowse = true;
             (handler, pusher) = tester.GetCDFPusher();
 
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            using var extractor = tester.BuildExtractor(pusher);
 
             // Populate data in Raw
             tester.Config.Cognite.RawNodeBuffer.BrowseOnEmpty = true;
@@ -1241,7 +1241,7 @@ namespace Test.Unit
             };
 
             (handler, pusher) = tester.GetCDFPusher();
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            using var extractor = tester.BuildExtractor(pusher);
 
             var dt = new UADataType(DataTypeIds.Double);
             var node = new UAObject(tester.Server.Ids.Base.Root, "BaseRoot", null, null, NodeId.Null, null);
@@ -1285,7 +1285,7 @@ namespace Test.Unit
             tester.Config.Events.Enabled = true;
 
             (handler, pusher) = tester.GetCDFPusher();
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            using var extractor = tester.BuildExtractor(pusher);
 
             // Run the extractor to get a type hierarchy.
             await extractor.RunExtractor(true);
@@ -1356,7 +1356,7 @@ namespace Test.Unit
             tester.Config.Events.Enabled = true;
 
             (handler, pusher) = tester.GetCDFPusher();
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            using var extractor = tester.BuildExtractor(pusher);
             // Run the extractor to get a type hierarchy.
             await extractor.RunExtractor(true);
 
@@ -1426,7 +1426,7 @@ namespace Test.Unit
             tester.Config.Events.Enabled = true;
 
             (handler, pusher) = tester.GetCDFPusher();
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            using var extractor = tester.BuildExtractor(pusher);
             // Run the extractor to get a type hierarchy.
             await extractor.RunExtractor(true);
 

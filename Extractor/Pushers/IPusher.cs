@@ -42,6 +42,8 @@ namespace Cognite.OpcUa
         bool EventsFailing { get; set; }
         bool Initialized { get; set; }
         bool NoInit { get; set; }
+
+        bool HasGoodStatus => !DataFailing && !EventsFailing && Initialized;
         IPusherConfig BaseConfig { get; }
 
         /// <summary>

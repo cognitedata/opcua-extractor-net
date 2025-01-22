@@ -59,7 +59,7 @@ namespace Test.Unit
         public void TestBuildFailureBuffer()
         {
             using var stateStore = new DummyStateStore();
-            using var extractor = tester.BuildExtractor(true, stateStore);
+            using var extractor = tester.BuildExtractor(null, true, stateStore);
             var cfg = BuildConfig();
 
             Assert.False(File.Exists(cfg.FailureBuffer.DatapointPath));
