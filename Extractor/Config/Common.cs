@@ -71,9 +71,5 @@ namespace Cognite.OpcUa.Config
     }
     public interface IPusherConfig
     {
-        /// <summary>
-        /// Replacement for NaN values.
-        /// </summary>
-        public double? NonFiniteReplacement { get; set; }
     }
 }
