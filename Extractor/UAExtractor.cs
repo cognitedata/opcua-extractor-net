@@ -895,7 +895,6 @@ namespace Cognite.OpcUa
             }
 
             if (input.Deletes == null) result.Deletes = true;
-            if (!pusher.BaseConfig.ReadExtractedRanges) result.Ranges = true;
 
             log.LogInformation("Executing pushes on pusher {Type}", pusher.GetType());
 
@@ -915,31 +914,6 @@ namespace Cognite.OpcUa
                 result.Variables = true;
                 result.Objects = true;
                 result.References = true;
-            }
-
-            if (pusher.BaseConfig.ReadExtractedRanges)
-            {
-                var statesToSync = input
-                    .Variables
-                    .Select(ts => ts.Id)
-                    .Distinct()
-                    .SelectNonNull(id => State.GetNodeState(id))
-                    .Where(state => state.FrontfillEnabled && !state.Initialized);
-
-                var eventStatesToSync = State.EmitterStates.Where(state => state.FrontfillEnabled && !state.Initialized);
-
-                var initResults = await Task.WhenAll(
-                    pusher.InitExtractedRanges(statesToSync, Config.History.Backfill, Source.Token),
-                    pusher.InitExtractedEventRanges(eventStatesToSync, Config.History.Backfill, Source.Token));
-
-                result.Ranges = initResults[0];
-
-                if (!initResults.All(res => res))
-                {
-                    log.LogError("Initialization of extracted ranges failed for pusher {Name}", pusher.GetType());
-                    PushNodesFailure(input, result, pusher);
-                    return;
-                }
             }
 
             if (input.Deletes != null)
@@ -1018,7 +992,7 @@ namespace Cognite.OpcUa
                 }
             }
 
-            if (StateStorage != null && Config.StateStorage.IntervalValue.Value != Timeout.InfiniteTimeSpan)
+            if (Config.StateStorage.IsEnabled && StateStorage != null)
             {
                 if (Streamer.AllowEvents)
                 {
