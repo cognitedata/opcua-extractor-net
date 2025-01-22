@@ -155,6 +155,11 @@ namespace Cognite.OpcUa.Config
 
             Summary.History.Enabled = true;
             baseConfig.History.Enabled = true;
+            baseConfig.StateStorage = new StateStorageConfig
+            {
+                Database = Extractor.StateStorage.StateStoreConfig.StorageType.LiteDb,
+                Location = "state_store.db"
+            };
             log.LogInformation("Settled on chunkSize: {Size}", baseConfig.History.DataNodesChunk);
             Summary.History.ChunkSize = baseConfig.History.DataNodesChunk;
             log.LogInformation("Largest estimated number of datapoints in a single nodes history is {LargestEstimate}, " +
