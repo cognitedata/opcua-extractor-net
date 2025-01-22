@@ -191,14 +191,6 @@ jobs:
             run: dotnet publish -c Release -r linux-x64 ${{ needs.prerequisites.outputs.args }} ExtractorLauncher/
           - run: ./build-zip.sh linux-x64 true ${{ needs.prerequisites.outputs.version }}
 
-          - name: Build windows bridge release
-            run: dotnet publish -c Release -r win-x64 ${{ needs.prerequisites.outputs.args }} MQTTCDFBridge/
-          - run: ./build-zip-bridge.sh win-x64 false ${{ needs.prerequisites.outputs.version }}
-
-          - name: Build linux bridge release
-            run: dotnet publish -c Release -r linux-x64 ${{ needs.prerequisites.outputs.args }} MQTTCDFBridge/
-          - run: ./build-zip-bridge.sh linux-x64 true ${{ needs.prerequisites.outputs.version }}
-
           - name: Build windows server release
             run: dotnet publish -c Release -r win-x64 ${{ needs.prerequisites.outputs.args }} Server/
           - run: ./build-zip-server.sh win-x64 false ${{ needs.prerequisites.outputs.version }}
@@ -213,8 +205,6 @@ jobs:
               mkdir artifacts
               mv ./opcua-extractor.win-x64.${{ needs.prerequisites.outputs.version }}.zip artifacts/
               mv ./opcua-extractor.linux-x64.${{ needs.prerequisites.outputs.version }}.zip artifacts/
-              mv ./mqtt-cdf-bridge.win-x64.${{ needs.prerequisites.outputs.version }}.zip artifacts/
-              mv ./mqtt-cdf-bridge.linux-x64.${{ needs.prerequisites.outputs.version }}.zip artifacts/
               mv ./test-server.win-x64.${{ needs.prerequisites.outputs.version }}.zip artifacts/
               mv ./test-server.linux-x64.${{ needs.prerequisites.outputs.version }}.zip artifacts/
               mv ./opcua-extractor-${{ needs.prerequisites.outputs.rpmver }}-1.x86_64.rpm artifacts/
@@ -240,7 +230,6 @@ jobs:
         - id: image_tags
           run: |
             echo extractor_dockerhub="cognite/opcua-extractor-net:${{ needs.prerequisites.outputs.version }}" >> "$GITHUB_OUTPUT"
-            echo bridge_dockerhub="cognite/mqtt-cdf-bridge:${{ needs.prerequisites.outputs.version }}" >> "$GITHUB_OUTPUT"
             echo desc="$(git describe --tags --dirty) $(git log -1  --format=%ai)" >> "$GITHUB_OUTPUT"
 
         - name: Build extractor image
@@ -251,23 +240,10 @@ jobs:
             docker rm -v $id
             docker build -t ${{ steps.image_tags.outputs.extractor_dockerhub }} .
 
-        - name: Build bridge image
-          run: |
-            image=$(docker build --build-arg VERSION='${{ needs.prerequisites.outputs.version }}' --build-arg DESCRIPTION='${{ steps.image_tags.outputs.desc }}' -f Dockerfile.bridge.build -q .)
-            id=$(docker create $image)
-            docker cp $id:/build/deploy .
-            docker rm -v $id
-            docker build -f Dockerfile.bridge -t ${{ steps.image_tags.outputs.bridge_dockerhub }} .
-
         - name: Scan extractor image
           uses: cognitedata/image-scan-action@v1
           with:
             image: docker.io/${{ steps.image_tags.outputs.extractor_dockerhub }}
-
-        - name: Scan bridge image
-          uses: cognitedata/image-scan-action@v1
-          with:
-            image: docker.io/${{ steps.image_tags.outputs.bridge_dockerhub }}
 
         - name: "Log in to the Dockerhub"
           if: ${{ needs.prerequisites.outputs.should-release == 0 && needs.prerequisites.outputs.branch == 'master' }}
@@ -279,6 +255,5 @@ jobs:
         - name: Push images dockerhub
           if: ${{ needs.prerequisites.outputs.should-release == 0 && needs.prerequisites.outputs.branch == 'master' }}
           run: |
-            echo "Images being pushed as ${{ steps.image_tags.outputs.extractor_dockerhub }}, ${{ steps.image_tags.outputs.bridge_dockerhub }}"
+            echo "Image being pushed as ${{ steps.image_tags.outputs.extractor_dockerhub }}"
             docker push ${{ steps.image_tags.outputs.extractor_dockerhub }}
-            docker push ${{ steps.image_tags.outputs.bridge_dockerhub }}
