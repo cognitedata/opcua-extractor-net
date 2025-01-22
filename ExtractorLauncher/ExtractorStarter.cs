@@ -129,6 +129,17 @@ namespace Cognite.OpcUa
                 return "datapoints-batch must be greater than 0";
             }
 
+            if (config.StateStorage.Database != Extractor.StateStorage.StateStoreConfig.StorageType.None
+                && string.IsNullOrWhiteSpace(config.StateStorage.Location))
+            {
+                return "When state-storage.database is set to something other than None, state-storage.location must be specified";
+            }
+
+            if ((config.History?.Enabled ?? false) && !config.StateStorage.IsEnabled)
+            {
+                return "When history is enabled, you must configure state-storage.";
+            }
+
             return null;
         }
 

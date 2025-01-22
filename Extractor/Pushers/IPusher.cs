@@ -59,7 +59,7 @@ namespace Cognite.OpcUa
 
         void AddPendingNodes(PusherInput pending, FullPushResult result, FullConfig config)
         {
-            var filtered = pending.Filter(result, config);
+            var filtered = pending.Filter(result);
             if (PendingNodes is null)
             {
                 PendingNodes = filtered;
@@ -87,32 +87,6 @@ namespace Cognite.OpcUa
         /// the test is somehow unable to be completed with meaningful results.
         /// </summary>
         Task<bool?> TestConnection(FullConfig fullConfig, CancellationToken token);
-        /// <summary>
-        /// Get earliest and latest timestamps for datapoints in destination system, if possible
-        /// </summary>
-        /// <param name="states">States to initialize for</param>
-        /// <param name="backfillEnabled">True if backfill is enabled and earliest timestamps should be read</param>
-        /// <returns>True on success</returns>
-        Task<bool> InitExtractedRanges(
-            IEnumerable<VariableExtractionState> states,
-            bool backfillEnabled,
-            CancellationToken token)
-        {
-            return Task.FromResult(true);
-        }
-        /// <summary>
-        /// Get the earliest and latest timestamps for events in the destination system, if possible.
-        /// </summary>
-        /// <param name="states">States to initialize for</param>
-        /// <param name="backfillEnabled">True if backfill is enabled and earliest timestamps should be read</param>
-        /// <returns>True on success</returns>
-        Task<bool> InitExtractedEventRanges(
-            IEnumerable<EventExtractionState> states,
-            bool backfillEnabled,
-            CancellationToken token)
-        {
-            return Task.FromResult(true);
-        }
         /// <summary>
         /// Push given list of events
         /// </summary>

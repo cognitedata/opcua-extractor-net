@@ -72,10 +72,6 @@ namespace Cognite.OpcUa.Config
     public interface IPusherConfig
     {
         /// <summary>
-        /// If applicable, read the ranges of extracted variables from the destination.
-        /// </summary>
-        bool ReadExtractedRanges { get; set; }
-        /// <summary>
         /// Replacement for NaN values.
         /// </summary>
         public double? NonFiniteReplacement { get; set; }

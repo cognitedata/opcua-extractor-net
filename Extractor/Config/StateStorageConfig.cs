@@ -17,12 +17,13 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using Cognite.Extractor.Common;
 using Cognite.Extractor.StateStorage;
+using YamlDotNet.Serialization;
 
 namespace Cognite.OpcUa.Config
 {
     public class StateStorageConfig : StateStoreConfig
     {
-        public TimeSpanWrapper IntervalValue { get; } = new TimeSpanWrapper(false, "s", "0");
+        public TimeSpanWrapper IntervalValue { get; } = new TimeSpanWrapper(false, "s", "30s");
         /// <summary>
         /// Interval between each write to the buffer file, in seconds. 0 or less disables the state storage.
         /// Alternatively, use N[timeunit] where timeunit is w, d, h, m, s or ms.
@@ -55,5 +56,9 @@ namespace Cognite.OpcUa.Config
         /// Name of the raw table or litedb store for storing known reference-type nodes, used for detecting deleted nodes.
         /// </summary>
         public string KnownReferencesStore { get; set; } = "known_references";
+
+
+        [YamlIgnore]
+        public bool IsEnabled => Database != StorageType.None;
     }
 }

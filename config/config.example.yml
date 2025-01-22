@@ -223,13 +223,6 @@ cognite:
     host: "https://api.cognitedata.com"
     # Replace all instances of NaN with this floating point number. If left empty, ignore instead.
     nan-replacement:
-    # Whether to read start/end-points on startup, where possible. At least one pusher should be able to do this,
-    # otherwise back/frontfill will run for the entire history every restart.
-    # The CDF pusher is not able to read start/end points for events, so if reading historical events is enabled, one other pusher
-    # able to do this should be enabled.
-    # The state-store can do all this, if the state-store is enabled this can still be enabled if timeseries have been deleted from CDF
-    # and need to be re-read from history.
-    read-extracted-ranges: true
     # Data set to use for new objects. Existing objects will not be updated
     data-set:
         # Data set internal id.
@@ -510,8 +503,8 @@ failure-buffer:
     max-buffer-size: 0
 
 # Periodically store state in a local database to speed up starting, by not having to read state from destinations
-# This allows you to set the read-extracted-ranges option to false on the pushers without having to read all of history on startup.
 # If the OPC-UA server does not support history this does nothing.
+# If reading history is enabled at all, this is required.
 state-storage:
     # Path to .db file used by the state storage, or database in CDF raw.
     location: # ex: "buffer.db"
@@ -522,7 +515,7 @@ state-storage:
     event-store: event_states
     # Interval between each write to the buffer file, in seconds. 0 or less disables the state storage.
     # Alternatively, use N[timeunit] where timeunit is w, d, h, m, s or ms.
-    interval: 10
+    interval: 30s
 
 logger:
     # Writes log events at this level to the Console. One of verbose, debug, information, warning, error, fatal.

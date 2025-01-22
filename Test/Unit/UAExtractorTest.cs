@@ -90,9 +90,7 @@ namespace Test.Unit
         [Theory]
         [InlineData(0, 2, 2, 1, 0, 0)]
         [InlineData(1, 0, 0, 1, 4, 0)]
-        [InlineData(2, 2, 2, 0, 1, 1)]
-        [InlineData(3, 2, 2, 1, 1, 0)]
-        [InlineData(4, 2, 2, 1, 0, 0)]
+        [InlineData(2, 2, 2, 0, 0, 1)]
         [InlineData(5, 0, 0, 0, 4, 1)]
         public async Task TestPushNodes(int failAt, int pushedObjects, int pushedVariables, int pushedRefs, int failedNodes, int failedRefs)
         {
@@ -107,12 +105,6 @@ namespace Test.Unit
                     break;
                 case 2:
                     pusher.PushReferenceResult = false;
-                    break;
-                case 3:
-                    pusher.InitDpRangesResult = false;
-                    break;
-                case 4:
-                    pusher.InitEventRangesResult = false;
                     break;
                 case 5:
                     pusher.NoInit = true;
