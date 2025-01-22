@@ -14,10 +14,6 @@ logger:
 cognite:
     project: test
 
-mqtt:
-    host: "localhost"
-    port: 4060
-
 history:
     enabled: true
 

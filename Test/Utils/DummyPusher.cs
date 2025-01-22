@@ -15,7 +15,6 @@ namespace Test.Utils
 {
     public class DummyPusherConfig : IPusherConfig
     {
-        public bool Debug { get; set; }
         public double? NonFiniteReplacement { get; set; }
     }
     public sealed class DummyPusher : IPusher

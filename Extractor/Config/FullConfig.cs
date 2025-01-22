@@ -66,10 +66,6 @@ namespace Cognite.OpcUa.Config
         /// </summary>
         public CognitePusherConfig? Cognite { get; set; }
         /// <summary>
-        /// Configuration for writing to CDF over MQTT.
-        /// </summary>
-        public MqttPusherConfig? Mqtt { get; set; }
-        /// <summary>
         /// Configuration for how data should be extracted.
         /// </summary>
         public ExtractionConfig Extraction { get; set; } = null!;
