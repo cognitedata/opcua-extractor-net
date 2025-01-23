@@ -78,6 +78,7 @@ namespace Test.Unit
             await extractor.WaitForSubscription(SubscriptionName.DataPoints);
             Assert.NotEmpty(pusher.PushedNodes);
             pusher.PushedNodes.Clear();
+            extractor.State.Clear();
             await extractor.OnServerReconnect(tester.Client);
 
             Assert.True(pusher.OnReset.WaitOne(10000));

@@ -50,7 +50,6 @@ namespace Cognite.OpcUa.Pushers.Writers
             IEnumerable<UAVariable> variables,
             IEnumerable<UAReference> references,
             BrowseReport report,
-            UpdateConfig update,
             PushResult result,
             UAExtractor extractor,
             CancellationToken token)
@@ -80,14 +79,14 @@ namespace Cognite.OpcUa.Pushers.Writers
             if (clean != null && clean.Assets)
             {
                 result.Objects &= await clean.PushAssets(extractor, assetMap, NodeToAssetIds,
-                    update.Objects, report, token);
+                    report, token);
             }
 
             // Next, push timeseries. If we're pushing to FDM, this happens later.
             if (timeseries != null)
             {
                 result.Variables &= await timeseries.PushVariables(extractor, timeseriesMap, NodeToAssetIds,
-                    MismatchedTimeseries, update.Variables, report, token);
+                    MismatchedTimeseries, report, token);
             }
 
             // Finally, push the various other resources as needed.
@@ -124,14 +123,14 @@ namespace Cognite.OpcUa.Pushers.Writers
             {
                 tasks.Add(Task.Run(async () =>
                 {
-                    result.RawObjects &= await raw.PushAssets(extractor, assetMap, update.Objects, report, token);
+                    result.RawObjects &= await raw.PushAssets(extractor, assetMap, report, token);
                 }, token));
             }
             if (assetMap.Count != 0 && idm != null && idm.Assets)
             {
                 tasks.Add(Task.Run(async () =>
                 {
-                    result.Objects &= await idm.PushAssets(extractor, assetMap, update.Objects, report, token);
+                    result.Objects &= await idm.PushAssets(extractor, assetMap, report, token);
                 }, token));
             }
 
@@ -139,7 +138,7 @@ namespace Cognite.OpcUa.Pushers.Writers
             {
                 tasks.Add(Task.Run(async () =>
                 {
-                    result.RawVariables &= await raw.PushTimeseries(extractor, timeseriesMap, update.Variables, report, token);
+                    result.RawVariables &= await raw.PushTimeseries(extractor, timeseriesMap, report, token);
                 }, token));
             }
             if (timeseriesMap.Count != 0 && idm != null)

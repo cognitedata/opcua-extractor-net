@@ -97,20 +97,8 @@ namespace Test.Unit
                 { new NodeId("parent2", 0), 222 }
             };
 
-            var update = new TypeUpdateConfig();
-
-            Assert.Null(PusherUtils.GetTSUpdate(tester.Config, extractor, null, node, update, nodeToAssetIds));
-            var result = PusherUtils.GetTSUpdate(tester.Config, extractor, ts, node, update, nodeToAssetIds);
-            Assert.Null(result.AssetId);
-            Assert.Null(result.Description);
-            Assert.Null(result.Metadata);
-            Assert.Null(result.Name);
-
-            update.Context = true;
-            update.Description = true;
-            update.Metadata = true;
-            update.Name = true;
-            result = PusherUtils.GetTSUpdate(tester.Config, extractor, ts, node, update, nodeToAssetIds);
+            Assert.Null(PusherUtils.GetTSUpdate(tester.Config, extractor, null, node, nodeToAssetIds));
+            var result = PusherUtils.GetTSUpdate(tester.Config, extractor, ts, node, nodeToAssetIds);
             Assert.Null(result.AssetId);
             Assert.Null(result.Description);
             Assert.Null(result.Metadata);
@@ -127,13 +115,7 @@ namespace Test.Unit
             (oldProperties[3] as UAVariable).FullAttributes.Value = new Variant("value-new");
             (oldProperties[2] as UAVariable).FullAttributes.Value = new Variant("value4-new");
 
-            result = PusherUtils.GetTSUpdate(tester.Config, extractor, ts, node, new TypeUpdateConfig(), nodeToAssetIds);
-            Assert.Null(result.AssetId);
-            Assert.Null(result.Description);
-            Assert.Null(result.Metadata);
-            Assert.Null(result.Name);
-
-            result = PusherUtils.GetTSUpdate(tester.Config, extractor, ts, node, update, nodeToAssetIds);
+            result = PusherUtils.GetTSUpdate(tester.Config, extractor, ts, node, nodeToAssetIds);
             Assert.Equal("description2", result.Description.Set);
             Assert.Equal("test2", result.Name.Set);
             Assert.Equal(222, result.AssetId.Set);
@@ -148,7 +130,7 @@ namespace Test.Unit
             // Update with null values, and missing asset
             node = new UAVariable(new NodeId("test3", 0), null, null, null, new NodeId("parent3", 0), null);
             node.FullAttributes.DataType = new UADataType(DataTypeIds.Double);
-            result = PusherUtils.GetTSUpdate(tester.Config, extractor, ts, node, update, nodeToAssetIds);
+            result = PusherUtils.GetTSUpdate(tester.Config, extractor, ts, node, nodeToAssetIds);
             Assert.Null(result.AssetId);
             Assert.Null(result.Description);
             Assert.Null(result.Metadata);
@@ -185,20 +167,8 @@ namespace Test.Unit
                     { "prop4", "value4" }
                 }
             };
-            var update = new TypeUpdateConfig();
-
-            Assert.Null(PusherUtils.GetAssetUpdate(tester.Config, asset, null, extractor, update));
-            var result = PusherUtils.GetAssetUpdate(tester.Config, asset, node, extractor, update);
-            Assert.Null(result.ParentExternalId);
-            Assert.Null(result.Description);
-            Assert.Null(result.Metadata);
-            Assert.Null(result.Name);
-
-            update.Context = true;
-            update.Description = true;
-            update.Metadata = true;
-            update.Name = true;
-            result = PusherUtils.GetAssetUpdate(tester.Config, asset, node, extractor, update);
+            Assert.Null(PusherUtils.GetAssetUpdate(tester.Config, asset, null, extractor));
+            var result = PusherUtils.GetAssetUpdate(tester.Config, asset, node, extractor);
             Assert.Null(result.ParentExternalId);
             Assert.Null(result.Description);
             Assert.Null(result.Metadata);
@@ -214,13 +184,7 @@ namespace Test.Unit
             (oldProperties[3] as UAVariable).FullAttributes.Value = new Variant("value-new");
             (oldProperties[2] as UAVariable).FullAttributes.Value = new Variant("value4-new");
 
-            result = PusherUtils.GetAssetUpdate(tester.Config, asset, node, extractor, new TypeUpdateConfig());
-            Assert.Null(result.ParentExternalId);
-            Assert.Null(result.Description);
-            Assert.Null(result.Metadata);
-            Assert.Null(result.Name);
-
-            result = PusherUtils.GetAssetUpdate(tester.Config, asset, node, extractor, update);
+            result = PusherUtils.GetAssetUpdate(tester.Config, asset, node, extractor);
             Assert.Equal("description2", result.Description.Set);
             Assert.Equal("test2", result.Name.Set);
             Assert.Equal("gp.base:s=parent2", result.ParentExternalId.Set);
@@ -233,65 +197,11 @@ namespace Test.Unit
             Assert.Null(result.ExternalId);
 
             node = new UAObject(new NodeId("test3", 0), null, null, null, NodeId.Null, null);
-            result = PusherUtils.GetAssetUpdate(tester.Config, asset, node, extractor, update);
+            result = PusherUtils.GetAssetUpdate(tester.Config, asset, node, extractor);
             Assert.Null(result.ParentExternalId);
             Assert.Null(result.Description);
             Assert.Null(result.Metadata);
             Assert.Null(result.Name);
-        }
-
-        [Fact]
-        public void TestRawUpdate()
-        {
-            var log = tester.Provider.GetRequiredService<ILogger<PusherUtilsTest>>();
-
-            // Test null
-            Assert.Null(PusherUtils.CreateRawUpdate(log, null, null, null, ConverterType.Node));
-
-            var properties = new List<BaseUANode>
-            {
-                new UAVariable(new NodeId("prop1", 0), "prop1", null, null, NodeId.Null, null),
-                new UAObject(new NodeId("prop2", 0), "prop2", null, null, NodeId.Null, null),
-            };
-            var deepProp = new UAVariable(new NodeId("prop3", 0), "prop3", null, null, NodeId.Null, null);
-            properties[1].Attributes.AddProperty(deepProp);
-            deepProp.FullAttributes.Value = new Variant("value3");
-            (properties[0] as UAVariable).FullAttributes.Value = new Variant(new[] { 1, 2, 3, 4 });
-
-            // Test create asset
-            var node = new UAObject(new NodeId("test", 0), "test", null, null, new NodeId("parent", 0), null);
-            foreach (var prop in properties) node.Attributes.AddProperty(prop);
-            var result = PusherUtils.CreateRawUpdate(log, tester.Client.StringConverter, node, null, ConverterType.Node);
-            Assert.Equal(@"{""externalId"":""gp.base:s=test"",""name"":""test"",""description"":null,""metadata"":{""prop1"":[1,2,3,4]," +
-                @"""prop2"":{""prop3"":""value3""}},""parentExternalId"":""gp.base:s=parent""}", result.ToString());
-
-            var nodeRow = ToRawRow(result.Value);
-
-            Assert.Null(PusherUtils.CreateRawUpdate(log, tester.Client.StringConverter, node, nodeRow, ConverterType.Node));
-
-            // Modified description
-            node.Attributes.Description = "desc";
-            result = PusherUtils.CreateRawUpdate(log, tester.Client.StringConverter, node, nodeRow, ConverterType.Node);
-            Assert.Equal(@"{""externalId"":""gp.base:s=test"",""name"":""test"",""description"":""desc"",""metadata"":{""prop1"":[1,2,3,4]," +
-                @"""prop2"":{""prop3"":""value3""}},""parentExternalId"":""gp.base:s=parent""}", result.ToString());
-
-            var variable = new UAVariable(new NodeId("test", 0), "test", null, null, new NodeId("parent", 0), null);
-            variable.FullAttributes.DataType = new UADataType(new NodeId("dt", 0));
-            variable.FullAttributes.Value = new Variant("test");
-
-            foreach (var prop in properties) variable.Attributes.AddProperty(prop);
-            result = PusherUtils.CreateRawUpdate(log, tester.Client.StringConverter, variable, null, ConverterType.Variable);
-            Assert.Equal(@"{""externalId"":""gp.base:s=test"",""name"":""test"",""description"":null,""metadata"":{""prop1"":[1,2,3,4]," +
-                @"""prop2"":{""prop3"":""value3""}},""assetExternalId"":""gp.base:s=parent"",""isString"":true,""isStep"":false}", result.ToString());
-
-            nodeRow = ToRawRow(result.Value);
-
-            Assert.Null(PusherUtils.CreateRawUpdate(log, tester.Client.StringConverter, variable, nodeRow, ConverterType.Variable));
-
-            variable.FullAttributes.DataType = new UADataType(DataTypeIds.Boolean);
-            result = PusherUtils.CreateRawUpdate(log, tester.Client.StringConverter, variable, nodeRow, ConverterType.Variable);
-            Assert.Equal(@"{""externalId"":""gp.base:s=test"",""name"":""test"",""description"":null,""metadata"":{""prop1"":[1,2,3,4]," +
-                @"""prop2"":{""prop3"":""value3""}},""assetExternalId"":""gp.base:s=parent"",""isString"":false,""isStep"":true}", result.ToString());
         }
     }
 }
