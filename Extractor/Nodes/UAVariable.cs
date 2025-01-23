@@ -323,26 +323,24 @@ namespace Cognite.OpcUa.Nodes
             return fields;
         }
 
-        public override int GetUpdateChecksum(TypeUpdateConfig update, bool dataTypeMetadata, bool nodeTypeMetadata)
+        public override int GetUpdateChecksum(bool dataTypeMetadata, bool nodeTypeMetadata)
         {
-            int checksum = base.GetUpdateChecksum(update, dataTypeMetadata, nodeTypeMetadata);
-            if (update.Metadata)
-            {
-                unchecked
-                {
-                    if (dataTypeMetadata)
-                    {
-                        checksum = checksum * 31 + FullAttributes.DataType.Id.GetHashCode();
-                    }
-                    if (NodeClass == NodeClass.VariableType)
-                    {
-                        checksum = checksum * 31 + FullAttributes.Value.GetHashCode();
-                    }
+            int checksum = base.GetUpdateChecksum(dataTypeMetadata, nodeTypeMetadata);
 
-                    if (nodeTypeMetadata)
-                    {
-                        checksum = checksum * 31 + (FullAttributes.TypeDefinition?.Id?.GetHashCode() ?? 0);
-                    }
+            unchecked
+            {
+                if (dataTypeMetadata)
+                {
+                    checksum = checksum * 31 + FullAttributes.DataType.Id.GetHashCode();
+                }
+                if (NodeClass == NodeClass.VariableType)
+                {
+                    checksum = checksum * 31 + FullAttributes.Value.GetHashCode();
+                }
+
+                if (nodeTypeMetadata)
+                {
+                    checksum = checksum * 31 + (FullAttributes.TypeDefinition?.Id?.GetHashCode() ?? 0);
                 }
             }
 
@@ -589,6 +587,7 @@ namespace Cognite.OpcUa.Nodes
         {
             Index = index;
             TSParent = parent;
+            Source = parent.Source;
         }
 
         public override string? GetUniqueId(SessionContext context)

@@ -36,7 +36,7 @@ namespace Cognite.OpcUa.Pushers.Writers
         /// <param name="timeseriesMap">Dictionary of mapping of variables to keys</param>
         /// <param name="nodeToAssetIds">Node to assets to ids</param>
         /// <param name="mismatchedTimeseries">Mismatched timeseries</param>
-        /// <param name="update">Type update configuration</param>
+        /// <param name="report">Metrics about pushed variables</param>
         /// <param name="token">Cancellation token</param>
         /// <returns>Operation result</returns>
         public async Task<bool> PushVariables(
@@ -44,7 +44,6 @@ namespace Cognite.OpcUa.Pushers.Writers
             IDictionary<string, UAVariable> timeseriesMap,
             IDictionary<NodeId, long> nodeToAssetIds,
             HashSet<string> mismatchedTimeseries,
-            TypeUpdateConfig update,
             BrowseReport report,
             CancellationToken token)
         {
@@ -64,9 +63,9 @@ namespace Cognite.OpcUa.Pushers.Writers
                     .Where(kvp => kvp.Value.Source != NodeSource.CDF)
                     .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
 
-                if (update.AnyUpdate && toPushMeta.Count != 0)
+                if (toPushMeta.Count != 0)
                 {
-                    await UpdateTimeseries(extractor, toPushMeta, timeseries, nodeToAssetIds, update, result, token);
+                    await UpdateTimeseries(extractor, toPushMeta, timeseries, nodeToAssetIds, result, token);
                 }
                 if (this is MinimalTimeseriesWriter)
                 {
@@ -94,8 +93,6 @@ namespace Cognite.OpcUa.Pushers.Writers
         /// <param name="nodeToAssetIds">Node to assets to ids</param>
         /// <param name="mismatchedTimeseries">Mismatched timeseries</param>
         /// <param name="result">Operation result</param>
-        /// <param name="update">Type update configuration</param>
-        /// <param name="createMinimalTimeseries">Indicate if to create minimal timeseries</param>
         /// <param name="token">Cancellation token</param>
         /// <returns>Operation result</returns>
         private async Task<IEnumerable<TimeSeries>> CreateTimeseries(
@@ -158,7 +155,6 @@ namespace Cognite.OpcUa.Pushers.Writers
             IDictionary<string, UAVariable> tsMap,
             IEnumerable<TimeSeries> timeseries,
             IDictionary<NodeId, long> nodeToAssetIds,
-            TypeUpdateConfig update,
             Result result,
             CancellationToken token);
 

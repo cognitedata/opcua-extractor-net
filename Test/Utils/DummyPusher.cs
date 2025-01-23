@@ -75,7 +75,6 @@ namespace Test.Utils
             IEnumerable<BaseUANode> objects,
             IEnumerable<UAVariable> variables,
             IEnumerable<UAReference> references,
-            UpdateConfig update,
             CancellationToken token)
         {
             var result = new PushResult

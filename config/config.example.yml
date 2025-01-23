@@ -594,23 +594,6 @@ extraction:
     # events on the server node. These will be used to add new nodes automatically, by recursively browsing from each given ParentId.
     enable-audit-discovery:
 
-    # Update data in destinations on rebrowse or restart.
-    # Set auto-rebrowse-period to some value to do this periodically.
-    # Context refers to the structure of the node graph in OPC-UA. (assetId and parentId in CDF)
-    # Metadata refers to any information obtained from OPC-UA properties. (metadata in CDF)
-    # Enabling anything here will increase the startup- and rebrowse-time of the extractor. Enabling metadata will increase it more.
-    update:
-        objects:
-            name: false
-            description: false
-            context: false
-            metadata: false
-        variables:
-            name: false
-            description: false
-            context: false
-            metadata: false
-
     # Map OPC-UA non-hierarchical references to relationships in CDF.
     # The generated relationships will have external-id
     # [prefix][reference type name (or inverse-name)];[namespace source][id source];[namespace target][id target]
