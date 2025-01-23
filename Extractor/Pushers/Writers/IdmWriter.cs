@@ -106,7 +106,6 @@ namespace Cognite.OpcUa.Pushers.Writers
         public Task<bool> PushAssets(
             IUAClientAccess client,
             IDictionary<string, BaseUANode> nodes,
-            TypeUpdateConfig update,
             BrowseReport report,
             CancellationToken token
         )

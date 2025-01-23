@@ -243,11 +243,10 @@ namespace Cognite.OpcUa.Pushers
         /// <param name="objects">List of objects to be synchronized</param>
         /// <param name="variables">List of variables to be synchronized</param>
         /// <param name="references"> List of references to be synchronized</param>
-        /// <param name="update">Configuration of what fields, if any, should be updated.</param>
         /// <param name="token">Cancellation token</param>
         /// <returns>True if no operation failed unexpectedly</returns>
         public async Task<PushResult> PushNodes(IEnumerable<BaseUANode> objects,
-                IEnumerable<UAVariable> variables, IEnumerable<UAReference> references, UpdateConfig update, CancellationToken token)
+                IEnumerable<UAVariable> variables, IEnumerable<UAReference> references, CancellationToken token)
         {
             var result = new PushResult();
             var report = new BrowseReport
@@ -297,7 +296,6 @@ namespace Cognite.OpcUa.Pushers
                 variables,
                 references,
                 report,
-                update,
                 result,
                 Extractor,
                 token
