@@ -87,15 +87,6 @@ namespace Cognite.OpcUa.Config
             get => DataPushDelayValue.RawValue; set => DataPushDelayValue.RawValue = value!;
         }
         /// <summary>
-        /// Update data in destinations on rebrowse or restart.
-        /// Set auto-rebrowse-period to some value to do this periodically.
-        /// Context refers to the structure of the node graph in OPC-UA. (assetId and parentId in CDF)
-        /// Metadata refers to any information obtained from OPC-UA properties. (metadata in CDF)
-        /// Enabling anything here will increase the startup- and rebrowse-time of the extractor.
-        /// </summary>
-        public UpdateConfig Update { get => update; set => update = value ?? update; }
-        private UpdateConfig update = new UpdateConfig();
-        /// <summary>
         /// Configuration for handling of data types in OPC-UA.
         /// </summary>
         public DataTypeConfig DataTypes { get => dataTypes; set => dataTypes = value ?? dataTypes; }
@@ -289,41 +280,6 @@ namespace Cognite.OpcUa.Config
         /// To actually get types in the node hierarchy you have to add a root node that they descend from.
         /// </summary>
         public bool AsNodes { get; set; }
-    }
-
-    public class UpdateConfig
-    {
-        public bool AnyUpdate => objects.AnyUpdate || variables.AnyUpdate;
-        /// <summary>
-        /// Configuration for updating objects and object types.
-        /// </summary>
-        public TypeUpdateConfig Objects { get => objects; set => objects = value ?? objects; }
-        private TypeUpdateConfig objects = new TypeUpdateConfig();
-        /// <summary>
-        /// Configuration for updating variables and variable types.
-        /// </summary>
-        public TypeUpdateConfig Variables { get => variables; set => variables = value ?? variables; }
-        private TypeUpdateConfig variables = new TypeUpdateConfig();
-    }
-    public class TypeUpdateConfig
-    {
-        public bool AnyUpdate => Description || Name || Metadata || Context;
-        /// <summary>
-        /// True to update description.
-        /// </summary>
-        public bool Description { get; set; }
-        /// <summary>
-        /// True to update name.
-        /// </summary>
-        public bool Name { get; set; }
-        /// <summary>
-        /// True to update metadata.
-        /// </summary>
-        public bool Metadata { get; set; }
-        /// <summary>
-        /// True to update context, i.e. the position of the node in the node hierarchy.
-        /// </summary>
-        public bool Context { get; set; }
     }
 
     public class DeletesConfig

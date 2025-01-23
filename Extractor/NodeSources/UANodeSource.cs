@@ -89,8 +89,6 @@ namespace Cognite.OpcUa.NodeSources
 
             if (nodeMap.Count != 0) await client.ReadNodeData(nodeMap, token, "new non-hierarchical instances");
 
-            logger.LogDebug("Is mandatory in nodemap? {Yes}", nodeMap.FirstOrDefault(n => n.Id == ObjectIds.ModellingRule_Mandatory));
-
             return TakeResults(false);
         }
 
