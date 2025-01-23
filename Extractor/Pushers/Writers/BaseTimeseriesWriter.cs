@@ -36,7 +36,7 @@ namespace Cognite.OpcUa.Pushers.Writers
         /// <param name="timeseriesMap">Dictionary of mapping of variables to keys</param>
         /// <param name="nodeToAssetIds">Node to assets to ids</param>
         /// <param name="mismatchedTimeseries">Mismatched timeseries</param>
-        /// <param name="update">Type update configuration</param>
+        /// <param name="report">Metrics about pushed variables</param>
         /// <param name="token">Cancellation token</param>
         /// <returns>Operation result</returns>
         public async Task<bool> PushVariables(
@@ -93,8 +93,6 @@ namespace Cognite.OpcUa.Pushers.Writers
         /// <param name="nodeToAssetIds">Node to assets to ids</param>
         /// <param name="mismatchedTimeseries">Mismatched timeseries</param>
         /// <param name="result">Operation result</param>
-        /// <param name="update">Type update configuration</param>
-        /// <param name="createMinimalTimeseries">Indicate if to create minimal timeseries</param>
         /// <param name="token">Cancellation token</param>
         /// <returns>Operation result</returns>
         private async Task<IEnumerable<TimeSeries>> CreateTimeseries(

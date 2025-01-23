@@ -59,7 +59,7 @@ namespace Cognite.OpcUa.Pushers.Writers
         /// <param name="extractor">UAExtractor instance<param>
         /// <param name="nodes">Dictionary of mapping of variables to keys</param>
         /// <param name="nodeToAssetIds">Node to assets to ids</param>
-        /// <param name="update">Type update configuration</param>
+        /// <param name="report">Metrics about assets created and updated</param>
         /// <param name="token">Cancellation token</param>
         /// <returns>Operation result</returns>
         public async Task<bool> PushAssets(
@@ -185,7 +185,6 @@ namespace Cognite.OpcUa.Pushers.Writers
         /// <param name="extractor">UAExtractor instance<param>
         /// <param name="assetMap">Dictionary of mapping of variables to keys</param>
         /// <param name="assets">List of assets</param>
-        /// <param name="update">Type update configuration</param>
         /// <param name="result">Operation result</param>
         /// <param name="token">Cancellation token</param>
         /// <returns>Future list of assets</returns>

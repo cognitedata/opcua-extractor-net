@@ -80,9 +80,10 @@ namespace Cognite.OpcUa.Pushers
         /// <summary>
         /// Create timeseries update from existing timeseries and new OPC-UA variable.
         /// </summary>
+        /// <param name="config">Extractor configuration object.</param>
+        /// <param name="client">Interface for generating unique IDs using the client context.</param>
         /// <param name="old">Existing timeseries</param>
         /// <param name="newTs">New OPC-UA variable</param>
-        /// <param name="update">Configuration for which fields to update</param>
         /// <param name="nodeToAssetIds">Map from NodeIds to assetIds, necessary for setting parents</param>
         /// <returns>Update object, or null if updating was unnecessary</returns>
         public static TimeSeriesUpdate? GetTSUpdate(
@@ -132,10 +133,10 @@ namespace Cognite.OpcUa.Pushers
         /// <summary>
         /// Create asset update from existing asset and new OPC-UA node.
         /// </summary>
-        /// <param name="extractor">Active extractor, used for building metadata</param>
+        /// <param name="config">Extractor config.</param>
         /// <param name="old">Existing asset</param>
         /// <param name="newAsset">New OPC-UA node</param>
-        /// <param name="update">Configuration for which fields to update</param>
+        /// <param name="extractor">Active extractor, used for building metadata</param>
         /// <returns>Update object, or null if updating was unnecessary</returns>
         public static AssetUpdate? GetAssetUpdate(
             FullConfig config,

@@ -65,8 +65,8 @@ namespace Cognite.OpcUa.Pushers.Writers
         /// </summary>
         /// <param name="extractor">UAExtractor instance<param>
         /// <param name="tsMap">Dictionary of mapping of variables to keys</param>
+        /// <param name="timeseries">Existing timeseries</param>
         /// <param name="nodeToAssetIds">Node to assets to ids</param>
-        /// <param name="update">Type update configuration</param>
         /// <param name="result">Operation result</param>
         /// <param name="token">Cancellation token</param>
         /// <returns>Operation result</returns>

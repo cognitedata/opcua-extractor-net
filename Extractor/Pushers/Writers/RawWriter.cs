@@ -149,7 +149,6 @@ namespace Cognite.OpcUa.Pushers.Writers
         /// <param name="table">Name of metadata table in CDF</param>
         /// <param name="rows">Dictionary map of BaseUANode of their keys</param>
         /// <param name="converter">Converter</param>
-        /// <param name="shouldUpdate">Indicates if it is an update operation</param>
         /// <param name="token">Cancellation token</param>
         /// <returns>Operation result</returns>
         private async Task<Result> PushRows<T>(UAExtractor extractor, string database, string table,
@@ -157,12 +156,12 @@ namespace Cognite.OpcUa.Pushers.Writers
         {
             var result = new Result { Created = 0, Updated = 0 };
 
-            await CreateRows(extractor, database, table, rows, converter, result, token);
+            await UpsertRows(extractor, database, table, rows, converter, result, token);
             return result;
         }
 
         /// <summary>
-        /// Creates all BaseUANode to CDF raw
+        /// Creates or updates the given BaseUANodes in CDF Raw.
         /// </summary>
         /// <param name="extractor">UAExtractor instance<param>
         /// <param name="database">Name of metadata database in CDF</param>
@@ -170,10 +169,9 @@ namespace Cognite.OpcUa.Pushers.Writers
         /// <param name="dataSet">Dictionary map of BaseUANode of their keys</param>
         /// <param name="converter">Converter</param>
         /// <param name="result">Operation result</param>
-        /// <param name="shouldUpdate">Indicates if it is an update operation</param>
         /// <param name="token">Cancellation token</param>
         /// <returns>Task</returns>
-        private async Task CreateRows<T>(UAExtractor extractor, string database, string table,
+        private async Task UpsertRows<T>(UAExtractor extractor, string database, string table,
                 IDictionary<string, T> dataMap, ConverterType converter, Result result, CancellationToken token) where T : BaseUANode
         {
             var json = dataMap
