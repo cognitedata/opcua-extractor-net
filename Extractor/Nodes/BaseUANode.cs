@@ -405,45 +405,32 @@ namespace Cognite.OpcUa.Nodes
             return null;
         }
 
-        public virtual int GetUpdateChecksum(TypeUpdateConfig update, bool dataTypeMetadata, bool nodeTypeMetadata)
+        public virtual int GetUpdateChecksum(bool dataTypeMetadata, bool nodeTypeMetadata)
         {
-            if (update == null || !update.AnyUpdate) return 0;
             int checksum = 0;
             unchecked
             {
-                if (update.Context)
+                checksum += (ParentId?.GetHashCode() ?? 0);
+                checksum = checksum * 31 + (Attributes.Description?.GetHashCode(StringComparison.InvariantCulture) ?? 0);
+                checksum = checksum * 31 + (Name?.GetHashCode(StringComparison.InvariantCulture) ?? 0);
+                int metaHash = 0;
+                if (Properties != null)
                 {
-                    checksum += (ParentId?.GetHashCode() ?? 0);
-                }
-                if (update.Description)
-                {
-                    checksum = checksum * 31 + (Attributes.Description?.GetHashCode(StringComparison.InvariantCulture) ?? 0);
-                }
-                if (update.Name)
-                {
-                    checksum = checksum * 31 + (Name?.GetHashCode(StringComparison.InvariantCulture) ?? 0);
-                }
-                if (update.Metadata)
-                {
-                    int metaHash = 0;
-                    if (Properties != null)
+                    foreach (var prop in Properties.OrderBy(prop => prop.Name))
                     {
-                        foreach (var prop in Properties.OrderBy(prop => prop.Name))
+                        metaHash *= 31;
+                        if (prop.Name == null) continue;
+                        if (prop is UAVariable propVariable)
                         {
-                            metaHash *= 31;
-                            if (prop.Name == null) continue;
-                            if (prop is UAVariable propVariable)
-                            {
-                                metaHash += (prop.Name, propVariable.Value?.Value).GetHashCode();
-                            }
-                            if (prop.Properties?.Any() ?? false)
-                            {
-                                metaHash += prop.GetUpdateChecksum(new TypeUpdateConfig { Metadata = true }, false, false);
-                            }
+                            metaHash += (prop.Name, propVariable.Value?.Value).GetHashCode();
+                        }
+                        if (prop.Properties?.Any() ?? false)
+                        {
+                            metaHash += prop.GetUpdateChecksum(false, false);
                         }
                     }
-                    checksum = checksum * 31 + metaHash;
                 }
+                checksum = checksum * 31 + metaHash;
             }
             return checksum;
         }
