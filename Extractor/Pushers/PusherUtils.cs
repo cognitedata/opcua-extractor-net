@@ -184,7 +184,18 @@ namespace Cognite.OpcUa.Pushers
         public static DataPushResult ResultFromException(Exception? exc)
         {
             if (exc is not ResponseException rex) return DataPushResult.RecoverableFailure;
-            if (rex.Code == 429 || rex.Code >= 500) return DataPushResult.RecoverableFailure;
+            // This is more than just the status codes we auto-retry on.
+            // It includes errors that are likely to pop up during an extractor's life
+            // that are easily remedied, it makes sense to buffer in this case.
+            // We want these to be errors that are likely to also be reflected in the
+            // "CanPush*" methods, so that we don't constantly read from the failure buffer.
+            // This includes 401 and 403, as well as regular transient errors such as
+            // 408, 5xx, and non-CDF errors.
+            if (rex.Code == 429
+                || rex.Code >= 500
+                || rex.Code == 401
+                || rex.Code == 403
+                || rex.Code == 408) return DataPushResult.RecoverableFailure;
             return DataPushResult.UnrecoverableFailure;
         }
     }
