@@ -35,14 +35,11 @@ namespace Cognite.OpcUa
 
         public PeriodicScheduler Scheduler { get; }
 
-        private readonly IEnumerable<IPusher> pushers;
+        private readonly IPusher pusher;
         private readonly ILogger<Looper> log;
 
         private TaskCompletionSource<bool>? pushWaiterSource;
         private bool restart;
-
-        private List<IPusher> failingPushers = new List<IPusher>();
-        private List<IPusher> passingPushers = new List<IPusher>();
 
         private static readonly Counter numPushes = Metrics.CreateCounter("opcua_num_pushes",
             "Increments by one after each push to destination systems");
@@ -52,29 +49,18 @@ namespace Cognite.OpcUa
             PeriodicScheduler scheduler,
             UAExtractor extractor,
             FullConfig config,
-            IEnumerable<IPusher> pushers)
+            IPusher pusher)
         {
             this.log = log;
             Scheduler = scheduler;
             this.extractor = extractor;
             this.config = config;
-            this.pushers = pushers;
-        }
-
-        private static TimeSpan ToTimespan(string? t, bool allowZero, string unit)
-        {
-            if (t == null) return Timeout.InfiniteTimeSpan;
-            var conv = CogniteTime.ParseTimeSpanString(t, unit);
-            if (conv == TimeSpan.Zero && !allowZero) return Timeout.InfiniteTimeSpan;
-            return conv ?? Timeout.InfiniteTimeSpan;
+            this.pusher = pusher;
         }
 
         public void Run()
         {
-            failingPushers = pushers.Where(pusher => pusher.DataFailing || pusher.EventsFailing || !pusher.Initialized).ToList();
-            passingPushers = pushers.Except(failingPushers).ToList();
-
-            Scheduler.SchedulePeriodicTask(nameof(Pushers), config.Extraction.DataPushDelayValue.Value, Pushers, true);
+            Scheduler.SchedulePeriodicTask(nameof(Pusher), config.Extraction.DataPushDelayValue.Value, Pusher, true);
             Scheduler.SchedulePeriodicTask(nameof(ExtraTasks), Timeout.InfiniteTimeSpan, ExtraTasks, false);
 
             Scheduler.SchedulePeriodicTask(nameof(Rebrowse), config.Extraction.AutoRebrowsePeriodValue, Rebrowse, false);
@@ -112,7 +98,7 @@ namespace Cognite.OpcUa
             pushWaiterSource = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             if (trigger)
             {
-                Scheduler.TryTriggerTask(nameof(Pushers));
+                Scheduler.TryTriggerTask(nameof(Pusher));
             }
             var t = new Stopwatch();
             t.Start();
@@ -126,72 +112,44 @@ namespace Cognite.OpcUa
         }
 
 
-        private async Task CheckFailingPushers(CancellationToken token)
+        private async Task EnsurePusherIsInitialized(CancellationToken token)
         {
-            if (failingPushers.Count == 0) return;
+            if (pusher.Initialized) return;
 
-            var result = await Task.WhenAll(failingPushers.Select(pusher => pusher.TestConnection(config, token)));
-            var recovered = result.Select((res, idx) => (result: res, pusher: failingPushers.ElementAt(idx)))
-                .Where(x => x.result == true).ToList();
+            var result = await pusher.TestConnection(config, token);
 
-            if (recovered.Count != 0)
+            if (result != true)
             {
-                log.LogInformation("Pushers {Names} recovered", string.Join(", ", recovered.Select(val => val.pusher.GetType())));
+                return;
             }
 
+            log.LogInformation("Pusher connection test succeeded, attempting to initialize");
 
-            if (recovered.Any(pair => !pair.pusher.Initialized))
-            {
-                var tasks = new List<Task>();
-                var toInit = recovered.Select(pair => pair.pusher).Where(pusher => !pusher.Initialized);
-                foreach (var pusher in toInit)
-                {
-                    pusher.NoInit = false;
-                    var pending = pusher.PendingNodes;
-                    pusher.PendingNodes = null;
-                    tasks.Add(extractor.PushNodes(pending, pusher, true));
-                }
+            pusher.NoInit = false;
+            var pending = pusher.PendingNodes;
+            pusher.PendingNodes = null;
+            await extractor.PushNodes(pending, pusher, true);
 
-                await Task.WhenAll(tasks);
-            }
-            foreach (var pair in recovered)
+            if (pusher.Initialized)
             {
-                if (pair.pusher.Initialized)
-                {
-                    pair.pusher.DataFailing = true;
-                    pair.pusher.EventsFailing = true;
-                    failingPushers.Remove(pair.pusher);
-                    passingPushers.Add(pair.pusher);
-                }
+                pusher.DataFailing = extractor.Streamer.AllowData;
+                pusher.EventsFailing = extractor.Streamer.AllowEvents;
             }
         }
 
 
-        private async Task Pushers(CancellationToken token)
+        private async Task Pusher(CancellationToken token)
         {
             if (token.IsCancellationRequested) return;
 
-            await CheckFailingPushers(token);
+            await EnsurePusherIsInitialized(token);
 
             await Task.WhenAll(
-                Task.Run(async () => await extractor.Streamer.PushDataPoints(passingPushers, failingPushers, token), token),
-                Task.Run(async () => await extractor.Streamer.PushEvents(passingPushers, failingPushers, token), token)
+                Task.Run(async () => await extractor.Streamer.PushDataPoints(pusher, token), token),
+                Task.Run(async () => await extractor.Streamer.PushEvents(pusher, token), token)
             );
 
-            var failedPushers = passingPushers.Where(pusher =>
-            pusher.DataFailing && extractor.Streamer.AllowData
-            || pusher.EventsFailing && extractor.Streamer.AllowEvents
-            || !pusher.Initialized).ToList();
-            foreach (var pusher in failedPushers)
-            {
-                pusher.DataFailing = extractor.Streamer.AllowData;
-                pusher.EventsFailing = extractor.Streamer.AllowEvents;
-                failingPushers.Add(pusher);
-                passingPushers.Remove(pusher);
-            }
-
             numPushes.Inc();
-
             pushWaiterSource?.TrySetResult(true);
         }
 
