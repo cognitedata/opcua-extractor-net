@@ -173,13 +173,21 @@ namespace Cognite.OpcUa
             }
 
 
-            bool? result = false;
+            DataPushResult result = DataPushResult.NoDataPushed;
             if (pusher.Initialized)
             {
                 result = await pusher.PushDataPoints(dataPointList, token);
             }
 
-            if (result == false)
+            if (pusher.DataFailing && result == DataPushResult.NoDataPushed && pusher.Initialized)
+            {
+                if (await pusher.CanPushDataPoints(token))
+                {
+                    result = DataPushResult.Success;
+                }
+            }
+
+            if (result == DataPushResult.RecoverableFailure)
             {
                 pusher.DataFailing = true;
                 extractor.OnDataPushFailure();
@@ -189,8 +197,18 @@ namespace Cognite.OpcUa
                     await extractor.FailureBuffer.WriteDatapoints(dataPointList, pointRanges, token);
                 }
             }
+            else if (result == DataPushResult.UnrecoverableFailure)
+            {
+                // This is generally either a bug, or some conflict that can't be resolved automatically.
+                // All we can really do is alert the user and keep going. Buffering this data is
+                // useless, since we can never recover anyway. It is better to keep going and
+                // require the user to re-ingest.
+                // If we can build workarounds for specific cases, that is a potential future feature.
+                log.LogError("Unrecoverable error while pushing data points. These values will never be successfully pushed and are skipped. They will need to be re-ingested after the error is manually corrected.");
+                return;
+            }
 
-            if (pusher.DataFailing && result == true)
+            if (pusher.DataFailing && result == DataPushResult.Success)
             {
                 pusher.DataFailing = false;
                 log.LogInformation("Pusher was able to push data, reconnecting");
@@ -234,13 +252,26 @@ namespace Cognite.OpcUa
                 eventRanges[evt.EmittingNode] = range.Extend(evt.Time, evt.Time);
             }
 
-            bool? result = null;
+            DataPushResult result = DataPushResult.NoDataPushed;
             if (pusher.Initialized)
             {
                 result = await pusher.PushEvents(eventList, token);
             }
 
-            if (result == false)
+            if (pusher.EventsFailing && result == DataPushResult.NoDataPushed && pusher.Initialized)
+            {
+                if (await pusher.CanPushEvents(token))
+                {
+                    result = DataPushResult.Success;
+                }
+            }
+
+            if (result == DataPushResult.NoDataPushed && pusher.EventsFailing)
+            {
+
+            }
+
+            if (result == DataPushResult.RecoverableFailure)
             {
                 pusher.EventsFailing = true;
                 extractor.OnEventsPushFailure();
@@ -250,8 +281,13 @@ namespace Cognite.OpcUa
                     await extractor.FailureBuffer.WriteEvents(eventList, token);
                 }
             }
+            else if (result == DataPushResult.UnrecoverableFailure)
+            {
+                log.LogError("Unrecoverable error while pushing events. These values will never be successfully pushed and are skipped. They will need to be re-ingested after the error is manually corrected.");
+                return;
+            }
 
-            if (pusher.EventsFailing && result == true)
+            if (pusher.EventsFailing && result == DataPushResult.Success)
             {
                 pusher.EventsFailing = false;
                 log.LogInformation("Pusher was able to push events, reconnecting");

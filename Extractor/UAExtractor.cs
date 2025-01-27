@@ -30,6 +30,7 @@ using Cognite.OpcUa.Types;
 using Cognite.OpcUa.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Nito.Disposables.Internals;
 using Opc.Ua;
 using Opc.Ua.Client;
 using Prometheus;
@@ -124,7 +125,15 @@ namespace Cognite.OpcUa
             RemoteConfigManager<FullConfig>? configManager = null) : base(config, provider, null, run, configManager)
         {
             this.uaClient = uaClient;
-            this.pusher = pusher;
+            // Fallback to other pusher... This is bad, but it's fundamentally a design flaw
+            // in .NET dependency injection that you can register a services as null and
+            // it is considered to exist...
+            if (pusher == null)
+            {
+                pusher = provider.GetServices<IPusher>().WhereNotNull().FirstOrDefault();
+            }
+
+            this.pusher = pusher ?? throw new ConfigurationException("Missing cognite configuration");
             this.uaClient.Callbacks = this;
             log = provider.GetRequiredService<ILogger<UAExtractor>>();
 
@@ -147,6 +156,8 @@ namespace Cognite.OpcUa
             {
                 pubSubManager = new PubSubManager(provider.GetRequiredService<ILogger<PubSubManager>>(), uaClient, this, Config);
             }
+
+
 
             pusher.Extractor = this;
 

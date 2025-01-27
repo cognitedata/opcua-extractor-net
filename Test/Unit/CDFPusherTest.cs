@@ -112,7 +112,7 @@ namespace Test.Unit
             stringTs.isString = true;
 
             // Null input
-            Assert.Null(await pusher.PushDataPoints(null, tester.Source.Token));
+            Assert.Equal(DataPushResult.NoDataPushed, await pusher.PushDataPoints(null, tester.Source.Token));
 
             tester.Config.DryRun = true;
 
@@ -124,7 +124,7 @@ namespace Test.Unit
                 new UADataPoint(time.AddSeconds(1), "test-ts-double", double.NaN, StatusCodes.Good)
             };
 
-            Assert.Null(await pusher.PushDataPoints(invalidDps, tester.Source.Token));
+            Assert.Equal(DataPushResult.NoDataPushed, await pusher.PushDataPoints(invalidDps, tester.Source.Token));
 
             var dps = new[]
             {
@@ -136,20 +136,20 @@ namespace Test.Unit
             };
 
             // Debug true
-            Assert.Null(await pusher.PushDataPoints(dps, tester.Source.Token));
+            Assert.Equal(DataPushResult.NoDataPushed, await pusher.PushDataPoints(dps, tester.Source.Token));
 
             tester.Config.DryRun = false;
 
             handler.FailedRoutes.Add("/timeseries/data");
 
             // Thrown error
-            Assert.False(await pusher.PushDataPoints(dps, tester.Source.Token));
+            Assert.Equal(DataPushResult.RecoverableFailure, await pusher.PushDataPoints(dps, tester.Source.Token));
 
             handler.FailedRoutes.Clear();
             Assert.True(CommonTestUtils.TestMetricValue("opcua_datapoint_push_failures_cdf", 1));
 
             // Missing timeseries, but the others should succeed
-            Assert.True(await pusher.PushDataPoints(dps, tester.Source.Token));
+            Assert.Equal(DataPushResult.Success, await pusher.PushDataPoints(dps, tester.Source.Token));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_missing_timeseries", 1));
 
             Assert.Equal(2, handler.Datapoints["test-ts-double"].NumericDatapoints.Count);
@@ -171,7 +171,7 @@ namespace Test.Unit
                 new UADataPoint(time.AddSeconds(3), "test-ts-string", "string4", StatusCodes.Good),
                 new UADataPoint(time, "test-ts-missing", "value", StatusCodes.Good)
             };
-            Assert.True(await pusher.PushDataPoints(dps, tester.Source.Token));
+            Assert.Equal(DataPushResult.Success, await pusher.PushDataPoints(dps, tester.Source.Token));
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_mismatched_timeseries", 1));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_missing_timeseries", 1));
@@ -186,7 +186,7 @@ namespace Test.Unit
                 new UADataPoint(time, "test-ts-double", 123, StatusCodes.Good),
                 new UADataPoint(time, "test-ts-missing", "value", StatusCodes.Good)
             };
-            Assert.Null(await pusher.PushDataPoints(invalidDps, tester.Source.Token));
+            Assert.Equal(DataPushResult.NoDataPushed, await pusher.PushDataPoints(invalidDps, tester.Source.Token));
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_datapoints_pushed_cdf", 6));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_datapoint_pushes_cdf", 2));
@@ -206,7 +206,7 @@ namespace Test.Unit
                 new UADataPoint(DateTime.UtcNow, "test-ts-double", 1, StatusCodes.GoodClamped)
             };
 
-            Assert.True(await pusher.PushDataPoints(dps, tester.Source.Token));
+            Assert.Equal(DataPushResult.Success, await pusher.PushDataPoints(dps, tester.Source.Token));
 
             var idps = handler.Datapoints["test-ts-double"].NumericDatapoints;
             Assert.Equal(5, idps.Count);
@@ -235,7 +235,7 @@ namespace Test.Unit
                 new UADataPoint(start + TimeSpan.FromSeconds(4), "test-ts-double", false, StatusCodes.GoodClamped)
             };
 
-            Assert.True(await pusher.PushDataPoints(dps, tester.Source.Token));
+            Assert.Equal(DataPushResult.Success, await pusher.PushDataPoints(dps, tester.Source.Token));
 
             var idps = handler.Datapoints["test-ts-double"].NumericDatapoints;
             Assert.Equal(5, idps.Count);
@@ -253,7 +253,7 @@ namespace Test.Unit
                 "opcua_events_pushed_cdf", "opcua_event_pushes_cdf",
                 "opcua_skipped_events_cdf");
 
-            Assert.Null(await pusher.PushEvents(null, tester.Source.Token));
+            Assert.Equal(DataPushResult.NoDataPushed, await pusher.PushEvents(null, tester.Source.Token));
             var invalidEvents = new[]
             {
                 new UAEvent
@@ -265,7 +265,7 @@ namespace Test.Unit
                     Time = DateTime.MaxValue
                 }
             };
-            Assert.Null(await pusher.PushEvents(invalidEvents, tester.Source.Token));
+            Assert.Equal(DataPushResult.NoDataPushed, await pusher.PushEvents(invalidEvents, tester.Source.Token));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_skipped_events_cdf", 2));
 
 
@@ -299,15 +299,15 @@ namespace Test.Unit
             };
 
             tester.Config.DryRun = true;
-            Assert.Null(await pusher.PushEvents(events, tester.Source.Token));
+            Assert.Equal(DataPushResult.NoDataPushed, await pusher.PushEvents(events, tester.Source.Token));
             tester.Config.DryRun = false;
 
             handler.FailedRoutes.Add("/events");
-            Assert.False(await pusher.PushEvents(events, tester.Source.Token));
+            Assert.Equal(DataPushResult.RecoverableFailure, await pusher.PushEvents(events, tester.Source.Token));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_event_push_failures_cdf", 1));
             handler.FailedRoutes.Clear();
 
-            Assert.True(await pusher.PushEvents(events, tester.Source.Token));
+            Assert.Equal(DataPushResult.Success, await pusher.PushEvents(events, tester.Source.Token));
             Assert.Equal(2, handler.Events.Count);
             Assert.Equal(123, handler.Events.First().Value.assetIds.First());
             Assert.Null(handler.Events.Last().Value.assetIds);
@@ -321,7 +321,7 @@ namespace Test.Unit
                 EventId = "someid3"
             }).ToArray();
 
-            Assert.True(await pusher.PushEvents(events, tester.Source.Token));
+            Assert.Equal(DataPushResult.Success, await pusher.PushEvents(events, tester.Source.Token));
             Assert.Equal(3, handler.Events.Count);
             Assert.True(CommonTestUtils.TestMetricValue("opcua_event_pushes_cdf", 2));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_events_pushed_cdf", 3));
@@ -700,7 +700,7 @@ namespace Test.Unit
                 new UADataPoint(DateTime.UtcNow, id, 123.45, StatusCodes.Good),
                 new UADataPoint(DateTime.UtcNow.AddSeconds(1), id, 123.45, StatusCodes.Good),
             };
-            Assert.True(await pusher.PushDataPoints(dps, tester.Source.Token));
+            Assert.Equal(DataPushResult.Success, await pusher.PushDataPoints(dps, tester.Source.Token));
             Assert.Equal(2, handler.DatapointsByInstanceId[new InstanceIdentifier(
                 "space", id
             )].NumericDatapoints.Count);

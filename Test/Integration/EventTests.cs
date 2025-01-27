@@ -476,8 +476,8 @@ namespace Test.Integration
 
             tester.Server.PopulateEvents(now.AddSeconds(-20));
 
-            pusher.PushEventResult = false;
-            pusher.PushDataPointResult = false;
+            pusher.PushEventResult = DataPushResult.RecoverableFailure;
+            pusher.PushDataPointResult = DataPushResult.RecoverableFailure;
             pusher.TestConnectionResult = false;
 
             var runTask = extractor.RunExtractor();
@@ -501,8 +501,8 @@ namespace Test.Integration
             await TestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_buffer_num_events", 2), 5,
                 () => $"Expected 2 events to arrive in buffer, but got {CommonTestUtils.GetMetricValue("opcua_buffer_num_events")}");
 
-            pusher.PushEventResult = true;
-            pusher.PushDataPointResult = true;
+            pusher.PushEventResult = DataPushResult.Success;
+            pusher.PushDataPointResult = DataPushResult.Success;
             pusher.TestConnectionResult = true;
 
             await TestUtils.WaitForCondition(() => pusher.Events.Count == 3 && pusher.Events[ObjectIds.Server].Count == 714, 10);

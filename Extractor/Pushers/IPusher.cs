@@ -36,6 +36,14 @@ namespace Cognite.OpcUa
         public bool RawReferences { get; set; } = true;
     }
 
+    public enum DataPushResult
+    {
+        Success,
+        RecoverableFailure,
+        UnrecoverableFailure,
+        NoDataPushed
+    }
+
     public interface IPusher : IDisposable
     {
         bool DataFailing { get; set; }
@@ -92,19 +100,30 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="events">Events to push to destination</param>
         /// <returns>True on success, false on failure, null if no events were valid for this destination.</returns>
-        Task<bool?> PushEvents(IEnumerable<UAEvent> events, CancellationToken token)
-        {
-            return Task.FromResult((bool?)true);
-        }
+        Task<DataPushResult> PushEvents(IEnumerable<UAEvent> events, CancellationToken token);
+
+        /// <summary>
+        /// Return whether the pusher is able to push events.
+        /// This should test whether the target is live and accessible.
+        /// </summary>
+        /// <param name="token">Cancellation token</param>
+        /// <returns>True if pushing should succeed, false otherwise.</returns>
+        Task<bool> CanPushEvents(CancellationToken token);
+
         /// <summary>
         /// Push given list of datapoints.
         /// </summary>
         /// <param name="points">Data points to be pushed</param>
         /// <returns>True on success, false on failure, null if no events were valid for this destination.</returns>
-        Task<bool?> PushDataPoints(IEnumerable<UADataPoint> points, CancellationToken token)
-        {
-            return Task.FromResult((bool?)true);
-        }
+        Task<DataPushResult> PushDataPoints(IEnumerable<UADataPoint> points, CancellationToken token);
+
+        /// <summary>
+        /// Return whether the pusher is able to push datapoints.
+        /// This should test whether the target is live and accessible.
+        /// </summary>
+        /// <param name="token">Cancellation token</param>
+        /// <returns>True if pushing should succeed, false otherwise.</returns>
+        Task<bool> CanPushDataPoints(CancellationToken token);
 
         /// <summary>
         /// Mark the given nodes as deleted in destinations.

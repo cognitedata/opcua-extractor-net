@@ -37,6 +37,7 @@ namespace Test.Unit
             pusher.UniqueToNodeId["id"] = (new NodeId("id", 0), -1);
             var dps = new List<UADataPoint>();
             pusher.DataPoints[(new NodeId("id", 0), -1)] = dps;
+            pusher.Initialized = true;
             using var extractor = tester.BuildExtractor(pusher);
 
             using var evt = new ManualResetEvent(false);
@@ -111,6 +112,7 @@ namespace Test.Unit
         public async Task TestEventQueue()
         {
             using var pusher = new DummyPusher(new DummyPusherConfig());
+            pusher.Initialized = true;
             using var extractor = tester.BuildExtractor(pusher);
 
             var id = new NodeId("id", 0);
@@ -188,6 +190,7 @@ namespace Test.Unit
         {
             // Push successfully, push failure, reconnect
             using var pusher = new DummyPusher(new DummyPusherConfig());
+            pusher.Initialized = true;
 
             pusher.UniqueToNodeId["id"] = (new NodeId("id", 0), -1);
             var dps = new List<UADataPoint>();
@@ -212,7 +215,7 @@ namespace Test.Unit
             await extractor.Streamer.PushDataPoints(pusher, tester.Source.Token);
             Assert.Equal(1000, dps.Count);
 
-            pusher.PushDataPointResult = false;
+            pusher.PushDataPointResult = DataPushResult.RecoverableFailure;
             await extractor.Streamer.EnqueueAsync(toPush);
             await extractor.Streamer.PushDataPoints(pusher, tester.Source.Token);
             Assert.True(pusher.DataFailing);
@@ -224,7 +227,7 @@ namespace Test.Unit
             Assert.Equal(1000, dps.Count);
 
             await extractor.Streamer.EnqueueAsync(toPush);
-            pusher.PushDataPointResult = true;
+            pusher.PushDataPointResult = DataPushResult.Success;
             await extractor.Streamer.PushDataPoints(pusher, tester.Source.Token);
             Assert.False(pusher.DataFailing);
             Assert.Equal(2000, dps.Count);
@@ -239,6 +242,7 @@ namespace Test.Unit
 
             tester.Config.Events.History = true;
             extractor.Streamer.AllowEvents = true;
+            pusher.Initialized = true;
             var start = DateTime.UtcNow;
 
             var id = new NodeId("id", 0);
@@ -258,7 +262,7 @@ namespace Test.Unit
 
             Assert.Equal(1000, evts.Count);
 
-            pusher.PushEventResult = false;
+            pusher.PushEventResult = DataPushResult.RecoverableFailure;
             await extractor.Streamer.EnqueueAsync(toPush);
             await extractor.Streamer.PushEvents(pusher, tester.Source.Token);
             Assert.True(pusher.EventsFailing);
@@ -270,7 +274,7 @@ namespace Test.Unit
             Assert.Equal(1000, evts.Count);
 
             await extractor.Streamer.EnqueueAsync(toPush);
-            pusher.PushEventResult = true;
+            pusher.PushEventResult = DataPushResult.Success;
             await extractor.Streamer.PushEvents(pusher, tester.Source.Token);
             Assert.False(pusher.EventsFailing);
             Assert.Equal(2000, evts.Count);

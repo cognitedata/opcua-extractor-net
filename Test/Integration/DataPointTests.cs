@@ -922,7 +922,7 @@ namespace Test.Integration
             tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(ids.Root, tester.Client);
             tester.Server.PopulateBaseHistory(now.AddSeconds(-20));
 
-            pusher.PushDataPointResult = false;
+            pusher.PushDataPointResult = DataPushResult.RecoverableFailure;
             pusher.TestConnectionResult = false;
 
             var runTask = extractor.RunExtractor();
@@ -954,7 +954,7 @@ namespace Test.Integration
             await TestUtils.WaitForCondition(() => CommonTestUtils.GetMetricValue("opcua_buffer_num_points") >= 4, 5,
                 () => $"Expected at least 4 points to arrive in buffer, but got {CommonTestUtils.GetMetricValue("opcua_buffer_num_points")}");
 
-            pusher.PushDataPointResult = true;
+            pusher.PushDataPointResult = DataPushResult.Success;
             pusher.TestConnectionResult = true;
 
             await TestUtils.WaitForCondition(() => pusher.DataPoints[(ids.DoubleVar1, -1)].Count >= 1002, 10);

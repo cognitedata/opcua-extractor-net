@@ -180,7 +180,16 @@ namespace Cognite.OpcUa.Pushers
             }
             return assetUpdate;
         }
+
+        public static DataPushResult ResultFromException(Exception? exc)
+        {
+            if (exc is not ResponseException rex) return DataPushResult.RecoverableFailure;
+            if (rex.Code == 429 || rex.Code >= 500) return DataPushResult.RecoverableFailure;
+            return DataPushResult.UnrecoverableFailure;
+        }
     }
+
+
     /// <summary>
     /// EventCreate which can can be created without access to CDF Clean.
     /// </summary>

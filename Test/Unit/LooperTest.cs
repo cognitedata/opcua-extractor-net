@@ -163,8 +163,8 @@ namespace Test.Unit
             await extractor.Streamer.EnqueueAsync(dps);
             await extractor.Streamer.EnqueueAsync(evts);
 
-            pusher.PushDataPointResult = false;
-            pusher.PushEventResult = false;
+            pusher.PushDataPointResult = DataPushResult.RecoverableFailure;
+            pusher.PushEventResult = DataPushResult.RecoverableFailure;
             pusher.TestConnectionResult = false;
 
             await extractor.Looper.WaitForNextPush(true);
@@ -180,8 +180,8 @@ namespace Test.Unit
             await extractor.Streamer.EnqueueAsync(dps);
             await extractor.Streamer.EnqueueAsync(evts);
 
-            pusher.PushDataPointResult = true;
-            pusher.PushEventResult = true;
+            pusher.PushDataPointResult = DataPushResult.Success;
+            pusher.PushEventResult = DataPushResult.Success;
             pusher.TestConnectionResult = true;
 
             await extractor.Looper.WaitForNextPush(true);

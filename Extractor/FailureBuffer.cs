@@ -227,7 +227,7 @@ namespace Cognite.OpcUa
 
                     var result = await pusher.PushDataPoints(points, token);
 
-                    if (result == false) return false;
+                    if (result == DataPushResult.RecoverableFailure || result == DataPushResult.UnrecoverableFailure) return false;
 
                     var ranges = points
                         .GroupBy(point => point.Id)
@@ -296,7 +296,7 @@ namespace Cognite.OpcUa
 
                     var result = await pusher.PushEvents(events, token);
 
-                    if (result == false) return false;
+                    if (result == DataPushResult.RecoverableFailure || result == DataPushResult.UnrecoverableFailure) return false;
 
                     var ranges = events
                         .GroupBy(evt => evt.EmittingNode)
