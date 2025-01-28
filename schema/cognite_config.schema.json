@@ -266,9 +266,9 @@
             "type": "boolean",
             "description": "If this is set to `true`, relationships deleted from the source will be hard-deleted in CDF. Relationships do not have metadata, so soft-deleting them is not possible."
         },
-        "stream-records": {
+        "records": {
             "type": "object",
-            "description": "BETA: Write events to data modeling stream records. Containers corresponding to OPC-UA event types will be created as needed in the configured model-space. Note that if your server produces a lot of different event types, this can create a large number of containers.",
+            "description": "BETA: Write events to data modeling Records. Containers corresponding to OPC-UA event types will be created as needed in the configured model-space. Note that if your server produces a lot of different event types, this can create a large number of containers.",
             "unevaluatedProperties": false,
             "required": [
                 "log-space",
