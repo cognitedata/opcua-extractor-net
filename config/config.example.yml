@@ -329,11 +329,11 @@ cognite:
         min-ttl: 30
 
     # BETA:
-    # Write events to data modeling stream records.
+    # Write events to data modeling records.
     # Containers corresponding to OPC-UA event types will be created as needed in the configured
     # model-space. Note that if your server produces a lot of different event types, this can create
     # a large number of containers.
-    stream-records:
+    records:
         # Data modeling space to write the records to. The space will be created if it
         # does not already exist. Required.
         log-space:
