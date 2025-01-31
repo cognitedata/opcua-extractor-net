@@ -86,7 +86,7 @@ namespace Cognite.OpcUa.Pushers
                 callback = new BrowseCallback(destination, config.BrowseCallback, log);
             }
 
-            if (fullConfig.Cognite?.StreamRecords != null)
+            if (fullConfig.Cognite?.Records != null)
             {
                 recordsWriter = new StreamRecordsWriter(fullConfig, destination, provider.GetRequiredService<ILogger<StreamRecordsWriter>>());
             }

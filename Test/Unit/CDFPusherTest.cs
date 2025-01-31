@@ -1402,7 +1402,7 @@ namespace Test.Unit
         public async Task TestILABasic()
         {
             // Plain config.
-            tester.Config.Cognite.StreamRecords = new StreamRecordsConfig
+            tester.Config.Cognite.Records = new RecordsConfig
             {
                 Stream = "test-stream",
                 LogSpace = "ila-space",
@@ -1472,7 +1472,7 @@ namespace Test.Unit
         public async Task TestILAReversibleEncoding()
         {
             // Plain config.
-            tester.Config.Cognite.StreamRecords = new StreamRecordsConfig
+            tester.Config.Cognite.Records = new RecordsConfig
             {
                 Stream = "test-stream",
                 LogSpace = "ila-space",
@@ -1542,7 +1542,7 @@ namespace Test.Unit
         public async Task TestILARawNodeId()
         {
             // Plain config.
-            tester.Config.Cognite.StreamRecords = new StreamRecordsConfig
+            tester.Config.Cognite.Records = new RecordsConfig
             {
                 Stream = "test-stream",
                 LogSpace = "ila-space",

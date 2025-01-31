@@ -122,9 +122,9 @@ namespace Cognite.OpcUa.Config
         public MetadataTargetsConfig? MetadataTargets { get; set; }
 
         /// <summary>
-        /// Configuration for writing events to stream records.
+        /// Configuration for writing events to records.
         /// </summary>
-        public StreamRecordsConfig? StreamRecords { get; set; }
+        public RecordsConfig? Records { get; set; }
     }
     public class RawMetadataConfig
     {
@@ -323,7 +323,7 @@ namespace Cognite.OpcUa.Config
         public int ModelChunk { get; set; } = 100;
     }
 
-    public class StreamRecordsConfig
+    public class RecordsConfig
     {
         /// <summary>
         /// The space any containers will be created in.

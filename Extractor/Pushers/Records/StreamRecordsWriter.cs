@@ -24,7 +24,7 @@ namespace Cognite.OpcUa.Pushers.Records
 
         private readonly CogniteDestination destination;
 
-        private readonly StreamRecordsConfig logAnalyticsConfig;
+        private readonly RecordsConfig logAnalyticsConfig;
         private readonly LogContainerCache containerCache;
         private readonly string stream;
 
@@ -36,7 +36,7 @@ namespace Cognite.OpcUa.Pushers.Records
             // this.config = config;
             this.destination = destination;
             this.log = log;
-            logAnalyticsConfig = config.Cognite!.StreamRecords!;
+            logAnalyticsConfig = config.Cognite!.Records!;
             // modelSpace = logAnalyticsConfig.ModelSpace ?? throw new ConfigurationException("log-analytics.model-space is required when writing to log analytics is enabled");
             logSpace = logAnalyticsConfig.LogSpace ?? throw new ConfigurationException("log-analytics.log-space is required when writing to log analytics is enabled");
             stream = logAnalyticsConfig.Stream ?? throw new ConfigurationException("log-analytics.stream is required when writing to log analytics is enabled");
@@ -75,14 +75,14 @@ namespace Cognite.OpcUa.Pushers.Records
                 }
                 catch (Exception ex)
                 {
-                    log.LogError(ex, "Failed to initialize stream records writer: {Message}", ex.Message);
+                    log.LogError(ex, "Failed to initialize records writer: {Message}", ex.Message);
                     return false;
                 }
             }
 
             await containerCache.EnsureContainers(events.SelectNonNull(e => e.EventType), logAnalyticsConfig.UseRawNodeId, token);
 
-            log.LogDebug("Writing {Count} events to stream records", events.Count);
+            log.LogDebug("Writing {Count} events to records", events.Count);
 
             var logs = new List<StreamRecordWrite>();
 
@@ -90,7 +90,7 @@ namespace Cognite.OpcUa.Pushers.Records
             {
                 if (evt.EventType == null)
                 {
-                    log.LogWarning("Cannot ingest event to stream records, event type is not set");
+                    log.LogWarning("Cannot ingest event to records, event type is not set");
                     continue;
                 }
 

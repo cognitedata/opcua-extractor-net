@@ -191,20 +191,20 @@ namespace Cognite.OpcUa
                 log.LogWarning("Data modeling support is enabled. This feature is in Alpha, any may change at any time.");
             }
 
-            if (config.Cognite?.StreamRecords != null)
+            if (config.Cognite?.Records != null)
             {
-                log.LogWarning("Writing events to stream records is enabled. This feature is in Beta, and may change in the future.");
-                if (string.IsNullOrWhiteSpace(config.Cognite.StreamRecords.Stream))
+                log.LogWarning("Writing events to data modeling records is enabled. This feature is in Beta, and may change in the future.");
+                if (string.IsNullOrWhiteSpace(config.Cognite.Records.Stream))
                 {
-                    return "Missing required field cognite.stream-records.stream";
+                    return "Missing required field cognite.records.stream";
                 }
-                if (string.IsNullOrWhiteSpace(config.Cognite.StreamRecords.LogSpace))
+                if (string.IsNullOrWhiteSpace(config.Cognite.Records.LogSpace))
                 {
-                    return "Missing required field cognite.stream-records.log-space";
+                    return "Missing required field cognite.records.log-space";
                 }
-                if (string.IsNullOrWhiteSpace(config.Cognite.StreamRecords.ModelSpace))
+                if (string.IsNullOrWhiteSpace(config.Cognite.Records.ModelSpace))
                 {
-                    return "Missing required field cognite.stream-records.model-space";
+                    return "Missing required field cognite.records.model-space";
                 }
             }
 
