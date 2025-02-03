@@ -67,6 +67,13 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.33.0":
+    description: Release improvements to connection logic.
+    changelog:
+      fixed:
+        - Major improvements to connection logic that should help with extractor reliability and avoiding loss of data.
+      changed:
+        - Rename the beta option "stream-records" to "records" 
   "2.32.1-beta4":
     description: Abandon reconnect attempts on unknown exceptions.
     changelog:
