@@ -17,13 +17,13 @@ namespace Cognite.OpcUa.Pushers.Records
     public class LogContainerCache
     {
         private readonly Dictionary<string, Container> cache = new();
-        private readonly StreamRecordsConfig config;
+        private readonly RecordsConfig config;
         private readonly CogniteDestination destination;
         private readonly ILogger log;
 
         private readonly Dictionary<NodeId, EventContainer> resolvedEventTypes = new();
 
-        public LogContainerCache(CogniteDestination destination, StreamRecordsConfig config, ILogger log)
+        public LogContainerCache(CogniteDestination destination, RecordsConfig config, ILogger log)
         {
             this.config = config;
             this.destination = destination;
