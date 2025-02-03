@@ -183,7 +183,7 @@ namespace Cognite.OpcUa
             {
                 if (await pusher.CanPushDataPoints(token))
                 {
-                    result = DataPushResult.Success;
+                    result = DataPushResult.ReadyToPush;
                 }
             }
 
@@ -208,7 +208,7 @@ namespace Cognite.OpcUa
                 return;
             }
 
-            if (pusher.DataFailing && result == DataPushResult.Success)
+            if (pusher.DataFailing && (result == DataPushResult.Success || result == DataPushResult.ReadyToPush))
             {
                 pusher.DataFailing = false;
                 log.LogInformation("Pusher was able to push data, reconnecting");
@@ -252,6 +252,7 @@ namespace Cognite.OpcUa
                 eventRanges[evt.EmittingNode] = range.Extend(evt.Time, evt.Time);
             }
 
+
             DataPushResult result = DataPushResult.NoDataPushed;
             if (pusher.Initialized)
             {
@@ -268,7 +269,10 @@ namespace Cognite.OpcUa
 
             if (result == DataPushResult.NoDataPushed && pusher.EventsFailing)
             {
-
+                if (await pusher.CanPushEvents(token))
+                {
+                    result = DataPushResult.ReadyToPush;
+                }
             }
 
             if (result == DataPushResult.RecoverableFailure)
@@ -287,7 +291,7 @@ namespace Cognite.OpcUa
                 return;
             }
 
-            if (pusher.EventsFailing && result == DataPushResult.Success)
+            if (pusher.EventsFailing && (result == DataPushResult.Success || result == DataPushResult.ReadyToPush))
             {
                 pusher.EventsFailing = false;
                 log.LogInformation("Pusher was able to push events, reconnecting");

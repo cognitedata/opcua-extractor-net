@@ -39,6 +39,7 @@ namespace Cognite.OpcUa
     public enum DataPushResult
     {
         Success,
+        ReadyToPush,
         RecoverableFailure,
         UnrecoverableFailure,
         NoDataPushed
