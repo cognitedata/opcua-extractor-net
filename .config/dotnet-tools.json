@@ -3,7 +3,7 @@
   "isRoot": true,
   "tools": {
     "microsoft.sbom.dotnettool": {
-      "version": "3.0.1",
+      "version": "3.1.0",
       "commands": [
         "sbom-tool"
       ]
