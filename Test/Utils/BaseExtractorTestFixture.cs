@@ -92,7 +92,7 @@ namespace Test.Utils
 
         }
 
-        private static void ResetType(object obj, object reference)
+        public static void ResetType(object obj, object reference)
         {
             if (obj == null) return;
             var type = obj.GetType();
