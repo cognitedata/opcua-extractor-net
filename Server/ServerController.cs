@@ -93,7 +93,7 @@ namespace Server
                     cfg.SecurityConfiguration.TrustedPeerCertificates.StorePath = $"{certPath}/pki/trusted";
                     cfg.SecurityConfiguration.RejectedCertificateStore.StorePath = $"{certPath}/pki/rejected";
                 }
-                await app.CheckApplicationInstanceCertificate(false, 0);
+                await app.CheckApplicationInstanceCertificates(false);
                 Server = new TestServer(setups, mqttUrl, provider, logTrace, nodeSetFiles);
                 await Task.Run(async () => await app.Start(Server));
                 log.LogInformation("Server started on address: {Address}", address);
