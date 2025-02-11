@@ -11,6 +11,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using Test.Utils;
 using Xunit;
@@ -1101,13 +1102,15 @@ namespace Test.Integration
             // ... and that the JSON looks right
             var metaElem = root.ToJson(log, extractor.StringConverter, ConverterType.Node);
             var metaString = CommonTestUtils.JsonElementToString(metaElem.RootElement.GetProperty("metadata"));
-            // This wouldn't work in clean, since there is only a single very large metadata field, but it is a much more useful input to Raw.
-            Assert.Equal(@"{""CustomRoot"":{""ChildObject"":null,""ChildObject2"":{""NumericProp"":1234,""StringProp"":""String prop value""},"
+            var refJson = JsonNode.Parse(@"{""CustomRoot"":{""ChildObject"":null,""ChildObject2"":{""NumericProp"":1234,""StringProp"":""String prop value""},"
             + @"""Variable Array"":{""Value"":[0,0,0,0],""EngineeringUnits"":""°C: degree Celsius"",""EURange"":""(0, 100)""},"
             + @"""Variable StringArray"":[""test1"",""test2""],""StringyVar"":null,""IgnoreVar"":null,"
             + @"""MysteryVar"":{""Value"":null,""EngineeringUnits"":""°C: degree Celsius"",""EURange"":""(0, 100)""},"
             + @"""NumberVar"":{""Value"":null,""DeepProp"":{""DeepProp2"":{""val1"":""value 1"",""val2"":""value 2""}}},"
-            + @"""EnumVar1"":""Enum2"",""EnumVar2"":""VEnum2"",""EnumVar3"":[""VEnum2"",""VEnum2"",""VEnum1"",""VEnum2""]}}", metaString);
+            + @"""EnumVar1"":""Enum2"",""EnumVar2"":""VEnum2"",""EnumVar3"":[""VEnum2"",""VEnum2"",""VEnum1"",""VEnum2""]}}");
+            var metaJson = JsonNode.Parse(metaString);
+            // This wouldn't work in clean, since there is only a single very large metadata field, but it is a much more useful input to Raw.
+            Assert.True(JsonNode.DeepEquals(refJson, metaJson));
         }
         [Fact]
         public async Task TestArrayPropertiesWithoutMaxArraySize()
@@ -1149,12 +1152,14 @@ namespace Test.Integration
             var metaElem = root.ToJson(log, extractor.StringConverter, ConverterType.Node);
             var metaString = CommonTestUtils.JsonElementToString(metaElem.RootElement.GetProperty("metadata"));
             // This wouldn't work in clean, since there is only a single very large metadata field, but it is a much more useful input to Raw.
-            Assert.Equal(@"{""CustomRoot"":{""ChildObject"":null,""ChildObject2"":{""NumericProp"":1234,""StringProp"":""String prop value""},"
+            var refJson = JsonNode.Parse(@"{""CustomRoot"":{""ChildObject"":null,""ChildObject2"":{""NumericProp"":1234,""StringProp"":""String prop value""},"
             + @"""Variable Array"":{""Value"":[0,0,0,0],""EngineeringUnits"":""°C: degree Celsius"",""EURange"":""(0, 100)""},"
             + @"""Variable StringArray"":[""test1"",""test2""],""StringyVar"":null,""IgnoreVar"":null,"
             + @"""MysteryVar"":{""Value"":null,""EngineeringUnits"":""°C: degree Celsius"",""EURange"":""(0, 100)""},"
             + @"""NumberVar"":{""Value"":null,""DeepProp"":{""DeepProp2"":{""val1"":""value 1"",""val2"":""value 2""}}},"
-            + @"""EnumVar1"":1,""EnumVar2"":123,""EnumVar3"":[123,123,321,123]}}", metaString);
+            + @"""EnumVar1"":1,""EnumVar2"":123,""EnumVar3"":[123,123,321,123]}}");
+            var metaJson = JsonNode.Parse(metaString);
+            Assert.True(JsonNode.DeepEquals(refJson, metaJson));
         }
         [Fact]
         public async Task TestLateIgnore()

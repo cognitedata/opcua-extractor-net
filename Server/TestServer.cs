@@ -147,7 +147,7 @@ namespace Server
             else
             {
                 var validator = new CertificateValidator();
-                validator.Update(fullConfig.SecurityConfiguration);
+                validator.Update(fullConfig);
                 validator.Update(
                     fullConfig.SecurityConfiguration.UserIssuerCertificates,
                     fullConfig.SecurityConfiguration.TrustedUserCertificates,
@@ -224,7 +224,7 @@ namespace Server
             args.Identity.GrantedRoleIds.Add(ObjectIds.WellKnownRole_SecurityAdmin);
         }
 
-        private IEnumerable<NodeSetBundle> BuildNodeSetFiles(ISystemContext context)
+        private IEnumerable<NodeSetBundle> BuildNodeSetFiles(ServerSystemContext context)
         {
             if (nodeSetFiles == null || !nodeSetFiles.Any()) return Enumerable.Empty<NodeSetBundle>();
             var results = new List<NodeSetBundle>();
