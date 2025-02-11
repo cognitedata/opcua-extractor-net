@@ -161,10 +161,6 @@ namespace Cognite.OpcUa.Pushers.FDM
                         Nullable = false,
                         Name = "TypeHierarchy"
                     } }
-                },
-                Indexes = new Dictionary<string, BaseIndex>
-                {
-                    { "typeHierarchy_index", new BTreeIndex { Properties = new[] { "TypeHierarchy" } } }
                 }
             };
         }
