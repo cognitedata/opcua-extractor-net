@@ -67,6 +67,11 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.33.1":
+    description: Improve sanitation of data modeling external IDs.
+    changelog:
+      fixed:
+        - Fix incomplete sanitation of data modeling external IDs.
   "2.33.0":
     description: Release improvements to connection logic.
     changelog:
