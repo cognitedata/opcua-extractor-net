@@ -1,5 +1,6 @@
 ﻿using Cognite.Extractor.StateStorage;
 using Cognite.OpcUa.Config;
+using Cognite.OpcUa.Pushers.FDM;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
@@ -211,6 +212,17 @@ namespace Test.Unit
 
             var pubSubDiagnosticsType = handler.Views["PubSubDiagnosticsType"];
             Assert.Equal(10, pubSubDiagnosticsType["properties"].AsObject().Count);
+        }
+
+        [Theory]
+        [InlineData("test", "test")]
+        [InlineData("MyObject#", "MyObject")] // _ is not allowed at the end of a name so we trim them.
+        [InlineData("**ReallyCool_Object**", "opc__ReallyCool_Object")]
+        [InlineData("<CoolPlaceHolder>", "CoolPlaceHolder")] // < and > are used in OPC-UA placeholders, so they are not replaced.
+        [InlineData("ÆÆÆÆÆÆWeirdId", "opc______WeirdId")] // Adds a prefix since _ is not allowed at the start of a name...
+        public void TestSanitizeExternalId(string id, string expected)
+        {
+            Assert.Equal(expected, FDMUtils.SanitizeExternalId(id));
         }
     }
 }
