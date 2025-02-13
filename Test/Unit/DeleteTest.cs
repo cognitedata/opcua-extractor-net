@@ -281,12 +281,12 @@ namespace Test.Unit
         [Fact]
         public async Task TestNotifyDeletedNodes()
         {
-            var pusher = new DummyPusher(new DummyPusherConfig());
+            using var pusher = new DummyPusher(new DummyPusherConfig());
             tester.Config.Extraction.Relationships.Enabled = true;
             tester.Config.Extraction.Deletes.Enabled = true;
             using var stateStore = new MockStateStore();
 
-            using var extractor = tester.BuildExtractor(pushers: pusher, stateStore: stateStore);
+            using var extractor = tester.BuildExtractor(pusher, stateStore: stateStore);
             // We need a reference to the delete manager
             var deleteManager = extractor.GetType().GetField("deletesManager", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).GetValue(extractor) as DeletesManager;
 
@@ -349,12 +349,12 @@ namespace Test.Unit
         [Fact]
         public async Task TestFullRunDelete()
         {
-            var pusher = new DummyPusher(new DummyPusherConfig());
+            using var pusher = new DummyPusher(new DummyPusherConfig());
             tester.Config.Extraction.Deletes.Enabled = true;
             tester.Config.Extraction.RootNode = tester.Ids.Audit.Root.ToProtoNodeId(tester.Client);
             using var stateStore = new MockStateStore();
 
-            using var extractor = tester.BuildExtractor(pushers: pusher, stateStore: stateStore);
+            using var extractor = tester.BuildExtractor(pusher, stateStore: stateStore);
 
             var addedId = tester.Server.Server.AddObject(tester.Ids.Audit.Root, "NodeToDelete");
             var addedVarId = tester.Server.Server.AddVariable(tester.Ids.Audit.Root, "VariableToDelete", DataTypeIds.Double);
@@ -400,7 +400,7 @@ namespace Test.Unit
             using var stateStore = new MockStateStore();
 
             var (handler, pusher) = tester.GetCDFPusher();
-            using var extractor = tester.BuildExtractor(pushers: pusher, stateStore: stateStore);
+            using var extractor = tester.BuildExtractor(pusher, stateStore: stateStore);
 
             var addedId = tester.Server.Server.AddObject(tester.Ids.Audit.Root, "NodeToDelete");
             var addedVarId = tester.Server.Server.AddVariable(tester.Ids.Audit.Root, "VariableToDelete", DataTypeIds.Double);
@@ -466,7 +466,7 @@ namespace Test.Unit
             using var stateStore = new MockStateStore();
             var (handler, pusher) = tester.GetCDFPusher();
 
-            using var extractor = tester.BuildExtractor(pushers: pusher, stateStore: stateStore);
+            using var extractor = tester.BuildExtractor(pusher, stateStore: stateStore);
 
             var addedId = tester.Server.Server.AddObject(tester.Ids.Audit.Root, "NodeToDelete");
             var addedVarId = tester.Server.Server.AddVariable(tester.Ids.Audit.Root, "VariableToDelete", DataTypeIds.Double);
