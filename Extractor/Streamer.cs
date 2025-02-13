@@ -31,6 +31,7 @@ using System.Threading;
 using Nito.AsyncEx;
 using System.Threading.Tasks;
 using Cognite.OpcUa.Utils;
+using Cognite.Extractor.StateStorage;
 
 namespace Cognite.OpcUa
 {
@@ -149,6 +150,12 @@ namespace Cognite.OpcUa
             if (events == null) return;
             await eventQueue.EnqueueAsync(events);
         }
+
+        private bool ShouldUpdateStateFromStream(UAHistoryExtractionState state)
+        {
+            return extractor.AllowUpdateState || !state.FrontfillEnabled && !state.BackfillEnabled;
+        }
+
         /// <summary>
         /// Push data points to destinations
         /// </summary>
@@ -227,9 +234,10 @@ namespace Cognite.OpcUa
             foreach ((string id, var range) in pointRanges)
             {
                 var state = extractor.State.GetNodeState(id);
-                if (state != null && (extractor.AllowUpdateState || !state.FrontfillEnabled && !state.BackfillEnabled)) state.UpdateDestinationRange(range.First, range.Last);
+                if (state != null && ShouldUpdateStateFromStream(state)) state.UpdateDestinationRange(range.First, range.Last);
             }
         }
+
         /// <summary>
         /// Push events to destinations
         /// </summary>
@@ -309,7 +317,7 @@ namespace Cognite.OpcUa
             foreach ((var id, var range) in eventRanges)
             {
                 var state = extractor.State.GetEmitterState(id);
-                if (state != null && (extractor.AllowUpdateState || !state.FrontfillEnabled && !state.BackfillEnabled)) state.UpdateDestinationRange(range.First, range.Last);
+                if (state != null && ShouldUpdateStateFromStream(state)) state.UpdateDestinationRange(range.First, range.Last);
             }
         }
         /// <summary>
