@@ -136,7 +136,7 @@ namespace Test.Utils
             Config.Source.EndpointUrl = $"opc.tcp://localhost:{Port}";
             Config.GenerateDefaults();
         }
-        public UAExtractor BuildExtractor(bool clear = true, IExtractionStateStore stateStore = null, params IPusher[] pushers)
+        public UAExtractor BuildExtractor(IPusher pusher = null, bool clear = true, IExtractionStateStore stateStore = null)
         {
             if (clear)
             {
@@ -146,7 +146,10 @@ namespace Test.Utils
                 RemoveSubscription(null, SubscriptionName.RebrowseTriggers).Wait();
                 Client.Browser.Transformations = null;
             }
-            var ext = new UAExtractor(Config, Provider, pushers, Client, stateStore);
+#pragma warning disable CA2000 // Dispose objects before losing scope. No idea why C# doesn't understand this.
+            pusher ??= new DummyPusher(new DummyPusherConfig());
+#pragma warning restore CA2000 // Dispose objects before losing scope
+            var ext = new UAExtractor(Config, Provider, pusher, Client, stateStore);
             ext.InitExternal(Source.Token);
 
             return ext;
