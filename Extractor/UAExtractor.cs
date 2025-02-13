@@ -30,6 +30,7 @@ using Cognite.OpcUa.Types;
 using Cognite.OpcUa.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Nito.Disposables.Internals;
 using Opc.Ua;
 using Opc.Ua.Client;
 using Prometheus;
@@ -59,7 +60,7 @@ namespace Cognite.OpcUa
         public PeriodicScheduler TaskScheduler => Scheduler;
         private HistoryReader? historyReader;
         public IEnumerable<NodeId> RootNodes { get; private set; } = null!;
-        private readonly IEnumerable<IPusher> pushers;
+        private readonly IPusher pusher;
         private readonly ConcurrentQueue<NodeId> extraNodesToBrowse = new ConcurrentQueue<NodeId>();
         public TransformationCollection? Transformations { get; private set; }
         public TypeConverter TypeConverter => uaClient.TypeConverter;
@@ -119,14 +120,22 @@ namespace Cognite.OpcUa
         /// <param name="uaClient">UAClient to be used</param>
         public UAExtractor(FullConfig config,
             IServiceProvider provider,
-            IEnumerable<IPusher> pushers,
+            IPusher pusher,
             UAClient uaClient,
             IExtractionStateStore? stateStore,
             ExtractionRun? run = null,
             RemoteConfigManager<FullConfig>? configManager = null) : base(config, provider, null, run, configManager)
         {
             this.uaClient = uaClient;
-            this.pushers = pushers.Where(pusher => pusher != null).ToList();
+            // Fallback to other pusher... This is bad, but it's fundamentally a design flaw
+            // in .NET dependency injection that you can register a services as null and
+            // it is considered to exist...
+            if (pusher == null)
+            {
+                pusher = provider.GetServices<IPusher>().WhereNotNull().FirstOrDefault();
+            }
+
+            this.pusher = pusher ?? throw new ConfigurationException("Missing cognite configuration");
             this.uaClient.Callbacks = this;
             // Default timeout for the scheduler is 60 seconds. It should never take even close to this long,
             // but if it does it is better to fail and restart than to wait forever.
@@ -146,17 +155,16 @@ namespace Cognite.OpcUa
             }
             if (run != null) run.Continuous = true;
 
-            log.LogInformation("Building extractor with {NumPushers} pushers", this.pushers.Count());
+            log.LogInformation("Building extractor");
 
             if (Config.PubSub.Enabled)
             {
                 pubSubManager = new PubSubManager(provider.GetRequiredService<ILogger<PubSubManager>>(), uaClient, this, Config);
             }
 
-            foreach (var pusher in this.pushers)
-            {
-                pusher.Extractor = this;
-            }
+
+
+            pusher.Extractor = this;
 
             if (configManager != null)
             {
@@ -278,7 +286,7 @@ namespace Cognite.OpcUa
         {
             base.Init(token);
             historyReader?.Dispose();
-            Looper = new Looper(Provider.GetRequiredService<ILogger<Looper>>(), Scheduler, this, Config, pushers);
+            Looper = new Looper(Provider.GetRequiredService<ILogger<Looper>>(), Scheduler, this, Config, pusher);
             historyReader = new HistoryReader(Provider.GetRequiredService<ILogger<HistoryReader>>(),
                 uaClient, this, TypeManager, Config, Source.Token);
         }
@@ -345,10 +353,7 @@ namespace Cognite.OpcUa
 
             startTime.Set(new DateTimeOffset(UAExtractor.StartTime).ToUnixTimeMilliseconds());
 
-            foreach (var pusher in pushers)
-            {
-                pusher.Reset();
-            }
+            pusher.Reset();
 
             var synchTasks = await RunMapping(RootNodes, initial: true, isFull: true);
 
@@ -417,10 +422,7 @@ namespace Cognite.OpcUa
             historyReader?.AddIssue(HistoryReader.StateIssue.NodeHierarchyRead);
 
             await Looper.WaitForNextPush(true);
-            foreach (var pusher in pushers)
-            {
-                pusher.Reset();
-            }
+            pusher.Reset();
             Starting.Set(1);
             Looper.Restart();
         }
@@ -624,7 +626,10 @@ namespace Cognite.OpcUa
             if ((Config.Cognite?.RawNodeBuffer?.Enable ?? false) && initial)
             {
                 var cdfSource = new CDFNodeSource(Provider.GetRequiredService<ILogger<CDFNodeSource>>(),
-                    Config, this, pushers.OfType<CDFPusher>().First(), TypeManager);
+                    Config,
+                    this,
+                    pusher as CDFPusher ?? throw new InvalidOperationException("Attempt to read from CDF without a configured CDF source"),
+                    TypeManager);
                 if (Config.Cognite.RawNodeBuffer.BrowseOnEmpty)
                 {
                     nodeSource = new CDFNodeSourceWithFallback(cdfSource, uaNodeSource);
@@ -955,7 +960,9 @@ namespace Cognite.OpcUa
                     "data point subscriptions by setting `subscriptions.data-points` to false");
             }
 
-            var pushTasks = pushers.Select(pusher => PushNodes(input, pusher, initial));
+            var pushTasks = new List<Task> {
+                PushNodes(input, pusher, initial)
+            };
 
             if (Config.DryRun)
             {
@@ -995,7 +1002,7 @@ namespace Cognite.OpcUa
 
             if (StateStorage != null)
             {
-                pushTasks = pushTasks.Append(RestoreExtractionStateWithRetry(newStates));
+                pushTasks.Add(RestoreExtractionStateWithRetry(newStates));
             }
             else
             {

@@ -59,7 +59,7 @@ namespace Test.Unit
         public async Task TestBuildFailureBuffer()
         {
             using var stateStore = new DummyStateStore();
-            await using var extractor = tester.BuildExtractor(true, stateStore);
+            await using var extractor = tester.BuildExtractor(null, true, stateStore);
             var cfg = BuildConfig();
 
             Assert.False(File.Exists(cfg.FailureBuffer.DatapointPath));
@@ -99,8 +99,7 @@ namespace Test.Unit
             var cfg = BuildConfig();
             await using var extractor = tester.BuildExtractor();
 
-            using var dPusher = new DummyPusher(new DummyPusherConfig());
-            var pushers = new IPusher[] { dPusher };
+            using var pusher = new DummyPusher(new DummyPusherConfig());
 
             var log = tester.Provider.GetRequiredService<ILogger<FailureBuffer>>();
             var fb1 = new FailureBuffer(log, cfg, extractor);
@@ -117,15 +116,15 @@ namespace Test.Unit
             extractor.State.SetNodeState(state2, "state2");
             extractor.State.SetNodeState(state3, "state3");
 
-            var dps1 = dPusher.DataPoints[(new NodeId("state1", 0), -1)] = new List<UADataPoint>();
-            var dps2 = dPusher.DataPoints[(new NodeId("state2", 0), -1)] = new List<UADataPoint>();
-            var dps3 = dPusher.DataPoints[(new NodeId("state3", 0), -1)] = new List<UADataPoint>();
+            var dps1 = pusher.DataPoints[(new NodeId("state1", 0), -1)] = new List<UADataPoint>();
+            var dps2 = pusher.DataPoints[(new NodeId("state2", 0), -1)] = new List<UADataPoint>();
+            var dps3 = pusher.DataPoints[(new NodeId("state3", 0), -1)] = new List<UADataPoint>();
 
             foreach (var state in new[] { state1, state2, state3 })
             {
                 state.InitToEmpty();
                 state.FinalizeRangeInit();
-                dPusher.UniqueToNodeId[state.DisplayName] = (state.SourceId, -1);
+                pusher.UniqueToNodeId[state.DisplayName] = (state.SourceId, -1);
             }
 
             var start = DateTime.UtcNow;
@@ -145,7 +144,7 @@ namespace Test.Unit
             Assert.True(new FileInfo(cfg.FailureBuffer.DatapointPath).Length > 0);
 
             var readDpsMethod = fb1.GetType().GetMethod("ReadDatapointsFromFile", BindingFlags.Instance | BindingFlags.NonPublic);
-            Assert.True(await (Task<bool>)readDpsMethod.Invoke(fb1, new object[] { pushers, tester.Source.Token }));
+            Assert.True(await (Task<bool>)readDpsMethod.Invoke(fb1, new object[] { pusher, tester.Source.Token }));
 
             Assert.Equal(100, dps1.Count);
             Assert.Equal(100, dps2.Count);
@@ -195,8 +194,7 @@ namespace Test.Unit
             var cfg = BuildConfig();
             await using var extractor = tester.BuildExtractor();
 
-            using var dPusher = new DummyPusher(new DummyPusherConfig());
-            var pushers = new IPusher[] { dPusher };
+            using var pusher = new DummyPusher(new DummyPusherConfig());
 
             var log = tester.Provider.GetRequiredService<ILogger<FailureBuffer>>();
             var fb1 = new FailureBuffer(log, cfg, extractor);
@@ -219,10 +217,10 @@ namespace Test.Unit
                 .Concat(GetEvents(start, new NodeId("somemissingemitter", 0), 100))
                 .Concat(GetEvents(start, estate3.SourceId, 100)).ToList();
 
-            var evts1 = dPusher.Events[new NodeId("emitter1", 0)] = new List<UAEvent>();
-            var evts2 = dPusher.Events[new NodeId("emitter2", 0)] = new List<UAEvent>();
-            var evts3 = dPusher.Events[new NodeId("emitter3", 0)] = new List<UAEvent>();
-            var evts4 = dPusher.Events[new NodeId("somemissingemitter", 0)] = new List<UAEvent>();
+            var evts1 = pusher.Events[new NodeId("emitter1", 0)] = new List<UAEvent>();
+            var evts2 = pusher.Events[new NodeId("emitter2", 0)] = new List<UAEvent>();
+            var evts3 = pusher.Events[new NodeId("emitter3", 0)] = new List<UAEvent>();
+            var evts4 = pusher.Events[new NodeId("somemissingemitter", 0)] = new List<UAEvent>();
 
             Assert.Equal(0, new FileInfo(cfg.FailureBuffer.EventPath).Length);
 
@@ -233,7 +231,7 @@ namespace Test.Unit
             Assert.True(new FileInfo(cfg.FailureBuffer.EventPath).Length > 0);
 
             var readEvtsMethod = fb1.GetType().GetMethod("ReadEventsFromFile", BindingFlags.Instance | BindingFlags.NonPublic);
-            Assert.True(await (Task<bool>)readEvtsMethod.Invoke(fb1, new object[] { pushers, tester.Source.Token }));
+            Assert.True(await (Task<bool>)readEvtsMethod.Invoke(fb1, new object[] { pusher, tester.Source.Token }));
 
             Assert.Equal(100, evts1.Count);
             Assert.Equal(100, evts2.Count);

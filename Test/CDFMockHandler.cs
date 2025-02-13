@@ -133,7 +133,7 @@ namespace Test
             if (FailedRoutes.Contains(reqPath))
             {
                 log.LogInformation("Failing request to {Path}", reqPath);
-                return GetFailedRequest(HttpStatusCode.Forbidden);
+                return GetFailedRequest(HttpStatusCode.InternalServerError);
             }
 
             if (reqPath == "/timeseries/data" && req.Method == HttpMethod.Post && StoreDatapoints)
