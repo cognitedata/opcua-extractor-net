@@ -54,7 +54,7 @@ namespace Test.Integration
         public async Task TestBasicSubscriptions()
         {
             using var pusher = new DummyPusher(new DummyPusherConfig());
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            using var extractor = tester.BuildExtractor(pusher);
 
             var dataTypes = tester.Config.Extraction.DataTypes;
             var ids = tester.Ids.Custom;
@@ -134,7 +134,7 @@ namespace Test.Integration
         public async Task TestEnumAsString()
         {
             using var pusher = new DummyPusher(new DummyPusherConfig());
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            using var extractor = tester.BuildExtractor(pusher);
 
             var dataTypes = tester.Config.Extraction.DataTypes;
             var ids = tester.Ids.Custom;
@@ -197,7 +197,7 @@ namespace Test.Integration
         public async Task TestWrongData()
         {
             using var pusher = new DummyPusher(new DummyPusherConfig());
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            using var extractor = tester.BuildExtractor(pusher);
 
             var dataTypes = tester.Config.Extraction.DataTypes;
             var ids = tester.Ids.Wrong;
@@ -276,7 +276,7 @@ namespace Test.Integration
         public async Task TestDataChangeFilter()
         {
             using var pusher = new DummyPusher(new DummyPusherConfig());
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            using var extractor = tester.BuildExtractor(pusher);
 
             var dataTypes = tester.Config.Extraction.DataTypes;
             var ids = tester.Ids.Base;
@@ -313,7 +313,7 @@ namespace Test.Integration
         public async Task TestDataPointsAsEvents()
         {
             using var pusher = new DummyPusher(new DummyPusherConfig());
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            using var extractor = tester.BuildExtractor(pusher);
 
             var ids = tester.Ids.Base;
 
@@ -363,7 +363,7 @@ namespace Test.Integration
             tester.Config.Extraction.StatusCodes.StatusCodesToIngest = StatusCodeMode.All;
 
             using var pusher = new DummyPusher(new DummyPusherConfig());
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            using var extractor = tester.BuildExtractor(pusher);
 
             var ids = tester.Ids.Base;
 
@@ -389,7 +389,7 @@ namespace Test.Integration
         public async Task TestVariableDataPointsConfig()
         {
             using var pusher = new DummyPusher(new DummyPusherConfig());
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            using var extractor = tester.BuildExtractor(pusher);
 
             var dataTypes = tester.Config.Extraction.DataTypes;
             var ids = tester.Ids.Base;
@@ -488,7 +488,7 @@ namespace Test.Integration
         public async Task TestHistory(bool backfill)
         {
             using var pusher = new DummyPusher(new DummyPusherConfig());
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            using var extractor = tester.BuildExtractor(pusher);
 
             var ids = tester.Server.Ids.Custom;
 
@@ -540,7 +540,7 @@ namespace Test.Integration
         public async Task TestHistoryContinuation(bool backfill)
         {
             using var pusher = new DummyPusher(new DummyPusherConfig());
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            using var extractor = tester.BuildExtractor(pusher);
 
             var ids = tester.Server.Ids.Custom;
 
@@ -614,7 +614,7 @@ namespace Test.Integration
             using var stateStore = new LiteDBStateStore(tester.Config.StateStorage, tester.Provider.GetRequiredService<ILogger<LiteDBStateStore>>());
 
             using var pusher = new DummyPusher(new DummyPusherConfig());
-            var extractor = tester.BuildExtractor(true, stateStore, pusher);
+            var extractor = tester.BuildExtractor(pusher, true, stateStore);
 
             var ids = tester.Ids.Custom;
 
@@ -661,7 +661,7 @@ namespace Test.Integration
             tester.Server.PopulateCustomHistory(now.AddSeconds(-15));
             tester.Server.PopulateCustomHistory(now.AddSeconds(5));
 
-            extractor = tester.BuildExtractor(true, stateStore, pusher);
+            extractor = tester.BuildExtractor(pusher, true, stateStore);
 
             try
             {
@@ -689,7 +689,7 @@ namespace Test.Integration
         public async Task TestDisableSubscriptions()
         {
             using var pusher = new DummyPusher(new DummyPusherConfig());
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            using var extractor = tester.BuildExtractor(pusher);
 
             tester.Config.Subscriptions.RecreateSubscriptionGracePeriod = "100ms";
 
@@ -773,7 +773,7 @@ namespace Test.Integration
 
             using var stateStore = new DummyStateStore();
 
-            using var extractor = tester.BuildExtractor(true, stateStore, pusher);
+            using var extractor = tester.BuildExtractor(pusher, true, stateStore);
 
             var ids = tester.Server.Ids.Base;
 
@@ -866,7 +866,7 @@ namespace Test.Integration
             tester.Config.Subscriptions.DataPoints = false;
             tester.Config.Extraction.RootNode = tester.Ids.Base.Root.ToProtoNodeId(tester.Client);
 
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            using var extractor = tester.BuildExtractor(pusher);
 
             // First start the extractor and read the first half of history.
             var runTask = extractor.RunExtractor();
@@ -908,7 +908,7 @@ namespace Test.Integration
             tester.Config.FailureBuffer.Enabled = true;
 
             using var pusher = new DummyPusher(new DummyPusherConfig());
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            using var extractor = tester.BuildExtractor(pusher);
 
             var ids = tester.Server.Ids.Base;
 
@@ -923,7 +923,7 @@ namespace Test.Integration
             tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(ids.Root, tester.Client);
             tester.Server.PopulateBaseHistory(now.AddSeconds(-20));
 
-            pusher.PushDataPointResult = false;
+            pusher.PushDataPointResult = DataPushResult.RecoverableFailure;
             pusher.TestConnectionResult = false;
 
             var runTask = extractor.RunExtractor();
@@ -955,7 +955,7 @@ namespace Test.Integration
             await TestUtils.WaitForCondition(() => CommonTestUtils.GetMetricValue("opcua_buffer_num_points") >= 4, 5,
                 () => $"Expected at least 4 points to arrive in buffer, but got {CommonTestUtils.GetMetricValue("opcua_buffer_num_points")}");
 
-            pusher.PushDataPointResult = true;
+            pusher.PushDataPointResult = DataPushResult.Success;
             pusher.TestConnectionResult = true;
 
             await TestUtils.WaitForCondition(() => pusher.DataPoints[(ids.DoubleVar1, -1)].Count >= 1002, 10);
@@ -984,7 +984,7 @@ namespace Test.Integration
             tester.Server.PopulateBaseHistory(now.AddSeconds(-20));
 
             using var pusher = new DummyPusher(new DummyPusherConfig());
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            using var extractor = tester.BuildExtractor(pusher);
 
             var runTask = extractor.RunExtractor();
             await extractor.WaitForSubscription(SubscriptionName.DataPoints);

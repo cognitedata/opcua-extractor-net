@@ -38,9 +38,9 @@ namespace Test.Integration
         public async Task TestRebrowseIsSubscribed(RebrowseTriggersConfig config)
         {
             // Arrange
-            var pusher = new DummyPusher(new DummyPusherConfig());
+            using var pusher = new DummyPusher(new DummyPusherConfig());
             tester.Config.Extraction.RebrowseTriggers = config;
-            using var extractor = tester.BuildExtractor(pushers: pusher);
+            using var extractor = tester.BuildExtractor(pusher);
 
             // Act
             var runTask = extractor.RunExtractor();
@@ -57,9 +57,9 @@ namespace Test.Integration
         public async Task TestRebrowseIsNotSubscribed(RebrowseTriggersConfig config)
         {
             // Arrange
-            var pusher = new DummyPusher(new DummyPusherConfig());
+            using var pusher = new DummyPusher(new DummyPusherConfig());
             tester.Config.Extraction.RebrowseTriggers = config;
-            using var extractor = tester.BuildExtractor(true, pushers: pusher);
+            using var extractor = tester.BuildExtractor(pusher, true);
 
             // Act
             var runTask = extractor.RunExtractor();
@@ -75,7 +75,7 @@ namespace Test.Integration
         public async Task TestRebrowseIsTriggered()
         {
             // Arrange
-            var cdfPusher = new DummyPusher(new DummyPusherConfig());
+            using var cdfPusher = new DummyPusher(new DummyPusherConfig());
             tester.Config.Extraction.RebrowseTriggers = new RebrowseTriggersConfig
             {
                 Targets = new RebrowseTriggerTargets { NamespacePublicationDate = true }
@@ -89,7 +89,7 @@ namespace Test.Integration
                 tester.Config.StateStorage,
                 tester.Provider.GetRequiredService<ILogger<LiteDBStateStore>>()
             );
-            using var extractor = tester.BuildExtractor(true, stateStore, cdfPusher);
+            using var extractor = tester.BuildExtractor(cdfPusher, true, stateStore);
             var npdId = tester.Client.GetUniqueId(tester.Server.Server.GetNamespacePublicationDateId());
             var npds = new NamespacePublicationDateState(npdId);
             var lts = DateTime.UtcNow.AddSeconds(-10);

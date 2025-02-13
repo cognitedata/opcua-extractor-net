@@ -26,8 +26,8 @@ namespace Test.Utils
 
         public bool? TestConnectionResult { get; set; } = true;
         public bool PushNodesResult { get; set; } = true;
-        public bool? PushDataPointResult { get; set; } = true;
-        public bool? PushEventResult { get; set; } = true;
+        public DataPushResult PushDataPointResult { get; set; } = DataPushResult.Success;
+        public DataPushResult PushEventResult { get; set; } = DataPushResult.Success;
         public bool PushReferenceResult { get; set; } = true;
         public bool DeleteResult { get; set; } = true;
         public ManualResetEvent OnReset { get; } = new ManualResetEvent(false);
@@ -122,11 +122,11 @@ namespace Test.Utils
             return Task.FromResult(result);
         }
 
-        public Task<bool?> PushEvents(IEnumerable<UAEvent> events, CancellationToken token)
+        public Task<DataPushResult> PushEvents(IEnumerable<UAEvent> events, CancellationToken token)
         {
             EventsPushCount += 1;
-            if (!PushEventResult ?? false) return Task.FromResult(PushEventResult);
-            if (events == null || !events.Any()) return Task.FromResult<bool?>(null);
+            if (PushEventResult != DataPushResult.Success) return Task.FromResult(PushEventResult);
+            if (events == null || !events.Any()) return Task.FromResult(DataPushResult.NoDataPushed);
             lock (eventLock)
             {
                 var groups = events.GroupBy(evt => evt.EmittingNode);
@@ -144,11 +144,11 @@ namespace Test.Utils
             return Task.FromResult(PushEventResult);
         }
 
-        public Task<bool?> PushDataPoints(IEnumerable<UADataPoint> points, CancellationToken token)
+        public Task<DataPushResult> PushDataPoints(IEnumerable<UADataPoint> points, CancellationToken token)
         {
             DataPointsPushCount += 1;
-            if (!PushDataPointResult ?? false) return Task.FromResult(PushDataPointResult);
-            if (points == null || !points.Any()) return Task.FromResult<bool?>(null);
+            if (PushDataPointResult != DataPushResult.Success) return Task.FromResult(PushDataPointResult);
+            if (points == null || !points.Any()) return Task.FromResult(DataPushResult.NoDataPushed);
             lock (dpLock)
             {
                 // Missing nodes here is unacceptable
@@ -180,6 +180,16 @@ namespace Test.Utils
             DataPoints.Clear();
             Events.Clear();
             UniqueToNodeId.Clear();
+        }
+
+        public Task<bool> CanPushEvents(CancellationToken token)
+        {
+            return Task.FromResult(PushEventResult == DataPushResult.Success);
+        }
+
+        public Task<bool> CanPushDataPoints(CancellationToken token)
+        {
+            return Task.FromResult(PushDataPointResult == DataPushResult.Success);
         }
     }
 }
