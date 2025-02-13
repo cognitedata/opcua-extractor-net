@@ -71,7 +71,7 @@ namespace Test.Unit
             tester.Config.Cognite.MetadataTargets.DataModels.SkipSimpleTypes = false;
 
             var (handler, pusher) = tester.GetCDFPusher();
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            using var extractor = tester.BuildExtractor(pusher);
 
             await extractor.RunExtractor(true);
 
@@ -148,7 +148,7 @@ namespace Test.Unit
 
 
             var (handler, pusher) = tester.GetCDFPusher();
-            var extractor = tester.BuildExtractor(true, stateStore, pusher);
+            var extractor = tester.BuildExtractor(pusher, true, stateStore);
 
             try
             {
@@ -177,7 +177,7 @@ namespace Test.Unit
                 });
 
 
-            await using var extractor2 = tester.BuildExtractor(true, stateStore, pusher);
+            await using var extractor2 = tester.BuildExtractor(pusher, true, stateStore);
             await extractor2.RunExtractor(true);
 
             Assert.Equal(2, handler.Spaces.Count);
@@ -197,7 +197,7 @@ namespace Test.Unit
             tester.Config.Cognite.MetadataTargets.DataModels.TypesToMap = TypesToMap.All;
 
             var (handler, pusher) = tester.GetCDFPusher();
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            using var extractor = tester.BuildExtractor(pusher);
 
             await extractor.RunExtractor(true);
 

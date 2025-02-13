@@ -114,7 +114,7 @@ namespace Test.Unit
             stringTs.isString = true;
 
             // Null input
-            Assert.Null(await pusher.PushDataPoints(null, tester.Source.Token));
+            Assert.Equal(DataPushResult.NoDataPushed, await pusher.PushDataPoints(null, tester.Source.Token));
 
             tester.Config.DryRun = true;
 
@@ -126,7 +126,7 @@ namespace Test.Unit
                 new UADataPoint(time.AddSeconds(1), "test-ts-double", double.NaN, StatusCodes.Good)
             };
 
-            Assert.Null(await pusher.PushDataPoints(invalidDps, tester.Source.Token));
+            Assert.Equal(DataPushResult.NoDataPushed, await pusher.PushDataPoints(invalidDps, tester.Source.Token));
 
             var dps = new[]
             {
@@ -138,20 +138,20 @@ namespace Test.Unit
             };
 
             // Debug true
-            Assert.Null(await pusher.PushDataPoints(dps, tester.Source.Token));
+            Assert.Equal(DataPushResult.NoDataPushed, await pusher.PushDataPoints(dps, tester.Source.Token));
 
             tester.Config.DryRun = false;
 
             handler.FailedRoutes.Add("/timeseries/data");
 
             // Thrown error
-            Assert.False(await pusher.PushDataPoints(dps, tester.Source.Token));
+            Assert.Equal(DataPushResult.RecoverableFailure, await pusher.PushDataPoints(dps, tester.Source.Token));
 
             handler.FailedRoutes.Clear();
             Assert.True(CommonTestUtils.TestMetricValue("opcua_datapoint_push_failures_cdf", 1));
 
             // Missing timeseries, but the others should succeed
-            Assert.True(await pusher.PushDataPoints(dps, tester.Source.Token));
+            Assert.Equal(DataPushResult.Success, await pusher.PushDataPoints(dps, tester.Source.Token));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_missing_timeseries", 1));
 
             Assert.Equal(2, handler.Datapoints["test-ts-double"].NumericDatapoints.Count);
@@ -173,7 +173,7 @@ namespace Test.Unit
                 new UADataPoint(time.AddSeconds(3), "test-ts-string", "string4", StatusCodes.Good),
                 new UADataPoint(time, "test-ts-missing", "value", StatusCodes.Good)
             };
-            Assert.True(await pusher.PushDataPoints(dps, tester.Source.Token));
+            Assert.Equal(DataPushResult.Success, await pusher.PushDataPoints(dps, tester.Source.Token));
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_mismatched_timeseries", 1));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_missing_timeseries", 1));
@@ -188,7 +188,7 @@ namespace Test.Unit
                 new UADataPoint(time, "test-ts-double", 123, StatusCodes.Good),
                 new UADataPoint(time, "test-ts-missing", "value", StatusCodes.Good)
             };
-            Assert.Null(await pusher.PushDataPoints(invalidDps, tester.Source.Token));
+            Assert.Equal(DataPushResult.NoDataPushed, await pusher.PushDataPoints(invalidDps, tester.Source.Token));
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_datapoints_pushed_cdf", 6));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_datapoint_pushes_cdf", 2));
@@ -208,7 +208,7 @@ namespace Test.Unit
                 new UADataPoint(DateTime.UtcNow, "test-ts-double", 1, StatusCodes.GoodClamped)
             };
 
-            Assert.True(await pusher.PushDataPoints(dps, tester.Source.Token));
+            Assert.Equal(DataPushResult.Success, await pusher.PushDataPoints(dps, tester.Source.Token));
 
             var idps = handler.Datapoints["test-ts-double"].NumericDatapoints;
             Assert.Equal(5, idps.Count);
@@ -237,7 +237,7 @@ namespace Test.Unit
                 new UADataPoint(start + TimeSpan.FromSeconds(4), "test-ts-double", false, StatusCodes.GoodClamped)
             };
 
-            Assert.True(await pusher.PushDataPoints(dps, tester.Source.Token));
+            Assert.Equal(DataPushResult.Success, await pusher.PushDataPoints(dps, tester.Source.Token));
 
             var idps = handler.Datapoints["test-ts-double"].NumericDatapoints;
             Assert.Equal(5, idps.Count);
@@ -249,13 +249,13 @@ namespace Test.Unit
         [Fact]
         public async Task TestPushEvents()
         {
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            using var extractor = tester.BuildExtractor(pusher);
 
             CommonTestUtils.ResetMetricValues("opcua_event_push_failures_cdf",
                 "opcua_events_pushed_cdf", "opcua_event_pushes_cdf",
                 "opcua_skipped_events_cdf");
 
-            Assert.Null(await pusher.PushEvents(null, tester.Source.Token));
+            Assert.Equal(DataPushResult.NoDataPushed, await pusher.PushEvents(null, tester.Source.Token));
             var invalidEvents = new[]
             {
                 new UAEvent
@@ -267,7 +267,7 @@ namespace Test.Unit
                     Time = DateTime.MaxValue
                 }
             };
-            Assert.Null(await pusher.PushEvents(invalidEvents, tester.Source.Token));
+            Assert.Equal(DataPushResult.NoDataPushed, await pusher.PushEvents(invalidEvents, tester.Source.Token));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_skipped_events_cdf", 2));
 
 
@@ -301,15 +301,15 @@ namespace Test.Unit
             };
 
             tester.Config.DryRun = true;
-            Assert.Null(await pusher.PushEvents(events, tester.Source.Token));
+            Assert.Equal(DataPushResult.NoDataPushed, await pusher.PushEvents(events, tester.Source.Token));
             tester.Config.DryRun = false;
 
             handler.FailedRoutes.Add("/events");
-            Assert.False(await pusher.PushEvents(events, tester.Source.Token));
+            Assert.Equal(DataPushResult.RecoverableFailure, await pusher.PushEvents(events, tester.Source.Token));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_event_push_failures_cdf", 1));
             handler.FailedRoutes.Clear();
 
-            Assert.True(await pusher.PushEvents(events, tester.Source.Token));
+            Assert.Equal(DataPushResult.Success, await pusher.PushEvents(events, tester.Source.Token));
             Assert.Equal(2, handler.Events.Count);
             Assert.Equal(123, handler.Events.First().Value.assetIds.First());
             Assert.Null(handler.Events.Last().Value.assetIds);
@@ -323,7 +323,7 @@ namespace Test.Unit
                 EventId = "someid3"
             }).ToArray();
 
-            Assert.True(await pusher.PushEvents(events, tester.Source.Token));
+            Assert.Equal(DataPushResult.Success, await pusher.PushEvents(events, tester.Source.Token));
             Assert.Equal(3, handler.Events.Count);
             Assert.True(CommonTestUtils.TestMetricValue("opcua_event_pushes_cdf", 2));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_events_pushed_cdf", 3));
@@ -333,7 +333,7 @@ namespace Test.Unit
         public async Task TestMissingTimeSeriesDatapoints()
         {
             (handler, pusher) = tester.GetCDFPusher();
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            using var extractor = tester.BuildExtractor(pusher);
 
             handler.MockTimeseries("test-ts-double");
             var writer = (CDFWriter)pusher.GetType()
@@ -359,7 +359,7 @@ namespace Test.Unit
                 new UADataPoint(time.AddSeconds(1), tsId, 222, StatusCodes.Good),
             };
 
-            Assert.True(await pusher.PushDataPoints(dps, tester.Source.Token));
+            Assert.Equal(DataPushResult.Success, await pusher.PushDataPoints(dps, tester.Source.Token));
             Assert.Single(writer.MissingTimeseries);
             Assert.Equal(tsId, writer.MissingTimeseries.First().ExternalId);
 
@@ -381,7 +381,7 @@ namespace Test.Unit
                 }
             };
             (handler, pusher) = tester.GetCDFPusher();
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            using var extractor = tester.BuildExtractor(pusher);
 
             handler.MockTimeseriesIdm("test-ts-double", "test-space");
             var writer = (CDFWriter)pusher.GetType()
@@ -407,7 +407,7 @@ namespace Test.Unit
                 new UADataPoint(time.AddSeconds(1), tsId, 222, StatusCodes.Good),
             };
 
-            Assert.True(await pusher.PushDataPoints(dps, tester.Source.Token));
+            Assert.Equal(DataPushResult.Success, await pusher.PushDataPoints(dps, tester.Source.Token));
             Assert.Single(writer.MissingTimeseries);
             Assert.Equal(tsId, writer.MissingTimeseries.First().InstanceId.ExternalId);
 
@@ -433,7 +433,7 @@ namespace Test.Unit
                 }
             };
             (handler, pusher) = tester.GetCDFPusher();
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            using var extractor = tester.BuildExtractor(pusher);
 
             var rels = Enumerable.Empty<UAReference>();
             var tss = Enumerable.Empty<UAVariable>();
@@ -493,7 +493,7 @@ namespace Test.Unit
                 }
             };
             (handler, pusher) = tester.GetCDFPusher();
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            using var extractor = tester.BuildExtractor(pusher);
 
             var node = new UAObject(tester.Server.Ids.Base.Root, "BaseRoot", null, null, NodeId.Null, null);
             var rels = Enumerable.Empty<UAReference>();
@@ -540,7 +540,7 @@ namespace Test.Unit
                 }
             };
             (handler, pusher) = tester.GetCDFPusher();
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            using var extractor = tester.BuildExtractor(pusher);
             var node = new UAObject(tester.Server.Ids.Base.Root, "BaseRoot", null, null, NodeId.Null, null);
             var rels = Enumerable.Empty<UAReference>();
             var tss = Enumerable.Empty<UAVariable>();
@@ -579,7 +579,7 @@ namespace Test.Unit
                 },
             };
             (handler, pusher) = tester.GetCDFPusher();
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            using var extractor = tester.BuildExtractor(pusher);
 
             var dt = new UADataType(DataTypeIds.Double);
 
@@ -658,7 +658,7 @@ namespace Test.Unit
                 }
             };
             (handler, pusher) = tester.GetCDFPusher();
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            using var extractor = tester.BuildExtractor(pusher);
 
             var dt = new UADataType(DataTypeIds.Double);
 
@@ -711,7 +711,7 @@ namespace Test.Unit
             };
 
             (handler, pusher) = tester.GetCDFPusher();
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            using var extractor = tester.BuildExtractor(pusher);
             var dt = new UADataType(DataTypeIds.Double);
 
             var writer = (CDFWriter)pusher.GetType()
@@ -762,7 +762,7 @@ namespace Test.Unit
             };
 
             (handler, pusher) = tester.GetCDFPusher();
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            using var extractor = tester.BuildExtractor(pusher);
             extractor.SourceInfo.Uri = "some-source-uri";
 
             var rels = Enumerable.Empty<UAReference>();
@@ -792,7 +792,7 @@ namespace Test.Unit
                 new UADataPoint(DateTime.UtcNow, id, 123.45, StatusCodes.Good),
                 new UADataPoint(DateTime.UtcNow.AddSeconds(1), id, 123.45, StatusCodes.Good),
             };
-            Assert.True(await pusher.PushDataPoints(dps, tester.Source.Token));
+            Assert.Equal(DataPushResult.Success, await pusher.PushDataPoints(dps, tester.Source.Token));
             Assert.Equal(2, handler.DatapointsByInstanceId[new InstanceIdentifier(
                 "space", id
             )].NumericDatapoints.Count);
@@ -824,7 +824,7 @@ namespace Test.Unit
             var targetVar = new UAVariable(new NodeId("target2", 0), "Target", "Target", null, NodeId.Null, null);
 
             (handler, pusher) = tester.GetCDFPusher();
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            using var extractor = tester.BuildExtractor(pusher);
 
             var uaSource = new UANodeSource(tester.Log, extractor, tester.Client, tester.Client.TypeManager);
 
@@ -901,7 +901,7 @@ namespace Test.Unit
 
             tester.Config.Extraction.Relationships.Enabled = true;
             (handler, pusher) = tester.GetCDFPusher();
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            using var extractor = tester.BuildExtractor(pusher);
 
             var uaSource = new UANodeSource(tester.Log, extractor, tester.Client, tester.Client.TypeManager);
 
@@ -1116,7 +1116,7 @@ namespace Test.Unit
             tester.Config.History.Enabled = true;
 
             (handler, pusher) = tester.GetCDFPusher();
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            using var extractor = tester.BuildExtractor(pusher);
 
             // Nothing in CDF
             await extractor.RunExtractor(true);
@@ -1172,7 +1172,7 @@ namespace Test.Unit
             await TestUtils.WaitForCondition(async () =>
             {
                 tester.Server.UpdateNode(tester.Server.Ids.Custom.MysteryVar, idx++);
-                await extractor.Streamer.PushDataPoints(new[] { pusher }, Enumerable.Empty<IPusher>(), tester.Source.Token);
+                await extractor.Streamer.PushDataPoints(pusher, tester.Source.Token);
                 return handler.Datapoints.ContainsKey(id) && handler.Datapoints[id].NumericDatapoints.Count != 0;
             }, 10);
 
@@ -1207,7 +1207,7 @@ namespace Test.Unit
             tester.Config.Extraction.RootNode = tester.Ids.Event.Root.ToProtoNodeId(tester.Client);
 
             (handler, pusher) = tester.GetCDFPusher();
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            using var extractor = tester.BuildExtractor(pusher);
 
             // Nothing in CDF
             await extractor.RunExtractor(true);
@@ -1248,7 +1248,7 @@ namespace Test.Unit
 
             await TestUtils.WaitForCondition(async () =>
             {
-                await extractor.Streamer.PushEvents(new[] { pusher }, Enumerable.Empty<IPusher>(), tester.Source.Token);
+                await extractor.Streamer.PushEvents(pusher, tester.Source.Token);
                 return handler.Events.Count != 0;
             }, 10);
 
@@ -1283,7 +1283,7 @@ namespace Test.Unit
             tester.Config.Source.AltSourceBackgroundBrowse = true;
             (handler, pusher) = tester.GetCDFPusher();
 
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            using var extractor = tester.BuildExtractor(pusher);
 
             // Populate data in Raw
             tester.Config.Cognite.RawNodeBuffer.BrowseOnEmpty = true;
@@ -1332,7 +1332,7 @@ namespace Test.Unit
             };
 
             (handler, pusher) = tester.GetCDFPusher();
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            using var extractor = tester.BuildExtractor(pusher);
 
             var dt = new UADataType(DataTypeIds.Double);
             var node = new UAObject(tester.Server.Ids.Base.Root, "BaseRoot", null, null, NodeId.Null, null);
@@ -1376,7 +1376,7 @@ namespace Test.Unit
             tester.Config.Events.Enabled = true;
 
             (handler, pusher) = tester.GetCDFPusher();
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            using var extractor = tester.BuildExtractor(pusher);
 
             // Run the extractor to get a type hierarchy.
             await extractor.RunExtractor(true);
@@ -1449,7 +1449,7 @@ namespace Test.Unit
             tester.Config.Events.Enabled = true;
 
             (handler, pusher) = tester.GetCDFPusher();
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            using var extractor = tester.BuildExtractor(pusher);
             // Run the extractor to get a type hierarchy.
             await extractor.RunExtractor(true);
 
@@ -1521,7 +1521,7 @@ namespace Test.Unit
             tester.Config.Events.Enabled = true;
 
             (handler, pusher) = tester.GetCDFPusher();
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            using var extractor = tester.BuildExtractor(pusher);
             // Run the extractor to get a type hierarchy.
             await extractor.RunExtractor(true);
 

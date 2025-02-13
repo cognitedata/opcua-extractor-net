@@ -127,13 +127,13 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="pushers">Pushers to write to</param>
         /// <returns>True on success</returns>
-        public async Task<bool> ReadDatapoints(IEnumerable<IPusher> pushers, CancellationToken token)
+        public async Task<bool> ReadDatapoints(IPusher pusher, CancellationToken token)
         {
             bool success = true;
 
             if (!string.IsNullOrEmpty(config.DatapointPath))
             {
-                success &= await ReadDatapointsFromFile(pushers, token);
+                success &= await ReadDatapointsFromFile(pusher, token);
             }
 
             return success;
@@ -178,13 +178,13 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="pushers">Pushers to write to</param>
         /// <returns>True on success</returns>
-        public async Task<bool> ReadEvents(IEnumerable<IPusher> pushers, CancellationToken token)
+        public async Task<bool> ReadEvents(IPusher pusher, CancellationToken token)
         {
             bool success = true;
 
             if (!string.IsNullOrEmpty(config.EventPath))
             {
-                success &= await ReadEventsFromFile(pushers, token);
+                success &= await ReadEventsFromFile(pusher, token);
             }
 
             return success;
@@ -195,7 +195,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="pushers">Pushers to write to</param>
         /// <returns>True on success</returns>
-        private async Task<bool> ReadDatapointsFromFile(IEnumerable<IPusher> pushers, CancellationToken token)
+        private async Task<bool> ReadDatapointsFromFile(IPusher pusher, CancellationToken token)
         {
             bool final = false;
 
@@ -224,9 +224,9 @@ namespace Cognite.OpcUa
                     log.LogInformation("Read {Count} datapoints from file", points.Count);
                     if (points.Count == 0 && final) break;
 
-                    var results = await Task.WhenAll(pushers.Select(pusher => pusher.PushDataPoints(points, token)));
+                    var result = await pusher.PushDataPoints(points, token);
 
-                    if (!results.All(result => result ?? true)) return false;
+                    if (result == DataPushResult.RecoverableFailure || result == DataPushResult.UnrecoverableFailure) return false;
 
                     var ranges = points
                         .GroupBy(point => point.Id)
@@ -261,7 +261,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="pushers">Pushers to write to</param>
         /// <returns>True on success</returns>
-        private async Task<bool> ReadEventsFromFile(IEnumerable<IPusher> pushers, CancellationToken token)
+        private async Task<bool> ReadEventsFromFile(IPusher pusher, CancellationToken token)
         {
             bool final = false;
 
@@ -292,9 +292,9 @@ namespace Cognite.OpcUa
                     log.LogInformation("Read {Count} events from file", events.Count);
                     if (events.Count == 0 && final) break;
 
-                    var results = await Task.WhenAll(pushers.Select(pusher => pusher.PushEvents(events, token)));
+                    var result = await pusher.PushEvents(events, token);
 
-                    if (!results.All(result => result ?? true)) return false;
+                    if (result == DataPushResult.RecoverableFailure || result == DataPushResult.UnrecoverableFailure) return false;
 
                     var ranges = events
                         .GroupBy(evt => evt.EmittingNode)

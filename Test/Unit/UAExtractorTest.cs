@@ -52,8 +52,8 @@ namespace Test.Unit
         public async Task TestMapping()
         {
             tester.Config.Extraction.RootNode = tester.Server.Ids.Full.Root.ToProtoNodeId(tester.Client);
-            var pusher = new DummyPusher(new DummyPusherConfig());
-            using var extractor = tester.BuildExtractor(pushers: pusher);
+            using var pusher = new DummyPusher(new DummyPusherConfig());
+            using var extractor = tester.BuildExtractor(pusher);
 
             await extractor.RunExtractor(true);
 
@@ -71,8 +71,8 @@ namespace Test.Unit
             if (!tester.Client.Started) await tester.Client.Run(tester.Source.Token, 0);
             tester.Config.Extraction.RootNode = tester.Ids.Base.Root.ToProtoNodeId(tester.Client);
 
-            var pusher = new DummyPusher(new DummyPusherConfig());
-            using var extractor = tester.BuildExtractor(pushers: pusher);
+            using var pusher = new DummyPusher(new DummyPusherConfig());
+            using var extractor = tester.BuildExtractor(pusher);
 
             var task = extractor.RunExtractor();
             await extractor.WaitForSubscription(SubscriptionName.DataPoints);
@@ -95,9 +95,9 @@ namespace Test.Unit
         [InlineData(5, 0, 0, 0, 4, 1)]
         public async Task TestPushNodes(int failAt, int pushedObjects, int pushedVariables, int pushedRefs, int failedNodes, int failedRefs)
         {
-            var pusher = new DummyPusher(new DummyPusherConfig());
+            using var pusher = new DummyPusher(new DummyPusherConfig());
             tester.Config.Extraction.Relationships.Enabled = true;
-            using var extractor = tester.BuildExtractor(pushers: pusher);
+            using var extractor = tester.BuildExtractor(pusher);
 
             switch (failAt)
             {
@@ -261,7 +261,7 @@ namespace Test.Unit
             tester.Config.Extraction.DataTypes.EstimateArraySizes = true;
             using var pusher = new DummyPusher(new DummyPusherConfig());
             using var client = new UAClient(tester.Provider, tester.Config);
-            using var extractor = new UAExtractor(tester.Config, tester.Provider, new[] { pusher }, client, null);
+            using var extractor = new UAExtractor(tester.Config, tester.Provider, pusher, client, null);
 
             extractor.InitExternal(tester.Source.Token);
             await extractor.RunExtractor(true);
