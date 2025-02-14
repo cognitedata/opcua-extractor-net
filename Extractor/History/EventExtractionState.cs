@@ -17,9 +17,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using Cognite.OpcUa.Types;
 using Opc.Ua;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 
 namespace Cognite.OpcUa.History
 {

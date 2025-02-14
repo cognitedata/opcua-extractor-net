@@ -174,7 +174,7 @@ namespace Test.Unit
             historyDataHandler.Invoke(reader, new object[] { node });
             Assert.Equal(100, node.TotalRead);
             Assert.False(state1.IsFrontfilling);
-            Assert.Equal(101, queue.Count);
+            Assert.Equal(100, queue.Count);
             Assert.Equal(start.AddSeconds(100), state1.SourceExtractedRange.Last);
 
             // Test termination without cp
@@ -333,7 +333,7 @@ namespace Test.Unit
             historyEventHandler.Invoke(reader, new object[] { node, details });
             Assert.Equal(100, node.TotalRead);
             Assert.False(state.IsFrontfilling);
-            Assert.Equal(101, queue.Count);
+            Assert.Equal(100, queue.Count);
             Assert.Equal(start.AddSeconds(100), state.SourceExtractedRange.Last);
 
             // Test termination without cp
