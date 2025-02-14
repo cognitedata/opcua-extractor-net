@@ -17,9 +17,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using Cognite.OpcUa.Types;
 using Opc.Ua;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 
 namespace Cognite.OpcUa.History
 {
@@ -30,10 +27,6 @@ namespace Cognite.OpcUa.History
     /// </summary>
     public sealed class EventExtractionState : UAHistoryExtractionState
     {
-        /// <summary>
-        /// Last known timestamp of events from OPC-UA.
-        /// </summary>
-        private List<UAEvent>? buffer;
         public bool ShouldSubscribe { get; }
 
         public EventExtractionState(
@@ -42,10 +35,6 @@ namespace Cognite.OpcUa.History
             bool frontfill, bool backfill, bool subscription)
             : base(client, emitterId, frontfill, backfill)
         {
-            if (frontfill)
-            {
-                buffer = new List<UAEvent>();
-            }
             ShouldSubscribe = subscription;
         }
 
@@ -53,58 +42,10 @@ namespace Cognite.OpcUa.History
         /// Update timestamp and buffer from stream.
         /// </summary>
         /// <param name="points">Event received for current stream iteration</param>
-        public void UpdateFromStream(UAEvent? evt, bool useBuffer = false)
+        public void UpdateFromStream(UAEvent? evt)
         {
             if (evt == null) return;
             UpdateFromStream(evt.Time, evt.Time);
-            lock (Mutex)
-            {
-                if (IsFrontfilling && buffer != null && useBuffer)
-                {
-                    var threshold = DateTime.UtcNow.AddSeconds(-30);
-                    buffer.RemoveAll(e => e.Time < threshold);
-                    buffer.Add(evt);
-                }
-            }
-        }
-        private void RefreshBuffer()
-        {
-            if (buffer == null) return;
-            lock (Mutex)
-            {
-                buffer.RemoveAll(evt => SourceExtractedRange.Contains(evt.Time));
-            }
-        }
-        public override void UpdateFromBackfill(DateTime first, bool final)
-        {
-            base.UpdateFromBackfill(first, final);
-            if (!final)
-            {
-                RefreshBuffer();
-            }
-        }
-
-        public override void UpdateFromFrontfill(DateTime last, bool final)
-        {
-            base.UpdateFromFrontfill(last, final);
-            if (!final)
-            {
-                RefreshBuffer();
-            }
-        }
-        /// <summary>
-        /// Retrieve contents of the buffer after final historyRead iteration
-        /// </summary>
-        /// <returns>The contents of the buffer</returns>
-        public IEnumerable<UAEvent> FlushBuffer()
-        {
-            if (IsFrontfilling || buffer == null || !buffer.Any()) return Array.Empty<UAEvent>();
-            lock (Mutex)
-            {
-                var result = buffer.Where(evt => !SourceExtractedRange.Contains(evt.Time)).ToList();
-                buffer.Clear();
-                return result;
-            }
         }
     }
 }
