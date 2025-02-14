@@ -248,26 +248,31 @@ namespace Test.Unit
                 Assert.Equal(expected, result);
             }
 
-            tester.Config.Extraction.DataTypes.ExpandNodeIds = true;
             var node = new UAObject(new NodeId("test", 0), "test", null, null, NodeId.Null, null);
             TestConvert(node,
                 @"{""externalId"":""gp.base:s=test"",""name"":""test"","
                 + @"""description"":null,""metadata"":null,""parentExternalId"":null,"
-                + @"""NodeId"":{""idType"":1,""identifier"":""test""}}");
+                + @"""NodeId"":{""idType"":1,""identifier"":""test""},"
+                + @"""InternalInfo"":{""EventNotifier"":0,""ShouldSubscribeEvents"":false,"
+                + @"""ShouldReadHistoryEvents"":false,""NodeClass"":1}}");
 
             node.FullAttributes.TypeDefinition = new UAObjectType(new NodeId("test-type", 0));
             TestConvert(node,
                 @"{""externalId"":""gp.base:s=test"",""name"":""test"","
                 + @"""description"":null,""metadata"":null,""parentExternalId"":null,"
                 + @"""NodeId"":{""idType"":1,""identifier"":""test""},"
-                + @"""TypeDefinitionId"":{""idType"":1,""identifier"":""test-type""}}");
+                + @"""TypeDefinitionId"":{""idType"":1,""identifier"":""test-type""},"
+                + @"""InternalInfo"":{""EventNotifier"":0,""ShouldSubscribeEvents"":false,"
+                + @"""ShouldReadHistoryEvents"":false,""NodeClass"":1}}");
 
             node = new UAObject(new NodeId("test", 0), "test", null, null, new NodeId("parent", 0), null);
             TestConvert(node,
                 @"{""externalId"":""gp.base:s=test"",""name"":""test"","
                 + @"""description"":null,""metadata"":null,""parentExternalId"":""gp.base:s=parent"","
                 + @"""NodeId"":{""idType"":1,""identifier"":""test""},"
-                + @"""ParentNodeId"":{""idType"":1,""identifier"":""parent""}}");
+                + @"""ParentNodeId"":{""idType"":1,""identifier"":""parent""},"
+                + @"""InternalInfo"":{""EventNotifier"":0,""ShouldSubscribeEvents"":false,"
+                + @"""ShouldReadHistoryEvents"":false,""NodeClass"":1}}");
 
             options = new JsonSerializerOptions();
             converter.AddConverters(options, ConverterType.Variable);
@@ -280,7 +285,9 @@ namespace Test.Unit
                 + @"""description"":null,""metadata"":null,""assetExternalId"":null,"
                 + @"""isString"":false,""isStep"":true,"
                 + @"""NodeId"":{""idType"":1,""identifier"":""test""},"
-                + @"""DataTypeId"":{""idType"":0,""identifier"":1}}");
+                + @"""DataTypeId"":{""idType"":0,""identifier"":1},"
+                + @"""InternalInfo"":{""NodeClass"":2,""AccessLevel"":0,""Historizing"":false,""ValueRank"":0,"
+                + @"""ShouldSubscribeData"":false,""ShouldReadHistoryData"":false}}");
         }
         [Fact]
         public void TestWriteInternals()
@@ -296,13 +303,13 @@ namespace Test.Unit
                 Assert.Equal(expected, result);
             }
 
-            tester.Config.Extraction.DataTypes.AppendInternalValues = true;
             tester.Config.Events.Enabled = true;
             tester.Config.Events.History = true;
             var node = new UAObject(new NodeId("test", 0), "test", null, null, NodeId.Null, null);
             TestConvert(node,
                 @"{""externalId"":""gp.base:s=test"",""name"":""test"","
                 + @"""description"":null,""metadata"":null,""parentExternalId"":null,"
+                + @"""NodeId"":{""idType"":1,""identifier"":""test""},"
                 + @"""InternalInfo"":{""EventNotifier"":0,""ShouldSubscribeEvents"":false,"
                 + @"""ShouldReadHistoryEvents"":false,""NodeClass"":1}}");
 
@@ -310,6 +317,7 @@ namespace Test.Unit
             TestConvert(node,
                 @"{""externalId"":""gp.base:s=test"",""name"":""test"","
                 + @"""description"":null,""metadata"":null,""parentExternalId"":null,"
+                + @"""NodeId"":{""idType"":1,""identifier"":""test""},"
                 + @"""InternalInfo"":{""EventNotifier"":5,""ShouldSubscribeEvents"":true,"
                 + @"""ShouldReadHistoryEvents"":true,""NodeClass"":1}}");
 
@@ -324,6 +332,8 @@ namespace Test.Unit
                 @"{""externalId"":""gp.base:s=test"",""name"":""test"","
                 + @"""description"":null,""metadata"":null,""assetExternalId"":null,"
                 + @"""isString"":false,""isStep"":false,"
+                + @"""NodeId"":{""idType"":1,""identifier"":""test""},"
+                + @"""DataTypeId"":{""idType"":0,""identifier"":11},"
                 + @"""InternalInfo"":{""NodeClass"":2,""AccessLevel"":5,"
                 + @"""Historizing"":true,""ValueRank"":-1,""ShouldSubscribeData"":true,""ShouldReadHistoryData"":true}}");
 
@@ -334,6 +344,8 @@ namespace Test.Unit
                 @"{""externalId"":""gp.base:s=test"",""name"":""test"","
                 + @"""description"":null,""metadata"":null,""assetExternalId"":null,"
                 + @"""isString"":false,""isStep"":false,"
+                + @"""NodeId"":{""idType"":1,""identifier"":""test""},"
+                + @"""DataTypeId"":{""idType"":0,""identifier"":11},"
                 + @"""InternalInfo"":{""NodeClass"":2,""AccessLevel"":5,"
                 + @"""Historizing"":true,""ValueRank"":1,""ShouldSubscribeData"":true,""ShouldReadHistoryData"":true,"
                 + @"""ArrayDimensions"":[5],""Index"":-1,""AsEvents"":true}}"
@@ -349,9 +361,6 @@ namespace Test.Unit
 
             var node = new UAObject(new NodeId("test", 2), "test", null, null, new NodeId("parent", 0), null);
             node.FullAttributes.EventNotifier = 5;
-
-            tester.Config.Extraction.DataTypes.AppendInternalValues = true;
-            tester.Config.Extraction.DataTypes.ExpandNodeIds = true;
 
             SavedNode Convert(BaseUANode node)
             {

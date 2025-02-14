@@ -893,8 +893,6 @@ namespace Test.Unit
                 Database = "metadata",
                 Enable = true
             };
-            tester.Config.Extraction.DataTypes.ExpandNodeIds = true;
-            tester.Config.Extraction.DataTypes.AppendInternalValues = true;
             tester.Config.Extraction.DataTypes.AllowStringVariables = true;
             tester.Config.Extraction.DataTypes.MaxArraySize = 10;
             tester.Config.Subscriptions.IgnoreAccessLevel = true;
@@ -1011,8 +1009,6 @@ namespace Test.Unit
                     Database = "metadata"
                 }
             };
-            tester.Config.Extraction.DataTypes.ExpandNodeIds = true;
-            tester.Config.Extraction.DataTypes.AppendInternalValues = true;
             tester.Config.Extraction.DataTypes.AllowStringVariables = true;
             tester.Config.Extraction.DataTypes.MaxArraySize = 10;
             tester.Config.Extraction.DataTypes.AutoIdentifyTypes = true;
@@ -1104,8 +1100,6 @@ namespace Test.Unit
                     Database = "metadata"
                 }
             };
-            tester.Config.Extraction.DataTypes.ExpandNodeIds = true;
-            tester.Config.Extraction.DataTypes.AppendInternalValues = true;
             tester.Config.Events.Enabled = true;
             tester.Config.Events.ReadServer = false;
             tester.Config.Subscriptions.DataPoints = true;
@@ -1179,8 +1173,6 @@ namespace Test.Unit
                     AssetsTable = "assets"
                 }
             };
-            tester.Config.Extraction.DataTypes.ExpandNodeIds = true;
-            tester.Config.Extraction.DataTypes.AppendInternalValues = true;
             tester.Config.Events.Enabled = true;
             tester.Config.Events.ReadServer = false;
             tester.Config.Subscriptions.DataPoints = true;
