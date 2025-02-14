@@ -566,20 +566,6 @@ namespace Cognite.OpcUa.History
                             log.LogTrace("Bad history datapoint: {BadDatapointExternalId} {SourceTimestamp}. Value: {Value}, Status: {Status}",
                                 node.State.Id, dp.SourceTimestamp, dp.Value, ExtractorUtils.GetStatusCodeName((uint)dp.StatusCode));
                         }
-
-                        switch (fullConfig.Extraction.StatusCodes.StatusCodesToIngest)
-                        {
-                            case StatusCodeMode.All:
-                                break;
-                            case StatusCodeMode.Uncertain:
-                                if (!StatusCode.IsUncertain(dp.StatusCode))
-                                {
-                                    continue;
-                                }
-                                break;
-                            case StatusCodeMode.GoodOnly:
-                                continue;
-                        }
                     }
                     dataPoints.Add(dp);
                 }

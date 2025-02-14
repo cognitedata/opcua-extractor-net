@@ -221,8 +221,6 @@ cognite:
     project:
     # Cognite service url
     host: "https://api.cognitedata.com"
-    # Replace all instances of NaN with this floating point number. If left empty, ignore instead.
-    nan-replacement:
     # Data set to use for new objects. Existing objects will not be updated
     data-set:
         # Data set internal id.

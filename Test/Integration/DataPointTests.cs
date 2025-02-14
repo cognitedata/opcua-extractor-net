@@ -359,9 +359,6 @@ namespace Test.Integration
         [Fact]
         public async Task TestIngestDataPointsWithStatus()
         {
-            tester.Config.Extraction.StatusCodes.IngestStatusCodes = true;
-            tester.Config.Extraction.StatusCodes.StatusCodesToIngest = StatusCodeMode.All;
-
             using var pusher = new DummyPusher(new DummyPusherConfig());
             await using var extractor = tester.BuildExtractor(pusher);
 
@@ -944,7 +941,9 @@ namespace Test.Integration
             pusher.PushDataPointResult = DataPushResult.Success;
             pusher.TestConnectionResult = true;
 
-            await TestUtils.WaitForCondition(() => pusher.DataPoints[(ids.DoubleVar1, -1)].Count >= 1002, 10);
+            tester.Server.UpdateNode(ids.DoubleVar2, 3);
+            await TestUtils.WaitForCondition(() => pusher.DataPoints[(ids.DoubleVar1, -1)].Count >= 1002, 10,
+                () => $"Expected at least 1002 points to arrive in buffer, got {pusher.DataPoints[(ids.DoubleVar1, -1)].Count}");
 
             Assert.Equal(1002, pusher.DataPoints[(ids.DoubleVar1, -1)].DistinctBy(dp => dp.Timestamp).Count());
             Assert.True(pusher.DataPoints[(ids.DoubleVar2, -1)].Count >= 2);

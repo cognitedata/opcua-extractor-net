@@ -365,20 +365,6 @@ namespace Cognite.OpcUa
                     log.LogDebug("Bad streaming datapoint: {BadDatapointExternalId} {SourceTimestamp}. Value: {Value}, Status: {Status}",
                         node.Id, datapoint.SourceTimestamp, datapoint.Value, ExtractorUtils.GetStatusCodeName((uint)datapoint.StatusCode));
                 }
-
-                switch (config.Extraction.StatusCodes.StatusCodesToIngest)
-                {
-                    case StatusCodeMode.All:
-                        break;
-                    case StatusCodeMode.Uncertain:
-                        if (!StatusCode.IsUncertain(datapoint.StatusCode))
-                        {
-                            return;
-                        }
-                        break;
-                    case StatusCodeMode.GoodOnly:
-                        return;
-                }
             }
 
             timeToExtractorDps.Observe((DateTime.UtcNow - datapoint.SourceTimestamp).TotalSeconds);
@@ -397,10 +383,6 @@ namespace Cognite.OpcUa
             {
                 node.UpdateFromStream(buffDps);
             }
-
-            if ((extractor.StateStorage == null || config.StateStorage.IntervalValue.Value == Timeout.InfiniteTimeSpan)
-                 && (node.IsFrontfilling && datapoint.SourceTimestamp > node.SourceExtractedRange.Last
-                    || node.IsBackfilling && datapoint.SourceTimestamp < node.SourceExtractedRange.First)) return;
 
             foreach (var buffDp in buffDps)
             {
