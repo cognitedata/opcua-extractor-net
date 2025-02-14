@@ -623,16 +623,6 @@ namespace Cognite.OpcUa.History
 
             node.LastRead = cnt;
             node.TotalRead += cnt;
-
-            if (!node.Completed || !Frontfill) return;
-
-            var buffered = nodeState.FlushBuffer();
-            if (buffered.Any())
-            {
-                log.LogDebug("Read {Count} datapoints from buffer of state {Id}", buffered.Count(), node.State.Id);
-                nodeState.UpdateFromStream(buffered);
-                await extractor.Streamer.EnqueueAsync(buffered);
-            }
         }
 
         private static DateTime? GetTimeAttribute(VariantCollection evt, EventFilter filter)
@@ -731,19 +721,6 @@ namespace Cognite.OpcUa.History
 
             node.LastRead = createdEvents.Count;
             node.TotalRead += createdEvents.Count;
-
-            if (!node.Completed || !Frontfill) return;
-
-            if (node.State is not EventExtractionState emitterState) return;
-
-            var buffered = emitterState.FlushBuffer();
-            if (buffered.Any())
-            {
-                var (smin, smax) = buffered.MinMax(dp => dp.Time);
-                emitterState.UpdateFromStream(smin, smax);
-                log.LogDebug("Read {Count} events from buffer of state {Id}", buffered.Count(), node.State.Id);
-                await extractor.Streamer.EnqueueAsync(buffered);
-            }
         }
         #endregion
     }
