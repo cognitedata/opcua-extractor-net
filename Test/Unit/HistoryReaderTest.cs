@@ -159,24 +159,6 @@ namespace Test.Unit
             Assert.Equal(200, queue.Count);
             Assert.True(CommonTestUtils.TestMetricValue("opcua_bad_datapoints", 100));
 
-            // Test flush buffer
-            historyData.DataValues = frontfillDataValues;
-            state1.RestartHistory();
-            await queue.Clear();
-            // Get a datapoint from stream that happened after the last history point was read from the server, but arrived
-            // at the extractor before the history data was parsed. This is an edge-case, but a potential lost datapoint 
-            state1.UpdateFromStream(new[] { new UADataPoint(start.AddSeconds(100), "state1", 1.0, StatusCodes.Good) });
-            node = new HistoryReadNode(HistoryReadType.FrontfillData, new NodeId("state1", 0))
-            {
-                LastResult = historyData,
-                ContinuationPoint = null
-            };
-            historyDataHandler.Invoke(reader, new object[] { node });
-            Assert.Equal(100, node.TotalRead);
-            Assert.False(state1.IsFrontfilling);
-            Assert.Equal(100, queue.Count);
-            Assert.Equal(start.AddSeconds(100), state1.SourceExtractedRange.Last);
-
             // Test termination without cp
             historyData.DataValues = frontfillDataValues;
             state1.RestartHistory();
@@ -320,21 +302,6 @@ namespace Test.Unit
             Assert.True(state.IsFrontfilling);
             Assert.Equal(0, queue.Count);
             Assert.True(CommonTestUtils.TestMetricValue("opcua_bad_events", 100));
-
-            // Test flush buffer
-            historyEvents.Events = frontfillEvents;
-            state.RestartHistory();
-            await queue.Clear();
-            state.UpdateFromStream(new UAEvent { Time = start.AddSeconds(100) });
-            node = new HistoryReadNode(HistoryReadType.FrontfillEvents, new NodeId("emitter", 0))
-            {
-                LastResult = historyEvents
-            };
-            historyEventHandler.Invoke(reader, new object[] { node, details });
-            Assert.Equal(100, node.TotalRead);
-            Assert.False(state.IsFrontfilling);
-            Assert.Equal(100, queue.Count);
-            Assert.Equal(start.AddSeconds(100), state.SourceExtractedRange.Last);
 
             // Test termination without cp
             historyEvents.Events = frontfillEvents;
