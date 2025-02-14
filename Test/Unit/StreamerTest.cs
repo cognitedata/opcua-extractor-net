@@ -481,8 +481,7 @@ namespace Test.Unit
             var generated = await queue.DequeueAsync();
             Assert.Single(generated.MetaData);
 
-            // Test multiple events, one early, one late, one now
-
+            // Test multiple events, one early, one late, one ok
             var val1 = EventUtils.GetEventValues(DateTime.UtcNow);
             var val2 = EventUtils.GetEventValues(DateTime.UtcNow);
             var val3 = EventUtils.GetEventValues(DateTime.UtcNow);
