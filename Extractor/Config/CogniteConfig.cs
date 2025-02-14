@@ -55,16 +55,6 @@ namespace Cognite.OpcUa.Config
         /// </summary>
         public CDFNodeSourceConfig? RawNodeBuffer { get; set; }
         /// <summary>
-        /// Replacement for NaN values.
-        /// </summary>
-        public double? NonFiniteReplacement
-        {
-            get => NanReplacement;
-            set => NanReplacement = value == null || double.IsFinite(value.Value)
-                && value.Value > CogniteUtils.NumericValueMin
-                && value.Value < CogniteUtils.NumericValueMax ? value : null;
-        }
-        /// <summary>
         /// There is no good way to mark relationships as deleted, so they are hard-deleted.
         /// This has to be enabled to delete relationships deleted from OPC-UA. This requires extraction.deletes to be enabled.
         /// Alternatively, use Raw, where relationships can be marked as deleted.
