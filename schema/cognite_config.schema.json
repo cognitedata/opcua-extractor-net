@@ -227,7 +227,7 @@
         },
         "raw-node-buffer": {
             "type": "object",
-            "description": "Read from CDF instead of OPC-UA when starting, to speed up start on slow servers. Requires [`extraction.data-types.expand-node-ids`](#extraction.data-types) and [`extraction.data-types.append-internal-values`](#extraction.data-types) to be set to `true`.\n\nThis should generaly be enabled along with [`metadata-targets.raw`](#cognite.metadata-targets.raw) or with no metadata targets at all.\n\nIf `browse-on-empty` is set to `true` and `metadata-targets.raw` is configured with the same database and tables the extractor will read into raw on first run, then use raw as source for later runs. The Raw database can be deleted, and it will be re-created on extractor restart.",
+            "description": "Read from CDF instead of OPC-UA when starting, to speed up start on slow servers.\n\nThis should generaly be enabled along with [`metadata-targets.raw`](#cognite.metadata-targets.raw) or with no metadata targets at all.\n\nIf `browse-on-empty` is set to `true` and `metadata-targets.raw` is configured with the same database and tables the extractor will read into raw on first run, then use raw as source for later runs. The Raw database can be deleted, and it will be re-created on extractor restart.",
             "unevaluatedProperties": false,
             "required": [
                 "enable",
