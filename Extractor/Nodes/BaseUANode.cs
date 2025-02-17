@@ -404,12 +404,12 @@ namespace Cognite.OpcUa.Nodes
             return null;
         }
 
-        public virtual int GetUpdateChecksum(bool dataTypeMetadata, bool nodeTypeMetadata)
+        public virtual int GetUpdateChecksum(bool nodeTypeMetadata)
         {
             int checksum = 0;
             unchecked
             {
-                checksum += (ParentId?.GetHashCode() ?? 0);
+                checksum += ParentId?.GetHashCode() ?? 0;
                 checksum = checksum * 31 + (Attributes.Description?.GetHashCode(StringComparison.InvariantCulture) ?? 0);
                 checksum = checksum * 31 + (Name?.GetHashCode(StringComparison.InvariantCulture) ?? 0);
                 int metaHash = 0;
@@ -425,7 +425,7 @@ namespace Cognite.OpcUa.Nodes
                         }
                         if (prop.Properties?.Any() ?? false)
                         {
-                            metaHash += prop.GetUpdateChecksum(false, false);
+                            metaHash += prop.GetUpdateChecksum(false);
                         }
                     }
                 }

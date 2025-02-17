@@ -476,7 +476,6 @@ namespace Test.Integration
             extraction.DataTypes.AllowStringVariables = true;
             extraction.DataTypes.MaxArraySize = -1;
             extraction.DataTypes.AutoIdentifyTypes = true;
-            extraction.DataTypes.DataTypeMetadata = true;
             extraction.NodeTypes.Metadata = true;
 
             await extractor.RunExtractor(true);
@@ -1073,7 +1072,6 @@ namespace Test.Integration
             extraction.RootNode = CommonTestUtils.ToProtoNodeId(tester.Ids.Custom.Root, tester.Client);
             extraction.DataTypes.AllowStringVariables = true;
             extraction.DataTypes.MaxArraySize = 4;
-            extraction.DataTypes.DataTypeMetadata = true;
             extraction.NodeTypes.Metadata = true;
 
             tester.Config.History.Enabled = true;
