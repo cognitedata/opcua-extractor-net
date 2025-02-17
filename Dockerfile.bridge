@@ -4,6 +4,12 @@ VOLUME /logs
 COPY /deploy /bridge
 WORKDIR /bridge
 
+# Update distro packages
+RUN apt-get -qq update \
+    && apt-get -qq upgrade \
+    && apt-get -qq clean \
+    && rm -rf /var/lib/apt/lists/*
+
 ENV MQTT_BRIDGE_CONFIG_DIR="/config"
 
 RUN mkdir -p /logs
