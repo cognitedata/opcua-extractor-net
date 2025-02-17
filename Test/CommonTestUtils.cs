@@ -261,8 +261,8 @@ namespace Test
             Assert.Equal(2, obj2Meta.Count);
             Assert.Equal("1234", obj2Meta["NumericProp"]);
 
-            Assert.True(stringyMeta == null || stringyMeta.Count == 0);
-            Assert.Equal(2, mysteryMeta.Count);
+            Assert.True(stringyMeta.Count == 1);
+            Assert.Equal(3, mysteryMeta.Count);
             Assert.Equal("(0, 100)", mysteryMeta["EURange"]);
         }
 
@@ -325,9 +325,9 @@ namespace Test
             Assert.Equal("4321", obj2Meta["NumericProp"]);
             Assert.True(obj2Meta.ContainsKey("StringProp updated"));
 
-            Assert.Single(stringyMeta);
+            Assert.Equal(2, stringyMeta.Count);
             Assert.Equal("New prop value", stringyMeta["NewProp"]);
-            Assert.Equal(2, mysteryMeta.Count);
+            Assert.Equal(3, mysteryMeta.Count);
             Assert.Equal("(0, 200)", mysteryMeta["EURange"]);
         }
 

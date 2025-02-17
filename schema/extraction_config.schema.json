@@ -259,10 +259,6 @@
                     "type": "boolean",
                     "description": "If this is `false` and `auto-identify-types` is `true`, or there are manually added enums in `custom-numeric-types`, enums will be mapped to numeric time series, and labels are added as metadata fields.\n\nIf this is `true`, labels are not mapped to metadata, and enums will be mapped to string time series with values equal to mapped label values."
                 },
-                "data-type-metadata": {
-                    "type": "boolean",
-                    "description": "Add a metadata property `dataType`, which contains the node ID of the OPC-UA data type."
-                },
                 "null-as-numeric": {
                     "type": "boolean",
                     "description": "Set this to `true` to treat `null` node IDs as numeric instead of ignoring them. Note that `null` node IDs violate the OPC UA standard."
