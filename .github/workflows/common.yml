@@ -259,6 +259,16 @@ jobs:
             docker rm -v $id
             docker build -f Dockerfile.bridge -t ${{ steps.image_tags.outputs.bridge_dockerhub }} .
 
+        - name: Scan extractor image
+          uses: cognitedata/image-scan-action@v1
+          with:
+            image: docker.io/${{ steps.image_tags.outputs.extractor_dockerhub }}
+
+        - name: Scan bridge image
+          uses: cognitedata/image-scan-action@v1
+          with:
+            image: docker.io/${{ steps.image_tags.outputs.bridge_dockerhub }}
+
         - name: "Log in to the Dockerhub"
           if: ${{ needs.prerequisites.outputs.should-release == 0 && needs.prerequisites.outputs.branch == 'master' }}
           uses: docker/login-action@v3
