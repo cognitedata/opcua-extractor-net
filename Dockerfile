@@ -8,6 +8,12 @@ COPY /deploy /extractor
 
 WORKDIR /extractor
 
+# Update distro packages
+RUN apt-get -qq update \
+    && apt-get -qq upgrade \
+    && apt-get -qq clean \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY /config/config.remote.yml /config_remote/config.yml
 COPY /config/opc.ua.net.extractor.Config.xml /config_remote
 
