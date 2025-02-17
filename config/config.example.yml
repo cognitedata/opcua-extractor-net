@@ -256,7 +256,6 @@ cognite:
         relationships-table:
 
     # Read from CDF instead of OPC-UA when starting, to speed up start on slow servers.
-    # Requires extraction.data-types.expand-node-ids and append-internal-values to be set to true.
 
     # This should generally be enabled along with metadata-targets.raw
     # If browse-on-empty is set to true, and metadata-targets.raw is configured with the same
@@ -571,13 +570,6 @@ extraction:
 
         # True to treat null nodeIds as numeric instead of string
         null-as-numeric: false
-
-        # Add full JSON node-ids to data pushed to Raw. TypeDefintionId, ParentNodeId, NodeId and DataTypeId.
-        expand-node-ids: false
-
-        # Add attributes generally used internally like AccessLevel, Historizing, ArrayDimensions, ValueRank etc.
-        # to data pushed to Raw.
-        append-internal-values: false
 
         # If max-array-size is set, this looks for the MaxArraySize property on each node with one-dimension ValueRank,
         # if it is not found, it tries to read the value as well, and look at the current size.

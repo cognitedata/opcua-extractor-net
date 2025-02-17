@@ -267,14 +267,6 @@
                     "type": "boolean",
                     "description": "Set this to `true` to treat `null` node IDs as numeric instead of ignoring them. Note that `null` node IDs violate the OPC UA standard."
                 },
-                "expand-node-ids": {
-                    "type": "boolean",
-                    "description": "Add attributes such as `NodeId`, `ParentNodeId`, and `TypeDefinitionId` to nodes written to CDF Raw as full node IDs with reversible encoding."
-                },
-                "append-internal-values": {
-                    "type": "boolean",
-                    "description": "Add attributes generally used internally like `AccessLevel`, `Historizing`, `ArrayDimensions`, and `ValueRank` to data pushed to CDF Raw."
-                },
                 "estimate-array-sizes": {
                     "type": "boolean",
                     "description": "If `max-array-size` is set, this looks for the `MaxArraySize` property on each node with `one-dimensional` ValueRank. If it is not found, the extractor tries to read the value of the node, and look at the current array length.\n\n`ArrayDimensions` is still the preferred way to identify array sizes, this is not guaranteed to generate reasonable or useful values."
