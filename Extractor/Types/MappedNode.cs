@@ -29,10 +29,10 @@ namespace Cognite.OpcUa.Types
         public bool IsObject { get; }
         public NodeClass NodeClass { get; }
 
-        public MappedNode(BaseUANode node, bool dataTypeMetadata, bool nodeTypeMetadata)
+        public MappedNode(BaseUANode node, bool nodeTypeMetadata)
         {
             Id = node.Id;
-            Checksum = node.GetUpdateChecksum(dataTypeMetadata, nodeTypeMetadata);
+            Checksum = node.GetUpdateChecksum(nodeTypeMetadata);
             IsProperty = node.IsProperty;
             IsObject = node is not UAVariable variable || variable.IsObject;
         }
