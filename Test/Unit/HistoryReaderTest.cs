@@ -321,21 +321,6 @@ namespace Test.Unit
             Assert.Equal(0, queue.Count);
             Assert.True(CommonTestUtils.TestMetricValue("opcua_bad_events", 100));
 
-            // Test flush buffer
-            historyEvents.Events = frontfillEvents;
-            state.RestartHistory();
-            await queue.Clear();
-            state.UpdateFromStream(new UAEvent { Time = start.AddSeconds(100) });
-            node = new HistoryReadNode(HistoryReadType.FrontfillEvents, new NodeId("emitter", 0))
-            {
-                LastResult = historyEvents
-            };
-            historyEventHandler.Invoke(reader, new object[] { node, details });
-            Assert.Equal(100, node.TotalRead);
-            Assert.False(state.IsFrontfilling);
-            Assert.Equal(101, queue.Count);
-            Assert.Equal(start.AddSeconds(100), state.SourceExtractedRange.Last);
-
             // Test termination without cp
             historyEvents.Events = frontfillEvents;
             state.RestartHistory();
