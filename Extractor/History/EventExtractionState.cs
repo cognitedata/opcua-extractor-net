@@ -33,7 +33,7 @@ namespace Cognite.OpcUa.History
         /// <summary>
         /// Last known timestamp of events from OPC-UA.
         /// </summary>
-        private IList<UAEvent>? buffer;
+        private List<UAEvent>? buffer;
         public bool ShouldSubscribe { get; }
 
         public EventExtractionState(
@@ -53,15 +53,17 @@ namespace Cognite.OpcUa.History
         /// Update timestamp and buffer from stream.
         /// </summary>
         /// <param name="points">Event received for current stream iteration</param>
-        public void UpdateFromStream(UAEvent? evt)
+        public void UpdateFromStream(UAEvent? evt, bool useBuffer = false)
         {
             if (evt == null) return;
             UpdateFromStream(evt.Time, evt.Time);
             lock (Mutex)
             {
-                if (IsFrontfilling)
+                if (IsFrontfilling && buffer != null && useBuffer)
                 {
-                    buffer?.Add(evt);
+                    var threshold = DateTime.UtcNow.AddSeconds(-30);
+                    buffer.RemoveAll(e => e.Time < threshold);
+                    buffer.Add(evt);
                 }
             }
         }
@@ -70,7 +72,7 @@ namespace Cognite.OpcUa.History
             if (buffer == null) return;
             lock (Mutex)
             {
-                buffer = buffer.Where(evt => !SourceExtractedRange.Contains(evt.Time)).ToList();
+                buffer.RemoveAll(evt => SourceExtractedRange.Contains(evt.Time));
             }
         }
         public override void UpdateFromBackfill(DateTime first, bool final)

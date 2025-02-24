@@ -67,6 +67,11 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.33.2":
+    description: Fix possible memory leak from live events being buffered.
+    changelog:
+      fixed:
+        - Fix possible memory leak related to events being buffered to avoid data loss on history end.
   "2.33.1":
     description: Improve sanitation of data modeling external IDs.
     changelog:
