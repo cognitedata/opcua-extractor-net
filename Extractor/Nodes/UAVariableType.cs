@@ -142,31 +142,25 @@ namespace Cognite.OpcUa.Nodes
                     fields[kvp.Key.ToString(CultureInfo.InvariantCulture)] = kvp.Value;
                 }
             }
-            if (config.Extraction.DataTypes.DataTypeMetadata)
+            if (dt.Id.NamespaceIndex == 0)
             {
-                if (dt.Id.NamespaceIndex == 0)
-                {
-                    fields["dataType"] = DataTypes.GetBuiltInType(dt.Id).ToString();
-                }
-                else
-                {
-                    fields["dataType"] = dt.Name ?? dt.GetUniqueId(context) ?? "null";
-                }
+                fields["dataType"] = DataTypes.GetBuiltInType(dt.Id).ToString();
+            }
+            else
+            {
+                fields["dataType"] = dt.Name ?? dt.GetUniqueId(context) ?? "null";
             }
             fields["Value"] = converter.ConvertToString(FullAttributes.Value, dt.EnumValues);
 
             return fields;
         }
 
-        public override int GetUpdateChecksum(bool dataTypeMetadata, bool nodeTypeMetadata)
+        public override int GetUpdateChecksum(bool nodeTypeMetadata)
         {
-            int checksum = base.GetUpdateChecksum(dataTypeMetadata, nodeTypeMetadata);
+            int checksum = base.GetUpdateChecksum(nodeTypeMetadata);
             unchecked
             {
-                if (dataTypeMetadata)
-                {
-                    checksum = checksum * 31 + FullAttributes.DataType.Id.GetHashCode();
-                }
+                checksum = checksum * 31 + FullAttributes.DataType.Id.GetHashCode();
                 checksum = checksum * 31 + FullAttributes.Value.GetHashCode();
             }
             return checksum;
