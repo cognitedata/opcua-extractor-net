@@ -365,7 +365,7 @@ namespace Test.Unit
 
             TestConvert(variable,
                 @"{""externalId"":""gp.base:s=test"",""name"":""test"","
-                + @"""description"":null,""metadata"":null,""assetExternalId"":null,"
+                + @"""description"":null,""metadata"":{""dataType"":""Boolean""},""assetExternalId"":null,"
                 + @"""isString"":false,""isStep"":true,"
                 + @"""NodeId"":{""idType"":1,""identifier"":""test""},"
                 + @"""DataTypeId"":{""idType"":0,""identifier"":1},"
@@ -413,7 +413,7 @@ namespace Test.Unit
             variable.FullAttributes.DataType = new UADataType(DataTypeIds.Double);
             TestConvert(variable,
                 @"{""externalId"":""gp.base:s=test"",""name"":""test"","
-                + @"""description"":null,""metadata"":null,""assetExternalId"":null,"
+                + @"""description"":null,""metadata"":{""dataType"":""Double""},""assetExternalId"":null,"
                 + @"""isString"":false,""isStep"":false,"
                 + @"""NodeId"":{""idType"":1,""identifier"":""test""},"
                 + @"""DataTypeId"":{""idType"":0,""identifier"":11},"
@@ -425,7 +425,7 @@ namespace Test.Unit
             variable.AsEvents = true;
             TestConvert(variable,
                 @"{""externalId"":""gp.base:s=test"",""name"":""test"","
-                + @"""description"":null,""metadata"":null,""assetExternalId"":null,"
+                + @"""description"":null,""metadata"":{""dataType"":""Double""},""assetExternalId"":null,"
                 + @"""isString"":false,""isStep"":false,"
                 + @"""NodeId"":{""idType"":1,""identifier"":""test""},"
                 + @"""DataTypeId"":{""idType"":0,""identifier"":11},"

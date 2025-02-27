@@ -235,13 +235,11 @@ namespace Cognite.OpcUa.NodeSources
             extractor.State.RegisterNode(node.Id, node.GetUniqueId(client.Context));
             extractor.State.AddActiveNode(
                 node,
-                config.Extraction.DataTypes.DataTypeMetadata,
                 config.Extraction.NodeTypes.Metadata);
             foreach (var prop in node.GetAllProperties())
             {
                 extractor.State.AddActiveNode(
                 prop,
-                config.Extraction.DataTypes.DataTypeMetadata,
                 config.Extraction.NodeTypes.Metadata);
             }
         }
@@ -392,7 +390,6 @@ namespace Cognite.OpcUa.NodeSources
                 if (oldChecksum != null)
                 {
                     node.Changed |= oldChecksum != node.GetUpdateChecksum(
-                        config.Extraction.DataTypes.DataTypeMetadata,
                         config.Extraction.NodeTypes.Metadata);
                     return node.Changed;
                 }

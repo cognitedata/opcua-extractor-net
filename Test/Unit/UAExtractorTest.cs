@@ -169,7 +169,6 @@ namespace Test.Unit
         {
             await using var extractor = tester.BuildExtractor();
 
-            tester.Config.Extraction.DataTypes.DataTypeMetadata = true;
             var variable = new UAVariable(new NodeId("test", 0), "test", null, null, NodeId.Null, null);
             variable.FullAttributes.DataType = new UADataType(DataTypeIds.Double);
             var fields = variable.GetExtraMetadata(tester.Config, extractor.Context, extractor.TypeConverter);
@@ -183,7 +182,6 @@ namespace Test.Unit
             Assert.Single(fields);
             Assert.Equal("SomeType", fields["TypeDefinition"]);
 
-            tester.Config.Extraction.DataTypes.DataTypeMetadata = false;
             tester.Config.Extraction.NodeTypes.Metadata = false;
 
             tester.Config.Extraction.NodeTypes.AsNodes = true;
@@ -191,8 +189,9 @@ namespace Test.Unit
             type.FullAttributes.DataType = new UADataType(DataTypeIds.String);
             type.FullAttributes.Value = new Variant("value");
             fields = type.GetExtraMetadata(tester.Config, extractor.Context, extractor.TypeConverter);
-            Assert.Single(fields);
+            Assert.Equal(2, fields.Count);
             Assert.Equal("value", fields["Value"]);
+            Assert.Equal("String", fields["dataType"]);
         }
         [Fact]
         public void TestNodeMapping()
