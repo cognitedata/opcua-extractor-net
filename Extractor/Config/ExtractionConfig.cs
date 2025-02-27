@@ -200,10 +200,6 @@ namespace Cognite.OpcUa.Config
         /// </summary>
         public bool EnumsAsStrings { get; set; }
         /// <summary>
-        /// Add a metadata property dataType which contains the id of the OPC-UA datatype.
-        /// </summary>
-        public bool DataTypeMetadata { get; set; }
-        /// <summary>
         /// True to treat null nodeIds as numeric instead of string
         /// </summary>
         public bool NullAsNumeric { get; set; }

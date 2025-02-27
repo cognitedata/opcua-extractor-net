@@ -561,9 +561,6 @@ extraction:
         # equal to mapped label values.
         enums-as-strings: false
 
-        # Add a metadata property dataType which contains the id of the OPC-UA datatype.
-        data-type-metadata: false
-
         # True to treat null nodeIds as numeric instead of string
         null-as-numeric: false
 

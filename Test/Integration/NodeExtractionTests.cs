@@ -476,7 +476,6 @@ namespace Test.Integration
             extraction.DataTypes.AllowStringVariables = true;
             extraction.DataTypes.MaxArraySize = -1;
             extraction.DataTypes.AutoIdentifyTypes = true;
-            extraction.DataTypes.DataTypeMetadata = true;
             extraction.NodeTypes.Metadata = true;
 
             await extractor.RunExtractor(true);
@@ -1078,8 +1077,9 @@ namespace Test.Integration
 
             Assert.Equal(NodeClass.VariableType, customVarType.NodeClass);
             var meta = customVarType.BuildMetadata(tester.Config, extractor, true);
-            Assert.Single(meta);
+            Assert.Equal(2, meta.Count);
             Assert.Equal("123.123", meta["Value"]);
+            Assert.Equal("Double", meta["dataType"]);
             var customObjType = pusher.PushedNodes[tester.Server.Ids.Custom.ObjectType];
             Assert.Equal("CustomObjectType", customObjType.Name);
             Assert.Equal(NodeClass.ObjectType, customObjType.NodeClass);
@@ -1119,7 +1119,6 @@ namespace Test.Integration
             extraction.RootNode = CommonTestUtils.ToProtoNodeId(tester.Ids.Custom.Root, tester.Client);
             extraction.DataTypes.AllowStringVariables = true;
             extraction.DataTypes.MaxArraySize = 4;
-            extraction.DataTypes.DataTypeMetadata = true;
             extraction.NodeTypes.Metadata = true;
 
             tester.Config.History.Enabled = true;
