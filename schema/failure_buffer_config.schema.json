@@ -23,7 +23,7 @@
         },
         "max-buffer-size": {
             "type": "integer",
-            "description": "Set the maximum size in bytes of the buffer file. If the size of the file exceeds this number, no new datapoints or events will be written to their respective buffer files, and any further ephemeral data is lost. Note that if both datapoint and event buffers are enabled, the potential disk usage is twice this number."
+            "description": "Set the maximum size in bytes of the buffer file. If the size of the file exceeds this number, no new datapoints or events will be written to their respective buffer files, and any further ephemeral data is lost. Note that if both datapoint and event buffers are enabled, the potential disk usage is twice this number. If set to 0, the buffer file has no upper limit, and will expand until the system is out of storage space, at which point the extractor will probably crash. It is highly recommended to set this if you expect the failure buffer to be used."
         },
         "influx-state-store": {
             "type": "boolean",
