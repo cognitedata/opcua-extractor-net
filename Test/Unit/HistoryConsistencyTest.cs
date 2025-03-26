@@ -1,5 +1,6 @@
 ﻿using Cognite.Extensions;
 using Cognite.Extractor.Common;
+using Cognite.Extractor.Configuration;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.Nodes;
@@ -119,7 +120,7 @@ namespace Test.Unit
             var logger = tester.Provider.GetRequiredService<ILogger<HistoryReader>>();
 
             cfg.Throttling.MaxNodeParallelism = nodeParallelism;
-            cfg.StartTime = tester.HistoryStart.AddSeconds(-10).ToUnixTimeMilliseconds().ToString();
+            cfg.StartTime = new TimestampWrapper(tester.HistoryStart.AddSeconds(-10));
 
             tester.Config.History = cfg;
 
@@ -203,7 +204,7 @@ namespace Test.Unit
             tester.Config.Events.History = true;
 
             cfg.Throttling.MaxNodeParallelism = nodeParallelism;
-            cfg.StartTime = tester.HistoryStart.AddSeconds(-10).ToUnixTimeMilliseconds().ToString();
+            cfg.StartTime = new TimestampWrapper(tester.HistoryStart.AddSeconds(-10));
 
             tester.Config.History = cfg;
 

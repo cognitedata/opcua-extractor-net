@@ -1,4 +1,5 @@
 ﻿using Cognite.Extractor.Common;
+using Cognite.Extractor.Configuration;
 using Cognite.Extractor.StateStorage;
 using Cognite.Extractor.Testing;
 using Cognite.OpcUa;
@@ -945,7 +946,7 @@ namespace Test.Integration
             tester.Config.History.Backfill = false;
             tester.Config.History.Data = true;
             tester.Config.History.Enabled = true;
-            tester.Config.History.EndTime = startTime.AddSeconds(5).ToUnixTimeMilliseconds().ToString();
+            tester.Config.History.EndTime = new TimestampWrapper(startTime.AddSeconds(5));
             tester.Config.Subscriptions.DataPoints = false;
             tester.Config.Extraction.RootNode = tester.Ids.Base.Root.ToProtoNodeId(tester.Client);
 

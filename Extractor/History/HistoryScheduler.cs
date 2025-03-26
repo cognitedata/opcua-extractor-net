@@ -103,7 +103,7 @@ namespace Cognite.OpcUa.History
             IEnumerable<UAHistoryExtractionState> states,
             CancellationToken token)
             : base(
-                  GetNodes(states, log, type, config.History.StartTime, out var count),
+                  GetNodes(states, log, type, config.History.StartTime?.Get() ?? CogniteTime.DateTimeEpoch, out var count),
                   throttler,
                   (type == HistoryReadType.FrontfillData || type == HistoryReadType.BackfillData)
                     ? config.History.DataNodesChunk
@@ -130,26 +130,10 @@ namespace Cognite.OpcUa.History
                 TokenSource.Cancel();
             });
 
-            historyStartTime = GetStartTime(config.History.StartTime);
-            if (!string.IsNullOrWhiteSpace(config.History.EndTime))
-            {
-                var endTime = CogniteTime.ParseTimestampString(config.History.EndTime)!;
-                if (endTime.HasValue)
-                {
-                    historyEndTime = endTime.Value;
-                }
-                else
-                {
-                    log.LogWarning("Failed to parse timestamp from end-time string {Conf}", config.History.EndTime);
-                    historyEndTime = DefaultEndTime();
-                }
-            }
-            else
-            {
-                historyEndTime = DefaultEndTime();
-            }
+            historyStartTime = config.History.StartTime?.Get() ?? CogniteTime.DateTimeEpoch;
+            historyEndTime = config.History.EndTime?.Get() ?? DefaultEndTime();
 
-            if (historyStartTime != null && historyEndTime != null && historyStartTime >= historyEndTime)
+            if (historyStartTime >= historyEndTime)
             {
                 throw new ConfigurationException(
                     $"History start time must be less than history end time. Start time is {historyStartTime}, end time is {historyEndTime}");
@@ -184,12 +168,10 @@ namespace Cognite.OpcUa.History
             IEnumerable<UAHistoryExtractionState> states,
             ILogger log,
             HistoryReadType type,
-            string? historyStart,
+            DateTime startTime,
             out int count)
         {
             var nodes = states.Select(state => new HistoryReadNode(type, state)).ToList();
-
-            var startTime = GetStartTime(historyStart);
 
             if (type == HistoryReadType.BackfillData || type == HistoryReadType.BackfillEvents)
             {

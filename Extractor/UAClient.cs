@@ -208,7 +208,7 @@ namespace Cognite.OpcUa
                 AppConfig.SecurityConfiguration.ApplicationCertificate.SubjectName = certificateSubject;
             }
 
-            bool validAppCert = await application.CheckApplicationInstanceCertificate(false, 0, Config.Source.CertificateExpiry);
+            bool validAppCert = await application.CheckApplicationInstanceCertificates(false, Config.Source.CertificateExpiry, liveToken);
             if (!validAppCert)
             {
                 log.LogWarning("Missing application certificate, using insecure connection.");

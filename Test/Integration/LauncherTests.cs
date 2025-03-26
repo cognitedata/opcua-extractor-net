@@ -505,13 +505,6 @@ version: 1
                 method.Invoke(typeof(ExtractorStarter), new object[] { log, config, setup, options, "config", services }));
             Assert.Equal("Invalid config: Do not use events. as id-prefix, as it is used internally", exc.InnerException.Message);
 
-            // Invalid history start time
-            config.Extraction.IdPrefix = null;
-            config.History.StartTime = "2d-agoo";
-            exc = Assert.Throws<TargetInvocationException>(() =>
-                method.Invoke(typeof(ExtractorStarter), new object[] { log, config, setup, options, "config", services }));
-            Assert.Equal("Invalid config: Invalid history start time: 2d-agoo", exc.InnerException.Message);
-
             // Missing opc-ua xml config
             config.History.StartTime = null;
             exc = Assert.Throws<TargetInvocationException>(() =>

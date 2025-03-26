@@ -1,4 +1,5 @@
 ﻿using Cognite.Extractor.Common;
+using Cognite.Extractor.Configuration;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.Nodes;
@@ -927,7 +928,7 @@ namespace Test.Unit
             {
                 Backfill = false,
                 Data = true,
-                EndTime = tester.HistoryStart.AddSeconds(20).ToUnixTimeMilliseconds().ToString()
+                EndTime = new TimestampWrapper(tester.HistoryStart.AddSeconds(20))
             };
 
 
@@ -986,7 +987,7 @@ namespace Test.Unit
             {
                 Backfill = false,
                 Data = true,
-                EndTime = tester.HistoryStart.AddSeconds(20).ToUnixTimeMilliseconds().ToString()
+                EndTime = new TimestampWrapper(tester.HistoryStart.AddSeconds(20))
             };
 
 
@@ -1047,7 +1048,7 @@ namespace Test.Unit
             {
                 Backfill = true,
                 Data = true,
-                StartTime = tester.HistoryStart.AddSeconds(-5).ToUnixTimeMilliseconds().ToString()
+                StartTime = new TimestampWrapper(tester.HistoryStart.AddSeconds(-5))
             };
 
 
@@ -1105,7 +1106,7 @@ namespace Test.Unit
             {
                 Backfill = true,
                 Data = true,
-                EndTime = tester.HistoryStart.AddSeconds(20).ToUnixTimeMilliseconds().ToString(),
+                EndTime = new TimestampWrapper(tester.HistoryStart.AddSeconds(20)),
                 ErrorThreshold = 40
             };
 
