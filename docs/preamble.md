@@ -78,3 +78,4 @@ In most places where time intervals are required, you can use a CDF-like syntax 
 
 For history start and end times you can use a similar syntax. `[N][timeunit]` and `[N][timeunit]-ago`. `1d-ago` means 1 day in the past from the time history starts, and `1h` means 1 hour in the future. For instance, you can use this syntax to configure the extractor to read only recent history.
 
+History start and end times can also be set to a specific date on RFC 3339 form, like `2024-01-02T09:27:15Z`, or on a shorter form like `2021-07-23+01:00`. A timezone specifier is necessary, `Z` means UTC.

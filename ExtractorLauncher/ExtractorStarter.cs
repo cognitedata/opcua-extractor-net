@@ -71,16 +71,6 @@ namespace Cognite.OpcUa
             if (string.IsNullOrEmpty(config.Extraction.IdPrefix)) log.LogWarning("No id-prefix specified in config file");
             if (config.Cognite == null && config.Influx == null && config.Mqtt == null) log.LogWarning("No destination system specified");
             if (config.Extraction.IdPrefix == "events.") return "Do not use events. as id-prefix, as it is used internally";
-            if (!string.IsNullOrWhiteSpace(config.History?.StartTime))
-            {
-                var parsed = CogniteTime.ParseTimestampString(config.History.StartTime);
-                if (parsed == null) return $"Invalid history start time: {config.History.StartTime}";
-            }
-            if (!string.IsNullOrWhiteSpace(config.History?.EndTime))
-            {
-                var parsed = CogniteTime.ParseTimestampString(config.History.EndTime);
-                if (parsed == null) return $"Invalid history end time: {config.History.EndTime}";
-            }
             if (config.Source.SamplingInterval != null)
             {
                 log.LogWarning("source.sampling-interval is deprecated. Use subscriptions.sampling-interval instead.");

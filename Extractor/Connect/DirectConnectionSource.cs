@@ -72,7 +72,7 @@ namespace Cognite.OpcUa.Connect
             EndpointDescription selectedEndpoint;
             try
             {
-                selectedEndpoint = CoreClientUtils.SelectEndpoint(endpointUrl, config.Secure);
+                selectedEndpoint = CoreClientUtils.SelectEndpoint(appConfig, endpointUrl, config.Secure);
             }
             catch (Exception ex)
             {
