@@ -928,7 +928,7 @@ namespace Test.Unit
             {
                 Backfill = false,
                 Data = true,
-                EndTime = new TimestampWrapper(tester.HistoryStart.AddSeconds(20))
+                EndTime = new TimestampWrapper(tester.HistoryStart.AddSeconds(20).ToUnixTimeMilliseconds().ToString())
             };
 
 
@@ -987,7 +987,7 @@ namespace Test.Unit
             {
                 Backfill = false,
                 Data = true,
-                EndTime = new TimestampWrapper(tester.HistoryStart.AddSeconds(20))
+                EndTime = new TimestampWrapper(tester.HistoryStart.AddSeconds(20).ToUnixTimeMilliseconds().ToString())
             };
 
 
@@ -1048,7 +1048,7 @@ namespace Test.Unit
             {
                 Backfill = true,
                 Data = true,
-                StartTime = new TimestampWrapper(tester.HistoryStart.AddSeconds(-5))
+                StartTime = new TimestampWrapper(tester.HistoryStart.AddSeconds(-5).ToUnixTimeMilliseconds().ToString())
             };
 
 
@@ -1106,7 +1106,7 @@ namespace Test.Unit
             {
                 Backfill = true,
                 Data = true,
-                EndTime = new TimestampWrapper(tester.HistoryStart.AddSeconds(20)),
+                EndTime = new TimestampWrapper(tester.HistoryStart.AddSeconds(20).ToUnixTimeMilliseconds().ToString()),
                 ErrorThreshold = 40
             };
 

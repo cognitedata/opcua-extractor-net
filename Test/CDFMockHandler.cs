@@ -25,6 +25,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Serialization;
 using System;
 using System.Collections.Generic;
+using System.Dynamic;
 using System.Globalization;
 using System.Linq;
 using System.Net;
@@ -258,6 +259,9 @@ namespace Test
                         case "/streams/test-stream/records":
                             res = HandleIngestRecords(content);
                             break;
+                        case "/api/v1/token/inspect":
+                            res = HandleTokenInspect();
+                            break;
                         default:
                             log.LogWarning("Unknown path: {DummyFactoryUnknownPath}", reqPath);
                             res = new HttpResponseMessage(HttpStatusCode.InternalServerError);
@@ -276,6 +280,25 @@ namespace Test
                 log.Information(contentTask.Result);*/
                 return res;
             }
+        }
+
+        private static HttpResponseMessage HandleTokenInspect()
+        {
+            dynamic res = new ExpandoObject();
+            res.subject = "sub";
+            dynamic project = new ExpandoObject();
+            project.projectUrlName = "test";
+            project.groups = new List<int> { 1, 2, 3 };
+            res.projects = new List<ExpandoObject>
+            {
+                project
+            };
+            res.capabilities = new List<ExpandoObject>();
+
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(JsonConvert.SerializeObject(res))
+            };
         }
 
         private HttpResponseMessage HandleAssetsByIds(string content)

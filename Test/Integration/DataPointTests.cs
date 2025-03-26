@@ -946,7 +946,7 @@ namespace Test.Integration
             tester.Config.History.Backfill = false;
             tester.Config.History.Data = true;
             tester.Config.History.Enabled = true;
-            tester.Config.History.EndTime = new TimestampWrapper(startTime.AddSeconds(5));
+            tester.Config.History.EndTime = new TimestampWrapper(startTime.AddSeconds(5).ToUnixTimeMilliseconds().ToString());
             tester.Config.Subscriptions.DataPoints = false;
             tester.Config.Extraction.RootNode = tester.Ids.Base.Root.ToProtoNodeId(tester.Client);
 

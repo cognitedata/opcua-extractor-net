@@ -120,7 +120,7 @@ namespace Test.Unit
             var logger = tester.Provider.GetRequiredService<ILogger<HistoryReader>>();
 
             cfg.Throttling.MaxNodeParallelism = nodeParallelism;
-            cfg.StartTime = new TimestampWrapper(tester.HistoryStart.AddSeconds(-10));
+            cfg.StartTime = new TimestampWrapper(tester.HistoryStart.AddSeconds(-10).ToUnixTimeMilliseconds().ToString());
 
             tester.Config.History = cfg;
 
@@ -204,7 +204,7 @@ namespace Test.Unit
             tester.Config.Events.History = true;
 
             cfg.Throttling.MaxNodeParallelism = nodeParallelism;
-            cfg.StartTime = new TimestampWrapper(tester.HistoryStart.AddSeconds(-10));
+            cfg.StartTime = new TimestampWrapper(tester.HistoryStart.AddSeconds(-10).ToUnixTimeMilliseconds().ToString());
 
             tester.Config.History = cfg;
 

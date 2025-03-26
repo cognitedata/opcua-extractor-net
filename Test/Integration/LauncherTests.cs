@@ -506,7 +506,7 @@ version: 1
             Assert.Equal("Invalid config: Do not use events. as id-prefix, as it is used internally", exc.InnerException.Message);
 
             // Missing opc-ua xml config
-            config.History.StartTime = null;
+            config.Extraction.IdPrefix = null;
             exc = Assert.Throws<TargetInvocationException>(() =>
                 method.Invoke(typeof(ExtractorStarter), new object[] { log, config, setup, options, ".", services }));
             Assert.Equal("Missing opc.ua.net.extractor.Config.xml in config folder .", exc.InnerException.Message);
