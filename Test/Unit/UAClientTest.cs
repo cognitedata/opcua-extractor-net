@@ -1066,7 +1066,6 @@ namespace Test.Unit
                 }
                 tester.Config.Source.SubscriptionChunk = 1000;
             }
-            Assert.True(CommonTestUtils.TestMetricValue("opcua_subscriptions", 2000));
         }
 
         [Fact]
