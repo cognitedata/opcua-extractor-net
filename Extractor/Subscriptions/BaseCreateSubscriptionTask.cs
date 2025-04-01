@@ -21,7 +21,7 @@ namespace Cognite.OpcUa.Subscriptions
         protected IClientCallbacks Callbacks { get; }
         protected Dictionary<NodeId, T> Items { get; }
         private static readonly Gauge numSubscriptions = Metrics
-            .CreateGauge("opcua_subscriptions", "Number of active monitored items");
+            .CreateGauge("opcua_subscriptions", "Number of active monitored items per subscription", "subscription");
 
         protected BaseCreateSubscriptionTask(SubscriptionName name, Dictionary<NodeId, T> items, IClientCallbacks callbacks)
         {
@@ -33,14 +33,14 @@ namespace Cognite.OpcUa.Subscriptions
         protected abstract MonitoredItem CreateMonitoredItem(T item, FullConfig config);
 
 
-        private async Task CreateItemsWithRetryInner(ILogger logger, int count, UARetryConfig retries, Subscription subscription, CancellationToken token)
+        private async Task CreateItemsWithRetryInner(ILogger logger, UARetryConfig retries, Subscription subscription, CancellationToken token)
         {
             await RetryUtil.RetryAsync($"create monitored items for {SubscriptionName.Name()}", async () =>
             {
                 try
                 {
                     await subscription.CreateItemsAsync(token);
-                    numSubscriptions.Inc(count);
+                    numSubscriptions.WithLabels(SubscriptionName.Name()).Set(subscription.MonitoredItems.Count(m => m.Created));
                 }
                 catch (Exception ex)
                 {
@@ -80,12 +80,12 @@ namespace Cognite.OpcUa.Subscriptions
                 {
                     subscription.AddItems(chunk);
 
-                    await CreateItemsWithRetryInner(logger, numToCreate, retries, subscription, token);
+                    await CreateItemsWithRetryInner(logger, retries, subscription, token);
                 }
             }
             else
             {
-                await CreateItemsWithRetryInner(logger, numToCreate, retries, subscription, token);
+                await CreateItemsWithRetryInner(logger, retries, subscription, token);
             }
         }
 
@@ -142,6 +142,7 @@ namespace Cognite.OpcUa.Subscriptions
             }
             if (!subscription.Created)
             {
+                numSubscriptions.WithLabels(SubscriptionName.Name()).Set(0);
                 try
                 {
                     session.AddSubscription(subscription);
