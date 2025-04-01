@@ -3,5 +3,5 @@
   "extends": [
     "config:base"
   ],
-  "labels": ["auto-merge", "auto-update"]
+  "labels": ["auto-merge"]
 }
