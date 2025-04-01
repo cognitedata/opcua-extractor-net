@@ -61,9 +61,7 @@ namespace Cognite.OpcUa.Config
                 return;
             }
 
-            DateTime earliestTime;
-            if (Config.History.StartTime == null) earliestTime = CogniteTime.DateTimeEpoch;
-            else earliestTime = CogniteTime.ParseTimestampString(Config.History.StartTime)!.Value;
+            DateTime earliestTime = Config.History.StartTime?.Get() ?? CogniteTime.DateTimeEpoch;
 
             var details = new ReadRawModifiedDetails
             {

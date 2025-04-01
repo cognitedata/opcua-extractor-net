@@ -19,6 +19,7 @@ using System;
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using Cognite.Extractor.Common;
+using Cognite.Extractor.Configuration;
 
 namespace Cognite.OpcUa.Config
 {
@@ -89,14 +90,14 @@ namespace Cognite.OpcUa.Config
         /// Alternatively, use syntax N[timeunit](-ago) where timeunit is w, d, h, m, s or ms. In past if -ago is added,
         /// future if not.
         /// </summary>
-        public string? StartTime { get; set; }
+        public TimestampWrapper? StartTime { get; set; }
         /// <summary>
         /// Timestamp to be considered the end of forward history. Only relevant if max-read-length is set.
         /// In milliseconds since 1/1/1970. Default is current time, if this is null.
         /// Alternatively, use syntax N[timeunit](-ago) where timeunit is w, d, h, m, s or ms. In past if -ago is added,
         /// future if not.
         /// </summary>
-        public string? EndTime { get; set; }
+        public TimestampWrapper? EndTime { get; set; }
         public TimeSpanWrapper GranularityValue { get; } = new TimeSpanWrapper(true, "s", "600");
         /// <summary>
         /// Granularity to use when doing historyRead, in seconds. Nodes with last known timestamp within this range of eachother will
