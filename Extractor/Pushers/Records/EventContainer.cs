@@ -96,6 +96,7 @@ namespace Cognite.OpcUa.Pushers.Records
 
             return new StreamRecordWrite
             {
+                ExternalId = evt.EventId,
                 Space = space,
                 Sources = sources
             };
