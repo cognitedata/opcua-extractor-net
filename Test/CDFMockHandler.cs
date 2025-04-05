@@ -1317,6 +1317,7 @@ namespace Test
     public class DynamicRecord
     {
         public string Space { get; set; }
+        public string ExternalId { get; set; }
         public IEnumerable<DynamicRecordSource> Sources { get; set; }
     }
 

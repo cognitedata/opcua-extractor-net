@@ -1427,6 +1427,7 @@ namespace Test.Unit
             var evt = new UAEvent();
             evt.Time = new DateTime(2024, 01, 01, 00, 00, 00, DateTimeKind.Utc);
             evt.EventType = customEventType;
+            evt.EventId = "Event1";
             evt.SetMetadata(extractor.StringConverter, new[] {
                 new EventFieldValue(fieldsByName["Message"], new LocalizedText("Some message")),
                 new EventFieldValue(fieldsByName["EventType"], customEventType.Id),
@@ -1448,6 +1449,7 @@ namespace Test.Unit
             Assert.Single(handler.Records);
 
             var record = handler.Records[0];
+            Assert.Equal("Event1", record.ExternalId);
 
             Assert.Equal(2, record.Sources.Count());
             var baseData = record.Sources.Last().Properties;
@@ -1497,6 +1499,7 @@ namespace Test.Unit
             var evt = new UAEvent();
             evt.Time = new DateTime(2024, 01, 01, 00, 00, 00, DateTimeKind.Utc);
             evt.EventType = customEventType;
+            evt.EventId = "Event1";
             evt.SetMetadata(extractor.StringConverter, new[] {
                 new EventFieldValue(fieldsByName["Message"], new LocalizedText("Some message")),
                 new EventFieldValue(fieldsByName["EventType"], customEventType.Id),
@@ -1518,6 +1521,7 @@ namespace Test.Unit
             Assert.Single(handler.Records);
 
             var record = handler.Records[0];
+            Assert.Equal("Event1", record.ExternalId);
 
             Assert.Equal(2, record.Sources.Count());
             var baseData = record.Sources.Last().Properties;
@@ -1567,6 +1571,7 @@ namespace Test.Unit
             var evt = new UAEvent();
             evt.Time = new DateTime(2024, 01, 01, 00, 00, 00, DateTimeKind.Utc);
             evt.EventType = customEventType;
+            evt.EventId = "Event1";
             evt.SetMetadata(extractor.StringConverter, new[] {
                 new EventFieldValue(fieldsByName["Message"], new LocalizedText("Some message")),
                 new EventFieldValue(fieldsByName["EventType"], customEventType.Id),
@@ -1588,6 +1593,7 @@ namespace Test.Unit
             Assert.Single(handler.Records);
 
             var record = handler.Records[0];
+            Assert.Equal("Event1", record.ExternalId);
 
             Assert.Equal(2, record.Sources.Count());
             var baseData = record.Sources.Last().Properties;
