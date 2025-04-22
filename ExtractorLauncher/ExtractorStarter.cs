@@ -198,6 +198,15 @@ namespace Cognite.OpcUa
                 }
             }
 
+            if (config.FailureBuffer?.EventsBatch <= 0)
+            {
+                return "events-batch must be greater than 0";
+            }
+            if (config.FailureBuffer?.DatapointsBatch <= 0)
+            {
+                return "datapoints-batch must be greater than 0";
+            }
+
             return null;
         }
 
