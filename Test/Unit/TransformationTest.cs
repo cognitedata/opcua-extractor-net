@@ -110,6 +110,43 @@ namespace Test.Unit
 
             Assert.DoesNotContain(matched, node => node.Id.Identifier is uint unodeId && unodeId == 4u);
         }
+
+        [Fact]
+        public void TestIdFilterExactMatch()
+        {
+            var filter = new NodeFilter
+            {
+                Id = new ListFieldFilter(new[] {
+                    "i=1",
+                    "s=hello",
+                    "s=complex weirdo string/[abc]"
+                }, "f"),
+                NodeClass = NodeClass.Object,
+            };
+            UAObject node(object identifier)
+            {
+                return new UAObject(new NodeId(identifier, 2), "TestTest", null, null, new NodeId("parent", 0), null);
+            }
+
+            var nodes = new[] {
+                node((uint)1), node("hello"), node("complex weirdo string/[abc]"), node("not a match"),
+                node(new byte[] { 1, 2, 3 }), node((uint)15),
+            };
+
+            bool AssertMatch(UAObject node)
+            {
+                return filter.IsMatch(node, nss)
+                    && filter.IsBasicMatch(node.Name, node.Id, node.FullAttributes.TypeDefinition?.Id, nss, node.NodeClass);
+            }
+
+            Assert.True(AssertMatch(nodes[0]));
+            Assert.True(AssertMatch(nodes[1]));
+            Assert.True(AssertMatch(nodes[2]));
+            Assert.False(AssertMatch(nodes[3]));
+            Assert.False(AssertMatch(nodes[4]));
+            Assert.False(AssertMatch(nodes[5]));
+        }
+
         [Fact]
         public void TestNamespaceFilter()
         {
