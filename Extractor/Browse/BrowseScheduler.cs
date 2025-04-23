@@ -170,7 +170,7 @@ namespace Cognite.OpcUa
                     if (rd.NodeId.ServerIndex != 0) continue;
                     var nodeId = client.ToNodeId(rd.NodeId);
                     if (nodeId == ObjectIds.Server || nodeId == ObjectIds.Aliases || nodeId == ObjectIds.Locations) continue;
-                    if (!NodeFilter(rd.DisplayName.Text, client.ToNodeId(rd.TypeDefinition), nodeId, rd.NodeClass))
+                    if (!NodeFilter(rd.DisplayName.Text, nodeId, client.ToNodeId(rd.TypeDefinition), rd.NodeClass))
                     {
                         log.LogTrace("Ignoring filtered {NodeId}", nodeId);
                         continue;

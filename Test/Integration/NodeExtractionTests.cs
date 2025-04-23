@@ -1191,6 +1191,47 @@ namespace Test.Integration
             Assert.Empty(pusher.PushedVariables);
         }
 
+        [Fact]
+        public async Task TestEarlyIncludeFilter()
+        {
+            using var pusher = new DummyPusher(new DummyPusherConfig());
+            var extraction = tester.Config.Extraction;
+            extraction.DataTypes.AllowStringVariables = true;
+            extraction.RootNode = CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Base.Root, tester.Client);
+            // Include two nodes by name, and two by ID.
+            extraction.Transformations = new List<RawNodeTransformation>
+            {
+                new RawNodeTransformation
+                {
+                    Filter = new NodeFilter
+                    {
+                        Id = new ListFieldFilter(new[] {
+                            $"i={tester.Server.Ids.Base.IntVar.Identifier}",
+                            $"i={tester.Server.Ids.Base.StringVar.Identifier}",
+                        }, null)
+                    },
+                    Type = TransformationType.Include,
+                },
+                new RawNodeTransformation
+                {
+                    Filter = new NodeFilter
+                    {
+                        Name = new ListFieldFilter(new[] {
+                            "Variable 2",
+                            "BaseRoot"
+                        }, null)
+                    },
+                    Type = TransformationType.Include,
+                },
+            };
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+
+            await extractor.RunExtractor(true);
+
+            Assert.Single(pusher.PushedNodes);
+            Assert.Equal(3, pusher.PushedVariables.Count);
+        }
+
         #endregion
         #region types
         [Fact]
