@@ -72,6 +72,7 @@ versions:
     changelog:
       fixed:
         - Fix batching of datapoints and events from the failure buffer.
+        - Fix bug causing ID and type definition ID based filtering to not work properly.
       added:
         - Add configuration options for batch size of events and datapoints in the failure buffer.
   "2.34.0":
