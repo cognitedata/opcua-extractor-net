@@ -451,6 +451,45 @@ namespace Test.Unit
             Assert.Equal(0, new FileInfo(cfg.FailureBuffer.EventPath).Length);
         }
         [Fact]
+        public async Task TestReadDatapointsBatch()
+        {
+            var log = tester.Provider.GetRequiredService<ILogger<FailureBuffer>>();
+            var cfg = BuildConfig();
+            cfg.FailureBuffer.DatapointsBatch = 100;
+            using var pusher = new DummyPusher(new DummyPusherConfig());
+            using var extractor = tester.BuildExtractor(pushers: pusher);
+            var fb = new FailureBuffer(log, cfg, extractor, null);
+            var state = new VariableExtractionState(extractor,
+                CommonTestUtils.GetSimpleVariable("state1", new UADataType(DataTypeIds.Double)),
+                false, false, true
+            );
+            extractor.State.SetNodeState(state);
+            pusher.DataPoints[(state.SourceId, -1)] = new List<UADataPoint>();
+            pusher.UniqueToNodeId[state.Id] = (state.SourceId, -1);
+
+
+            tester.Log.LogInformation("{Help}", extractor.State.GetNodeState(state.Id).FrontfillEnabled);
+
+            var start = DateTime.UtcNow;
+            var ranges = new Dictionary<string, TimeRange>
+            {
+                { state.Id, new TimeRange(start, start.AddSeconds(249)) },
+            };
+            await fb.WriteDatapoints(Enumerable.Range(0, 250).Select(i => new UADataPoint(
+                start.AddSeconds(i),
+                state.Id,
+                i,
+                StatusCodes.Good
+            )), ranges, tester.Source.Token);
+
+            await fb.ReadDatapoints(new[] { pusher }, tester.Source.Token);
+
+            Assert.Equal(250, pusher.DataPoints[(state.SourceId, -1)].Count);
+            // Batch size should result in three pushes.
+            Assert.Equal(3, pusher.DataPointsPushCount);
+        }
+
+        [Fact]
         public async Task TestReadEvents()
         {
             var cfg = BuildConfig();
@@ -544,6 +583,34 @@ namespace Test.Unit
 
             Assert.Equal(0, new FileInfo(cfg.FailureBuffer.EventPath).Length);
         }
+        [Fact]
+        public async Task TestReadEventsBatch()
+        {
+            var cfg = BuildConfig();
+            cfg.FailureBuffer.EventsBatch = 100;
+            using var pusher = new DummyPusher(new DummyPusherConfig());
+            using var extractor = tester.BuildExtractor(true, pushers: pusher);
+            pusher.Extractor = extractor;
+
+            var log = tester.Provider.GetRequiredService<ILogger<FailureBuffer>>();
+            var fb = new FailureBuffer(log, cfg, extractor, null);
+
+            var state = new EventExtractionState(extractor, new NodeId("emitter1", 0), false, false, true);
+            extractor.State.SetEmitterState(state);
+            extractor.State.RegisterNode(state.SourceId, state.Id);
+
+            var start = DateTime.UtcNow;
+            var evts = GetEvents(start, state.SourceId, 250).ToList();
+
+            var evts1 = pusher.Events[state.SourceId] = new List<UAEvent>();
+
+            await fb.WriteEvents(evts, tester.Source.Token);
+            Assert.True(await fb.ReadEvents(new[] { pusher }, tester.Source.Token));
+
+            Assert.Equal(250, evts1.Count);
+            Assert.Equal(3, pusher.EventsPushCount);
+        }
+
         [Fact]
         public async Task TestWriteDatapointsToFile()
         {

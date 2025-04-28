@@ -47,6 +47,15 @@ namespace Cognite.OpcUa.Config
         /// </summary>
         public string? EventPath { get; set; }
         public long MaxBufferSize { get; set; }
+
+        /// <summary>
+        /// Number of datapoints per batch to read from the failure buffer and send to CDF.
+        /// </summary>
+        public int DatapointsBatch { get; set; } = 1_000_000;
+        /// <summary>
+        /// Number of events per batch to read from the failure buffer and send to CDF.
+        /// </summary>
+        public int EventsBatch { get; set; } = 10_000;
     }
 
 }

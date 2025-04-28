@@ -61,6 +61,9 @@ namespace Test.Utils
 
         public PusherInput PendingNodes { get; set; }
 
+        public int DataPointsPushCount { get; private set; }
+        public int EventsPushCount { get; private set; }
+
         public DummyPusher(DummyPusherConfig config)
         {
             this.config = config;
@@ -194,6 +197,7 @@ namespace Test.Utils
 
         public Task<bool?> PushEvents(IEnumerable<UAEvent> events, CancellationToken token)
         {
+            EventsPushCount += 1;
             if (!PushEventResult ?? false) return Task.FromResult(PushEventResult);
             if (events == null || !events.Any()) return Task.FromResult<bool?>(null);
             lock (eventLock)
@@ -215,6 +219,7 @@ namespace Test.Utils
 
         public Task<bool?> PushDataPoints(IEnumerable<UADataPoint> points, CancellationToken token)
         {
+            DataPointsPushCount += 1;
             if (!PushDataPointResult ?? false) return Task.FromResult(PushDataPointResult);
             if (points == null || !points.Any()) return Task.FromResult<bool?>(null);
             lock (dpLock)

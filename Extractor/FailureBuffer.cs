@@ -216,7 +216,7 @@ namespace Cognite.OpcUa
             if (points == null || !points.Any() || pointRanges == null || !pointRanges.Any() || fullConfig.DryRun) return true;
 
             points = points.GroupBy(pt => pt.Id)
-                .Where(group => !extractor.State.GetNodeState(group.Key)?.FrontfillEnabled ?? false)
+                .Where(group => extractor.State.GetNodeState(group.Key)?.FrontfillEnabled == false)
                 .SelectMany(group => group)
                 .ToList();
 
@@ -431,8 +431,7 @@ namespace Cognite.OpcUa
                 {
                     var points = new List<UADataPoint>();
 
-                    int count = 0;
-                    while (!token.IsCancellationRequested && count < 1_000_000)
+                    while (!token.IsCancellationRequested && points.Count < config.DatapointsBatch)
                     {
                         var dp = UADataPoint.FromStream(stream);
                         if (dp == null)
@@ -498,8 +497,7 @@ namespace Cognite.OpcUa
                 {
                     var events = new List<UAEvent>();
 
-                    int count = 0;
-                    while (!token.IsCancellationRequested && count < 10_000)
+                    while (!token.IsCancellationRequested && events.Count < config.EventsBatch)
                     {
                         var evt = UAEvent.FromStream(stream, extractor, log);
                         if (evt == null)
