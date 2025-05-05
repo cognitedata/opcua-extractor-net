@@ -86,6 +86,10 @@ namespace Cognite.OpcUa.Types
         {
             if (mode == StringConverterMode.ReversibleJson && uaClient != null && value is Variant variant)
             {
+                if (variant == Variant.Null)
+                {
+                    return "null";
+                }
                 using var encoder = new JsonEncoder(uaClient.MessageContext, true, null, false);
                 encoder.WriteVariant(null, variant);
                 var result = encoder.CloseAndReturnText();

@@ -456,7 +456,7 @@ namespace Test.Unit
             prop.FullAttributes.Value = new Variant(value);
             node.Attributes.AddProperty(prop);
 
-            Assert.Equal(@"{""readvalueid"":{""NodeId"":{""IdType"":1,""Id"":""test""},""AttributeId"":13}}",
+            Assert.Equal(@"{""readvalueid"":{""NodeId"":{""IdType"":1,""Id"":""test""},""AttributeId"":13,""DataEncoding"":{}}}",
                 MetadataToJson(log, node, extractor));
 
             // Test nested
@@ -464,14 +464,14 @@ namespace Test.Unit
             var outerProp = new UAObject(new NodeId("outer", 0), "outer", null, null, NodeId.Null, null);
             outerProp.Attributes.AddProperty(prop);
             node.Attributes.AddProperty(outerProp);
-            Assert.Equal(@"{""outer"":{""readvalueid"":{""NodeId"":{""IdType"":1,""Id"":""test""},""AttributeId"":13}}}",
+            Assert.Equal(@"{""outer"":{""readvalueid"":{""NodeId"":{""IdType"":1,""Id"":""test""},""AttributeId"":13,""DataEncoding"":{}}}}",
                 MetadataToJson(log, node, extractor));
 
             // Test array
             prop.FullAttributes.Value = new Variant(new ReadValueIdCollection(new[] { value, value }));
             Assert.Equal(@"{""outer"":{""readvalueid"":["
-            + @"{""NodeId"":{""IdType"":1,""Id"":""test""},""AttributeId"":13},"
-            + @"{""NodeId"":{""IdType"":1,""Id"":""test""},""AttributeId"":13}]}}",
+            + @"{""NodeId"":{""IdType"":1,""Id"":""test""},""AttributeId"":13,""DataEncoding"":{}},"
+            + @"{""NodeId"":{""IdType"":1,""Id"":""test""},""AttributeId"":13,""DataEncoding"":{}}]}}",
                 MetadataToJson(log, node, extractor));
         }
         #endregion
@@ -936,7 +936,7 @@ namespace Test.Unit
             var value = new Variant(new ReadValueId { AttributeId = Attributes.Value, NodeId = new NodeId("test", 0) });
             dp = dt.ToDataPoint(extractor, value, now, "id", StatusCodes.Good);
             Assert.Equal("id", dp.Id);
-            Assert.Equal(@"{""NodeId"":{""IdType"":1,""Id"":""test""},""AttributeId"":13}", dp.StringValue);
+            Assert.Equal(@"{""NodeId"":{""IdType"":1,""Id"":""test""},""AttributeId"":13,""DataEncoding"":{}}", dp.StringValue);
             Assert.Equal(now, dp.Timestamp);
         }
         [Fact]
@@ -1244,8 +1244,8 @@ namespace Test.Unit
 
             Assert.Equal(3, meta.Count);
             Assert.Equal("gp.base:s=test", meta["test-simple"]);
-            Assert.Equal(@"{""NodeId"":{""IdType"":1,""Id"":""test2""},""AttributeId"":1}", meta["test-complex"]);
-            Assert.Equal(@"{""deep-2"":{""deep-simple"":123.123,""deep-complex"":{""NodeId"":{""IdType"":1,""Id"":""test2""},""AttributeId"":1},"
+            Assert.Equal(@"{""NodeId"":{""IdType"":1,""Id"":""test2""},""AttributeId"":1,""DataEncoding"":{}}", meta["test-complex"]);
+            Assert.Equal(@"{""deep-2"":{""deep-simple"":123.123,""deep-complex"":{""NodeId"":{""IdType"":1,""Id"":""test2""},""AttributeId"":1,""DataEncoding"":{}},"
                 + @"""Value1"":123.321,""Value"":[1,2,3,4]}}", meta["deep"]);
 
         }

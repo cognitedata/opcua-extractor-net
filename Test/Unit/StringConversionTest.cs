@@ -52,7 +52,7 @@ namespace Test.Unit
                 Value = new NodeId("abc", 2)
             }));
             var readValueId = new ReadValueId { AttributeId = Attributes.Value, NodeId = new NodeId("test", 0) };
-            var readValueIdStr = @"{""NodeId"":{""IdType"":1,""Id"":""test""},""AttributeId"":13}";
+            var readValueIdStr = @"{""NodeId"":{""IdType"":1,""Id"":""test""},""AttributeId"":13,""DataEncoding"":{}}";
             Assert.Equal(readValueIdStr, converter.ConvertToString(new Variant(readValueId)));
             var ids = new ReadValueIdCollection { readValueId, readValueId };
             // Results in Variant(ExtensionObject[])
@@ -395,6 +395,13 @@ namespace Test.Unit
             saved = Convert(variable);
             Assert.Equal(variable.ArrayDimensions, saved.InternalInfo.ArrayDimensions);
             Assert.Equal(variable.ValueRank, saved.InternalInfo.ValueRank);
+        }
+
+        [Fact]
+        public void TestReversibleJsonNullVariant()
+        {
+            var converter = tester.Client.StringConverter;
+            Assert.Equal("null", converter.ConvertToString(Variant.Null, null, null, StringConverterMode.ReversibleJson));
         }
     }
 }
