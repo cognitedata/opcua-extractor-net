@@ -141,7 +141,7 @@ namespace Cognite.OpcUa.PubSub
                 log.LogTrace("UADP Network DataSetMessage ({DataSets} DataSets): Source={Source}, SequenceNumber={SequenceNumber}",
                         e.NetworkMessage.DataSetMessages.Count, e.Source, uadpMessage.SequenceNumber);
             }
-            else if (e.NetworkMessage is JsonNetworkMessage jsonMessage)
+            else if (e.NetworkMessage is Opc.Ua.PubSub.Encoding.JsonNetworkMessage jsonMessage)
             {
                 log.LogTrace("JSON Network DataSetMessage ({DataSets} DataSets): Source={Source}, MessageId={MessageId}",
                         e.NetworkMessage.DataSetMessages.Count, e.Source, jsonMessage.MessageId);

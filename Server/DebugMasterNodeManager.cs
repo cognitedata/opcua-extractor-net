@@ -73,14 +73,15 @@ namespace Server
             IList<MonitoredItemCreateRequest> itemsToCreate,
             IList<ServiceResult> errors,
             IList<MonitoringFilterResult> filterResults,
-            IList<IMonitoredItem> monitoredItems)
+            IList<IMonitoredItem> monitoredItems,
+            bool createDurable)
         {
             ArgumentNullException.ThrowIfNull(itemsToCreate);
             ArgumentNullException.ThrowIfNull(errors);
 
             Callbacks.OnCreateMonitoredItems(context, subscriptionId, itemsToCreate);
 
-            base.CreateMonitoredItems(context, subscriptionId, publishingInterval, timestampsToReturn, itemsToCreate, errors, filterResults, monitoredItems);
+            base.CreateMonitoredItems(context, subscriptionId, publishingInterval, timestampsToReturn, itemsToCreate, errors, filterResults, monitoredItems, createDurable);
         }
 
         public override void HistoryRead(

@@ -126,6 +126,9 @@ namespace Cognite.OpcUa
             this.uaClient = uaClient;
             this.pushers = pushers.Where(pusher => pusher != null).ToList();
             this.uaClient.Callbacks = this;
+            // Scheduler timeout is 30 seconds. It should never take this long to shut down, so if we get here
+            // we're fine with erroring out, better than getting stuck.
+            SchedulerExitTimeoutMs = 60000;
             log = provider.GetRequiredService<ILogger<UAExtractor>>();
 
             log.LogDebug("Config:{NewLine}{Config}", Environment.NewLine, ExtractorUtils.ConfigToString(Config));

@@ -1247,7 +1247,7 @@ namespace Test.Integration
             extraction.DataTypes.AutoIdentifyTypes = true;
             await extractor.RunExtractor(true);
 
-            Assert.Equal(884, pusher.PushedNodes.Count);
+            Assert.Equal(913, pusher.PushedNodes.Count);
             Assert.Equal(2, pusher.PushedVariables.Count);
             var customVarType = pusher.PushedNodes[tester.Server.Ids.Custom.VariableType] as UAVariableType;
             Assert.Equal("CustomVariableType", customVarType.Name);
@@ -1275,9 +1275,9 @@ namespace Test.Integration
             extraction.Relationships.Hierarchical = false;
             await extractor.RunExtractor(true);
 
-            Assert.Equal(884, pusher.PushedNodes.Count);
+            Assert.Equal(913, pusher.PushedNodes.Count);
             Assert.Equal(2, pusher.PushedVariables.Count);
-            Assert.Equal(409, pusher.PushedReferences.Count);
+            Assert.Equal(419, pusher.PushedReferences.Count);
         }
         #endregion
 

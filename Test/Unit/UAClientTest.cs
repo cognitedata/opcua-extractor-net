@@ -646,7 +646,7 @@ namespace Test.Unit
             var distinctNodes = nodes.SelectMany(kvp => kvp.Value).GroupBy(rd => rd.NodeId);
 
             Assert.Equal(distinctNodes.Count(), nodes.Sum(kvp => kvp.Value.Count));
-            Assert.Equal(3117, nodes.Sum(kvp => kvp.Value.Count));
+            Assert.Equal(3233, nodes.Sum(kvp => kvp.Value.Count));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_browse_operations", 11));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_tree_depth", 11));
         }
