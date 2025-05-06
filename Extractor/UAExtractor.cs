@@ -126,6 +126,9 @@ namespace Cognite.OpcUa
             this.uaClient = uaClient;
             this.pushers = pushers.Where(pusher => pusher != null).ToList();
             this.uaClient.Callbacks = this;
+            // Default timeout for the scheduler is 60 seconds. It should never take even close to this long,
+            // but if it does it is better to fail and restart than to wait forever.
+            SchedulerExitTimeoutMs = 60_000;
             log = provider.GetRequiredService<ILogger<UAExtractor>>();
 
             log.LogDebug("Config:{NewLine}{Config}", Environment.NewLine, ExtractorUtils.ConfigToString(Config));
