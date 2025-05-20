@@ -67,6 +67,11 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.35.2":
+    description: No longer require groups:List and projects:List permissions.
+    changelog:
+      changed:
+        - The extractor no longer requires groups:List and projects:List permissions to run.
   "2.35.1":
     description: Add timeout to extractor shutdown.
     changelog:
