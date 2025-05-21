@@ -446,7 +446,7 @@ namespace Cognite.OpcUa.Pushers
 
             try
             {
-                await destination.TestCogniteConfig(token);
+                await destination.CogniteClient.TestCogniteConfig(config.Project!, token, checkProjectOwnership: false);
             }
             catch (Exception ex)
             {
