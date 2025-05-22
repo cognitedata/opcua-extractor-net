@@ -28,6 +28,16 @@ namespace Cognite.OpcUa.Subscriptions
                 _ => throw new ArgumentException("Subscription name is not valid")
             };
         }
+
+        public static bool IsEvents(this SubscriptionName name)
+        {
+            return name == SubscriptionName.Events;
+        }
+
+        public static bool IsDataPoints(this SubscriptionName name)
+        {
+            return name == SubscriptionName.DataPoints;
+        }
     }
 
     public interface ISubscriptionState
