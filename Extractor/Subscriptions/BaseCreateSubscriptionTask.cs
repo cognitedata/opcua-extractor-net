@@ -137,11 +137,11 @@ namespace Cognite.OpcUa.Subscriptions
                 }
                 else if (SubscriptionName.IsDataPoints())
                 {
-                    maxNotificationsPerPublish = config.Subscriptions.MaxDataNotificationsPerPublish;
+                    maxNotificationsPerPublish = config.Subscriptions.MaxDatapointNotificationsPerPublish;
                 }
-                // For general subscriptions, the default value of 0 is going to be fine. In practice,
-                // we will never receive that many notifications for those, since they are very limited in size.
 
+                // For other subscriptions, like audit events service level changes, etc. the number of notifications
+                // is going to be quite low, so the default value of 0 is fine.
                 logger.LogInformation("Creating new subscription with name {Name}", SubscriptionName.Name());
                 subscription = new Subscription(session.DefaultSubscription)
                 {

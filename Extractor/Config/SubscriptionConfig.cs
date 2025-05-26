@@ -108,11 +108,11 @@ namespace Cognite.OpcUa.Config
         public bool RecreateStoppedSubscriptions { get; set; } = true;
 
         /// <summary>
-        /// Maximum number of event notifications per publish.
+        /// Maximum number of datapoint notifications per publish.
         /// This is the maximum number of datapoints that can be sent in a single publish response
         /// from datapoint subscriptions.
         /// </summary>
-        public uint MaxDataNotificationsPerPublish { get; set; } = 0;
+        public uint MaxDatapointNotificationsPerPublish { get; set; } = 0;
 
         /// <summary>
         /// Maximum number of event notifications per publish.

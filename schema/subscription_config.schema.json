@@ -89,9 +89,9 @@
             "default": "-1",
             "description": "Grace period for recreating stopped subscriptions. If this is negative, default to 8 * publishing-interval. Format is as given in [Timestamps and intervals](#timestamps-and-intervals)."
         },
-        "max-data-notifications-per-publish": {
+        "max-datapoint-notifications-per-publish": {
             "type": "integer",
-            "description": "Maximum number of data notifications per publish. Some servers do not properly support this. The default is 0, which means that the server will decide.",
+            "description": "Maximum number of datapoint notifications per publish. Some servers do not properly support this. The default is 0, which means that the server will decide.",
             "default": 0,
             "mimimum": 0
         },

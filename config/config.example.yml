@@ -876,7 +876,7 @@ subscriptions:
     # Maximum number of data points to be sent in each publish request.
     # Some servers do not properly support this.
     # The default is 0, which means that the server will decide.
-    max-data-notifications-per-publish: 0
+    max-datapoint-notifications-per-publish: 0
     # Maximum number of events to be sent in each publish request.
     # Some servers do not properly support this.
     # The default is 0, which means that the server will decide.
