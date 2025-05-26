@@ -71,7 +71,7 @@ versions:
     description: Add options to configure the maximum number of notifications per publish request.
     changelog:
       added:
-        - Add `max-data-notifications-per-publish` and `max-event-notifications-per-publish` to the subscription config.
+        - Add `max-datapoint-notifications-per-publish` and `max-event-notifications-per-publish` to the subscription config.
   "2.35.2":
     description: No longer require groups:List and projects:List permissions.
     changelog:
