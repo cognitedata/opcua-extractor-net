@@ -67,6 +67,11 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.36.0":
+    description: Add support for writing to core data model assets.
+    changelog:
+      added:
+        - Support for writing to core data model assets. Non-timeseries nodes will be written to the CogniteExtractorAsset view, if enabled in `cognite.metadata-targets.clean`.
   "2.35.2":
     description: No longer require groups:List and projects:List permissions.
     changelog:

@@ -522,28 +522,27 @@ namespace Cognite.OpcUa.Nodes
             FullConfig config,
             Dictionary<string, string>? metaMap)
         {
-            var write = new CogniteExtractorTimeSeries
+            var res = new SourcedNodeWrite<CogniteExtractorTimeSeries>
             {
-                Name = Name,
-                Description = FullAttributes.Description,
-                SourceId = Id.IdType switch
+                Properties = new CogniteExtractorTimeSeries
                 {
-                    IdType.Numeric => $"i={Id.Identifier}",
-                    IdType.String => $"s={Id.Identifier}",
-                    IdType.Guid => $"g={Id.Identifier}",
-                    IdType.Opaque => $"o={Id.Identifier}",
-                    _ => Id.ToString(),
-                },
-                SourceContext = client.Context.NamespaceTable.GetString(Id.NamespaceIndex),
-                Source = new DirectRelationIdentifier(space, source),
-                IsStep = FullAttributes.DataType.IsStep,
-                Type = FullAttributes.DataType.IsString switch
-                {
-                    true => TimeSeriesType.String,
-                    false => TimeSeriesType.Numeric
-                },
-                extractedData = BuildMetadata(config, client, true),
+                    IsStep = FullAttributes.DataType.IsStep,
+                    Type = FullAttributes.DataType.IsString switch
+                    {
+                        true => TimeSeriesType.String,
+                        false => TimeSeriesType.Numeric
+                    },
+                    extractedData = BuildMetadata(config, client, true),
+                }
             };
+            PopulateBase(client, res, space, source);
+
+            if (Parent != null && config.Cognite?.MetadataTargets?.Clean?.Assets == true)
+            {
+                res.Properties.Assets = new[] {
+                    new DirectRelationIdentifier(space, Parent.GetUniqueId(client.Context))
+                };
+            }
 
             if (Properties != null && Properties.Any() && metaMap != null && metaMap.Count != 0)
             {
@@ -556,23 +555,13 @@ namespace Cognite.OpcUa.Nodes
                         if (string.IsNullOrWhiteSpace(value)) continue;
                         switch (mapped)
                         {
-                            case "description": write.Description = value; break;
-                            case "name": write.Name = value; break;
-                            case "unit": write.SourceUnit = value; break;
+                            case "description": res.Properties.Description = value; break;
+                            case "name": res.Properties.Name = value; break;
+                            case "unit": res.Properties.SourceUnit = value; break;
                         }
                     }
                 }
             }
-
-            var res = new SourcedNodeWrite<CogniteExtractorTimeSeries>
-            {
-                Space = space,
-                ExternalId = GetUniqueId(client.Context),
-                Properties = write,
-                Type = FullAttributes.TypeDefinition == null
-                    ? null
-                    : new DirectRelationIdentifier(space, FullAttributes.TypeDefinition.GetUniqueId(client.Context))
-            };
 
             return res;
         }

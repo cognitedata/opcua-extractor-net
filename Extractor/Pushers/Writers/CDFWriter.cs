@@ -131,7 +131,7 @@ namespace Cognite.OpcUa.Pushers.Writers
             {
                 tasks.Add(Task.Run(async () =>
                 {
-                    result.Objects &= await idm.PushAssets(extractor, assetMap, update.Objects, report, token);
+                    result.Objects &= await idm.PushAssets(extractor, assetMap, report, token);
                 }, token));
             }
 

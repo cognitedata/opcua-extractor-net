@@ -737,6 +737,68 @@ namespace Test.Unit
                 "space", id
             )].NumericDatapoints.Count);
         }
+
+        [Fact]
+        public async Task TestIdmAssets()
+        {
+            tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
+            {
+                Clean = new CleanMetadataTargetConfig
+                {
+                    Assets = true,
+                    Timeseries = true,
+                    Relationships = false,
+                    Space = "space",
+                    Source = "mysource"
+                }
+            };
+
+            (handler, pusher) = tester.GetCDFPusher();
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+            extractor.SourceInfo.Uri = "some-source-uri";
+
+            // Push both a timeseries and a pair of assets, to verify that we get
+            // correct relationships between them.
+            var asset1 = new UAObject(tester.Server.Ids.Base.Root, "BaseRoot", null, null, null, new UAObjectType(new NodeId("objTypedef", 0)));
+            var asset2 = new UAObject(tester.Server.Ids.Custom.Root, "CustomRoot", null, asset1, null, new UAObjectType(new NodeId("objTypedef", 0)));
+
+            var dt = new UADataType(DataTypeIds.Double);
+            var tsId = extractor.GetUniqueId(tester.Server.Ids.Base.DoubleVar1);
+            var ts = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", null, asset2, null, new UAVariableType(new NodeId("varTypedef", 0)));
+            ts.FullAttributes.DataType = dt;
+
+            handler.FailedRoutes.Clear();
+            var res = await pusher.PushNodes(new[] { asset1, asset2 }, new[] { ts }, Enumerable.Empty<UAReference>(), new UpdateConfig(), tester.Source.Token);
+            Assert.True(res.Objects);
+            Assert.True(res.Variables);
+
+            var tsInst = handler.Instances[tsId];
+            var tsData = tsInst["sources"][0]["properties"];
+            tester.Log.LogInformation("{Help}", tsInst.ToJsonString());
+            Assert.Equal("Variable 1", tsData["name"].ToString());
+            Assert.Equal("i=36", tsData["sourceId"].ToString());
+            Assert.Equal("opc.tcp://test.localhost", tsData["sourceContext"].ToString());
+            Assert.Equal("mysource", tsData["source"]["externalId"].ToString());
+            Assert.Equal("numeric", tsData["type"].ToString());
+            Assert.Equal("gp.base:s=varTypedef", tsInst["type"]["externalId"].ToString());
+            Assert.Equal(extractor.GetUniqueId(asset2.Id), tsData["assets"][0]["externalId"].ToString());
+
+            var asset1Inst = handler.Instances[extractor.GetUniqueId(asset1.Id)];
+            var asset1Data = asset1Inst["sources"][0]["properties"];
+            Assert.Equal("BaseRoot", asset1Data["name"].ToString());
+            Assert.Equal("opc.tcp://test.localhost", asset1Data["sourceContext"].ToString());
+            Assert.Equal("mysource", asset1Data["source"]["externalId"].ToString());
+            Assert.Equal("gp.base:s=objTypedef", asset1Inst["type"]["externalId"].ToString());
+            Assert.DoesNotContain("parent", asset1Data.AsObject());
+
+            var asset2Inst = handler.Instances[extractor.GetUniqueId(asset2.Id)];
+            var asset2Data = asset2Inst["sources"][0]["properties"];
+            Assert.Equal("CustomRoot", asset2Data["name"].ToString());
+            Assert.Equal("opc.tcp://test.localhost", asset2Data["sourceContext"].ToString());
+            Assert.Equal("mysource", asset2Data["source"]["externalId"].ToString());
+            Assert.Equal("gp.base:s=objTypedef", asset2Inst["type"]["externalId"].ToString());
+            Assert.Equal(extractor.GetUniqueId(asset1.Id), asset2Data["parent"]["externalId"].ToString());
+        }
         #endregion
 
         #region other-methods
