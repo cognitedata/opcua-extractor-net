@@ -15,11 +15,14 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using Cognite.Extensions.DataModels.CogniteExtractorExtensions;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
 using CogniteSdk;
+using CogniteSdk.DataModels;
+using CogniteSdk.DataModels.Core;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using System;
@@ -571,6 +574,75 @@ namespace Cognite.OpcUa.Nodes
                 extras = GetExtraMetadata(config, client.Context, client.StringConverter);
             }
             return BuildMetadataBase(extras, client);
+        }
+
+        protected void PopulateBase<T>(
+            IUAClientAccess client,
+            SourcedNodeWrite<T> write,
+            string space,
+            string source
+        ) where T : CogniteCoreInstanceBase
+        {
+            write.Properties.Name = Name;
+            write.Properties.Description = Attributes.Description;
+            write.Properties.SourceId = Id.IdType switch
+            {
+                IdType.Numeric => $"i={Id.Identifier}",
+                IdType.String => $"s={Id.Identifier}",
+                IdType.Guid => $"g={Id.Identifier}",
+                IdType.Opaque => $"o={Id.Identifier}",
+                _ => Id.ToString(),
+            };
+            write.Properties.SourceContext = client.Context.NamespaceTable.GetString(Id.NamespaceIndex);
+            write.Properties.Source = new DirectRelationIdentifier(space, source);
+            write.Space = space;
+            write.ExternalId = GetUniqueId(client.Context);
+            write.Type = TypeDefinition == null
+                ? null
+                : new DirectRelationIdentifier(space, client.GetUniqueId(TypeDefinition));
+        }
+
+        public SourcedNodeWrite<CogniteExtractorAsset> ToIdmAsset(
+            IUAClientAccess client,
+            string space,
+            string source,
+            FullConfig config,
+            Dictionary<string, string>? metaMap)
+        {
+            var res = new SourcedNodeWrite<CogniteExtractorAsset>
+            {
+                Properties = new CogniteExtractorAsset
+                {
+                    extractedData = BuildMetadata(config, client, true),
+                }
+            };
+
+            PopulateBase(client, res, space, source);
+
+            if (Properties != null && Properties.Any() && metaMap != null && metaMap.Count != 0)
+            {
+                foreach (var prop in Properties)
+                {
+                    if (prop is not UAVariable propVar) continue;
+                    if (metaMap.TryGetValue(prop.Name ?? "", out var mapped))
+                    {
+                        var value = client.StringConverter.ConvertToString(propVar.Value, propVar.FullAttributes.DataType.EnumValues);
+                        if (string.IsNullOrWhiteSpace(value)) continue;
+                        switch (mapped)
+                        {
+                            case "description": res.Properties.Description = value; break;
+                            case "name": res.Properties.Name = value; break;
+                        }
+                    }
+                }
+            }
+
+            if (Parent != null)
+            {
+                res.Properties.Parent = new DirectRelationIdentifier(space, Parent.GetUniqueId(client.Context));
+            }
+
+            return res;
         }
         #endregion
     }

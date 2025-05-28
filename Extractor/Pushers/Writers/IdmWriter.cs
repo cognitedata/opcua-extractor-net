@@ -101,18 +101,47 @@ namespace Cognite.OpcUa.Pushers.Writers
             await sources.UpsertAsync(new[] { item }, new UpsertOptions(), token);
         }
 
-        [System.Diagnostics.CodeAnalysis.SuppressMessage("Style", "IDE0060:Remove unused parameter", Justification = "Temp interface until implemented")]
-        public Task<bool> PushAssets(
+        private CoreAssetResource<CogniteExtractorAsset> AssetsResource()
+        {
+            return new CoreAssetResource<CogniteExtractorAsset>(
+                destination.CogniteClient.DataModels,
+                new ViewIdentifier("cdf_extraction_extensions", "CogniteExtractorAsset", "v1")
+            );
+        }
+
+        public async Task<bool> PushAssets(
             IUAClientAccess client,
             IDictionary<string, BaseUANode> nodes,
-            TypeUpdateConfig update,
             BrowseReport report,
             CancellationToken token
         )
         {
-            if (!cleanConfig.Assets) return Task.FromResult(true);
-            log.LogWarning("Writing assets to the core data models is not yet implemented");
-            return Task.FromResult(true);
+            if (!cleanConfig.Assets) return true;
+            var assets = nodes.Values.Select(v => v.ToIdmAsset(client, space, sourceId, config, config.Cognite?.MetadataMapping?.Assets));
+
+            try
+            {
+                var res = await AssetsResource().UpsertAsync(
+                    assets,
+                    config.Cognite!.CdfChunking.Instances,
+                    config.Cognite!.CdfThrottling.Instances,
+                    RetryMode.OnError,
+                    SanitationMode.Clean,
+                    token
+                );
+
+                log.LogResult(res, RequestType.CreateAssets, false);
+                res.ThrowOnFatal();
+
+                report.AssetsCreated += nodes.Count;
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                log.LogError(ex, "Failed to push timeseries to data models: {Message}", ex.Message);
+                return false;
+            }
         }
 
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Style", "IDE0060:Remove unused parameter", Justification = "Temp interface until implemented")]
@@ -145,7 +174,7 @@ namespace Cognite.OpcUa.Pushers.Writers
                 log.LogResult(res, RequestType.CreateTimeSeries, false);
                 res.ThrowOnFatal();
 
-                report.AssetsCreated += nodes.Count;
+                report.TimeSeriesCreated += nodes.Count;
 
                 return true;
             }
