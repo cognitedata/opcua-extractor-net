@@ -873,6 +873,14 @@ subscriptions:
     # If this is negative, default to 8 * publishing-interval.
     # Syntax is N[timeunit] where timeunit is w, d, h, m, s or ms.
     recreate-subscription-grace-period: -1
+    # Maximum number of data points to be sent in each publish request.
+    # Some servers do not properly support this.
+    # The default is 0, which means that the server will decide.
+    max-datapoint-notifications-per-publish: 0
+    # Maximum number of events to be sent in each publish request.
+    # Some servers do not properly support this.
+    # The default is 0, which means that the server will decide.
+    max-event-notifications-per-publish: 0
     # List of alternative subscription configurations.
     # The first entry with a matching filter will be used for each node.
     alternative-configs:
