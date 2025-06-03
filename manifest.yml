@@ -67,6 +67,11 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.36.1":
+    description: Log errors that occur when failing to create connection parameters for connecting to the server.
+    changelog:
+      fixed:
+        - Log errors that occur when failing to create connection parameters for connecting to the server.
   "2.36.0":
     description: Add options to configure the maximum number of notifications per publish request.
     changelog:
