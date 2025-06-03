@@ -130,13 +130,26 @@ namespace Cognite.OpcUa.Subscriptions
 
             if (subscription == null)
             {
+                uint maxNotificationsPerPublish = 0;
+                if (SubscriptionName.IsEvents())
+                {
+                    maxNotificationsPerPublish = config.Subscriptions.MaxEventNotificationsPerPublish;
+                }
+                else if (SubscriptionName.IsDataPoints())
+                {
+                    maxNotificationsPerPublish = config.Subscriptions.MaxDatapointNotificationsPerPublish;
+                }
+
+                // For other subscriptions, like audit events service level changes, etc. the number of notifications
+                // is going to be quite low, so the default value of 0 is fine.
                 logger.LogInformation("Creating new subscription with name {Name}", SubscriptionName.Name());
                 subscription = new Subscription(session.DefaultSubscription)
                 {
                     PublishingInterval = config.Source.PublishingInterval,
                     DisplayName = SubscriptionName.Name(),
                     KeepAliveCount = config.Subscriptions.KeepAliveCount,
-                    LifetimeCount = config.Subscriptions.LifetimeCount
+                    LifetimeCount = config.Subscriptions.LifetimeCount,
+                    MaxNotificationsPerPublish = maxNotificationsPerPublish
                 };
                 subscription.PublishStatusChanged += subManager.OnSubscriptionPublishStatusChange;
             }
