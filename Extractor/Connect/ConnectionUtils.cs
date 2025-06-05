@@ -52,7 +52,7 @@ namespace Cognite.OpcUa.Connect
                 {
                     return await method();
                 }
-                catch
+                catch (Exception e)
                 {
                     iter++;
                     iter = Math.Min(iter, maxBackoff);
@@ -63,7 +63,9 @@ namespace Cognite.OpcUa.Connect
                         throw;
                     }
                     if (!token.IsCancellationRequested)
-                        log.LogWarning("Failed to connect, retrying in {Backoff}", backoff);
+                    {
+                        log.LogWarning("Failed to connect: {Error}, retrying in {Backoff}", e.Message, backoff);
+                    }
                     try { await Task.Delay(backoff, token); } catch (TaskCanceledException) { }
                 }
             }
