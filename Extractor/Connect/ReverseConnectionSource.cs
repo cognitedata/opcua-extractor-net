@@ -123,6 +123,12 @@ namespace Cognite.OpcUa.Connect
                     0,
                     identity,
                     null);
+
+                // This is 0 by default, which can cause subscription recreation to fail.
+                // We try to do our own chunking, but the client is rather opaque so it sometimes creates too many items
+                // in a single call, typically exceeding its own encoding limits.
+                session.OperationLimits.MaxMonitoredItemsPerCall = (uint)config.SubscriptionChunk;
+
                 ConnectionUtils.Connects.Inc();
                 session.DeleteSubscriptionsOnClose = true;
                 return new ConnectResult(new Connection(session, endpointUrl), ConnectType.NewSession);

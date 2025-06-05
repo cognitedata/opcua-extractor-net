@@ -99,6 +99,13 @@ namespace Cognite.OpcUa
                 config.History.EventNodesChunk, values[idsToRead[5]], "event history nodes chunk");
             config.Source.AttributesChunk = SafeValue(
                 config.Source.AttributesChunk, values[idsToRead[6]], "attribute read chunk");
+
+            // We generally do our own batching, but for monitored items in particular we should set the limit on the client.
+            // If not the client may in some cases try to create way too many monitored items in a single call.
+            if (client.SessionManager.Session is SessionClientBatched batchedClient)
+            {
+                batchedClient.OperationLimits.MaxMonitoredItemsPerCall = (uint)config.Source.SubscriptionChunk;
+            }
         }
     }
 }
