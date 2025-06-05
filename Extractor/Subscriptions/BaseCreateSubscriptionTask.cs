@@ -69,8 +69,8 @@ namespace Cognite.OpcUa.Subscriptions
 
                 // The only way to make it _not_ do that is to remove the non-created items before proceeding. This might work,
                 // I have not been able to reproduce the issue locally.
-                logger.LogWarning("Creating more than {Chunk} items, removing and re-adding all non-created monitored items",
-                    config.Source.SubscriptionChunk);
+                logger.LogWarning("Creating more than {Chunk} items, removing and re-adding all non-created monitored items. {Count} items will be recreated",
+                    config.Source.SubscriptionChunk, numToCreate);
 
                 var toAdd = new List<MonitoredItem>();
                 toAdd.AddRange(subscription.MonitoredItems.Where(m => !m.Created));
