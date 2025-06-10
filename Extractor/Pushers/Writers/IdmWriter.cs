@@ -10,6 +10,7 @@ using Cognite.Extractor.Utils;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.Types;
+using CogniteSdk;
 using CogniteSdk.DataModels;
 using CogniteSdk.DataModels.Core;
 using CogniteSdk.Resources;
@@ -131,6 +132,7 @@ namespace Cognite.OpcUa.Pushers.Writers
         public async Task<bool> PushTimeseries(
             IUAClientAccess client,
             IDictionary<string, UAVariable> nodes,
+            HashSet<Identity> missingTimeseries,
             BrowseReport report,
             CancellationToken token
         )
@@ -141,6 +143,14 @@ namespace Cognite.OpcUa.Pushers.Writers
             try
             {
                 var res = await destination.UpsertTimeSeriesAsync(timeseries, RetryMode.OnError, SanitationMode.Clean, token);
+
+                if (missingTimeseries.Count > 0)
+                {
+                    foreach (var ts in timeseries)
+                    {
+                        missingTimeseries.Remove(Identity.Create(new InstanceIdentifier(ts.Space, ts.ExternalId)));
+                    }
+                }
 
                 log.LogResult(res, RequestType.CreateTimeSeries, false);
                 res.ThrowOnFatal();

@@ -59,7 +59,7 @@ namespace Cognite.OpcUa.Pushers
         public UAExtractor Extractor { get; set; }
         public IPusherConfig BaseConfig { get; }
 
-        private readonly HashSet<string> missingTimeseries = new HashSet<string>();
+
         private readonly CogniteDestinationWithIDM destination;
 
         private readonly BrowseCallback? callback;
@@ -127,8 +127,14 @@ namespace Cognite.OpcUa.Pushers
             if (points == null) return null;
             Dictionary<string, List<UADataPoint>> dataPointList = points
                 .GroupBy(dp => dp.Id)
-                .Where(group => !cdfWriter.MismatchedTimeseries.Contains(group.Key)
-                    && !missingTimeseries.Contains(group.Key))
+                .Where(group =>
+                {
+                    var idt = config.MetadataTargets?.Clean?.Space != null
+                        ? Identity.Create(new InstanceIdentifier(config.MetadataTargets.Clean.Space, group.Key))
+                        : Identity.Create(group.Key);
+                    return !cdfWriter.MismatchedTimeseries.Contains(idt)
+                        && !cdfWriter.MissingTimeseries.Contains(idt);
+                })
                 .ToDictionary(group => group.Key, group => group.ToList());
 
             int count = dataPointList.Aggregate(0, (seed, points) => seed + points.Value.Count);
@@ -306,6 +312,10 @@ namespace Cognite.OpcUa.Pushers
                 token
             );
 
+            // Missing and mismatched timeseries may be changed at this point, so we update the metrics
+            missingTimeseriesCnt.Set(cdfWriter.MissingTimeseries.Count);
+            mismatchedTimeseriesCnt.Set(cdfWriter.MismatchedTimeseries.Count);
+
             if (fullConfig.DryRun) return result;
 
             log.LogInformation("Finish pushing nodes to CDF");
@@ -337,7 +347,7 @@ namespace Cognite.OpcUa.Pushers
         /// </summary>
         public void Reset()
         {
-            missingTimeseries.Clear();
+            cdfWriter.MissingTimeseries.Clear();
             cdfWriter.MismatchedTimeseries.Clear();
         }
 
@@ -560,9 +570,9 @@ namespace Cognite.OpcUa.Pushers
                         log.LogError("Failed to push datapoints to CDF, missing ids: {Ids}", missing.Skipped.Select(ms => ms.Id));
                         foreach (var skipped in missing.Skipped)
                         {
-                            missingTimeseries.Add(skipped.Id.ExternalId);
+                            cdfWriter.MissingTimeseries.Add(skipped.Id);
                         }
-                        missingTimeseriesCnt.Set(missing.Skipped.Count());
+                        missingTimeseriesCnt.Set(cdfWriter.MissingTimeseries.Count);
                     }
 
                     var mismatched = result.Errors.FirstOrDefault(err => err.Type == ErrorType.MismatchedType);
@@ -571,9 +581,9 @@ namespace Cognite.OpcUa.Pushers
                         log.LogError("Failed to push datapoints to CDF, mismatched timeseries: {Ids}", mismatched.Skipped.Select(ms => ms.Id));
                         foreach (var skipped in mismatched.Skipped)
                         {
-                            cdfWriter.MismatchedTimeseries.Add(skipped.Id.ExternalId);
+                            cdfWriter.MismatchedTimeseries.Add(skipped.Id);
                         }
-                        mismatchedTimeseriesCnt.Set(mismatched.Skipped.Count());
+                        mismatchedTimeseriesCnt.Set(cdfWriter.MismatchedTimeseries.Count);
                     }
 
                     foreach (var err in result.Errors)
@@ -624,9 +634,9 @@ namespace Cognite.OpcUa.Pushers
                         log.LogError("Failed to push datapoints to CDF, missing ids: {Ids}", missing.Skipped.Select(ms => ms.Id));
                         foreach (var skipped in missing.Skipped)
                         {
-                            missingTimeseries.Add(skipped.Id.ExternalId);
+                            cdfWriter.MissingTimeseries.Add(skipped.Id);
                         }
-                        missingTimeseriesCnt.Set(missing.Skipped.Count());
+                        missingTimeseriesCnt.Set(cdfWriter.MissingTimeseries.Count);
                     }
 
                     var mismatched = result.Errors.FirstOrDefault(err => err.Type == ErrorType.MismatchedType);
@@ -635,9 +645,9 @@ namespace Cognite.OpcUa.Pushers
                         log.LogError("Failed to push datapoints to CDF, mismatched timeseries: {Ids}", mismatched.Skipped.Select(ms => ms.Id));
                         foreach (var skipped in mismatched.Skipped)
                         {
-                            cdfWriter.MismatchedTimeseries.Add(skipped.Id.ExternalId);
+                            cdfWriter.MismatchedTimeseries.Add(skipped.Id);
                         }
-                        mismatchedTimeseriesCnt.Set(mismatched.Skipped.Count());
+                        mismatchedTimeseriesCnt.Set(cdfWriter.MismatchedTimeseries.Count);
                     }
 
                     foreach (var err in result.Errors)
