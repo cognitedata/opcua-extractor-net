@@ -100,6 +100,8 @@ namespace Test.Unit
             Assert.False(await pusher.TestConnection(tester.Config, tester.Source.Token));
             Assert.Null(tester.Config.Cognite.DataSet.Id);
         }
+
+        #region pushdata
         [Fact]
         public async Task TestPushDatapoints()
         {
@@ -326,6 +328,48 @@ namespace Test.Unit
             Assert.True(CommonTestUtils.TestMetricValue("opcua_event_pushes_cdf", 2));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_events_pushed_cdf", 3));
         }
+
+        [Fact]
+        public async Task TestMissingTimeSeriesDatapoints()
+        {
+            (handler, pusher) = tester.GetCDFPusher();
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+
+            handler.MockTimeseries("test-ts-double");
+            var writer = (CDFWriter)pusher.GetType()
+                .GetField("cdfWriter", BindingFlags.Instance | BindingFlags.NonPublic)
+                .GetValue(pusher);
+
+            Assert.Empty(writer.MissingTimeseries);
+            Assert.Empty(writer.MismatchedTimeseries);
+
+            var time = DateTime.UtcNow;
+
+            var ts = new UAVariable(new NodeId("test-ts-missing", 2), "test", null, null, null, null);
+            var dt = new UADataType(DataTypeIds.Double);
+            ts.FullAttributes.DataType = dt;
+            var tsId = ts.GetUniqueId(tester.Client.Context);
+
+            // Try to insert a few datapoints, missing values should be skipped.
+            var dps = new[]
+            {
+                new UADataPoint(time, "test-ts-double", 123, StatusCodes.Good),
+                new UADataPoint(time.AddSeconds(1), "test-ts-double", 321, StatusCodes.Good),
+                new UADataPoint(time, tsId, 111, StatusCodes.Good),
+                new UADataPoint(time.AddSeconds(1), tsId, 222, StatusCodes.Good),
+            };
+
+            Assert.True(await pusher.PushDataPoints(dps, tester.Source.Token));
+            Assert.Single(writer.MissingTimeseries);
+            Assert.Equal(tsId, writer.MissingTimeseries.First().ExternalId);
+
+            // Insert the missing timeseries, should be removed from skipped.
+            await pusher.PushNodes(Enumerable.Empty<BaseUANode>(), new[] { ts }, Enumerable.Empty<UAReference>(), new UpdateConfig(), tester.Source.Token);
+            Assert.Empty(writer.MissingTimeseries);
+            Assert.Empty(writer.MismatchedTimeseries);
+        }
+        #endregion
+
         #region pushnodes
         [Fact]
         public async Task TestCreateUpdateAssets()
@@ -1172,7 +1216,6 @@ namespace Test.Unit
             tester.Config.Cognite.RawNodeBuffer.BrowseOnEmpty = false;
             string oldAssets = System.Text.Json.JsonSerializer.Serialize(handler.AssetsRaw);
             string oldTimeseries = System.Text.Json.JsonSerializer.Serialize(handler.TimeseriesRaw);
-            handler.Timeseries.Clear();
             extractor.ClearKnownSubscriptions();
             var reader = (HistoryReader)extractor.GetType().GetField("historyReader", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(extractor);
             reader.AddIssue(HistoryReader.StateIssue.NodeHierarchyRead);
