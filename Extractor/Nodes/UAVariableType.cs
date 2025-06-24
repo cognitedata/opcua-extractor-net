@@ -131,7 +131,7 @@ namespace Cognite.OpcUa.Nodes
                 && FullAttributes.DataType.AllowValueRead(this, FullAttributes.ArrayDimensions, FullAttributes.ValueRank, logger, config, ignoreDimension);
         }
 
-        public override Dictionary<string, string>? GetExtraMetadata(FullConfig config, SessionContext context, StringConverter converter)
+        public override Dictionary<string, string>? GetExtraMetadata(FullConfig config, SessionContext context, TypeConverter converter)
         {
             Dictionary<string, string>? fields = new Dictionary<string, string>();
             var dt = FullAttributes.DataType;
@@ -153,7 +153,10 @@ namespace Cognite.OpcUa.Nodes
                     fields["dataType"] = dt.Name ?? dt.GetUniqueId(context) ?? "null";
                 }
             }
-            fields["Value"] = converter.ConvertToString(FullAttributes.Value, dt.EnumValues);
+            if (FullAttributes.Value != null)
+            {
+                fields["Value"] = converter.ConvertToString(FullAttributes.Value.Value, dt.EnumValues);
+            }
 
             return fields;
         }

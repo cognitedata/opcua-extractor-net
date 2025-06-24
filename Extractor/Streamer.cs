@@ -437,10 +437,12 @@ namespace Cognite.OpcUa
                     missedArrayPoints.Inc(values.Length - dim);
                 }
                 var ret = new List<UADataPoint>();
+                var variantArray = extractor.StringConverter.ExtractVariantArray(value.WrappedValue);
                 for (int i = 0; i < dim; i++)
                 {
                     var id = variable.IsArray ? GetArrayUniqueId(uniqueId, i) : uniqueId;
-                    ret.Add(variable.DataType.ToDataPoint(extractor, values.GetValue(i), value.SourceTimestamp, id, value.StatusCode));
+                    var entry = i < variantArray.Length ? variantArray[i] : Variant.Null;
+                    ret.Add(variable.DataType.ToDataPoint(extractor, entry, value.SourceTimestamp, id, value.StatusCode));
                 }
                 return ret;
             }
@@ -568,7 +570,7 @@ namespace Cognite.OpcUa
             var finalProperties = extractedProperties.Select(kvp => kvp.Value);
             var buffEvent = new UAEvent
             {
-                Message = extractor.StringConverter.ConvertToString(extractedProperties.GetValueOrDefault("Message")?.Value),
+                Message = extractor.StringConverter.ConvertToString(extractedProperties.GetValueOrDefault("Message")?.Value ?? Variant.Null),
                 EventId = config.Extraction.IdPrefix + eventId,
                 SourceNode = sourceNode,
                 Time = time,

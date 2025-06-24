@@ -174,10 +174,10 @@ namespace Cognite.OpcUa.Nodes
         /// <param name="stringOverride">True to override the IsString parameter of this datatype, converting
         /// numerical datavalues to string as well.</param>
         /// <returns>Created UADataPoint</returns>
-        public UADataPoint ToDataPoint(IUAClientAccess client, object value, DateTime timestamp, string id, StatusCode status, bool stringOverride = false)
+        public UADataPoint ToDataPoint(IUAClientAccess client, Variant value, DateTime timestamp, string id, StatusCode status, bool stringOverride = false)
         {
             if (timestamp == DateTime.MinValue) timestamp = DateTime.UtcNow;
-            if (value is null)
+            if (value.Value is null)
             {
                 return new UADataPoint(timestamp, id, IsString, status);
             }

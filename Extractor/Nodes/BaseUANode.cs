@@ -399,7 +399,7 @@ namespace Cognite.OpcUa.Nodes
             return true;
         }
 
-        public virtual Dictionary<string, string>? GetExtraMetadata(FullConfig config, SessionContext context, StringConverter converter)
+        public virtual Dictionary<string, string>? GetExtraMetadata(FullConfig config, SessionContext context, TypeConverter converter)
         {
             return null;
         }
@@ -448,7 +448,7 @@ namespace Cognite.OpcUa.Nodes
         }
 
         #region serialization
-        public JsonDocument? ToJson(ILogger log, StringConverter converter, ConverterType type)
+        public JsonDocument? ToJson(ILogger log, TypeConverter converter, ConverterType type)
         {
             var options = new JsonSerializerOptions();
             converter.AddConverters(options, type);
@@ -491,7 +491,8 @@ namespace Cognite.OpcUa.Nodes
                     if (prop is not UAVariable propVar) continue;
                     if (metaMap.TryGetValue(prop.Name ?? "", out var mapped))
                     {
-                        var value = client.StringConverter.ConvertToString(propVar.Value, propVar.FullAttributes.DataType.EnumValues);
+                        if (propVar.Value == null) continue;
+                        var value = client.StringConverter.ConvertToString(propVar.Value.Value, propVar.FullAttributes.DataType.EnumValues);
                         if (string.IsNullOrWhiteSpace(value)) continue;
                         switch (mapped)
                         {
@@ -537,8 +538,15 @@ namespace Cognite.OpcUa.Nodes
                 {
                     if (prop is UAVariable variable)
                     {
-                        result[prop.Name] = client.StringConverter.ConvertToString(variable.Value, variable.FullAttributes.DataType?.EnumValues)
-                            ?? variable.Value.ToString();
+                        if (variable.Value == null)
+                        {
+                            result[prop.Name] = string.Empty;
+                        }
+                        else
+                        {
+                            result[prop.Name] = client.StringConverter.ConvertToString(variable.Value.Value, variable.FullAttributes.DataType?.EnumValues)
+                                ?? variable.Value.ToString();
+                        }
                     }
 
                     if (prop.Properties != null)

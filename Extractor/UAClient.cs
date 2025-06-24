@@ -81,7 +81,7 @@ namespace Cognite.OpcUa
         private readonly ILogger<Tracing> traceLog;
         private LogLevel? traceLevel;
 
-        public StringConverter StringConverter { get; }
+        public TypeConverter StringConverter { get; }
         public Browser Browser { get; }
 
         public SourceInformation SourceInfo { get; private set; } = SourceInformation.Default();
@@ -102,7 +102,7 @@ namespace Cognite.OpcUa
             {
                 metricsManager = new NodeMetricsManager(this, config.Metrics.Nodes);
             }
-            StringConverter = new StringConverter(provider.GetRequiredService<ILogger<StringConverter>>(), this, config);
+            StringConverter = new TypeConverter(provider.GetRequiredService<ILogger<TypeConverter>>(), this, config);
             Browser = new Browser(provider.GetRequiredService<ILogger<Browser>>(), this, config);
             TypeManager = new TypeManager(config, this, provider.GetRequiredService<ILogger<TypeManager>>());
             SessionManager = new SessionManager(this, Config, provider.GetRequiredService<ILogger<SessionManager>>());

@@ -934,8 +934,8 @@ namespace Test.Unit
             Assert.Equal(new Variant(0.0), nodes[0].Value);
             Assert.Equal(new Variant(new double[] { 0, 0, 0, 0 }), nodes[1].Value);
             Assert.Equal(new Variant(new[] { "test1", "test2" }), nodes[2].Value);
-            Assert.Equal("°C: degree Celsius", tester.Client.StringConverter.ConvertToString(nodes[3].Value));
-            Assert.Equal("(0, 100)", tester.Client.StringConverter.ConvertToString(nodes[4].Value));
+            Assert.Equal("°C: degree Celsius", tester.Client.StringConverter.ConvertToString(nodes[3].Value ?? Variant.Null));
+            Assert.Equal("(0, 100)", tester.Client.StringConverter.ConvertToString(nodes[4].Value ?? Variant.Null));
         }
 
         [Fact]

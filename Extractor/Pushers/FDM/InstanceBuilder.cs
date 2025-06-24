@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Nodes;
@@ -442,7 +443,7 @@ namespace Cognite.OpcUa.Pushers.FDM
         [JsonPropertyName("ValueRank")]
         public int ValueRank { get; }
         [JsonPropertyName("Value")]
-        public JsonElement? Value { get; }
+        public JsonNode? Value { get; }
         [JsonPropertyName("ValueTimeseries")]
         public string? ValueTimeseries { get; }
         [JsonPropertyName("MinimumSamplingInterval")]
@@ -452,10 +453,17 @@ namespace Cognite.OpcUa.Pushers.FDM
 
         public VariableData(UAVariable variable, IUAClientAccess client, DMSValueConverter converter, string space, NodeIdContext context)
         {
-            if (variable.IsProperty)
+            if (variable.IsProperty && variable.Value != null)
             {
-                var json = converter.Converter.ConvertToString(variable.Value, null, null, StringConverterMode.ReversibleJson);
-                Value = JsonDocument.Parse(json).RootElement;
+                var json = converter.Converter.ConvertToJson(variable.Value.Value, null, null, JsonMode.ReversibleJson);
+                if (json is not null && json is not JsonObject)
+                {
+                    json = new JsonObject
+                    {
+                        ["Value"] = json
+                    };
+                }
+                Value = json;
             }
             else
             {
@@ -525,7 +533,7 @@ namespace Cognite.OpcUa.Pushers.FDM
         [JsonPropertyName("ValueRank")]
         public int ValueRank { get; }
         [JsonPropertyName("Value")]
-        public JsonElement Value { get; }
+        public JsonNode? Value { get; }
 
         public VariableTypeData(UAVariableType variable, DMSValueConverter converter, string space, NodeIdContext context)
         {
@@ -533,8 +541,18 @@ namespace Cognite.OpcUa.Pushers.FDM
             if (!variable.FullAttributes.DataType.Id.IsNullNodeId) DataType = new DirectRelationIdentifier(space, context.NodeIdToString(variable.FullAttributes.DataType.Id));
             ArrayDimensions = variable.FullAttributes.ArrayDimensions;
             ValueRank = variable.FullAttributes.ValueRank;
-            var json = converter.Converter.ConvertToString(variable.FullAttributes.Value, null, null, StringConverterMode.ReversibleJson);
-            Value = JsonDocument.Parse(json).RootElement;
+            if (variable.FullAttributes.Value != null)
+            {
+                var json = converter.Converter.ConvertToJson(variable.FullAttributes.Value.Value, null, null, JsonMode.ReversibleJson);
+                if (json is not null && json is not JsonObject)
+                {
+                    json = new JsonObject
+                    {
+                        ["Value"] = json
+                    };
+                }
+                Value = json;
+            }
         }
     }
 
@@ -558,15 +576,22 @@ namespace Cognite.OpcUa.Pushers.FDM
         [JsonPropertyName("IsAbstract")]
         public bool IsAbstract { get; }
         [JsonPropertyName("DataTypeDefinition")]
-        public JsonElement? DataTypeDefinition { get; }
+        public JsonNode? DataTypeDefinition { get; }
 
         public DataTypeData(UADataType node, DMSValueConverter converter)
         {
             var def = node.FullAttributes.DataTypeDefinition;
             if (def != null)
             {
-                var json = converter.Converter.ConvertToString(def, null, null, StringConverterMode.ReversibleJson);
-                DataTypeDefinition = JsonDocument.Parse(json).RootElement;
+                var json = converter.Converter.ConvertToJson(def.Value, null, null, JsonMode.ReversibleJson);
+                if (json is not null && json is not JsonObject)
+                {
+                    json = new JsonObject
+                    {
+                        ["Value"] = json
+                    };
+                }
+                DataTypeDefinition = json;
             }
         }
     }

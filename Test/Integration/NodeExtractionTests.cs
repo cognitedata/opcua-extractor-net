@@ -105,10 +105,10 @@ namespace Test.Integration
             Assert.Equal(2, vnode.Properties.Count());
             var prop = vnode.Properties.First(prop => prop.Name == "EngineeringUnits") as UAVariable;
             Assert.Equal(DataTypeIds.EUInformation, prop.FullAttributes.DataType.Id);
-            Assert.Equal("°C: degree Celsius", extractor.StringConverter.ConvertToString(prop.Value));
+            Assert.Equal("°C: degree Celsius", extractor.StringConverter.ConvertToString(prop.Value ?? Variant.Null));
             prop = vnode.Properties.First(prop => prop.Name == "EURange") as UAVariable;
             Assert.Equal(DataTypeIds.Range, prop.FullAttributes.DataType.Id);
-            Assert.Equal("(0, 100)", extractor.StringConverter.ConvertToString(prop.Value));
+            Assert.Equal("(0, 100)", extractor.StringConverter.ConvertToString(prop.Value ?? Variant.Null));
 
             Assert.All(pusher.PushedVariables.Values.Where(variable => variable.Name != "MysteryVar"
                 && variable.Name != "NumberVar"),
@@ -182,10 +182,10 @@ namespace Test.Integration
             Assert.Equal(2, arr.Properties.Count());
             var prop = arr.Properties.First(prop => prop.Name == "EngineeringUnits") as UAVariable;
             Assert.Equal(DataTypeIds.EUInformation, prop.FullAttributes.DataType.Id);
-            Assert.Equal("°C: degree Celsius", extractor.StringConverter.ConvertToString(prop.Value));
+            Assert.Equal("°C: degree Celsius", extractor.StringConverter.ConvertToString(prop.Value ?? Variant.Null));
             prop = arr.Properties.First(prop => prop.Name == "EURange") as UAVariable;
             Assert.Equal(DataTypeIds.Range, prop.FullAttributes.DataType.Id);
-            Assert.Equal("(0, 100)", extractor.StringConverter.ConvertToString(prop.Value));
+            Assert.Equal("(0, 100)", extractor.StringConverter.ConvertToString(prop.Value ?? Variant.Null));
             Assert.True(arr.IsArray);
             Assert.Equal(4, arr.ArrayDimensions[0]);
             Assert.Equal(4, arr.ArrayChildren.Count());
@@ -475,16 +475,16 @@ namespace Test.Integration
             var node = pusher.PushedNodes[ids.Root];
             Assert.Equal(5, node.Properties.Count());
             var prop = node.Properties.First(prop => prop.Name == "Variable StringArray") as UAVariable;
-            Assert.Equal(@"[""test1"",""test2""]", extractor.StringConverter.ConvertToString(prop.Value));
+            Assert.Equal(@"[""test1"",""test2""]", extractor.StringConverter.ConvertToString(prop.Value ?? Variant.Null));
             prop = node.Properties.First(prop => prop.Name == "Variable Array") as UAVariable;
-            Assert.Equal("[0,0,0,0]", extractor.StringConverter.ConvertToString(prop.Value));
+            Assert.Equal("[0,0,0,0]", extractor.StringConverter.ConvertToString(prop.Value ?? Variant.Null));
             prop = node.Properties.First(prop => prop.Name == "EnumVar1") as UAVariable;
-            Assert.Equal("Enum2", extractor.StringConverter.ConvertToString(prop.Value, prop.FullAttributes.DataType.EnumValues));
+            Assert.Equal("Enum2", extractor.StringConverter.ConvertToString(prop.Value ?? Variant.Null, prop.FullAttributes.DataType.EnumValues));
             prop = node.Properties.First(prop => prop.Name == "EnumVar2") as UAVariable;
-            Assert.Equal("VEnum2", extractor.StringConverter.ConvertToString(prop.Value, prop.FullAttributes.DataType.EnumValues));
+            Assert.Equal("VEnum2", extractor.StringConverter.ConvertToString(prop.Value ?? Variant.Null, prop.FullAttributes.DataType.EnumValues));
             prop = node.Properties.First(prop => prop.Name == "EnumVar3") as UAVariable;
             Assert.Equal(@"[""VEnum2"",""VEnum2"",""VEnum1"",""VEnum2""]",
-                extractor.StringConverter.ConvertToString(prop.Value, prop.FullAttributes.DataType.EnumValues));
+                extractor.StringConverter.ConvertToString(prop.Value ?? Variant.Null, prop.FullAttributes.DataType.EnumValues));
         }
         [Fact]
         public async Task TestPropertyIdFilter()
@@ -510,7 +510,7 @@ namespace Test.Integration
             var node = pusher.PushedNodes[ids.Root];
             Assert.Single(node.Properties);
             var prop = node.Properties.First(prop => prop.Name == "EnumVar2") as UAVariable;
-            Assert.Equal("VEnum2", extractor.StringConverter.ConvertToString(prop.Value, prop.FullAttributes.DataType.EnumValues));
+            Assert.Equal("VEnum2", extractor.StringConverter.ConvertToString(prop.Value ?? Variant.Null, prop.FullAttributes.DataType.EnumValues));
         }
         [Fact]
         public async Task TestMultipleSourceNodes()
@@ -1103,12 +1103,15 @@ namespace Test.Integration
             var metaElem = root.ToJson(log, extractor.StringConverter, ConverterType.Node);
             var metaString = CommonTestUtils.JsonElementToString(metaElem.RootElement.GetProperty("metadata"));
             var refJson = JsonNode.Parse(@"{""CustomRoot"":{""ChildObject"":null,""ChildObject2"":{""NumericProp"":1234,""StringProp"":""String prop value""},"
-            + @"""Variable Array"":{""Value"":[0,0,0,0],""EngineeringUnits"":""°C: degree Celsius"",""EURange"":""(0, 100)""},"
+            + @"""Variable Array"":{""Value"":[0,0,0,0],""EngineeringUnits"":{""NamespaceUri"":""http://www.opcfoundation.org/UA/units/un/cefact"",""UnitId"":4408652,"
+            + @"""DisplayName"":""°C"", ""Description"":""degree Celsius""},""EURange"":{""Low"":0,""High"":100}},"
             + @"""Variable StringArray"":[""test1"",""test2""],""StringyVar"":null,""IgnoreVar"":null,"
-            + @"""MysteryVar"":{""Value"":null,""EngineeringUnits"":""°C: degree Celsius"",""EURange"":""(0, 100)""},"
+            + @"""MysteryVar"":{""Value"":null,""EngineeringUnits"":{""NamespaceUri"":""http://www.opcfoundation.org/UA/units/un/cefact"",""UnitId"":4408652,"
+            + @"""DisplayName"":""°C"", ""Description"":""degree Celsius""},""EURange"":{""Low"":0,""High"":100}},"
             + @"""NumberVar"":{""Value"":null,""DeepProp"":{""DeepProp2"":{""val1"":""value 1"",""val2"":""value 2""}}},"
             + @"""EnumVar1"":""Enum2"",""EnumVar2"":""VEnum2"",""EnumVar3"":[""VEnum2"",""VEnum2"",""VEnum1"",""VEnum2""]}}");
             var metaJson = JsonNode.Parse(metaString);
+            log.LogDebug("Metadata JSON: {MetaJson}", metaJson.ToJsonString());
             // This wouldn't work in clean, since there is only a single very large metadata field, but it is a much more useful input to Raw.
             Assert.True(JsonNode.DeepEquals(refJson, metaJson));
         }
@@ -1153,9 +1156,11 @@ namespace Test.Integration
             var metaString = CommonTestUtils.JsonElementToString(metaElem.RootElement.GetProperty("metadata"));
             // This wouldn't work in clean, since there is only a single very large metadata field, but it is a much more useful input to Raw.
             var refJson = JsonNode.Parse(@"{""CustomRoot"":{""ChildObject"":null,""ChildObject2"":{""NumericProp"":1234,""StringProp"":""String prop value""},"
-            + @"""Variable Array"":{""Value"":[0,0,0,0],""EngineeringUnits"":""°C: degree Celsius"",""EURange"":""(0, 100)""},"
+            + @"""Variable Array"":{""Value"":[0,0,0,0],""EngineeringUnits"":{""NamespaceUri"":""http://www.opcfoundation.org/UA/units/un/cefact"","
+            + @"""UnitId"":4408652,""DisplayName"":""°C"", ""Description"":""degree Celsius""},""EURange"":{""Low"":0,""High"":100}},"
             + @"""Variable StringArray"":[""test1"",""test2""],""StringyVar"":null,""IgnoreVar"":null,"
-            + @"""MysteryVar"":{""Value"":null,""EngineeringUnits"":""°C: degree Celsius"",""EURange"":""(0, 100)""},"
+            + @"""MysteryVar"":{""Value"":null,""EngineeringUnits"":{""NamespaceUri"":""http://www.opcfoundation.org/UA/units/un/cefact"",""UnitId"":4408652,"
+            + @"""DisplayName"":""°C"", ""Description"":""degree Celsius""},""EURange"":{""Low"":0,""High"":100}},"
             + @"""NumberVar"":{""Value"":null,""DeepProp"":{""DeepProp2"":{""val1"":""value 1"",""val2"":""value 2""}}},"
             + @"""EnumVar1"":1,""EnumVar2"":123,""EnumVar3"":[123,123,321,123]}}");
             var metaJson = JsonNode.Parse(metaString);
