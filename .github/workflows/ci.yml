@@ -38,3 +38,4 @@ jobs:
         - name: Verify manifest
           run: |
             publish-extractor validate --manifest manifest.yml --config-files Test/config.test.yml
+            publish-extractor docs --manifest manifest.yml
