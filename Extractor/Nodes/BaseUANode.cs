@@ -554,7 +554,39 @@ namespace Cognite.OpcUa.Nodes
             return result;
         }
 
+        protected Dictionary<string, object> BuildMetadataJsonBase(Dictionary<string, object>? extras, IUAClientAccess client, bool reversibleJson = true)
+        {
+            var result = extras ?? new Dictionary<string, object>();
 
+            if (Properties == null) return result;
+
+            foreach (var prop in Properties)
+            {
+                if (prop != null && !string.IsNullOrEmpty(prop.Name))
+                {
+                    if (prop is UAVariable variable)
+                    {
+                        result[prop.Name] = client.StringConverter.ConvertToString(
+                            variable.Value,
+                            variable.FullAttributes.DataType?.EnumValues,
+                            null,
+                            reversibleJson ? StringConverterMode.Json : StringConverterMode.ReversibleJson)
+                            ?? variable.Value.ToString();
+                    }
+
+                    if (prop.Properties != null)
+                    {
+                        var nestedProperties = prop.BuildMetadataJsonBase(null, client);
+                        foreach (var sprop in nestedProperties)
+                        {
+                            result[$"{prop.Name}_{sprop.Key}"] = sprop.Value;
+                        }
+                    }
+                }
+            }
+            return result;
+        }
+    
         /// <summary>
         /// Return a dictionary of metadata fields for this node.
         /// </summary>
@@ -571,6 +603,16 @@ namespace Cognite.OpcUa.Nodes
                 extras = GetExtraMetadata(config, client.Context, client.StringConverter);
             }
             return BuildMetadataBase(extras, client);
+        }
+
+        public Dictionary<string, object> BuildMetadataAsJson(FullConfig config, IUAClientAccess client, bool getExtras)
+        {
+            Dictionary<string, string>? extras = null;
+            if (getExtras)
+            {
+                extras = GetExtraMetadata(config, client.Context, client.StringConverter);
+            }
+            return BuildMetadataJsonBase(extras.ToDictionary(extras => extras.Key, extras => (object)extras.Value), client);
         }
         #endregion
     }
