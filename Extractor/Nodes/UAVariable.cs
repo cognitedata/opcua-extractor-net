@@ -32,6 +32,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
 
 namespace Cognite.OpcUa.Nodes
 {
@@ -199,6 +200,7 @@ namespace Cognite.OpcUa.Nodes
         public bool IsObject { get => isObject || IsArray && (this is not UAVariableMember); set => isObject = value; }
         public bool AsEvents { get; set; }
 
+        private readonly StringConverter converter;
 
         /// <summary>
         /// If this is an object, this is the matching timeseries
@@ -516,14 +518,15 @@ namespace Cognite.OpcUa.Nodes
             };
         }
 
-        public SourcedNodeWrite<CogniteExtractorTimeSeries> ToIdmTimeSeries(
+        public SourcedNodeWrite<CogniteExtractorTimeSeriesBase<object>> ToIdmTimeSeries(
             IUAClientAccess client,
             string space,
             string source,
             FullConfig config,
             Dictionary<string, string>? metaMap)
         {
-            var write = new CogniteExtractorTimeSeries
+            var writeAsJson = true; // config.Extraction.TimeSeries.WriteAsJson;
+            CogniteExtractorTimeSeriesBase<object> write = new CogniteExtractorTimeSeriesBase<object>
             {
                 Name = Name,
                 Description = FullAttributes.Description,
@@ -543,9 +546,13 @@ namespace Cognite.OpcUa.Nodes
                     true => TimeSeriesType.String,
                     false => TimeSeriesType.Numeric
                 },
-                extractedData = BuildMetadata(config, client, true),
+                extractedData = writeAsJson
+                                ? BuildMetadataAsJson(config, client, true)
+                                : BuildMetadata(config, client, true).ToDictionary(
+                                    kvp => kvp.Key,
+                                    kvp => (object)kvp.Value)
             };
-
+            
             if (Properties != null && Properties.Any() && metaMap != null && metaMap.Count != 0)
             {
                 foreach (var prop in Properties)
@@ -566,7 +573,7 @@ namespace Cognite.OpcUa.Nodes
                 }
             }
 
-            var res = new SourcedNodeWrite<CogniteExtractorTimeSeries>
+            var res = new SourcedNodeWrite<CogniteExtractorTimeSeriesBase<object>>
             {
                 Space = space,
                 ExternalId = GetUniqueId(client.Context),
@@ -578,6 +585,7 @@ namespace Cognite.OpcUa.Nodes
 
             return res;
         }
+        
         #endregion
     }
 
