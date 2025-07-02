@@ -87,6 +87,43 @@ namespace Cognite.OpcUa.Pushers
         private static readonly Counter createdRelationships = Metrics
             .CreateCounter("opcua_created_relationships_mqtt", "Number of relationships pushed over MQTT");
 
+        private double? nonFiniteReplacement;
+
+        /// <summary>
+        /// Get formatted timestamp based on configuration
+        /// </summary>
+        /// <param name="timestamp">Timestamp in milliseconds since epoch</param>
+        /// <returns>Formatted timestamp as long (epoch) or string (ISO8601)</returns>
+        private object GetFormattedTimestamp(long timestamp)
+        {
+            switch (config.TimestampFormat.ToLowerInvariant())
+            {
+                case "iso8601":
+                    var dateTime = DateTimeOffset.FromUnixTimeMilliseconds(timestamp);
+                    // Apply configured timezone offset
+                    if (!string.IsNullOrEmpty(config.TimezoneOffset))
+                    {
+                        // Parse offset like "+09:00" or "-05:00"
+                        if (config.TimezoneOffset.StartsWith("+") || config.TimezoneOffset.StartsWith("-"))
+                        {
+                            var offsetStr = config.TimezoneOffset.Substring(1); // Remove + or -
+                            if (TimeSpan.TryParse(offsetStr, out var offset))
+                            {
+                                if (config.TimezoneOffset.StartsWith("-"))
+                                {
+                                    offset = -offset;
+                                }
+                                dateTime = dateTime.ToOffset(offset);
+                            }
+                        }
+                    }
+                    return dateTime.ToString("yyyy-MM-ddTHH:mm:ss.fffzzz");
+                case "epoch":
+                default:
+                    return timestamp;
+            }
+        }
+
         /// <summary>
         /// Constructor, also starts the client and sets up correct disconnect handlers.
         /// </summary>
@@ -247,11 +284,11 @@ namespace Cognite.OpcUa.Pushers
 
             if (!results.All(res => res))
             {
-                log.LogDebug("Failed to push {Count} points to CDF over MQTT", count);
+                log.LogDebug("Failed to push {Count} points to Target over MQTT", count);
                 return false;
             }
 
-            log.LogDebug("Successfully pushed {Count} points to CDF over MQTT", count);
+            log.LogDebug("Successfully pushed {Count} points to Target over MQTT", count);
 
             return true;
         }
@@ -489,19 +526,74 @@ namespace Cognite.OpcUa.Pushers
                 pair => pair.Value.SelectNonNull(dp => dp.ToCDFDataPoint(fullConfig.Extraction.StatusCodes.IngestStatusCodes, log)));
             var (points, errors) = Sanitation.CleanDataPointsRequest(inserts, SanitationMode.Clean, config.NonFiniteReplacement);
             var cleaned = points.ToDictionary(pair => (Identity)pair.Key, pair => pair.Value);
-            var req = cleaned.ToInsertRequest();
 
             foreach (var error in errors)
             {
                 log.LogCogniteError(error, RequestType.CreateDatapoints, true);
             }
 
-            if (req.Items.Count == 0) return true;
+            if (cleaned.Count == 0) return true;
 
-            var data = req.ToByteArray();
+            byte[] data;
+            string topic;
+
+            if (config.UseGrpc)
+            {
+                // gRPC/Protobuf serialization (기존 방식)
+                var req = cleaned.ToInsertRequest();
+                if (req.Items.Count == 0) return true;
+
+                data = req.ToByteArray();
+                topic = config.DatapointTopic;
+
+                log.LogTrace("Using gRPC/Protobuf serialization for {Count} datapoint items", req.Items.Count);
+            }
+            else
+            {
+                // JSON serialization (새로운 방식)
+                var jsonDataPoints = new List<JsonDataPointWrapper>();
+
+                foreach (var (externalId, datapoints) in cleaned)
+                {
+                    var wrapper = new JsonDataPointWrapper(externalId.ExternalId);
+                    
+                    var numericPoints = datapoints.Where(dp => !dp.IsString).ToList();
+                    var stringPoints = datapoints.Where(dp => dp.IsString).ToList();
+
+                    if (numericPoints.Any())
+                    {
+                        wrapper.NumericDatapoints = numericPoints.Select(dp => new DataPoint
+                        {
+                            Timestamp = GetFormattedTimestamp(dp.Timestamp),
+                            Value = dp.NumericValue ?? 0.0
+                        });
+                    }
+
+                    if (stringPoints.Any())
+                    {
+                        wrapper.StringDatapoints = stringPoints.Select(dp => new StringDataPoint
+                        {
+                            Timestamp = GetFormattedTimestamp(dp.Timestamp),
+                            Value = dp.StringValue ?? string.Empty
+                        });
+                    }
+
+                    jsonDataPoints.Add(wrapper);
+                }
+
+                data = JsonSerializer.SerializeToUtf8Bytes(jsonDataPoints, new JsonSerializerOptions
+                {
+                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                    Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+                });
+                topic = config.DatapointTopic + "/json"; // JSON 형식임을 나타내는 토픽
+
+                log.LogTrace("Using JSON serialization for {Count} datapoint items", jsonDataPoints.Count);
+            }
+
             var msg = baseBuilder
                 .WithPayload(data)
-                .WithTopic(config.DatapointTopic)
+                .WithTopic(topic)
                 .Build();
 
             try
@@ -515,9 +607,7 @@ namespace Cognite.OpcUa.Pushers
             }
 
             dataPointPushes.Inc();
-            int count = req.Items.Sum(
-                x => x.NumericDatapoints?.Datapoints?.Count ?? 0
-                + x.StringDatapoints?.Datapoints?.Count ?? 0);
+            int count = cleaned.Values.Sum(datapoints => datapoints.Count());
             dataPointsCounter.Inc(count);
 
             return true;
@@ -544,7 +634,8 @@ namespace Cognite.OpcUa.Pushers
                     jsonAssets.Select(pair => new RawRowCreateDto<JsonElement>(pair.id, pair.node)));
                 var rawData = JsonSerializer.SerializeToUtf8Bytes(rawObj, new JsonSerializerOptions
                 {
-                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                    Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
                 });
                 var rawMsg = baseBuilder
                     .WithTopic(config.RawTopic)
@@ -566,7 +657,10 @@ namespace Cognite.OpcUa.Pushers
             }
             var assets = ConvertNodes(objects, update);
 
-            var data = JsonSerializer.SerializeToUtf8Bytes(assets);
+            var data = JsonSerializer.SerializeToUtf8Bytes(assets, new JsonSerializerOptions
+            {
+                Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+            });
 
             var msg = baseBuilder
                 .WithTopic(config.AssetTopic)
@@ -680,7 +774,10 @@ namespace Cognite.OpcUa.Pushers
 
                 if (minimalTimeseries.Count != 0)
                 {
-                    var minimalData = JsonSerializer.SerializeToUtf8Bytes(minimalTimeseries);
+                    var minimalData = JsonSerializer.SerializeToUtf8Bytes(minimalTimeseries, new JsonSerializerOptions
+                    {
+                        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+                    });
 
                     var minimalMsg = baseBuilder
                         .WithPayload(minimalData)
@@ -712,7 +809,8 @@ namespace Cognite.OpcUa.Pushers
 
                 var rawData = JsonSerializer.SerializeToUtf8Bytes(rawObj, new JsonSerializerOptions
                 {
-                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                    Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
                 });
                 var rawMsg = baseBuilder
                     .WithTopic(config.RawTopic)
@@ -734,7 +832,10 @@ namespace Cognite.OpcUa.Pushers
 
             var timeseries = ConvertVariables(variables, update);
 
-            var data = JsonSerializer.SerializeToUtf8Bytes(timeseries);
+            var data = JsonSerializer.SerializeToUtf8Bytes(timeseries, new JsonSerializerOptions
+            {
+                Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+            });
             var msg = baseBuilder
                 .WithPayload(data)
                 .WithTopic(config.TsTopic)
@@ -764,7 +865,10 @@ namespace Cognite.OpcUa.Pushers
                 .Select(evt => evt.ToStatelessCDFEvent(Extractor, config.DataSetId, eventParents))
                 .Where(evt => evt != null);
 
-            var data = JsonSerializer.SerializeToUtf8Bytes(events);
+            var data = JsonSerializer.SerializeToUtf8Bytes(events, new JsonSerializerOptions
+            {
+                Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+            });
 
             var msg = baseBuilder
                 .WithPayload(data)
@@ -794,7 +898,10 @@ namespace Cognite.OpcUa.Pushers
         {
             bool useRawStore = config.RawMetadata != null && !string.IsNullOrWhiteSpace(config.RawMetadata.Database)
                 && !string.IsNullOrWhiteSpace(config.RawMetadata.RelationshipsTable);
-            var data = JsonSerializer.SerializeToUtf8Bytes(references);
+            var data = JsonSerializer.SerializeToUtf8Bytes(references, new JsonSerializerOptions
+            {
+                Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+            });
 
             if (useRawStore)
             {
@@ -805,7 +912,8 @@ namespace Cognite.OpcUa.Pushers
 
                 var rawData = JsonSerializer.SerializeToUtf8Bytes(rawObj, new JsonSerializerOptions
                 {
-                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                    Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
                 });
                 var rawMsg = baseBuilder
                     .WithTopic(config.RawTopic)
@@ -886,6 +994,48 @@ namespace Cognite.OpcUa.Pushers
                 Columns = columns;
             }
         }
+
+        /// <summary>
+        /// JSON format datapoint wrapper for non-gRPC serialization
+        /// </summary>
+        private class JsonDataPointWrapper
+        {
+            public string ExternalId { get; set; }
+            public IEnumerable<DataPoint>? NumericDatapoints { get; set; }
+            public IEnumerable<StringDataPoint>? StringDatapoints { get; set; }
+
+            public JsonDataPointWrapper(string externalId)
+            {
+                ExternalId = externalId;
+            }
+        }
+
+        /// <summary>
+        /// JSON format datapoint for numeric values
+        /// </summary>
+        private class DataPoint
+        {
+            public object Timestamp { get; set; }
+            public double Value { get; set; }
+
+            public DataPoint()
+            {
+            }
+        }
+
+        /// <summary>
+        /// JSON format datapoint for string values
+        /// </summary>
+        private class StringDataPoint
+        {
+            public object Timestamp { get; set; }
+            public string Value { get; set; }
+
+            public StringDataPoint()
+            {
+            }
+        }
+
         public async Task Disconnect()
         {
             closed = true;

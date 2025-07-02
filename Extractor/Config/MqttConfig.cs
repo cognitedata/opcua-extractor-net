@@ -145,5 +145,30 @@ namespace Cognite.OpcUa.Config
             }
         }
         private double? nonFiniteReplacement;
+
+        /// <summary>
+        /// Whether to use gRPC/Protobuf serialization for datapoints.
+        /// If true, datapoints will be serialized using Protobuf (gRPC format).
+        /// If false, datapoints will be serialized using JSON format.
+        /// Default is true for better performance and compatibility with MQTTCDFBridge.
+        /// </summary>
+        [DefaultValue(true)]
+        public bool UseGrpc { get; set; } = true;
+
+        /// <summary>
+        /// Timestamp format for JSON serialization.
+        /// "epoch" - Unix timestamp in milliseconds since epoch (default)
+        /// "iso8601" - ISO 8601 format (YYYY-MM-DDTHH:mm:ss.SSS+09:00)
+        /// </summary>
+        [DefaultValue("epoch")]
+        public string TimestampFormat { get; set; } = "epoch";
+
+        /// <summary>
+        /// Timezone offset for ISO8601 timestamp format.
+        /// Format: "+09:00" for Korea time, "+00:00" for UTC, etc.
+        /// Only used when TimestampFormat is "iso8601".
+        /// </summary>
+        [DefaultValue("+00:00")]
+        public string TimezoneOffset { get; set; } = "+00:00";
     }
 }

@@ -1,0 +1,13 @@
+
+version: '3.4'
+
+services:
+  extractorlauncher:
+    image: extractorlauncher
+    build:
+      context: .
+      dockerfile: ExtractorLauncher/Dockerfile
+      args:
+        - configuration=Debug
+    volumes:
+      - ~/.vsdbg:/remote_debugger:rw
