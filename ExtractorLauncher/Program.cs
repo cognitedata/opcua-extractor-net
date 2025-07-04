@@ -61,6 +61,8 @@ namespace Cognite.OpcUa
         public bool NoConfig { get; set; }
         [CommandLineOption("Run the extractor in dry-run mode. In this mode, it will not push anything to destinations")]
         public bool DryRun { get; set; }
+        [CommandLineOption("Force metadata to be written as JSON (true) or dictionary (false). Overrides config file setting")]
+        public bool? MetadataAsJson { get; set; }
 
         public bool ConfigTool { get; set; }
         public FullConfig? Config { get; set; }
