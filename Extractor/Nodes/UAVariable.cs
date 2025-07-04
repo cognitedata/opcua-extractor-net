@@ -518,15 +518,45 @@ namespace Cognite.OpcUa.Nodes
             };
         }
 
-        public SourcedNodeWrite<CogniteExtractorTimeSeriesBase<object>> ToIdmTimeSeries(
+        public SourcedNodeWrite<CogniteExtractorTimeSeriesBase<JsonElement>> ToIdmTimeSeries(
             IUAClientAccess client,
             string space,
             string source,
             FullConfig config,
             Dictionary<string, string>? metaMap)
         {
-            var writeAsJson = true; // config.Extraction.TimeSeries.WriteAsJson;
-            CogniteExtractorTimeSeriesBase<object> write = new CogniteExtractorTimeSeriesBase<object>
+             var writeAsJson = config.Cognite?.MetadataTargets?.Clean?.MetadataAsJson ?? false;
+            
+            Dictionary<string, object> metaData;
+            if (writeAsJson)
+            {
+                metaData = BuildMetadataAsJson(config, client, true);
+            }
+            else
+            {
+                var stringMetadata = BuildMetadata(config, client, true);
+                metaData = stringMetadata.ToDictionary(kvp => kvp.Key, kvp => (object)kvp.Value);
+            }
+
+            Dictionary<string, JsonElement> extractedData;
+            try
+            {
+                var json = JsonSerializer.Serialize(metaData);
+                using var jsonDocument = JsonDocument.Parse(json);
+                var rootElement = jsonDocument.RootElement;
+                
+                extractedData = new Dictionary<string, JsonElement>();
+                foreach (var property in rootElement.EnumerateObject())
+                {
+                    extractedData[property.Name] = property.Value.Clone();
+                }
+            }
+            catch (Exception)
+            {
+                extractedData = new Dictionary<string, JsonElement>();
+            }
+
+            CogniteExtractorTimeSeriesBase<JsonElement> write = new CogniteExtractorTimeSeriesBase<JsonElement>
             {
                 Name = Name,
                 Description = FullAttributes.Description,
@@ -546,11 +576,7 @@ namespace Cognite.OpcUa.Nodes
                     true => TimeSeriesType.String,
                     false => TimeSeriesType.Numeric
                 },
-                extractedData = writeAsJson
-                                ? BuildMetadataAsJson(config, client, true)
-                                : BuildMetadata(config, client, true).ToDictionary(
-                                    kvp => kvp.Key,
-                                    kvp => (object)kvp.Value)
+                extractedData = extractedData
             };
             
             if (Properties != null && Properties.Any() && metaMap != null && metaMap.Count != 0)
@@ -573,7 +599,7 @@ namespace Cognite.OpcUa.Nodes
                 }
             }
 
-            var res = new SourcedNodeWrite<CogniteExtractorTimeSeriesBase<object>>
+            var res = new SourcedNodeWrite<CogniteExtractorTimeSeriesBase<JsonElement>>
             {
                 Space = space,
                 ExternalId = GetUniqueId(client.Context),

@@ -248,6 +248,10 @@ cognite:
         timeseries: false
         # Toggle CDF relationships destination as a target
         relationships: false
+        # Controls whether metadata is written as JSON objects or as a dictionary.
+        # When true, metadata is serialized as JSON in the extractedData field.
+        # When false, metadata is stored as a dictionary of key-value pairs.
+        metadata-as-json: false
       # Configuration for some form or CDF raw destination.
       # When this is used, it is required that 'database' name and any of the other keys are provided
       raw:

@@ -620,7 +620,7 @@ namespace Cognite.OpcUa.Nodes
             {
                 extras = GetExtraMetadata(config, client.Context, client.StringConverter);
             }
-            return BuildMetadataJsonBase(extras.ToDictionary(extras => extras.Key, extras => (object)extras.Value), client);
+            return BuildMetadataJsonBase(extras?.ToDictionary(extras => extras.Key, extras => (object)extras.Value), client);
         }
         #endregion
     }

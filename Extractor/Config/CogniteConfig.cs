@@ -176,6 +176,14 @@ namespace Cognite.OpcUa.Config
 
         public string? Space { get; set; }
         public string? Source { get; set; }
+        
+        /// <summary>
+        /// Controls whether metadata is written as JSON objects or as a dictionary.
+        /// When true, metadata is serialized as JSON in the extractedData field.
+        /// When false, metadata is stored as a dictionary of key-value pairs.
+        /// </summary>
+        [DefaultValue(false)]
+        public bool MetadataAsJson { get; set; } = false;
     }
     public class MetadataMapConfig
     {
