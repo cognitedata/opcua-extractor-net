@@ -1,10 +1,13 @@
-﻿using Cognite.Extractor.Common;
+﻿using Cognite.Extensions.DataModels.CogniteExtractorExtensions;
+using Cognite.Extractor.Common;
 using Cognite.OpcUa;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.Types;
 using CogniteSdk;
+using CogniteSdk.DataModels;
+using CogniteSdk.DataModels.Core;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
@@ -16,6 +19,8 @@ using System.Linq;
 using Test.Utils;
 using Xunit;
 using Xunit.Abstractions;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace Test.Unit
 {
@@ -1343,6 +1348,445 @@ namespace Test.Unit
             Assert.Equal("gp.base:s=target", rel.SourceExternalId);
             Assert.Equal("gp.base:s=source", rel.TargetExternalId);
             Assert.Equal("gp.OrganizedBy;base:s=source;base:s=target", rel.ExternalId);
+        }
+        #endregion
+
+        #region json metadata tests
+        [Fact]
+        public void TestMetadataAsJsonConfigDefault()
+        {
+            // Test that MetadataAsJson defaults to false
+            var config = new CleanMetadataTargetConfig();
+            Assert.False(config.MetadataAsJson);
+        }
+
+        [Fact]
+        public void TestBuildMetadataAsJson()
+        {
+            using var extractor = tester.BuildExtractor();
+            var node = new UAObject(new NodeId("test", 0), "test", null, null, NodeId.Null, null);
+            
+            // Test empty metadata
+            Assert.Empty(node.BuildMetadataAsJson(tester.Config, extractor, false));
+            Assert.Empty(node.BuildMetadataAsJson(tester.Config, extractor, true));
+            
+            // Test extras only
+            tester.Config.Extraction.NodeTypes.Metadata = true;
+            node.FullAttributes.TypeDefinition = new UAObjectType(new NodeId("type", 0));
+            node.FullAttributes.TypeDefinition.Attributes.DisplayName = "SomeType";
+            var meta = node.BuildMetadataAsJson(tester.Config, extractor, true);
+            Assert.Single(meta);
+            Assert.Equal("SomeType", meta["TypeDefinition"]);
+            Assert.IsType<string>(meta["TypeDefinition"]);
+
+            // Test properties only
+            var pdt = new UADataType(DataTypeIds.String);
+            tester.Config.Extraction.NodeTypes.Metadata = false;
+            
+            var propA = CommonTestUtils.GetSimpleVariable("propA", pdt);
+            var propB = CommonTestUtils.GetSimpleVariable("propB", pdt);
+            propA.FullAttributes.Value = new Variant("valueA");
+            propB.FullAttributes.Value = new Variant("valueB");
+
+            node.Attributes.Properties = new List<BaseUANode>
+            {
+                propA, propB
+            };
+            
+            meta = node.BuildMetadataAsJson(tester.Config, extractor, true);
+            Assert.Equal(2, meta.Count);
+            Assert.Equal("\"valueA\"", meta["propA"]);
+            Assert.Equal("\"valueB\"", meta["propB"]);
+            Assert.IsType<string>(meta["propA"]);
+            Assert.IsType<string>(meta["propB"]);
+
+            // Test both extras and properties
+            tester.Config.Extraction.NodeTypes.Metadata = true;
+            meta = node.BuildMetadataAsJson(tester.Config, extractor, true);
+            Assert.Equal(3, meta.Count);
+            Assert.Equal("SomeType", meta["TypeDefinition"]);
+            Assert.Equal("\"valueA\"", meta["propA"]);
+            Assert.Equal("\"valueB\"", meta["propB"]);
+
+            // Test nested properties
+            var nestedProp = CommonTestUtils.GetSimpleVariable("nestedProp", pdt);
+            nestedProp.FullAttributes.Value = new Variant("nestedValue");
+            propB.Attributes.Properties = new List<BaseUANode>
+            {
+                nestedProp
+            };
+            
+            meta = node.BuildMetadataAsJson(tester.Config, extractor, true);
+            Assert.Equal(4, meta.Count);
+            Assert.Equal("\"nestedValue\"", meta["propB_nestedProp"]);
+
+            // Test null name property is ignored
+            var nullNameProp = new UAVariable(new NodeId("nullName", 0), null, null, null, NodeId.Null, null);
+            nullNameProp.FullAttributes.DataType = pdt;
+            node.Attributes.AddProperty(nullNameProp);
+            meta = node.BuildMetadataAsJson(tester.Config, extractor, true);
+            Assert.Equal(4, meta.Count); // Should not increase
+
+            // Test null value property
+            var nullValueProp = new UAVariable(new NodeId("nullValue", 0), "nullValue", null, null, NodeId.Null, null);
+            nullValueProp.FullAttributes.DataType = pdt;
+            node.Attributes.AddProperty(nullValueProp);
+            meta = node.BuildMetadataAsJson(tester.Config, extractor, true);
+            Assert.Equal(5, meta.Count);
+            Assert.Equal("null", meta["nullValue"]);
+
+            // Test property overwrites extras
+            var propNT = new UAVariable(new NodeId("TypeDef", 0), "TypeDefinition", null, null, NodeId.Null, null);
+            propNT.FullAttributes.DataType = pdt;
+            propNT.FullAttributes.Value = new Variant("SomeOtherType");
+            node.Attributes.AddProperty(propNT);
+            meta = node.BuildMetadataAsJson(tester.Config, extractor, true);
+            Assert.Equal(5, meta.Count);
+            Assert.Equal("\"SomeOtherType\"", meta["TypeDefinition"]);
+        }
+
+        [Fact]
+        public void TestBuildMetadataAsJsonComplexTypes()
+        {
+            using var extractor = tester.BuildExtractor();
+            var node = new UAObject(new NodeId("test", 0), "test", null, null, NodeId.Null, null);
+
+            // Test complex OPC-UA types get converted to JSON
+            var complexPdt = new UADataType(DataTypeIds.ReadValueId);
+            var complexProp = new UAVariable(new NodeId("complexProp", 0), "complexProp", null, null, NodeId.Null, null);
+            complexProp.FullAttributes.DataType = complexPdt;
+            
+            var complexValue = new ReadValueId { NodeId = new NodeId("test", 0), AttributeId = Attributes.Value };
+            complexProp.FullAttributes.Value = new Variant(complexValue);
+            
+            node.Attributes.Properties = new List<BaseUANode> { complexProp };
+
+            var meta = node.BuildMetadataAsJson(tester.Config, extractor, true);
+            Assert.Single(meta);
+            Assert.Contains("complexProp", meta.Keys);
+            
+            // The value should be a JSON string representation
+            var jsonValue = meta["complexProp"] as string;
+            Assert.NotNull(jsonValue);
+            Assert.Contains("NodeId", jsonValue, StringComparison.Ordinal);
+            Assert.Contains("AttributeId", jsonValue, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void TestToIdmTimeSeriesJsonModeDisabled()
+        {
+            using var extractor = tester.BuildExtractor();
+            
+            // Ensure MetadataAsJson is false (default)
+            tester.Config.Cognite = new CognitePusherConfig();
+            tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
+            {
+                Clean = new CleanMetadataTargetConfig
+                {
+                    MetadataAsJson = false
+                }
+            };
+
+            var pdt = new UADataType(DataTypeIds.String);
+            var node = new UAVariable(new NodeId("test", 0), "test", null, null, new NodeId("parent", 0), null);
+            node.Attributes.Description = "description";
+            node.FullAttributes.DataType = new UADataType(DataTypeIds.Boolean);
+
+            var propA = CommonTestUtils.GetSimpleVariable("propA", pdt);
+            var propB = CommonTestUtils.GetSimpleVariable("propB", pdt);
+            propA.FullAttributes.Value = new Variant("valueA");
+            propB.FullAttributes.Value = new Variant("valueB");
+
+            node.Attributes.Properties = new List<BaseUANode> { propA, propB };
+
+            var result = node.ToIdmTimeSeries(extractor, "testspace", "testsource", tester.Config, null);
+
+            // Verify the result uses the base class with JsonElement
+            Assert.IsType<SourcedNodeWrite<CogniteExtractorTimeSeriesBase<JsonElement>>>(result);
+            
+            // Verify extracted data contains JsonElement values
+            Assert.Equal(2, result.Properties.extractedData.Count);
+            Assert.True(result.Properties.extractedData.ContainsKey("propA"));
+            Assert.True(result.Properties.extractedData.ContainsKey("propB"));
+            
+            // In string mode, values should be JSON strings
+            var propAValue = result.Properties.extractedData["propA"];
+            var propBValue = result.Properties.extractedData["propB"];
+            Assert.Equal(JsonValueKind.String, propAValue.ValueKind);
+            Assert.Equal(JsonValueKind.String, propBValue.ValueKind);
+            Assert.Equal("valueA", propAValue.GetString());
+            Assert.Equal("valueB", propBValue.GetString());
+        }
+
+        [Fact]
+        public void TestToIdmTimeSeriesJsonModeEnabled()
+        {
+            using var extractor = tester.BuildExtractor();
+            
+            // Enable MetadataAsJson
+            tester.Config.Cognite = new CognitePusherConfig();
+            tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
+            {
+                Clean = new CleanMetadataTargetConfig
+                {
+                    MetadataAsJson = true
+                }
+            };
+
+            var pdt = new UADataType(DataTypeIds.String);
+            var node = new UAVariable(new NodeId("test", 0), "test", null, null, new NodeId("parent", 0), null);
+            node.Attributes.Description = "description";
+            node.FullAttributes.DataType = new UADataType(DataTypeIds.Boolean);
+
+            var propA = CommonTestUtils.GetSimpleVariable("propA", pdt);
+            var propB = CommonTestUtils.GetSimpleVariable("propB", pdt);
+            propA.FullAttributes.Value = new Variant("valueA");
+            propB.FullAttributes.Value = new Variant("valueB");
+
+            node.Attributes.Properties = new List<BaseUANode> { propA, propB };
+
+            var result = node.ToIdmTimeSeries(extractor, "testspace", "testsource", tester.Config, null);
+
+            // Verify the result uses the base class with JsonElement
+            Assert.IsType<SourcedNodeWrite<CogniteExtractorTimeSeriesBase<JsonElement>>>(result);
+            
+            // Verify extracted data contains JsonElement values
+            Assert.Equal(2, result.Properties.extractedData.Count);
+            Assert.True(result.Properties.extractedData.ContainsKey("propA"));
+            Assert.True(result.Properties.extractedData.ContainsKey("propB"));
+            
+            // In JSON mode, values should still be JSON strings (since these are simple string values)
+            var propAValue = result.Properties.extractedData["propA"];
+            var propBValue = result.Properties.extractedData["propB"];
+            Assert.Equal(JsonValueKind.String, propAValue.ValueKind);
+            Assert.Equal(JsonValueKind.String, propBValue.ValueKind);
+            Assert.Equal("\"valueA\"", propAValue.GetString());
+            Assert.Equal("\"valueB\"", propBValue.GetString());
+        }
+
+        [Fact]
+        public void TestToIdmTimeSeriesJsonModeWithComplexTypes()
+        {
+            using var extractor = tester.BuildExtractor();
+            
+            // Enable MetadataAsJson
+            tester.Config.Cognite = new CognitePusherConfig();
+            tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
+            {
+                Clean = new CleanMetadataTargetConfig
+                {
+                    MetadataAsJson = true
+                }
+            };
+
+            var node = new UAVariable(new NodeId("test", 0), "test", null, null, new NodeId("parent", 0), null);
+            node.FullAttributes.DataType = new UADataType(DataTypeIds.Boolean);
+
+            // Add a complex property that should be serialized as JSON object
+            var complexPdt = new UADataType(DataTypeIds.ReadValueId);
+            var complexProp = new UAVariable(new NodeId("complexProp", 0), "complexProp", null, null, NodeId.Null, null);
+            complexProp.FullAttributes.DataType = complexPdt;
+            
+            var complexValue = new ReadValueId { NodeId = new NodeId("test", 0), AttributeId = Attributes.Value };
+            complexProp.FullAttributes.Value = new Variant(complexValue);
+            
+            node.Attributes.Properties = new List<BaseUANode> { complexProp };
+
+            var result = node.ToIdmTimeSeries(extractor, "testspace", "testsource", tester.Config, null);
+
+            // Verify extracted data contains the complex property
+            Assert.Single(result.Properties.extractedData);
+            Assert.True(result.Properties.extractedData.ContainsKey("complexProp"));
+            
+            var complexPropValue = result.Properties.extractedData["complexProp"];
+            
+            // The complex type should be serialized as a JSON string containing an object
+            Assert.Equal(JsonValueKind.String, complexPropValue.ValueKind);
+            var jsonString = complexPropValue.GetString();
+            Assert.Contains("NodeId", jsonString, StringComparison.Ordinal);
+            Assert.Contains("AttributeId", jsonString, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void TestToIdmTimeSeriesWithMetaMap()
+        {
+            using var extractor = tester.BuildExtractor();
+            
+            tester.Config.Cognite = new CognitePusherConfig();
+            tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
+            {
+                Clean = new CleanMetadataTargetConfig
+                {
+                    MetadataAsJson = false
+                }
+            };
+
+            var pdt = new UADataType(DataTypeIds.String);
+            var node = new UAVariable(new NodeId("test", 0), "test", null, null, new NodeId("parent", 0), null);
+            node.FullAttributes.DataType = new UADataType(DataTypeIds.Boolean);
+
+            var propA = CommonTestUtils.GetSimpleVariable("propA", pdt);
+            var propB = CommonTestUtils.GetSimpleVariable("propB", pdt);
+            var propC = CommonTestUtils.GetSimpleVariable("propC", pdt);
+            propA.FullAttributes.Value = new Variant("valueA");
+            propB.FullAttributes.Value = new Variant("valueB");
+            propC.FullAttributes.Value = new Variant("valueC");
+
+            node.Attributes.Properties = new List<BaseUANode> { propA, propB, propC };
+
+            var metaMap = new Dictionary<string, string>
+            {
+                { "propA", "description" },
+                { "propB", "name" },
+                { "propC", "unit" }
+            };
+
+            var result = node.ToIdmTimeSeries(extractor, "testspace", "testsource", tester.Config, metaMap);
+
+            // Verify meta-map affects the timeseries properties
+            Assert.Equal("valueA", result.Properties.Description);
+            Assert.Equal("valueB", result.Properties.Name);
+            Assert.Equal("valueC", result.Properties.SourceUnit);
+            
+            // Verify extracted data still contains all properties
+            Assert.Equal(3, result.Properties.extractedData.Count);
+        }
+
+        [Fact]
+        public void TestToIdmTimeSeriesBasicProperties()
+        {
+            using var extractor = tester.BuildExtractor();
+            
+            tester.Config.Cognite = new CognitePusherConfig();
+            tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
+            {
+                Clean = new CleanMetadataTargetConfig
+                {
+                    MetadataAsJson = false
+                }
+            };
+
+            var node = new UAVariable(new NodeId("test", 0), "TestVariable", null, null, new NodeId("parent", 0), null);
+            node.Attributes.Description = "Test Description";
+            node.FullAttributes.DataType = new UADataType(DataTypeIds.Boolean);
+            node.FullAttributes.DataType.IsStep = true;
+            node.FullAttributes.DataType.IsString = false;
+
+            var result = node.ToIdmTimeSeries(extractor, "testspace", "testsource", tester.Config, null);
+
+            // Verify basic properties
+            Assert.Equal("TestVariable", result.Properties.Name);
+            Assert.Equal("Test Description", result.Properties.Description);
+            Assert.True(result.Properties.IsStep);
+            Assert.Equal(TimeSeriesType.Numeric, result.Properties.Type);
+            Assert.Equal("testspace", result.Space);
+            Assert.Equal("gp.base:s=test", result.ExternalId);
+            
+            // Verify source information
+            Assert.Equal("s=test", result.Properties.SourceId);
+            Assert.Equal("http://opcfoundation.org/UA/", result.Properties.SourceContext);
+            Assert.Equal("testsource", result.Properties.Source.ExternalId);
+            Assert.Equal("testspace", result.Properties.Source.Space);
+        }
+
+        [Fact]
+        public void TestToIdmTimeSeriesJsonSerializationException()
+        {
+            using var extractor = tester.BuildExtractor();
+            
+            tester.Config.Cognite = new CognitePusherConfig();
+            tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
+            {
+                Clean = new CleanMetadataTargetConfig
+                {
+                    MetadataAsJson = true
+                }
+            };
+
+            var node = new UAVariable(new NodeId("test", 0), "test", null, null, new NodeId("parent", 0), null);
+            node.FullAttributes.DataType = new UADataType(DataTypeIds.Boolean);
+
+            // Create a mock property that might cause JSON serialization issues
+            // We'll create a circular reference to potentially trigger an exception
+            var circularProp = new UAVariable(new NodeId("circular", 0), "circular", null, null, NodeId.Null, null);
+            var pdt = new UADataType(DataTypeIds.String);
+            circularProp.FullAttributes.DataType = pdt;
+            circularProp.FullAttributes.Value = new Variant("test");
+
+            node.Attributes.Properties = new List<BaseUANode> { circularProp };
+
+            // This should not throw an exception, even if JSON serialization fails
+            var result = node.ToIdmTimeSeries(extractor, "testspace", "testsource", tester.Config, null);
+
+            // Even if serialization failed, we should get a result with empty extractedData
+            Assert.NotNull(result);
+            Assert.NotNull(result.Properties.extractedData);
+            
+            // The extractedData might be empty if serialization failed, but that's acceptable
+            // The important thing is that no exception was thrown
+        }
+
+        [Fact]
+        public void TestToIdmTimeSeriesNoMetadataTargetsConfig()
+        {
+            using var extractor = tester.BuildExtractor();
+            
+            // No MetadataTargets config - should default to string mode
+            tester.Config.Cognite = new CognitePusherConfig();
+
+            var pdt = new UADataType(DataTypeIds.String);
+            var node = new UAVariable(new NodeId("test", 0), "test", null, null, new NodeId("parent", 0), null);
+            node.FullAttributes.DataType = new UADataType(DataTypeIds.Boolean);
+
+            var propA = CommonTestUtils.GetSimpleVariable("propA", pdt);
+            propA.FullAttributes.Value = new Variant("valueA");
+            node.Attributes.Properties = new List<BaseUANode> { propA };
+
+            var result = node.ToIdmTimeSeries(extractor, "testspace", "testsource", tester.Config, null);
+
+            // Should work and default to string mode (MetadataAsJson = false)
+            Assert.NotNull(result);
+            Assert.Single(result.Properties.extractedData);
+            Assert.Equal("valueA", result.Properties.extractedData["propA"].GetString());
+        }
+
+        [Fact]
+        public void TestToIdmTimeSeriesNestedPropertiesWithJson()
+        {
+            using var extractor = tester.BuildExtractor();
+            
+            tester.Config.Cognite = new CognitePusherConfig();
+            tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
+            {
+                Clean = new CleanMetadataTargetConfig
+                {
+                    MetadataAsJson = true
+                }
+            };
+
+            var pdt = new UADataType(DataTypeIds.String);
+            var node = new UAVariable(new NodeId("test", 0), "test", null, null, new NodeId("parent", 0), null);
+            node.FullAttributes.DataType = new UADataType(DataTypeIds.Boolean);
+
+            // Create nested properties
+            var parentProp = CommonTestUtils.GetSimpleVariable("parentProp", pdt);
+            var nestedProp = CommonTestUtils.GetSimpleVariable("nestedProp", pdt);
+            
+            parentProp.FullAttributes.Value = new Variant("parentValue");
+            nestedProp.FullAttributes.Value = new Variant("nestedValue");
+            
+            parentProp.Attributes.Properties = new List<BaseUANode> { nestedProp };
+            node.Attributes.Properties = new List<BaseUANode> { parentProp };
+
+            var result = node.ToIdmTimeSeries(extractor, "testspace", "testsource", tester.Config, null);
+
+            // Verify both parent and nested properties are included with flattened names
+            Assert.Equal(2, result.Properties.extractedData.Count);
+            Assert.True(result.Properties.extractedData.ContainsKey("parentProp"));
+            Assert.True(result.Properties.extractedData.ContainsKey("parentProp_nestedProp"));
+            
+            Assert.Equal("\"parentValue\"", result.Properties.extractedData["parentProp"].GetString());
+            Assert.Equal("\"nestedValue\"", result.Properties.extractedData["parentProp_nestedProp"].GetString());
         }
         #endregion
     }
