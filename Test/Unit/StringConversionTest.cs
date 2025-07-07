@@ -136,6 +136,11 @@ namespace Test.Unit
         {
             // The OPC-UA JsonEncoder can be a bit unreliable, this is a brute-force way to check that it behaves properly
             // for all types, or they are handled externally.
+            var canBeNull = new HashSet<Type>
+            {
+                typeof(ExtensionObject), typeof(Variant)
+            };
+
             var log = tester.Provider.GetRequiredService<ILogger<TypeConverter>>();
             var converter = new TypeConverter(log, tester.Client, tester.Config);
             var failedTypes = new List<Type>();
@@ -145,7 +150,12 @@ namespace Test.Unit
                 builder.Append(@"""value"":");
                 try
                 {
-                    builder.Append(converter.ConvertToJson(variant, null, null, JsonMode.Json)?.ToJsonString() ?? "null");
+                    var conv = converter.ConvertToJson(variant, null, null, JsonMode.Json)?.ToJsonString();
+                    if (conv == null && !canBeNull.Contains(type))
+                    {
+                        throw new InvalidOperationException($"Type {type} produced null JSON");
+                    }
+                    builder.Append(conv ?? "null");
                 }
                 catch
                 {
