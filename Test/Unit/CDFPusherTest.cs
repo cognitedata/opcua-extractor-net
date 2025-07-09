@@ -368,6 +368,54 @@ namespace Test.Unit
             Assert.Empty(writer.MissingTimeseries);
             Assert.Empty(writer.MismatchedTimeseries);
         }
+
+        [Fact]
+        public async Task TestMissingTimeSeriesDatapointsIdm()
+        {
+            tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
+            {
+                Clean = new CleanMetadataTargetConfig
+                {
+                    Space = "test-space",
+                    Timeseries = true,
+                }
+            };
+            (handler, pusher) = tester.GetCDFPusher();
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+
+            handler.MockTimeseriesIdm("test-ts-double", "test-space");
+            var writer = (CDFWriter)pusher.GetType()
+                .GetField("cdfWriter", BindingFlags.Instance | BindingFlags.NonPublic)
+                .GetValue(pusher);
+
+            Assert.Empty(writer.MissingTimeseries);
+            Assert.Empty(writer.MismatchedTimeseries);
+
+            var time = DateTime.UtcNow;
+
+            var ts = new UAVariable(new NodeId("test-ts-missing", 2), "test", null, null, null, null);
+            var dt = new UADataType(DataTypeIds.Double);
+            ts.FullAttributes.DataType = dt;
+            var tsId = ts.GetUniqueId(tester.Client.Context);
+
+            // Try to insert a few datapoints, missing values should be skipped.
+            var dps = new[]
+            {
+                new UADataPoint(time, "test-ts-double", 123, StatusCodes.Good),
+                new UADataPoint(time.AddSeconds(1), "test-ts-double", 321, StatusCodes.Good),
+                new UADataPoint(time, tsId, 111, StatusCodes.Good),
+                new UADataPoint(time.AddSeconds(1), tsId, 222, StatusCodes.Good),
+            };
+
+            Assert.True(await pusher.PushDataPoints(dps, tester.Source.Token));
+            Assert.Single(writer.MissingTimeseries);
+            Assert.Equal(tsId, writer.MissingTimeseries.First().InstanceId.ExternalId);
+
+            // Insert the missing timeseries, should be removed from skipped.
+            await pusher.PushNodes(Enumerable.Empty<BaseUANode>(), new[] { ts }, Enumerable.Empty<UAReference>(), new UpdateConfig(), tester.Source.Token);
+            Assert.Empty(writer.MissingTimeseries);
+            Assert.Empty(writer.MismatchedTimeseries);
+        }
         #endregion
 
         #region pushnodes
