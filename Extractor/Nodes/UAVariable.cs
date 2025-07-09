@@ -451,7 +451,7 @@ namespace Cognite.OpcUa.Nodes
                 Metadata = BuildMetadata(config, client, true)
             };
 
-            HandleMetaMap(metaMap, writePoco, value => writePoco.AssetExternalId = value, client.StringConverter);
+            HandleMetaMap(metaMap, writePoco, value => writePoco.AssetExternalId = value, client.TypeConverter);
 
             return writePoco;
         }
@@ -498,7 +498,7 @@ namespace Cognite.OpcUa.Nodes
                 {
                     writePoco.AssetId = assetId;
                 }
-            }, extractor.StringConverter);
+            }, extractor.TypeConverter);
 
             return writePoco;
         }
@@ -554,7 +554,7 @@ namespace Cognite.OpcUa.Nodes
                     if (metaMap.TryGetValue(prop.Name ?? "", out var mapped))
                     {
                         if (propVar.Value == null) continue;
-                        var value = client.StringConverter.ConvertToString(propVar.Value.Value, propVar.FullAttributes.DataType.EnumValues);
+                        var value = client.TypeConverter.ConvertToString(propVar.Value.Value, propVar.FullAttributes.DataType.EnumValues);
                         if (string.IsNullOrWhiteSpace(value)) continue;
                         switch (mapped)
                         {

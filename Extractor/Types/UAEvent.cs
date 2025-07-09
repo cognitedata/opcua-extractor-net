@@ -227,7 +227,7 @@ namespace Cognite.OpcUa.Types
                 if (r == null) return null;
                 values.Add(r);
             }
-            evt.SetMetadata(extractor.StringConverter, values, log);
+            evt.SetMetadata(extractor.TypeConverter, values, log);
             evt.Values = values.ToDictionary(v => v.Field);
 
             return evt;
@@ -251,7 +251,7 @@ namespace Cognite.OpcUa.Types
                 : Time.ToUnixTimeMilliseconds();
             evt.ExternalId = EventId;
             evt.Type = MetaData != null && MetaData.TryGetValue("Type", out var rawType)
-                ? client.StringConverter.ConvertToString(rawType)
+                ? client.TypeConverter.ConvertToString(rawType)
                 : client.GetUniqueId(EventType?.Id);
             evt.DataSetId = dataSetId;
 
@@ -271,7 +271,7 @@ namespace Cognite.OpcUa.Types
             }
             if (MetaData.TryGetValue("SubType", out var subtype))
             {
-                evt.Subtype = client.StringConverter.ConvertToString(subtype);
+                evt.Subtype = client.TypeConverter.ConvertToString(subtype);
             }
 
             foreach (var dt in MetaData)

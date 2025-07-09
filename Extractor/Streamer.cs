@@ -389,7 +389,7 @@ namespace Cognite.OpcUa
 
         private UAEvent DpAsEvent(DataValue datapoint, VariableExtractionState node)
         {
-            var value = extractor.StringConverter.ConvertToString(datapoint.WrappedValue);
+            var value = extractor.TypeConverter.ConvertToString(datapoint.WrappedValue);
             var evt = new UAEvent
             {
                 EmittingNode = node.SourceId,
@@ -398,7 +398,7 @@ namespace Cognite.OpcUa
                 SourceNode = node.SourceId,
                 Time = datapoint.SourceTimestamp,
             };
-            evt.SetMetadata(extractor.StringConverter, new[] {
+            evt.SetMetadata(extractor.TypeConverter, new[] {
                 new EventFieldValue(new RawTypeField(new QualifiedName("Status")), new Variant(datapoint.StatusCode))
             }, log);
             return evt;
@@ -416,7 +416,7 @@ namespace Cognite.OpcUa
 
             if (value.Value is Array)
             {
-                var variantArray = extractor.StringConverter.ExtractVariantArray(value.WrappedValue);
+                var variantArray = extractor.TypeConverter.ExtractVariantArray(value.WrappedValue);
                 int dim = 1;
                 if (variantArray.Length == 0) return Enumerable.Empty<UADataPoint>();
                 if (!variable.IsArray)
@@ -570,14 +570,14 @@ namespace Cognite.OpcUa
             var finalProperties = extractedProperties.Select(kvp => kvp.Value);
             var buffEvent = new UAEvent
             {
-                Message = extractor.StringConverter.ConvertToString(extractedProperties.GetValueOrDefault("Message")?.Value ?? Variant.Null),
+                Message = extractor.TypeConverter.ConvertToString(extractedProperties.GetValueOrDefault("Message")?.Value ?? Variant.Null),
                 EventId = config.Extraction.IdPrefix + eventId,
                 SourceNode = sourceNode,
                 Time = time,
                 EventType = eventType,
                 EmittingNode = emitter
             };
-            buffEvent.SetMetadata(extractor.StringConverter, finalProperties, log);
+            buffEvent.SetMetadata(extractor.TypeConverter, finalProperties, log);
             return buffEvent;
         }
     }

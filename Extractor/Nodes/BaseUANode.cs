@@ -492,7 +492,7 @@ namespace Cognite.OpcUa.Nodes
                     if (metaMap.TryGetValue(prop.Name ?? "", out var mapped))
                     {
                         if (propVar.Value == null) continue;
-                        var value = client.StringConverter.ConvertToString(propVar.Value.Value, propVar.FullAttributes.DataType.EnumValues);
+                        var value = client.TypeConverter.ConvertToString(propVar.Value.Value, propVar.FullAttributes.DataType.EnumValues);
                         if (string.IsNullOrWhiteSpace(value)) continue;
                         switch (mapped)
                         {
@@ -510,7 +510,7 @@ namespace Cognite.OpcUa.Nodes
         /// </summary>
         /// <param name="config">Active configuration object</param>
         /// <param name="client">Access to OPC-UA session</param>
-        /// <param name="converter">StringConverter for converting fields</param>
+        /// <param name="converter">TypeConverter for converting fields</param>
         /// <param name="dataSetId">Optional dataSetId</param>
         /// <param name="metaMap">Map from metadata to asset attributes.</param>
         /// <returns></returns>
@@ -544,7 +544,7 @@ namespace Cognite.OpcUa.Nodes
                         }
                         else
                         {
-                            result[prop.Name] = client.StringConverter.ConvertToString(variable.Value.Value, variable.FullAttributes.DataType?.EnumValues)
+                            result[prop.Name] = client.TypeConverter.ConvertToString(variable.Value.Value, variable.FullAttributes.DataType?.EnumValues)
                                 ?? variable.Value.ToString();
                         }
                     }
@@ -568,7 +568,7 @@ namespace Cognite.OpcUa.Nodes
         /// </summary>
         /// <param name="config">Extraction config object</param>
         /// <param name="manager">DataTypeManager used to get information about the datatype</param>
-        /// <param name="converter">StringConverter used for building metadata</param>
+        /// <param name="converter">TypeConverter used for building metadata</param>
         /// <param name="getExtras">True to get extra metadata</param>
         /// <returns>Created metadata dictionary.</returns>
         public Dictionary<string, string> BuildMetadata(FullConfig config, IUAClientAccess client, bool getExtras)
@@ -576,7 +576,7 @@ namespace Cognite.OpcUa.Nodes
             Dictionary<string, string>? extras = null;
             if (getExtras)
             {
-                extras = GetExtraMetadata(config, client.Context, client.StringConverter);
+                extras = GetExtraMetadata(config, client.Context, client.TypeConverter);
             }
             return BuildMetadataBase(extras, client);
         }

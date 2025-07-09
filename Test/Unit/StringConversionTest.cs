@@ -202,7 +202,7 @@ namespace Test.Unit
         public void TestNodeIdSerialization()
         {
             var options = new JsonSerializerOptions();
-            var converter = tester.Client.StringConverter;
+            var converter = tester.Client.TypeConverter;
             converter.AddConverters(options, ConverterType.Node);
 
             void TestConvert(NodeId id, string expected)
@@ -258,7 +258,7 @@ namespace Test.Unit
         public void TestWriteNodeIds()
         {
             var options = new JsonSerializerOptions();
-            var converter = tester.Client.StringConverter;
+            var converter = tester.Client.TypeConverter;
             converter.AddConverters(options, ConverterType.Node);
 
             void TestConvert(BaseUANode node, string expected)
@@ -306,7 +306,7 @@ namespace Test.Unit
         public void TestWriteInternals()
         {
             var options = new JsonSerializerOptions();
-            var converter = tester.Client.StringConverter;
+            var converter = tester.Client.TypeConverter;
             converter.AddConverters(options, ConverterType.Node);
 
             void TestConvert(BaseUANode node, string expected)
@@ -364,7 +364,7 @@ namespace Test.Unit
         {
             // Objects
             var options = new JsonSerializerOptions();
-            var converter = tester.Client.StringConverter;
+            var converter = tester.Client.TypeConverter;
             converter.AddConverters(options, ConverterType.Node);
 
             var node = new UAObject(new NodeId("test", 2), "test", null, null, new NodeId("parent", 0), null);

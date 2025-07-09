@@ -184,7 +184,7 @@ namespace Cognite.OpcUa.Nodes
 
             if (IsString || stringOverride)
             {
-                return new UADataPoint(timestamp, id, client.StringConverter.ConvertToString(value, EnumValues), status);
+                return new UADataPoint(timestamp, id, client.TypeConverter.ConvertToString(value, EnumValues), status);
             }
             return new UADataPoint(timestamp, id, UAClient.ConvertToDouble(value), status);
         }
