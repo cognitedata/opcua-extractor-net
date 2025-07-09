@@ -322,6 +322,17 @@ namespace Cognite.OpcUa.Types
             return SafeEncodeToJson(value, false);
         }
 
+        public JsonObject? ConvertToJsonObject(Variant value, IDictionary<long, string>? enumValues = null, INodeIdConverter? context = null, JsonMode mode = JsonMode.Json)
+        {
+            var jsonNode = ConvertToJson(value, enumValues, context, mode);
+            if (jsonNode is JsonObject jsonObject) return jsonObject;
+            if (jsonNode is null) return null;
+
+            // If we get here, we have a JSON array or a primitive value.
+            // We wrap it in an object with a single property "value".
+            return new JsonObject { ["Value"] = jsonNode };
+        }
+
         private readonly ConcurrentDictionary<ConverterType, NodeSerializer> converters = new ConcurrentDictionary<ConverterType, NodeSerializer>();
         private readonly NodeIdConverter nodeIdConverter;
         public void AddConverters(JsonSerializerOptions options, ConverterType type)

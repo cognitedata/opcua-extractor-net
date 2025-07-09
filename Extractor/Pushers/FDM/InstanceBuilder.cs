@@ -455,14 +455,7 @@ namespace Cognite.OpcUa.Pushers.FDM
         {
             if (variable.IsProperty && variable.Value != null)
             {
-                var json = converter.Converter.ConvertToJson(variable.Value.Value, null, null, JsonMode.ReversibleJson);
-                if (json is not null && json is not JsonObject)
-                {
-                    json = new JsonObject
-                    {
-                        ["Value"] = json
-                    };
-                }
+                var json = converter.Converter.ConvertToJsonObject(variable.Value.Value, null, null, JsonMode.ReversibleJson);
                 Value = json;
             }
             else
@@ -543,14 +536,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             ValueRank = variable.FullAttributes.ValueRank;
             if (variable.FullAttributes.Value != null)
             {
-                var json = converter.Converter.ConvertToJson(variable.FullAttributes.Value.Value, null, null, JsonMode.ReversibleJson);
-                if (json is not null && json is not JsonObject)
-                {
-                    json = new JsonObject
-                    {
-                        ["Value"] = json
-                    };
-                }
+                var json = converter.Converter.ConvertToJsonObject(variable.FullAttributes.Value.Value, null, null, JsonMode.ReversibleJson);
                 Value = json;
             }
         }
@@ -583,14 +569,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             var def = node.FullAttributes.DataTypeDefinition;
             if (def != null)
             {
-                var json = converter.Converter.ConvertToJson(def.Value, null, null, JsonMode.ReversibleJson);
-                if (json is not null && json is not JsonObject)
-                {
-                    json = new JsonObject
-                    {
-                        ["Value"] = json
-                    };
-                }
+                var json = converter.Converter.ConvertToJsonObject(def.Value, null, null, JsonMode.ReversibleJson);
                 DataTypeDefinition = json;
             }
         }

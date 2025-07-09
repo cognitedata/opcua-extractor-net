@@ -157,6 +157,10 @@ namespace Cognite.OpcUa.Nodes
             {
                 fields["Value"] = converter.ConvertToString(FullAttributes.Value.Value, dt.EnumValues);
             }
+            else
+            {
+                fields["Value"] = string.Empty;
+            }
 
             return fields;
         }

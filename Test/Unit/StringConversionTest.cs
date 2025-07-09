@@ -1,7 +1,6 @@
 ﻿using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.Types;
-using CogniteSdk.DataModels;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;

@@ -414,30 +414,30 @@ namespace Cognite.OpcUa
         {
             string uniqueId = variable.Id;
 
-            if (value.Value is Array values)
+            if (value.Value is Array)
             {
+                var variantArray = extractor.StringConverter.ExtractVariantArray(value.WrappedValue);
                 int dim = 1;
-                if (values.Length == 0) return Enumerable.Empty<UADataPoint>();
+                if (variantArray.Length == 0) return Enumerable.Empty<UADataPoint>();
                 if (!variable.IsArray)
                 {
                     log.LogDebug("Array values returned for scalar variable {Id}", variable.Id);
-                    if (values.Length > 1)
+                    if (variantArray.Length > 1)
                     {
-                        missedArrayPoints.Inc(values.Length - 1);
+                        missedArrayPoints.Inc(variantArray.Length - 1);
                     }
                 }
-                else if (variable.ArrayDimensions[0] >= values.Length)
+                else if (variable.ArrayDimensions[0] >= variantArray.Length)
                 {
-                    dim = values.Length;
+                    dim = variantArray.Length;
                 }
                 else
                 {
                     dim = variable.ArrayDimensions[0];
-                    log.LogDebug("Missing {Count} points for variable {Id} due to too small ArrayDimensions", values.Length - dim, variable.Id);
-                    missedArrayPoints.Inc(values.Length - dim);
+                    log.LogDebug("Missing {Count} points for variable {Id} due to too small ArrayDimensions", variantArray.Length - dim, variable.Id);
+                    missedArrayPoints.Inc(variantArray.Length - dim);
                 }
                 var ret = new List<UADataPoint>();
-                var variantArray = extractor.StringConverter.ExtractVariantArray(value.WrappedValue);
                 for (int i = 0; i < dim; i++)
                 {
                     var id = variable.IsArray ? GetArrayUniqueId(uniqueId, i) : uniqueId;
