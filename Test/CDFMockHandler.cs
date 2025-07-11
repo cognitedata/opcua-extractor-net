@@ -585,6 +585,54 @@ namespace Test
             }
         }
 
+        private HttpResponseMessage CheckMissingInstanceIds(IEnumerable<DataPointInsertionItem> items)
+        {
+            var missing = items.Where(item => !Instances.ContainsKey(item.InstanceId.ExternalId));
+            var mismatched = items.Where(item =>
+            {
+                if (!Instances.TryGetValue(item.InstanceId.ExternalId, out var instance)) return false;
+                bool isString = item.DatapointTypeCase == DataPointInsertionItem.DatapointTypeOneofCase.StringDatapoints;
+                return (string)instance["sources"][0]["properties"]["type"].AsValue() == "string" && !isString;
+            });
+            if (missing.Any())
+            {
+                return new HttpResponseMessage(HttpStatusCode.BadRequest)
+                {
+                    Content = new StringContent(JsonConvert.SerializeObject(new ErrorWrapper
+                    {
+                        error = new ErrorContent
+                        {
+                            code = 400,
+                            message = "missing",
+                            missing = missing.Select(item => new CdfIdentity
+                            {
+                                instanceId = new CdfInstanceId
+                                {
+                                    externalId = item.InstanceId.ExternalId,
+                                    space = item.InstanceId.Space
+                                }
+                            })
+                        }
+                    }))
+                };
+            }
+            if (mismatched.Any())
+            {
+                return new HttpResponseMessage(HttpStatusCode.BadRequest)
+                {
+                    Content = new StringContent(JsonConvert.SerializeObject(new ErrorWrapper
+                    {
+                        error = new ErrorContent
+                        {
+                            code = 400,
+                            message = "Expected string value for datapoint"
+                        }
+                    }))
+                };
+            }
+            return null;
+        }
+
         private HttpResponseMessage HandleTimeseriesData(DataPointInsertionRequest req)
         {
             if (!AllowPush)
@@ -612,6 +660,8 @@ namespace Test
 
             if (req.Items.FirstOrDefault()?.InstanceId != null)
             {
+                var res = CheckMissingInstanceIds(req.Items);
+                if (res != null) return res;
                 foreach (var item in req.Items)
                 {
                     HandleTimeseriesDataByInstanceId(item);
@@ -1076,6 +1126,27 @@ namespace Test
             return ts;
         }
 
+        public JsonObject MockTimeseriesIdm(string externalId, string space)
+        {
+            var ts = new JsonObject
+            {
+                ["sources"] = new JsonArray
+                {
+                    new JsonObject
+                    {
+                        ["properties"] = new JsonObject
+                        {
+                            ["type"] = "numeric",
+                        }
+                    }
+                },
+                ["externalId"] = externalId,
+                ["space"] = space,
+            };
+            Instances.Add(externalId, ts);
+            return ts;
+        }
+
         private HttpResponseMessage HandleCreateRelationships(string content)
         {
             var newRelationships = JsonConvert.DeserializeObject<RelationshipsReadWrapper>(content);
@@ -1379,9 +1450,15 @@ namespace Test
         public string externalId { get; set; }
         public TimeseriesUpdate update { get; set; }
     }
+    public class CdfInstanceId
+    {
+        public string externalId { get; set; }
+        public string space { get; set; }
+    }
     public class CdfIdentity
     {
         public string externalId { get; set; }
+        public CdfInstanceId instanceId { get; set; }
     }
     public class IdentityListWrapper
     {
