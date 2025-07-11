@@ -62,7 +62,7 @@ namespace Cognite.OpcUa
         private readonly IEnumerable<IPusher> pushers;
         private readonly ConcurrentQueue<NodeId> extraNodesToBrowse = new ConcurrentQueue<NodeId>();
         public TransformationCollection? Transformations { get; private set; }
-        public StringConverter StringConverter => uaClient.StringConverter;
+        public TypeConverter TypeConverter => uaClient.TypeConverter;
         private PubSubManager? pubSubManager;
         public NamespaceTable? NamespaceTable => uaClient.NamespaceTable;
 
@@ -1340,7 +1340,7 @@ namespace Cognite.OpcUa
     public interface IUAClientAccess
     {
         string? GetUniqueId(ExpandedNodeId id, int index = -1);
-        StringConverter StringConverter { get; }
+        TypeConverter TypeConverter { get; }
         string GetRelationshipId(UAReference reference);
         NamespaceTable? NamespaceTable { get; }
         public SessionContext Context { get; }

@@ -7,16 +7,17 @@ using System.Collections;
 using System.Globalization;
 using System.Linq;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace Cognite.OpcUa.Pushers.FDM
 {
     public class DMSValueConverter
     {
-        private readonly StringConverter converter;
+        private readonly TypeConverter converter;
 
-        public StringConverter Converter => converter;
+        public TypeConverter Converter => converter;
         private readonly string instanceSpace;
-        public DMSValueConverter(StringConverter converter, string instanceSpace)
+        public DMSValueConverter(TypeConverter converter, string instanceSpace)
         {
             this.converter = converter;
             this.instanceSpace = instanceSpace;
@@ -46,7 +47,7 @@ namespace Cognite.OpcUa.Pushers.FDM
 
         class WrappedJson
         {
-            public JsonElement Value { get; set; }
+            public JsonNode? Value { get; set; }
         }
 
         private IDMSValue? ConvertScalarVariant(PropertyTypeVariant variant, Variant value, INodeIdConverter context, bool reversibleJson = true)
@@ -65,7 +66,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                 case PropertyTypeVariant.date:
                     return new RawPropertyValue<string>(ConvertDateTime(Convert.ToDateTime(value.Value)));
                 case PropertyTypeVariant.text:
-                    return new RawPropertyValue<string>(converter.ConvertToString(value, null, null, StringConverterMode.Simple, context));
+                    return new RawPropertyValue<string>(converter.ConvertToString(value, null, context));
                 case PropertyTypeVariant.direct:
                     if (value.Value is NodeId id && !id.IsNullNodeId)
                     {
@@ -73,19 +74,18 @@ namespace Cognite.OpcUa.Pushers.FDM
                     }
                     return null;
                 case PropertyTypeVariant.json:
-                    var val = converter.ConvertToString(value, null, null, reversibleJson ? StringConverterMode.ReversibleJson : StringConverterMode.Json, context);
-                    var json = JsonDocument.Parse(val);
-                    if (json.RootElement.ValueKind != JsonValueKind.Object)
+                    var val = converter.ConvertToJson(value, null, context, reversibleJson ? JsonMode.ReversibleJson : JsonMode.Json);
+                    if (val is not JsonObject json)
                     {
                         return new RawPropertyValue<WrappedJson>
                         {
                             Value = new WrappedJson
                             {
-                                Value = json.RootElement
+                                Value = val
                             }
                         };
                     }
-                    return new RawPropertyValue<JsonElement>(json.RootElement);
+                    return new RawPropertyValue<JsonObject>(json);
                 case PropertyTypeVariant.boolean:
                     return new RawPropertyValue<bool>(Convert.ToBoolean(value.Value));
             }
@@ -104,7 +104,7 @@ namespace Cognite.OpcUa.Pushers.FDM
                 PropertyTypeVariant.float64 => new RawPropertyValue<double[]>(enm.Cast<object>().Select(v => Convert.ToDouble(v)).ToArray()),
                 PropertyTypeVariant.timestamp or PropertyTypeVariant.date => new RawPropertyValue<string[]>(enm.Cast<object>().Select(v => ConvertDateTime(Convert.ToDateTime(v))).ToArray()),
                 PropertyTypeVariant.text => new RawPropertyValue<string[]>(enm.Cast<object>()
-                                        .Select(v => converter.ConvertToString(value, null, null, StringConverterMode.Simple, context))
+                                        .Select(v => converter.ConvertToString(value, null, context))
                                         .ToArray()),
                 PropertyTypeVariant.direct => new RawPropertyValue<DirectRelationIdentifier[]>(enm.Cast<object>().OfType<NodeId>().Where(v => !v.IsNullNodeId)
                     .Select(v => new DirectRelationIdentifier(instanceSpace, context.NodeIdToString(v))).ToArray()),

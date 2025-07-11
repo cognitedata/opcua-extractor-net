@@ -625,7 +625,7 @@ namespace Cognite.OpcUa.Pushers
             if (Extractor == null) throw new InvalidOperationException("Extractor must be set");
             foreach (var node in nodes)
             {
-                var create = node.ToJson(log, Extractor.StringConverter, type);
+                var create = node.ToJson(log, Extractor.TypeConverter, type);
                 if (create == null) continue;
                 string? id = Extractor.GetUniqueId(node.Id);
                 if (id == null) continue;

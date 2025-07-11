@@ -290,7 +290,7 @@ namespace Cognite.OpcUa.Nodes
             return (Id, -1);
         }
 
-        public override Dictionary<string, string>? GetExtraMetadata(FullConfig config, SessionContext context, StringConverter converter)
+        public override Dictionary<string, string>? GetExtraMetadata(FullConfig config, SessionContext context, TypeConverter converter)
         {
             Dictionary<string, string>? fields = null;
             if (config.Extraction.NodeTypes.Metadata && FullAttributes.TypeDefinition?.Name != null)
@@ -402,7 +402,7 @@ namespace Cognite.OpcUa.Nodes
             Dictionary<string, string>? metaMap,
             TimeSeriesCreate writePoco,
             Action<string> parentIdHandler,
-            StringConverter converter)
+            TypeConverter converter)
         {
             if (Properties == null || !Properties.Any() || metaMap == null || metaMap.Count == 0) return;
             foreach (var prop in Properties)
@@ -410,7 +410,8 @@ namespace Cognite.OpcUa.Nodes
                 if (prop is not UAVariable propVar) continue;
                 if (metaMap.TryGetValue(prop.Name ?? "", out var mapped))
                 {
-                    var value = converter.ConvertToString(propVar.Value, propVar.FullAttributes.DataType.EnumValues);
+                    if (propVar.Value == null) continue;
+                    var value = converter.ConvertToString(propVar.Value.Value, propVar.FullAttributes.DataType.EnumValues);
                     if (string.IsNullOrWhiteSpace(value)) continue;
                     switch (mapped)
                     {
@@ -450,7 +451,7 @@ namespace Cognite.OpcUa.Nodes
                 Metadata = BuildMetadata(config, client, true)
             };
 
-            HandleMetaMap(metaMap, writePoco, value => writePoco.AssetExternalId = value, client.StringConverter);
+            HandleMetaMap(metaMap, writePoco, value => writePoco.AssetExternalId = value, client.TypeConverter);
 
             return writePoco;
         }
@@ -497,7 +498,7 @@ namespace Cognite.OpcUa.Nodes
                 {
                     writePoco.AssetId = assetId;
                 }
-            }, extractor.StringConverter);
+            }, extractor.TypeConverter);
 
             return writePoco;
         }
@@ -552,7 +553,8 @@ namespace Cognite.OpcUa.Nodes
                     if (prop is not UAVariable propVar) continue;
                     if (metaMap.TryGetValue(prop.Name ?? "", out var mapped))
                     {
-                        var value = client.StringConverter.ConvertToString(propVar.Value, propVar.FullAttributes.DataType.EnumValues);
+                        if (propVar.Value == null) continue;
+                        var value = client.TypeConverter.ConvertToString(propVar.Value.Value, propVar.FullAttributes.DataType.EnumValues);
                         if (string.IsNullOrWhiteSpace(value)) continue;
                         switch (mapped)
                         {

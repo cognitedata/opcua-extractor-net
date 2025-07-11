@@ -88,7 +88,7 @@ namespace Cognite.OpcUa.NodeSources
         {
             // Ignores nodesToBrowse, nothing really to do with that here
             var options = new JsonSerializerOptions();
-            extractor.StringConverter.AddConverters(options, ConverterType.Node);
+            extractor.TypeConverter.AddConverters(options, ConverterType.Node);
 
             var nodeSet = new HashSet<NodeId>();
 
