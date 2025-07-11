@@ -34,7 +34,8 @@ namespace Test.Unit
 
             string ToString(object obj)
             {
-                return converter.ConvertToString(new Variant(obj));
+                var variant = obj is Variant v ? v : new Variant(obj);
+                return converter.ConvertToString(variant);
             }
 
             Assert.Equal("", ToString(null));
@@ -75,6 +76,47 @@ namespace Test.Unit
                 { new Variant(readValueId), new Variant(readValueId) } }, BuiltInType.Variant);
             Assert.Equal($"[[{readValueIdStr},{readValueIdStr}],[{readValueIdStr},{readValueIdStr}]]", converter.ConvertToString(new Variant(m2)));
 #pragma warning restore CA1814 // Prefer jagged arrays over multidimensional
+
+
+            Assert.Equal("Good", ToString(new Variant(StatusCodes.Good, new TypeInfo(BuiltInType.StatusCode, ValueRanks.Scalar))));
+            Assert.Equal("f5a7af86-0989-48dc-a535-7789483c5d04", ToString(Guid.Parse("f5a7af86-0989-48dc-a535-7789483c5d04")));
+            var xml = new XmlDocument();
+            xml.LoadXml("<?xml version='1.0' ?>" +
+                "<test1 key1='val1' key2='val2'>" +
+                "   <test2 key3='val3' key4='val4'>Content</test2>" +
+                "</test1>");
+            var xmlJson = ToString(xml.DocumentElement);
+            Assert.Equal(@"{""test1"":{""@key1"":""val1"",""@key2"":""val2"",""test2"":"
+                + @"{""@key3"":""val3"",""@key4"":""val4"",""#text"":""Content""}}}", xmlJson);
+            var diagInfo = new DiagnosticInfo
+            {
+                LocalizedText = 5,
+                InnerStatusCode = StatusCodes.BadAlreadyExists,
+                AdditionalInfo = "Some additional info",
+                InnerDiagnosticInfo = new DiagnosticInfo
+                {
+                    LocalizedText = 6,
+                    InnerStatusCode = StatusCodes.BadNotConnected,
+                    AdditionalInfo = "Inner additional info"
+                }
+            };
+            var diagInfoStr = @"{""LocalizedText"":5,""InnerStatusCode"":""BadAlreadyExists""," +
+                @"""AdditionalInfo"":""Some additional info""," +
+                @"""InnerDiagnosticInfo"":{""LocalizedText"":6," +
+                @"""InnerStatusCode"":""BadNotConnected""," +
+                @"""AdditionalInfo"":""Inner additional info""}}";
+            Assert.Equal(diagInfoStr, ToString(diagInfo));
+
+            Assert.Equal("N: Newton", ToString(new Variant(
+                new ExtensionObject(new EUInformation { DisplayName = "N", Description = "Newton" })
+            )));
+            Assert.Equal("Anonymous", ToString(UserTokenType.Anonymous));
+            Assert.Equal("VGhlIHF1aWNrIGJyb3c=", ToString(new Variant(
+                new ExtensionObject(new NodeId("abc", 2), new byte[] { 0x54, 0x68, 0x65, 0x20, 0x71, 0x75, 0x69, 0x63, 0x6b, 0x20, 0x62, 0x72, 0x6f, 0x77 })
+            )));
+            var xmlJson2 = ToString(new ExtensionObject(new NodeId("abc", 2), xml.DocumentElement));
+            Assert.Equal(@"{""test1"":{""@key1"":""val1"",""@key2"":""val2"",""test2"":"
+                + @"{""@key3"":""val3"",""@key4"":""val4"",""#text"":""Content""}}}", xmlJson2);
         }
         [Fact]
         public void TestConvertToStringJson()
@@ -128,7 +170,28 @@ namespace Test.Unit
             Assert.Equal(@"""Anonymous""", ToJsonString(new Variant(UserTokenType.Anonymous)));
             Assert.Equal(@"""bcabfe0c-1fe6-42c4-8dad-2d72e50e2dbd""", ToJsonString(new Guid("bcabfe0c-1fe6-42c4-8dad-2d72e50e2dbd")));
             Assert.Equal(@"""Good""", ToJsonString(new StatusCode(StatusCodes.Good)));
+            Assert.Equal(@"""VGhlIHF1aWNrIGJyb3c=""", ToJsonString(new Variant(
+                new byte[] { 0x54, 0x68, 0x65, 0x20, 0x71, 0x75, 0x69, 0x63, 0x6b, 0x20, 0x62, 0x72, 0x6f, 0x77 },
+                new TypeInfo(BuiltInType.ByteString, ValueRanks.Scalar))
+            ));
 
+            Assert.Equal("123", ToJsonString((sbyte)123));
+            Assert.Equal("123", ToJsonString((byte)123));
+            Assert.Equal("123", ToJsonString((short)123));
+            Assert.Equal("123", ToJsonString((uint)123));
+            Assert.Equal("123", ToJsonString((ulong)123));
+            Assert.Equal("true", ToJsonString(true));
+            Assert.Equal(@"""2023-10-01 12:00:00.000""", ToJsonString(new DateTime(2023, 10, 1, 12, 0, 0, DateTimeKind.Utc)));
+            Assert.Equal(@"""f5a7af86-0989-48dc-a535-7789483c5d04""", ToJsonString(Guid.Parse("f5a7af86-0989-48dc-a535-7789483c5d04")));
+
+            // Raw extension object bodies. Not a lot we can do about these once we get here, so we just serialize them in their raw form.
+            Assert.Equal(@"""VGhlIHF1aWNrIGJyb3c=""", ToJsonString(new Variant(
+                new ExtensionObject(new NodeId("abc", 2), new byte[] { 0x54, 0x68, 0x65, 0x20, 0x71, 0x75, 0x69, 0x63, 0x6b, 0x20, 0x62, 0x72, 0x6f, 0x77 })
+            )));
+            var xmlJson2 = ToJsonString(new ExtensionObject(new NodeId("abc", 2), xml.DocumentElement));
+            Assert.Equal(@"{""test1"":{""@key1"":""val1"",""@key2"":""val2"",""test2"":"
+                + @"{""@key3"":""val3"",""@key4"":""val4"",""#text"":""Content""}}}", xmlJson2);
+            Assert.Equal(@"""Anonymous""", ToJsonString(UserTokenType.Anonymous));
         }
         [Fact]
         public void TestConvertToStringJsonIssues()
