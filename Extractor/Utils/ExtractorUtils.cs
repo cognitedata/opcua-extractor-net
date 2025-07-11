@@ -512,6 +512,18 @@ namespace Cognite.OpcUa.Utils
                 _ => $"{valueRank}Dimensions",
             };
         }
+
+        public static T GetValueOrDefault<T>(this T[] arr, int index, T defaultValue)
+        {
+            if (index < 0 || index >= arr.Length)
+            {
+                return defaultValue;
+            }
+            else
+            {
+                return arr[index];
+            }
+        }
     }
 
     /// <summary>

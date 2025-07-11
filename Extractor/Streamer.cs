@@ -441,7 +441,7 @@ namespace Cognite.OpcUa
                 for (int i = 0; i < dim; i++)
                 {
                     var id = variable.IsArray ? GetArrayUniqueId(uniqueId, i) : uniqueId;
-                    var entry = i < variantArray.Length ? variantArray[i] : Variant.Null;
+                    var entry = variantArray.GetValueOrDefault(i, Variant.Null);
                     ret.Add(variable.DataType.ToDataPoint(extractor, entry, value.SourceTimestamp, id, value.StatusCode));
                 }
                 return ret;
