@@ -19,7 +19,11 @@ version: 1
 
 source:
     # KEPServer의 OPC-UA 엔드포인트 URL을 실제 주소로 변경
-    endpoint-url: "opc.tcp://192.168.11.33:49320"  # KEPServer의 실제 IP와 포트로 변경
+    endpoint-url: "opc.tcp://192.168.11.46:49320"  # KEPServer의 실제 IP와 포트로 변경
+    # Publishing interval을 100ms로 설정하여 지연 최소화
+    publishing-interval: 1000
+    browse-nodes-chunk: 1
+    browse-chunk: 1000
 
 
 extraction:
@@ -29,12 +33,30 @@ extraction:
 
     # Delay in ms between each push of data points to targets
     # Alternatively, use N[timeunit] where timeunit is w, d, h, m, s or ms.
-    data-push-delay: 1000
+    data-push-delay: 100
 
     # KEPServer의 실제 태그 구조에 맞게 루트 노드 설정
     root-nodes:
         - namespace-uri: "KEPServerEX"
-          node-id: "s=Simulation Examples.Functions"  # KEPServer의 실제 태그 경로로 변경
+          node-id: "s=S.A"
+        - namespace-uri: "KEPServerEX"
+          node-id: "s=S.B"
+        - namespace-uri: "KEPServerEX"
+          node-id: "s=S.C"
+        - namespace-uri: "KEPServerEX"
+          node-id: "s=S.D"
+        - namespace-uri: "KEPServerEX"
+          node-id: "s=S.E"
+        - namespace-uri: "KEPServerEX"
+          node-id: "s=S.F"
+        - namespace-uri: "KEPServerEX"
+          node-id: "s=S.G"
+        - namespace-uri: "KEPServerEX"
+          node-id: "s=S.H"
+        - namespace-uri: "KEPServerEX"
+          node-id: "s=S.I"
+        - namespace-uri: "KEPServerEX"
+          node-id: "s=S.J"
     # - namespace-uri:
         #   node-id:
 
@@ -100,7 +122,36 @@ extraction:
     transformations:
       - type: Ignore
         filter:
-          id: "s=Simulation Examples.Functions._System"
+          #id: "s=Simulation Examples.Functions._System"
+          id: "s=S.A._System"
+      - type: Ignore
+        filter:
+          id: "s=S.B._System"
+      - type: Ignore
+        filter:
+          id: "s=S.C._System"
+      - type: Ignore
+        filter:
+          id: "s=S.D._System"
+      - type: Ignore
+        filter:
+          id: "s=S.E._System"
+      - type: Ignore
+        filter:
+          id: "s=S.F._System"
+      - type: Ignore
+        filter:
+          id: "s=S.G._System"
+      - type: Ignore
+        filter:
+          id: "s=S.H._System"
+      - type: Ignore
+        filter:
+          id: "s=S.I._System"
+      - type: Ignore
+        filter:
+          id: "s=S.J._System"
+          
       # Type, either "Ignore", "Property", "DropSubscriptions", "TimeSeries", "AsEvents", or "Include"
       # - type:
       #  NodeFilter. All non-null filters must match each node for the transformation to be applied.
@@ -177,7 +228,7 @@ subscriptions:
     # How often the server requests updates from the source system (the source system is often the server itself)
     # 0 uses maximum rate set by server
     # Lower increases server load. This should be set to below the maximum update frequency of the source system.
-    sampling-interval: 1000
+    sampling-interval: 100
     # Length of internal server queue for each subscribed item. < 2 means that any updates occuring between publish requests are lost.
     queue-length: 1
     # The number of publish requests without a response before the server should send a keep alive message.
@@ -216,6 +267,8 @@ logger:
         path: "logs/log.txt"
 
 influx:
+    # Set to true to enable this destination
+    enabled: true
     # Host URI, ex localhost:8086
 #    host: http://192.168.11.116:58086
     # Influx username
@@ -237,6 +290,7 @@ influx:
 mqtt: 
     # TCP Broker URL
     #host: rabbitmq313-q
+    enabled: true
     host: 192.168.11.116 
     # TCP Broker port
     port: 59183
@@ -276,6 +330,16 @@ mqtt:
     # Format: "+09:00" for Korea time, "+00:00" for UTC, etc.
     # Only used when timestamp-format is "iso8601"
     timezone-offset: "+09:00"
+    # JSON format type for MQTT output
+    # "legacy" - Original format with numericDatapoints/stringDatapoints
+    # "polling_snapshot" - Optimized format for bulk data reads with shared timestamp
+    # "subscription" - Format for subscription data with individual timestamps per tag
+    #json-format-type: "polling_snapshot"
+    json-format-type: PollingSnapshotObject
+    # Include data type information in JSON output
+    #include-data-type: false
+    # Include status code information in JSON output
+    #include-status-code: false
     # Set to enable storing a list of created assets/timeseries to local litedb.
     # Requires the StateStorage.Location property to be set.
     # If this is left empty, metadata will have to be read each time the extractor restarts.

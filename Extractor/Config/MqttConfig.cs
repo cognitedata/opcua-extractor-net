@@ -16,11 +16,37 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using System.ComponentModel;
+using System.Text.Json.Serialization;
 
 namespace Cognite.OpcUa.Config
 {
+    /// <summary>
+    /// Enum for MQTT JSON format types.
+    /// </summary>
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public enum MqttJsonFormat
+    {
+        /// <summary>
+        /// Timeseries format.
+        /// </summary>
+        Timeseries,
+        /// <summary>
+        /// Polling snapshot format.
+        /// </summary>
+        PollingSnapshot,
+        /// <summary>
+        /// Polling snapshot object format.
+        /// </summary>
+        PollingSnapshotObject
+    }
+
     public class MqttPusherConfig : IPusherConfig
     {
+        /// <summary>
+        /// Set to true to enable this destination
+        /// </summary>
+        public bool Enabled { get; set; }
+
         /// <summary>
         /// TCP Broker URL.
         /// </summary>
@@ -170,5 +196,17 @@ namespace Cognite.OpcUa.Config
         /// </summary>
         [DefaultValue("+00:00")]
         public string TimezoneOffset { get; set; } = "+00:00";
+
+        /// <summary>
+        /// JSON format to use when UseGrpc is false.
+        /// </summary>
+        [DefaultValue(MqttJsonFormat.PollingSnapshot)]
+        public MqttJsonFormat JsonFormatType { get; set; } = MqttJsonFormat.PollingSnapshot;
+
+        /// <summary>
+        /// Maximum number of timeseries to send in a single datapoint message.
+        /// </summary>
+        [DefaultValue(1000)]
+        public int DatapointsPerMessage { get; set; } = 1000;
     }
 }

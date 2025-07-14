@@ -29,6 +29,11 @@ namespace Cognite.OpcUa.Config
     public class CognitePusherConfig : CogniteConfig, IPusherConfig
     {
         /// <summary>
+        /// Set to true to enable this destination
+        /// </summary>
+        public bool Enabled { get; set; }
+
+        /// <summary>
         /// DEPRECATED. Data set to use for new objects. Existing objects will not be updated.
         /// </summary>
         public long? DataSetId { get; set; }

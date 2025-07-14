@@ -23,7 +23,12 @@ namespace Cognite.OpcUa.Config
     public class InfluxPusherConfig : IPusherConfig
     {
         /// <summary>
-        /// URL of the host influxdb server.
+        /// Set to true to enable this destination
+        /// </summary>
+        public bool Enabled { get; set; }
+
+        /// <summary>
+        /// Host URI, ex localhost:8086
         /// </summary>
         [Required]
         public string? Host { get; set; }

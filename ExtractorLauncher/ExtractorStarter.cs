@@ -357,26 +357,28 @@ namespace Cognite.OpcUa
                 config.GenerateDefaults();
             }
 
+            services.AddSingleton<UAExtractor>();
+
             services.AddSingleton<IPusher, CDFPusher>(provider =>
             {
-                var conf = provider.GetRequiredService<FullConfig>();
-                var dest = provider.GetService<CogniteDestinationWithIDM>();
+                var conf = provider.GetService<FullConfig>();
                 var log = provider.GetRequiredService<ILogger<CDFPusher>>();
-                if (conf.Cognite == null || dest == null || dest.CogniteClient == null) return null!;
-                return new CDFPusher(log, conf, conf.Cognite, dest, provider);
+                var idm = provider.GetService<CogniteDestinationWithIDM>();
+                if (conf?.Cognite == null || idm == null || !conf.Cognite.Enabled) return null!;
+                return new CDFPusher(log, conf, conf.Cognite, idm, provider);
             });
             services.AddSingleton<IPusher, InfluxPusher>(provider =>
             {
                 var conf = provider.GetService<FullConfig>();
                 var log = provider.GetRequiredService<ILogger<InfluxPusher>>();
-                if (conf?.Influx == null) return null!;
+                if (conf?.Influx == null || !conf.Influx.Enabled) return null!;
                 return new InfluxPusher(log, conf);
             });
             services.AddSingleton<IPusher, MQTTPusher>(provider =>
             {
                 var conf = provider.GetService<FullConfig>();
                 var log = provider.GetRequiredService<ILogger<MQTTPusher>>();
-                if (conf?.Mqtt == null) return null!;
+                if (conf?.Mqtt == null || !conf.Mqtt.Enabled) return null!;
                 return new MQTTPusher(log, provider, conf.Mqtt);
             });
 

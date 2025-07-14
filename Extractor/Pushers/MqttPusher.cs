@@ -521,96 +521,144 @@ namespace Cognite.OpcUa.Pushers
         /// <returns>True on success, false on failure</returns>
         private async Task<bool> PushDataPointsChunk(IDictionary<string, IEnumerable<UADataPoint>> dataPointList, CancellationToken token)
         {
-            var inserts = dataPointList.ToDictionary(
-                pair => Identity.Create(pair.Key),
-                pair => pair.Value.SelectNonNull(dp => dp.ToCDFDataPoint(fullConfig.Extraction.StatusCodes.IngestStatusCodes, log)));
-            var (points, errors) = Sanitation.CleanDataPointsRequest(inserts, SanitationMode.Clean, config.NonFiniteReplacement);
-            var cleaned = points.ToDictionary(pair => (Identity)pair.Key, pair => pair.Value);
-
-            foreach (var error in errors)
+            if (dataPointList == null || !dataPointList.Any()) return false;
+            if (!client.IsConnected)
             {
-                log.LogCogniteError(error, RequestType.CreateDatapoints, true);
+                log.LogError("Could not write to MQTT, client not connected");
+                return false;
             }
-
-            if (cleaned.Count == 0) return true;
-
-            byte[] data;
-            string topic;
-
-            if (config.UseGrpc)
-            {
-                // gRPC/Protobuf serialization (기존 방식)
-                var req = cleaned.ToInsertRequest();
-                if (req.Items.Count == 0) return true;
-
-                data = req.ToByteArray();
-                topic = config.DatapointTopic;
-
-                log.LogTrace("Using gRPC/Protobuf serialization for {Count} datapoint items", req.Items.Count);
-            }
-            else
-            {
-                // JSON serialization (새로운 방식)
-                var jsonDataPoints = new List<JsonDataPointWrapper>();
-
-                foreach (var (externalId, datapoints) in cleaned)
-                {
-                    var wrapper = new JsonDataPointWrapper(externalId.ExternalId);
-                    
-                    var numericPoints = datapoints.Where(dp => !dp.IsString).ToList();
-                    var stringPoints = datapoints.Where(dp => dp.IsString).ToList();
-
-                    if (numericPoints.Any())
-                    {
-                        wrapper.NumericDatapoints = numericPoints.Select(dp => new DataPoint
-                        {
-                            Timestamp = GetFormattedTimestamp(dp.Timestamp),
-                            Value = dp.NumericValue ?? 0.0
-                        });
-                    }
-
-                    if (stringPoints.Any())
-                    {
-                        wrapper.StringDatapoints = stringPoints.Select(dp => new StringDataPoint
-                        {
-                            Timestamp = GetFormattedTimestamp(dp.Timestamp),
-                            Value = dp.StringValue ?? string.Empty
-                        });
-                    }
-
-                    jsonDataPoints.Add(wrapper);
-                }
-
-                data = JsonSerializer.SerializeToUtf8Bytes(jsonDataPoints, new JsonSerializerOptions
-                {
-                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-                    Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
-                });
-                topic = config.DatapointTopic + "/json"; // JSON 형식임을 나타내는 토픽
-
-                log.LogTrace("Using JSON serialization for {Count} datapoint items", jsonDataPoints.Count);
-            }
-
-            var msg = baseBuilder
-                .WithPayload(data)
-                .WithTopic(topic)
-                .Build();
-
             try
             {
-                await client.PublishAsync(msg, token);
+                if (!config.UseGrpc)
+                {
+                    var options = new JsonSerializerOptions
+                    {
+                        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+                    };
+
+                    var chunks = dataPointList.ChunkBy(config.DatapointsPerMessage);
+
+                    foreach (var chunk in chunks)
+                    {
+                        object payload;
+
+                        if (config.JsonFormatType == MqttJsonFormat.PollingSnapshotObject)
+                        {
+                            var payloadObject = new Dictionary<string, JsonDataPointObject>();
+                            foreach (var kvp in chunk)
+                            {
+                                var numeric = new List<DataPoint>();
+                                var str = new List<StringDataPoint>();
+                                foreach (var dp in kvp.Value)
+                                {
+                                    if (dp.IsString) str.Add(new StringDataPoint { Timestamp = GetFormattedTimestamp(dp.Timestamp.ToUnixTimeMilliseconds()), Value = dp.StringValue! });
+                                    else numeric.Add(new DataPoint { Timestamp = GetFormattedTimestamp(dp.Timestamp.ToUnixTimeMilliseconds()), Value = dp.DoubleValue ?? 0 });
+                                }
+
+                                var data = new JsonDataPointObject();
+                                if (numeric.Any()) data.NumericDatapoints = numeric;
+                                if (str.Any()) data.StringDatapoints = str;
+
+                                if (data.NumericDatapoints != null || data.StringDatapoints != null)
+                                {
+                                    payloadObject[kvp.Key] = data;
+                                }
+                            }
+                            if (!payloadObject.Any()) continue;
+                            payload = payloadObject;
+                        }
+                        else
+                        {
+                            var payloadList = new List<object>();
+                            log.LogTrace("Using JSON serialization for {count} datapoint items", chunk.Count());
+                            foreach (var kvp in chunk)
+                            {
+                                var numeric = new List<DataPoint>();
+                                var str = new List<StringDataPoint>();
+                                foreach (var dp in kvp.Value)
+                                {
+                                    if (dp.IsString) str.Add(new StringDataPoint { Timestamp = GetFormattedTimestamp(dp.Timestamp.ToUnixTimeMilliseconds()), Value = dp.StringValue! });
+                                    else numeric.Add(new DataPoint { Timestamp = GetFormattedTimestamp(dp.Timestamp.ToUnixTimeMilliseconds()), Value = dp.DoubleValue ?? 0 });
+                                }
+
+                                if (config.JsonFormatType == MqttJsonFormat.PollingSnapshot)
+                                {
+                                    var wrapper = new JsonDataPointWrapper(kvp.Key);
+                                    if (numeric.Any()) wrapper.NumericDatapoints = numeric;
+                                    if (str.Any()) wrapper.StringDatapoints = str;
+                                    payloadList.Add(wrapper);
+                                }
+                                else if (config.JsonFormatType == MqttJsonFormat.Timeseries)
+                                {
+                                    payloadList.AddRange(numeric.Cast<object>().Concat(str));
+                                }
+                            }
+                            if (!payloadList.Any()) continue;
+                            payload = payloadList;
+                        }
+
+                        var bytes = JsonSerializer.SerializeToUtf8Bytes(payload, options);
+                        var msg = baseBuilder
+                            .WithTopic(config.DatapointTopic)
+                            .WithPayload(bytes)
+                            .Build();
+
+                        var result = await client.PublishAsync(msg, token);
+                        if (result.ReasonCode != MQTTnet.Client.MqttClientPublishReasonCode.Success)
+                        {
+                            log.LogError("Failed to write to MQTT: {reason}", result.ReasonString);
+                            DataFailing = true;
+                            return false;
+                        }
+                    }
+                }
+                else // Protobuf
+                {
+                    var inserts = dataPointList.ToDictionary(
+                        pair => Identity.Create(pair.Key),
+                        pair => pair.Value.SelectNonNull(dp => dp.ToCDFDataPoint(fullConfig.Extraction.StatusCodes.IngestStatusCodes, log)));
+            
+                    var (points, errors) = Sanitation.CleanDataPointsRequest(inserts, SanitationMode.Clean, config.NonFiniteReplacement);
+                    var cleaned = points.ToDictionary(pair => (Identity)pair.Key, pair => pair.Value);
+
+                    foreach (var error in errors)
+                    {
+                        log.LogCogniteError(error, RequestType.CreateDatapoints, true);
+                    }
+
+                    if (cleaned.Count == 0) return true;
+
+                    var req = cleaned.ToInsertRequest();
+                    if (req.Items.Count == 0) return true;
+
+                    var data = req.ToByteArray();
+
+                    log.LogTrace("Using protobuf serialization for {count} timeseries", dataPointList.Count);
+                    
+                    var msg = baseBuilder
+                        .WithTopic(config.DatapointTopic)
+                        .WithPayload(data)
+                        .Build();
+
+                    var result = await client.PublishAsync(msg, token);
+                    if (result.ReasonCode != MQTTnet.Client.MqttClientPublishReasonCode.Success)
+                    {
+                        log.LogError("Failed to write to MQTT: {reason}", result.ReasonString);
+                        DataFailing = true;
+                        return false;
+                    }
+                }
+                dataPointsCounter.Inc(dataPointList.Select(dp => (long)dp.Value.Count()).Sum());
+                dataPointPushes.Inc();
+                DataFailing = false;
+                return true;
             }
             catch (Exception e)
             {
-                log.LogError("Failed to write to MQTT: {Message}", e.Message);
+                log.LogError(e, "Failed to write to MQTT: {msg}", e.Message);
+                DataFailing = true;
                 return false;
             }
-
-            dataPointPushes.Inc();
-            int count = cleaned.Values.Sum(datapoints => datapoints.Count());
-            dataPointsCounter.Inc(count);
-
-            return true;
         }
         /// <summary>
         /// Push the given list of assets over MQTT to CDF, optionally passing "update" to indicate that the
@@ -1034,6 +1082,12 @@ namespace Cognite.OpcUa.Pushers
             public StringDataPoint()
             {
             }
+        }
+
+        private class JsonDataPointObject
+        {
+            public IEnumerable<DataPoint>? NumericDatapoints { get; set; }
+            public IEnumerable<StringDataPoint>? StringDatapoints { get; set; }
         }
 
         public async Task Disconnect()
