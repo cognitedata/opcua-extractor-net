@@ -39,24 +39,24 @@ extraction:
     root-nodes:
         - namespace-uri: "KEPServerEX"
           node-id: "s=S.A"
-        #- namespace-uri: "KEPServerEX"
-        #  node-id: "s=S.B"
-        #- namespace-uri: "KEPServerEX"
-        #  node-id: "s=S.C"
-        #- namespace-uri: "KEPServerEX"
-        #  node-id: "s=S.D"
-        #- namespace-uri: "KEPServerEX"
-        #  node-id: "s=S.E"
-        #- namespace-uri: "KEPServerEX"
-        #  node-id: "s=S.F"
-        #- namespace-uri: "KEPServerEX"
-        #  node-id: "s=S.G"
-        #- namespace-uri: "KEPServerEX"
-        #  node-id: "s=S.H"
-        #- namespace-uri: "KEPServerEX"
-        #  node-id: "s=S.I"
-        #- namespace-uri: "KEPServerEX"
-        #  node-id: "s=S.J"
+        - namespace-uri: "KEPServerEX"
+          node-id: "s=S.B"
+        - namespace-uri: "KEPServerEX"
+          node-id: "s=S.C"
+        - namespace-uri: "KEPServerEX"
+          node-id: "s=S.D"
+        - namespace-uri: "KEPServerEX"
+          node-id: "s=S.E"
+        - namespace-uri: "KEPServerEX"
+          node-id: "s=S.F"
+        - namespace-uri: "KEPServerEX"
+          node-id: "s=S.G"
+        - namespace-uri: "KEPServerEX"
+          node-id: "s=S.H"
+        - namespace-uri: "KEPServerEX"
+          node-id: "s=S.I"
+        - namespace-uri: "KEPServerEX"
+          node-id: "s=S.J"
     # - namespace-uri:
         #   node-id:
 
@@ -124,33 +124,33 @@ extraction:
         filter:
           #id: "s=Simulation Examples.Functions._System"
           id: "s=S.A._System"
-      #- type: Ignore
-      #  filter:
-      #    id: "s=S.B._System"
-      #- type: Ignore
-      #  filter:
-      #    id: "s=S.C._System"
-      #- type: Ignore
-      #  filter:
-      #    id: "s=S.D._System"
-      #- type: Ignore
-      #  filter:
-      #    id: "s=S.E._System"
-      #- type: Ignore
-      #  filter:
-      #    id: "s=S.F._System"
-      #- type: Ignore
-      #  filter:
-      #    id: "s=S.G._System"
-      #- type: Ignore
-      #  filter:
-      #    id: "s=S.H._System"
-      #- type: Ignore
-      #  filter:
-      #    id: "s=S.I._System"
-      #- type: Ignore
-      #  filter:
-      #    id: "s=S.J._System"
+      - type: Ignore
+        filter:
+          id: "s=S.B._System"
+      - type: Ignore
+        filter:
+          id: "s=S.C._System"
+      - type: Ignore
+        filter:
+          id: "s=S.D._System"
+      - type: Ignore
+        filter:
+          id: "s=S.E._System"
+      - type: Ignore
+        filter:
+          id: "s=S.F._System"
+      - type: Ignore
+        filter:
+          id: "s=S.G._System"
+      - type: Ignore
+        filter:
+          id: "s=S.H._System"
+      - type: Ignore
+        filter:
+          id: "s=S.I._System"
+      - type: Ignore
+        filter:
+          id: "s=S.J._System"
       # Type, either "Ignore", "Property", "DropSubscriptions", "TimeSeries", "AsEvents", or "Include"
       # - type:
       #  NodeFilter. All non-null filters must match each node for the transformation to be applied.
@@ -345,7 +345,7 @@ mqtt:
     #   - Each tag has its own data array with timestamp, value, sc, dt
     #   - Ideal for event-driven subscription scenarios
     
-    json-format-type: Subscription
+    json-format-type: PollingSnapshotObject
     
     # Whether to include metadata object in JSON output
     include-metadata: true
@@ -359,11 +359,15 @@ mqtt:
     
     # Adaptive chunking configuration for MQTT message optimization
     # Maximum MQTT message size in bytes (default: 1048576 = 1MB)
-    max-message-size: 10485760
+    max-message-size: 104857600
     # Maximum number of data points in a single chunk (default: 10000)
-    max-chunk-size: 2000
+    max-chunk-size: 10000
     # Minimum number of data points in a single chunk (default: 10)
     min-chunk-size: 10
+    
+    # Maximum number of concurrent chunk processing for parallel MQTT publishing (default: 4)
+    # Higher values may improve throughput but can overwhelm the MQTT broker
+    max-concurrency: 4
     
     # Set to enable storing a list of created assets/timeseries to local litedb.
     # Requires the StateStorage.Location property to be set.

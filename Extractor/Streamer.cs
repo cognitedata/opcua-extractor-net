@@ -176,6 +176,13 @@ namespace Cognite.OpcUa
                 pointRanges[dp.Id] = range.Extend(dp.Timestamp, dp.Timestamp);
             }
 
+            // Log data drained from queue
+            if (dataPointList.Count > 0)
+            {
+                log.LogInformation("[Queue Drain] Drained {Count} datapoints from internal queue, processing {NodeCount} nodes", 
+                    dataPointList.Count, pointRanges.Count);
+            }
+
             var results = await Task.WhenAll(passingPushers.Select(pusher => pusher.PushDataPoints(dataPointList, token)));
 
             bool anyFailed = results.Any(status => status == false);
@@ -234,14 +241,26 @@ namespace Cognite.OpcUa
         {
             if (!AllowData) return;
 
+            int totalProcessed = 0;
+            var totalNodeIds = new HashSet<string>();
+
             // Feed streaming processor with data from queue
             var feedTask = Task.Run(async () =>
             {
                 await foreach (var dp in dataPointQueue.DrainAsync(token))
                 {
                     await streamingProcessor.AddDataPointAsync(dp, token);
+                    totalProcessed++;
+                    totalNodeIds.Add(dp.Id);
                 }
                 streamingProcessor.CompleteAdding();
+                
+                // Log total data drained from queue
+                if (totalProcessed > 0)
+                {
+                    log.LogInformation("[Queue Drain Streaming] Drained {Count} datapoints from internal queue, processing {NodeCount} nodes", 
+                        totalProcessed, totalNodeIds.Count);
+                }
             }, token);
 
             // Process data in streaming fashion

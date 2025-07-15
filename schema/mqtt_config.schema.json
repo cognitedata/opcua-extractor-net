@@ -185,6 +185,13 @@
             "type": "integer",
             "description": "Minimum number of data points in a single chunk for adaptive chunking. This acts as a lower limit to prevent too many small messages.",
             "default": 10
+        },
+        "max-concurrency": {
+            "type": "integer",
+            "description": "Maximum number of concurrent chunk processing for parallel MQTT publishing. Higher values may improve throughput but can overwhelm the MQTT broker.",
+            "default": 4,
+            "minimum": 1,
+            "maximum": 16
         }
     }
 }

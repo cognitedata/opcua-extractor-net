@@ -32,8 +32,12 @@ namespace Cognite.OpcUa.Utils
             _maxMessageSize = maxMessageSize;
             _minChunkSize = minChunkSize;
             _maxChunkSize = maxChunkSize;
-            _currentChunkSize = Math.Min(1000, maxChunkSize); // Start with moderate size
+            _currentChunkSize = _maxChunkSize; // Set to max chunk size since we only split when exceeding this
             _lastAdjustment = DateTime.UtcNow;
+            
+            // Log adaptive chunker configuration
+            _log.LogInformation("[AdaptiveChunker] Initialized with MaxMessageSize={MaxMessageSize}MB, MinChunkSize={MinChunkSize}, MaxChunkSize={MaxChunkSize}",
+                _maxMessageSize / (1024 * 1024), _minChunkSize, _maxChunkSize);
             
             _jsonOptions = new JsonSerializerOptions
             {
@@ -51,20 +55,47 @@ namespace Cognite.OpcUa.Utils
             var dataList = dataPoints.ToList();
             var chunks = new List<IEnumerable<KeyValuePair<string, IEnumerable<UADataPoint>>>>();
             
+            int totalDataPoints = dataList.Sum(item => item.Value.Count());
+            _log.LogInformation("[AdaptiveChunker] Starting chunking process: TotalNodes={TotalNodes}, TotalDataPoints={TotalDataPoints}, MaxChunkSize={MaxChunkSize}",
+                dataList.Count, totalDataPoints, _maxChunkSize);
+            
+            // If total data points is within max chunk size, create a single chunk
+            if (totalDataPoints <= _maxChunkSize)
+            {
+                _log.LogInformation("[AdaptiveChunker] Total data points ({TotalDataPoints}) within max chunk size ({MaxChunkSize}), creating single chunk",
+                    totalDataPoints, _maxChunkSize);
+                chunks.Add(dataList);
+                return chunks;
+            }
+            
+            // If exceeds max chunk size, split into multiple chunks
+            _log.LogInformation("[AdaptiveChunker] Total data points ({TotalDataPoints}) exceeds max chunk size ({MaxChunkSize}), splitting into multiple chunks",
+                totalDataPoints, _maxChunkSize);
+            
             int currentIndex = 0;
+            int chunkNumber = 0;
             
             while (currentIndex < dataList.Count)
             {
                 var chunk = new List<KeyValuePair<string, IEnumerable<UADataPoint>>>();
-                int currentChunkSize = GetCurrentChunkSize();
                 int estimatedSize = 0;
                 
-                // Build chunk up to size limit or count limit
+                // Build chunk up to max chunk size or message size limit
+                int currentDataPointCount = 0;
                 while (currentIndex < dataList.Count && 
-                       chunk.Count < currentChunkSize)
+                       currentDataPointCount < _maxChunkSize)
                 {
                     var item = dataList[currentIndex];
+                    int itemDataPointCount = item.Value.Count();
+                    
+                    // Check if adding this item would exceed the max chunk size
+                    if (currentDataPointCount + itemDataPointCount > _maxChunkSize && chunk.Count > 0)
+                    {
+                        break; // Don't add this item, finish current chunk
+                    }
+                    
                     chunk.Add(item);
+                    currentDataPointCount += itemDataPointCount;
                     currentIndex++;
                     
                     // Estimate size every few items to avoid expensive calculations
@@ -74,8 +105,11 @@ namespace Cognite.OpcUa.Utils
                         if (estimatedSize > _maxMessageSize)
                         {
                             // Remove last item and break
+                            currentDataPointCount -= itemDataPointCount;
                             chunk.RemoveAt(chunk.Count - 1);
                             currentIndex--;
+                            _log.LogWarning("[AdaptiveChunker] Chunk {ChunkNumber} exceeded message size limit: EstimatedSize={EstimatedSize}MB, MaxSize={MaxSize}MB",
+                                chunkNumber + 1, estimatedSize / (1024 * 1024), _maxMessageSize / (1024 * 1024));
                             break;
                         }
                     }
@@ -83,9 +117,15 @@ namespace Cognite.OpcUa.Utils
                 
                 if (chunk.Count > 0)
                 {
+                    chunkNumber++;
+                    _log.LogInformation("[AdaptiveChunker] Created chunk {ChunkNumber}: Nodes={NodeCount}, DataPoints={DataPointCount}, EstimatedSize={EstimatedSize}KB",
+                        chunkNumber, chunk.Count, currentDataPointCount, estimatedSize / 1024);
                     chunks.Add(chunk);
                 }
             }
+            
+            _log.LogInformation("[AdaptiveChunker] Chunking completed: TotalChunks={TotalChunks}, ProcessedDataPoints={ProcessedDataPoints}/{TotalDataPoints}",
+                chunks.Count, chunks.Sum(c => c.Sum(item => item.Value.Count())), totalDataPoints);
             
             return chunks;
         }
@@ -214,15 +254,76 @@ namespace Cognite.OpcUa.Utils
         }
 
         /// <summary>
-        /// Reset performance counters
+        /// Process chunks in parallel with adaptive chunking
         /// </summary>
-        public void ResetStats()
+        /// <param name="dataPoints">Data points to process</param>
+        /// <param name="payloadCreator">Function to create payload from chunk</param>
+        /// <param name="chunkProcessor">Function to process each chunk</param>
+        /// <param name="maxConcurrency">Maximum number of concurrent chunk processing (default: 4)</param>
+        /// <param name="token">Cancellation token</param>
+        /// <returns>True if all chunks processed successfully</returns>
+        public async Task<bool> ProcessChunksParallel<T>(
+            IDictionary<string, IEnumerable<UADataPoint>> dataPoints,
+            Func<IEnumerable<KeyValuePair<string, IEnumerable<UADataPoint>>>, object?> payloadCreator,
+            Func<IEnumerable<KeyValuePair<string, IEnumerable<UADataPoint>>>, object?, Task<T>> chunkProcessor,
+            int maxConcurrency = 4,
+            CancellationToken token = default)
         {
-            lock (_adjustmentLock)
+            var chunks = CreateAdaptiveChunks(dataPoints, payloadCreator);
+            var semaphore = new SemaphoreSlim(maxConcurrency, maxConcurrency);
+            var tasks = new List<Task<bool>>();
+
+            foreach (var chunk in chunks)
             {
-                _successfulChunks = 0;
-                _failedChunks = 0;
-                _lastAdjustment = DateTime.UtcNow;
+                var task = ProcessChunkWithSemaphore(chunk, payloadCreator, chunkProcessor, semaphore, token);
+                tasks.Add(task);
+            }
+
+            var results = await Task.WhenAll(tasks);
+            return results.All(result => result);
+        }
+
+        /// <summary>
+        /// Process a single chunk with semaphore for concurrency control
+        /// </summary>
+        private async Task<bool> ProcessChunkWithSemaphore<T>(
+            IEnumerable<KeyValuePair<string, IEnumerable<UADataPoint>>> chunk,
+            Func<IEnumerable<KeyValuePair<string, IEnumerable<UADataPoint>>>, object?> payloadCreator,
+            Func<IEnumerable<KeyValuePair<string, IEnumerable<UADataPoint>>>, object?, Task<T>> chunkProcessor,
+            SemaphoreSlim semaphore,
+            CancellationToken token)
+        {
+            await semaphore.WaitAsync(token);
+            try
+            {
+                var startTime = DateTime.UtcNow;
+                var payload = payloadCreator(chunk);
+
+                if (payload == null) return true;
+
+                var result = await chunkProcessor(chunk, payload);
+                var processingTime = DateTime.UtcNow - startTime;
+
+                // Report success or failure based on result
+                if (result != null)
+                {
+                    ReportSuccess(chunk.Count(), processingTime);
+                    return true;
+                }
+                else
+                {
+                    ReportFailure(chunk.Count());
+                    return false;
+                }
+            }
+            catch (Exception ex)
+            {
+                ReportFailure(chunk.Count(), ex);
+                return false;
+            }
+            finally
+            {
+                semaphore.Release();
             }
         }
     }

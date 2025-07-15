@@ -266,5 +266,12 @@ namespace Cognite.OpcUa.Config
         /// </summary>
         [DefaultValue(10)]
         public int MinChunkSize { get; set; } = 10;
+
+        /// <summary>
+        /// Maximum number of concurrent chunk processing for parallel MQTT publishing.
+        /// Higher values may improve throughput but can overwhelm the MQTT broker.
+        /// </summary>
+        [DefaultValue(4)]
+        public int MaxConcurrency { get; set; } = 4;
     }
 }

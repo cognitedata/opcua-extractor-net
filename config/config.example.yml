@@ -515,6 +515,10 @@ mqtt:
     # Minimum number of data points in a single chunk (default: 10)
     min-chunk-size: 10
 
+    # Maximum number of concurrent chunk processing for parallel MQTT publishing (default: 4)
+    # Higher values may improve throughput but can overwhelm the MQTT broker
+    max-concurrency: 4
+
     # If relationships are eneabled, and written to clean, and deletes are enabled. This needs to be set to
     # true in order to hard delete the relationships.
     delete-relationships: false

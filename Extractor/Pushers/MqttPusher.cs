@@ -318,6 +318,10 @@ namespace Cognite.OpcUa.Pushers
                 return null;
             }
 
+            // Log data being sent to MQTT broker (only when there's actual data)
+            log.LogInformation("[Queue → MQTT] Processing {Count} datapoints from {NodeCount} nodes for MQTT transmission", 
+                count, dataPointList.Count);
+
             if (fullConfig.DryRun)
             {
                 log.LogInformation("Dry run enabled. Would insert {Count} datapoints over {C2} timeseries using MQTT", count, dataPointList.Count);
@@ -325,18 +329,19 @@ namespace Cognite.OpcUa.Pushers
                 return null;
             }
 
-            var dpChunks = dataPointList.Select(kvp => (kvp.Key, (IEnumerable<UADataPoint>)kvp.Value)).ChunkBy(100000, 10000).ToArray();
-            var pushTasks = dpChunks.Select(chunk => PushDataPointsChunk(chunk.ToDictionary(pair => pair.Key, pair => pair.Values), token)).ToList();
-            var results = await Task.WhenAll(pushTasks);
-
-            if (!results.All(res => res))
+            // Use AdaptiveChunker directly instead of ChunkBy for unified chunking logic
+            var convertedDataPointList = dataPointList.ToDictionary(kvp => kvp.Key, kvp => (IEnumerable<UADataPoint>)kvp.Value);
+            var result = await PushDataPointsChunk(convertedDataPointList, token);
+            
+            if (!result)
             {
                 log.LogDebug("Failed to push {Count} points to Target over MQTT", count);
                 collectionPool.ReturnDictionary(dataPointList);
                 return false;
             }
 
-            log.LogDebug("Successfully pushed {Count} points to Target over MQTT", count);
+            log.LogDebug("Successfully pushed {Count} points to Target over MQTT (Current chunk size: {ChunkSize}, Max chunk size: {MaxChunkSize})", 
+                count, adaptiveChunker.GetCurrentChunkSize(), config.MaxChunkSize);
 
             // Return collections to pool
             collectionPool.ReturnDictionary(dataPointList);
@@ -600,36 +605,54 @@ namespace Cognite.OpcUa.Pushers
                         };
                     };
 
-                    var chunks = adaptiveChunker.CreateAdaptiveChunks(dataPointList, payloadCreator);
+                    // Use parallel processing for better performance
+                    Func<IEnumerable<KeyValuePair<string, IEnumerable<UADataPoint>>>, object?, Task<object?>> chunkProcessor = 
+                        async (IEnumerable<KeyValuePair<string, IEnumerable<UADataPoint>>> chunk, object? payload) =>
+                        {
+                            if (payload == null) return (object?)null;
 
-                    foreach (var chunk in chunks)
+                            // Count actual datapoints in this chunk
+                            var actualDataPointCount = chunk.Select(pair => pair.Value.Count()).Sum();
+
+                            var bytes = JsonSerializer.SerializeToUtf8Bytes(payload, options);
+                            var msg = baseBuilder
+                                .WithTopic(config.DatapointTopic)
+                                .WithPayload(bytes)
+                                .Build();
+
+                            var result = await client.PublishAsync(msg, token);
+                            
+                            if (result.ReasonCode != MQTTnet.Client.MqttClientPublishReasonCode.Success)
+                            {
+                                log.LogError("Failed to write to MQTT: {reason}", result.ReasonString);
+                                DataFailing = true;
+                                throw new Exception(result.ReasonString);
+                            }
+
+                            // Log successful chunk transmission
+                            log.LogInformation("[MQTT Chunk Success] Successfully sent {Count} datapoints to MQTT broker", actualDataPointCount);
+
+                            return (object?)result;
+                        };
+
+                    // Process chunks in parallel with configurable concurrency limit
+                    var maxConcurrency = Math.Min(config.MaxConcurrency, Environment.ProcessorCount);
+                    var success = await adaptiveChunker.ProcessChunksParallel(
+                        dataPointList, 
+                        payloadCreator, 
+                        chunkProcessor, 
+                        maxConcurrency, 
+                        token);
+
+                    if (!success)
                     {
-                        var startTime = DateTime.UtcNow;
-                        var payload = payloadCreator(chunk);
-
-                        if (payload == null) continue;
-
-                        var bytes = JsonSerializer.SerializeToUtf8Bytes(payload, options);
-                        var msg = baseBuilder
-                            .WithTopic(config.DatapointTopic)
-                            .WithPayload(bytes)
-                            .Build();
-
-                        var result = await client.PublishAsync(msg, token);
-                        var processingTime = DateTime.UtcNow - startTime;
-                        
-                        if (result.ReasonCode != MQTTnet.Client.MqttClientPublishReasonCode.Success)
-                        {
-                            log.LogError("Failed to write to MQTT: {reason}", result.ReasonString);
-                            adaptiveChunker.ReportFailure(chunk.Count(), new Exception(result.ReasonString));
-                            DataFailing = true;
-                            return false;
-                        }
-                        else
-                        {
-                            adaptiveChunker.ReportSuccess(chunk.Count(), processingTime);
-                        }
+                        DataFailing = true;
+                        return false;
                     }
+
+                    // Calculate and log total transmitted datapoints
+                    var totalTransmitted = dataPointList.Select(dp => (long)dp.Value.Count()).Sum();
+                    log.LogInformation("[MQTT Total Success] Successfully transmitted {Count} datapoints to MQTT broker", totalTransmitted);
                 }
                 else // Protobuf
                 {
@@ -669,6 +692,7 @@ namespace Cognite.OpcUa.Pushers
                 }
                 dataPointsCounter.Inc(dataPointList.Select(dp => (long)dp.Value.Count()).Sum());
                 dataPointPushes.Inc();
+                
                 DataFailing = false;
                 return true;
             }
