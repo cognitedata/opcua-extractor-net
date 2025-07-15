@@ -39,24 +39,24 @@ extraction:
     root-nodes:
         - namespace-uri: "KEPServerEX"
           node-id: "s=S.A"
-        - namespace-uri: "KEPServerEX"
-          node-id: "s=S.B"
-        - namespace-uri: "KEPServerEX"
-          node-id: "s=S.C"
-        - namespace-uri: "KEPServerEX"
-          node-id: "s=S.D"
-        - namespace-uri: "KEPServerEX"
-          node-id: "s=S.E"
-        - namespace-uri: "KEPServerEX"
-          node-id: "s=S.F"
-        - namespace-uri: "KEPServerEX"
-          node-id: "s=S.G"
-        - namespace-uri: "KEPServerEX"
-          node-id: "s=S.H"
-        - namespace-uri: "KEPServerEX"
-          node-id: "s=S.I"
-        - namespace-uri: "KEPServerEX"
-          node-id: "s=S.J"
+        #- namespace-uri: "KEPServerEX"
+        #  node-id: "s=S.B"
+        #- namespace-uri: "KEPServerEX"
+        #  node-id: "s=S.C"
+        #- namespace-uri: "KEPServerEX"
+        #  node-id: "s=S.D"
+        #- namespace-uri: "KEPServerEX"
+        #  node-id: "s=S.E"
+        #- namespace-uri: "KEPServerEX"
+        #  node-id: "s=S.F"
+        #- namespace-uri: "KEPServerEX"
+        #  node-id: "s=S.G"
+        #- namespace-uri: "KEPServerEX"
+        #  node-id: "s=S.H"
+        #- namespace-uri: "KEPServerEX"
+        #  node-id: "s=S.I"
+        #- namespace-uri: "KEPServerEX"
+        #  node-id: "s=S.J"
     # - namespace-uri:
         #   node-id:
 
@@ -124,34 +124,33 @@ extraction:
         filter:
           #id: "s=Simulation Examples.Functions._System"
           id: "s=S.A._System"
-      - type: Ignore
-        filter:
-          id: "s=S.B._System"
-      - type: Ignore
-        filter:
-          id: "s=S.C._System"
-      - type: Ignore
-        filter:
-          id: "s=S.D._System"
-      - type: Ignore
-        filter:
-          id: "s=S.E._System"
-      - type: Ignore
-        filter:
-          id: "s=S.F._System"
-      - type: Ignore
-        filter:
-          id: "s=S.G._System"
-      - type: Ignore
-        filter:
-          id: "s=S.H._System"
-      - type: Ignore
-        filter:
-          id: "s=S.I._System"
-      - type: Ignore
-        filter:
-          id: "s=S.J._System"
-          
+      #- type: Ignore
+      #  filter:
+      #    id: "s=S.B._System"
+      #- type: Ignore
+      #  filter:
+      #    id: "s=S.C._System"
+      #- type: Ignore
+      #  filter:
+      #    id: "s=S.D._System"
+      #- type: Ignore
+      #  filter:
+      #    id: "s=S.E._System"
+      #- type: Ignore
+      #  filter:
+      #    id: "s=S.F._System"
+      #- type: Ignore
+      #  filter:
+      #    id: "s=S.G._System"
+      #- type: Ignore
+      #  filter:
+      #    id: "s=S.H._System"
+      #- type: Ignore
+      #  filter:
+      #    id: "s=S.I._System"
+      #- type: Ignore
+      #  filter:
+      #    id: "s=S.J._System"
       # Type, either "Ignore", "Property", "DropSubscriptions", "TimeSeries", "AsEvents", or "Include"
       # - type:
       #  NodeFilter. All non-null filters must match each node for the transformation to be applied.
@@ -268,7 +267,7 @@ logger:
 
 influx:
     # Set to true to enable this destination
-    enabled: true
+    enabled: false
     # Host URI, ex localhost:8086
 #    host: http://192.168.11.116:58086
     # Influx username
@@ -331,15 +330,33 @@ mqtt:
     # Only used when timestamp-format is "iso8601"
     timezone-offset: "+09:00"
     # JSON format type for MQTT output
-    # "legacy" - Original format with numericDatapoints/stringDatapoints
-    # "polling_snapshot" - Optimized format for bulk data reads with shared timestamp
-    # "subscription" - Format for subscription data with individual timestamps per tag
-    #json-format-type: "polling_snapshot"
-    json-format-type: PollingSnapshotObject
-    # Include data type information in JSON output
-    #include-data-type: false
-    # Include status code information in JSON output
-    #include-status-code: false
+    # Available options:
+    # "Legacy" - Original timeseries format (existing format for backward compatibility)
+    # "PollingSnapshotObject" - Structured object format for polling/batch reads
+    #   - Includes metadata with data_ingest_type, message_timestamp, etc.
+    #   - Data section with shared timestamp and tags array
+    #   - Optimized for bulk data transmission with minimal size
+    # "PollingSnapshotPlain" - Flat structure format for polling/batch reads  
+    #   - Includes metadata with camelCase naming (dataIngestType, messageTimestamp)
+    #   - Tag values directly in root object with shared timestamp
+    #   - Most compact format for high-volume data
+    # "Subscription" - Format for subscription-based data with individual timestamps
+    #   - Supports multiple data points per tag with different timestamps
+    #   - Each tag has its own data array with timestamp, value, sc, dt
+    #   - Ideal for event-driven subscription scenarios
+    
+    json-format-type: Subscription
+    
+    # Whether to include metadata object in JSON output
+    include-metadata: true
+    # Whether to include msgRecvStartTimestamp and msgRecvEndTimestamp in metadata
+    # Only applicable when include-metadata is true
+    include-message-timestamps: true
+    # Whether to include data type (dt) field for each tag
+    include-data-type: false
+    # Whether to include status code (sc) field for each tag
+    include-status-code: false
+    
     # Set to enable storing a list of created assets/timeseries to local litedb.
     # Requires the StateStorage.Location property to be set.
     # If this is left empty, metadata will have to be read each time the extractor restarts.

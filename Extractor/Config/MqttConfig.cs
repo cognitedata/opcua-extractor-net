@@ -27,17 +27,29 @@ namespace Cognite.OpcUa.Config
     public enum MqttJsonFormat
     {
         /// <summary>
-        /// Timeseries format.
+        /// Legacy timeseries format (existing format).
+        /// </summary>
+        Legacy,
+        /// <summary>
+        /// Polling snapshot object format with structured data.
+        /// </summary>
+        PollingSnapshotObject,
+        /// <summary>
+        /// Polling snapshot plain format with flat structure.
+        /// </summary>
+        PollingSnapshotPlain,
+        /// <summary>
+        /// Subscription format for individual tag updates.
+        /// </summary>
+        Subscription,
+        /// <summary>
+        /// Timeseries format (deprecated, use Legacy instead).
         /// </summary>
         Timeseries,
         /// <summary>
-        /// Polling snapshot format.
+        /// Polling snapshot format (deprecated, use PollingSnapshotObject instead).
         /// </summary>
-        PollingSnapshot,
-        /// <summary>
-        /// Polling snapshot object format.
-        /// </summary>
-        PollingSnapshotObject
+        PollingSnapshot
     }
 
     public class MqttPusherConfig : IPusherConfig
@@ -200,8 +212,33 @@ namespace Cognite.OpcUa.Config
         /// <summary>
         /// JSON format to use when UseGrpc is false.
         /// </summary>
-        [DefaultValue(MqttJsonFormat.PollingSnapshot)]
-        public MqttJsonFormat JsonFormatType { get; set; } = MqttJsonFormat.PollingSnapshot;
+        [DefaultValue(MqttJsonFormat.Legacy)]
+        public MqttJsonFormat JsonFormatType { get; set; } = MqttJsonFormat.Legacy;
+
+        /// <summary>
+        /// Whether to include metadata object in JSON output.
+        /// </summary>
+        [DefaultValue(true)]
+        public bool IncludeMetadata { get; set; } = true;
+
+        /// <summary>
+        /// Whether to include msgRecvStartTimestamp and msgRecvEndTimestamp in metadata.
+        /// Only applicable when IncludeMetadata is true.
+        /// </summary>
+        [DefaultValue(true)]
+        public bool IncludeMessageTimestamps { get; set; } = true;
+
+        /// <summary>
+        /// Whether to include data type (dt) field for each tag.
+        /// </summary>
+        [DefaultValue(true)]
+        public bool IncludeDataType { get; set; } = true;
+
+        /// <summary>
+        /// Whether to include status code (sc) field for each tag.
+        /// </summary>
+        [DefaultValue(true)]
+        public bool IncludeStatusCode { get; set; } = true;
 
         /// <summary>
         /// Maximum number of timeseries to send in a single datapoint message.

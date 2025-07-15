@@ -514,8 +514,7 @@ namespace Cognite.OpcUa.Pushers
         #endregion
         #region pushing
         /// <summary>
-        /// Push a chunk of the full datapoint push over MQTT.
-        /// Handles the serialization and actual pushing.
+        /// Push a chunk of datapoints to MQTT.
         /// </summary>
         /// <param name="dataPointList">Datapoints to create, grouped by timeseries name.</param>
         /// <returns>True on success, false on failure</returns>
@@ -540,62 +539,17 @@ namespace Cognite.OpcUa.Pushers
 
                     foreach (var chunk in chunks)
                     {
-                        object payload;
-
-                        if (config.JsonFormatType == MqttJsonFormat.PollingSnapshotObject)
+                        object payload = config.JsonFormatType switch
                         {
-                            var payloadObject = new Dictionary<string, JsonDataPointObject>();
-                            foreach (var kvp in chunk)
-                            {
-                                var numeric = new List<DataPoint>();
-                                var str = new List<StringDataPoint>();
-                                foreach (var dp in kvp.Value)
-                                {
-                                    if (dp.IsString) str.Add(new StringDataPoint { Timestamp = GetFormattedTimestamp(dp.Timestamp.ToUnixTimeMilliseconds()), Value = dp.StringValue! });
-                                    else numeric.Add(new DataPoint { Timestamp = GetFormattedTimestamp(dp.Timestamp.ToUnixTimeMilliseconds()), Value = dp.DoubleValue ?? 0 });
-                                }
+                            MqttJsonFormat.PollingSnapshotObject => CreatePollingSnapshotObjectPayload(chunk),
+                            MqttJsonFormat.PollingSnapshotPlain => CreatePollingSnapshotPlainPayload(chunk),
+                            MqttJsonFormat.Subscription => CreateSubscriptionPayload(chunk),
+                            MqttJsonFormat.Legacy or MqttJsonFormat.Timeseries => CreateLegacyPayload(chunk),
+                            MqttJsonFormat.PollingSnapshot => CreatePollingSnapshotPayload(chunk),
+                            _ => CreateLegacyPayload(chunk)
+                        };
 
-                                var data = new JsonDataPointObject();
-                                if (numeric.Any()) data.NumericDatapoints = numeric;
-                                if (str.Any()) data.StringDatapoints = str;
-
-                                if (data.NumericDatapoints != null || data.StringDatapoints != null)
-                                {
-                                    payloadObject[kvp.Key] = data;
-                                }
-                            }
-                            if (!payloadObject.Any()) continue;
-                            payload = payloadObject;
-                        }
-                        else
-                        {
-                            var payloadList = new List<object>();
-                            log.LogTrace("Using JSON serialization for {count} datapoint items", chunk.Count());
-                            foreach (var kvp in chunk)
-                            {
-                                var numeric = new List<DataPoint>();
-                                var str = new List<StringDataPoint>();
-                                foreach (var dp in kvp.Value)
-                                {
-                                    if (dp.IsString) str.Add(new StringDataPoint { Timestamp = GetFormattedTimestamp(dp.Timestamp.ToUnixTimeMilliseconds()), Value = dp.StringValue! });
-                                    else numeric.Add(new DataPoint { Timestamp = GetFormattedTimestamp(dp.Timestamp.ToUnixTimeMilliseconds()), Value = dp.DoubleValue ?? 0 });
-                                }
-
-                                if (config.JsonFormatType == MqttJsonFormat.PollingSnapshot)
-                                {
-                                    var wrapper = new JsonDataPointWrapper(kvp.Key);
-                                    if (numeric.Any()) wrapper.NumericDatapoints = numeric;
-                                    if (str.Any()) wrapper.StringDatapoints = str;
-                                    payloadList.Add(wrapper);
-                                }
-                                else if (config.JsonFormatType == MqttJsonFormat.Timeseries)
-                                {
-                                    payloadList.AddRange(numeric.Cast<object>().Concat(str));
-                                }
-                            }
-                            if (!payloadList.Any()) continue;
-                            payload = payloadList;
-                        }
+                        if (payload == null) continue;
 
                         var bytes = JsonSerializer.SerializeToUtf8Bytes(payload, options);
                         var msg = baseBuilder
@@ -659,6 +613,252 @@ namespace Cognite.OpcUa.Pushers
                 DataFailing = true;
                 return false;
             }
+        }
+
+        /// <summary>
+        /// Create metadata object for JSON payload
+        /// </summary>
+        private Dictionary<string, object>? CreateMetadata(string dataIngestType)
+        {
+            if (!config.IncludeMetadata) return null;
+
+            var metadata = new Dictionary<string, object>
+            {
+                ["data_ingest_type"] = dataIngestType,
+                ["message_timestamp"] = GetFormattedTimestamp(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds())
+            };
+
+            if (config.IncludeMessageTimestamps)
+            {
+                var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                metadata["msgRecvStartTimestamp"] = GetFormattedTimestamp(now);
+                metadata["msgRecvEndTimestamp"] = GetFormattedTimestamp(now);
+            }
+
+            return metadata;
+        }
+
+        /// <summary>
+        /// Get OPC UA data type string
+        /// </summary>
+        private string GetDataTypeString(UADataPoint dp)
+        {
+            if (dp.IsString) return "string";
+            
+            var value = dp.DoubleValue ?? 0;
+            if (value == Math.Floor(value) && value >= int.MinValue && value <= int.MaxValue)
+                return "int32";
+            return "float";
+        }
+
+        /// <summary>
+        /// Create payload for polling snapshot object format (case1)
+        /// </summary>
+        private object? CreatePollingSnapshotObjectPayload(IEnumerable<KeyValuePair<string, IEnumerable<UADataPoint>>> chunk)
+        {
+            if (!chunk.Any()) return null;
+
+            var payload = new Dictionary<string, object>();
+            
+            var metadata = CreateMetadata("polling_snapshot");
+            if (metadata != null)
+            {
+                payload["metadata"] = metadata;
+            }
+
+            // Find the most common timestamp for shared timestamp
+            var allDataPoints = chunk.SelectMany(kvp => kvp.Value).ToList();
+            var sharedTimestamp = allDataPoints.GroupBy(dp => dp.Timestamp)
+                .OrderByDescending(g => g.Count())
+                .FirstOrDefault()?.Key ?? DateTime.UtcNow;
+
+            var data = new Dictionary<string, object>
+            {
+                ["timestamp"] = GetFormattedTimestamp(sharedTimestamp.ToUnixTimeMilliseconds()),
+                ["tags"] = chunk.SelectMany(kvp => kvp.Value.Select(dp => CreateTagObject(kvp.Key, dp))).ToList()
+            };
+
+            payload["data"] = data;
+            return payload;
+        }
+
+        /// <summary>
+        /// Create payload for polling snapshot plain format (case2)
+        /// </summary>
+        private object? CreatePollingSnapshotPlainPayload(IEnumerable<KeyValuePair<string, IEnumerable<UADataPoint>>> chunk)
+        {
+            if (!chunk.Any()) return null;
+
+            var payload = new Dictionary<string, object>();
+            
+            var metadata = CreateMetadata("polling_snapshot");
+            if (metadata != null)
+            {
+                // Use camelCase for case2 format
+                var camelCaseMetadata = new Dictionary<string, object>();
+                foreach (var kvp in metadata)
+                {
+                    var key = kvp.Key switch
+                    {
+                        "data_ingest_type" => "dataIngestType",
+                        "message_timestamp" => "messageTimestamp",
+                        _ => kvp.Key
+                    };
+                    camelCaseMetadata[key] = kvp.Value;
+                }
+                payload["metadata"] = camelCaseMetadata;
+            }
+
+            // Find the most common timestamp for shared timestamp
+            var allDataPoints = chunk.SelectMany(kvp => kvp.Value).ToList();
+            var sharedTimestamp = allDataPoints.GroupBy(dp => dp.Timestamp)
+                .OrderByDescending(g => g.Count())
+                .FirstOrDefault()?.Key ?? DateTime.UtcNow;
+
+            payload["timestamp"] = GetFormattedTimestamp(sharedTimestamp.ToUnixTimeMilliseconds());
+
+            // Add tag values directly to payload
+            foreach (var kvp in chunk)
+            {
+                var latestDataPoint = kvp.Value.OrderByDescending(dp => dp.Timestamp).FirstOrDefault();
+                if (latestDataPoint != null)
+                {
+                    payload[kvp.Key] = latestDataPoint.IsString ? 
+                        (object)(latestDataPoint.StringValue ?? "") : 
+                        (latestDataPoint.DoubleValue ?? 0);
+                }
+            }
+
+            return payload;
+        }
+
+        /// <summary>
+        /// Create payload for subscription format (case3)
+        /// </summary>
+        private object? CreateSubscriptionPayload(IEnumerable<KeyValuePair<string, IEnumerable<UADataPoint>>> chunk)
+        {
+            if (!chunk.Any()) return null;
+
+            var payload = new Dictionary<string, object>();
+            
+            var metadata = CreateMetadata("subscription");
+            if (metadata != null)
+            {
+                payload["metadata"] = metadata;
+            }
+
+            var tagsData = chunk.Select(kvp => new Dictionary<string, object>
+            {
+                ["tag"] = kvp.Key,
+                ["data"] = kvp.Value.Select(dp => CreateDataPointObject(dp)).ToList()
+            }).ToList();
+
+            payload["tags_data"] = tagsData;
+            return payload;
+        }
+
+        /// <summary>
+        /// Create payload for legacy format (existing format)
+        /// </summary>
+        private object? CreateLegacyPayload(IEnumerable<KeyValuePair<string, IEnumerable<UADataPoint>>> chunk)
+        {
+            var payloadList = new List<object>();
+            log.LogTrace("Using JSON serialization for {count} datapoint items", chunk.Count());
+            
+            foreach (var kvp in chunk)
+            {
+                var numeric = new List<DataPoint>();
+                var str = new List<StringDataPoint>();
+                
+                foreach (var dp in kvp.Value)
+                {
+                    if (dp.IsString) 
+                        str.Add(new StringDataPoint { Timestamp = GetFormattedTimestamp(dp.Timestamp.ToUnixTimeMilliseconds()), Value = dp.StringValue! });
+                    else 
+                        numeric.Add(new DataPoint { Timestamp = GetFormattedTimestamp(dp.Timestamp.ToUnixTimeMilliseconds()), Value = dp.DoubleValue ?? 0 });
+                }
+
+                payloadList.AddRange(numeric.Cast<object>().Concat(str));
+            }
+            
+            return payloadList.Any() ? payloadList : null;
+        }
+
+        /// <summary>
+        /// Create payload for polling snapshot format (deprecated, for backward compatibility)
+        /// </summary>
+        private object? CreatePollingSnapshotPayload(IEnumerable<KeyValuePair<string, IEnumerable<UADataPoint>>> chunk)
+        {
+            var payloadList = new List<object>();
+            log.LogTrace("Using JSON serialization for {count} datapoint items", chunk.Count());
+            
+            foreach (var kvp in chunk)
+            {
+                var numeric = new List<DataPoint>();
+                var str = new List<StringDataPoint>();
+                
+                foreach (var dp in kvp.Value)
+                {
+                    if (dp.IsString) 
+                        str.Add(new StringDataPoint { Timestamp = GetFormattedTimestamp(dp.Timestamp.ToUnixTimeMilliseconds()), Value = dp.StringValue! });
+                    else 
+                        numeric.Add(new DataPoint { Timestamp = GetFormattedTimestamp(dp.Timestamp.ToUnixTimeMilliseconds()), Value = dp.DoubleValue ?? 0 });
+                }
+
+                var wrapper = new JsonDataPointWrapper(kvp.Key);
+                if (numeric.Any()) wrapper.NumericDatapoints = numeric;
+                if (str.Any()) wrapper.StringDatapoints = str;
+                payloadList.Add(wrapper);
+            }
+            
+            return payloadList.Any() ? payloadList : null;
+        }
+
+        /// <summary>
+        /// Create tag object for polling snapshot object format
+        /// </summary>
+        private Dictionary<string, object> CreateTagObject(string tagId, UADataPoint dp)
+        {
+            var tagObj = new Dictionary<string, object>
+            {
+                [tagId] = dp.IsString ? (object)(dp.StringValue ?? "") : (dp.DoubleValue ?? 0)
+            };
+
+            if (config.IncludeDataType)
+            {
+                tagObj["dt"] = GetDataTypeString(dp);
+            }
+
+            if (config.IncludeStatusCode)
+            {
+                tagObj["sc"] = (int)dp.Status.Code;
+            }
+
+            return tagObj;
+        }
+
+        /// <summary>
+        /// Create data point object for subscription format
+        /// </summary>
+        private Dictionary<string, object> CreateDataPointObject(UADataPoint dp)
+        {
+            var dataObj = new Dictionary<string, object>
+            {
+                ["timestamp"] = GetFormattedTimestamp(dp.Timestamp.ToUnixTimeMilliseconds()),
+                ["value"] = dp.IsString ? (object)(dp.StringValue ?? "") : (dp.DoubleValue ?? 0)
+            };
+
+            if (config.IncludeStatusCode)
+            {
+                dataObj["sc"] = (int)dp.Status.Code;
+            }
+
+            if (config.IncludeDataType)
+            {
+                dataObj["dt"] = GetDataTypeString(dp);
+            }
+
+            return dataObj;
         }
         /// <summary>
         /// Push the given list of assets over MQTT to CDF, optionally passing "update" to indicate that the
