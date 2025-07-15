@@ -245,5 +245,26 @@ namespace Cognite.OpcUa.Config
         /// </summary>
         [DefaultValue(1000)]
         public int DatapointsPerMessage { get; set; } = 1000;
+
+        /// <summary>
+        /// Maximum MQTT message size in bytes for adaptive chunking.
+        /// Messages larger than this will be split into smaller chunks.
+        /// </summary>
+        [DefaultValue(1048576)] // 1MB
+        public int MaxMessageSize { get; set; } = 1048576;
+
+        /// <summary>
+        /// Maximum number of data points in a single chunk for adaptive chunking.
+        /// This acts as an upper limit regardless of message size.
+        /// </summary>
+        [DefaultValue(10000)]
+        public int MaxChunkSize { get; set; } = 10000;
+
+        /// <summary>
+        /// Minimum number of data points in a single chunk for adaptive chunking.
+        /// This acts as a lower limit to prevent too many small messages.
+        /// </summary>
+        [DefaultValue(10)]
+        public int MinChunkSize { get; set; } = 10;
     }
 }

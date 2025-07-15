@@ -357,6 +357,14 @@ mqtt:
     # Whether to include status code (sc) field for each tag
     include-status-code: false
     
+    # Adaptive chunking configuration for MQTT message optimization
+    # Maximum MQTT message size in bytes (default: 1048576 = 1MB)
+    max-message-size: 10485760
+    # Maximum number of data points in a single chunk (default: 10000)
+    max-chunk-size: 2000
+    # Minimum number of data points in a single chunk (default: 10)
+    min-chunk-size: 10
+    
     # Set to enable storing a list of created assets/timeseries to local litedb.
     # Requires the StateStorage.Location property to be set.
     # If this is left empty, metadata will have to be read each time the extractor restarts.

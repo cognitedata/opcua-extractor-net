@@ -67,6 +67,10 @@ namespace Cognite.OpcUa.Pushers
         private readonly Dictionary<NodeId, string?> eventParents = new Dictionary<NodeId, string?>();
 
         private readonly FullConfig fullConfig;
+        private readonly Utils.DataPointCollectionPool collectionPool;
+        private readonly Utils.DataFormatCache formatCache;
+        private readonly Utils.AdaptiveChunker adaptiveChunker;
+        private readonly Utils.ConnectionRecoveryManager connectionRecovery;
 
         private static readonly Counter createdAssets = Metrics
             .CreateCounter("opcua_created_assets_mqtt", "Number of assets pushed over mqtt");
@@ -90,37 +94,19 @@ namespace Cognite.OpcUa.Pushers
         private double? nonFiniteReplacement;
 
         /// <summary>
-        /// Get formatted timestamp based on configuration
+        /// Get formatted timestamp based on configuration (cached)
         /// </summary>
         /// <param name="timestamp">Timestamp in milliseconds since epoch</param>
         /// <returns>Formatted timestamp as long (epoch) or string (ISO8601)</returns>
         private object GetFormattedTimestamp(long timestamp)
         {
-            switch (config.TimestampFormat.ToLowerInvariant())
+            if (config.TimestampFormat.ToLowerInvariant() == "iso8601")
             {
-                case "iso8601":
-                    var dateTime = DateTimeOffset.FromUnixTimeMilliseconds(timestamp);
-                    // Apply configured timezone offset
-                    if (!string.IsNullOrEmpty(config.TimezoneOffset))
-                    {
-                        // Parse offset like "+09:00" or "-05:00"
-                        if (config.TimezoneOffset.StartsWith("+") || config.TimezoneOffset.StartsWith("-"))
-                        {
-                            var offsetStr = config.TimezoneOffset.Substring(1); // Remove + or -
-                            if (TimeSpan.TryParse(offsetStr, out var offset))
-                            {
-                                if (config.TimezoneOffset.StartsWith("-"))
-                                {
-                                    offset = -offset;
-                                }
-                                dateTime = dateTime.ToOffset(offset);
-                            }
-                        }
-                    }
-                    return dateTime.ToString("yyyy-MM-ddTHH:mm:ss.fffzzz");
-                case "epoch":
-                default:
-                    return timestamp;
+                return formatCache.GetFormattedTimestamp(timestamp);
+            }
+            else
+            {
+                return timestamp;
             }
         }
 
@@ -133,6 +119,10 @@ namespace Cognite.OpcUa.Pushers
             this.log = log;
             this.config = config;
             fullConfig = provider.GetRequiredService<FullConfig>();
+            collectionPool = new Utils.DataPointCollectionPool();
+            formatCache = new Utils.DataFormatCache(10000, config.TimezoneOffset ?? "+00:00", config.TimestampFormat == "iso8601");
+            adaptiveChunker = new Utils.AdaptiveChunker(log, config.MaxMessageSize, config.MinChunkSize, config.MaxChunkSize);
+            connectionRecovery = new Utils.ConnectionRecoveryManager(log, 100000, TimeSpan.FromSeconds(5), 10);
             var builder = new MqttClientOptionsBuilder()
                 .WithClientId(config.ClientId)
                 .WithTcpServer(config.Host, config.Port)
@@ -213,6 +203,62 @@ namespace Cognite.OpcUa.Pushers
             };
             client.ConnectAsync(options, CancellationToken.None).Wait();
         }
+        /// <summary>
+        /// Attempt to recover MQTT connection and replay buffered data
+        /// </summary>
+        private async Task AttemptConnectionRecovery(CancellationToken token)
+        {
+            try
+            {
+                await connectionRecovery.AttemptRecovery(
+                    connectionTest: async () => 
+                    {
+                        try
+                        {
+                            if (client.IsConnected) return true;
+                            await client.ConnectAsync(options, token);
+                            return client.IsConnected;
+                        }
+                        catch (Exception ex)
+                        {
+                            log.LogDebug("Connection test failed: {Message}", ex.Message);
+                            return false;
+                        }
+                    },
+                    dataPointSender: async (dataPoints, ct) => 
+                    {
+                        try
+                        {
+                            return await PushDataPoints(dataPoints, ct);
+                        }
+                        catch (Exception ex)
+                        {
+                            log.LogWarning("Failed to replay data points: {Message}", ex.Message);
+                            return false;
+                        }
+                    },
+                    groupedDataSender: async (groupedData, ct) =>
+                    {
+                        try
+                        {
+                            var result = await PushDataPointsChunk(groupedData, ct);
+                            return result;
+                        }
+                        catch (Exception ex)
+                        {
+                            log.LogWarning("Failed to replay grouped data: {Message}", ex.Message);
+                            return false;
+                        }
+                    },
+                    token: token
+                );
+            }
+            catch (Exception ex)
+            {
+                log.LogError(ex, "Error during connection recovery: {Message}", ex.Message);
+            }
+        }
+
         #region interface
         /// <summary>
         /// Push given list of datapoints over MQTT.
@@ -224,57 +270,58 @@ namespace Cognite.OpcUa.Pushers
             if (points == null) return null;
             if (!client.IsConnected)
             {
-                log.LogWarning("Client is not connected");
+                log.LogWarning("Client is not connected, buffering data for recovery");
+                
+                // Buffer data for recovery
+                var validatedPoints = points.Select(dp => Utils.DataPointValidator.ValidateForMqtt(dp, config, log))
+                    .Where(dp => dp != null)
+                    .Cast<UADataPoint>()
+                    .ToList();
+                
+                if (validatedPoints.Any())
+                {
+                    connectionRecovery.BufferData(validatedPoints, "MqttPusher");
+                    
+                    // Attempt recovery in background
+                    _ = Task.Run(async () => await AttemptConnectionRecovery(token));
+                }
+                
                 return false;
             }
 
             int count = 0;
-            var dataPointList = new Dictionary<string, List<UADataPoint>>();
+            var dataPointList = collectionPool.GetDictionary();
 
             foreach (var ldp in points)
             {
-                var dp = ldp;
-                if (dp.Timestamp < minDateTime)
+                // Use consolidated validation logic
+                var dp = Utils.DataPointValidator.ValidateForMqtt(ldp, config, log);
+                if (dp == null)
                 {
                     skippedDatapoints.Inc();
                     continue;
                 }
 
-                if (!dp.IsString && (dp.DoubleValue.HasValue && !double.IsFinite(dp.DoubleValue.Value)
-                    || dp.DoubleValue >= CogniteUtils.NumericValueMax
-                    || dp.DoubleValue <= CogniteUtils.NumericValueMin))
-                {
-                    if (config.NonFiniteReplacement != null)
-                    {
-                        dp = new UADataPoint(dp, config.NonFiniteReplacement.Value);
-                    }
-                    else
-                    {
-                        skippedDatapoints.Inc();
-                        continue;
-                    }
-                }
-
-                if (dp.IsString && dp.StringValue == null)
-                {
-                    dp = new UADataPoint(dp, "");
-                }
-
                 count++;
                 if (!dataPointList.TryGetValue(dp.Id, out List<UADataPoint>? value))
                 {
-                    value = new List<UADataPoint>();
+                    value = collectionPool.GetList();
                     dataPointList[dp.Id] = value;
                 }
 
                 value.Add(dp);
             }
 
-            if (count == 0) return null;
+            if (count == 0) 
+            {
+                collectionPool.ReturnDictionary(dataPointList);
+                return null;
+            }
 
             if (fullConfig.DryRun)
             {
                 log.LogInformation("Dry run enabled. Would insert {Count} datapoints over {C2} timeseries using MQTT", count, dataPointList.Count);
+                collectionPool.ReturnDictionary(dataPointList);
                 return null;
             }
 
@@ -285,10 +332,14 @@ namespace Cognite.OpcUa.Pushers
             if (!results.All(res => res))
             {
                 log.LogDebug("Failed to push {Count} points to Target over MQTT", count);
+                collectionPool.ReturnDictionary(dataPointList);
                 return false;
             }
 
             log.LogDebug("Successfully pushed {Count} points to Target over MQTT", count);
+
+            // Return collections to pool
+            collectionPool.ReturnDictionary(dataPointList);
 
             return true;
         }
@@ -535,11 +586,10 @@ namespace Cognite.OpcUa.Pushers
                         DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
                     };
 
-                    var chunks = dataPointList.ChunkBy(config.DatapointsPerMessage);
-
-                    foreach (var chunk in chunks)
+                    // Create payload creator function for adaptive chunking
+                    Func<IEnumerable<KeyValuePair<string, IEnumerable<UADataPoint>>>, object?> payloadCreator = chunk =>
                     {
-                        object payload = config.JsonFormatType switch
+                        return config.JsonFormatType switch
                         {
                             MqttJsonFormat.PollingSnapshotObject => CreatePollingSnapshotObjectPayload(chunk),
                             MqttJsonFormat.PollingSnapshotPlain => CreatePollingSnapshotPlainPayload(chunk),
@@ -548,6 +598,14 @@ namespace Cognite.OpcUa.Pushers
                             MqttJsonFormat.PollingSnapshot => CreatePollingSnapshotPayload(chunk),
                             _ => CreateLegacyPayload(chunk)
                         };
+                    };
+
+                    var chunks = adaptiveChunker.CreateAdaptiveChunks(dataPointList, payloadCreator);
+
+                    foreach (var chunk in chunks)
+                    {
+                        var startTime = DateTime.UtcNow;
+                        var payload = payloadCreator(chunk);
 
                         if (payload == null) continue;
 
@@ -558,11 +616,18 @@ namespace Cognite.OpcUa.Pushers
                             .Build();
 
                         var result = await client.PublishAsync(msg, token);
+                        var processingTime = DateTime.UtcNow - startTime;
+                        
                         if (result.ReasonCode != MQTTnet.Client.MqttClientPublishReasonCode.Success)
                         {
                             log.LogError("Failed to write to MQTT: {reason}", result.ReasonString);
+                            adaptiveChunker.ReportFailure(chunk.Count(), new Exception(result.ReasonString));
                             DataFailing = true;
                             return false;
+                        }
+                        else
+                        {
+                            adaptiveChunker.ReportSuccess(chunk.Count(), processingTime);
                         }
                     }
                 }
@@ -639,16 +704,11 @@ namespace Cognite.OpcUa.Pushers
         }
 
         /// <summary>
-        /// Get OPC UA data type string
+        /// Get OPC UA data type string (cached)
         /// </summary>
         private string GetDataTypeString(UADataPoint dp)
         {
-            if (dp.IsString) return "string";
-            
-            var value = dp.DoubleValue ?? 0;
-            if (value == Math.Floor(value) && value >= int.MinValue && value <= int.MaxValue)
-                return "int32";
-            return "float";
+            return formatCache.GetDataTypeString(dp);
         }
 
         /// <summary>

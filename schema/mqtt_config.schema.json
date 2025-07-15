@@ -170,6 +170,21 @@
                     }
                 }
             }
+        },
+        "max-message-size": {
+            "type": "integer",
+            "description": "Maximum MQTT message size in bytes for adaptive chunking. Messages larger than this will be split into smaller chunks.",
+            "default": 1048576
+        },
+        "max-chunk-size": {
+            "type": "integer",
+            "description": "Maximum number of data points in a single chunk for adaptive chunking. This acts as an upper limit regardless of message size.",
+            "default": 10000
+        },
+        "min-chunk-size": {
+            "type": "integer",
+            "description": "Minimum number of data points in a single chunk for adaptive chunking. This acts as a lower limit to prevent too many small messages.",
+            "default": 10
         }
     }
 }

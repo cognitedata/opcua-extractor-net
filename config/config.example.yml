@@ -508,6 +508,13 @@ mqtt:
         assets:
         timeseries:
 
+    # Maximum MQTT message size in bytes for adaptive chunking (default: 1048576 = 1MB)
+    max-message-size: 1048576
+    # Maximum number of data points in a single chunk (default: 10000)
+    max-chunk-size: 10000
+    # Minimum number of data points in a single chunk (default: 10)
+    min-chunk-size: 10
+
     # If relationships are eneabled, and written to clean, and deletes are enabled. This needs to be set to
     # true in order to hard delete the relationships.
     delete-relationships: false

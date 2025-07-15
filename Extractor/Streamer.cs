@@ -45,6 +45,7 @@ namespace Cognite.OpcUa
 
         private readonly AsyncBlockingQueue<UADataPoint> dataPointQueue;
         private readonly AsyncBlockingQueue<UAEvent> eventQueue;
+        private readonly Utils.StreamingDataProcessor streamingProcessor;
 
         private const int maxEventCount = 100_000;
         private const int maxDpCount = 1_000_000;
@@ -69,6 +70,7 @@ namespace Cognite.OpcUa
 
             dataPointQueue = new AsyncBlockingQueue<UADataPoint>(maxDpCount, "Datapoints", log);
             eventQueue = new AsyncBlockingQueue<UAEvent>(maxEventCount, "Events", log);
+            streamingProcessor = new Utils.StreamingDataProcessor(log, 1000, TimeSpan.FromMilliseconds(100));
 
             dataPointQueue.OnQueueOverflow += OnQueueOverflow;
             eventQueue.OnQueueOverflow += OnQueueOverflow;
@@ -223,6 +225,94 @@ namespace Cognite.OpcUa
                 if (state != null && (extractor.AllowUpdateState || !state.FrontfillEnabled && !state.BackfillEnabled)) state.UpdateDestinationRange(range.First, range.Last);
             }
         }
+
+        /// <summary>
+        /// Push data points to destinations using streaming processing for better memory efficiency
+        /// </summary>
+        public async Task PushDataPointsStreaming(IEnumerable<IPusher> passingPushers,
+            IEnumerable<IPusher> failingPushers, CancellationToken token)
+        {
+            if (!AllowData) return;
+
+            // Feed streaming processor with data from queue
+            var feedTask = Task.Run(async () =>
+            {
+                await foreach (var dp in dataPointQueue.DrainAsync(token))
+                {
+                    await streamingProcessor.AddDataPointAsync(dp, token);
+                }
+                streamingProcessor.CompleteAdding();
+            }, token);
+
+            // Process data in streaming fashion
+            await foreach (var batch in streamingProcessor.ProcessStreamAsync(token))
+            {
+                var pointRanges = new Dictionary<string, TimeRange>();
+                foreach (var dp in batch)
+                {
+                    if (!pointRanges.TryGetValue(dp.Id, out var range))
+                    {
+                        pointRanges[dp.Id] = new TimeRange(dp.Timestamp, dp.Timestamp);
+                        continue;
+                    }
+                    pointRanges[dp.Id] = range.Extend(dp.Timestamp, dp.Timestamp);
+                }
+
+                var results = await Task.WhenAll(passingPushers.Select(pusher => pusher.PushDataPoints(batch, token)));
+
+                bool anyFailed = results.Any(status => status == false);
+
+                if (anyFailed || failingPushers.Any())
+                {
+                    List<IPusher> failedPushers = new List<IPusher>();
+                    if (anyFailed)
+                    {
+                        var failed = results.Select((res, idx) => (result: res, Index: idx)).Where(x => x.result == false).ToList();
+                        foreach (var pair in failed)
+                        {
+                            var pusher = passingPushers.ElementAt(pair.Index);
+                            pusher.DataFailing = true;
+                            failedPushers.Add(pusher);
+                        }
+                        log.LogWarning("Pushers of types {Types} failed while pushing datapoints",
+                            string.Concat(failedPushers.Select(pusher => pusher.GetType().ToString())));
+                        extractor.OnDataPushFailure();
+                    }
+                    if (config.FailureBuffer.Enabled && extractor.FailureBuffer != null)
+                    {
+                        await extractor.FailureBuffer.WriteDatapoints(batch.ToList(), pointRanges, token);
+                    }
+
+                    continue; // Continue processing other batches
+                }
+
+                var reconnectedPushers = passingPushers.Where(pusher => pusher.DataFailing).ToList();
+                if (reconnectedPushers.Count != 0)
+                {
+                    log.LogInformation("{Count} failing pushers were able to push datapoints, reconnecting", reconnectedPushers.Count);
+                    extractor.OnDataPushRecovery();
+
+                    foreach (var pusher in reconnectedPushers)
+                    {
+                        pusher.DataFailing = false;
+                    }
+                }
+
+                foreach (var (id, range) in pointRanges)
+                {
+                    var state = extractor.State.GetNodeState(id);
+                    if (state != null && (extractor.AllowUpdateState || !state.FrontfillEnabled && !state.BackfillEnabled)) state?.UpdateDestinationRange(range.First, range.Last);
+                }
+            }
+
+            await feedTask; // Wait for feeding to complete
+
+            if (config.FailureBuffer.Enabled && extractor.FailureBuffer != null && extractor.FailureBuffer.AnyPoints)
+            {
+                await extractor.FailureBuffer.ReadDatapoints(passingPushers, token);
+            }
+        }
+
         /// <summary>
         /// Push events to destinations
         /// </summary>
@@ -326,29 +416,11 @@ namespace Cognite.OpcUa
 
         public void HandleStreamedDatapoint(DataValue datapoint, VariableExtractionState node)
         {
-            if (StatusCode.IsNotGood(datapoint.StatusCode))
+            // Use consolidated validation logic
+            var validationResult = Utils.DataPointValidator.ValidateAndPreprocess(datapoint, node, config, log);
+            if (validationResult == null)
             {
-                UAExtractor.BadDataPoints.Inc();
-
-                if (config.Subscriptions.LogBadValues)
-                {
-                    log.LogDebug("Bad streaming datapoint: {BadDatapointExternalId} {SourceTimestamp}. Value: {Value}, Status: {Status}",
-                        node.Id, datapoint.SourceTimestamp, datapoint.Value, ExtractorUtils.GetStatusCodeName((uint)datapoint.StatusCode));
-                }
-
-                switch (config.Extraction.StatusCodes.StatusCodesToIngest)
-                {
-                    case StatusCodeMode.All:
-                        break;
-                    case StatusCodeMode.Uncertain:
-                        if (!StatusCode.IsUncertain(datapoint.StatusCode))
-                        {
-                            return;
-                        }
-                        break;
-                    case StatusCodeMode.GoodOnly:
-                        return;
-                }
+                return;
             }
 
             timeToExtractorDps.Observe((DateTime.UtcNow - datapoint.SourceTimestamp).TotalSeconds);
