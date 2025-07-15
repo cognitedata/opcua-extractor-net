@@ -48,7 +48,17 @@ namespace Cognite.OpcUa.Pushers
         public bool Initialized { get; set; }
         public bool NoInit { get; set; }
         public PusherInput? PendingNodes { get; set; }
-        public UAExtractor Extractor { get; set; } = null!;
+        private UAExtractor? _extractor;
+        public UAExtractor Extractor 
+        { 
+            get => _extractor ?? throw new InvalidOperationException("Extractor must be set");
+            set 
+            { 
+                _extractor = value;
+                // Initialize transmission grouper with the extractor
+                transmissionGrouper = new MqttTransmissionGrouper(config, log, value);
+            } 
+        }
         public IPusherConfig BaseConfig => config;
         private readonly MqttPusherConfig config;
         private readonly IMqttClient client;
@@ -71,6 +81,7 @@ namespace Cognite.OpcUa.Pushers
         private readonly Utils.DataFormatCache formatCache;
         private readonly Utils.AdaptiveChunker adaptiveChunker;
         private readonly Utils.ConnectionRecoveryManager connectionRecovery;
+        private MqttTransmissionGrouper transmissionGrouper;
 
         private static readonly Counter createdAssets = Metrics
             .CreateCounter("opcua_created_assets_mqtt", "Number of assets pushed over mqtt");
@@ -123,6 +134,7 @@ namespace Cognite.OpcUa.Pushers
             formatCache = new Utils.DataFormatCache(10000, config.TimezoneOffset ?? "+00:00", config.TimestampFormat == "iso8601");
             adaptiveChunker = new Utils.AdaptiveChunker(log, config.MaxMessageSize, config.MinChunkSize, config.MaxChunkSize);
             connectionRecovery = new Utils.ConnectionRecoveryManager(log, 100000, TimeSpan.FromSeconds(5), 10);
+            transmissionGrouper = new MqttTransmissionGrouper(config, log, null!);
             var builder = new MqttClientOptionsBuilder()
                 .WithClientId(config.ClientId)
                 .WithTcpServer(config.Host, config.Port)
@@ -329,8 +341,32 @@ namespace Cognite.OpcUa.Pushers
                 return null;
             }
 
-            // Use AdaptiveChunker directly instead of ChunkBy for unified chunking logic
-            var convertedDataPointList = dataPointList.ToDictionary(kvp => kvp.Key, kvp => (IEnumerable<UADataPoint>)kvp.Value);
+            // Apply transmission strategy grouping
+            var allDataPoints = dataPointList.SelectMany(kvp => kvp.Value);
+            
+            // CRITICAL FIX: Enumerate and materialize the collection immediately to prevent infinite loops
+            var allDataPointsList = allDataPoints.ToList();
+            
+            log.LogInformation("[DEBUG] Starting transmission strategy grouping with {Strategy}. Total datapoints: {Count}", 
+                config.TransmissionStrategy, allDataPointsList.Count);
+            
+            log.LogInformation("[MQTT PUSH DEBUG] About to call GroupDataPoints with {Count} datapoints", allDataPointsList.Count);
+            var groupedByStrategy = transmissionGrouper.GroupDataPoints(allDataPointsList);
+            log.LogInformation("[MQTT PUSH DEBUG] GroupDataPoints returned {GroupCount} groups", groupedByStrategy.Count());
+            
+            // Convert grouped data to dictionary format for PushDataPointsChunk
+            var convertedDataPointList = groupedByStrategy.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+            
+            // Log strategy-specific grouping information
+            log.LogInformation("[Transmission Strategy] {Strategy} grouped {OriginalGroups} original groups into {NewGroups} strategy-based groups", 
+                config.TransmissionStrategy, dataPointList.Count, convertedDataPointList.Count);
+            
+            foreach (var group in convertedDataPointList.Take(5)) // Log first 5 groups for debugging
+            {
+                log.LogInformation("[Strategy Group] '{GroupKey}' contains {DataPointCount} datapoints", 
+                    group.Key, group.Value.Count());
+            }
+            
             var result = await PushDataPointsChunk(convertedDataPointList, token);
             
             if (!result)
@@ -635,52 +671,97 @@ namespace Cognite.OpcUa.Pushers
                             return (object?)result;
                         };
 
-                    // Process chunks in parallel with configurable concurrency limit
-                    var maxConcurrency = Math.Min(config.MaxConcurrency, Environment.ProcessorCount);
-                    var success = await adaptiveChunker.ProcessChunksParallel(
-                        dataPointList, 
-                        payloadCreator, 
-                        chunkProcessor, 
-                        maxConcurrency, 
-                        token);
-
-                    if (!success)
+                    // Process based on transmission strategy
+                    if (config.TransmissionStrategy == MqttTransmissionStrategy.CHUNK_BASED)
                     {
-                        DataFailing = true;
-                        return false;
+                        // Use AdaptiveChunker for CHUNK_BASED strategy
+                        var maxConcurrency = Math.Min(config.MaxConcurrency, Environment.ProcessorCount);
+                        var success = await adaptiveChunker.ProcessChunksParallel(
+                            dataPointList, 
+                            payloadCreator, 
+                            chunkProcessor, 
+                            maxConcurrency, 
+                            token);
+
+                        if (!success)
+                        {
+                            DataFailing = true;
+                            return false;
+                        }
+                    }
+                    else
+                    {
+                        // For other strategies, process based on strategy type
+                        log.LogInformation("[MQTT Strategy] Processing {GroupCount} groups using {Strategy} strategy", 
+                            dataPointList.Count, config.TransmissionStrategy);
+
+                        if (config.TransmissionStrategy == MqttTransmissionStrategy.ROOT_NODE_BASED || 
+                            config.TransmissionStrategy == MqttTransmissionStrategy.TAG_LIST_BASED)
+                        {
+                            // For ROOT_NODE_BASED and TAG_LIST_BASED, each group becomes one JSON message
+                            foreach (var group in dataPointList)
+                            {
+                                // Create a single message with all datapoints in this group
+                                var groupData = new[] { group };
+                                var payload = payloadCreator(groupData);
+                                
+                                if (payload != null)
+                                {
+                                    await chunkProcessor(groupData, payload);
+                                }
+                            }
+                        }
+                        else if (config.TransmissionStrategy == MqttTransmissionStrategy.TAG_CHANGE_BASED)
+                        {
+                            // For TAG_CHANGE_BASED, each individual tag becomes a separate JSON message
+                            foreach (var group in dataPointList)
+                            {
+                                foreach (var dataPoint in group.Value)
+                                {
+                                    var singlePointGroup = new[] { new KeyValuePair<string, IEnumerable<UADataPoint>>(group.Key, new[] { dataPoint }) };
+                                    var payload = payloadCreator(singlePointGroup);
+                                    
+                                    if (payload != null)
+                                    {
+                                        await chunkProcessor(singlePointGroup, payload);
+                                    }
+                                }
+                            }
+                        }
                     }
 
                     // Calculate and log total transmitted datapoints
                     var totalTransmitted = dataPointList.Select(dp => (long)dp.Value.Count()).Sum();
-                    log.LogInformation("[MQTT Total Success] Successfully transmitted {Count} datapoints to MQTT broker", totalTransmitted);
+                    log.LogInformation("[MQTT Total Success] Successfully transmitted {Count} datapoints to MQTT broker using {Strategy} strategy", 
+                        totalTransmitted, config.TransmissionStrategy);
                 }
                 else // Protobuf
-                {
-                    var inserts = dataPointList.ToDictionary(
-                        pair => Identity.Create(pair.Key),
-                        pair => pair.Value.SelectNonNull(dp => dp.ToCDFDataPoint(fullConfig.Extraction.StatusCodes.IngestStatusCodes, log)));
+        {
+            var inserts = dataPointList.ToDictionary(
+                pair => Identity.Create(pair.Key),
+                pair => pair.Value.SelectNonNull(dp => dp.ToCDFDataPoint(fullConfig.Extraction.StatusCodes.IngestStatusCodes, log)));
             
-                    var (points, errors) = Sanitation.CleanDataPointsRequest(inserts, SanitationMode.Clean, config.NonFiniteReplacement);
-                    var cleaned = points.ToDictionary(pair => (Identity)pair.Key, pair => pair.Value);
+            var (points, errors) = Sanitation.CleanDataPointsRequest(inserts, SanitationMode.Clean, config.NonFiniteReplacement);
+            var cleaned = points.ToDictionary(pair => (Identity)pair.Key, pair => pair.Value);
 
-                    foreach (var error in errors)
-                    {
-                        log.LogCogniteError(error, RequestType.CreateDatapoints, true);
-                    }
+            foreach (var error in errors)
+            {
+                log.LogCogniteError(error, RequestType.CreateDatapoints, true);
+            }
 
                     if (cleaned.Count == 0) return true;
 
                     var req = cleaned.ToInsertRequest();
-                    if (req.Items.Count == 0) return true;
+            if (req.Items.Count == 0) return true;
 
-                    var data = req.ToByteArray();
+            var data = req.ToByteArray();
 
                     log.LogTrace("Using protobuf serialization for {count} timeseries", dataPointList.Count);
                     
-                    var msg = baseBuilder
-                        .WithTopic(config.DatapointTopic)
+            var msg = baseBuilder
+                .WithTopic(config.DatapointTopic)
                         .WithPayload(data)
-                        .Build();
+                .Build();
 
                     var result = await client.PublishAsync(msg, token);
                     if (result.ReasonCode != MQTTnet.Client.MqttClientPublishReasonCode.Success)

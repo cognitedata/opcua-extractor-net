@@ -192,6 +192,29 @@
             "default": 4,
             "minimum": 1,
             "maximum": 16
+        },
+        "mqtt-transmission-strategy": {
+            "type": "string",
+            "description": "MQTT transmission strategy for grouping and sending data. ROOT_NODE_BASED: Group by extraction.root-nodes configuration. CHUNK_BASED: Use existing chunking strategy (default). TAG_LIST_BASED: Group by specified tag lists. TAG_CHANGE_BASED: Send based on OPC UA tag changes (subscription-based).",
+            "enum": [
+                "ROOT_NODE_BASED",
+                "CHUNK_BASED", 
+                "TAG_LIST_BASED",
+                "TAG_CHANGE_BASED"
+            ],
+            "default": "CHUNK_BASED"
+        },
+        "tag-lists": {
+            "type": "array",
+            "description": "Configuration for tag list grouping when mqtt-transmission-strategy is TAG_LIST_BASED. Each array represents a group of tags that should be sent together in one JSON message.",
+            "items": {
+                "type": "array",
+                "description": "A list of tag names that should be grouped together",
+                "items": {
+                    "type": "string",
+                    "description": "Tag name or external ID"
+                }
+            }
         }
     }
 }

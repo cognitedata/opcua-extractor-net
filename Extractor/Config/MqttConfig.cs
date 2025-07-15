@@ -15,6 +15,7 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Text.Json.Serialization;
 
@@ -50,6 +51,30 @@ namespace Cognite.OpcUa.Config
         /// Polling snapshot format (deprecated, use PollingSnapshotObject instead).
         /// </summary>
         PollingSnapshot
+    }
+
+    /// <summary>
+    /// Enum for MQTT transmission strategy types.
+    /// </summary>
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public enum MqttTransmissionStrategy
+    {
+        /// <summary>
+        /// Group data by root nodes configured in extraction.root-nodes.
+        /// </summary>
+        ROOT_NODE_BASED,
+        /// <summary>
+        /// Use chunking strategy with max-chunk-size (default behavior).
+        /// </summary>
+        CHUNK_BASED,
+        /// <summary>
+        /// Group data by specified tag lists.
+        /// </summary>
+        TAG_LIST_BASED,
+        /// <summary>
+        /// Send data based on OPC UA tag changes (subscription-based).
+        /// </summary>
+        TAG_CHANGE_BASED
     }
 
     public class MqttPusherConfig : IPusherConfig
@@ -252,6 +277,24 @@ namespace Cognite.OpcUa.Config
         /// </summary>
         [DefaultValue(1048576)] // 1MB
         public int MaxMessageSize { get; set; } = 1048576;
+
+        /// <summary>
+        /// MQTT transmission strategy for grouping and sending data.
+        /// ROOT_NODE_BASED: Group by extraction.root-nodes configuration
+        /// CHUNK_BASED: Use existing chunking strategy (default)
+        /// TAG_LIST_BASED: Group by specified tag lists
+        /// TAG_CHANGE_BASED: Send based on OPC UA tag changes (subscription-based)
+        /// </summary>
+        [DefaultValue(MqttTransmissionStrategy.CHUNK_BASED)]
+        [YamlDotNet.Serialization.YamlMember(Alias = "mqtt-transmission-strategy")]
+        public MqttTransmissionStrategy TransmissionStrategy { get; set; } = MqttTransmissionStrategy.CHUNK_BASED;
+
+        /// <summary>
+        /// Configuration for tag list grouping when TransmissionStrategy is TAG_LIST_BASED.
+        /// Each list represents a group of tags that should be sent together in one JSON message.
+        /// </summary>
+        [YamlDotNet.Serialization.YamlMember(Alias = "tag-lists")]
+        public List<List<string>>? TagLists { get; set; }
 
         /// <summary>
         /// Maximum number of data points in a single chunk for adaptive chunking.

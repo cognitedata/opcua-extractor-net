@@ -33,7 +33,7 @@ extraction:
 
     # Delay in ms between each push of data points to targets
     # Alternatively, use N[timeunit] where timeunit is w, d, h, m, s or ms.
-    data-push-delay: 100
+    data-push-delay: 300
 
     # KEPServer의 실제 태그 구조에 맞게 루트 노드 설정
     root-nodes:
@@ -368,6 +368,18 @@ mqtt:
     # Maximum number of concurrent chunk processing for parallel MQTT publishing (default: 4)
     # Higher values may improve throughput but can overwhelm the MQTT broker
     max-concurrency: 4
+    
+    # MQTT transmission strategy for grouping and sending data
+    # ROOT_NODE_BASED: Group by extraction.root-nodes configuration
+    # CHUNK_BASED: Use existing chunking strategy (default) 
+    # TAG_LIST_BASED: Group by specified tag lists
+    # TAG_CHANGE_BASED: Send based on OPC UA tag changes (subscription-based)
+    mqtt-transmission-strategy: ROOT_NODE_BASED
+    
+    # Configuration for tag list grouping when mqtt-transmission-strategy is TAG_LIST_BASED
+    # tag-lists:
+    #   - ["kep.S.A.tag1", "kep.S.A.tag2", "kep.S.A.tag3"]  # Group 1
+    #   - ["kep.S.B.tag1", "kep.S.B.tag2"]                  # Group 2
     
     # Set to enable storing a list of created assets/timeseries to local litedb.
     # Requires the StateStorage.Location property to be set.
