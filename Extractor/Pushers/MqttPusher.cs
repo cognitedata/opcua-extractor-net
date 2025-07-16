@@ -368,7 +368,7 @@ namespace Cognite.OpcUa.Pushers
             }
             
             var result = await PushDataPointsChunk(convertedDataPointList, token);
-            
+
             if (!result)
             {
                 log.LogDebug("Failed to push {Count} points to Target over MQTT", count);
@@ -912,13 +912,50 @@ namespace Cognite.OpcUa.Pushers
                 payload["metadata"] = metadata;
             }
 
-            var tagsData = chunk.Select(kvp => new Dictionary<string, object>
+            // Handle ROOT_NODE_BASED strategy: group datapoints by tag ID and preserve multiple values per tag
+            if (config.TransmissionStrategy == MqttTransmissionStrategy.ROOT_NODE_BASED)
             {
-                ["tag"] = kvp.Key,
-                ["data"] = kvp.Value.Select(dp => CreateDataPointObject(dp)).ToList()
-            }).ToList();
+                var tagsData = new List<Dictionary<string, object>>();
+                
+                // Group all datapoints by tag ID across all root node groups
+                var tagGroupedData = new Dictionary<string, List<UADataPoint>>();
+                
+                foreach (var kvp in chunk)
+                {
+                    foreach (var dp in kvp.Value)
+                    {
+                        if (!tagGroupedData.ContainsKey(dp.Id))
+                        {
+                            tagGroupedData[dp.Id] = new List<UADataPoint>();
+                        }
+                        tagGroupedData[dp.Id].Add(dp);
+                    }
+                }
+                
+                // Create tag entries with all datapoints for each tag
+                foreach (var tagGroup in tagGroupedData)
+                {
+                    tagsData.Add(new Dictionary<string, object>
+                    {
+                        ["tag"] = tagGroup.Key, // Tag ID
+                        ["data"] = tagGroup.Value.Select(dp => CreateDataPointObject(dp)).ToList() // All datapoints for this tag
+                    });
+                }
+                
+                payload["tags_data"] = tagsData;
+            }
+            else
+            {
+                // For other strategies, use the original logic
+                var tagsData = chunk.Select(kvp => new Dictionary<string, object>
+                {
+                    ["tag"] = kvp.Key,
+                    ["data"] = kvp.Value.Select(dp => CreateDataPointObject(dp)).ToList()
+                }).ToList();
 
-            payload["tags_data"] = tagsData;
+                payload["tags_data"] = tagsData;
+            }
+            
             return payload;
         }
 

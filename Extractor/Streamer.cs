@@ -426,7 +426,15 @@ namespace Cognite.OpcUa
                 return;
             }
 
-            foreach (var datapoint in item.DequeueValues())
+            // 추가: OPC UA 서버에서 받은 데이터포인트 수 로그 출력
+            var dequeuedValues = item.DequeueValues().ToList();
+            if (dequeuedValues.Count > 0)
+            {
+                log.LogInformation("[OPC UA SERVER DATA] Tag '{TagId}' received {Count} datapoints from server", 
+                    node.Id, dequeuedValues.Count);
+            }
+
+            foreach (var datapoint in dequeuedValues)
             {
                 HandleStreamedDatapoint(datapoint, node);
             }
@@ -439,7 +447,7 @@ namespace Cognite.OpcUa
             var validationResult = Utils.DataPointValidator.ValidateAndPreprocess(datapoint, node, config, log);
             if (validationResult == null)
             {
-                return;
+                        return;
             }
 
             timeToExtractorDps.Observe((DateTime.UtcNow - datapoint.SourceTimestamp).TotalSeconds);
@@ -453,7 +461,12 @@ namespace Cognite.OpcUa
                 return;
             }
 
-            var buffDps = ToDataPoint(datapoint, node);
+            var buffDps = ToDataPoint(datapoint, node).ToList();
+            
+            // 추가: ToDataPoint에서 생성된 UADataPoint 수 로그 출력
+            log.LogInformation("[DATAPOINT CONVERSION] Tag '{TagId}' converted to {Count} UADataPoints (SourceTimestamp: {Timestamp})", 
+                node.Id, buffDps.Count, datapoint.SourceTimestamp);
+            
             if (StatusCode.IsGood(datapoint.StatusCode))
             {
                 node.UpdateFromStream(buffDps);

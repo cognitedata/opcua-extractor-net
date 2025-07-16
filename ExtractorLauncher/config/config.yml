@@ -39,8 +39,8 @@ extraction:
     root-nodes:
         - namespace-uri: "KEPServerEX"
           node-id: "s=S.A"
-        - namespace-uri: "KEPServerEX"
-          node-id: "s=S.B"
+        #- namespace-uri: "KEPServerEX"
+        #  node-id: "s=S.B"
         #- namespace-uri: "KEPServerEX"
         #  node-id: "s=S.C"
         #- namespace-uri: "KEPServerEX"
@@ -124,9 +124,9 @@ extraction:
         filter:
           #id: "s=Simulation Examples.Functions._System"
           id: "s=S.A._System"
-      - type: Ignore
-        filter:
-          id: "s=S.B._System"
+      #- type: Ignore
+      #  filter:
+      #    id: "s=S.B._System"
       #- type: Ignore
       #  filter:
       #    id: "s=S.C._System"
@@ -229,7 +229,7 @@ subscriptions:
     # Lower increases server load. This should be set to below the maximum update frequency of the source system.
     sampling-interval: 100
     # Length of internal server queue for each subscribed item. < 2 means that any updates occuring between publish requests are lost.
-    queue-length: 1
+    queue-length: 10
     # The number of publish requests without a response before the server should send a keep alive message.
     keep-alive-count: 10
     # The number of publish requests without a response before the server should close the subscription.
@@ -345,7 +345,7 @@ mqtt:
     #   - Each tag has its own data array with timestamp, value, sc, dt
     #   - Ideal for event-driven subscription scenarios
     
-    json-format-type: PollingSnapshotObject
+    json-format-type: Subscription
     
     # Whether to include metadata object in JSON output
     include-metadata: true
@@ -374,7 +374,7 @@ mqtt:
     # CHUNK_BASED: Use existing chunking strategy (default) 
     # TAG_LIST_BASED: Group by specified tag lists
     # TAG_CHANGE_BASED: Send based on OPC UA tag changes (subscription-based)
-    mqtt-transmission-strategy: CHUNK_BASED
+    mqtt-transmission-strategy: ROOT_NODE_BASED
     
     # Configuration for tag list grouping when mqtt-transmission-strategy is TAG_LIST_BASED
     # tag-lists:

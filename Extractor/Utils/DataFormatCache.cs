@@ -39,8 +39,32 @@ namespace Cognite.OpcUa.Utils
 
                 if (_useIso8601)
                 {
-                    var dateTime = DateTimeOffset.FromUnixTimeMilliseconds(ts);
-                    return $"{dateTime.ToString("yyyy-MM-ddTHH:mm:ss.fff")}{_timezoneOffset}";
+                    // Parse timezone offset to get hours and minutes
+                    var offset = TimeSpan.Zero;
+                    if (!string.IsNullOrEmpty(_timezoneOffset) && _timezoneOffset != "+00:00")
+                    {
+                        try
+                        {
+                            // Parse timezone offset format like "+09:00" or "-05:00"
+                            if (_timezoneOffset.Length >= 6)
+                            {
+                                var sign = _timezoneOffset[0] == '+' ? 1 : -1;
+                                var hours = int.Parse(_timezoneOffset.Substring(1, 2));
+                                var minutes = int.Parse(_timezoneOffset.Substring(4, 2));
+                                offset = new TimeSpan(sign * hours, sign * minutes, 0);
+                            }
+                        }
+                        catch
+                        {
+                            // If parsing fails, default to UTC
+                            offset = TimeSpan.Zero;
+                        }
+                    }
+
+                    // Create DateTimeOffset with proper timezone conversion
+                    var utcDateTime = DateTimeOffset.FromUnixTimeMilliseconds(ts);
+                    var localDateTime = utcDateTime.ToOffset(offset);
+                    return localDateTime.ToString("yyyy-MM-ddTHH:mm:ss.fffzzz");
                 }
                 else
                 {

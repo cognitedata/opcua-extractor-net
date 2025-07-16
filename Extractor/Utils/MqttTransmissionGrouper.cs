@@ -73,19 +73,14 @@ namespace Cognite.OpcUa.Utils
             logger.LogTrace("[ROOT_NODE_BASED] Processing {Count} datapoints for root node grouping", 
                 dataPoints.Count);
 
-            // CRITICAL: Deduplicate immediately to prevent infinite loops
-            var uniqueDataPoints = dataPoints
-                .GroupBy(dp => dp.Id)
-                .Select(g => g.OrderByDescending(dp => dp.Timestamp).First())
-                .ToList();
-                
-            logger.LogInformation("[ROOT_NODE_BASED] Input: {Original} datapoints, After dedup: {Unique} unique", 
-                dataPoints.Count, uniqueDataPoints.Count);
+            // PRESERVE ALL DATAPOINTS: No deduplication to maintain multiple values per tag
+            logger.LogInformation("[ROOT_NODE_BASED] Processing all {Count} datapoints without deduplication", 
+                dataPoints.Count);
 
             // Group datapoints by root node and count them
             var rootNodeCounts = new Dictionary<string, int>();
             
-            foreach (var dataPoint in uniqueDataPoints)
+            foreach (var dataPoint in dataPoints)
             {
                 var rootNodeKey = ExtractRootNodeFromId(dataPoint.Id);
                 
