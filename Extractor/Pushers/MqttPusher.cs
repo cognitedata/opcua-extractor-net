@@ -840,7 +840,7 @@ namespace Cognite.OpcUa.Pushers
             var data = new Dictionary<string, object>
             {
                 ["timestamp"] = GetFormattedTimestamp(sharedTimestamp.ToUnixTimeMilliseconds()),
-                ["tags"] = chunk.SelectMany(kvp => kvp.Value.Select(dp => CreateTagObject(kvp.Key, dp))).ToList()
+                ["tags"] = chunk.SelectMany(kvp => kvp.Value.Select(dp => CreateTagObject(dp.Id, dp))).ToList()
             };
 
             payload["data"] = data;

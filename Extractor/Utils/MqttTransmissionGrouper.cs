@@ -132,7 +132,6 @@ namespace Cognite.OpcUa.Utils
             for (int i = 0; i < config.TagLists.Count; i++)
             {
                 var tagList = config.TagLists[i];
-                var groupKey = $"tag_list_{i + 1}";
                 var groupDataPoints = new List<UADataPoint>();
 
                 foreach (var tag in tagList)
@@ -150,6 +149,9 @@ namespace Cognite.OpcUa.Utils
 
                 if (groupDataPoints.Any())
                 {
+                    // Create meaningful group key based on the first tag's root node
+                    var firstTag = groupDataPoints.First();
+                    var groupKey = ExtractRootNodeFromId(firstTag.Id) ?? $"tag_list_{i + 1}";
                     tagListGroups[groupKey] = groupDataPoints;
                 }
             }
