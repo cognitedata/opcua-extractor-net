@@ -430,8 +430,8 @@ namespace Cognite.OpcUa
             var dequeuedValues = item.DequeueValues().ToList();
             if (dequeuedValues.Count > 0)
             {
-                log.LogInformation("[OPC UA SERVER DATA] Tag '{TagId}' received {Count} datapoints from server", 
-                    node.Id, dequeuedValues.Count);
+                // log.LogInformation("[OPC UA SERVER DATA] Tag '{TagId}' received {Count} datapoints from server", 
+                //     node.Id, dequeuedValues.Count);
             }
 
             foreach (var datapoint in dequeuedValues)
@@ -464,8 +464,8 @@ namespace Cognite.OpcUa
             var buffDps = ToDataPoint(datapoint, node).ToList();
             
             // 추가: ToDataPoint에서 생성된 UADataPoint 수 로그 출력
-            log.LogInformation("[DATAPOINT CONVERSION] Tag '{TagId}' converted to {Count} UADataPoints (SourceTimestamp: {Timestamp})", 
-                node.Id, buffDps.Count, datapoint.SourceTimestamp);
+            // log.LogInformation("[DATAPOINT CONVERSION] Tag '{TagId}' converted to {Count} UADataPoints (SourceTimestamp: {Timestamp})", 
+            //     node.Id, buffDps.Count, datapoint.SourceTimestamp);
             
             if (StatusCode.IsGood(datapoint.StatusCode))
             {
