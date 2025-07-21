@@ -116,6 +116,7 @@ namespace Cognite.OpcUa
         private readonly object queueLock = new object();
         private readonly Timer flushTimer;
         private InfluxDBClient? influxClient;
+        private volatile bool disposed = false;
         
         public InfluxDBMetricsConfig Config => config;
 
@@ -287,7 +288,7 @@ namespace Cognite.OpcUa
         /// </summary>
         private void FlushDataPoints(object? state)
         {
-            if (influxClient == null) return;
+            if (disposed || influxClient == null) return;
             List<InfluxDBDataPoint> pointsToFlush;
             lock (queueLock)
             {
@@ -339,8 +340,17 @@ namespace Cognite.OpcUa
 
         public void Dispose()
         {
+            if (disposed) return;
+            
+            // Stop the timer first and wait for any pending callbacks
+            flushTimer?.Change(Timeout.Infinite, Timeout.Infinite);
             flushTimer?.Dispose();
+            
+            // Flush any remaining data points
+            FlushDataPoints(null);
+            
             influxClient?.Dispose();
+            disposed = true;
         }
     }
 } 

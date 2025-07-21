@@ -780,13 +780,14 @@ namespace Test.Unit
         {
             UADataPoint dt;
             var ts = DateTime.UtcNow;
+            var receivedTs = DateTime.UtcNow.AddMilliseconds(100); // Different from ts to verify serialization
             if (value is string || value == null)
             {
-                dt = new UADataPoint(ts, id, value as string, StatusCodes.Good);
+                dt = new UADataPoint(ts, id, value as string, StatusCodes.Good, receivedTs);
             }
             else
             {
-                dt = new UADataPoint(ts, id, UAClient.ConvertToDouble(value), StatusCodes.Good);
+                dt = new UADataPoint(ts, id, UAClient.ConvertToDouble(value), StatusCodes.Good, receivedTs);
             }
             var bytes = dt.ToStorableBytes();
 
@@ -794,6 +795,7 @@ namespace Test.Unit
 
             var convDt = UADataPoint.FromStream(stream);
             Assert.Equal(dt.Timestamp, convDt.Timestamp);
+            Assert.Equal(dt.ReceivedTimestamp, convDt.ReceivedTimestamp);
             Assert.Equal(dt.Id, convDt.Id);
             Assert.Equal(dt.IsString, convDt.IsString);
             Assert.Equal(dt.StringValue, convDt.StringValue);

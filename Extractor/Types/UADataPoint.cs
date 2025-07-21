@@ -162,6 +162,7 @@ namespace Cognite.OpcUa.Types
             var bytes = new List<byte>(20);
             bytes.AddRange(CogniteUtils.StringToStorable(Id));
             bytes.AddRange(BitConverter.GetBytes(Timestamp.ToBinary()));
+            bytes.AddRange(BitConverter.GetBytes(ReceivedTimestamp.ToBinary()));
             bytes.AddRange(BitConverter.GetBytes(IsString));
             bytes.AddRange(BitConverter.GetBytes(Status.Code));
 
@@ -197,6 +198,9 @@ namespace Cognite.OpcUa.Types
             if (stream.Read(buffer, 0, sizeof(long)) < sizeof(long)) return null;
             DateTime ts = DateTime.FromBinary(BitConverter.ToInt64(buffer, 0));
 
+            if (stream.Read(buffer, 0, sizeof(long)) < sizeof(long)) return null;
+            DateTime receivedTs = DateTime.FromBinary(BitConverter.ToInt64(buffer, 0));
+
             if (stream.Read(buffer, 0, sizeof(bool)) < sizeof(bool)) return null;
             bool isstr = BitConverter.ToBoolean(buffer, 0);
 
@@ -206,7 +210,7 @@ namespace Cognite.OpcUa.Types
             if (isstr)
             {
                 var value = CogniteUtils.StringFromStream(stream);
-                return new UADataPoint(ts, id, value, status);
+                return new UADataPoint(ts, id, value, status, receivedTs);
             }
             else
             {
@@ -217,11 +221,11 @@ namespace Cognite.OpcUa.Types
                 {
                     if (stream.Read(buffer, 0, sizeof(double)) < sizeof(double)) return null;
                     var value = BitConverter.ToDouble(buffer, 0);
-                    return new UADataPoint(ts, id, value, status);
+                    return new UADataPoint(ts, id, value, status, receivedTs);
                 }
                 else
                 {
-                    return new UADataPoint(ts, id, false, status);
+                    return new UADataPoint(ts, id, false, status, receivedTs);
                 }
 
             }
