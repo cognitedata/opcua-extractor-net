@@ -106,7 +106,7 @@ namespace Cognite.OpcUa
     /// <summary>
     /// Utility class handling reading nodes as InfluxDB metrics.
     /// </summary>
-    public class InfluxDBMetricsManager : IDisposable
+    public class InfluxDBMetricsManager : IDisposable, IAsyncDisposable
     {
         private readonly InfluxDBMetricsConfig config;
         private readonly UAClient client;
@@ -127,7 +127,7 @@ namespace Cognite.OpcUa
             this.log = log;
             // Use config.Url as is to maintain consistency with InitializeInfluxDB
             influxClient = new InfluxDBClient(config.Url, config.Username, config.Password);
-            flushTimer = new Timer(FlushDataPoints, null, TimeSpan.FromMilliseconds(config.FlushIntervalMs), TimeSpan.FromMilliseconds(config.FlushIntervalMs));
+            flushTimer = new Timer(async _ => await FlushDataPointsAsync(), null, TimeSpan.FromMilliseconds(config.FlushIntervalMs), TimeSpan.FromMilliseconds(config.FlushIntervalMs));
         }
 
         private readonly NodeId[] serverDiagnostics = new[]
@@ -159,8 +159,10 @@ namespace Cognite.OpcUa
         {
             try
             {
-                // Use config.Url directly for consistency
-                influxClient = new InfluxDBClient(config.Url, config.Username ?? "", config.Password ?? "");
+                if (influxClient == null)
+                {
+                    throw new InvalidOperationException("InfluxDB client not initialized");
+                }
                 // Test connection by trying to get databases
                 var databases = await influxClient.GetInfluxDBNamesAsync();
                 log.LogInformation("Connected to InfluxDB at {Url}", config.Url);
@@ -271,6 +273,7 @@ namespace Cognite.OpcUa
         /// <param name="dataPoint">Data point to enqueue</param>
         public void EnqueueDataPoint(InfluxDBDataPoint dataPoint)
         {
+            bool shouldFlush = false;
             lock (queueLock)
             {
                 dataPointQueue.Enqueue(dataPoint);
@@ -278,15 +281,30 @@ namespace Cognite.OpcUa
                 // Flush if batch size is reached
                 if (dataPointQueue.Count >= config.BatchSize)
                 {
-                    FlushDataPoints(null);
+                    shouldFlush = true;
                 }
+            }
+            
+            if (shouldFlush)
+            {
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await FlushDataPointsAsync();
+                    }
+                    catch (Exception ex)
+                    {
+                        log.LogError(ex, "Failed to flush data points from batch trigger");
+                    }
+                });
             }
         }
 
         /// <summary>
         /// Flush queued data points to InfluxDB
         /// </summary>
-        private void FlushDataPoints(object? state)
+        private async Task FlushDataPointsAsync()
         {
             if (disposed || influxClient == null) return;
             List<InfluxDBDataPoint> pointsToFlush;
@@ -318,37 +336,50 @@ namespace Cognite.OpcUa
                     return (IInfluxDatapoint)point;
                 }).ToList();
                 
-                // Use fire-and-forget pattern to avoid blocking the timer thread
-                _ = Task.Run(async () =>
-                {
-                    try
-                    {
-                        await influxClient.PostPointsAsync(config.Database, influxPoints, config.BatchSize);
-                        log.LogDebug("Flushed {Count} data points to InfluxDB", pointsToFlush.Count);
-                    }
-                    catch (Exception ex)
-                    {
-                        log.LogError(ex, "Failed to write {Count} data points to InfluxDB", pointsToFlush.Count);
-                    }
-                });
+                // Direct await instead of fire-and-forget for proper disposal handling
+                await influxClient.PostPointsAsync(config.Database, influxPoints, config.BatchSize);
+                log.LogDebug("Flushed {Count} data points to InfluxDB", pointsToFlush.Count);
             }
             catch (Exception ex)
             {
-                log.LogError(ex, "Failed to prepare data points for InfluxDB: {Message}", ex.Message);
+                log.LogError(ex, "Failed to write {Count} data points to InfluxDB", pointsToFlush.Count);
             }
+        }
+
+        /// <summary>
+        /// Flush queued data points to InfluxDB (synchronous wrapper for timer callback)
+        /// </summary>
+        private void FlushDataPoints(object? state)
+        {
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await FlushDataPointsAsync();
+                }
+                catch (Exception ex)
+                {
+                    log.LogError(ex, "Failed to flush data points from timer callback");
+                }
+            });
         }
 
         public void Dispose()
         {
+            DisposeAsync().GetAwaiter().GetResult();
+        }
+
+        public async ValueTask DisposeAsync()
+        {
             if (disposed) return;
-            
+
             // Stop the timer first and wait for any pending callbacks
             flushTimer?.Change(Timeout.Infinite, Timeout.Infinite);
             flushTimer?.Dispose();
-            
-            // Flush any remaining data points
-            FlushDataPoints(null);
-            
+
+            // Flush any remaining data points and wait for completion
+            await FlushDataPointsAsync();
+
             influxClient?.Dispose();
             disposed = true;
         }
