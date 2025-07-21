@@ -200,8 +200,6 @@ namespace Cognite.OpcUa.Nodes
         public bool IsObject { get => isObject || IsArray && (this is not UAVariableMember); set => isObject = value; }
         public bool AsEvents { get; set; }
 
-        private readonly StringConverter converter;
-
         /// <summary>
         /// If this is an object, this is the matching timeseries
         /// </summary>
@@ -525,8 +523,8 @@ namespace Cognite.OpcUa.Nodes
             FullConfig config,
             Dictionary<string, string>? metaMap)
         {
-             var writeAsJson = config.Cognite?.MetadataTargets?.Clean?.MetadataAsJson ?? false;
-            
+            var writeAsJson = config.Cognite?.MetadataTargets?.Clean?.MetadataAsJson ?? false;
+
             Dictionary<string, object> metaData;
             if (writeAsJson)
             {
@@ -544,7 +542,7 @@ namespace Cognite.OpcUa.Nodes
                 var json = JsonSerializer.Serialize(metaData);
                 using var jsonDocument = JsonDocument.Parse(json);
                 var rootElement = jsonDocument.RootElement;
-                
+
                 extractedData = new Dictionary<string, JsonElement>();
                 foreach (var property in rootElement.EnumerateObject())
                 {
@@ -578,7 +576,7 @@ namespace Cognite.OpcUa.Nodes
                 },
                 extractedData = extractedData
             };
-            
+
             if (Properties != null && Properties.Any() && metaMap != null && metaMap.Count != 0)
             {
                 foreach (var prop in Properties)
@@ -611,7 +609,7 @@ namespace Cognite.OpcUa.Nodes
 
             return res;
         }
-        
+
         #endregion
     }
 
