@@ -316,13 +316,24 @@ namespace Cognite.OpcUa
                     }
                     return (IInfluxDatapoint)point;
                 }).ToList();
-                var task = influxClient.PostPointsAsync(config.Database, influxPoints, config.BatchSize);
-                task.Wait();
-                log.LogDebug("Flushed {Count} data points to InfluxDB", pointsToFlush.Count);
+                
+                // Use fire-and-forget pattern to avoid blocking the timer thread
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await influxClient.PostPointsAsync(config.Database, influxPoints, config.BatchSize);
+                        log.LogDebug("Flushed {Count} data points to InfluxDB", pointsToFlush.Count);
+                    }
+                    catch (Exception ex)
+                    {
+                        log.LogError(ex, "Failed to write {Count} data points to InfluxDB", pointsToFlush.Count);
+                    }
+                });
             }
             catch (Exception ex)
             {
-                log.LogError(ex, "Failed to write {Count} data points to InfluxDB", pointsToFlush.Count);
+                log.LogError(ex, "Failed to prepare data points for InfluxDB: {Message}", ex.Message);
             }
         }
 

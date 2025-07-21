@@ -271,14 +271,14 @@ metrics:
     #   - namespaceUri: "KEPServerEX"
 
 influx-db-metrics:
-     enabled: true
-     url: "http://192.168.11.116:58086"
-     database: "opcua_metrics" 
-     username: "admin"
-     password: "admin"
-     retention-policy: "autogen"
-     measurement-prefix: "opcua"
-     batch-size: 100
+    enabled: true
+    url: "http://192.168.11.116:58086"
+    database: "opcua_metrics" 
+    username: "admin"
+    password: "admin"
+    retention-policy: "autogen"
+    measurement-prefix: "opcua"
+    batch-size: 100
 
 influx:
     # Set to true to enable this destination
