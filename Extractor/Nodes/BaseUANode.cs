@@ -574,12 +574,10 @@ namespace Cognite.OpcUa.Nodes
                 {
                     if (prop is UAVariable variable)
                     {
-                        result[prop.Name] = client.StringConverter.ConvertToString(
-                            variable.Value,
+                        result[prop.Name] = client.TypeConverter.ConvertToJsonObject(
+                            variable.Value ?? variable.Value.ToString(),
                             variable.FullAttributes.DataType?.EnumValues,
-                            null,
-                            reversibleJson ? StringConverterMode.Json : StringConverterMode.ReversibleJson)
-                            ?? variable.Value.ToString();
+                            mode: reversibleJson ? JsonMode.Json : JsonMode.ReversibleJson) ?? new object();
                     }
 
                     if (prop.Properties != null)
@@ -594,7 +592,7 @@ namespace Cognite.OpcUa.Nodes
             }
             return result;
         }
-    
+
         /// <summary>
         /// Return a dictionary of metadata fields for this node.
         /// </summary>
@@ -613,12 +611,24 @@ namespace Cognite.OpcUa.Nodes
             return BuildMetadataBase(extras, client);
         }
 
+        /// <summary>
+        /// Builds a JSON-compatible metadata dictionary based on the provided configuration and client context.
+        /// </summary>
+        /// <remarks>If <paramref name="getExtras"/> is <see langword="true"/>, the method retrieves
+        /// additional metadata  using the provided configuration and client context. Otherwise, only the base metadata
+        /// is included.</remarks>
+        /// <param name="config">The configuration object containing the metadata settings.</param>
+        /// <param name="client">The client providing access to the context and type conversion utilities.</param>
+        /// <param name="getExtras">A boolean value indicating whether to include additional metadata.  If <see langword="true"/>, extra
+        /// metadata will be retrieved and included in the result.</param>
+        /// <returns>A dictionary where the keys are metadata property names and the values are the corresponding metadata
+        /// values. The dictionary is formatted to be JSON-compatible.</returns>
         public Dictionary<string, object> BuildMetadataAsJson(FullConfig config, IUAClientAccess client, bool getExtras)
         {
             Dictionary<string, string>? extras = null;
             if (getExtras)
             {
-                extras = GetExtraMetadata(config, client.Context, client.StringConverter);
+                extras = GetExtraMetadata(config, client.Context, client.TypeConverter);
             }
             return BuildMetadataJsonBase(extras?.ToDictionary(extras => extras.Key, extras => (object)extras.Value), client);
         }
