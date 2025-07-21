@@ -269,11 +269,14 @@ logger:
 metrics:
     # otherMetrics:
     #   - namespaceUri: "KEPServerEX"
+    #     nodeId: "SomeCustomMetric"
+    #   - namespaceUri: "KEPServerEX"
+    #     nodeId: "SomeCustomMetric2"
 
 influx-db-metrics:
     enabled: true
     url: "http://192.168.11.116:58086"
-    database: "opcua_metrics" 
+    database: "opcua_metrics"
     username: "admin"
     password: "admin"
     retention-policy: "autogen"
