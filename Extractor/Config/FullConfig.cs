@@ -62,6 +62,12 @@ namespace Cognite.OpcUa.Config
         /// </summary>
         public UAMetricsConfig Metrics { get; set; } = null!;
         /// <summary>
+        /// Configuration for InfluxDB metrics collection.
+        /// Values will be sent to InfluxDB as time series data.
+        /// </summary>
+        [YamlMember(Alias = "influx-db-metrics")]
+        public InfluxDBMetricsConfig? InfluxDBMetrics { get; set; }
+        /// <summary>
         /// Configuration for writing to CDF.
         /// </summary>
         public CognitePusherConfig? Cognite { get; set; }
@@ -140,6 +146,64 @@ namespace Cognite.OpcUa.Config
         /// Values will be mapped to opcua_nodes_NODE-DISPLAY-NAME in prometheus.
         /// </summary>
         public NodeMetricsConfig? Nodes { get; set; }
+    }
+    
+    public class InfluxDBMetricsConfig
+    {
+        /// <summary>
+        /// InfluxDB server URL (e.g., http://localhost:8086)
+        /// </summary>
+        public string Url { get; set; } = "http://localhost:8086";
+        
+        /// <summary>
+        /// InfluxDB database name
+        /// </summary>
+        public string Database { get; set; } = "opcua_metrics";
+        
+        /// <summary>
+        /// InfluxDB username (optional for InfluxDB 1.8)
+        /// </summary>
+        public string? Username { get; set; }
+        
+        /// <summary>
+        /// InfluxDB password (optional for InfluxDB 1.8)
+        /// </summary>
+        public string? Password { get; set; }
+        
+        /// <summary>
+        /// InfluxDB retention policy (optional, defaults to "autogen")
+        /// </summary>
+        public string RetentionPolicy { get; set; } = "autogen";
+        
+        /// <summary>
+        /// Measurement name prefix for OPC UA metrics
+        /// </summary>
+        public string MeasurementPrefix { get; set; } = "opcua";
+        
+        /// <summary>
+        /// Batch size for sending metrics to InfluxDB
+        /// </summary>
+        public int BatchSize { get; set; } = 100;
+        
+        /// <summary>
+        /// Flush interval in milliseconds
+        /// </summary>
+        public int FlushIntervalMs { get; set; } = 5000;
+        
+        /// <summary>
+        /// Enable InfluxDB metrics collection
+        /// </summary>
+        public bool Enabled { get; set; } = false;
+        
+        /// <summary>
+        /// Map server diagnostics to InfluxDB metrics
+        /// </summary>
+        public bool ServerMetrics { get; set; } = true;
+        
+        /// <summary>
+        /// Map other nodes to InfluxDB metrics
+        /// </summary>
+        public IEnumerable<ProtoNodeId>? OtherMetrics { get; set; }
     }
     public class NodeMetricsConfig
     {

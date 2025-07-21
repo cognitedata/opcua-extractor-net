@@ -786,20 +786,60 @@ namespace Cognite.OpcUa.Pushers
         }
 
         /// <summary>
+        /// Calculate the time range of when data was received from OPC UA server
+        /// </summary>
+        /// <param name="chunk">Chunk of datapoints</param>
+        /// <returns>Tuple of start and end times</returns>
+        private (DateTime startTime, DateTime endTime) CalculateReceiveTimeRange(IEnumerable<KeyValuePair<string, IEnumerable<UADataPoint>>> chunk)
+        {
+            var allDataPoints = chunk.SelectMany(kvp => kvp.Value);
+            
+            if (!allDataPoints.Any())
+            {
+                var now = DateTime.UtcNow;
+                return (now, now);
+            }
+            
+            var receivedTimes = allDataPoints.Select(dp => dp.ReceivedTimestamp).ToList();
+            return (receivedTimes.Min(), receivedTimes.Max());
+        }
+
+        /// <summary>
         /// Create metadata object for JSON payload
         /// </summary>
         private Dictionary<string, object>? CreateMetadata(string dataIngestType)
         {
+            return CreateMetadata(dataIngestType, null, null);
+        }
+
+        /// <summary>
+        /// Create metadata object for JSON payload with specified receive time range
+        /// </summary>
+        /// <param name="dataIngestType">Type of data ingestion</param>
+        /// <param name="msgRecvStart">Start time when data was received from OPC UA server</param>
+        /// <param name="msgRecvEnd">End time when data was received from OPC UA server</param>
+        /// <returns>Metadata dictionary</returns>
+        private Dictionary<string, object>? CreateMetadata(string dataIngestType, DateTime? msgRecvStart, DateTime? msgRecvEnd)
+        {
             if (!config.IncludeMetadata) return null;
+
+            // JSON message completion time (when metadata is being created)
+            var messageCompletionTime = DateTime.UtcNow;
 
             var metadata = new Dictionary<string, object>
             {
                 ["data_ingest_type"] = dataIngestType,
-                ["message_timestamp"] = GetFormattedTimestamp(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds())
+                ["message_timestamp"] = GetFormattedTimestamp(messageCompletionTime.ToUnixTimeMilliseconds())
             };
 
-            if (config.IncludeMessageTimestamps)
+            if (config.IncludeMessageTimestamps && msgRecvStart.HasValue && msgRecvEnd.HasValue)
             {
+                metadata["msgRecvStartTimestamp"] = GetFormattedTimestamp(msgRecvStart.Value.ToUnixTimeMilliseconds());
+                metadata["msgRecvEndTimestamp"] = GetFormattedTimestamp(msgRecvEnd.Value.ToUnixTimeMilliseconds());
+            }
+            else if (config.IncludeMessageTimestamps)
+            {
+                // Fallback to current time if receive times are not provided
                 var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
                 metadata["msgRecvStartTimestamp"] = GetFormattedTimestamp(now);
                 metadata["msgRecvEndTimestamp"] = GetFormattedTimestamp(now);
@@ -904,9 +944,13 @@ namespace Cognite.OpcUa.Pushers
         {
             if (!chunk.Any()) return null;
 
+            // Calculate receive time range from datapoints
+            var (msgRecvStart, msgRecvEnd) = CalculateReceiveTimeRange(chunk);
+
             var payload = new Dictionary<string, object>();
             
-            var metadata = CreateMetadata("subscription");
+            // Create metadata with accurate receive time information
+            var metadata = CreateMetadata("subscription", msgRecvStart, msgRecvEnd);
             if (metadata != null)
             {
                 payload["metadata"] = metadata;

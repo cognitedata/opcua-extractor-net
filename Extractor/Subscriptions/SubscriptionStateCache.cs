@@ -11,6 +11,7 @@ namespace Cognite.OpcUa.Subscriptions
         ServiceLevel,
         NodeMetrics,
         RebrowseTriggers,
+        InfluxDBMetrics,
     }
 
     public static class SubscriptionNameMethods
@@ -25,6 +26,7 @@ namespace Cognite.OpcUa.Subscriptions
                 SubscriptionName.ServiceLevel => "ServiceLevel",
                 SubscriptionName.NodeMetrics => "NodeMetrics",
                 SubscriptionName.RebrowseTriggers => "RebrowseTriggers",
+                SubscriptionName.InfluxDBMetrics => "InfluxDBMetrics",
                 _ => throw new ArgumentException("Subscription name is not valid")
             };
         }

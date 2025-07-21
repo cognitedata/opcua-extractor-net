@@ -39,27 +39,36 @@ namespace Cognite.OpcUa.Types
         public bool IsString { get; }
 
         public StatusCode Status { get; }
+        
+        /// <summary>
+        /// Timestamp when this datapoint was received from OPC UA server
+        /// </summary>
+        public DateTime ReceivedTimestamp { get; }
         /// <param name="timestamp">Timestamp in ms since epoch</param>
         /// <param name="id">Converted id of node this belongs to, equal to externalId of timeseries in CDF</param>
         /// <param name="value">Value to set</param>
-        public UADataPoint(DateTime timestamp, string id, double value, StatusCode status)
+        /// <param name="receivedTimestamp">Timestamp when data was received from OPC UA server</param>
+        public UADataPoint(DateTime timestamp, string id, double value, StatusCode status, DateTime? receivedTimestamp = null)
         {
             Timestamp = timestamp;
             Id = id;
             DoubleValue = value;
             Status = status;
             IsString = false;
+            ReceivedTimestamp = receivedTimestamp ?? DateTime.UtcNow;
         }
         /// <param name="timestamp">Timestamp in ms since epoch</param>
         /// <param name="id">Converted id of node this belongs to, equal to externalId of timeseries in CDF</param>
         /// <param name="value">Value to set</param>
-        public UADataPoint(DateTime timestamp, string id, string? value, StatusCode status)
+        /// <param name="receivedTimestamp">Timestamp when data was received from OPC UA server</param>
+        public UADataPoint(DateTime timestamp, string id, string? value, StatusCode status, DateTime? receivedTimestamp = null)
         {
             Timestamp = timestamp;
             Id = id;
             StringValue = value;
             Status = status;
             IsString = true;
+            ReceivedTimestamp = receivedTimestamp ?? DateTime.UtcNow;
         }
         /// <summary>
         /// Copy given datapoint with given replacement value
@@ -73,6 +82,7 @@ namespace Cognite.OpcUa.Types
             StringValue = replacement;
             Status = other.Status;
             IsString = true;
+            ReceivedTimestamp = other.ReceivedTimestamp;
         }
         /// <summary>
         /// Copy given datapoint with given replacement value
@@ -86,6 +96,7 @@ namespace Cognite.OpcUa.Types
             DoubleValue = replacement;
             Status = other.Status;
             IsString = false;
+            ReceivedTimestamp = other.ReceivedTimestamp;
         }
 
         /// <summary>
@@ -95,12 +106,14 @@ namespace Cognite.OpcUa.Types
         /// <param name="id">Converted id of node this belongs to</param>
         /// <param name="isString">Whether this datapoint is for a string data type</param>
         /// <param name="status">Status code</param>
-        public UADataPoint(DateTime timestamp, string id, bool isString, StatusCode status)
+        /// <param name="receivedTimestamp">Timestamp when data was received from OPC UA server</param>
+        public UADataPoint(DateTime timestamp, string id, bool isString, StatusCode status, DateTime? receivedTimestamp = null)
         {
             Timestamp = timestamp;
             Id = id;
             IsString = isString;
             Status = status;
+            ReceivedTimestamp = receivedTimestamp ?? DateTime.UtcNow;
         }
 
 

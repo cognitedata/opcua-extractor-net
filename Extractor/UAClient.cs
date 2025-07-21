@@ -74,6 +74,7 @@ namespace Cognite.OpcUa
             .CreateCounter("opcua_browse_failures", "Number of failures on browse operations");
 
         private readonly NodeMetricsManager? metricsManager;
+        private readonly InfluxDBMetricsManager? influxDBMetricsManager;
 
         public SessionManager SessionManager { get; }
 
@@ -101,6 +102,11 @@ namespace Cognite.OpcUa
             if (config.Metrics.Nodes != null)
             {
                 metricsManager = new NodeMetricsManager(this, config.Metrics.Nodes);
+            }
+            
+            if (config.InfluxDBMetrics != null && config.InfluxDBMetrics.Enabled)
+            {
+                influxDBMetricsManager = new InfluxDBMetricsManager(this, config.InfluxDBMetrics, provider.GetRequiredService<ILogger<InfluxDBMetricsManager>>());
             }
             StringConverter = new StringConverter(provider.GetRequiredService<ILogger<StringConverter>>(), this, config);
             Browser = new Browser(provider.GetRequiredService<ILogger<Browser>>(), this, config);
@@ -319,8 +325,17 @@ namespace Cognite.OpcUa
         /// </summary>
         private async Task StartNodeMetrics()
         {
-            if (metricsManager == null) return;
-            await metricsManager.StartNodeMetrics(TypeManager, liveToken);
+            if (metricsManager == null && influxDBMetricsManager == null) return;
+            
+            if (metricsManager != null)
+            {
+                await metricsManager.StartNodeMetrics(TypeManager, liveToken);
+            }
+            
+            if (influxDBMetricsManager != null)
+            {
+                await influxDBMetricsManager.StartInfluxDBMetrics(TypeManager, liveToken);
+            }
         }
         #endregion
 
@@ -945,6 +960,7 @@ namespace Cognite.OpcUa
             }
             subscriptionSem.Dispose();
             SessionManager.Dispose();
+            influxDBMetricsManager?.Dispose();
         }
         #endregion
     }

@@ -27,6 +27,27 @@
                     }
                 }
             }
+        },
+        "influxDB": {
+            "type": "object",
+            "description": "Configuration for InfluxDB metrics collection",
+            "unevaluatedProperties": true,
+            "properties": {
+                "enabled": { "type": "boolean" },
+                "url": { "type": "string" },
+                "database": { "type": "string" },
+                "username": { "type": "string" },
+                "password": { "type": "string" },
+                "retentionPolicy": { "type": "string" },
+                "measurementPrefix": { "type": "string" },
+                "batchSize": { "type": "integer" },
+                "flushIntervalMs": { "type": "integer" },
+                "serverMetrics": { "type": "boolean" },
+                "otherMetrics": {
+                    "type": "array",
+                    "items": { "$ref": "proto_node_id.schema.json" }
+                }
+            }
         }
     }
 }

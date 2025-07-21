@@ -176,17 +176,34 @@ namespace Cognite.OpcUa.Nodes
         /// <returns>Created UADataPoint</returns>
         public UADataPoint ToDataPoint(IUAClientAccess client, object value, DateTime timestamp, string id, StatusCode status, bool stringOverride = false)
         {
+            return ToDataPoint(client, value, timestamp, id, status, stringOverride, null);
+        }
+
+        /// <summary>
+        /// Create the given value and timestamp to a new <see cref="UADataPoint"/>.
+        /// </summary>
+        /// <param name="client">Client to be used for converting to string</param>
+        /// <param name="value">Value to convert</param>
+        /// <param name="timestamp">Timestamp of created datapoint</param>
+        /// <param name="id">Id of created datapoint</param>
+        /// <param name="status">Status code</param>
+        /// <param name="stringOverride">True to override the IsString parameter of this datatype, converting
+        /// numerical datavalues to string as well.</param>
+        /// <param name="receivedTimestamp">Timestamp when data was received from OPC UA server</param>
+        /// <returns>Created UADataPoint</returns>
+        public UADataPoint ToDataPoint(IUAClientAccess client, object value, DateTime timestamp, string id, StatusCode status, bool stringOverride = false, DateTime? receivedTimestamp = null)
+        {
             if (timestamp == DateTime.MinValue) timestamp = DateTime.UtcNow;
             if (value is null)
             {
-                return new UADataPoint(timestamp, id, IsString, status);
+                return new UADataPoint(timestamp, id, IsString, status, receivedTimestamp);
             }
 
             if (IsString || stringOverride)
             {
-                return new UADataPoint(timestamp, id, client.StringConverter.ConvertToString(value, EnumValues), status);
+                return new UADataPoint(timestamp, id, client.StringConverter.ConvertToString(value, EnumValues), status, receivedTimestamp);
             }
-            return new UADataPoint(timestamp, id, UAClient.ConvertToDouble(value), status);
+            return new UADataPoint(timestamp, id, UAClient.ConvertToDouble(value), status, receivedTimestamp);
         }
 
         public override string ToString()
