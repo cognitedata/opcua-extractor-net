@@ -124,10 +124,8 @@ namespace Cognite.OpcUa
             this.config = config;
             this.client = client;
             this.log = log;
-            // config.Url에서 host만 추출
-            var uri = new Uri(config.Url);
-            var host = uri.Host + (uri.Port != 80 && uri.Port != 443 ? ":" + uri.Port : "");
-            influxClient = new InfluxDBClient($"http://{host}", config.Username, config.Password);
+            // Use config.Url as is to maintain consistency with InitializeInfluxDB
+            influxClient = new InfluxDBClient(config.Url, config.Username, config.Password);
             flushTimer = new Timer(FlushDataPoints, null, TimeSpan.FromMilliseconds(config.FlushIntervalMs), TimeSpan.FromMilliseconds(config.FlushIntervalMs));
         }
 
@@ -160,12 +158,8 @@ namespace Cognite.OpcUa
         {
             try
             {
-                // Parse URL to get host and port
-                var uri = new Uri(config.Url);
-                var host = (uri.Port == 80 || uri.Port == 443)
-                    ? $"{uri.Scheme}://{uri.Host}"
-                    : $"{uri.Scheme}://{uri.Host}:{uri.Port}";
-                influxClient = new InfluxDBClient(host, config.Username ?? "", config.Password ?? "");
+                // Use config.Url directly for consistency
+                influxClient = new InfluxDBClient(config.Url, config.Username ?? "", config.Password ?? "");
                 // Test connection by trying to get databases
                 var databases = await influxClient.GetInfluxDBNamesAsync();
                 log.LogInformation("Connected to InfluxDB at {Url}", config.Url);
