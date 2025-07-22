@@ -348,7 +348,7 @@ namespace Cognite.OpcUa.Pushers
             var allDataPointsList = allDataPoints.ToList();
             
             log.LogInformation("[DEBUG] Starting transmission strategy grouping with {Strategy}. Total datapoints: {Count}", 
-                config.TransmissionStrategy, allDataPointsList.Count);
+                config.GetEffectiveTransmissionStrategy(), allDataPointsList.Count);
             
             log.LogInformation("[MQTT PUSH DEBUG] About to call GroupDataPoints with {Count} datapoints", allDataPointsList.Count);
             var groupedByStrategy = transmissionGrouper.GroupDataPoints(allDataPointsList);
@@ -359,7 +359,7 @@ namespace Cognite.OpcUa.Pushers
             
             // Log strategy-specific grouping information
             log.LogInformation("[Transmission Strategy] {Strategy} grouped {OriginalGroups} original groups into {NewGroups} strategy-based groups", 
-                config.TransmissionStrategy, dataPointList.Count, convertedDataPointList.Count);
+                config.GetEffectiveTransmissionStrategy(), dataPointList.Count, convertedDataPointList.Count);
             
             foreach (var group in convertedDataPointList.Take(5)) // Log first 5 groups for debugging
             {
@@ -672,7 +672,7 @@ namespace Cognite.OpcUa.Pushers
                         };
 
                     // Process based on transmission strategy
-                    if (config.TransmissionStrategy == MqttTransmissionStrategy.CHUNK_BASED)
+                    if (config.GetEffectiveTransmissionStrategy() == MqttTransmissionStrategy.CHUNK_BASED)
                     {
                         // Use AdaptiveChunker for CHUNK_BASED strategy
                         var maxConcurrency = Math.Min(config.MaxConcurrency, Environment.ProcessorCount);
@@ -693,10 +693,10 @@ namespace Cognite.OpcUa.Pushers
                     {
                         // For other strategies, process based on strategy type
                         log.LogInformation("[MQTT Strategy] Processing {GroupCount} groups using {Strategy} strategy", 
-                            dataPointList.Count, config.TransmissionStrategy);
+                            dataPointList.Count, config.GetEffectiveTransmissionStrategy());
 
-                        if (config.TransmissionStrategy == MqttTransmissionStrategy.ROOT_NODE_BASED || 
-                            config.TransmissionStrategy == MqttTransmissionStrategy.TAG_LIST_BASED)
+                        if (config.GetEffectiveTransmissionStrategy() == MqttTransmissionStrategy.ROOT_NODE_BASED || 
+                            config.GetEffectiveTransmissionStrategy() == MqttTransmissionStrategy.TAG_LIST_BASED)
                         {
                             // For ROOT_NODE_BASED and TAG_LIST_BASED, each group becomes one JSON message
                             foreach (var group in dataPointList)
@@ -711,7 +711,7 @@ namespace Cognite.OpcUa.Pushers
                                 }
                             }
                         }
-                        else if (config.TransmissionStrategy == MqttTransmissionStrategy.TAG_CHANGE_BASED)
+                        else if (config.GetEffectiveTransmissionStrategy() == MqttTransmissionStrategy.TAG_CHANGE_BASED)
                         {
                             // For TAG_CHANGE_BASED, each individual tag becomes a separate JSON message
                             foreach (var group in dataPointList)
@@ -733,7 +733,7 @@ namespace Cognite.OpcUa.Pushers
                     // Calculate and log total transmitted datapoints
                     var totalTransmitted = dataPointList.Select(dp => (long)dp.Value.Count()).Sum();
                     log.LogInformation("[MQTT Total Success] Successfully transmitted {Count} datapoints to MQTT broker using {Strategy} strategy", 
-                        totalTransmitted, config.TransmissionStrategy);
+                        totalTransmitted, config.GetEffectiveTransmissionStrategy());
                 }
                 else // Protobuf
         {
@@ -818,8 +818,9 @@ namespace Cognite.OpcUa.Pushers
         /// <param name="dataIngestType">Type of data ingestion</param>
         /// <param name="msgRecvStart">Start time when data was received from OPC UA server</param>
         /// <param name="msgRecvEnd">End time when data was received from OPC UA server</param>
+        /// <param name="chunk">Chunk of datapoints to extract sequence numbers from</param>
         /// <returns>Metadata dictionary</returns>
-        private Dictionary<string, object>? CreateMetadata(string dataIngestType, DateTime? msgRecvStart, DateTime? msgRecvEnd)
+        private Dictionary<string, object>? CreateMetadata(string dataIngestType, DateTime? msgRecvStart, DateTime? msgRecvEnd, IEnumerable<KeyValuePair<string, IEnumerable<UADataPoint>>>? chunk = null)
         {
             if (!config.IncludeMetadata) return null;
 
@@ -845,6 +846,30 @@ namespace Cognite.OpcUa.Pushers
                 metadata["msgRecvEndTimestamp"] = GetFormattedTimestamp(now);
             }
 
+            // Add sequence number information if available
+            if (chunk != null)
+            {
+                var allDataPoints = chunk.SelectMany(kvp => kvp.Value).ToList();
+                var sequenceNumbers = allDataPoints
+                    .Where(dp => dp.SequenceNumber.HasValue)
+                    .Select(dp => dp.SequenceNumber!.Value)
+                    .Distinct()
+                    .OrderBy(seq => seq)
+                    .ToList();
+
+                if (sequenceNumbers.Any())
+                {
+                    if (sequenceNumbers.Count == 1)
+                    {
+                        metadata["sub_seq_num"] = sequenceNumbers.First();
+                    }
+                    else
+                    {
+                        metadata["sub_seq_num"] = sequenceNumbers; // Multiple sequence numbers as array
+                    }
+                }
+            }
+
             return metadata;
         }
 
@@ -865,7 +890,7 @@ namespace Cognite.OpcUa.Pushers
 
             var payload = new Dictionary<string, object>();
             
-            var metadata = CreateMetadata("polling_snapshot");
+            var metadata = CreateMetadata("polling_snapshot", null, null, chunk);
             if (metadata != null)
             {
                 payload["metadata"] = metadata;
@@ -896,7 +921,7 @@ namespace Cognite.OpcUa.Pushers
 
             var payload = new Dictionary<string, object>();
             
-            var metadata = CreateMetadata("polling_snapshot");
+            var metadata = CreateMetadata("polling_snapshot", null, null, chunk);
             if (metadata != null)
             {
                 // Use camelCase for case2 format
@@ -950,14 +975,14 @@ namespace Cognite.OpcUa.Pushers
             var payload = new Dictionary<string, object>();
             
             // Create metadata with accurate receive time information
-            var metadata = CreateMetadata("subscription", msgRecvStart, msgRecvEnd);
+            var metadata = CreateMetadata("subscription", msgRecvStart, msgRecvEnd, chunk);
             if (metadata != null)
             {
                 payload["metadata"] = metadata;
             }
 
             // Handle ROOT_NODE_BASED strategy: group datapoints by tag ID and preserve multiple values per tag
-            if (config.TransmissionStrategy == MqttTransmissionStrategy.ROOT_NODE_BASED)
+            if (config.GetEffectiveTransmissionStrategy() == MqttTransmissionStrategy.ROOT_NODE_BASED)
             {
                 var tagsData = new List<Dictionary<string, object>>();
                 

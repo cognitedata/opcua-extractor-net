@@ -44,11 +44,18 @@ namespace Cognite.OpcUa.Types
         /// Timestamp when this datapoint was received from OPC UA server
         /// </summary>
         public DateTime ReceivedTimestamp { get; }
+        
+        /// <summary>
+        /// OPC UA subscription sequence number for this datapoint
+        /// </summary>
+        public uint? SequenceNumber { get; }
+        
         /// <param name="timestamp">Timestamp in ms since epoch</param>
         /// <param name="id">Converted id of node this belongs to, equal to externalId of timeseries in CDF</param>
         /// <param name="value">Value to set</param>
         /// <param name="receivedTimestamp">Timestamp when data was received from OPC UA server</param>
-        public UADataPoint(DateTime timestamp, string id, double value, StatusCode status, DateTime? receivedTimestamp = null)
+        /// <param name="sequenceNumber">OPC UA subscription sequence number</param>
+        public UADataPoint(DateTime timestamp, string id, double value, StatusCode status, DateTime? receivedTimestamp = null, uint? sequenceNumber = null)
         {
             Timestamp = timestamp;
             Id = id;
@@ -56,12 +63,14 @@ namespace Cognite.OpcUa.Types
             Status = status;
             IsString = false;
             ReceivedTimestamp = receivedTimestamp ?? DateTime.UtcNow;
+            SequenceNumber = sequenceNumber;
         }
         /// <param name="timestamp">Timestamp in ms since epoch</param>
         /// <param name="id">Converted id of node this belongs to, equal to externalId of timeseries in CDF</param>
         /// <param name="value">Value to set</param>
         /// <param name="receivedTimestamp">Timestamp when data was received from OPC UA server</param>
-        public UADataPoint(DateTime timestamp, string id, string? value, StatusCode status, DateTime? receivedTimestamp = null)
+        /// <param name="sequenceNumber">OPC UA subscription sequence number</param>
+        public UADataPoint(DateTime timestamp, string id, string? value, StatusCode status, DateTime? receivedTimestamp = null, uint? sequenceNumber = null)
         {
             Timestamp = timestamp;
             Id = id;
@@ -69,6 +78,7 @@ namespace Cognite.OpcUa.Types
             Status = status;
             IsString = true;
             ReceivedTimestamp = receivedTimestamp ?? DateTime.UtcNow;
+            SequenceNumber = sequenceNumber;
         }
         /// <summary>
         /// Copy given datapoint with given replacement value
@@ -83,6 +93,7 @@ namespace Cognite.OpcUa.Types
             Status = other.Status;
             IsString = true;
             ReceivedTimestamp = other.ReceivedTimestamp;
+            SequenceNumber = other.SequenceNumber;
         }
         /// <summary>
         /// Copy given datapoint with given replacement value
@@ -97,6 +108,7 @@ namespace Cognite.OpcUa.Types
             Status = other.Status;
             IsString = false;
             ReceivedTimestamp = other.ReceivedTimestamp;
+            SequenceNumber = other.SequenceNumber;
         }
 
         /// <summary>
@@ -107,13 +119,15 @@ namespace Cognite.OpcUa.Types
         /// <param name="isString">Whether this datapoint is for a string data type</param>
         /// <param name="status">Status code</param>
         /// <param name="receivedTimestamp">Timestamp when data was received from OPC UA server</param>
-        public UADataPoint(DateTime timestamp, string id, bool isString, StatusCode status, DateTime? receivedTimestamp = null)
+        /// <param name="sequenceNumber">OPC UA subscription sequence number</param>
+        public UADataPoint(DateTime timestamp, string id, bool isString, StatusCode status, DateTime? receivedTimestamp = null, uint? sequenceNumber = null)
         {
             Timestamp = timestamp;
             Id = id;
             IsString = isString;
             Status = status;
             ReceivedTimestamp = receivedTimestamp ?? DateTime.UtcNow;
+            SequenceNumber = sequenceNumber;
         }
 
 
@@ -163,6 +177,7 @@ namespace Cognite.OpcUa.Types
             bytes.AddRange(CogniteUtils.StringToStorable(Id));
             bytes.AddRange(BitConverter.GetBytes(Timestamp.ToBinary()));
             bytes.AddRange(BitConverter.GetBytes(ReceivedTimestamp.ToBinary()));
+            bytes.AddRange(BitConverter.GetBytes(SequenceNumber ?? 0)); // Store as uint, 0 if null
             bytes.AddRange(BitConverter.GetBytes(IsString));
             bytes.AddRange(BitConverter.GetBytes(Status.Code));
 
@@ -201,6 +216,10 @@ namespace Cognite.OpcUa.Types
             if (stream.Read(buffer, 0, sizeof(long)) < sizeof(long)) return null;
             DateTime receivedTs = DateTime.FromBinary(BitConverter.ToInt64(buffer, 0));
 
+            if (stream.Read(buffer, 0, sizeof(uint)) < sizeof(uint)) return null;
+            uint sequenceNum = BitConverter.ToUInt32(buffer, 0);
+            uint? sequenceNumber = sequenceNum == 0 ? null : sequenceNum; // Convert back to nullable
+
             if (stream.Read(buffer, 0, sizeof(bool)) < sizeof(bool)) return null;
             bool isstr = BitConverter.ToBoolean(buffer, 0);
 
@@ -210,7 +229,7 @@ namespace Cognite.OpcUa.Types
             if (isstr)
             {
                 var value = CogniteUtils.StringFromStream(stream);
-                return new UADataPoint(ts, id, value, status, receivedTs);
+                return new UADataPoint(ts, id, value, status, receivedTs, sequenceNumber);
             }
             else
             {
@@ -221,11 +240,11 @@ namespace Cognite.OpcUa.Types
                 {
                     if (stream.Read(buffer, 0, sizeof(double)) < sizeof(double)) return null;
                     var value = BitConverter.ToDouble(buffer, 0);
-                    return new UADataPoint(ts, id, value, status, receivedTs);
+                    return new UADataPoint(ts, id, value, status, receivedTs, sequenceNumber);
                 }
                 else
                 {
-                    return new UADataPoint(ts, id, false, status, receivedTs);
+                    return new UADataPoint(ts, id, false, status, receivedTs, sequenceNumber);
                 }
 
             }

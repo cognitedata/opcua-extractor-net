@@ -429,6 +429,13 @@ namespace Cognite.OpcUa
                 return;
             }
 
+            // Extract sequence number from notification
+            uint? sequenceNumber = null;
+            if (args.NotificationValue is MonitoredItemNotification notification)
+            {
+                sequenceNumber = notification.Message?.SequenceNumber;
+            }
+
             // 추가: OPC UA 서버에서 받은 데이터포인트 수 로그 출력
             var dequeuedValues = item.DequeueValues().ToList();
             if (dequeuedValues.Count > 0)
@@ -439,17 +446,22 @@ namespace Cognite.OpcUa
 
             foreach (var datapoint in dequeuedValues)
             {
-                HandleStreamedDatapoint(datapoint, node, dataReceivedTime);
+                HandleStreamedDatapoint(datapoint, node, dataReceivedTime, sequenceNumber);
             }
         }
 
 
         public void HandleStreamedDatapoint(DataValue datapoint, VariableExtractionState node)
         {
-            HandleStreamedDatapoint(datapoint, node, DateTime.UtcNow);
+            HandleStreamedDatapoint(datapoint, node, DateTime.UtcNow, null);
         }
 
         public void HandleStreamedDatapoint(DataValue datapoint, VariableExtractionState node, DateTime receivedTime)
+        {
+            HandleStreamedDatapoint(datapoint, node, receivedTime, null);
+        }
+
+        public void HandleStreamedDatapoint(DataValue datapoint, VariableExtractionState node, DateTime receivedTime, uint? sequenceNumber)
         {
             // Use consolidated validation logic
             var validationResult = Utils.DataPointValidator.ValidateAndPreprocess(datapoint, node, config, log);
@@ -469,7 +481,7 @@ namespace Cognite.OpcUa
                 return;
             }
 
-            var buffDps = ToDataPoint(datapoint, node, receivedTime).ToList();
+            var buffDps = ToDataPoint(datapoint, node, receivedTime, sequenceNumber).ToList();
             
             // 추가: ToDataPoint에서 생성된 UADataPoint 수 로그 출력
             // log.LogInformation("[DATAPOINT CONVERSION] Tag '{TagId}' converted to {Count} UADataPoints (SourceTimestamp: {Timestamp})", 
@@ -536,6 +548,19 @@ namespace Cognite.OpcUa
         /// <returns>List of converted datapoints</returns>
         public IEnumerable<UADataPoint> ToDataPoint(DataValue value, VariableExtractionState variable, DateTime receivedTime)
         {
+            return ToDataPoint(value, variable, receivedTime, null);
+        }
+
+        /// <summary>
+        /// Transform a given DataValue into a datapoint or a list of datapoints if the variable in question has array type.
+        /// </summary>
+        /// <param name="value">DataValue to be transformed</param>
+        /// <param name="variable">NodeExtractionState for variable the datavalue belongs to</param>
+        /// <param name="receivedTime">Timestamp when data was received from OPC UA server</param>
+        /// <param name="sequenceNumber">Sequence number from OPC UA server</param>
+        /// <returns>List of converted datapoints</returns>
+        public IEnumerable<UADataPoint> ToDataPoint(DataValue value, VariableExtractionState variable, DateTime receivedTime, uint? sequenceNumber)
+        {
             string uniqueId = variable.Id;
 
             if (value.Value is Array values)
@@ -564,7 +589,7 @@ namespace Cognite.OpcUa
                 for (int i = 0; i < dim; i++)
                 {
                     var id = variable.IsArray ? GetArrayUniqueId(uniqueId, i) : uniqueId;
-                    ret.Add(variable.DataType.ToDataPoint(extractor, values.GetValue(i), value.SourceTimestamp, id, value.StatusCode, false, receivedTime));
+                    ret.Add(variable.DataType.ToDataPoint(extractor, values.GetValue(i), value.SourceTimestamp, id, value.StatusCode, false, receivedTime, sequenceNumber));
                 }
                 return ret;
             }
@@ -573,7 +598,7 @@ namespace Cognite.OpcUa
                 uniqueId = GetArrayUniqueId(uniqueId, 0);
             }
 
-            var sdp = variable.DataType.ToDataPoint(extractor, value.WrappedValue, value.SourceTimestamp, uniqueId, value.StatusCode, false, receivedTime);
+            var sdp = variable.DataType.ToDataPoint(extractor, value.WrappedValue, value.SourceTimestamp, uniqueId, value.StatusCode, false, receivedTime, sequenceNumber);
             return new[] { sdp };
         }
 

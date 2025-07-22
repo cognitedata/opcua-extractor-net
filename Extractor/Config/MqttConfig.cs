@@ -77,6 +77,30 @@ namespace Cognite.OpcUa.Config
         TAG_CHANGE_BASED
     }
 
+    /// <summary>
+    /// Configuration for MQTT transmission strategy.
+    /// Supports both legacy flat format and new nested format.
+    /// </summary>
+    public class MqttTransmissionStrategyConfig
+    {
+        /// <summary>
+        /// Data grouping strategy for MQTT transmission.
+        /// ROOT_NODE_BASED: Group by extraction.root-nodes configuration
+        /// CHUNK_BASED: Use existing chunking strategy (default)
+        /// TAG_LIST_BASED: Group by specified tag lists
+        /// TAG_CHANGE_BASED: Send based on OPC UA tag changes (subscription-based)
+        /// </summary>
+        [YamlDotNet.Serialization.YamlMember(Alias = "data-group-by")]
+        public MqttTransmissionStrategy DataGroupBy { get; set; } = MqttTransmissionStrategy.CHUNK_BASED;
+
+        /// <summary>
+        /// Configuration for tag list grouping when DataGroupBy is TAG_LIST_BASED.
+        /// Each list represents a group of tags that should be sent together in one JSON message.
+        /// </summary>
+        [YamlDotNet.Serialization.YamlMember(Alias = "tag-lists")]
+        public List<List<string>>? TagLists { get; set; }
+    }
+
     public class MqttPusherConfig : IPusherConfig
     {
         /// <summary>
@@ -286,14 +310,19 @@ namespace Cognite.OpcUa.Config
         /// TAG_CHANGE_BASED: Send based on OPC UA tag changes (subscription-based)
         /// </summary>
         [DefaultValue(MqttTransmissionStrategy.CHUNK_BASED)]
-        [YamlDotNet.Serialization.YamlMember(Alias = "mqtt-transmission-strategy")]
         public MqttTransmissionStrategy TransmissionStrategy { get; set; } = MqttTransmissionStrategy.CHUNK_BASED;
+
+        /// <summary>
+        /// New nested transmission strategy configuration.
+        /// If specified, this will override the legacy TransmissionStrategy and TagLists properties.
+        /// </summary>
+        [YamlDotNet.Serialization.YamlMember(Alias = "mqtt-transmission-strategy")]
+        public MqttTransmissionStrategyConfig? TransmissionStrategyConfig { get; set; }
 
         /// <summary>
         /// Configuration for tag list grouping when TransmissionStrategy is TAG_LIST_BASED.
         /// Each list represents a group of tags that should be sent together in one JSON message.
         /// </summary>
-        [YamlDotNet.Serialization.YamlMember(Alias = "tag-lists")]
         public List<List<string>>? TagLists { get; set; }
 
         /// <summary>
@@ -316,5 +345,34 @@ namespace Cognite.OpcUa.Config
         /// </summary>
         [DefaultValue(4)]
         public int MaxConcurrency { get; set; } = 4;
+
+        /// <summary>
+        /// Get the effective transmission strategy.
+        /// Returns the strategy from nested config if available, otherwise falls back to legacy property.
+        /// </summary>
+        public MqttTransmissionStrategy GetEffectiveTransmissionStrategy()
+        {
+            return TransmissionStrategyConfig?.DataGroupBy ?? TransmissionStrategy;
+        }
+
+        /// <summary>
+        /// Get the effective tag lists.
+        /// Returns tag lists from nested config if available, otherwise falls back to legacy property.
+        /// </summary>
+        public List<List<string>>? GetEffectiveTagLists()
+        {
+            return TransmissionStrategyConfig?.TagLists ?? TagLists;
+        }
+
+        /// <summary>
+        /// Set the transmission strategy using the new nested format.
+        /// This will create the nested config if it doesn't exist.
+        /// </summary>
+        public void SetTransmissionStrategy(MqttTransmissionStrategy strategy, List<List<string>>? tagLists = null)
+        {
+            TransmissionStrategyConfig ??= new MqttTransmissionStrategyConfig();
+            TransmissionStrategyConfig.DataGroupBy = strategy;
+            TransmissionStrategyConfig.TagLists = tagLists;
+        }
     }
 }

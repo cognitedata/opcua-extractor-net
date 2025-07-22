@@ -39,7 +39,7 @@ namespace Cognite.OpcUa.Utils
             }
 
             logger.LogInformation("[MqttTransmissionGrouper] Grouping {Count} datapoints using strategy: {Strategy}", 
-                dataPointsList.Count, config.TransmissionStrategy);
+                dataPointsList.Count, config.GetEffectiveTransmissionStrategy());
             
             // Log first 10 datapoint IDs to understand the input data structure
             var firstTenIds = dataPointsList.Take(10).Select(dp => dp.Id).ToList();
@@ -50,7 +50,7 @@ namespace Cognite.OpcUa.Utils
             logger.LogInformation("[INPUT DEBUG] Total input datapoints: {Total}, Unique IDs: {Unique}", 
                 dataPointsList.Count, uniqueInputIds);
 
-            return config.TransmissionStrategy switch
+            return config.GetEffectiveTransmissionStrategy() switch
             {
                 MqttTransmissionStrategy.ROOT_NODE_BASED => GroupByRootNode(dataPointsList),
                 MqttTransmissionStrategy.CHUNK_BASED => GroupByChunk(dataPointsList),
@@ -111,7 +111,8 @@ namespace Cognite.OpcUa.Utils
         private IEnumerable<KeyValuePair<string, IEnumerable<UADataPoint>>> GroupByTagList(
             IList<UADataPoint> dataPoints)
         {
-            if (config.TagLists == null || !config.TagLists.Any())
+            var effectiveTagLists = config.GetEffectiveTagLists();
+            if (effectiveTagLists == null || !effectiveTagLists.Any())
             {
                 logger.LogWarning("[TAG_LIST_BASED] No tag lists configured, falling back to chunk-based grouping");
                 return GroupByChunk(dataPoints);
@@ -121,12 +122,12 @@ namespace Cognite.OpcUa.Utils
             var processedDataPoints = new HashSet<string>();
 
             logger.LogTrace("[TAG_LIST_BASED] Processing {Count} datapoints against {ListCount} tag lists", 
-                dataPoints.Count, config.TagLists.Count);
+                dataPoints.Count, effectiveTagLists.Count);
 
             // Process each tag list
-            for (int i = 0; i < config.TagLists.Count; i++)
+            for (int i = 0; i < effectiveTagLists.Count; i++)
             {
-                var tagList = config.TagLists[i];
+                var tagList = effectiveTagLists[i];
                 var groupDataPoints = new List<UADataPoint>();
 
                 foreach (var tag in tagList)
