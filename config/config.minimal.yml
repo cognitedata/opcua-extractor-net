@@ -67,3 +67,90 @@ extraction:
         # `GoodOnly` ingest only good datapoints.
         status-codes-to-ingest: All
         ingest-status-codes: true
+
+# MQTT pusher configuration with new transmission strategy metadata
+mqtt:
+    host: localhost
+    port: 1883
+    use-grpc: false  # Use JSON format to see metadata
+    json-format-type: Subscription  # Format that supports rich metadata
+    include-metadata: true
+    
+    # New nested transmission strategy configuration
+    mqtt-transmission-strategy:
+        # Choose strategy based on your use case:
+        data-group-by: ROOT_NODE_BASED  # Options: ROOT_NODE_BASED, CHUNK_BASED, TAG_LIST_BASED, TAG_CHANGE_BASED
+        
+        # For TAG_LIST_BASED strategy with custom names (NEW FORMAT):
+        # data-group-by: TAG_LIST_BASED
+        # tag-list-groups:
+        #   - tag-list-name: "sensors_group"    # Custom name in metadata
+        #     tags:
+        #       - "s=S.A.Tag1"
+        #       - "s=S.A.Tag2"
+        #       - "s=S.A.Tag3"
+        #   - tag-list-name: "pumps_group"      # Another custom name
+        #     tags:
+        #       - "s=S.B.Pump1"
+        #       - "s=S.B.Pump2"
+        
+        # For TAG_LIST_BASED strategy (LEGACY FORMAT):
+        # data-group-by: TAG_LIST_BASED
+        # tag-lists:
+        #   - ["sensor1", "sensor2", "sensor3"]  # Group 1: metadata will include "tag_list_name": "tag_list_1"
+        #   - ["pump1", "pump2"]                 # Group 2: metadata will include "tag_list_name": "tag_list_2"
+
+# Metadata examples based on transmission strategy:
+# 
+# ROOT_NODE_BASED strategy metadata:
+# {
+#   "metadata": {
+#     "data_ingest_type": "subscription",
+#     "message_timestamp": 1648234567890,
+#     "root_node_name": "kepkeps=S.D"
+#   },
+#   "tags_data": [...]
+# }
+#
+# CHUNK_BASED strategy metadata:
+# {
+#   "metadata": {
+#     "data_ingest_type": "subscription", 
+#     "message_timestamp": 1648234567890,
+#     "chunk_id": "chunk_123_456_1648234567890"
+#   },
+#   "tags_data": [...]
+# }
+#
+# TAG_LIST_BASED strategy metadata:
+# {
+#   "metadata": {
+#     "data_ingest_type": "subscription",
+#     "message_timestamp": 1648234567890,
+#     "tag_list_name": "sensors_group"
+#   },
+#   "tags_data": [
+#     {
+#       "tag": "s=S.A.Tag1",
+#       "data": [
+#         {
+#           "timestamp": 1648234567890,
+#           "value": 124,
+#           "sc": 0,
+#           "dt": "int32"
+#         }
+#       ]
+#     },
+#     {
+#       "tag": "s=S.A.Tag2", 
+#       "data": [
+#         {
+#           "timestamp": 1648234567890,
+#           "value": "test",
+#           "sc": 0,
+#           "dt": "string"
+#         }
+#       ]
+#     }
+#   ]
+# }

@@ -18,6 +18,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Text.Json.Serialization;
+using System.Linq;
 
 namespace Cognite.OpcUa.Config
 {
@@ -78,6 +79,24 @@ namespace Cognite.OpcUa.Config
     }
 
     /// <summary>
+    /// Configuration for a single tag list group with custom name.
+    /// </summary>
+    public class TagListGroup
+    {
+        /// <summary>
+        /// Custom name for this tag list group. If not specified, defaults to "tag_list_N".
+        /// </summary>
+        [YamlDotNet.Serialization.YamlMember(Alias = "tag-list-name")]
+        public string? Name { get; set; }
+
+        /// <summary>
+        /// List of tag IDs that should be grouped together.
+        /// </summary>
+        [YamlDotNet.Serialization.YamlMember(Alias = "tags")]
+        public List<string>? Tags { get; set; }
+    }
+
+    /// <summary>
     /// Configuration for MQTT transmission strategy.
     /// Supports both legacy flat format and new nested format.
     /// </summary>
@@ -96,9 +115,55 @@ namespace Cognite.OpcUa.Config
         /// <summary>
         /// Configuration for tag list grouping when DataGroupBy is TAG_LIST_BASED.
         /// Each list represents a group of tags that should be sent together in one JSON message.
+        /// Legacy format: List of string arrays.
         /// </summary>
         [YamlDotNet.Serialization.YamlMember(Alias = "tag-lists")]
         public List<List<string>>? TagLists { get; set; }
+
+        /// <summary>
+        /// Advanced configuration for tag list grouping with custom names when DataGroupBy is TAG_LIST_BASED.
+        /// New format: List of TagListGroup objects with custom names.
+        /// </summary>
+        [YamlDotNet.Serialization.YamlMember(Alias = "tag-list-groups")]
+        public List<TagListGroup>? TagListGroups { get; set; }
+
+        /// <summary>
+        /// Get the effective tag lists with their names.
+        /// Returns a dictionary where key is the group name and value is the list of tags.
+        /// </summary>
+        public Dictionary<string, List<string>> GetEffectiveTagListsWithNames()
+        {
+            var result = new Dictionary<string, List<string>>();
+
+            // Process new format first (tag-list-groups)
+            if (TagListGroups != null && TagListGroups.Any())
+            {
+                for (int i = 0; i < TagListGroups.Count; i++)
+                {
+                    var group = TagListGroups[i];
+                    if (group.Tags != null && group.Tags.Any())
+                    {
+                        var groupName = !string.IsNullOrEmpty(group.Name) ? group.Name : $"tag_list_{i + 1}";
+                        result[groupName] = group.Tags;
+                    }
+                }
+            }
+            // Fall back to legacy format (tag-lists)
+            else if (TagLists != null && TagLists.Any())
+            {
+                for (int i = 0; i < TagLists.Count; i++)
+                {
+                    var tagList = TagLists[i];
+                    if (tagList != null && tagList.Any())
+                    {
+                        var groupName = $"tag_list_{i + 1}";
+                        result[groupName] = tagList;
+                    }
+                }
+            }
+
+            return result;
+        }
     }
 
     public class MqttPusherConfig : IPusherConfig

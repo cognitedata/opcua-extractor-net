@@ -630,14 +630,17 @@ namespace Cognite.OpcUa.Pushers
                     // Create payload creator function for adaptive chunking
                     Func<IEnumerable<KeyValuePair<string, IEnumerable<UADataPoint>>>, object?> payloadCreator = chunk =>
                     {
+                        // Extract groupKey from chunk - use first group's key as representative
+                        var groupKey = chunk.FirstOrDefault().Key;
+                        
                         return config.JsonFormatType switch
                         {
-                            MqttJsonFormat.PollingSnapshotObject => CreatePollingSnapshotObjectPayload(chunk),
-                            MqttJsonFormat.PollingSnapshotPlain => CreatePollingSnapshotPlainPayload(chunk),
-                            MqttJsonFormat.Subscription => CreateSubscriptionPayload(chunk),
-                            MqttJsonFormat.Legacy or MqttJsonFormat.Timeseries => CreateLegacyPayload(chunk),
-                            MqttJsonFormat.PollingSnapshot => CreatePollingSnapshotPayload(chunk),
-                            _ => CreateLegacyPayload(chunk)
+                            MqttJsonFormat.PollingSnapshotObject => CreatePollingSnapshotObjectPayload(chunk, groupKey),
+                            MqttJsonFormat.PollingSnapshotPlain => CreatePollingSnapshotPlainPayload(chunk, groupKey),
+                            MqttJsonFormat.Subscription => CreateSubscriptionPayload(chunk, groupKey),
+                            MqttJsonFormat.Legacy or MqttJsonFormat.Timeseries => CreateLegacyPayload(chunk, groupKey),
+                            MqttJsonFormat.PollingSnapshot => CreatePollingSnapshotPayload(chunk, groupKey),
+                            _ => CreateLegacyPayload(chunk, groupKey)
                         };
                     };
 
@@ -703,7 +706,19 @@ namespace Cognite.OpcUa.Pushers
                             {
                                 // Create a single message with all datapoints in this group
                                 var groupData = new[] { group };
-                                var payload = payloadCreator(groupData);
+                                
+                                // For these strategies, directly pass the group key from the transmission grouper
+                                var strategyGroupKey = group.Key;
+                                
+                                var payload = config.JsonFormatType switch
+                                {
+                                    MqttJsonFormat.PollingSnapshotObject => CreatePollingSnapshotObjectPayload(groupData, strategyGroupKey),
+                                    MqttJsonFormat.PollingSnapshotPlain => CreatePollingSnapshotPlainPayload(groupData, strategyGroupKey),
+                                    MqttJsonFormat.Subscription => CreateSubscriptionPayload(groupData, strategyGroupKey),
+                                    MqttJsonFormat.Legacy or MqttJsonFormat.Timeseries => CreateLegacyPayload(groupData, strategyGroupKey),
+                                    MqttJsonFormat.PollingSnapshot => CreatePollingSnapshotPayload(groupData, strategyGroupKey),
+                                    _ => CreateLegacyPayload(groupData, strategyGroupKey)
+                                };
                                 
                                 if (payload != null)
                                 {
@@ -719,7 +734,19 @@ namespace Cognite.OpcUa.Pushers
                                 foreach (var dataPoint in group.Value)
                                 {
                                     var singlePointGroup = new[] { new KeyValuePair<string, IEnumerable<UADataPoint>>(group.Key, new[] { dataPoint }) };
-                                    var payload = payloadCreator(singlePointGroup);
+                                    
+                                    // For TAG_CHANGE_BASED, use the individual tag ID as the group key
+                                    var tagChangeGroupKey = group.Key;
+                                    
+                                    var payload = config.JsonFormatType switch
+                                    {
+                                        MqttJsonFormat.PollingSnapshotObject => CreatePollingSnapshotObjectPayload(singlePointGroup, tagChangeGroupKey),
+                                        MqttJsonFormat.PollingSnapshotPlain => CreatePollingSnapshotPlainPayload(singlePointGroup, tagChangeGroupKey),
+                                        MqttJsonFormat.Subscription => CreateSubscriptionPayload(singlePointGroup, tagChangeGroupKey),
+                                        MqttJsonFormat.Legacy or MqttJsonFormat.Timeseries => CreateLegacyPayload(singlePointGroup, tagChangeGroupKey),
+                                        MqttJsonFormat.PollingSnapshot => CreatePollingSnapshotPayload(singlePointGroup, tagChangeGroupKey),
+                                        _ => CreateLegacyPayload(singlePointGroup, tagChangeGroupKey)
+                                    };
                                     
                                     if (payload != null)
                                     {
@@ -807,9 +834,9 @@ namespace Cognite.OpcUa.Pushers
         /// <summary>
         /// Create metadata object for JSON payload
         /// </summary>
-        private Dictionary<string, object>? CreateMetadata(string dataIngestType)
+        private Dictionary<string, object>? CreateMetadata(string dataIngestType, string? groupKey = null)
         {
-            return CreateMetadata(dataIngestType, null, null);
+            return CreateMetadata(dataIngestType, null, null, null, groupKey);
         }
 
         /// <summary>
@@ -819,8 +846,9 @@ namespace Cognite.OpcUa.Pushers
         /// <param name="msgRecvStart">Start time when data was received from OPC UA server</param>
         /// <param name="msgRecvEnd">End time when data was received from OPC UA server</param>
         /// <param name="chunk">Chunk of datapoints to extract sequence numbers from</param>
+        /// <param name="groupKey">Group key for the current transmission strategy</param>
         /// <returns>Metadata dictionary</returns>
-        private Dictionary<string, object>? CreateMetadata(string dataIngestType, DateTime? msgRecvStart, DateTime? msgRecvEnd, IEnumerable<KeyValuePair<string, IEnumerable<UADataPoint>>>? chunk = null)
+        private Dictionary<string, object>? CreateMetadata(string dataIngestType, DateTime? msgRecvStart, DateTime? msgRecvEnd, IEnumerable<KeyValuePair<string, IEnumerable<UADataPoint>>>? chunk = null, string? groupKey = null)
         {
             if (!config.IncludeMetadata) return null;
 
@@ -829,7 +857,7 @@ namespace Cognite.OpcUa.Pushers
 
             var metadata = new Dictionary<string, object>
             {
-                ["data_ingest_type"] = dataIngestType,
+                ["json_format_type"] = dataIngestType,
                 ["message_timestamp"] = GetFormattedTimestamp(messageCompletionTime.ToUnixTimeMilliseconds())
             };
 
@@ -870,6 +898,65 @@ namespace Cognite.OpcUa.Pushers
                 }
             }
 
+            // Add transmission strategy specific metadata
+            var strategy = config.GetEffectiveTransmissionStrategy();
+            switch (strategy)
+            {
+                case MqttTransmissionStrategy.ROOT_NODE_BASED:
+                    if (!string.IsNullOrEmpty(groupKey))
+                    {
+                        metadata["root_node_name"] = groupKey;
+                    }
+                    break;
+
+                case MqttTransmissionStrategy.CHUNK_BASED:
+                    // Generate unique chunk_id based on sequence numbers or timestamp
+                    string chunkId;
+                    if (chunk != null)
+                    {
+                        var allDataPoints = chunk.SelectMany(kvp => kvp.Value).ToList();
+                        var sequenceNumbers = allDataPoints
+                            .Where(dp => dp.SequenceNumber.HasValue)
+                            .Select(dp => dp.SequenceNumber!.Value)
+                            .Distinct()
+                            .OrderBy(seq => seq)
+                            .ToList();
+
+                        if (sequenceNumbers.Any())
+                        {
+                            // Create chunk_id based on sequence numbers
+                            chunkId = $"chunk_{string.Join("_", sequenceNumbers)}_{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}";
+                        }
+                        else
+                        {
+                            // Fallback to timestamp-based chunk_id
+                            chunkId = $"chunk_{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}_{Guid.NewGuid().ToString("N")[..8]}";
+                        }
+                    }
+                    else
+                    {
+                        // Fallback to timestamp-based chunk_id
+                        chunkId = $"chunk_{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}_{Guid.NewGuid().ToString("N")[..8]}";
+                    }
+                    metadata["chunk_id"] = chunkId;
+                    break;
+
+                case MqttTransmissionStrategy.TAG_LIST_BASED:
+                    if (!string.IsNullOrEmpty(groupKey))
+                    {
+                        metadata["tag_list_name"] = groupKey;
+                    }
+                    break;
+
+                case MqttTransmissionStrategy.TAG_CHANGE_BASED:
+                    // For tag change based, we could include the tag name that changed
+                    if (!string.IsNullOrEmpty(groupKey))
+                    {
+                        metadata["changed_tag"] = groupKey;
+                    }
+                    break;
+            }
+
             return metadata;
         }
 
@@ -884,13 +971,13 @@ namespace Cognite.OpcUa.Pushers
         /// <summary>
         /// Create payload for polling snapshot object format (case1)
         /// </summary>
-        private object? CreatePollingSnapshotObjectPayload(IEnumerable<KeyValuePair<string, IEnumerable<UADataPoint>>> chunk)
+        private object? CreatePollingSnapshotObjectPayload(IEnumerable<KeyValuePair<string, IEnumerable<UADataPoint>>> chunk, string? groupKey = null)
         {
             if (!chunk.Any()) return null;
 
             var payload = new Dictionary<string, object>();
             
-            var metadata = CreateMetadata("polling_snapshot", null, null, chunk);
+            var metadata = CreateMetadata("polling_snapshot", null, null, chunk, groupKey);
             if (metadata != null)
             {
                 payload["metadata"] = metadata;
@@ -915,13 +1002,13 @@ namespace Cognite.OpcUa.Pushers
         /// <summary>
         /// Create payload for polling snapshot plain format (case2)
         /// </summary>
-        private object? CreatePollingSnapshotPlainPayload(IEnumerable<KeyValuePair<string, IEnumerable<UADataPoint>>> chunk)
+        private object? CreatePollingSnapshotPlainPayload(IEnumerable<KeyValuePair<string, IEnumerable<UADataPoint>>> chunk, string? groupKey = null)
         {
             if (!chunk.Any()) return null;
 
             var payload = new Dictionary<string, object>();
             
-            var metadata = CreateMetadata("polling_snapshot", null, null, chunk);
+            var metadata = CreateMetadata("polling_snapshot", null, null, chunk, groupKey);
             if (metadata != null)
             {
                 // Use camelCase for case2 format
@@ -930,8 +1017,12 @@ namespace Cognite.OpcUa.Pushers
                 {
                     var key = kvp.Key switch
                     {
-                        "data_ingest_type" => "dataIngestType",
+                        "json_format_type" => "jsonFormatType",
                         "message_timestamp" => "messageTimestamp",
+                        "root_node_name" => "rootNodeName",
+                        "chunk_id" => "chunkId", 
+                        "tag_list_name" => "tagListName",
+                        "changed_tag" => "changedTag",
                         _ => kvp.Key
                     };
                     camelCaseMetadata[key] = kvp.Value;
@@ -950,12 +1041,37 @@ namespace Cognite.OpcUa.Pushers
             // Add tag values directly to payload
             foreach (var kvp in chunk)
             {
-                var latestDataPoint = kvp.Value.OrderByDescending(dp => dp.Timestamp).FirstOrDefault();
-                if (latestDataPoint != null)
+                // Check if this is a ROOT_NODE_BASED strategy where kvp.Value contains multiple tags
+                var strategy = config.GetEffectiveTransmissionStrategy();
+                
+                if (strategy == MqttTransmissionStrategy.ROOT_NODE_BASED || 
+                    strategy == MqttTransmissionStrategy.TAG_LIST_BASED)
                 {
-                    payload[kvp.Key] = latestDataPoint.IsString ? 
-                        (object)(latestDataPoint.StringValue ?? "") : 
-                        (latestDataPoint.DoubleValue ?? 0);
+                    // For ROOT_NODE_BASED and TAG_LIST_BASED, kvp.Value contains multiple datapoints from different tags
+                    // Group by individual tag ID and add each tag as a separate property
+                    var tagGroups = kvp.Value.GroupBy(dp => dp.Id);
+                    
+                    foreach (var tagGroup in tagGroups)
+                    {
+                        var latestDataPoint = tagGroup.OrderByDescending(dp => dp.Timestamp).FirstOrDefault();
+                        if (latestDataPoint != null)
+                        {
+                            payload[tagGroup.Key] = latestDataPoint.IsString ? 
+                                (object)(latestDataPoint.StringValue ?? "") : 
+                                (latestDataPoint.DoubleValue ?? 0);
+                        }
+                    }
+                }
+                else
+                {
+                    // For other strategies, use the original logic
+                    var latestDataPoint = kvp.Value.OrderByDescending(dp => dp.Timestamp).FirstOrDefault();
+                    if (latestDataPoint != null)
+                    {
+                        payload[kvp.Key] = latestDataPoint.IsString ? 
+                            (object)(latestDataPoint.StringValue ?? "") : 
+                            (latestDataPoint.DoubleValue ?? 0);
+                    }
                 }
             }
 
@@ -965,7 +1081,7 @@ namespace Cognite.OpcUa.Pushers
         /// <summary>
         /// Create payload for subscription format (case3)
         /// </summary>
-        private object? CreateSubscriptionPayload(IEnumerable<KeyValuePair<string, IEnumerable<UADataPoint>>> chunk)
+        private object? CreateSubscriptionPayload(IEnumerable<KeyValuePair<string, IEnumerable<UADataPoint>>> chunk, string? groupKey = null)
         {
             if (!chunk.Any()) return null;
 
@@ -975,18 +1091,20 @@ namespace Cognite.OpcUa.Pushers
             var payload = new Dictionary<string, object>();
             
             // Create metadata with accurate receive time information
-            var metadata = CreateMetadata("subscription", msgRecvStart, msgRecvEnd, chunk);
+            var metadata = CreateMetadata("subscription", msgRecvStart, msgRecvEnd, chunk, groupKey);
             if (metadata != null)
             {
                 payload["metadata"] = metadata;
             }
 
-            // Handle ROOT_NODE_BASED strategy: group datapoints by tag ID and preserve multiple values per tag
-            if (config.GetEffectiveTransmissionStrategy() == MqttTransmissionStrategy.ROOT_NODE_BASED)
+            // Handle ROOT_NODE_BASED and TAG_LIST_BASED strategies: group datapoints by tag ID and preserve multiple values per tag
+            var strategy = config.GetEffectiveTransmissionStrategy();
+            if (strategy == MqttTransmissionStrategy.ROOT_NODE_BASED || 
+                strategy == MqttTransmissionStrategy.TAG_LIST_BASED)
             {
                 var tagsData = new List<Dictionary<string, object>>();
                 
-                // Group all datapoints by tag ID across all root node groups
+                // Group all datapoints by tag ID across all strategy groups
                 var tagGroupedData = new Dictionary<string, List<UADataPoint>>();
                 
                 foreach (var kvp in chunk)
@@ -1006,16 +1124,19 @@ namespace Cognite.OpcUa.Pushers
                 {
                     tagsData.Add(new Dictionary<string, object>
                     {
-                        ["tag"] = tagGroup.Key, // Tag ID
+                        ["tag"] = tagGroup.Key, // Individual Tag ID (e.g., "S.A.Tag1")
                         ["data"] = tagGroup.Value.Select(dp => CreateDataPointObject(dp)).ToList() // All datapoints for this tag
                     });
                 }
                 
                 payload["tags_data"] = tagsData;
+                
+                log.LogTrace("[CreateSubscriptionPayload] {Strategy} strategy: processed {GroupCount} groups into {TagCount} individual tags", 
+                    strategy, chunk.Count(), tagGroupedData.Count);
             }
             else
             {
-                // For other strategies, use the original logic
+                // For other strategies (CHUNK_BASED, TAG_CHANGE_BASED), use the original logic
                 var tagsData = chunk.Select(kvp => new Dictionary<string, object>
                 {
                     ["tag"] = kvp.Key,
@@ -1031,10 +1152,20 @@ namespace Cognite.OpcUa.Pushers
         /// <summary>
         /// Create payload for legacy format (existing format)
         /// </summary>
-        private object? CreateLegacyPayload(IEnumerable<KeyValuePair<string, IEnumerable<UADataPoint>>> chunk)
+        private object? CreateLegacyPayload(IEnumerable<KeyValuePair<string, IEnumerable<UADataPoint>>> chunk, string? groupKey = null)
         {
             var payloadList = new List<object>();
             log.LogTrace("Using JSON serialization for {count} datapoint items", chunk.Count());
+            
+            // For legacy format, add metadata as a separate object if enabled
+            if (config.IncludeMetadata)
+            {
+                var metadata = CreateMetadata("legacy", null, null, chunk, groupKey);
+                if (metadata != null)
+                {
+                    payloadList.Add(new { metadata = metadata });
+                }
+            }
             
             foreach (var kvp in chunk)
             {
@@ -1058,10 +1189,20 @@ namespace Cognite.OpcUa.Pushers
         /// <summary>
         /// Create payload for polling snapshot format (deprecated, for backward compatibility)
         /// </summary>
-        private object? CreatePollingSnapshotPayload(IEnumerable<KeyValuePair<string, IEnumerable<UADataPoint>>> chunk)
+        private object? CreatePollingSnapshotPayload(IEnumerable<KeyValuePair<string, IEnumerable<UADataPoint>>> chunk, string? groupKey = null)
         {
             var payloadList = new List<object>();
             log.LogTrace("Using JSON serialization for {count} datapoint items", chunk.Count());
+            
+            // For polling snapshot format, add metadata as a separate object if enabled
+            if (config.IncludeMetadata)
+            {
+                var metadata = CreateMetadata("polling_snapshot_deprecated", null, null, chunk, groupKey);
+                if (metadata != null)
+                {
+                    payloadList.Add(new { metadata = metadata });
+                }
+            }
             
             foreach (var kvp in chunk)
             {

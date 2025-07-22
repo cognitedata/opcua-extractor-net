@@ -519,19 +519,86 @@ mqtt:
     # Higher values may improve throughput but can overwhelm the MQTT broker
     max-concurrency: 4
     
-    # MQTT transmission strategy for grouping and sending data
-    # ROOT_NODE_BASED: Group by extraction.root-nodes configuration
-    # CHUNK_BASED: Use existing chunking strategy (default) 
-    # TAG_LIST_BASED: Group by specified tag lists
-    # TAG_CHANGE_BASED: Send based on OPC UA tag changes (subscription-based)
-    mqtt-transmission-strategy: CHUNK_BASED
+    # Whether to use gRPC/Protobuf serialization for datapoints (default: true)
+    # If true, datapoints will be serialized using Protobuf (gRPC format)
+    # If false, datapoints will be serialized using JSON format
+    use-grpc: true
     
-    # Configuration for tag list grouping when mqtt-transmission-strategy is TAG_LIST_BASED
-    # Each array represents a group of tags that should be sent together in one JSON message
+    # JSON format to use when use-grpc is false (default: Legacy)
+    # Legacy: Existing simple format
+    # PollingSnapshotObject: Structured format with metadata and shared timestamp
+    # PollingSnapshotPlain: Flat format with camelCase metadata
+    # Subscription: Format optimized for real-time subscription data
+    json-format-type: Legacy
+    
+    # Timestamp format for JSON serialization (default: epoch)
+    # "epoch" - Unix timestamp in milliseconds since epoch
+    # "iso8601" - ISO 8601 format (YYYY-MM-DDTHH:mm:ss.SSS+09:00)
+    timestamp-format: epoch
+    
+    # Timezone offset for ISO8601 timestamp format (default: +00:00)
+    # Format: "+09:00" for Korea time, "+00:00" for UTC, etc.
+    # Only used when timestamp-format is "iso8601"
+    timezone-offset: "+00:00"
+    
+    # Whether to include metadata object in JSON output (default: true)
+    include-metadata: true
+    
+    # Whether to include msgRecvStartTimestamp and msgRecvEndTimestamp in metadata (default: true)
+    # Only applicable when include-metadata is true
+    include-message-timestamps: true
+    
+    # Whether to include data type (dt) field for each tag (default: true)
+    include-data-type: true
+    
+    # Whether to include status code (sc) field for each tag (default: true)
+    include-status-code: true
+    
+    # MQTT transmission strategy for grouping and sending data
+    # This configuration supports both legacy flat format and new nested format
+    # Legacy format (deprecated):
+    # mqtt-transmission-strategy: CHUNK_BASED
+    
+    # New nested format (recommended):
+    # This provides more granular control and better organization
+    mqtt-transmission-strategy:
+        # Data grouping strategy for MQTT transmission
+        # ROOT_NODE_BASED: Group by extraction.root-nodes configuration, metadata includes "root_node_name"
+        # CHUNK_BASED: Use existing chunking strategy (default), metadata includes "chunk_id" 
+        # TAG_LIST_BASED: Group by specified tag lists, metadata includes "tag_list_name"
+        # TAG_CHANGE_BASED: Send based on OPC UA tag changes (subscription-based), metadata includes "changed_tag"
+        data-group-by: CHUNK_BASED
+        
+        # Configuration for tag list grouping when data-group-by is TAG_LIST_BASED
+        # NEW FORMAT: Advanced tag list configuration with custom names
+        # tag-list-groups:
+        #   - tag-list-name: "sensors_group"          # Custom name for this group
+        #     tags:                                    # List of tags in this group
+        #       - "s=S.A.Tag1"
+        #       - "s=S.A.Tag2"
+        #       - "s=S.A.Tag3"
+        #   - tag-list-name: "pumps_group"            # Another group with custom name
+        #     tags:
+        #       - "s=S.B.Pump1"
+        #       - "s=S.B.Pump2"
+        #   - tags:                                    # Group without custom name (defaults to "tag_list_3")
+        #       - "s=S.C.Motor1"
+        #       - "s=S.C.Motor2"
+        
+        # LEGACY FORMAT: Simple tag list configuration (will be deprecated)
+        # Each array represents a group of tags that should be sent together in one JSON message
+        # tag-lists:
+        #   - ["tag1", "tag2", "tag3"]  # Group 1: metadata will include "tag_list_name": "tag_list_1"
+        #   - ["tag4", "tag5"]          # Group 2: metadata will include "tag_list_name": "tag_list_2"
+        #   - ["tag6"]                  # Group 3: metadata will include "tag_list_name": "tag_list_3"
+    
+    # Legacy flat format for backward compatibility (will be deprecated)
+    # mqtt-transmission-strategy: CHUNK_BASED
+    
+    # Legacy tag lists configuration (will be deprecated)
     # tag-lists:
-    #   - ["tag1", "tag2", "tag3"]  # Group 1
-    #   - ["tag4", "tag5"]          # Group 2
-    #   - ["tag6"]                  # Group 3
+    #   - ["tag1", "tag2", "tag3"]
+    #   - ["tag4", "tag5"]
 
     # If relationships are eneabled, and written to clean, and deletes are enabled. This needs to be set to
     # true in order to hard delete the relationships.

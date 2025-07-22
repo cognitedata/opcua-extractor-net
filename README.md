@@ -108,3 +108,152 @@ Please follow the code style of the rest of the code, meaning:
 In general just make sure the code remains consistent. The code has nullable analysis enabled, so make sure to fix any warnings. You should add tests for any new behavior or fixes.
 
 This project adheres to [Contributor Covenant v2.0](https://www.contributor-covenant.org/version/2/0/code_of_conduct/) as a code of conduct.
+
+## MQTT Transmission Strategy Metadata
+
+The OPC-UA extractor now supports enhanced metadata in MQTT JSON messages based on the configured transmission strategy. This feature automatically adds strategy-specific information to the metadata section of JSON messages.
+
+### Configuration
+
+Configure the transmission strategy in your `config.yml`:
+
+```yaml
+mqtt:
+  use-grpc: false  # Required for JSON format with metadata
+  include-metadata: true
+  json-format-type: Subscription  # Recommended for rich metadata support
+  
+  mqtt-transmission-strategy:
+    data-group-by: ROOT_NODE_BASED  # Choose your strategy
+    
+    # For TAG_LIST_BASED strategy:
+    # tag-lists:
+    #   - ["sensor1", "sensor2", "sensor3"]
+    #   - ["pump1", "pump2"]
+```
+
+### Transmission Strategies and Metadata
+
+#### ROOT_NODE_BASED
+Groups data by root nodes and adds `root_node_name` to metadata:
+```json
+{
+  "metadata": {
+    "data_ingest_type": "subscription",
+    "message_timestamp": 1648234567890,
+    "root_node_name": "kepkeps=S.D"
+  },
+  "tags_data": [...]
+}
+```
+
+#### CHUNK_BASED (Default)
+Uses chunking strategy and adds unique `chunk_id` based on sequence numbers:
+```json
+{
+  "metadata": {
+    "data_ingest_type": "subscription",
+    "message_timestamp": 1648234567890,
+    "chunk_id": "chunk_123_456_1648234567890"
+  },
+  "tags_data": [...]
+}
+```
+
+#### TAG_LIST_BASED
+Groups data by configured tag lists and adds `tag_list_name`:
+
+**New Format (with custom names):**
+```yaml
+mqtt:
+  mqtt-transmission-strategy:
+    data-group-by: TAG_LIST_BASED
+    tag-list-groups:
+      - tag-list-name: "sensors_group"
+        tags:
+          - "s=S.A.Tag1"
+          - "s=S.A.Tag2"
+          - "s=S.A.Tag3"
+      - tag-list-name: "pumps_group"
+        tags:
+          - "s=S.B.Pump1"
+          - "s=S.B.Pump2"
+```
+
+**Output:**
+```json
+{
+  "metadata": {
+    "data_ingest_type": "subscription",
+    "message_timestamp": 1648234567890,
+    "tag_list_name": "sensors_group"
+  },
+  "tags_data": [
+    {
+      "tag": "s=S.A.Tag1",
+      "data": [
+        {
+          "timestamp": 1648234567890,
+          "value": 124,
+          "sc": 0,
+          "dt": "int32"
+        }
+      ]
+    },
+    {
+      "tag": "s=S.A.Tag2",
+      "data": [
+        {
+          "timestamp": 1648234567890,
+          "value": "test",
+          "sc": 0,
+          "dt": "string" 
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Legacy Format:**
+```yaml
+mqtt:
+  mqtt-transmission-strategy:
+    data-group-by: TAG_LIST_BASED
+    tag-lists:
+      - ["tag1", "tag2", "tag3"]
+      - ["tag4", "tag5"]
+```
+
+Legacy format output:
+```json
+{
+  "metadata": {
+    "data_ingest_type": "subscription",
+    "message_timestamp": 1648234567890,
+    "tag_list_name": "tag_list_1"
+  },
+  "tags_data": [...]
+}
+```
+
+#### TAG_CHANGE_BASED
+Sends individual tag changes and adds `changed_tag`:
+```json
+{
+  "metadata": {
+    "data_ingest_type": "subscription",
+    "message_timestamp": 1648234567890,
+    "changed_tag": "sensor1"
+  },
+  "tags_data": [...]
+}
+```
+
+### Backward Compatibility
+
+The extractor maintains backward compatibility with legacy flat configuration:
+```yaml
+mqtt:
+  mqtt-transmission-strategy: CHUNK_BASED  # Legacy format
+```

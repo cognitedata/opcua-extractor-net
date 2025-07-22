@@ -111,6 +111,14 @@ namespace Cognite.OpcUa.Utils
         private IEnumerable<KeyValuePair<string, IEnumerable<UADataPoint>>> GroupByTagList(
             IList<UADataPoint> dataPoints)
         {
+            // Try new format first (with custom names)
+            var effectiveTagListsWithNames = config.TransmissionStrategyConfig?.GetEffectiveTagListsWithNames();
+            if (effectiveTagListsWithNames != null && effectiveTagListsWithNames.Any())
+            {
+                return GroupByTagListWithNames(dataPoints, effectiveTagListsWithNames);
+            }
+
+            // Fall back to legacy format
             var effectiveTagLists = config.GetEffectiveTagLists();
             if (effectiveTagLists == null || !effectiveTagLists.Any())
             {
@@ -121,7 +129,7 @@ namespace Cognite.OpcUa.Utils
             var tagListGroups = new Dictionary<string, List<UADataPoint>>();
             var processedDataPoints = new HashSet<string>();
 
-            logger.LogTrace("[TAG_LIST_BASED] Processing {Count} datapoints against {ListCount} tag lists", 
+            logger.LogTrace("[TAG_LIST_BASED] Processing {Count} datapoints against {ListCount} tag lists (legacy format)", 
                 dataPoints.Count, effectiveTagLists.Count);
 
             // Process each tag list
@@ -145,9 +153,8 @@ namespace Cognite.OpcUa.Utils
 
                 if (groupDataPoints.Any())
                 {
-                    // Create meaningful group key based on the first tag's root node
-                    var firstTag = groupDataPoints.First();
-                    var groupKey = ExtractRootNodeFromId(firstTag.Id) ?? $"tag_list_{i + 1}";
+                    // Create meaningful group key for tag list
+                    var groupKey = $"tag_list_{i + 1}";
                     tagListGroups[groupKey] = groupDataPoints;
                 }
             }
@@ -160,6 +167,59 @@ namespace Cognite.OpcUa.Utils
             }
 
             logger.LogTrace("[TAG_LIST_BASED] Grouped into {GroupCount} tag list groups", tagListGroups.Count);
+            return tagListGroups.Select(kvp => new KeyValuePair<string, IEnumerable<UADataPoint>>(kvp.Key, kvp.Value));
+        }
+
+        /// <summary>
+        /// Groups data points by specified tag lists with custom names
+        /// </summary>
+        private IEnumerable<KeyValuePair<string, IEnumerable<UADataPoint>>> GroupByTagListWithNames(
+            IList<UADataPoint> dataPoints, Dictionary<string, List<string>> tagListsWithNames)
+        {
+            var tagListGroups = new Dictionary<string, List<UADataPoint>>();
+            var processedDataPoints = new HashSet<string>();
+
+            logger.LogTrace("[TAG_LIST_BASED] Processing {Count} datapoints against {ListCount} tag lists with custom names", 
+                dataPoints.Count, tagListsWithNames.Count);
+
+            // Process each named tag list
+            foreach (var kvp in tagListsWithNames)
+            {
+                var groupName = kvp.Key;
+                var tagList = kvp.Value;
+                var groupDataPoints = new List<UADataPoint>();
+
+                foreach (var tag in tagList)
+                {
+                    var matchingDataPoints = dataPoints.Where(dp => 
+                        dp.Id.Equals(tag, StringComparison.OrdinalIgnoreCase) && 
+                        !processedDataPoints.Contains(dp.Id)).ToList();
+
+                    foreach (var dp in matchingDataPoints)
+                    {
+                        groupDataPoints.Add(dp);
+                        processedDataPoints.Add(dp.Id);
+                    }
+                }
+
+                if (groupDataPoints.Any())
+                {
+                    tagListGroups[groupName] = groupDataPoints;
+                    logger.LogTrace("[TAG_LIST_BASED] Group '{GroupName}' contains {Count} datapoints", 
+                        groupName, groupDataPoints.Count);
+                }
+            }
+
+            // Handle unassigned data points
+            var unassignedDataPoints = dataPoints.Where(dp => !processedDataPoints.Contains(dp.Id)).ToList();
+            if (unassignedDataPoints.Any())
+            {
+                tagListGroups["unassigned"] = unassignedDataPoints;
+                logger.LogTrace("[TAG_LIST_BASED] 'unassigned' group contains {Count} datapoints", 
+                    unassignedDataPoints.Count);
+            }
+
+            logger.LogTrace("[TAG_LIST_BASED] Grouped into {GroupCount} tag list groups with custom names", tagListGroups.Count);
             return tagListGroups.Select(kvp => new KeyValuePair<string, IEnumerable<UADataPoint>>(kvp.Key, kvp.Value));
         }
 
