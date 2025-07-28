@@ -43,7 +43,8 @@ namespace Cognite.OpcUa.Pushers.Writers
             UAExtractor extractor,
             IDictionary<string, UAVariable> timeseriesMap,
             IDictionary<NodeId, long> nodeToAssetIds,
-            HashSet<string> mismatchedTimeseries,
+            HashSet<Identity> mismatchedTimeseries,
+            HashSet<Identity> missingTimeseries,
             TypeUpdateConfig update,
             BrowseReport report,
             CancellationToken token)
@@ -77,6 +78,16 @@ namespace Cognite.OpcUa.Pushers.Writers
                     report.TimeSeriesCreated += result.Created;
                 }
                 report.TimeSeriesUpdated += result.Updated;
+
+                if (missingTimeseries.Count > 0)
+                {
+                    foreach (var ts in timeseries)
+                    {
+                        missingTimeseries.Remove(Identity.Create(ts.ExternalId));
+                    }
+                }
+
+
                 return true;
             }
             catch (Exception ex)
@@ -102,7 +113,7 @@ namespace Cognite.OpcUa.Pushers.Writers
             UAExtractor extractor,
             IDictionary<string, UAVariable> tsMap,
             IDictionary<NodeId, long> nodeToAssetIds,
-            HashSet<string> mismatchedTimeseries,
+            HashSet<Identity> mismatchedTimeseries,
             Result result,
             CancellationToken token)
         {
@@ -121,7 +132,7 @@ namespace Cognite.OpcUa.Pushers.Writers
             if (timeseries.Results == null)
                 return Array.Empty<TimeSeries>();
 
-            var foundBadTimeseries = new List<string>();
+            var foundBadTimeseries = new List<Identity>();
             foreach (var ts in timeseries.Results)
             {
                 var loc = tsMap[ts.ExternalId];
@@ -131,8 +142,8 @@ namespace Cognite.OpcUa.Pushers.Writers
                 }
                 if (ts.IsString != loc.FullAttributes.DataType.IsString)
                 {
-                    mismatchedTimeseries.Add(ts.ExternalId);
-                    foundBadTimeseries.Add(ts.ExternalId);
+                    mismatchedTimeseries.Add(Identity.Create(ts.ExternalId));
+                    foundBadTimeseries.Add(Identity.Create(ts.ExternalId));
                 }
             }
             if (foundBadTimeseries.Count != 0)

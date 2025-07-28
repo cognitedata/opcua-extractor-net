@@ -21,9 +21,11 @@ namespace Cognite.OpcUa.Pushers.Writers
         private readonly FDMWriter? fdm;
         private readonly IdmWriter? idm;
 
+        public HashSet<Identity> MissingTimeseries { get; } = new HashSet<Identity>();
+
         private readonly FullConfig config;
         public Dictionary<NodeId, long> NodeToAssetIds { get; } = new();
-        public HashSet<string> MismatchedTimeseries { get; } = new();
+        public HashSet<Identity> MismatchedTimeseries { get; } = new();
 
         private readonly ILogger log;
         public CDFWriter(
@@ -74,6 +76,7 @@ namespace Cognite.OpcUa.Pushers.Writers
                 .Where(node => node.Source != NodeSources.NodeSource.CDF)
                 .ToDictionary(obj => obj.GetUniqueId(extractor.Context)!);
             var timeseriesMap = variables
+                .Where(node => node.Source != NodeSources.NodeSource.CDF)
                 .ToDictionary(obj => obj.GetUniqueId(extractor.Context)!);
 
             // Start by initializing clean assets, if necessary.
@@ -87,7 +90,7 @@ namespace Cognite.OpcUa.Pushers.Writers
             if (timeseries != null)
             {
                 result.Variables &= await timeseries.PushVariables(extractor, timeseriesMap, NodeToAssetIds,
-                    MismatchedTimeseries, update.Variables, report, token);
+                    MismatchedTimeseries, MissingTimeseries, update.Variables, report, token);
             }
 
             // Finally, push the various other resources as needed.
@@ -146,7 +149,7 @@ namespace Cognite.OpcUa.Pushers.Writers
             {
                 tasks.Add(Task.Run(async () =>
                 {
-                    result.Variables &= await idm.PushTimeseries(extractor, timeseriesMap, report, token);
+                    result.Variables &= await idm.PushTimeseries(extractor, timeseriesMap, MissingTimeseries, report, token);
                 }, token));
             }
 
