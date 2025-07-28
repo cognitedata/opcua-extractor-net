@@ -50,7 +50,7 @@ namespace Cognite.OpcUa.Pushers.Records
             await destination.CogniteClient.DataModels.UpsertSpaces(spaces.Select(s => new SpaceCreate { Space = s, Name = s }), token);
 
             await containerCache.Initialize(token);
-            converter = new DMSValueConverter(extractor.StringConverter, logSpace);
+            converter = new DMSValueConverter(extractor.TypeConverter, logSpace);
             if (logAnalyticsConfig.UseRawNodeId)
             {
                 context = new NodeIdDirectStringConverter();

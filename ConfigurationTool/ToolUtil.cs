@@ -150,19 +150,19 @@ namespace Cognite.OpcUa.Config
                     log.LogDebug("Bad array datapoint: {BadPointName} {BadPointValue}", variable.Id, value.Value.ToString());
                     return Enumerable.Empty<UADataPoint>();
                 }
-                var values = (Array)value.Value;
+                var values = client.TypeConverter.ExtractVariantArray(value);
                 for (int i = 0; i < Math.Min(variable.ArrayDimensions[0], values.Length); i++)
                 {
                     var dp = variable.DataType.IsString
                         ? new UADataPoint(
                             value.SourceTimestamp,
                             $"{variable.Id}[{i}]",
-                            client.StringConverter.ConvertToString(values.GetValue(i)),
+                            client.TypeConverter.ConvertToString(values[i]),
                             value.StatusCode)
                         : new UADataPoint(
                             value.SourceTimestamp,
                             $"{variable.Id}[{i}]",
-                            UAClient.ConvertToDouble(values.GetValue(i)),
+                            UAClient.ConvertToDouble(values[i]),
                             value.StatusCode);
                     ret.Add(dp);
                 }
@@ -172,7 +172,7 @@ namespace Cognite.OpcUa.Config
                 ? new UADataPoint(
                     value.SourceTimestamp,
                     variable.Id,
-                    client.StringConverter.ConvertToString(value.Value),
+                    client.TypeConverter.ConvertToString(value.WrappedValue),
                     value.StatusCode)
                 : new UADataPoint(
                     value.SourceTimestamp,

@@ -272,7 +272,14 @@ namespace Test
             {
                 Assert.True(stringyMeta == null || stringyMeta.Count == 0);
                 Assert.Equal(2, mysteryMeta.Count);
-                Assert.Equal("(0, 100)", mysteryMeta["EURange"]);
+                if (raw)
+                {
+                    Assert.Equal(@"{""Low"":0,""High"":100}", mysteryMeta["EURange"]);
+                }
+                else
+                {
+                    Assert.Equal("(0, 100)", mysteryMeta["EURange"]);
+                }
             }
 
         }

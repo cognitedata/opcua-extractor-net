@@ -389,7 +389,7 @@ namespace Cognite.OpcUa
 
         private UAEvent DpAsEvent(DataValue datapoint, VariableExtractionState node)
         {
-            var value = extractor.StringConverter.ConvertToString(datapoint.WrappedValue);
+            var value = extractor.TypeConverter.ConvertToString(datapoint.WrappedValue);
             var evt = new UAEvent
             {
                 EmittingNode = node.SourceId,
@@ -398,7 +398,7 @@ namespace Cognite.OpcUa
                 SourceNode = node.SourceId,
                 Time = datapoint.SourceTimestamp,
             };
-            evt.SetMetadata(extractor.StringConverter, new[] {
+            evt.SetMetadata(extractor.TypeConverter, new[] {
                 new EventFieldValue(new RawTypeField(new QualifiedName("Status")), new Variant(datapoint.StatusCode))
             }, log);
             return evt;
@@ -414,33 +414,35 @@ namespace Cognite.OpcUa
         {
             string uniqueId = variable.Id;
 
-            if (value.Value is Array values)
+            if (value.Value is Array)
             {
+                var variantArray = extractor.TypeConverter.ExtractVariantArray(value.WrappedValue);
                 int dim = 1;
-                if (values.Length == 0) return Enumerable.Empty<UADataPoint>();
+                if (variantArray.Length == 0) return Enumerable.Empty<UADataPoint>();
                 if (!variable.IsArray)
                 {
                     log.LogDebug("Array values returned for scalar variable {Id}", variable.Id);
-                    if (values.Length > 1)
+                    if (variantArray.Length > 1)
                     {
-                        missedArrayPoints.Inc(values.Length - 1);
+                        missedArrayPoints.Inc(variantArray.Length - 1);
                     }
                 }
-                else if (variable.ArrayDimensions[0] >= values.Length)
+                else if (variable.ArrayDimensions[0] >= variantArray.Length)
                 {
-                    dim = values.Length;
+                    dim = variantArray.Length;
                 }
                 else
                 {
                     dim = variable.ArrayDimensions[0];
-                    log.LogDebug("Missing {Count} points for variable {Id} due to too small ArrayDimensions", values.Length - dim, variable.Id);
-                    missedArrayPoints.Inc(values.Length - dim);
+                    log.LogDebug("Missing {Count} points for variable {Id} due to too small ArrayDimensions", variantArray.Length - dim, variable.Id);
+                    missedArrayPoints.Inc(variantArray.Length - dim);
                 }
                 var ret = new List<UADataPoint>();
                 for (int i = 0; i < dim; i++)
                 {
                     var id = variable.IsArray ? GetArrayUniqueId(uniqueId, i) : uniqueId;
-                    ret.Add(variable.DataType.ToDataPoint(extractor, values.GetValue(i), value.SourceTimestamp, id, value.StatusCode));
+                    var entry = variantArray.GetValueOrDefault(i, Variant.Null);
+                    ret.Add(variable.DataType.ToDataPoint(extractor, entry, value.SourceTimestamp, id, value.StatusCode));
                 }
                 return ret;
             }
@@ -568,14 +570,14 @@ namespace Cognite.OpcUa
             var finalProperties = extractedProperties.Select(kvp => kvp.Value);
             var buffEvent = new UAEvent
             {
-                Message = extractor.StringConverter.ConvertToString(extractedProperties.GetValueOrDefault("Message")?.Value),
+                Message = extractor.TypeConverter.ConvertToString(extractedProperties.GetValueOrDefault("Message")?.Value ?? Variant.Null),
                 EventId = config.Extraction.IdPrefix + eventId,
                 SourceNode = sourceNode,
                 Time = time,
                 EventType = eventType,
                 EmittingNode = emitter
             };
-            buffEvent.SetMetadata(extractor.StringConverter, finalProperties, log);
+            buffEvent.SetMetadata(extractor.TypeConverter, finalProperties, log);
             return buffEvent;
         }
     }

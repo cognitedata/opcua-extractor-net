@@ -365,7 +365,7 @@ namespace Test.Unit
 
         private static string MetadataToJson(ILogger log, BaseUANode node, UAExtractor extractor)
         {
-            var json = node.ToJson(log, extractor.StringConverter, ConverterType.Node);
+            var json = node.ToJson(log, extractor.TypeConverter, ConverterType.Node);
             return json.RootElement.GetProperty("metadata").ToString();
         }
 
@@ -374,7 +374,7 @@ namespace Test.Unit
         {
             using var extractor = tester.BuildExtractor();
             var node = new UAObject(new NodeId("test", 0), "test", null, null, NodeId.Null, null);
-            var converter = tester.Client.StringConverter;
+            var converter = tester.Client.TypeConverter;
             var log = tester.Provider.GetRequiredService<ILogger<TypesTest>>();
             Assert.Equal("", MetadataToJson(log, node, extractor));
 
@@ -444,7 +444,7 @@ namespace Test.Unit
         {
             using var extractor = tester.BuildExtractor();
             var node = new UAObject(new NodeId("test", 0), "test", null, null, NodeId.Null, null);
-            var converter = tester.Client.StringConverter;
+            var converter = tester.Client.TypeConverter;
             var log = tester.Provider.GetRequiredService<ILogger<TypesTest>>();
 
             var pdt = new UADataType(DataTypeIds.ReadValueId);
@@ -1060,7 +1060,7 @@ namespace Test.Unit
             evt.Message = "message";
             evt.Time = now;
             evt.SourceNode = new NodeId("source", 0);
-            evt.SetMetadata(extractor.StringConverter, new[]
+            evt.SetMetadata(extractor.TypeConverter, new[]
             {
                 new EventFieldValue(new RawTypeField("key1"), "value1"),
                 new EventFieldValue(new RawTypeField("key2"), 123),
@@ -1082,7 +1082,7 @@ namespace Test.Unit
                 Assert.Equal(convEvt.MetaData.Count, evt.MetaData.Count);
                 foreach (var kvp in convEvt.MetaData)
                 {
-                    Assert.Equal(kvp.Value ?? "", tester.Client.StringConverter.ConvertToString(evt.MetaData[kvp.Key]));
+                    Assert.Equal(kvp.Value ?? "", tester.Client.TypeConverter.ConvertToString(evt.MetaData[kvp.Key]));
                 }
             }
         }
@@ -1239,7 +1239,7 @@ namespace Test.Unit
                 new EventFieldValue(new RawTypeField(new QualifiedNameCollection { "deep", "deep-2" }), new [] { 1, 2, 3, 4 }),
                 new EventFieldValue(new RawTypeField(new QualifiedNameCollection { "deep", "deep-2", "Value" }), 123.321)
             };
-            evt.SetMetadata(extractor.StringConverter, rawMeta, log);
+            evt.SetMetadata(extractor.TypeConverter, rawMeta, log);
             var meta = evt.MetaData;
 
             Assert.Equal(3, meta.Count);

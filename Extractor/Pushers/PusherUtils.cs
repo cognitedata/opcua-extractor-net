@@ -62,7 +62,7 @@ namespace Cognite.OpcUa.Pushers
 
         public static JsonElement? CreateRawUpdate(
             ILogger log,
-            StringConverter converter,
+            TypeConverter converter,
             BaseUANode node,
             RawRow<Dictionary<string, JsonElement>>? raw,
             ConverterType type)

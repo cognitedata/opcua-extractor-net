@@ -106,7 +106,7 @@ namespace Cognite.OpcUa.Nodes
 
         public override NodeId? TypeDefinition => FullAttributes.TypeDefinition?.Id;
 
-        public override Dictionary<string, string>? GetExtraMetadata(FullConfig config, SessionContext context, StringConverter converter)
+        public override Dictionary<string, string>? GetExtraMetadata(FullConfig config, SessionContext context, TypeConverter converter)
         {
             if (config.Extraction.NodeTypes.Metadata && FullAttributes.TypeDefinition?.Name != null)
             {

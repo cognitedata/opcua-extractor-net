@@ -278,7 +278,7 @@ namespace Cognite.OpcUa.Pushers.FDM
             await InitializeSpaceAndServer(token);
             context = await SyncServerMeta(extractor.NamespaceTable!, token);
 
-            var converter = new DMSValueConverter(extractor.StringConverter, modelInfo.InstanceSpace);
+            var converter = new DMSValueConverter(extractor.TypeConverter, modelInfo.InstanceSpace);
             var builder = new TypeHierarchyBuilder(log, converter, config, modelInfo, context);
 
             // First, collect all nodes, including properties.

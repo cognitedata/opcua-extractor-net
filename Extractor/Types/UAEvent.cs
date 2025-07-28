@@ -66,7 +66,7 @@ namespace Cognite.OpcUa.Types
 
         public Dictionary<RawTypeField, EventFieldValue>? Values { get; private set; }
 
-        private StringConverter? valuesConverter;
+        private TypeConverter? valuesConverter;
         private ILogger? valuesLogger;
 
         private Dictionary<string, string>? cachedMetadata;
@@ -119,14 +119,14 @@ namespace Cognite.OpcUa.Types
 
             return builder.ToString();
         }
-        public void SetMetadata(StringConverter converter, IEnumerable<EventFieldValue> values, ILogger log)
+        public void SetMetadata(TypeConverter converter, IEnumerable<EventFieldValue> values, ILogger log)
         {
             Values = values.ToDictionary(v => v.Field);
             valuesConverter = converter;
             valuesLogger = log;
         }
         [return: NotNullIfNotNull("values")]
-        private static Dictionary<string, string>? GetMetadata(StringConverter converter, IEnumerable<EventFieldValue> values, ILogger log)
+        private static Dictionary<string, string>? GetMetadata(TypeConverter converter, IEnumerable<EventFieldValue> values, ILogger log)
         {
             if (values == null) return null;
             var parents = new Dictionary<string, EventFieldNode>();
@@ -227,7 +227,7 @@ namespace Cognite.OpcUa.Types
                 if (r == null) return null;
                 values.Add(r);
             }
-            evt.SetMetadata(extractor.StringConverter, values, log);
+            evt.SetMetadata(extractor.TypeConverter, values, log);
             evt.Values = values.ToDictionary(v => v.Field);
 
             return evt;
@@ -251,7 +251,7 @@ namespace Cognite.OpcUa.Types
                 : Time.ToUnixTimeMilliseconds();
             evt.ExternalId = EventId;
             evt.Type = MetaData != null && MetaData.TryGetValue("Type", out var rawType)
-                ? client.StringConverter.ConvertToString(rawType)
+                ? client.TypeConverter.ConvertToString(rawType)
                 : client.GetUniqueId(EventType?.Id);
             evt.DataSetId = dataSetId;
 
@@ -271,7 +271,7 @@ namespace Cognite.OpcUa.Types
             }
             if (MetaData.TryGetValue("SubType", out var subtype))
             {
-                evt.Subtype = client.StringConverter.ConvertToString(subtype);
+                evt.Subtype = client.TypeConverter.ConvertToString(subtype);
             }
 
             foreach (var dt in MetaData)
@@ -404,8 +404,8 @@ namespace Cognite.OpcUa.Types
     internal class EventFieldConverter : JsonConverter<EventFieldNode>
     {
         private readonly ILogger log;
-        private readonly StringConverter converter;
-        public EventFieldConverter(StringConverter converter, ILogger log)
+        private readonly TypeConverter converter;
+        public EventFieldConverter(TypeConverter converter, ILogger log)
         {
             this.converter = converter;
             this.log = log;
@@ -418,10 +418,20 @@ namespace Cognite.OpcUa.Types
 
         private void WriteValueSafe(Utf8JsonWriter writer, EventFieldNode field)
         {
-            var value = converter.ConvertToString(field.Value, null, null, StringConverterMode.Json);
+            if (field.Value == null)
+            {
+                writer.WriteNullValue();
+                return;
+            }
+            var value = converter.ConvertToJson(field.Value.Value, null, null, JsonMode.Json);
+            if (value == null)
+            {
+                writer.WriteNullValue();
+                return;
+            }
             try
             {
-                writer.WriteRawValue(value);
+                writer.WriteRawValue(value.ToJsonString());
             }
             catch (Exception ex)
             {

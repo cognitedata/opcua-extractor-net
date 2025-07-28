@@ -1084,7 +1084,7 @@ namespace Test.Unit
         private void NodeToRaw(UAExtractor extractor, BaseUANode node, ConverterType type, bool ts)
         {
             var options = new JsonSerializerOptions();
-            var converter = tester.Client.StringConverter;
+            var converter = tester.Client.TypeConverter;
             converter.AddConverters(options, type);
 
             var id = node.GetUniqueId(extractor.Context);
@@ -1519,7 +1519,7 @@ namespace Test.Unit
             evt.Time = new DateTime(2024, 01, 01, 00, 00, 00, DateTimeKind.Utc);
             evt.EventType = customEventType;
             evt.EventId = "Event1";
-            evt.SetMetadata(extractor.StringConverter, new[] {
+            evt.SetMetadata(extractor.TypeConverter, new[] {
                 new EventFieldValue(fieldsByName["Message"], new LocalizedText("Some message")),
                 new EventFieldValue(fieldsByName["EventType"], customEventType.Id),
                 new EventFieldValue(fieldsByName["EventId"], new byte[] { 1, 2, 3, 4 }),
@@ -1591,7 +1591,7 @@ namespace Test.Unit
             evt.Time = new DateTime(2024, 01, 01, 00, 00, 00, DateTimeKind.Utc);
             evt.EventType = customEventType;
             evt.EventId = "Event1";
-            evt.SetMetadata(extractor.StringConverter, new[] {
+            evt.SetMetadata(extractor.TypeConverter, new[] {
                 new EventFieldValue(fieldsByName["Message"], new LocalizedText("Some message")),
                 new EventFieldValue(fieldsByName["EventType"], customEventType.Id),
                 new EventFieldValue(fieldsByName["EventId"], new byte[] { 1, 2, 3, 4 }),
@@ -1663,7 +1663,7 @@ namespace Test.Unit
             evt.Time = new DateTime(2024, 01, 01, 00, 00, 00, DateTimeKind.Utc);
             evt.EventType = customEventType;
             evt.EventId = "Event1";
-            evt.SetMetadata(extractor.StringConverter, new[] {
+            evt.SetMetadata(extractor.TypeConverter, new[] {
                 new EventFieldValue(fieldsByName["Message"], new LocalizedText("Some message")),
                 new EventFieldValue(fieldsByName["EventType"], customEventType.Id),
                 new EventFieldValue(fieldsByName["EventId"], new byte[] { 1, 2, 3, 4 }),

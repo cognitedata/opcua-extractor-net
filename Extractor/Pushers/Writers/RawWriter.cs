@@ -208,7 +208,7 @@ namespace Cognite.OpcUa.Pushers.Writers
                         return rowsToUpsert
                             .Select(
                                 kvp =>
-                                    (kvp.Key, update: PusherUtils.CreateRawUpdate(log, extractor.StringConverter, kvp.Value, null, converter))
+                                    (kvp.Key, update: PusherUtils.CreateRawUpdate(log, extractor.TypeConverter, kvp.Value, null, converter))
                             )
                             .Where(elem => elem.update != null)
                             .ToDictionary(pair => pair.Key, pair => pair.update!.Value);
@@ -229,7 +229,7 @@ namespace Cognite.OpcUa.Pushers.Writers
 
                     foreach (var (key, row, node) in toWrite)
                     {
-                        var update = PusherUtils.CreateRawUpdate(log, extractor.StringConverter, node, row, converter);
+                        var update = PusherUtils.CreateRawUpdate(log, extractor.TypeConverter, node, row, converter);
 
                         if (update != null)
                         {
@@ -275,7 +275,7 @@ namespace Cognite.OpcUa.Pushers.Writers
                 {
                     var rows = ids.Select(id => (dataMap[id], id));
                     var creates = rows
-                        .Select(pair => (pair.Item1.ToJson(log, extractor.StringConverter, converter), pair.id))
+                        .Select(pair => (pair.Item1.ToJson(log, extractor.TypeConverter, converter), pair.id))
                         .Where(pair => pair.Item1 != null)
                         .ToDictionary(pair => pair.id, pair => pair.Item1!.RootElement);
                     result.Created += creates.Count;
