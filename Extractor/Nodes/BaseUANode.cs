@@ -28,6 +28,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.Json.Nodes;
 using System.Text.Json;
 
 namespace Cognite.OpcUa.Nodes
@@ -562,9 +563,9 @@ namespace Cognite.OpcUa.Nodes
             return result;
         }
 
-        protected Dictionary<string, object> BuildMetadataJsonBase(Dictionary<string, object>? extras, IUAClientAccess client, bool reversibleJson = true)
+        protected Dictionary<string, JsonNode?> BuildMetadataJsonBase(Dictionary<string, JsonNode?>? extras, IUAClientAccess client, bool reversibleJson = true)
         {
-            var result = extras ?? new Dictionary<string, object>();
+            var result = extras ?? new Dictionary<string, JsonNode?>();
 
             if (Properties == null) return result;
 
@@ -574,10 +575,10 @@ namespace Cognite.OpcUa.Nodes
                 {
                     if (prop is UAVariable variable)
                     {
-                        result[prop.Name] = client.TypeConverter.ConvertToJsonObject(
+                        result[prop.Name] = client.TypeConverter.ConvertToJson(
                             variable.Value ?? variable.Value.ToString(),
                             variable.FullAttributes.DataType?.EnumValues,
-                            mode: reversibleJson ? JsonMode.Json : JsonMode.ReversibleJson) ?? new object();
+                            mode: reversibleJson ? JsonMode.Json : JsonMode.ReversibleJson);
                     }
 
                     if (prop.Properties != null)
@@ -623,14 +624,15 @@ namespace Cognite.OpcUa.Nodes
         /// metadata will be retrieved and included in the result.</param>
         /// <returns>A dictionary where the keys are metadata property names and the values are the corresponding metadata
         /// values. The dictionary is formatted to be JSON-compatible.</returns>
-        public Dictionary<string, object> BuildMetadataAsJson(FullConfig config, IUAClientAccess client, bool getExtras)
+        public Dictionary<string, JsonNode?> BuildMetadataAsJson(FullConfig config, IUAClientAccess client, bool getExtras)
         {
-            Dictionary<string, string>? extras = null;
+            Dictionary<string, JsonNode?>? extras = null;
             if (getExtras)
             {
-                extras = GetExtraMetadata(config, client.Context, client.TypeConverter);
+                var stringExtras = GetExtraMetadata(config, client.Context, client.TypeConverter);
+                extras = stringExtras?.ToDictionary(kvp => kvp.Key, kvp => (JsonNode?)JsonValue.Create(kvp.Value));
             }
-            return BuildMetadataJsonBase(extras?.ToDictionary(extras => extras.Key, extras => (object)extras.Value), client);
+            return BuildMetadataJsonBase(extras, client);
         }
         #endregion
     }

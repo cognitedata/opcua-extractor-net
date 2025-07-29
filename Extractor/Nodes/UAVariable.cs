@@ -33,6 +33,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace Cognite.OpcUa.Nodes
 {
@@ -516,7 +517,7 @@ namespace Cognite.OpcUa.Nodes
             };
         }
 
-        public SourcedNodeWrite<CogniteExtractorTimeSeriesBase<JsonElement>> ToIdmTimeSeries(
+        public SourcedNodeWrite<CogniteExtractorTimeSeriesBase<JsonNode>> ToIdmTimeSeries(
             IUAClientAccess client,
             string space,
             string source,
@@ -525,36 +526,30 @@ namespace Cognite.OpcUa.Nodes
         {
             var writeAsJson = config.Cognite?.MetadataTargets?.Clean?.MetadataAsJson ?? false;
 
-            Dictionary<string, object> metaData;
+            Dictionary<string, JsonNode> extractedData;
             if (writeAsJson)
             {
-                metaData = BuildMetadataAsJson(config, client, true);
+                var jsonMetaData = BuildMetadataAsJson(config, client, true);
+                extractedData = new Dictionary<string, JsonNode>();
+                foreach (var kvp in jsonMetaData)
+                {
+                    if (kvp.Value != null)
+                    {
+                        extractedData[kvp.Key] = kvp.Value;
+                    }
+                }
             }
             else
             {
                 var stringMetadata = BuildMetadata(config, client, true);
-                metaData = stringMetadata.ToDictionary(kvp => kvp.Key, kvp => (object)kvp.Value);
-            }
-
-            Dictionary<string, JsonElement> extractedData;
-            try
-            {
-                var json = JsonSerializer.Serialize(metaData);
-                using var jsonDocument = JsonDocument.Parse(json);
-                var rootElement = jsonDocument.RootElement;
-
-                extractedData = new Dictionary<string, JsonElement>();
-                foreach (var property in rootElement.EnumerateObject())
+                extractedData = new Dictionary<string, JsonNode>();
+                foreach (var kvp in stringMetadata)
                 {
-                    extractedData[property.Name] = property.Value.Clone();
+                    extractedData[kvp.Key] = JsonValue.Create(kvp.Value)!;
                 }
             }
-            catch (Exception)
-            {
-                extractedData = new Dictionary<string, JsonElement>();
-            }
 
-            CogniteExtractorTimeSeriesBase<JsonElement> write = new CogniteExtractorTimeSeriesBase<JsonElement>
+            CogniteExtractorTimeSeriesBase<JsonNode> write = new CogniteExtractorTimeSeriesBase<JsonNode>
             {
                 Name = Name,
                 Description = FullAttributes.Description,
@@ -597,7 +592,7 @@ namespace Cognite.OpcUa.Nodes
                 }
             }
 
-            var res = new SourcedNodeWrite<CogniteExtractorTimeSeriesBase<JsonElement>>
+            var res = new SourcedNodeWrite<CogniteExtractorTimeSeriesBase<JsonNode>>
             {
                 Space = space,
                 ExternalId = GetUniqueId(client.Context),
