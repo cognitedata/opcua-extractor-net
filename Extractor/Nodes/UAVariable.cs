@@ -517,7 +517,7 @@ namespace Cognite.OpcUa.Nodes
             };
         }
 
-        public SourcedNodeWrite<CogniteExtractorTimeSeriesBase<JsonNode>> ToIdmTimeSeries(
+        public SourcedNodeWrite<CogniteExtractorTimeSeriesBase<JsonNode?>> ToIdmTimeSeries(
             IUAClientAccess client,
             string space,
             string source,
@@ -526,30 +526,23 @@ namespace Cognite.OpcUa.Nodes
         {
             var writeAsJson = config.Cognite?.MetadataTargets?.Clean?.MetadataAsJson ?? false;
 
-            Dictionary<string, JsonNode> extractedData;
+            Dictionary<string, JsonNode?> extractedData;
             if (writeAsJson)
             {
                 var jsonMetaData = BuildMetadataAsJson(config, client, true);
-                extractedData = new Dictionary<string, JsonNode>();
+                extractedData = new Dictionary<string, JsonNode?>();
                 foreach (var kvp in jsonMetaData)
                 {
-                    if (kvp.Value != null)
-                    {
-                        extractedData[kvp.Key] = kvp.Value;
-                    }
+                    extractedData[kvp.Key] = kvp.Value;
                 }
             }
             else
             {
                 var stringMetadata = BuildMetadata(config, client, true);
-                extractedData = new Dictionary<string, JsonNode>();
-                foreach (var kvp in stringMetadata)
-                {
-                    extractedData[kvp.Key] = JsonValue.Create(kvp.Value)!;
-                }
+                extractedData = stringMetadata.ToDictionary(kvp => kvp.Key, kvp => (JsonNode?)JsonValue.Create(kvp.Value));
             }
 
-            CogniteExtractorTimeSeriesBase<JsonNode> write = new CogniteExtractorTimeSeriesBase<JsonNode>
+            CogniteExtractorTimeSeriesBase<JsonNode?> write = new CogniteExtractorTimeSeriesBase<JsonNode?>
             {
                 Name = Name,
                 Description = FullAttributes.Description,
@@ -592,7 +585,7 @@ namespace Cognite.OpcUa.Nodes
                 }
             }
 
-            var res = new SourcedNodeWrite<CogniteExtractorTimeSeriesBase<JsonNode>>
+            var res = new SourcedNodeWrite<CogniteExtractorTimeSeriesBase<JsonNode?>>
             {
                 Space = space,
                 ExternalId = GetUniqueId(client.Context),
