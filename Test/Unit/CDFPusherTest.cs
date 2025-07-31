@@ -1704,6 +1704,105 @@ namespace Test.Unit
             Assert.Equal(-1, customData["TestStruct"]["ValueRank"].GetValue<int>());
             Assert.Equal("Test desc", customData["TestStruct"]["Description"].GetValue<string>());
         }
+
+        [Fact]
+        public async Task TestPushNodesMetadataAsJson()
+        {
+            tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
+            {
+                Clean = new CleanMetadataTargetConfig
+                {
+                    Timeseries = true,
+                    Assets = false,
+                    Relationships = false,
+                    Space = "space",
+                    Source = "mysource",
+                    MetadataAsJson = true
+                }
+            };
+
+            (handler, pusher) = tester.GetCDFPusher();
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+            extractor.SourceInfo.Uri = "test-source-uri";
+
+            var rels = Enumerable.Empty<UAReference>();
+            var assets = Enumerable.Empty<BaseUANode>();
+
+            var dt = new UADataType(DataTypeIds.Double);
+            var id = extractor.GetUniqueId(tester.Server.Ids.Base.DoubleVar1);
+            var node = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", null, null, new NodeId("parent", 0), null);
+            node.FullAttributes.DataType = dt;
+            node.FullAttributes.TypeDefinition = new UAVariableType(new NodeId("typedef", 0));
+            node.FullAttributes.TypeDefinition.Attributes.DisplayName = "CustomType";
+
+            // Add properties for metadata
+            var stringProp = CommonTestUtils.GetSimpleVariable("StringProp", new UADataType(DataTypeIds.String));
+            stringProp.FullAttributes.Value = new Variant("test-value");
+
+            var intProp = CommonTestUtils.GetSimpleVariable("IntProp", new UADataType(DataTypeIds.Int32));
+            intProp.FullAttributes.Value = new Variant(123);
+
+            var nestedProp = CommonTestUtils.GetSimpleVariable("Nested", new UADataType(DataTypeIds.String));
+            nestedProp.FullAttributes.Value = new Variant("nested-value");
+            var childProp = CommonTestUtils.GetSimpleVariable("Child", new UADataType(DataTypeIds.String));
+            childProp.FullAttributes.Value = new Variant("child-value");
+
+            var duplicateChildProp1 = CommonTestUtils.GetSimpleVariable("DuplicateChild", new UADataType(DataTypeIds.String));
+            duplicateChildProp1.FullAttributes.Value = new Variant("dup-child-1");
+            var duplicateChildProp2 = CommonTestUtils.GetSimpleVariable("DuplicateChild", new UADataType(DataTypeIds.String));
+            duplicateChildProp2.FullAttributes.Value = new Variant("dup-child-2");
+            nestedProp.Attributes.Properties = new List<BaseUANode> { childProp, duplicateChildProp1, duplicateChildProp2 };
+
+            var duplicateProp1 = CommonTestUtils.GetSimpleVariable("Duplicate", new UADataType(DataTypeIds.String));
+            duplicateProp1.FullAttributes.Value = new Variant("dup-1");
+            var duplicateProp2 = CommonTestUtils.GetSimpleVariable("Duplicate", new UADataType(DataTypeIds.String));
+            duplicateProp2.FullAttributes.Value = new Variant("dup-2");
+
+            node.Attributes.Properties = new List<BaseUANode> { stringProp, intProp, nestedProp, duplicateProp1, duplicateProp2 };
+
+            // Enable metadata for update
+            tester.Config.Extraction.NodeTypes.Metadata = true;
+            var update = new UpdateConfig { Variables = { Metadata = true } };
+
+            // Push the node
+            Assert.True((await pusher.PushNodes(assets, new[] { node }, rels, update, tester.Source.Token)).Variables);
+
+            // Verify instance was created
+            Assert.True(handler.Instances.ContainsKey(id));
+            var instance = handler.Instances[id];
+            var data = instance["sources"][0]["properties"];
+
+            // Verify basic properties
+            Assert.Equal("Variable 1", data["name"].ToString());
+            Assert.Equal("numeric", data["type"].ToString());
+            Assert.Equal("gp.base:s=typedef", instance["type"]["externalId"].ToString());
+
+            // Verify extractedData contains JsonNode metadata
+            var extractedData = data["extractedData"].AsObject();
+            Assert.NotNull(extractedData);
+            Assert.Equal(6, extractedData.Count);
+
+            // Verify type preservation in JsonNode format
+            Assert.Equal("test-value", extractedData["StringProp"]?.GetValue<string>());
+            Assert.Equal(123, extractedData["IntProp"]?.GetValue<int>());
+
+            // Verify duplicate top-level properties
+            Assert.Equal("dup-1", extractedData["Duplicate"]?.GetValue<string>());
+            Assert.Equal("dup-2", extractedData["Duplicate0"]?.GetValue<string>());
+
+            // Verify nested property
+            var nestedJson = extractedData["Nested"]?.AsObject();
+            Assert.NotNull(nestedJson);
+            Assert.Equal(4, nestedJson.Count); // Value, Child, DuplicateChild, DuplicateChild0
+            Assert.Equal("nested-value", nestedJson["Value"]?.GetValue<string>());
+            Assert.Equal("child-value", nestedJson["Child"]?.GetValue<string>());
+            Assert.Equal("dup-child-1", nestedJson["DuplicateChild"]?.GetValue<string>());
+            Assert.Equal("dup-child-2", nestedJson["DuplicateChild0"]?.GetValue<string>());
+
+
+            // Verify TypeDefinition metadata is included
+            Assert.Equal("CustomType", extractedData["TypeDefinition"]?.GetValue<string>());
+        }
         #endregion
     }
 }
