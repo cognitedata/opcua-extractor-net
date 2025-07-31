@@ -569,29 +569,74 @@ namespace Cognite.OpcUa.Nodes
 
             if (Properties == null) return result;
 
+            var fields = new HashSet<string>(result.Keys);
             foreach (var prop in Properties)
             {
                 if (prop != null && !string.IsNullOrEmpty(prop.Name))
                 {
-                    if (prop is UAVariable variable)
+                    var name = prop.Name;
+                    string safeName = name;
+                    int idx = 0;
+                    while (!fields.Add(safeName))
                     {
-                        result[prop.Name] = client.TypeConverter.ConvertToJson(
-                            variable.Value ?? variable.Value.ToString(),
-                            variable.FullAttributes.DataType?.EnumValues,
-                            mode: reversibleJson ? JsonMode.Json : JsonMode.ReversibleJson);
+                        safeName = $"{name}{idx++}";
                     }
-
-                    if (prop.Properties != null)
-                    {
-                        var nestedProperties = prop.BuildMetadataJsonBase(null, client);
-                        foreach (var sprop in nestedProperties)
-                        {
-                            result[$"{prop.Name}_{sprop.Key}"] = sprop.Value;
-                        }
-                    }
+                    result[safeName] = CreatePropertyJsonValue(prop, client, reversibleJson);
                 }
             }
             return result;
+        }
+
+        private JsonNode? CreatePropertyJsonValue(BaseUANode prop, IUAClientAccess client, bool reversibleJson)
+        {
+            // Get nested properties
+            var nestedProperties = prop.Properties != null ?
+                prop.BuildMetadataJsonBase(null, client, reversibleJson) :
+                new Dictionary<string, JsonNode?>();
+
+            // Following UAPropertySerializer pattern: if no nested content, return value directly
+            if (nestedProperties.Count == 0)
+            {
+                if (prop is UAVariable variable)
+                {
+                    if (variable.Value == null)
+                        return null;
+
+                    return client.TypeConverter.ConvertToJson(
+                        (Variant)variable.Value,
+                        variable.FullAttributes.DataType?.EnumValues,
+                        mode: reversibleJson ? JsonMode.Json : JsonMode.ReversibleJson);
+
+                }
+                return null;
+            }
+
+            // Has nested properties - create object with Value field
+            var propertyObject = new JsonObject();
+
+            // Add main value
+            if (prop is UAVariable variable1)
+            {
+                propertyObject["Value"] = client.TypeConverter.ConvertToJson(
+                    variable1.Value ?? variable1.Value?.ToString(),
+                    variable1.FullAttributes.DataType?.EnumValues,
+                    mode: reversibleJson ? JsonMode.Json : JsonMode.ReversibleJson);
+            }
+
+            // Add nested properties, deduplicating conflicts
+            foreach (var nestedProp in nestedProperties)
+            {
+                var name = nestedProp.Key;
+                string safeName = name;
+                int idx = 0;
+                while (propertyObject.ContainsKey(safeName))
+                {
+                    safeName = $"{name}{idx++}";
+                }
+                propertyObject[safeName] = nestedProp.Value;
+            }
+
+            return propertyObject;
         }
 
         /// <summary>

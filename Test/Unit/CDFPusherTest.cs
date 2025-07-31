@@ -1746,9 +1746,19 @@ namespace Test.Unit
             nestedProp.FullAttributes.Value = new Variant("nested-value");
             var childProp = CommonTestUtils.GetSimpleVariable("Child", new UADataType(DataTypeIds.String));
             childProp.FullAttributes.Value = new Variant("child-value");
-            nestedProp.Attributes.Properties = new List<BaseUANode> { childProp };
 
-            node.Attributes.Properties = new List<BaseUANode> { stringProp, intProp, nestedProp };
+            var duplicateChildProp1 = CommonTestUtils.GetSimpleVariable("DuplicateChild", new UADataType(DataTypeIds.String));
+            duplicateChildProp1.FullAttributes.Value = new Variant("dup-child-1");
+            var duplicateChildProp2 = CommonTestUtils.GetSimpleVariable("DuplicateChild", new UADataType(DataTypeIds.String));
+            duplicateChildProp2.FullAttributes.Value = new Variant("dup-child-2");
+            nestedProp.Attributes.Properties = new List<BaseUANode> { childProp, duplicateChildProp1, duplicateChildProp2 };
+
+            var duplicateProp1 = CommonTestUtils.GetSimpleVariable("Duplicate", new UADataType(DataTypeIds.String));
+            duplicateProp1.FullAttributes.Value = new Variant("dup-1");
+            var duplicateProp2 = CommonTestUtils.GetSimpleVariable("Duplicate", new UADataType(DataTypeIds.String));
+            duplicateProp2.FullAttributes.Value = new Variant("dup-2");
+
+            node.Attributes.Properties = new List<BaseUANode> { stringProp, intProp, nestedProp, duplicateProp1, duplicateProp2 };
 
             // Enable metadata for update
             tester.Config.Extraction.NodeTypes.Metadata = true;
@@ -1770,12 +1780,25 @@ namespace Test.Unit
             // Verify extractedData contains JsonNode metadata
             var extractedData = data["extractedData"].AsObject();
             Assert.NotNull(extractedData);
+            Assert.Equal(6, extractedData.Count);
 
             // Verify type preservation in JsonNode format
             Assert.Equal("test-value", extractedData["StringProp"]?.GetValue<string>());
             Assert.Equal(123, extractedData["IntProp"]?.GetValue<int>());
-            Assert.Equal("nested-value", extractedData["Nested"]?.GetValue<string>());
-            Assert.Equal("child-value", extractedData["Nested_Child"]?.GetValue<string>());
+
+            // Verify duplicate top-level properties
+            Assert.Equal("dup-1", extractedData["Duplicate"]?.GetValue<string>());
+            Assert.Equal("dup-2", extractedData["Duplicate0"]?.GetValue<string>());
+
+            // Verify nested property
+            var nestedJson = extractedData["Nested"]?.AsObject();
+            Assert.NotNull(nestedJson);
+            Assert.Equal(4, nestedJson.Count); // Value, Child, DuplicateChild, DuplicateChild0
+            Assert.Equal("nested-value", nestedJson["Value"]?.GetValue<string>());
+            Assert.Equal("child-value", nestedJson["Child"]?.GetValue<string>());
+            Assert.Equal("dup-child-1", nestedJson["DuplicateChild"]?.GetValue<string>());
+            Assert.Equal("dup-child-2", nestedJson["DuplicateChild0"]?.GetValue<string>());
+
 
             // Verify TypeDefinition metadata is included
             Assert.Equal("CustomType", extractedData["TypeDefinition"]?.GetValue<string>());

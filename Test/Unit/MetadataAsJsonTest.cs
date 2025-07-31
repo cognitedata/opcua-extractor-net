@@ -3,6 +3,8 @@ using Cognite.OpcUa.Nodes;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Test.Utils;
 using Xunit;
 using Xunit.Abstractions;
@@ -71,26 +73,71 @@ namespace Test.Unit
         public void TestBuildMetadataAsJsonWithNestedProperties()
         {
             using var extractor = tester.BuildExtractor();
-            var pdt = new UADataType(DataTypeIds.String);
-            var node = CommonTestUtils.GetSimpleVariable("test", pdt);
+            // Define data types
+            var stringDt = new UADataType(DataTypeIds.String);
+            var doubleDt = new UADataType(DataTypeIds.Double);
 
-            // Create nested structure: propA -> nestedProp
-            var propA = CommonTestUtils.GetSimpleVariable("propA", pdt);
-            var nestedProp = CommonTestUtils.GetSimpleVariable("nestedProp", pdt);
+            // 1. Create the top-level UAObject: RobotArm
+            var robotArm = new UAObject(new NodeId("RobotArm", 1), "RobotArm", null, null, null, null);
 
-            propA.FullAttributes.Value = new Variant("valueA");
-            nestedProp.FullAttributes.Value = new Variant("nestedValue");
+            var status = CommonTestUtils.GetSimpleVariable("Status", stringDt);
+            status.FullAttributes.Value = new Variant("Idle");
 
-            propA.Attributes.Properties = new List<BaseUANode> { nestedProp };
-            node.Attributes.Properties = new List<BaseUANode> { propA };
+            var speed = CommonTestUtils.GetSimpleVariable("Speed", doubleDt);
+            speed.FullAttributes.Value = new Variant(75.5);
 
-            var jsonMetadata = node.BuildMetadataAsJson(tester.Config, extractor, false);
+            // 3. Create the nested UAObject: Motor
+            var motor = new UAObject(new NodeId("Motor", 1), "Motor", null, null, null, null);
 
-            Assert.Equal(2, jsonMetadata.Count);
-            Assert.True(jsonMetadata.ContainsKey("propA"));
-            Assert.True(jsonMetadata.ContainsKey("propA_nestedProp"));
-            Assert.Equal("valueA", jsonMetadata["propA"]?.GetValue<string>());
-            Assert.Equal("nestedValue", jsonMetadata["propA_nestedProp"]?.GetValue<string>());
+            var temperature = CommonTestUtils.GetSimpleVariable("Temperature", doubleDt);
+            temperature.FullAttributes.Value = new Variant(45.2);
+
+            var voltage = CommonTestUtils.GetSimpleVariable("Voltage", doubleDt);
+            voltage.FullAttributes.Value = new Variant(24.1);
+
+            // Assign properties to Motor
+            motor.Attributes.Properties = new List<BaseUANode> { temperature, voltage };
+
+            // 5. Create properties with redundant names to test conflict handling
+            var redundant1 = CommonTestUtils.GetSimpleVariable("RedundantName", stringDt);
+            redundant1.FullAttributes.Value = new Variant("This is a property");
+
+            var redundant2 = CommonTestUtils.GetSimpleVariable("RedundantName", stringDt);
+            redundant2.FullAttributes.Value = new Variant("This is another property with the same name");
+
+            robotArm.Attributes.Properties = new List<BaseUANode> { status, speed, motor, redundant1, redundant2 };
+
+            // Act
+            var jsonMetadata = robotArm.BuildMetadataAsJson(tester.Config, extractor, false);
+            var jsonObject = new JsonObject(jsonMetadata);
+            Console.WriteLine(jsonObject.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+
+            // Assert
+            Assert.NotNull(jsonMetadata);
+            // Expected keys: Status, Speed, Motor, RedundantName, RedundantName0
+            Assert.Equal(5, jsonMetadata.Count);
+
+            // Check simple properties
+            Assert.Equal("Idle", jsonMetadata["Status"]?.GetValue<string>());
+            Assert.Equal(75.5, jsonMetadata["Speed"]?.GetValue<double>());
+
+            // Check nested object: Motor
+            Assert.True(jsonMetadata.ContainsKey("Motor"));
+            var motorJson = jsonMetadata["Motor"]?.AsObject();
+            Assert.NotNull(motorJson);
+
+            // Motor is an object with nested properties, so it should be a JSON object
+            Assert.Equal(2, motorJson.Count);
+
+            Assert.True(motorJson.ContainsKey("Temperature"));
+            Assert.Equal(45.2, motorJson["Temperature"]?.GetValue<double>());
+
+            Assert.True(motorJson.ContainsKey("Voltage"));
+            Assert.Equal(24.1, motorJson["Voltage"]?.GetValue<double>());
+
+            // Check property with redundant name. The dictionary implementation means the last one wins.
+            Assert.True(jsonMetadata.ContainsKey("RedundantName"));
+            Assert.Equal("This is another property with the same name", jsonMetadata["RedundantName0"]?.GetValue<string>());
         }
 
         [Fact]
@@ -268,11 +315,13 @@ namespace Test.Unit
             // Create nested properties
             var parentProp = CommonTestUtils.GetSimpleVariable("parent", pdt);
             var childProp = CommonTestUtils.GetSimpleVariable("child", pdt);
+            var childProp2 = CommonTestUtils.GetSimpleVariable("child", pdt); // Duplicate name
 
             parentProp.FullAttributes.Value = new Variant("parentValue");
-            childProp.FullAttributes.Value = new Variant("childValue");
+            childProp.FullAttributes.Value = new Variant("childValue1");
+            childProp2.FullAttributes.Value = new Variant("childValue2");
 
-            parentProp.Attributes.Properties = new List<BaseUANode> { childProp };
+            parentProp.Attributes.Properties = new List<BaseUANode> { childProp, childProp2 };
             variable.Attributes.Properties = new List<BaseUANode> { parentProp };
 
             // Configure MetadataAsJson = true
@@ -290,14 +339,27 @@ namespace Test.Unit
             var result = variable.ToIdmTimeSeries(extractor, "testSpace", "testSource", tester.Config, null);
 
             Assert.NotNull(result);
-            Assert.Equal(2, result.Properties.extractedData.Count);
+            Assert.NotNull(result.Properties);
+            Assert.NotNull(result.Properties.extractedData);
 
-            // Check nested property naming
+            // Check that there is one top-level property: "parent"
+            Assert.Single(result.Properties.extractedData);
             Assert.True(result.Properties.extractedData.ContainsKey("parent"));
-            Assert.True(result.Properties.extractedData.ContainsKey("parent_child"));
 
-            Assert.Equal("parentValue", result.Properties.extractedData["parent"]?.GetValue<string>());
-            Assert.Equal("childValue", result.Properties.extractedData["parent_child"]?.GetValue<string>());
+            // Check the nested structure of "parent"
+            var parentJson = result.Properties.extractedData["parent"]?.AsObject();
+            Assert.NotNull(parentJson);
+
+            // Should contain "Value", "child", and "child0" for the duplicate
+            Assert.Equal(3, parentJson.Count);
+            Assert.True(parentJson.ContainsKey("Value"));
+            Assert.Equal("parentValue", parentJson["Value"]?.GetValue<string>());
+
+            Assert.True(parentJson.ContainsKey("child"));
+            Assert.Equal("childValue1", parentJson["child"]?.GetValue<string>());
+
+            Assert.True(parentJson.ContainsKey("child0"));
+            Assert.Equal("childValue2", parentJson["child0"]?.GetValue<string>());
         }
 
         [Fact]
@@ -360,31 +422,6 @@ namespace Test.Unit
         #endregion
 
         #region Edge Cases and Error Handling
-
-        [Fact]
-        public void TestBuildMetadataAsJsonPropertyOverwritesExtras()
-        {
-            using var extractor = tester.BuildExtractor();
-            var pdt = new UADataType(DataTypeIds.String);
-            var node = CommonTestUtils.GetSimpleVariable("test", pdt);
-
-            // Enable extras
-            tester.Config.Extraction.NodeTypes.Metadata = true;
-            node.FullAttributes.TypeDefinition = new UAVariableType(new NodeId("type", 0));
-            node.FullAttributes.TypeDefinition.Attributes.DisplayName = "ExtraType";
-
-            // Add property with same name as extra
-            var typeDefProp = CommonTestUtils.GetSimpleVariable("TypeDefinition", pdt);
-            typeDefProp.FullAttributes.Value = new Variant("PropertyType");
-            node.Attributes.Properties = new List<BaseUANode> { typeDefProp };
-
-            var jsonMetadata = node.BuildMetadataAsJson(tester.Config, extractor, true);
-
-            Assert.Single(jsonMetadata);
-            Assert.True(jsonMetadata.ContainsKey("TypeDefinition"));
-            // Property should overwrite extra
-            Assert.Equal("PropertyType", jsonMetadata["TypeDefinition"]?.GetValue<string>());
-        }
 
         [Fact]
         public void TestToIdmTimeSeriesComplexJsonStructure()
