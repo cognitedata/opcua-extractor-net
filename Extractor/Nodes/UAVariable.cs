@@ -529,12 +529,7 @@ namespace Cognite.OpcUa.Nodes
             Dictionary<string, JsonNode?> extractedData;
             if (writeAsJson)
             {
-                var jsonMetaData = BuildMetadataAsJson(config, client, true);
-                extractedData = new Dictionary<string, JsonNode?>();
-                foreach (var kvp in jsonMetaData)
-                {
-                    extractedData[kvp.Key] = kvp.Value;
-                }
+                extractedData = BuildMetadataAsJson(config, client, true);
             }
             else
             {

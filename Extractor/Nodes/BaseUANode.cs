@@ -603,7 +603,7 @@ namespace Cognite.OpcUa.Nodes
                         return null;
 
                     return client.TypeConverter.ConvertToJson(
-                        (Variant)variable.Value,
+                        variable.Value.Value,
                         variable.FullAttributes.DataType?.EnumValues,
                         mode: reversibleJson ? JsonMode.Json : JsonMode.ReversibleJson);
 
@@ -617,8 +617,11 @@ namespace Cognite.OpcUa.Nodes
             // Add main value
             if (prop is UAVariable variable1)
             {
+                if (variable1.Value == null)
+                    return null;
+
                 propertyObject["Value"] = client.TypeConverter.ConvertToJson(
-                    variable1.Value ?? variable1.Value?.ToString(),
+                    variable1.Value.Value,
                     variable1.FullAttributes.DataType?.EnumValues,
                     mode: reversibleJson ? JsonMode.Json : JsonMode.ReversibleJson);
             }
