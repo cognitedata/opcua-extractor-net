@@ -160,6 +160,7 @@ namespace Cognite.OpcUa.Subscriptions
                 {
                     session.AddSubscription(subscription);
                     await subscription.CreateAsync(token);
+                    numSubscriptions.WithLabels(SubscriptionName.Name()).Set(subscription.MonitoredItems.Count(m => m.Created));
                     subManager.Cache.InitSubscription(SubscriptionName, subscription.Id);
                 }
                 catch (Exception ex)
