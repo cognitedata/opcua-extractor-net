@@ -67,6 +67,13 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.37.0":
+    description: Fix issue with subscription metrics, stop creating timeseries that originate in the raw-node-buffer.
+    changelog:
+      fixed:
+        - Fix issue causing subscription metrics not to be incremented when a subscription is restored on the server.
+      changed:
+        - Timeseries read from raw with the raw-node-buffer feature are no longer used to produce timeseries in CDF. This speeds up startup when using the raw-node-buffer, but if the timeseries are deleted, they will not be recreated until nodes are read from the OPC-UA server.
   "2.36.1":
     description: Log errors that occur when failing to create connection parameters for connecting to the server.
     changelog:
