@@ -605,7 +605,7 @@ namespace Cognite.OpcUa.Nodes
                     return client.TypeConverter.ConvertToJson(
                         variable.Value.Value,
                         variable.FullAttributes.DataType?.EnumValues,
-                        mode: reversibleJson ? JsonMode.Json : JsonMode.ReversibleJson);
+                        mode: reversibleJson ? JsonMode.ReversibleJson : JsonMode.Json);
 
                 }
                 return null;
@@ -623,16 +623,17 @@ namespace Cognite.OpcUa.Nodes
                 propertyObject["Value"] = client.TypeConverter.ConvertToJson(
                     variable1.Value.Value,
                     variable1.FullAttributes.DataType?.EnumValues,
-                    mode: reversibleJson ? JsonMode.Json : JsonMode.ReversibleJson);
+                    mode: reversibleJson ? JsonMode.ReversibleJson : JsonMode.Json);
             }
 
             // Add nested properties, deduplicating conflicts
+            var usedNames = new HashSet<string>(propertyObject.Select(kvp => kvp.Key));
             foreach (var nestedProp in nestedProperties)
             {
                 var name = nestedProp.Key;
                 string safeName = name;
                 int idx = 0;
-                while (propertyObject.ContainsKey(safeName))
+                while (!usedNames.Add(safeName))
                 {
                     safeName = $"{name}{idx++}";
                 }
