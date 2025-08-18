@@ -61,7 +61,14 @@ namespace Cognite.OpcUa.Pushers.Records
             }
             await destination.GetOrCreateStreamAsync(new StreamWrite
             {
-                ExternalId = stream
+                ExternalId = stream,
+                Settings = new StreamSettings
+                {
+                    Template = new StreamTemplateSettings
+                    {
+                        Name = StreamTemplateName.ImmutableDataStaging
+                    }
+                }
             }, token);
         }
 

@@ -462,7 +462,7 @@ namespace Cognite.OpcUa.Config
             return typeof(IFieldFilter).IsAssignableFrom(type);
         }
 
-        public object? ReadYaml(IParser parser, Type type)
+        public object? ReadYaml(IParser parser, Type type, ObjectDeserializer deserializer)
         {
             if (parser.TryConsume<Scalar>(out var scalar))
             {
@@ -497,7 +497,7 @@ namespace Cognite.OpcUa.Config
             throw new YamlException("Expected a string, object, or list of strings");
         }
 
-        public void WriteYaml(IEmitter emitter, object? value, Type type)
+        public void WriteYaml(IEmitter emitter, object? value, Type type, ObjectSerializer serializer)
         {
             if (value is RegexFieldFilter regexFilter)
             {
