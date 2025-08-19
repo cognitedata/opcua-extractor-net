@@ -563,7 +563,7 @@ namespace Cognite.OpcUa.Nodes
             return result;
         }
 
-        protected Dictionary<string, JsonNode?> BuildMetadataJsonBase(Dictionary<string, JsonNode?>? extras, IUAClientAccess client, bool reversibleJson = true)
+        protected Dictionary<string, JsonNode?> BuildMetadataJsonBase(Dictionary<string, JsonNode?>? extras, IUAClientAccess client, bool reversibleJson = false)
         {
             var result = extras ?? new Dictionary<string, JsonNode?>();
 
