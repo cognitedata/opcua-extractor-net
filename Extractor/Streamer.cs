@@ -77,7 +77,7 @@ namespace Cognite.OpcUa
 
         private void OnQueueOverflow(object sender, EventArgs e)
         {
-            extractor.Looper.Scheduler.TryTriggerTask("Pushers");
+            extractor.OnQueueOverflow();
         }
 
         /// <summary>
