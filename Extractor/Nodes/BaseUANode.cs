@@ -569,7 +569,6 @@ namespace Cognite.OpcUa.Nodes
 
             if (Properties == null) return result;
 
-            var fields = new HashSet<string>(result.Keys);
             foreach (var prop in Properties)
             {
                 if (prop != null && !string.IsNullOrEmpty(prop.Name))
@@ -577,7 +576,7 @@ namespace Cognite.OpcUa.Nodes
                     var name = prop.Name;
                     string safeName = name;
                     int idx = 0;
-                    while (!fields.Add(safeName))
+                    while (result.ContainsKey(safeName))
                     {
                         safeName = $"{name}{idx++}";
                     }
@@ -626,14 +625,12 @@ namespace Cognite.OpcUa.Nodes
                     mode: reversibleJson ? JsonMode.ReversibleJson : JsonMode.Json);
             }
 
-            // Add nested properties, deduplicating conflicts
-            var usedNames = new HashSet<string>(propertyObject.Select(kvp => kvp.Key));
             foreach (var nestedProp in nestedProperties)
             {
                 var name = nestedProp.Key;
                 string safeName = name;
                 int idx = 0;
-                while (!usedNames.Add(safeName))
+                while (propertyObject.ContainsKey(safeName))
                 {
                     safeName = $"{name}{idx++}";
                 }
