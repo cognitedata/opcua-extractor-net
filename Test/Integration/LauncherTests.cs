@@ -510,6 +510,43 @@ version: 1
             exc = Assert.Throws<TargetInvocationException>(() =>
                 method.Invoke(typeof(ExtractorStarter), new object[] { log, config, setup, options, ".", services }));
             Assert.Equal("Missing opc.ua.net.extractor.Config.xml in config folder .", exc.InnerException.Message);
+
+            // Test MetadataAsJson configuration validation - missing space
+            config = new FullConfig();
+            config.GenerateDefaults();
+            config.Source.EndpointUrl = tester.EndpointUrl;
+            config.Cognite = new CognitePusherConfig
+            {
+                MetadataTargets = new MetadataTargetsConfig
+                {
+                    Clean = new CleanMetadataTargetConfig
+                    {
+                        Timeseries = true,
+                        MetadataAsJson = true,
+                        Space = null // Missing space - should cause validation error
+                    }
+                }
+            };
+            exc = Assert.Throws<TargetInvocationException>(() =>
+                method.Invoke(typeof(ExtractorStarter), new object[] { log, config, new ExtractorParams(), null, "config", services }));
+            Assert.Equal("Invalid config: cognite.metadata-targets.clean.space is required when metadata-as-json is enabled", exc.InnerException.Message);
+
+            // Test MetadataAsJson configuration validation - empty space
+            config.Cognite.MetadataTargets.Clean.Space = "";
+            exc = Assert.Throws<TargetInvocationException>(() =>
+                method.Invoke(typeof(ExtractorStarter), new object[] { log, config, new ExtractorParams(), null, "config", services }));
+            Assert.Equal("Invalid config: cognite.metadata-targets.clean.space is required when metadata-as-json is enabled", exc.InnerException.Message);
+
+            // Test MetadataAsJson configuration validation - valid config
+            config.Cognite.MetadataTargets.Clean.Space = "valid-space";
+            // This should complete without throwing
+            method.Invoke(typeof(ExtractorStarter), new object[] { log, config, new ExtractorParams(), null, "config", services });
+
+            // Test MetadataAsJson configuration validation - false doesn't require space
+            config.Cognite.MetadataTargets.Clean.MetadataAsJson = false;
+            config.Cognite.MetadataTargets.Clean.Space = null;
+            // This should complete without throwing
+            method.Invoke(typeof(ExtractorStarter), new object[] { log, config, new ExtractorParams(), null, "config", services });
         }
     }
 }

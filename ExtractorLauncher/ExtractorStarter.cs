@@ -207,6 +207,13 @@ namespace Cognite.OpcUa
                 return "datapoints-batch must be greater than 0";
             }
 
+            var cleanTarget = config?.Cognite?.MetadataTargets?.Clean;
+            if (cleanTarget?.MetadataAsJson == true && string.IsNullOrWhiteSpace(cleanTarget.Space))
+            {
+                return "cognite.metadata-targets.clean.space is required when metadata-as-json is enabled";
+            }
+
+
             return null;
         }
 

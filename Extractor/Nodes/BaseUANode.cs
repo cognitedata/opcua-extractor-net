@@ -28,6 +28,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.Json.Nodes;
 using System.Text.Json;
 
 namespace Cognite.OpcUa.Nodes
@@ -562,6 +563,82 @@ namespace Cognite.OpcUa.Nodes
             return result;
         }
 
+        protected Dictionary<string, JsonNode?> BuildMetadataJsonBase(Dictionary<string, JsonNode?>? extras, IUAClientAccess client, bool reversibleJson = false)
+        {
+            var result = extras ?? new Dictionary<string, JsonNode?>();
+
+            if (Properties == null) return result;
+
+            foreach (var prop in Properties)
+            {
+                if (prop != null && !string.IsNullOrEmpty(prop.Name))
+                {
+                    var name = prop.Name;
+                    string safeName = name;
+                    int idx = 0;
+                    while (result.ContainsKey(safeName))
+                    {
+                        safeName = $"{name}{idx++}";
+                    }
+                    result[safeName] = CreatePropertyJsonValue(prop, client, reversibleJson);
+                }
+            }
+            return result;
+        }
+
+        private JsonNode? CreatePropertyJsonValue(BaseUANode prop, IUAClientAccess client, bool reversibleJson)
+        {
+            // Get nested properties
+            var nestedProperties = prop.Properties != null ?
+                prop.BuildMetadataJsonBase(null, client, reversibleJson) :
+                new Dictionary<string, JsonNode?>();
+
+            // Following UAPropertySerializer pattern: if no nested content, return value directly
+            if (nestedProperties.Count == 0)
+            {
+                if (prop is UAVariable variable)
+                {
+                    if (variable.Value == null)
+                        return null;
+
+                    return client.TypeConverter.ConvertToJson(
+                        variable.Value.Value,
+                        variable.FullAttributes.DataType?.EnumValues,
+                        mode: reversibleJson ? JsonMode.ReversibleJson : JsonMode.Json);
+
+                }
+                return null;
+            }
+
+            // Has nested properties - create object with Value field
+            var propertyObject = new JsonObject();
+
+            // Add main value
+            if (prop is UAVariable variable1)
+            {
+                if (variable1.Value == null)
+                    return null;
+
+                propertyObject["Value"] = client.TypeConverter.ConvertToJson(
+                    variable1.Value.Value,
+                    variable1.FullAttributes.DataType?.EnumValues,
+                    mode: reversibleJson ? JsonMode.ReversibleJson : JsonMode.Json);
+            }
+
+            foreach (var nestedProp in nestedProperties)
+            {
+                var name = nestedProp.Key;
+                string safeName = name;
+                int idx = 0;
+                while (propertyObject.ContainsKey(safeName))
+                {
+                    safeName = $"{name}{idx++}";
+                }
+                propertyObject[safeName] = nestedProp.Value;
+            }
+
+            return propertyObject;
+        }
 
         /// <summary>
         /// Return a dictionary of metadata fields for this node.
@@ -579,6 +656,29 @@ namespace Cognite.OpcUa.Nodes
                 extras = GetExtraMetadata(config, client.Context, client.TypeConverter);
             }
             return BuildMetadataBase(extras, client);
+        }
+
+        /// <summary>
+        /// Builds a JSON-compatible metadata dictionary based on the provided configuration and client context.
+        /// </summary>
+        /// <remarks>If <paramref name="getExtras"/> is <see langword="true"/>, the method retrieves
+        /// additional metadata  using the provided configuration and client context. Otherwise, only the base metadata
+        /// is included.</remarks>
+        /// <param name="config">The configuration object containing the metadata settings.</param>
+        /// <param name="client">The client providing access to the context and type conversion utilities.</param>
+        /// <param name="getExtras">A boolean value indicating whether to include additional metadata.  If <see langword="true"/>, extra
+        /// metadata will be retrieved and included in the result.</param>
+        /// <returns>A dictionary where the keys are metadata property names and the values are the corresponding metadata
+        /// values. The dictionary is formatted to be JSON-compatible.</returns>
+        public Dictionary<string, JsonNode?> BuildMetadataAsJson(FullConfig config, IUAClientAccess client, bool getExtras)
+        {
+            Dictionary<string, JsonNode?>? extras = null;
+            if (getExtras)
+            {
+                var stringExtras = GetExtraMetadata(config, client.Context, client.TypeConverter);
+                extras = stringExtras?.ToDictionary(kvp => kvp.Key, kvp => (JsonNode?)JsonValue.Create(kvp.Value));
+            }
+            return BuildMetadataJsonBase(extras, client);
         }
         #endregion
     }
