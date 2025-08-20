@@ -204,7 +204,7 @@ namespace Cognite.OpcUa
                         "Triggering a rebrowse due to a changes yet in {value} to be reflected",
                         node.Item2
                     );
-                    _extractor.Looper.QueueRebrowse();
+                    _extractor.ScheduleRebrowse();
                     await UpsertSavedTimestampFor(id!, valueTime, token);
                 }
             }
@@ -233,7 +233,7 @@ namespace Cognite.OpcUa
                             lastTimestamp,
                             valueTime
                         );
-                        _extractor.Looper.QueueRebrowse();
+                        _extractor.ScheduleRebrowse();
                         Task.Run(async () => await UpsertSavedTimestampFor(id, valueTime, token));
                     }
                     else

@@ -21,6 +21,7 @@ using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.Types;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -56,6 +57,11 @@ namespace Cognite.OpcUa.NodeSources
 
         public bool CanBeUsedForDeletes { get; }
         public bool ShouldBackgroundBrowse { get; }
+
+        public string Describe()
+        {
+            return $"{SourceObjects.Count()} source objects, {SourceVariables.Count()} source variables, {DestinationObjects.Count()} destination objects, {DestinationVariables.Count()} destination variables, {DestinationReferences.Count()} references";
+        }
     }
 
     /// <summary>
