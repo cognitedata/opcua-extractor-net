@@ -19,12 +19,13 @@ using Cognite.Extractor.Common;
 using Cognite.Extractor.Configuration;
 using Cognite.Extractor.Logging;
 using Cognite.Extractor.Utils;
+using Cognite.Extractor.Utils.Unstable.Configuration;
+using Cognite.Extractor.Utils.Unstable.Runtime;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Pushers;
 using Cognite.OpcUa.Pushers.Writers;
 using Cognite.OpcUa.Utils;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Prometheus;
 using Serilog;
@@ -148,7 +149,7 @@ namespace Cognite.OpcUa
             ILogger log,
             FullConfig config,
             BaseExtractorParams setup,
-            ExtractorRunnerParams<FullConfig, UAExtractor>? options,
+            ExtractorRuntimeBuilder<FullConfig, UAExtractor>? options,
             string configRoot,
             ServiceCollection services)
         {
@@ -175,9 +176,9 @@ namespace Cognite.OpcUa
             config.Source.ExitOnFailure |= setup is ExtractorParams p2 && p2.Exit;
             config.DryRun |= setup.DryRun;
 
-            if (options != null)
+            if (options != null && config.Source.ExitOnFailure)
             {
-                options.Restart &= !config.Source.ExitOnFailure;
+                options.RestartPolicy = ExtractorRestartPolicy.Never;
             }
 
             string? configResult = VerifyConfig(log, config);
@@ -282,7 +283,6 @@ namespace Cognite.OpcUa
             version.Set(0);
             var ver = Extractor.Metrics.Version.GetVersion(Assembly.GetExecutingAssembly());
 
-
             FullConfig? config = null;
             if (setup.NoConfig)
             {
@@ -295,35 +295,36 @@ namespace Cognite.OpcUa
                 var conf = provider.GetRequiredService<FullConfig>();
                 var dest = provider.GetService<CogniteDestinationWithIDM>();
                 var log = provider.GetRequiredService<ILogger<CDFPusher>>();
+                var connectionConfig = provider.GetRequiredService<ConnectionConfig>();
                 if (conf.Cognite == null || dest == null || dest.CogniteClient == null)
                     return null!;
-                return new CDFPusher(log, conf, conf.Cognite, dest, provider);
+                return new CDFPusher(log, conf, conf.Cognite, dest, connectionConfig, provider);
             });
 
             services.AddSingleton<UAClient>();
 
-            var options = new ExtractorRunnerParams<FullConfig, UAExtractor>
+            var builder = new ExtractorRuntimeBuilder<FullConfig, UAExtractor>($"OPC-UA Extractor:{ver}", $"CogniteOPCUAExtractor/{ver}")
             {
-                ConfigPath = setup.ConfigFile ?? Path.Join(configDir, "config.yml"),
+                ConfigFolder = configDir,
                 AcceptedConfigVersions = new[] { 1 },
-                AppId = $"OPC-UA Extractor:{ver}",
-                UserAgent = $"CogniteOPCUAExtractor/{ver}",
+                OverrideConfigFile = setup.ConfigFile != null ? setup.ConfigFile : null,
                 AddStateStore = true,
                 AddLogger = true,
                 AddMetrics = true,
-                Restart = !setup.Exit,
-                ConfigCallback = (config, options, services) => VerifyAndBuildConfig(log, config, setup, options, configDir, services),
-                ExtServices = services,
+                RestartPolicy = ExtractorRestartPolicy.OnError,
+                OnConfigure = (config, builder, services) => VerifyAndBuildConfig(log, config, setup, builder, configDir, services),
+                ExternalServices = services,
                 StartupLogger = log,
-                Config = config,
-                RequireDestination = false,
+                ConfigSource = setup.ConfigFile != null ? ConfigSourceType.Local : ConfigSourceType.Remote,
+                ExternalConfig = config,
+                RetryStartupRequest = true,
+                BufferRemoteConfig = true,
                 LogException = (log, e, msg) => ExtractorUtils.LogException(log, e, msg, msg),
                 OnCreateExtractor = OnCreateExtractor,
-                AllowRemoteConfig = true,
-                BufferRemoteConfig = true
             };
 
-            await ExtractorRunner.Run(options, token);
+            var runtime = await builder.MakeRuntime(token);
+            await runtime.Run();
         }
     }
 }

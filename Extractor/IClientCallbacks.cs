@@ -1,12 +1,17 @@
 ﻿using Cognite.Extractor.Common;
+using Cognite.Extractor.Utils.Unstable;
 using Cognite.OpcUa.Subscriptions;
+using System;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Cognite.OpcUa
 {
     public interface IClientCallbacks
     {
-        PeriodicScheduler TaskScheduler { get; }
+        PeriodicScheduler PeriodicScheduler { get; }
+
+        void ScheduleTask(Func<CancellationToken, Task> task, ExtractorTaskResult staticResult, string name);
 
         /// <summary>
         /// Invoked when client loses connection to server.

@@ -261,7 +261,7 @@ namespace Cognite.OpcUa.Connect
                         // Don't run the callbacks inside the session manager loop, since
                         // if we lose connection while the callbacks are running,
                         // we need the loop to recover.
-                        client.Callbacks.TaskScheduler.ScheduleTask(null, _ => client.Callbacks.OnServerReconnect(client));
+                        client.Callbacks.ScheduleTask(_ => client.Callbacks.OnServerReconnect(client), Extractor.Utils.Unstable.ExtractorTaskResult.Expected, "OnServerReconnect");
                     }
 
                     await onNewPendingActions.WaitAsync(token);
@@ -379,9 +379,9 @@ namespace Cognite.OpcUa.Connect
             {
                 EnsureServiceLevelSubscription();
                 if (config.Redundancy.ReconnectIntervalValue.Value != Timeout.InfiniteTimeSpan
-                    && !client.Callbacks.TaskScheduler.ContainsTask("CheckServiceLevel"))
+                    && !client.Callbacks.PeriodicScheduler.ContainsTask("CheckServiceLevel"))
                 {
-                    client.Callbacks.TaskScheduler.SchedulePeriodicTask("CheckServiceLevel",
+                    client.Callbacks.PeriodicScheduler.SchedulePeriodicTask("CheckServiceLevel",
                         config.Redundancy.ReconnectIntervalValue,
                         async (token) =>
                         {

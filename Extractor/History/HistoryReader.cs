@@ -114,7 +114,6 @@ namespace Cognite.OpcUa.History
             {
                 if (activeTask != null)
                 {
-                    log.LogDebug("History is running, waiting for waker");
                     var res = await Task.WhenAny(activeTask, waitTask);
 
                     if (runTaskSource.IsCancellationRequested) break;

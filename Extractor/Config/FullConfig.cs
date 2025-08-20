@@ -112,8 +112,6 @@ namespace Cognite.OpcUa.Config
             {
                 if (Cognite.CdfChunking == null) Cognite.CdfChunking = new ChunkingConfig();
                 if (Cognite.CdfThrottling == null) Cognite.CdfThrottling = new ThrottlingConfig();
-                if (Cognite.CdfRetries == null) Cognite.CdfRetries = new RetryConfig();
-                if (Cognite.SdkLogging == null) Cognite.SdkLogging = new SdkLoggingConfig();
             }
             Extraction ??= new ExtractionConfig();
             Events ??= new EventConfig();

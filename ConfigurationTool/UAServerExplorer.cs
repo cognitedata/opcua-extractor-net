@@ -16,6 +16,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using Cognite.Extractor.Common;
+using Cognite.Extractor.Utils.Unstable;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.Subscriptions;
 using Microsoft.Extensions.DependencyInjection;
@@ -277,9 +278,14 @@ namespace Cognite.OpcUa.Config
         {
         }
 
+        public void ScheduleTask(Func<CancellationToken, Task> task, ExtractorTaskResult staticResult, string name)
+        {
+            PeriodicScheduler.ScheduleTask(name, task);
+        }
+
         public FullConfig FinalConfig => baseConfig;
 
         private readonly PeriodicScheduler scheduler = null!;
-        public PeriodicScheduler TaskScheduler => scheduler;
+        public PeriodicScheduler PeriodicScheduler => scheduler;
     }
 }

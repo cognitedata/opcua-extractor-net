@@ -15,9 +15,13 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using Cognite.Extensions;
 using Cognite.Extractor.Common;
 using Cognite.Extractor.StateStorage;
 using Cognite.Extractor.Utils;
+using Cognite.Extractor.Utils.Unstable;
+using Cognite.Extractor.Utils.Unstable.Configuration;
+using Cognite.Extractor.Utils.Unstable.Tasks;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.Nodes;
@@ -25,9 +29,11 @@ using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.PubSub;
 using Cognite.OpcUa.Pushers;
 using Cognite.OpcUa.Subscriptions;
+using Cognite.OpcUa.Tasks;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
 using Cognite.OpcUa.Utils;
+using CogniteSdk.Alpha;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Nito.Disposables.Internals;
@@ -49,19 +55,17 @@ namespace Cognite.OpcUa
     /// <summary>
     /// Main extractor class, tying together the <see cref="uaClient"/> and CDF client.
     /// </summary>
-    public class UAExtractor : BaseExtractor<FullConfig>, IUAClientAccess, IClientCallbacks
+    public class UAExtractor : Extractor.Utils.Unstable.BaseExtractor<FullConfig>, IUAClientAccess, IClientCallbacks
     {
         private readonly UAClient uaClient;
-        public Looper Looper { get; private set; } = null!;
         public FailureBuffer? FailureBuffer { get; }
         public IExtractionStateStore? StateStorage { get; }
         public State State { get; }
         public Streamer Streamer { get; }
-        public PeriodicScheduler TaskScheduler => Scheduler;
         private HistoryReader? historyReader;
         public IEnumerable<NodeId> RootNodes { get; private set; } = null!;
         private readonly IPusher pusher;
-        private readonly ConcurrentQueue<NodeId> extraNodesToBrowse = new ConcurrentQueue<NodeId>();
+        public IPusher Pusher => pusher;
         public TransformationCollection? Transformations { get; private set; }
         public TypeConverter TypeConverter => uaClient.TypeConverter;
         private PubSubManager? pubSubManager;
@@ -74,6 +78,7 @@ namespace Cognite.OpcUa
         private NodeSetNodeSource? nodeSetSource;
 
         private readonly DeletesManager? deletesManager;
+        public DeletesManager? DeletesManager => deletesManager;
 
         public bool ShouldStartLooping { get; set; } = true;
 
@@ -101,14 +106,18 @@ namespace Cognite.OpcUa
 
         private readonly RebrowseTriggerManager? rebrowseTriggerManager;
 
-        public static readonly DateTime StartTime = DateTime.UtcNow;
-
         public SourceInformation SourceInfo => uaClient?.SourceInfo ?? SourceInformation.Default();
 
         public bool AllowUpdateState => GetAllowUpdateState();
 
+        private readonly SubscriptionTask? subscriptionTask;
+        private readonly BrowseTask browseTask;
+        private readonly PusherTask pusherTask;
+
         // Active subscriptions, used in tests for WaitForSubscription().
         private readonly HashSet<SubscriptionName> activeSubscriptions = new();
+
+        public PeriodicScheduler PeriodicScheduler { get; private set; } = null!;
 
         /// <summary>
         /// Construct extractor with list of pushers
@@ -116,13 +125,14 @@ namespace Cognite.OpcUa
         /// <param name="config">Full config object</param>
         /// <param name="pushers">List of pushers to be used</param>
         /// <param name="uaClient">UAClient to be used</param>
-        public UAExtractor(FullConfig config,
+        public UAExtractor(
+            ConfigWrapper<FullConfig> config,
             IServiceProvider provider,
+            ExtractorTaskScheduler taskScheduler,
             IPusher pusher,
             UAClient uaClient,
-            IExtractionStateStore? stateStore,
-            ExtractionRun? run = null,
-            RemoteConfigManager<FullConfig>? configManager = null) : base(config, provider, null, run, configManager)
+            IIntegrationSink sink,
+            IExtractionStateStore? stateStore) : base(config, provider, taskScheduler, sink)
         {
             this.uaClient = uaClient;
             // Fallback to other pusher... This is bad, but it's fundamentally a design flaw
@@ -135,23 +145,19 @@ namespace Cognite.OpcUa
 
             this.pusher = pusher ?? throw new ConfigurationException("Missing cognite configuration");
             this.uaClient.Callbacks = this;
-            // Default timeout for the scheduler is 60 seconds. It should never take even close to this long,
-            // but if it does it is better to fail and restart than to wait forever.
-            SchedulerExitTimeoutMs = 60_000;
             log = provider.GetRequiredService<ILogger<UAExtractor>>();
 
             log.LogDebug("Config:{NewLine}{Config}", Environment.NewLine, ExtractorUtils.ConfigToString(Config));
 
             State = new State();
-            Streamer = new Streamer(provider.GetRequiredService<ILogger<Streamer>>(), this, config);
+            Streamer = new Streamer(provider.GetRequiredService<ILogger<Streamer>>(), this, Config);
             StateStorage = stateStore;
 
-            if (config.FailureBuffer.Enabled)
+            if (Config.FailureBuffer.Enabled)
             {
                 FailureBuffer = new FailureBuffer(provider.GetRequiredService<ILogger<FailureBuffer>>(),
-                    config, this);
+                    Config, this);
             }
-            if (run != null) run.Continuous = true;
 
             log.LogInformation("Building extractor");
 
@@ -160,44 +166,36 @@ namespace Cognite.OpcUa
                 pubSubManager = new PubSubManager(provider.GetRequiredService<ILogger<PubSubManager>>(), uaClient, this, Config);
             }
 
-
+            if (Config.Subscriptions.Events || Config.Subscriptions.DataPoints || Config.Extraction.EnableAuditDiscovery)
+            {
+                subscriptionTask = new SubscriptionTask(this, uaClient, Config);
+            }
+            browseTask = new BrowseTask(this, uaClient, Config, Provider);
+            pusherTask = new PusherTask(this, Config, pusher, Provider.GetRequiredService<ILogger<PusherTask>>());
 
             pusher.Extractor = this;
 
-            if (configManager != null)
-            {
-                configManager.UpdatePeriod = new BasicTimeSpanProvider(TimeSpan.FromMinutes(2));
-                OnConfigUpdate += OnNewConfig;
-            }
-
-            if (config.Extraction.RebrowseTriggers is not null)
+            if (Config.Extraction.RebrowseTriggers is not null)
             {
                 rebrowseTriggerManager = new RebrowseTriggerManager(
                     provider.GetRequiredService<ILogger<RebrowseTriggerManager>>(),
-                    uaClient, config.Extraction.RebrowseTriggers,
-                    config.StateStorage.NamespacePublicationDateStore,
+                    uaClient, Config.Extraction.RebrowseTriggers,
+                    Config.StateStorage.NamespacePublicationDateStore,
                     this
                 );
             }
 
-            if (config.Extraction.Deletes.Enabled)
+            if (Config.Extraction.Deletes.Enabled)
             {
                 if (stateStore != null)
                 {
-                    deletesManager = new DeletesManager(stateStore, this, provider.GetRequiredService<ILogger<DeletesManager>>(), config);
+                    deletesManager = new DeletesManager(stateStore, this, provider.GetRequiredService<ILogger<DeletesManager>>(), Config);
                 }
                 else
                 {
                     log.LogWarning("Deletes are enabled, but no state store is configured. Detecting deleted nodes will not work.");
                 }
             }
-        }
-
-        private void OnNewConfig(object sender, FullConfig newConfig, int revision)
-        {
-            log.LogInformation("New remote configuration file obtained, restarting extractor");
-            // Trigger close, we can just fire-and-forget this.
-            _ = Close();
         }
 
         private bool GetAllowUpdateState()
@@ -259,6 +257,29 @@ namespace Cognite.OpcUa
             historyReader?.RemoveIssue(HistoryReader.StateIssue.EventsPushFailing);
         }
 
+        public void OnNodeHierarchyRead()
+        {
+            historyReader?.RemoveIssue(HistoryReader.StateIssue.NodeHierarchyRead);
+            Starting.Set(0);
+        }
+
+        public void ScheduleRebrowse()
+        {
+            browseTask.AddNodesToBrowse(RootNodes, isFull: true);
+            TaskScheduler.ScheduleTaskNow(browseTask.Name, reScheduleIfRunning: true);
+        }
+
+        public void OnQueueOverflow()
+        {
+            pusherTask.TriggerPushNow();
+        }
+
+        public void OnSubscriptionsEstablished()
+        {
+            // Called when subscriptions are established.
+            TaskScheduler.ScheduleTaskNow(pusherTask.Name);
+        }
+
         /// <summary>
         /// Event handler for UAClient reconnect
         /// </summary>
@@ -276,17 +297,76 @@ namespace Cognite.OpcUa
             else
             {
                 historyReader?.RemoveIssue(HistoryReader.StateIssue.ServerConnection);
+                TaskScheduler.Notify();
             }
+        }
+
+        private async Task RunPeriodicTasks(CancellationToken token)
+        {
+            var scheduler = new PeriodicScheduler(token);
+            if (StateStorage != null && !Config.DryRun)
+            {
+                var interval = Config.StateStorage.IntervalValue.Value;
+                scheduler.SchedulePeriodicTask(nameof(StoreState), interval, StoreState, interval != Timeout.InfiniteTimeSpan);
+            }
+            await scheduler.WaitForAll();
+        }
+
+        public async Task StoreState(CancellationToken token)
+        {
+            if (token.IsCancellationRequested) return;
+            if (StateStorage == null) return;
+            await Task.WhenAll(
+                StateStorage.StoreExtractionState(State.NodeStates
+                    .Where(state => state.FrontfillEnabled), Config.StateStorage.VariableStore, token),
+                StateStorage.StoreExtractionState(State.EmitterStates
+                    .Where(state => state.FrontfillEnabled), Config.StateStorage.EventStore, token)
+            );
         }
         #region Interface
 
-        protected override void Init(CancellationToken token)
+        protected override Task InitTasks()
         {
-            base.Init(token);
             historyReader?.Dispose();
-            Looper = new Looper(Provider.GetRequiredService<ILogger<Looper>>(), Scheduler, this, Config, pusher);
-            historyReader = new HistoryReader(Provider.GetRequiredService<ILogger<HistoryReader>>(),
-                uaClient, this, TypeManager, Config, Source.Token);
+
+            if (Config.History.Enabled)
+            {
+                historyReader = new HistoryReader(Provider.GetRequiredService<ILogger<HistoryReader>>(),
+                    uaClient, this, TypeManager, Config, Source.Token);
+            }
+
+            log.LogInformation("Starting OPC UA Extractor version {Version}",
+                Extractor.Metrics.Version.GetVersion(Assembly.GetExecutingAssembly()));
+            log.LogInformation("Revision information: {Status}",
+                Extractor.Metrics.Version.GetDescription(Assembly.GetExecutingAssembly()));
+
+            if (subscriptionTask != null)
+            {
+                TaskScheduler.AddScheduledTask(subscriptionTask, false);
+            }
+            TaskScheduler.AddScheduledTask(browseTask, true);
+            TaskScheduler.AddScheduledTask(pusherTask, false);
+
+            AddMonitoredTask(token => InitialConnection(), ExtractorTaskResult.Expected, "Initial Connection");
+            AddMonitoredTask(RunPeriodicTasks, ExtractorTaskResult.Unexpected, "Run Periodic Tasks");
+            // TEMP: Rewrite as a proper task!
+            if (historyReader != null)
+            {
+                AddMonitoredTask(token => historyReader.Run(token), ExtractorTaskResult.Unexpected, "History Reader");
+            }
+
+            return Task.CompletedTask;
+        }
+
+        protected override ExtractorId GetExtractorVersion()
+        {
+            var version = Extractor.Metrics.Version.GetVersion(Assembly.GetExecutingAssembly());
+            Console.WriteLine(version);
+            return new ExtractorId
+            {
+                ExternalId = "cognite-opcua",
+                Version = string.IsNullOrWhiteSpace(version) ? null : version.Truncate(32),
+            };
         }
 
         public void InitExternal(CancellationToken token)
@@ -294,15 +374,8 @@ namespace Cognite.OpcUa
             Init(token);
         }
 
-        private async Task RunExtractorInternal(int startTimeout = -1)
+        private async Task InitialConnection(int startTimeout = -1)
         {
-            Starting.Set(1);
-
-            if (Config.HighAvailability != null)
-            {
-                await RunWithHighAvailabilityAndWait(Config.HighAvailability);
-            }
-
             if (!uaClient.Started && Config.Source.EndpointUrl != null)
             {
                 log.LogInformation("Start UAClient");
@@ -347,32 +420,21 @@ namespace Cognite.OpcUa
 
             await ConfigureExtractor();
 
-            Started = true;
+            TaskScheduler.Notify();
 
-            startTime.Set(new DateTimeOffset(UAExtractor.StartTime).ToUnixTimeMilliseconds());
+            Started = true;
+            startTime.Set(new DateTimeOffset(StartTime ?? DateTime.UtcNow).ToUnixTimeMilliseconds());
 
             pusher.Reset();
-
-            var synchTasks = await RunMapping(RootNodes, initial: true, isFull: true);
 
             if (rebrowseTriggerManager is not null)
             {
                 await rebrowseTriggerManager.EnableCustomServerSubscriptions(Source.Token);
             }
 
-            foreach (var task in synchTasks)
-            {
-                Scheduler.ScheduleTask(null, task);
-            }
-
             if (pubSubManager != null)
             {
-                Scheduler.ScheduleTask(null, StartPubSub);
-            }
-
-            if (historyReader != null && !historyReader.IsRunning)
-            {
-                Scheduler.ScheduleTask(null, historyReader.Run);
+                AddMonitoredTask(StartPubSub, ExtractorTaskResult.Expected, "Start PubSub");
             }
         }
 
@@ -382,7 +444,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="quitAfterMap">False to wait for cancellation</param>
         /// <returns></returns>
-        public async Task RunExtractor(bool quitAfterMap = false, int startTimeout = -1)
+        /* public async Task RunExtractor(bool quitAfterMap = false, int startTimeout = -1)
         {
             await RunExtractorInternal(startTimeout);
             if (!quitAfterMap)
@@ -390,23 +452,13 @@ namespace Cognite.OpcUa
                 Looper.Run();
                 await Scheduler.WaitForAll();
             }
-        }
+        }*/
 
-        protected override async Task Start()
+        public void ScheduleTask(Func<CancellationToken, Task> task, ExtractorTaskResult staticResult, string name)
         {
-            log.LogInformation("Starting OPC UA Extractor version {Version}",
-                Extractor.Metrics.Version.GetVersion(Assembly.GetExecutingAssembly()));
-            log.LogInformation("Revision information: {Status}",
-                Extractor.Metrics.Version.GetDescription(Assembly.GetExecutingAssembly()));
-
-            await RunExtractorInternal();
-            Looper.Run();
+            AddMonitoredTask(task, staticResult, name);
         }
 
-        protected override async Task OnStop()
-        {
-            await Close();
-        }
         /// <summary>
         /// Initializes restart of the extractor. Waits for history, reset states, then schedule restart on the looper.
         /// </summary>
@@ -419,10 +471,10 @@ namespace Cognite.OpcUa
 
             historyReader?.AddIssue(HistoryReader.StateIssue.NodeHierarchyRead);
 
-            await Looper.WaitForNextPush(true);
+            await pusherTask.WaitForNextPush(true);
             pusher.Reset();
             Starting.Set(1);
-            Looper.Restart();
+            AddMonitoredTask(token => FinishExtractorRestart(), ExtractorTaskResult.Expected, "Finish Extractor Restart");
         }
 
         /// <summary>
@@ -432,42 +484,16 @@ namespace Cognite.OpcUa
         public async Task FinishExtractorRestart()
         {
             log.LogInformation("Restarting extractor...");
-            extraNodesToBrowse.Clear();
             Started = false;
 
             await uaClient.WaitForOperations(Source.Token);
             await ConfigureExtractor();
             TypeManager.Reset();
 
-            var synchTasks = await RunMapping(RootNodes, initial: false, isFull: true);
+            browseTask!.AddNodesToBrowse(RootNodes, isFull: true);
+            TaskScheduler.ScheduleTaskNow(browseTask!.Name, reScheduleIfRunning: true);
 
-            foreach (var task in synchTasks)
-            {
-                Looper.Scheduler.ScheduleTask(null, task);
-            }
-            Started = true;
             log.LogInformation("Successfully restarted extractor");
-        }
-
-        /// <summary>
-        /// Push nodes from the extraNodesToBrowse queue.
-        /// </summary>
-        public async Task PushExtraNodes()
-        {
-            if (!extraNodesToBrowse.IsEmpty)
-            {
-                var nodesToBrowse = new List<NodeId>();
-                while (extraNodesToBrowse.TryDequeue(out NodeId id))
-                {
-                    nodesToBrowse.Add(id);
-                }
-                var historyTasks = await RunMapping(nodesToBrowse.Distinct(), initial: false, isFull: false);
-
-                foreach (var task in historyTasks)
-                {
-                    Looper.Scheduler.ScheduleTask(null, task);
-                }
-            }
         }
 
         /// <summary>
@@ -511,22 +537,6 @@ namespace Cognite.OpcUa
         public string GetRelationshipId(UAReference reference)
         {
             return uaClient.GetRelationshipId(reference);
-        }
-
-        /// <summary>
-        /// Redo browse, then schedule history on the looper.
-        /// </summary>
-        public async Task Rebrowse()
-        {
-            // If we are updating we want to re-discover nodes in order to run them through mapping again.
-            var historyTasks = await RunMapping(RootNodes,
-                initial: false,
-                isFull: true);
-
-            foreach (var task in historyTasks)
-            {
-                Looper.Scheduler.ScheduleTask(null, task);
-            }
         }
 
         /// <summary>
@@ -613,113 +623,6 @@ namespace Cognite.OpcUa
         #endregion
 
         #region Mapping
-
-        private (INodeSource nodeSource, ITypeAndNodeSource typeSource) GetSources(
-            bool initial,
-            UANodeSource uaNodeSource)
-        {
-            INodeSource? nodeSource = null;
-            ITypeAndNodeSource? typeSource = null;
-
-            if ((Config.Cognite?.RawNodeBuffer?.Enable ?? false) && initial)
-            {
-                var cdfSource = new CDFNodeSource(Provider.GetRequiredService<ILogger<CDFNodeSource>>(),
-                    Config,
-                    this,
-                    pusher as CDFPusher ?? throw new InvalidOperationException("Attempt to read from CDF without a configured CDF source"),
-                    TypeManager);
-                if (Config.Cognite.RawNodeBuffer.BrowseOnEmpty)
-                {
-                    nodeSource = new CDFNodeSourceWithFallback(cdfSource, uaNodeSource);
-                }
-                else
-                {
-                    nodeSource = cdfSource;
-                }
-            }
-
-            if ((Config.Source.NodeSetSource?.NodeSets?.Any() ?? false) && initial)
-            {
-                if (Config.Source.NodeSetSource.Instance || Config.Source.NodeSetSource.Types)
-                {
-                    nodeSetSource ??= new NodeSetNodeSource(
-                            Provider.GetRequiredService<ILogger<NodeSetNodeSource>>(),
-                            Config, this, uaClient, TypeManager);
-                }
-
-                if (Config.Source.NodeSetSource.Instance)
-                {
-                    if (nodeSource != null) throw new ConfigurationException(
-                        "Combining node-set-source.instance with cognite.raw-node-buffer is not allowed");
-                    nodeSource = nodeSetSource;
-                }
-                if (Config.Source.NodeSetSource.Types)
-                {
-                    typeSource = nodeSetSource;
-                }
-            }
-
-            return (nodeSource ?? uaNodeSource, typeSource ?? uaNodeSource);
-        }
-
-        private async Task<IEnumerable<Func<CancellationToken, Task>>> RunMapping(IEnumerable<NodeId> nodesToBrowse, bool initial, bool isFull)
-        {
-            UANodeSource uaSource = new UANodeSource(
-                Provider.GetRequiredService<ILogger<UANodeSource>>(),
-                this, uaClient, TypeManager);
-            var (nodeSource, typeSource) = GetSources(initial, uaSource);
-
-            NodeHierarchyBuilder MakeBuilder(INodeSource source)
-            {
-                return new NodeHierarchyBuilder(source, typeSource, Config, nodesToBrowse, uaClient, this, Transformations,
-                    Provider.GetRequiredService<ILogger<NodeHierarchyBuilder>>());
-            }
-
-            var builder = MakeBuilder(nodeSource);
-
-            var result = await builder.LoadNodeHierarchy(isFull, Source.Token);
-            builder = null;
-
-            var tasks = await MapUAToDestinations(result);
-
-            if (result.ShouldBackgroundBrowse && initial)
-            {
-                tasks = tasks.Append(async token =>
-                {
-                    builder = MakeBuilder(uaSource);
-                    result = await builder.LoadNodeHierarchy(true, token);
-                    var nextTasks = await MapUAToDestinations(result);
-                    foreach (var task in nextTasks)
-                    {
-                        Looper.Scheduler.ScheduleTask(null, task);
-                    }
-                });
-            }
-
-            return tasks;
-        }
-
-        /// <summary>
-        /// Empties the node queue, pushing nodes to each destination, and starting subscriptions and history.
-        /// This is the entry point for mapping on the extractor.
-        /// </summary>
-        /// <returns>A list of history tasks</returns>
-        private async Task<IEnumerable<Func<CancellationToken, Task>>> MapUAToDestinations(NodeSourceResult? result)
-        {
-            if (result == null) return Enumerable.Empty<Func<CancellationToken, Task>>();
-
-            Streamer.AllowData = State.NodeStates.Count != 0;
-
-            var toPush = await PusherInput.FromNodeSourceResult(result, Context, deletesManager, Source.Token);
-
-            await PushNodes(toPush);
-
-            historyReader?.RemoveIssue(HistoryReader.StateIssue.NodeHierarchyRead);
-            // Changed flag means that it already existed, so we avoid synchronizing these.
-            var historyTasks = CreateSubscriptions(result.SourceVariables.Where(var => !var.Changed));
-            Starting.Set(0);
-            return historyTasks;
-        }
 
         private async Task EnsureSubscriptions()
         {
@@ -942,14 +845,12 @@ namespace Cognite.OpcUa
         /// Push given lists of nodes to pusher destinations, and fetches latest timestamp for relevant nodes.
         /// </summary>
         /// <param name="input">Nodes to push</param>
-        private async Task PushNodes(PusherInput input)
+        public async Task PushNodes(PusherInput input, bool initial)
         {
             var newStates = input.Variables
                 .Select(ts => ts.Id)
                 .Distinct()
                 .Select(id => State.GetNodeState(id));
-
-            bool initial = input.Variables.Count() + input.Objects.Count() >= State.NumActiveNodes;
 
             if (initial && !input.Variables.Any() && Config.Subscriptions.DataPoints)
             {
@@ -1043,75 +944,20 @@ namespace Cognite.OpcUa
         }
 
         /// <summary>
-        /// Subscribe to event changes
-        /// </summary>
-        private async Task SubscribeToEvents(CancellationToken token)
-        {
-            if (Config.Subscriptions.Events)
-            {
-                if (uaClient.SubscriptionManager == null) throw new InvalidOperationException("Client not initialized");
-
-                var subscribeStates = State.EmitterStates.Where(state => state.ShouldSubscribe);
-
-                await uaClient.SubscriptionManager.EnqueueTaskAndWait(new EventSubscriptionTask(
-                    Streamer.EventSubscriptionHandler,
-                    subscribeStates,
-                    uaClient.BuildEventFilter(TypeManager.EventFields),
-                    this),
-                    token);
-            }
-        }
-
-        /// <summary>
-        /// Subscribe to data changes
-        /// </summary>
-        /// <param name="states">States to subscribe to</param>
-        private async Task SubscribeToDataPoints(IEnumerable<VariableExtractionState> states, CancellationToken token)
-        {
-            if (Config.Subscriptions.DataPoints)
-            {
-                if (uaClient.SubscriptionManager == null) throw new InvalidOperationException("Client not initialized");
-
-                var subscribeStates = states.Where(state => state.ShouldSubscribe);
-
-                await uaClient.SubscriptionManager.EnqueueTaskAndWait(new DataPointSubscriptionTask(
-                    Streamer.DataSubscriptionHandler,
-                    subscribeStates,
-                    this),
-                    token);
-            }
-        }
-
-        /// <summary>
         /// Start synchronization of given list of variables with the server.
         /// </summary>
         /// <param name="variables">Variables to synchronize</param>
         /// <returns>Two tasks, one for data and one for events</returns>
-        private IEnumerable<Func<CancellationToken, Task>> CreateSubscriptions(IEnumerable<UAVariable> variables)
+        public void CreateSubscriptions(IEnumerable<UAVariable> variables)
         {
             var states = variables.Select(ts => ts.Id).Distinct().SelectNonNull(id => State.GetNodeState(id));
 
             historyReader?.AddStates(states, State.EmitterStates);
 
-            log.LogInformation("Synchronize {NumNodesToSynch} nodes", variables.Count());
-            var tasks = new List<Func<CancellationToken, Task>>();
-            // Create tasks to subscribe to nodes, then start history read. We might lose data if history read finished before subscriptions were created.
-            if (states.Any())
-            {
-                tasks.Add(token => SubscribeToDataPoints(states, token));
-            }
-            if (State.EmitterStates.Count != 0)
-            {
-                tasks.Add(SubscribeToEvents);
-            }
+            subscriptionTask?.AddVariables(states);
+            subscriptionTask?.AddEmitters(State.EmitterStates);
 
-            if (Config.Extraction.EnableAuditDiscovery)
-            {
-                if (uaClient.SubscriptionManager == null) throw new InvalidOperationException("Client not initialized");
-
-                tasks.Add(token => uaClient.SubscriptionManager.EnqueueTaskAndWait(new AuditSubscriptionTask(AuditEventSubscriptionHandler, this), token));
-            }
-            return tasks;
+            if (subscriptionTask != null) TaskScheduler.ScheduleTaskNow(subscriptionTask.Name, reScheduleIfRunning: true);
         }
 
         private async Task StartPubSub(CancellationToken token)
@@ -1135,7 +981,7 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Handle subscription callback for audit events (AddReferences/AddNodes). Triggers partial re-browse when necessary
         /// </summary>
-        private void AuditEventSubscriptionHandler(MonitoredItem item, MonitoredItemNotificationEventArgs eventArgs)
+        public void AuditEventSubscriptionHandler(MonitoredItem item, MonitoredItemNotificationEventArgs eventArgs)
         {
             if (eventArgs.NotificationValue is not EventFieldList triggeredEvent)
             {
@@ -1190,12 +1036,11 @@ namespace Cognite.OpcUa
                     }
                     log.LogInformation("Trigger rebrowse on {NumNodes} node ids due to addNodes event", relevantIds.Count());
 
-                    foreach (var id in relevantIds)
+                    if (browseTask.AddNodesToBrowse(relevantIds, isFull: false))
                     {
-                        extraNodesToBrowse.Enqueue(id);
+                        TaskScheduler.ScheduleTaskNow(browseTask.Name, reScheduleIfRunning: true);
                     }
                 }
-                Looper.Scheduler.TryTriggerTask("ExtraTasks");
                 return;
             }
 
@@ -1224,18 +1069,18 @@ namespace Cognite.OpcUa
 
                 log.LogInformation("Trigger rebrowse on {NumNodes} node ids due to addReference event", relevantRefIds.Count());
 
-                foreach (var id in relevantRefIds)
+                if (browseTask.AddNodesToBrowse(relevantRefIds, isFull: false))
                 {
-                    extraNodesToBrowse.Enqueue(id);
+                    TaskScheduler.ScheduleTaskNow(browseTask.Name, reScheduleIfRunning: true);
                 }
             }
-
-            Looper.Scheduler.TryTriggerTask("ExtraTasks");
         }
         #endregion
 
         protected override async ValueTask DisposeAsyncCore()
         {
+            await Close(true);
+
             Starting.Set(0);
             historyReader?.Dispose();
             historyReader = null;
@@ -1244,27 +1089,8 @@ namespace Cognite.OpcUa
 
             await base.DisposeAsyncCore();
         }
-
-        private int disposed = 0;
-
-        protected override void Dispose(bool disposing)
-        {
-            // Only run dispose once...
-            if (Interlocked.CompareExchange(ref disposed, 1, 0) == 0)
-            {
-                return;
-            }
-            if (disposing)
-            {
-                Starting.Set(0);
-                historyReader?.Dispose();
-                historyReader = null;
-                pubSubManager?.Dispose();
-                pubSubManager = null;
-            }
-            base.Dispose(disposing);
-        }
     }
+
     public interface IUAClientAccess
     {
         string? GetUniqueId(ExpandedNodeId id, int index = -1);
