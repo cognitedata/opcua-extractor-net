@@ -67,6 +67,11 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.38.0":
+    description: Support writing metadata as a JSON structure to Core Data Model Timeseries.
+    changelog:
+      added:
+        - Added support for writing metadata as JSON to Core Data Model Timeseries. This is done by setting the `cognite.metadata-targets.metadata-as-json` option to `true`.
   "2.37.1":
     description: Fix creation of streams in unstable records support.
     changelog:
