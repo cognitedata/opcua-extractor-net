@@ -19,6 +19,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Text.Json.Serialization;
 using System.Linq;
+using System.Text.RegularExpressions;
 
 namespace Cognite.OpcUa.Config
 {
@@ -97,6 +98,76 @@ namespace Cognite.OpcUa.Config
     }
 
     /// <summary>
+    /// Configuration for exclusion rules within a selector.
+    /// </summary>
+    public class ExcludeConfig
+    {
+        /// <summary>
+        /// Specific tag IDs to exclude from the selection.
+        /// </summary>
+        [YamlDotNet.Serialization.YamlMember(Alias = "tags")]
+        public List<string>? Tags { get; set; }
+
+        /// <summary>
+        /// Regex patterns for tags to exclude from the selection.
+        /// </summary>
+        [YamlDotNet.Serialization.YamlMember(Alias = "patterns")]
+        public List<string>? Patterns { get; set; }
+    }
+
+    /// <summary>
+    /// Configuration for a single selector within a publish group.
+    /// </summary>
+    public class SelectorConfig
+    {
+        /// <summary>
+        /// Prefix string for matching node IDs (used for ROOT_NODE_BASED strategy).
+        /// All nodes whose IDs start with this prefix will be included.
+        /// </summary>
+        [YamlDotNet.Serialization.YamlMember(Alias = "prefix")]
+        public string? Prefix { get; set; }
+
+        /// <summary>
+        /// Specific tag IDs to include in this selector.
+        /// </summary>
+        [YamlDotNet.Serialization.YamlMember(Alias = "tags")]
+        public List<string>? Tags { get; set; }
+
+        /// <summary>
+        /// Regex pattern for matching node IDs.
+        /// All nodes whose IDs match this pattern will be included.
+        /// </summary>
+        [YamlDotNet.Serialization.YamlMember(Alias = "pattern")]
+        public string? Pattern { get; set; }
+
+        /// <summary>
+        /// Exclusion rules to filter out specific tags from this selector.
+        /// </summary>
+        [YamlDotNet.Serialization.YamlMember(Alias = "exclude")]
+        public ExcludeConfig? Exclude { get; set; }
+    }
+
+    /// <summary>
+    /// Configuration for a single publish group.
+    /// </summary>
+    public class PublishGroup
+    {
+        /// <summary>
+        /// Name of this publish group. This name will appear in the MQTT metadata.
+        /// </summary>
+        [YamlDotNet.Serialization.YamlMember(Alias = "name")]
+        public string? Name { get; set; }
+
+        /// <summary>
+        /// List of selectors that define which nodes belong to this group.
+        /// For ROOT_NODE_BASED strategy: Uses "most specific rule wins" logic.
+        /// For TAG_LIST_BASED strategy: Uses "first matching rule wins" logic.
+        /// </summary>
+        [YamlDotNet.Serialization.YamlMember(Alias = "selectors")]
+        public List<SelectorConfig>? Selectors { get; set; }
+    }
+
+    /// <summary>
     /// Configuration for MQTT transmission strategy.
     /// Supports both legacy flat format and new nested format.
     /// </summary>
@@ -126,6 +197,13 @@ namespace Cognite.OpcUa.Config
         /// </summary>
         [YamlDotNet.Serialization.YamlMember(Alias = "tag-list-groups")]
         public List<TagListGroup>? TagListGroups { get; set; }
+
+        /// <summary>
+        /// New unified publish groups configuration that replaces tag-list-groups.
+        /// This provides advanced selector and exclusion capabilities for both ROOT_NODE_BASED and TAG_LIST_BASED strategies.
+        /// </summary>
+        [YamlDotNet.Serialization.YamlMember(Alias = "publish-groups")]
+        public List<PublishGroup>? PublishGroups { get; set; }
 
         /// <summary>
         /// Get the effective tag lists with their names.

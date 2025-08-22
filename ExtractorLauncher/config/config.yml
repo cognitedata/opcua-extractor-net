@@ -21,10 +21,9 @@ source:
     # KEPServer의 OPC-UA 엔드포인트 URL을 실제 주소로 변경
     endpoint-url: "opc.tcp://192.168.11.46:49320"  # KEPServer의 실제 IP와 포트로 변경
     # Publishing interval을 100ms로 설정하여 지연 최소화
-    publishing-interval: 1000
+    publishing-interval: 10000
     browse-nodes-chunk: 1
     browse-chunk: 1000
-
 
 extraction:
     # Global prefix for externalId towards pushers. Should be unique to prevent name conflicts in the push destinations.
@@ -41,237 +40,119 @@ extraction:
           node-id: "s=S.A"
         #- namespace-uri: "KEPServerEX"
         #  node-id: "s=S.B"
-        #- namespace-uri: "KEPServerEX"
-        #  node-id: "s=S.C"
-        #- namespace-uri: "KEPServerEX"
-        #  node-id: "s=S.D"
-        #- namespace-uri: "KEPServerEX"
-        #  node-id: "s=S.E"
-        #- namespace-uri: "KEPServerEX"
-        #  node-id: "s=S.F"
-        #- namespace-uri: "KEPServerEX"
-        #  node-id: "s=S.G"
-        #- namespace-uri: "KEPServerEX"
-        #  node-id: "s=S.H"
-        #- namespace-uri: "KEPServerEX"
-        #  node-id: "s=S.I"
-        #- namespace-uri: "KEPServerEX"
-        #  node-id: "s=S.J"
-    # - namespace-uri:
-        #   node-id:
 
     # KEPServer의 네임스페이스 매핑 - TAG_LIST_BASED 전략을 위해 빈 값으로 설정
     namespace-map:
         "KEPServerEX": ""
-    # Config for how OPC-UA data-types are mapped to destinations
-   
+    data-types:
+        # Add custom numeric types using their nodeId. is-step indicates whether the datatype is discrete,
+        # enum indicates that it is an enumeration, which may be mapped to a string if enums-as-strings is true.
+        # This also overwrite default behavior, so it is possible to make Integer discrete, etc.
+        # Note that the type in question needs to have a sensible numerical conversion in C#, unless it is an array type or similar,
+        # in which case each element needs a conversion
+        custom-numeric-types:
+        #    - node-id:
+        #          namespace-uri:
+        #          node-id:
+        #      is-step: false
+        #      enum: false
+
+        # List of NodeIds corresponding to DataTypes that should be ignored. Timeseries with these datatypes will not be mapped to destinations.
+        ignore-data-types:
+            # - NamespaceUri:
+            #   NodeId:
+
+        # Assume unknown ValueRanks without ArrayDimensions are all scalar, and create timeseries in CDF accordingly.
+        # If such a variable produces an array, only the first element will be mapped to CDF
+        unknown-as-scalar: false
+
+        # Maximum size of array variables. Only arrays with the ArrayDimensions property in opc-ua specified will be used,
+        # leave at 0 to only allow scalar values.
+        # Note that some server implementations have issues with the ArrayDimensions property, so it is not fetched at all if MaxArraySize is 0
+        # -1 indicates that there is no limit to array length, though only 1-dimensional structures will be read either way.
+        max-array-size: 0
+
+        # Set to true to allow fetching string variables. This means that all variables with non-numeric type is converted to string in some way.
+        # 문자형 변수 읽으려면 true로 설정 필요
+        allow-string-variables: true
+
+        # Map out the dataType hierarchy before starting, useful if there are custom or enum types.
+        # Necessary for enum metadata and for enums-as-strings to work. If this is false, any
+        # custom numeric types have to be added manually.
+        auto-identify-types: false
+
+        # If this is false and auto-identify-types is true, or there are manually added enums in custom-numeric-types,
+        # enums will be mapped to numeric timeseries, and labels are added as metadata fields.
+        # If this is true, labels are not mapped to metadata, and enums will be mapped to string timeseries with values
+        # equal to mapped label values.
+        enums-as-strings: true
+
+        # Add a metadata property dataType which contains the id of the OPC-UA datatype.
+        data-type-metadata: false
+
+        # True to treat null nodeIds as numeric instead of string
+        null-as-numeric: false
+
+        # Add full JSON node-ids to data pushed to Raw. TypeDefintionId, ParentNodeId, NodeId and DataTypeId.
+        expand-node-ids: false
+
+        # Add attributes generally used internally like AccessLevel, Historizing, ArrayDimensions, ValueRank etc.
+        # to data pushed to Raw.
+        append-internal-values: false
+
+        # If max-array-size is set, this looks for the MaxArraySize property on each node with one-dimension ValueRank,
+        # if it is not found, it tries to read the value as well, and look at the current size.
+        # ArrayDimensions is still the prefered way to identify array sizes, this is not guaranteed to generate
+        # reasonable or useful values.
+        estimate-array-sizes: false
+
+
+
 
     # Time in minutes between each call to browse the OPC-UA directory, then push new nodes to destinations.
-    # Note that this is a heavy operation, so this number should not be set too low.
-    # Alternatively, use N[timeunit] where timeunit is w, d, h, m, s or ms.
-    # You may also use a cron expression on the form "[minute] [hour] [day of month] [month] [day of week]"
-    # See https://crontab.cronhub.io/
     auto-rebrowse-period: 30m
-    # Enable using audit events to discover new nodes. If this is set to true, the client will expect AuditAddNodes/AuditAddReferences
-    # events on the server node. These will be used to add new nodes automatically, by recursively browsing from each given ParentId.
     enable-audit-discovery: false
 
-    # Update data in destinations on rebrowse or restart.
-    # Set auto-rebrowse-period to some value to do this periodically.
-    # Context refers to the structure of the node graph in OPC-UA. (assetId and parentId in CDF)
-    # Metadata refers to any information obtained from OPC-UA properties. (metadata in CDF)
-    # Enabling anything here will increase the startup- and rebrowse-time of the extractor. Enabling metadata will increase it more.
-#    update:
-#        objects:
-#            name: false
-#            description: false
-#            context: false
-#            metadata: false
-#        variables:
-#            name: false
-#            description: false
-#            context: false
-#            metadata: false
-
-   
-    # A list of transformations to be applied to the source nodes before pushing
-    # The possible transformations are
-    # "Ignore", ignore the node. This will ignore all descendants of the node.
-    # If the filter does not use "is-array", "description" or "parent", this is done
-    # while reading, and so children will not be read at all. Otherwise, the filtering happens later.
-    # "Property", turn the node into a property, which is treated as metadata.
-    # This also applies to descendants. Nested metadata is give a name like "grandparent_parent_variable", for
-    # each variable in the tree.
-    # "DropSubscriptions", do not subscribe to this node with neither events or data-points.
-    # "TimeSeries", do not treat this variable as a property.
-    # "AsEvents", convert datapoints generated by this variable to events.
-    # "Include", include this node. If any Include filter is present all nodes are ignored by default.
-    # "AsEvents", if this matches a variable, treat datapoints generated by this variable as events.
-    # There is some overhead associated with the filters. They are applied sequentially, so it can help performance to put
-    # "Ignore" filters first. This is also worth noting when it comes to TimeSeries transformations, which can undo Property
-    # transformations.
-    # It is possible to have multiple of each filter type.
-    #
-    # name, description, id, namespace, and type-definition can be one of
-    #  - A regex string
-    #  - A list of strings, in which case the filter is a match if any of these are equal to the value being matched.
-    #  - An object on the form
-    #    name:
-    #      file: ...
-    #    where "file" is a path to a local file containing newline-separated values to be matched exactly.
     transformations:
       - type: Ignore
         filter:
-          #id: "s=Simulation Examples.Functions._System"
           id: "s=S.A._System"
-      #- type: Ignore
-      #  filter:
-      #    id: "s=S.B._System"
-      #- type: Ignore
-      #  filter:
-      #    id: "s=S.C._System"
-      #- type: Ignore
-      #  filter:
-      #    id: "s=S.D._System"
-      #- type: Ignore
-      #  filter:
-      #    id: "s=S.E._System"
-      #- type: Ignore
-      #  filter:
-      #    id: "s=S.F._System"
-      #- type: Ignore
-      #  filter:
-      #    id: "s=S.G._System"
-      #- type: Ignore
-      #  filter:
-      #    id: "s=S.H._System"
-      #- type: Ignore
-      #  filter:
-      #    id: "s=S.I._System"
-      #- type: Ignore
-      #  filter:
-      #    id: "s=S.J._System"
-      # Type, either "Ignore", "Property", "DropSubscriptions", "TimeSeries", "AsEvents", or "Include"
-      # - type:
-      #  NodeFilter. All non-null filters must match each node for the transformation to be applied.
-      #   filter:
-            # Regex on node DisplayName
-            # name:
-            # Regex on node Description. If this is set, requires description to be non-null.
-            # description:
-            # Regex on node id. Ids on the form "i=123" or "s=string" are matched.
-            # id:
-            # Whether the node is an array. If this is set, the filter only matches varables.
-            # is-array:
-            # Regex on the full namespace of the node id.
-            # namespace:
-            # Regex on the id of the type definition. On the form "i=123" or "s=string"
-            # type-definition:
-            # The OPC-UA node class, exact match. Should be one of
-            # "Object", "ObjectType", "Variable", "VariableType". The other types will work, but do nothing, since we never read those.
-            # node-class:
-            # The "historizing" attribute on variables. If this is set, the filter only matches variables.
-            # historizing:
-            # Another instance of NodeFilter which is applied to the parent node.
-            # parent:
-    # Configure extractor to trigger a rebrowse when there are changes to specific namespace metadata nodes.
-    # Also supports filtering by namespace uris.
-#    rebrowse-triggers:
-        # A dictionary of nodes to which we would like to listen for changes.
-#        targets:
-#            namespace-publication-date: false
-        # A list of namespace uris from which the targets above will be selected and listen for
-#        namespaces:
-#        - http://opcfoundation.org/UA/
-    # Configure soft deletes. When this is enabled, all read nodes are written to a state store after browse,
-    # and nodes that are missing on subsequent browses are marked as deleted from CDF, with a configurable
-    # marker.
-    # A notable exception is relationships in CDF, which has no metadata, so these are hard-deleted if
-    # cognite.delete-relationships is enabled
-#    deletes:
-        # True to enable deletes. This requires a state store to be configured.
-#       enabled: false
-        # Name of marker indicating that a node is deleted.
-        # Added to metadata, or as a column in Raw.
-#        delete-marker: "deleted"
 
     # Configuration for ingesting status codes to CDF timeseries.
     status-codes:
-        # Which data points to ingest to CDF.
-        # `All` ingests all datapoints, including bad.
-        # `Uncertain` ingests good and uncertain data points.
-        # `GoodOnly` ingest only good datapoints.
         status-codes-to-ingest: GoodOnly
         ingest-status-codes: false
 
 subscriptions:
     # Enable subscriptions on data-points.
     data-points: true
-    # Enable subscriptions on events. Requires events.enabled to be set to true.
     events: false
-    # Modify the DataChangeFilter used for datapoint subscriptions. See OPC-UA reference part 4 7.17.2 for details.
-    # These are just passed to the server, they have no effect on extractor behavior.
-    # Filters are applied to all nodes, but deadband should only affect some, according to the standard.
     data-change-filter:
-        # One of Status, StatusValue, or StatusValueTimestamp.
         trigger: "StatusValueTimestamp"
-        # One of None, Absolute, or Percent.
         deadband-type: "None"
-        # Double value of the deadband.
         deadband-value: 0
-    # Log bad subscription datapoints
     log-bad-values: true
-    # Ignore the access level parameter for history and datapoints.
-    # This means using the "Historizing" parameter for history, and subscribing to all timeseries, independent of AccessLevel.
     ignore-access-level: false
-    # How often the server requests updates from the source system (the source system is often the server itself)
-    # 0 uses maximum rate set by server
-    # Lower increases server load. This should be set to below the maximum update frequency of the source system.
     sampling-interval: 100
-    # Length of internal server queue for each subscribed item. < 2 means that any updates occuring between publish requests are lost.
     queue-length: 1
-    # The number of publish requests without a response before the server should send a keep alive message.
     keep-alive-count: 10
-    # The number of publish requests without a response before the server should close the subscription.
-    # Must be at least 3 * keep-alive-count.
     lifetime-count: 1000
-    # Recreate subscriptions that have stopped publishing. Enabled by default.
     recreate-stopped-subscriptions: true
-    # Grace period for recreating stopped subscriptions.
-    # If this is negative, default to 8 * publishing-interval.
-    # Syntax is N[timeunit] where timeunit is w, d, h, m, s or ms.
     recreate-subscription-grace-period: -1
-    # List of alternative subscription configurations.
-    # The first entry with a matching filter will be used for each node.
-    alternative-configs:
-        # Filter on node, if this matches or is null, the config will be applied.
-        #- filter:
-             # Regex match on node external ID.
-        #    id:
-             # Regex match on node data type, if it is a variable.
-        #    data-type:
-             # Match on whether this subscription is for data points or events.
-        #    is-event-state:
-           # See subscriptions.data-change-filter
-        #  data-change-filter:
-           # See subscriptions.sampling-interval
-        #  sampling-interval: 100
-           # See subscriptions.queue-length
-        #  queue-length: 10
+
 logger:
+    # Writes log events at this level to the Console. One of verbose, debug, information, warning, error, fatal.
+    # If not present, or if the level is invalid, Console is not used.
     console:
-        level: "verbose"
+        level: "information"
     file:
         level: "information"
-        path: "logs/log.txt"
-
+        path: "/logs/log.txt"
 
 metrics:
     # otherMetrics:
     #   - namespaceUri: "KEPServerEX"
     #     nodeId: "SomeCustomMetric"
-    #   - namespaceUri: "KEPServerEX"
-    #     nodeId: "SomeCustomMetric2"
 
 influx-db-metrics:
     enabled: true
@@ -284,69 +165,33 @@ influx-db-metrics:
     batch-size: 100
 
 influx:
-    # Set to true to enable this destination
     enabled: false
-    # Host URI, ex localhost:8086
-#    host: http://192.168.11.116:58086
-    # Influx username
-#    username: admin
-    # Influx password
-#    password: admin
-    # Database to connect to, will not be created automatically
-#    database: test
-    # Replace all instances of NaN or Infinity with this floating point number. If left empty, ignore instead.
-#    non-finite-replacement: 0
-    # Whether to read start/end-points on startup, where possible. At least one pusher should be able to do this,
-    # otherwise back/frontfill will run for the entire history every restart.
-#   read-extracted-ranges: true
-    # Whether to read start/end-points for events on startup, where possible.
-#    read-extracted-event-ranges: false
-    # Max number of points to send in each request to influx
-#    point-chunk-size: 1000
 
 mqtt: 
-    # TCP Broker URL
-    #host: rabbitmq313-q
     enabled: true
-    host: 192.168.11.116 
-    # TCP Broker port
-    port: 59183
-    # MQTT broker username
+    host: 192.168.11.115 
+    port: 1883
     username: admin
-    # MQTT broker password
     password: misoinfo1!
-    # True to enable TLS
     use-tls: false
-    # Allow untrusted server SSL certificates. This is fundamentally unsafe
     allow-untrusted-certificates: true
-    # Optional path to a custom certificate authority file for SSL
- #   custom-certificate-authority:
-    # Mqtt client id. Should be unique for a given broker.
     client-id: OPC-UA-Ext-Plain-JSON
-    # Data set to use for new objects. Existing objects will not be updated
- #   data-set-id: 1234567890123456
-    # Assets topic
     asset-topic: opcua/assets
-    # Timeseries topic
     ts-topic: opcua/timeseries
-    # Events topic
- #   event-topic: opcua/events
-    # Datapoints topic
     datapoint-topic: opcua/datapoints
-    # Raw topic
     raw-topic: opcua/raw
-    # Whether to use gRPC/Protobuf serialization for datapoints
-    # If true, datapoints will be serialized using Protobuf (gRPC format) - default and topic will be opcua/datapoints
-    # If false, datapoints will be serialized using JSON format and topic will be opcua/datapoints/json
     use-grpc: false
+
     # Timestamp format for JSON serialization
     # "epoch" - Unix timestamp in milliseconds since epoch (default)
     # "iso8601" - ISO 8601 format (YYYY-MM-DDTHH:mm:ss.SSS+09:00)
     timestamp-format: iso8601
+
     # Timezone offset for ISO8601 timestamp format
     # Format: "+09:00" for Korea time, "+00:00" for UTC, etc.
     # Only used when timestamp-format is "iso8601"
     timezone-offset: "+09:00"
+
     # JSON format type for MQTT output
     # Available options:
     # "Legacy" - Original timeseries format (existing format for backward compatibility)
@@ -363,1093 +208,122 @@ mqtt:
     #   - Supports multiple data points per tag with different timestamps
     #   - Each tag has its own data array with timestamp, value, sc, dt
     #   - Ideal for event-driven subscription scenarios
-    
     json-format-type: Subscription
     
     # Whether to include metadata object in JSON output
     include-metadata: true
-    # Whether to include msgRecvStartTimestamp and msgRecvEndTimestamp in metadata
-    # Only applicable when include-metadata is true
     include-message-timestamps: true
-    # Whether to include data type (dt) field for each tag
     include-data-type: false
-    # Whether to include status code (sc) field for each tag
     include-status-code: false
     
     # Adaptive chunking configuration for MQTT message optimization
-    # Maximum MQTT message size in bytes (default: 1048576 = 1MB)
     max-message-size: 104857600
-    # Maximum number of data points in a single chunk (default: 10000)
     max-chunk-size: 1000
-    # Minimum number of data points in a single chunk (default: 10)
     min-chunk-size: 10
-    
-    # Maximum number of concurrent chunk processing for parallel MQTT publishing (default: 4)
-    # Higher values may improve throughput but can overwhelm the MQTT broker
     max-concurrency: 4
     
     # MQTT transmission strategy for grouping and sending data
-    # ROOT_NODE_BASED: Group by extraction.root-nodes configuration
+    # ROOT_NODE_BASED: Group by extraction.root-nodes configuration with "most specific rule wins"
+    # TAG_LIST_BASED: Group by specified tag lists with "first matching rule wins"
     # CHUNK_BASED: Use existing chunking strategy (default) 
-    # TAG_LIST_BASED: Group by specified tag lists
     # TAG_CHANGE_BASED: Send based on OPC UA tag changes (subscription-based)
     mqtt-transmission-strategy: 
-        data-group-by: ROOT_NODE_BASED
-        
-        # NEW FORMAT: Advanced tag list configuration with custom names
-        tag-list-groups:
-          - tag-list-name: "S_A_group"  # Custom name that will appear in metadata as "tag_list_name": "S_A_sensors_group"
-            tags:
-              # All S.A tags (1000 tags total)
-              - "s=S.A.Tag1"
-              - "s=S.A.Tag2"
-              - "s=S.A.Tag3"
-              - "s=S.A.Tag4"
-              - "s=S.A.Tag5"
-              - "s=S.A.Tag6"
-              - "s=S.A.Tag7"
-              - "s=S.A.Tag8"
-              - "s=S.A.Tag9"
-              - "s=S.A.Tag10"
-              - "s=S.A.Tag11"
-              - "s=S.A.Tag12"
-              - "s=S.A.Tag13"
-              - "s=S.A.Tag14"
-              - "s=S.A.Tag15"
-              - "s=S.A.Tag16"
-              - "s=S.A.Tag17"
-              - "s=S.A.Tag18"
-              - "s=S.A.Tag19"
-              - "s=S.A.Tag20"
-              - "s=S.A.Tag21"
-              - "s=S.A.Tag22"
-              - "s=S.A.Tag23"
-              - "s=S.A.Tag24"
-              - "s=S.A.Tag25"
-              - "s=S.A.Tag26"
-              - "s=S.A.Tag27"
-              - "s=S.A.Tag28"
-              - "s=S.A.Tag29"
-              - "s=S.A.Tag30"
-              - "s=S.A.Tag31"
-              - "s=S.A.Tag32"
-              - "s=S.A.Tag33"
-              - "s=S.A.Tag34"
-              - "s=S.A.Tag35"
-              - "s=S.A.Tag36"
-              - "s=S.A.Tag37"
-              - "s=S.A.Tag38"
-              - "s=S.A.Tag39"
-              - "s=S.A.Tag40"
-              - "s=S.A.Tag41"
-              - "s=S.A.Tag42"
-              - "s=S.A.Tag43"
-              - "s=S.A.Tag44"
-              - "s=S.A.Tag45"
-              - "s=S.A.Tag46"
-              - "s=S.A.Tag47"
-              - "s=S.A.Tag48"
-              - "s=S.A.Tag49"
-              - "s=S.A.Tag50"
-              - "s=S.A.Tag51"
-              - "s=S.A.Tag52"
-              - "s=S.A.Tag53"
-              - "s=S.A.Tag54"
-              - "s=S.A.Tag55"
-              - "s=S.A.Tag56"
-              - "s=S.A.Tag57"
-              - "s=S.A.Tag58"
-              - "s=S.A.Tag59"
-              - "s=S.A.Tag60"
-              - "s=S.A.Tag61"
-              - "s=S.A.Tag62"
-              - "s=S.A.Tag63"
-              - "s=S.A.Tag64"
-              - "s=S.A.Tag65"
-              - "s=S.A.Tag66"
-              - "s=S.A.Tag67"
-              - "s=S.A.Tag68"
-              - "s=S.A.Tag69"
-              - "s=S.A.Tag70"
-              - "s=S.A.Tag71"
-              - "s=S.A.Tag72"
-              - "s=S.A.Tag73"
-              - "s=S.A.Tag74"
-              - "s=S.A.Tag75"
-              - "s=S.A.Tag76"
-              - "s=S.A.Tag77"
-              - "s=S.A.Tag78"
-              - "s=S.A.Tag79"
-              - "s=S.A.Tag80"
-              - "s=S.A.Tag81"
-              - "s=S.A.Tag82"
-              - "s=S.A.Tag83"
-              - "s=S.A.Tag84"
-              - "s=S.A.Tag85"
-              - "s=S.A.Tag86"
-              - "s=S.A.Tag87"
-              - "s=S.A.Tag88"
-              - "s=S.A.Tag89"
-              - "s=S.A.Tag90"
-              - "s=S.A.Tag91"
-              - "s=S.A.Tag92"
-              - "s=S.A.Tag93"
-              - "s=S.A.Tag94"
-              - "s=S.A.Tag95"
-              - "s=S.A.Tag96"
-              - "s=S.A.Tag97"
-              - "s=S.A.Tag98"
-              - "s=S.A.Tag99"
-              - "s=S.A.Tag100"
-              - "s=S.A.Tag101"
-              - "s=S.A.Tag102"
-              - "s=S.A.Tag103"
-              - "s=S.A.Tag104"
-              - "s=S.A.Tag105"
-              - "s=S.A.Tag106"
-              - "s=S.A.Tag107"
-              - "s=S.A.Tag108"
-              - "s=S.A.Tag109"
-              - "s=S.A.Tag110"
-              - "s=S.A.Tag111"
-              - "s=S.A.Tag112"
-              - "s=S.A.Tag113"
-              - "s=S.A.Tag114"
-              - "s=S.A.Tag115"
-              - "s=S.A.Tag116"
-              - "s=S.A.Tag117"
-              - "s=S.A.Tag118"
-              - "s=S.A.Tag119"
-              - "s=S.A.Tag120"
-              - "s=S.A.Tag121"
-              - "s=S.A.Tag122"
-              - "s=S.A.Tag123"
-              - "s=S.A.Tag124"
-              - "s=S.A.Tag125"
-              - "s=S.A.Tag126"
-              - "s=S.A.Tag127"
-              - "s=S.A.Tag128"
-              - "s=S.A.Tag129"
-              - "s=S.A.Tag130"
-              - "s=S.A.Tag131"
-              - "s=S.A.Tag132"
-              - "s=S.A.Tag133"
-              - "s=S.A.Tag134"
-              - "s=S.A.Tag135"
-              - "s=S.A.Tag136"
-              - "s=S.A.Tag137"
-              - "s=S.A.Tag138"
-              - "s=S.A.Tag139"
-              - "s=S.A.Tag140"
-              - "s=S.A.Tag141"
-              - "s=S.A.Tag142"
-              - "s=S.A.Tag143"
-              - "s=S.A.Tag144"
-              - "s=S.A.Tag145"
-              - "s=S.A.Tag146"
-              - "s=S.A.Tag147"
-              - "s=S.A.Tag148"
-              - "s=S.A.Tag149"
-              - "s=S.A.Tag150"
-              - "s=S.A.Tag151"
-              - "s=S.A.Tag152"
-              - "s=S.A.Tag153"
-              - "s=S.A.Tag154"
-              - "s=S.A.Tag155"
-              - "s=S.A.Tag156"
-              - "s=S.A.Tag157"
-              - "s=S.A.Tag158"
-              - "s=S.A.Tag159"
-              - "s=S.A.Tag160"
-              - "s=S.A.Tag161"
-              - "s=S.A.Tag162"
-              - "s=S.A.Tag163"
-              - "s=S.A.Tag164"
-              - "s=S.A.Tag165"
-              - "s=S.A.Tag166"
-              - "s=S.A.Tag167"
-              - "s=S.A.Tag168"
-              - "s=S.A.Tag169"
-              - "s=S.A.Tag170"
-              - "s=S.A.Tag171"
-              - "s=S.A.Tag172"
-              - "s=S.A.Tag173"
-              - "s=S.A.Tag174"
-              - "s=S.A.Tag175"
-              - "s=S.A.Tag176"
-              - "s=S.A.Tag177"
-              - "s=S.A.Tag178"
-              - "s=S.A.Tag179"
-              - "s=S.A.Tag180"
-              - "s=S.A.Tag181"
-              - "s=S.A.Tag182"
-              - "s=S.A.Tag183"
-              - "s=S.A.Tag184"
-              - "s=S.A.Tag185"
-              - "s=S.A.Tag186"
-              - "s=S.A.Tag187"
-              - "s=S.A.Tag188"
-              - "s=S.A.Tag189"
-              - "s=S.A.Tag190"
-              - "s=S.A.Tag191"
-              - "s=S.A.Tag192"
-              - "s=S.A.Tag193"
-              - "s=S.A.Tag194"
-              - "s=S.A.Tag195"
-              - "s=S.A.Tag196"
-              - "s=S.A.Tag197"
-              - "s=S.A.Tag198"
-              - "s=S.A.Tag199"
-              - "s=S.A.Tag200"
-              - "s=S.A.Tag201"
-              - "s=S.A.Tag202"
-              - "s=S.A.Tag203"
-              - "s=S.A.Tag204"
-              - "s=S.A.Tag205"
-              - "s=S.A.Tag206"
-              - "s=S.A.Tag207"
-              - "s=S.A.Tag208"
-              - "s=S.A.Tag209"
-              - "s=S.A.Tag210"
-              - "s=S.A.Tag211"
-              - "s=S.A.Tag212"
-              - "s=S.A.Tag213"
-              - "s=S.A.Tag214"
-              - "s=S.A.Tag215"
-              - "s=S.A.Tag216"
-              - "s=S.A.Tag217"
-              - "s=S.A.Tag218"
-              - "s=S.A.Tag219"
-              - "s=S.A.Tag220"
-              - "s=S.A.Tag221"
-              - "s=S.A.Tag222"
-              - "s=S.A.Tag223"
-              - "s=S.A.Tag224"
-              - "s=S.A.Tag225"
-              - "s=S.A.Tag226"
-              - "s=S.A.Tag227"
-              - "s=S.A.Tag228"
-              - "s=S.A.Tag229"
-              - "s=S.A.Tag230"
-              - "s=S.A.Tag231"
-              - "s=S.A.Tag232"
-              - "s=S.A.Tag233"
-              - "s=S.A.Tag234"
-              - "s=S.A.Tag235"
-              - "s=S.A.Tag236"
-              - "s=S.A.Tag237"
-              - "s=S.A.Tag238"
-              - "s=S.A.Tag239"
-              - "s=S.A.Tag240"
-              - "s=S.A.Tag241"
-              - "s=S.A.Tag242"
-              - "s=S.A.Tag243"
-              - "s=S.A.Tag244"
-              - "s=S.A.Tag245"
-              - "s=S.A.Tag246"
-              - "s=S.A.Tag247"
-              - "s=S.A.Tag248"
-              - "s=S.A.Tag249"
-              - "s=S.A.Tag250"
-              - "s=S.A.Tag251"
-              - "s=S.A.Tag252"
-              - "s=S.A.Tag253"
-              - "s=S.A.Tag254"
-              - "s=S.A.Tag255"
-              - "s=S.A.Tag256"
-              - "s=S.A.Tag257"
-              - "s=S.A.Tag258"
-              - "s=S.A.Tag259"
-              - "s=S.A.Tag260"
-              - "s=S.A.Tag261"
-              - "s=S.A.Tag262"
-              - "s=S.A.Tag263"
-              - "s=S.A.Tag264"
-              - "s=S.A.Tag265"
-              - "s=S.A.Tag266"
-              - "s=S.A.Tag267"
-              - "s=S.A.Tag268"
-              - "s=S.A.Tag269"
-              - "s=S.A.Tag270"
-              - "s=S.A.Tag271"
-              - "s=S.A.Tag272"
-              - "s=S.A.Tag273"
-              - "s=S.A.Tag274"
-              - "s=S.A.Tag275"
-              - "s=S.A.Tag276"
-              - "s=S.A.Tag277"
-              - "s=S.A.Tag278"
-              - "s=S.A.Tag279"
-              - "s=S.A.Tag280"
-              - "s=S.A.Tag281"
-              - "s=S.A.Tag282"
-              - "s=S.A.Tag283"
-              - "s=S.A.Tag284"
-              - "s=S.A.Tag285"
-              - "s=S.A.Tag286"
-              - "s=S.A.Tag287"
-              - "s=S.A.Tag288"
-              - "s=S.A.Tag289"
-              - "s=S.A.Tag290"
-              - "s=S.A.Tag291"
-              - "s=S.A.Tag292"
-              - "s=S.A.Tag293"
-              - "s=S.A.Tag294"
-              - "s=S.A.Tag295"
-              - "s=S.A.Tag296"
-              - "s=S.A.Tag297"
-              - "s=S.A.Tag298"
-              - "s=S.A.Tag299"
-              - "s=S.A.Tag300"
-              - "s=S.A.Tag301"
-              - "s=S.A.Tag302"
-              - "s=S.A.Tag303"
-              - "s=S.A.Tag304"
-              - "s=S.A.Tag305"
-              - "s=S.A.Tag306"
-              - "s=S.A.Tag307"
-              - "s=S.A.Tag308"
-              - "s=S.A.Tag309"
-              - "s=S.A.Tag310"
-              - "s=S.A.Tag311"
-              - "s=S.A.Tag312"
-              - "s=S.A.Tag313"
-              - "s=S.A.Tag314"
-              - "s=S.A.Tag315"
-              - "s=S.A.Tag316"
-              - "s=S.A.Tag317"
-              - "s=S.A.Tag318"
-              - "s=S.A.Tag319"
-              - "s=S.A.Tag320"
-              - "s=S.A.Tag321"
-              - "s=S.A.Tag322"
-              - "s=S.A.Tag323"
-              - "s=S.A.Tag324"
-              - "s=S.A.Tag325"
-              - "s=S.A.Tag326"
-              - "s=S.A.Tag327"
-              - "s=S.A.Tag328"
-              - "s=S.A.Tag329"
-              - "s=S.A.Tag330"
-              - "s=S.A.Tag331"
-              - "s=S.A.Tag332"
-              - "s=S.A.Tag333"
-              - "s=S.A.Tag334"
-              - "s=S.A.Tag335"
-              - "s=S.A.Tag336"
-              - "s=S.A.Tag337"
-              - "s=S.A.Tag338"
-              - "s=S.A.Tag339"
-              - "s=S.A.Tag340"
-              - "s=S.A.Tag341"
-              - "s=S.A.Tag342"
-              - "s=S.A.Tag343"
-              - "s=S.A.Tag344"
-              - "s=S.A.Tag345"
-              - "s=S.A.Tag346"
-              - "s=S.A.Tag347"
-              - "s=S.A.Tag348"
-              - "s=S.A.Tag349"
-              - "s=S.A.Tag350"
-              - "s=S.A.Tag351"
-              - "s=S.A.Tag352"
-              - "s=S.A.Tag353"
-              - "s=S.A.Tag354"
-              - "s=S.A.Tag355"
-              - "s=S.A.Tag356"
-              - "s=S.A.Tag357"
-              - "s=S.A.Tag358"
-              - "s=S.A.Tag359"
-              - "s=S.A.Tag360"
-              - "s=S.A.Tag361"
-              - "s=S.A.Tag362"
-              - "s=S.A.Tag363"
-              - "s=S.A.Tag364"
-              - "s=S.A.Tag365"
-              - "s=S.A.Tag366"
-              - "s=S.A.Tag367"
-              - "s=S.A.Tag368"
-              - "s=S.A.Tag369"
-              - "s=S.A.Tag370"
-              - "s=S.A.Tag371"
-              - "s=S.A.Tag372"
-              - "s=S.A.Tag373"
-              - "s=S.A.Tag374"
-              - "s=S.A.Tag375"
-              - "s=S.A.Tag376"
-              - "s=S.A.Tag377"
-              - "s=S.A.Tag378"
-              - "s=S.A.Tag379"
-              - "s=S.A.Tag380"
-              - "s=S.A.Tag381"
-              - "s=S.A.Tag382"
-              - "s=S.A.Tag383"
-              - "s=S.A.Tag384"
-              - "s=S.A.Tag385"
-              - "s=S.A.Tag386"
-              - "s=S.A.Tag387"
-              - "s=S.A.Tag388"
-              - "s=S.A.Tag389"
-              - "s=S.A.Tag390"
-              - "s=S.A.Tag391"
-              - "s=S.A.Tag392"
-              - "s=S.A.Tag393"
-              - "s=S.A.Tag394"
-              - "s=S.A.Tag395"
-              - "s=S.A.Tag396"
-              - "s=S.A.Tag397"
-              - "s=S.A.Tag398"
-              - "s=S.A.Tag399"
-              - "s=S.A.Tag400"
-              - "s=S.A.Tag401"
-              - "s=S.A.Tag402"
-              - "s=S.A.Tag403"
-              - "s=S.A.Tag404"
-              - "s=S.A.Tag405"
-              - "s=S.A.Tag406"
-              - "s=S.A.Tag407"
-              - "s=S.A.Tag408"
-              - "s=S.A.Tag409"
-              - "s=S.A.Tag410"
-              - "s=S.A.Tag411"
-              - "s=S.A.Tag412"
-              - "s=S.A.Tag413"
-              - "s=S.A.Tag414"
-              - "s=S.A.Tag415"
-              - "s=S.A.Tag416"
-              - "s=S.A.Tag417"
-              - "s=S.A.Tag418"
-              - "s=S.A.Tag419"
-              - "s=S.A.Tag420"
-              - "s=S.A.Tag421"
-              - "s=S.A.Tag422"
-              - "s=S.A.Tag423"
-              - "s=S.A.Tag424"
-              - "s=S.A.Tag425"
-              - "s=S.A.Tag426"
-              - "s=S.A.Tag427"
-              - "s=S.A.Tag428"
-              - "s=S.A.Tag429"
-              - "s=S.A.Tag430"
-              - "s=S.A.Tag431"
-              - "s=S.A.Tag432"
-              - "s=S.A.Tag433"
-              - "s=S.A.Tag434"
-              - "s=S.A.Tag435"
-              - "s=S.A.Tag436"
-              - "s=S.A.Tag437"
-              - "s=S.A.Tag438"
-              - "s=S.A.Tag439"
-              - "s=S.A.Tag440"
-              - "s=S.A.Tag441"
-              - "s=S.A.Tag442"
-              - "s=S.A.Tag443"
-              - "s=S.A.Tag444"
-              - "s=S.A.Tag445"
-              - "s=S.A.Tag446"
-              - "s=S.A.Tag447"
-              - "s=S.A.Tag448"
-              - "s=S.A.Tag449"
-              - "s=S.A.Tag450"
-              - "s=S.A.Tag451"
-              - "s=S.A.Tag452"
-              - "s=S.A.Tag453"
-              - "s=S.A.Tag454"
-              - "s=S.A.Tag455"
-              - "s=S.A.Tag456"
-              - "s=S.A.Tag457"
-              - "s=S.A.Tag458"
-              - "s=S.A.Tag459"
-              - "s=S.A.Tag460"
-              - "s=S.A.Tag461"
-              - "s=S.A.Tag462"
-              - "s=S.A.Tag463"
-              - "s=S.A.Tag464"
-              - "s=S.A.Tag465"
-              - "s=S.A.Tag466"
-              - "s=S.A.Tag467"
-              - "s=S.A.Tag468"
-              - "s=S.A.Tag469"
-              - "s=S.A.Tag470"
-              - "s=S.A.Tag471"
-              - "s=S.A.Tag472"
-              - "s=S.A.Tag473"
-              - "s=S.A.Tag474"
-              - "s=S.A.Tag475"
-              - "s=S.A.Tag476"
-              - "s=S.A.Tag477"
-              - "s=S.A.Tag478"
-              - "s=S.A.Tag479"
-              - "s=S.A.Tag480"
-              - "s=S.A.Tag481"
-              - "s=S.A.Tag482"
-              - "s=S.A.Tag483"
-              - "s=S.A.Tag484"
-              - "s=S.A.Tag485"
-              - "s=S.A.Tag486"
-              - "s=S.A.Tag487"
-              - "s=S.A.Tag488"
-              - "s=S.A.Tag489"
-              - "s=S.A.Tag490"
-              - "s=S.A.Tag491"
-              - "s=S.A.Tag492"
-              - "s=S.A.Tag493"
-              - "s=S.A.Tag494"
-              - "s=S.A.Tag495"
-              - "s=S.A.Tag496"
-              - "s=S.A.Tag497"
-              - "s=S.A.Tag498"
-              - "s=S.A.Tag499"
-              - "s=S.A.Tag500"
-              - "s=S.A.Tag501"
-              - "s=S.A.Tag502"
-              - "s=S.A.Tag503"
-              - "s=S.A.Tag504"
-              - "s=S.A.Tag505"
-              - "s=S.A.Tag506"
-              - "s=S.A.Tag507"
-              - "s=S.A.Tag508"
-              - "s=S.A.Tag509"
-              - "s=S.A.Tag510"
-              - "s=S.A.Tag511"
-              - "s=S.A.Tag512"
-              - "s=S.A.Tag513"
-              - "s=S.A.Tag514"
-              - "s=S.A.Tag515"
-              - "s=S.A.Tag516"
-              - "s=S.A.Tag517"
-              - "s=S.A.Tag518"
-              - "s=S.A.Tag519"
-              - "s=S.A.Tag520"
-              - "s=S.A.Tag521"
-              - "s=S.A.Tag522"
-              - "s=S.A.Tag523"
-              - "s=S.A.Tag524"
-              - "s=S.A.Tag525"
-              - "s=S.A.Tag526"
-              - "s=S.A.Tag527"
-              - "s=S.A.Tag528"
-              - "s=S.A.Tag529"
-              - "s=S.A.Tag530"
-              - "s=S.A.Tag531"
-              - "s=S.A.Tag532"
-              - "s=S.A.Tag533"
-              - "s=S.A.Tag534"
-              - "s=S.A.Tag535"
-              - "s=S.A.Tag536"
-              - "s=S.A.Tag537"
-              - "s=S.A.Tag538"
-              - "s=S.A.Tag539"
-              - "s=S.A.Tag540"
-              - "s=S.A.Tag541"
-              - "s=S.A.Tag542"
-              - "s=S.A.Tag543"
-              - "s=S.A.Tag544"
-              - "s=S.A.Tag545"
-              - "s=S.A.Tag546"
-              - "s=S.A.Tag547"
-              - "s=S.A.Tag548"
-              - "s=S.A.Tag549"
-              - "s=S.A.Tag550"
-              - "s=S.A.Tag551"
-              - "s=S.A.Tag552"
-              - "s=S.A.Tag553"
-              - "s=S.A.Tag554"
-              - "s=S.A.Tag555"
-              - "s=S.A.Tag556"
-              - "s=S.A.Tag557"
-              - "s=S.A.Tag558"
-              - "s=S.A.Tag559"
-              - "s=S.A.Tag560"
-              - "s=S.A.Tag561"
-              - "s=S.A.Tag562"
-              - "s=S.A.Tag563"
-              - "s=S.A.Tag564"
-              - "s=S.A.Tag565"
-              - "s=S.A.Tag566"
-              - "s=S.A.Tag567"
-              - "s=S.A.Tag568"
-              - "s=S.A.Tag569"
-              - "s=S.A.Tag570"
-              - "s=S.A.Tag571"
-              - "s=S.A.Tag572"
-              - "s=S.A.Tag573"
-              - "s=S.A.Tag574"
-              - "s=S.A.Tag575"
-              - "s=S.A.Tag576"
-              - "s=S.A.Tag577"
-              - "s=S.A.Tag578"
-              - "s=S.A.Tag579"
-              - "s=S.A.Tag580"
-              - "s=S.A.Tag581"
-              - "s=S.A.Tag582"
-              - "s=S.A.Tag583"
-              - "s=S.A.Tag584"
-              - "s=S.A.Tag585"
-              - "s=S.A.Tag586"
-              - "s=S.A.Tag587"
-              - "s=S.A.Tag588"
-              - "s=S.A.Tag589"
-              - "s=S.A.Tag590"
-              - "s=S.A.Tag591"
-              - "s=S.A.Tag592"
-              - "s=S.A.Tag593"
-              - "s=S.A.Tag594"
-              - "s=S.A.Tag595"
-              - "s=S.A.Tag596"
-              - "s=S.A.Tag597"
-              - "s=S.A.Tag598"
-              - "s=S.A.Tag599"
-              - "s=S.A.Tag600"
-              - "s=S.A.Tag601"
-              - "s=S.A.Tag602"
-              - "s=S.A.Tag603"
-              - "s=S.A.Tag604"
-              - "s=S.A.Tag605"
-              - "s=S.A.Tag606"
-              - "s=S.A.Tag607"
-              - "s=S.A.Tag608"
-              - "s=S.A.Tag609"
-              - "s=S.A.Tag610"
-              - "s=S.A.Tag611"
-              - "s=S.A.Tag612"
-              - "s=S.A.Tag613"
-              - "s=S.A.Tag614"
-              - "s=S.A.Tag615"
-              - "s=S.A.Tag616"
-              - "s=S.A.Tag617"
-              - "s=S.A.Tag618"
-              - "s=S.A.Tag619"
-              - "s=S.A.Tag620"
-              - "s=S.A.Tag621"
-              - "s=S.A.Tag622"
-              - "s=S.A.Tag623"
-              - "s=S.A.Tag624"
-              - "s=S.A.Tag625"
-              - "s=S.A.Tag626"
-              - "s=S.A.Tag627"
-              - "s=S.A.Tag628"
-              - "s=S.A.Tag629"
-              - "s=S.A.Tag630"
-              - "s=S.A.Tag631"
-              - "s=S.A.Tag632"
-              - "s=S.A.Tag633"
-              - "s=S.A.Tag634"
-              - "s=S.A.Tag635"
-              - "s=S.A.Tag636"
-              - "s=S.A.Tag637"
-              - "s=S.A.Tag638"
-              - "s=S.A.Tag639"
-              - "s=S.A.Tag640"
-              - "s=S.A.Tag641"
-              - "s=S.A.Tag642"
-              - "s=S.A.Tag643"
-              - "s=S.A.Tag644"
-              - "s=S.A.Tag645"
-              - "s=S.A.Tag646"
-              - "s=S.A.Tag647"
-              - "s=S.A.Tag648"
-              - "s=S.A.Tag649"
-              - "s=S.A.Tag650"
-              - "s=S.A.Tag651"
-              - "s=S.A.Tag652"
-              - "s=S.A.Tag653"
-              - "s=S.A.Tag654"
-              - "s=S.A.Tag655"
-              - "s=S.A.Tag656"
-              - "s=S.A.Tag657"
-              - "s=S.A.Tag658"
-              - "s=S.A.Tag659"
-              - "s=S.A.Tag660"
-              - "s=S.A.Tag661"
-              - "s=S.A.Tag662"
-              - "s=S.A.Tag663"
-              - "s=S.A.Tag664"
-              - "s=S.A.Tag665"
-              - "s=S.A.Tag666"
-              - "s=S.A.Tag667"
-              - "s=S.A.Tag668"
-              - "s=S.A.Tag669"
-              - "s=S.A.Tag670"
-              - "s=S.A.Tag671"
-              - "s=S.A.Tag672"
-              - "s=S.A.Tag673"
-              - "s=S.A.Tag674"
-              - "s=S.A.Tag675"
-              - "s=S.A.Tag676"
-              - "s=S.A.Tag677"
-              - "s=S.A.Tag678"
-              - "s=S.A.Tag679"
-              - "s=S.A.Tag680"
-              - "s=S.A.Tag681"
-              - "s=S.A.Tag682"
-              - "s=S.A.Tag683"
-              - "s=S.A.Tag684"
-              - "s=S.A.Tag685"
-              - "s=S.A.Tag686"
-              - "s=S.A.Tag687"
-              - "s=S.A.Tag688"
-              - "s=S.A.Tag689"
-              - "s=S.A.Tag690"
-              - "s=S.A.Tag691"
-              - "s=S.A.Tag692"
-              - "s=S.A.Tag693"
-              - "s=S.A.Tag694"
-              - "s=S.A.Tag695"
-              - "s=S.A.Tag696"
-              - "s=S.A.Tag697"
-              - "s=S.A.Tag698"
-              - "s=S.A.Tag699"
-              - "s=S.A.Tag700"
-              - "s=S.A.Tag701"
-              - "s=S.A.Tag702"
-              - "s=S.A.Tag703"
-              - "s=S.A.Tag704"
-              - "s=S.A.Tag705"
-              - "s=S.A.Tag706"
-              - "s=S.A.Tag707"
-              - "s=S.A.Tag708"
-              - "s=S.A.Tag709"
-              - "s=S.A.Tag710"
-              - "s=S.A.Tag711"
-              - "s=S.A.Tag712"
-              - "s=S.A.Tag713"
-              - "s=S.A.Tag714"
-              - "s=S.A.Tag715"
-              - "s=S.A.Tag716"
-              - "s=S.A.Tag717"
-              - "s=S.A.Tag718"
-              - "s=S.A.Tag719"
-              - "s=S.A.Tag720"
-              - "s=S.A.Tag721"
-              - "s=S.A.Tag722"
-              - "s=S.A.Tag723"
-              - "s=S.A.Tag724"
-              - "s=S.A.Tag725"
-              - "s=S.A.Tag726"
-              - "s=S.A.Tag727"
-              - "s=S.A.Tag728"
-              - "s=S.A.Tag729"
-              - "s=S.A.Tag730"
-              - "s=S.A.Tag731"
-              - "s=S.A.Tag732"
-              - "s=S.A.Tag733"
-              - "s=S.A.Tag734"
-              - "s=S.A.Tag735"
-              - "s=S.A.Tag736"
-              - "s=S.A.Tag737"
-              - "s=S.A.Tag738"
-              - "s=S.A.Tag739"
-              - "s=S.A.Tag740"
-              - "s=S.A.Tag741"
-              - "s=S.A.Tag742"
-              - "s=S.A.Tag743"
-              - "s=S.A.Tag744"
-              - "s=S.A.Tag745"
-              - "s=S.A.Tag746"
-              - "s=S.A.Tag747"
-              - "s=S.A.Tag748"
-              - "s=S.A.Tag749"
-              - "s=S.A.Tag750"
-              - "s=S.A.Tag751"
-              - "s=S.A.Tag752"
-              - "s=S.A.Tag753"
-              - "s=S.A.Tag754"
-              - "s=S.A.Tag755"
-              - "s=S.A.Tag756"
-              - "s=S.A.Tag757"
-              - "s=S.A.Tag758"
-              - "s=S.A.Tag759"
-              - "s=S.A.Tag760"
-              - "s=S.A.Tag761"
-              - "s=S.A.Tag762"
-              - "s=S.A.Tag763"
-              - "s=S.A.Tag764"
-              - "s=S.A.Tag765"
-              - "s=S.A.Tag766"
-              - "s=S.A.Tag767"
-              - "s=S.A.Tag768"
-              - "s=S.A.Tag769"
-              - "s=S.A.Tag770"
-              - "s=S.A.Tag771"
-              - "s=S.A.Tag772"
-              - "s=S.A.Tag773"
-              - "s=S.A.Tag774"
-              - "s=S.A.Tag775"
-              - "s=S.A.Tag776"
-              - "s=S.A.Tag777"
-              - "s=S.A.Tag778"
-              - "s=S.A.Tag779"
-              - "s=S.A.Tag780"
-              - "s=S.A.Tag781"
-              - "s=S.A.Tag782"
-              - "s=S.A.Tag783"
-              - "s=S.A.Tag784"
-              - "s=S.A.Tag785"
-              - "s=S.A.Tag786"
-              - "s=S.A.Tag787"
-              - "s=S.A.Tag788"
-              - "s=S.A.Tag789"
-              - "s=S.A.Tag790"
-              - "s=S.A.Tag791"
-              - "s=S.A.Tag792"
-              - "s=S.A.Tag793"
-              - "s=S.A.Tag794"
-              - "s=S.A.Tag795"
-              - "s=S.A.Tag796"
-              - "s=S.A.Tag797"
-              - "s=S.A.Tag798"
-              - "s=S.A.Tag799"
-              - "s=S.A.Tag800"
-              - "s=S.A.Tag801"
-              - "s=S.A.Tag802"
-              - "s=S.A.Tag803"
-              - "s=S.A.Tag804"
-              - "s=S.A.Tag805"
-              - "s=S.A.Tag806"
-              - "s=S.A.Tag807"
-              - "s=S.A.Tag808"
-              - "s=S.A.Tag809"
-              - "s=S.A.Tag810"
-              - "s=S.A.Tag811"
-              - "s=S.A.Tag812"
-              - "s=S.A.Tag813"
-              - "s=S.A.Tag814"
-              - "s=S.A.Tag815"
-              - "s=S.A.Tag816"
-              - "s=S.A.Tag817"
-              - "s=S.A.Tag818"
-              - "s=S.A.Tag819"
-              - "s=S.A.Tag820"
-              - "s=S.A.Tag821"
-              - "s=S.A.Tag822"
-              - "s=S.A.Tag823"
-              - "s=S.A.Tag824"
-              - "s=S.A.Tag825"
-              - "s=S.A.Tag826"
-              - "s=S.A.Tag827"
-              - "s=S.A.Tag828"
-              - "s=S.A.Tag829"
-              - "s=S.A.Tag830"
-              - "s=S.A.Tag831"
-              - "s=S.A.Tag832"
-              - "s=S.A.Tag833"
-              - "s=S.A.Tag834"
-              - "s=S.A.Tag835"
-              - "s=S.A.Tag836"
-              - "s=S.A.Tag837"
-              - "s=S.A.Tag838"
-              - "s=S.A.Tag839"
-              - "s=S.A.Tag840"
-              - "s=S.A.Tag841"
-              - "s=S.A.Tag842"
-              - "s=S.A.Tag843"
-              - "s=S.A.Tag844"
-              - "s=S.A.Tag845"
-              - "s=S.A.Tag846"
-              - "s=S.A.Tag847"
-              - "s=S.A.Tag848"
-              - "s=S.A.Tag849"
-              - "s=S.A.Tag850"
-              - "s=S.A.Tag851"
-              - "s=S.A.Tag852"
-              - "s=S.A.Tag853"
-              - "s=S.A.Tag854"
-              - "s=S.A.Tag855"
-              - "s=S.A.Tag856"
-              - "s=S.A.Tag857"
-              - "s=S.A.Tag858"
-              - "s=S.A.Tag859"
-              - "s=S.A.Tag860"
-              - "s=S.A.Tag861"
-              - "s=S.A.Tag862"
-              - "s=S.A.Tag863"
-              - "s=S.A.Tag864"
-              - "s=S.A.Tag865"
-              - "s=S.A.Tag866"
-              - "s=S.A.Tag867"
-              - "s=S.A.Tag868"
-              - "s=S.A.Tag869"
-              - "s=S.A.Tag870"
-              - "s=S.A.Tag871"
-              - "s=S.A.Tag872"
-              - "s=S.A.Tag873"
-              - "s=S.A.Tag874"
-              - "s=S.A.Tag875"
-              - "s=S.A.Tag876"
-              - "s=S.A.Tag877"
-              - "s=S.A.Tag878"
-              - "s=S.A.Tag879"
-              - "s=S.A.Tag880"
-              - "s=S.A.Tag881"
-              - "s=S.A.Tag882"
-              - "s=S.A.Tag883"
-              - "s=S.A.Tag884"
-              - "s=S.A.Tag885"
-              - "s=S.A.Tag886"
-              - "s=S.A.Tag887"
-              - "s=S.A.Tag888"
-              - "s=S.A.Tag889"
-              - "s=S.A.Tag890"
-              - "s=S.A.Tag891"
-              - "s=S.A.Tag892"
-              - "s=S.A.Tag893"
-              - "s=S.A.Tag894"
-              - "s=S.A.Tag895"
-              - "s=S.A.Tag896"
-              - "s=S.A.Tag897"
-              - "s=S.A.Tag898"
-              - "s=S.A.Tag899"
-              - "s=S.A.Tag900"
-              - "s=S.A.Tag901"
-              - "s=S.A.Tag902"
-              - "s=S.A.Tag903"
-              - "s=S.A.Tag904"
-              - "s=S.A.Tag905"
-              - "s=S.A.Tag906"
-              - "s=S.A.Tag907"
-              - "s=S.A.Tag908"
-              - "s=S.A.Tag909"
-              - "s=S.A.Tag910"
-              - "s=S.A.Tag911"
-              - "s=S.A.Tag912"
-              - "s=S.A.Tag913"
-              - "s=S.A.Tag914"
-              - "s=S.A.Tag915"
-              - "s=S.A.Tag916"
-              - "s=S.A.Tag917"
-              - "s=S.A.Tag918"
-              - "s=S.A.Tag919"
-              - "s=S.A.Tag920"
-              - "s=S.A.Tag921"
-              - "s=S.A.Tag922"
-              - "s=S.A.Tag923"
-              - "s=S.A.Tag924"
-              - "s=S.A.Tag925"
-              - "s=S.A.Tag926"
-              - "s=S.A.Tag927"
-              - "s=S.A.Tag928"
-              - "s=S.A.Tag929"
-              - "s=S.A.Tag930"
-              - "s=S.A.Tag931"
-              - "s=S.A.Tag932"
-              - "s=S.A.Tag933"
-              - "s=S.A.Tag934"
-              - "s=S.A.Tag935"
-              - "s=S.A.Tag936"
-              - "s=S.A.Tag937"
-              - "s=S.A.Tag938"
-              - "s=S.A.Tag939"
-              - "s=S.A.Tag940"
-              - "s=S.A.Tag941"
-              - "s=S.A.Tag942"
-              - "s=S.A.Tag943"
-              - "s=S.A.Tag944"
-              - "s=S.A.Tag945"
-              - "s=S.A.Tag946"
-              - "s=S.A.Tag947"
-              - "s=S.A.Tag948"
-              - "s=S.A.Tag949"
-              - "s=S.A.Tag950"
-              - "s=S.A.Tag951"
-              - "s=S.A.Tag952"
-              - "s=S.A.Tag953"
-              - "s=S.A.Tag954"
-              - "s=S.A.Tag955"
-              - "s=S.A.Tag956"
-              - "s=S.A.Tag957"
-              - "s=S.A.Tag958"
-              - "s=S.A.Tag959"
-              - "s=S.A.Tag960"
-              - "s=S.A.Tag961"
-              - "s=S.A.Tag962"
-              - "s=S.A.Tag963"
-              - "s=S.A.Tag964"
-              - "s=S.A.Tag965"
-              - "s=S.A.Tag966"
-              - "s=S.A.Tag967"
-              - "s=S.A.Tag968"
-              - "s=S.A.Tag969"
-              - "s=S.A.Tag970"
-              - "s=S.A.Tag971"
-              - "s=S.A.Tag972"
-              - "s=S.A.Tag973"
-              - "s=S.A.Tag974"
-              - "s=S.A.Tag975"
-              - "s=S.A.Tag976"
-              - "s=S.A.Tag977"
-              - "s=S.A.Tag978"
-              - "s=S.A.Tag979"
-              - "s=S.A.Tag980"
-              - "s=S.A.Tag981"
-              - "s=S.A.Tag982"
-              - "s=S.A.Tag983"
-              - "s=S.A.Tag984"
-              - "s=S.A.Tag985"
-              - "s=S.A.Tag986"
-              - "s=S.A.Tag987"
-              - "s=S.A.Tag988"
-              - "s=S.A.Tag989"
-              - "s=S.A.Tag990"
-              - "s=S.A.Tag991"
-              - "s=S.A.Tag992"
-              - "s=S.A.Tag993"
-              - "s=S.A.Tag994"
-              - "s=S.A.Tag995"
-              - "s=S.A.Tag996"
-              - "s=S.A.Tag997"
-              - "s=S.A.Tag998"
-              - "s=S.A.Tag999"
-              - "s=S.A.Tag1000"
-        
-        # LEGACY FORMAT (commented out - use the above tag-list-groups instead)
-        # tag-lists:
-        #   # Group 1: S.A tags (first 5 tags for testing)
-        #   - ["s=S.A.Tag1", "s=S.A.Tag2", "s=S.A.Tag3", ...]
-      
-    # Set to enable storing a list of created assets/timeseries to local litedb.
-    # Requires the StateStorage.Location property to be set.
-    # If this is left empty, metadata will have to be read each time the extractor restarts.
-    # Default is empty
- #   local-state:
-    # Timestamp in ms since epoch to invalidate stored mqtt states.
-    # On extractor restart, assets/timeseries created before this will be attempted re-created in CDF.
-    # They will not be deleted or updated.
- #   invalidate-before: 0
-    # Replace all instances of NaN, Infinity or values greater than 1E100 with this floating point number. If left empty, ignore instead.
- #   non-finite-replacement:
-    # Do not push any metadata at all. If this is true, plain timeseries without metadata will be created,
-    # similarly to raw-metadata, and datapoints will be pushed. Nothing will be written to raw, and no assets will be created.
-    # Events will be created, but without asset context.
- #   skip-metadata: false
-    # Default empty. Store assets and/or timeseries data in raw. Assets will not be created at all,
-    # timeseries will be created with just externalId, isStep and isString.
-    # Both timeseries and assets will be persisted in their entirety to raw.
-    # Datapoints are not affected, events will be created, but without asset context. The externalId
-    # of the source node is added to metadata if applicable.
-    # Use different table names for assets and timeseries.
- #   raw-metadata:
-        # Database to store data in, required.
- #       database:
-        # Table to store assets in.
- #       assets-table:
-        # Table to store timeseries in.
- #       timeseries-table:
-        # Table to store relationships in
- #       relationships-table:
-    # Map metadata to asset/timeseries attributes. Each of "assets" and "timeseries" is a map from property DisplayName to
-    # CDF attribute. Legal attributes are "name, description, parentId" and "unit" for timeseries. "parentId" must somehow refer to
-    # an existing asset. For timeseries it must be a mapped asset, for assets it can be any asset.
-    # Example usage:
-    # timeseries:
-    #    "EngineeringUnits": "unit"
-    #    "EURange": "description"
-    # assets:
-    #    "Name": "name"
-#    metadata-mapping:
-#        assets:
-#        timeseries:
 
-    # If relationships are eneabled, and written to clean, and deletes are enabled. This needs to be set to
-    # true in order to hard delete the relationships.
-    #delete-relationships: false
+         #running setting
+#        data-group-by: ROOT_NODE_BASED
+        
+#        # NEW UNIFIED FORMAT: Advanced publish groups with selectors and exclusions
+#        # Supports both ROOT_NODE_BASED and TAG_LIST_BASED strategies
+#        publish-groups:
+#          # Group B: High-priority S.A tags that need separate handling
+#          - name: "S_A_TagGroup-A"
+#            selectors:
+#              # Pattern for critical sensors
+#              - pattern: "s=S\\.A\\.TagGroup-A\\..*"
+
+#          - name: "S_A_TagGroup-B"
+#            selectors:
+#              # Pattern for critical sensors
+#              - pattern: "s=S\\.A\\.TagGroup-B\\..*"
+
+#          - name: "S_A_Tags"
+#            selectors:
+#              - pattern: "s=S\\.A\\.[^.]*$"
+
+
+
+          #sample setting
+          # Group A: S.A production data but exclude system diagnostics
+#          - name: "S_A_Tags"
+#            selectors:
+#              - prefix: "s=S.A"
+#                exclude:
+                  # Exclude specific admin/maintenance tags
+#                  tags:
+#                    - "s=S.A.System.LastMaintenance"
+#                    - "s=S.A.Admin.Override"
+                  # Exclude all diagnostics folder content
+#                  patterns:
+#                    - "s=S\\.A\\.Diagnostics\\..*"
+#                    - "s=S\\.A\\._System\\..*"
+          
+#          # Group B: High-priority S.A tags that need separate handling
+#          - name: "S_A_Group-A"
+#            selectors:
+#              # Pattern for critical sensors
+#              - pattern: "s=S\\.A\\.Group-A\\..*"
+
+#          - name: "S_A_Group-A"
+#            selectors:
+#              - tags:
+#                  - "s=S.A.Tag1"
+#                  - "s=S.A.Tag2"
+#                  - "s=S.A.Tag3"
+#                  - "s=S.A.Tag4"
+#                  - "s=S.A.Tag5"
+#              # Pattern for critical sensors
+#              - pattern: "s=S\\.A\\.Critical\\..*"
+
+
+
+        # EXAMPLE: Alternative TAG_LIST_BASED configuration
+        # Uncomment below and change data-group-by to use TAG_LIST_BASED strategy instead
+         data-group-by: TAG_LIST_BASED
+         publish-groups:
+        #   # Group 1: Quality control KPI tags from different lines
+           - name: "S.A.TagGroup-A"
+             selectors:
+               - tags:
+                   - "s=S.A.TagGroup-A.Tag001"
+                   - "s=S.A.TagGroup-A.Tag002"
+                   - "s=S.A.TagGroup-A.Tag003"
+                   - "s=S.A.TagGroup-A.Tag004"
+                   - "s=S.A.TagGroup-A.Tag005"
+                   - "s=S.A.TagGroup-A.Tag006"
+                   - "s=S.A.TagGroup-A.Tag007"
+                   - "s=S.A.TagGroup-A.Tag008"
+                   - "s=S.A.TagGroup-A.Tag009"
+                   - "s=S.A.TagGroup-A.Tag010"
+                   - "s=S.A.TagGroup-A.Tag011"
+                   - "s=S.A.TagGroup-A.Tag012"
+                   - "s=S.A.TagGroup-A.Tag013"
+                   - "s=S.A.TagGroup-A.Tag014"
+                   - "s=S.A.TagGroup-A.Tag015"
+                   - "s=S.A.TagGroup-A.Tag016"
+                   - "s=S.A.TagGroup-A.Tag017"
+                   - "s=S.A.TagGroup-A.Tag018"
+                   - "s=S.A.TagGroup-A.Tag019"
+                   - "s=S.A.TagGroup-A.Tag020"
+        #   
+        #   # Group 2: All motor data but exclude test motors
+        #   - name: "All-Motor-Data"
+        #     selectors:
+        #       - pattern: "s=.*\\.Motor\\..*"
+        #         exclude:
+        #           patterns:
+        #             - "s=.*\\.TestMotor\\..*"
+        #   
+        #   # Group 3: Catch-all for other analog values
+        #   - name: "Other-Analog-Values"
+        #     selectors:
+        #       - pattern: "s=.*\\.AnalogInput.*"

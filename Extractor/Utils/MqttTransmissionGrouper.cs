@@ -66,15 +66,29 @@ namespace Cognite.OpcUa.Utils
         private IEnumerable<KeyValuePair<string, IEnumerable<UADataPoint>>> GroupByRootNode(
             IList<UADataPoint> dataPoints)
         {
-            // For now, we'll use a simple prefix-based grouping approach
-            // This can be enhanced later with proper node hierarchy traversal
-            var rootNodeMap = new Dictionary<string, List<UADataPoint>>();
-
             logger.LogTrace("[ROOT_NODE_BASED] Processing {Count} datapoints for root node grouping", 
                 dataPoints.Count);
 
-            // PRESERVE ALL DATAPOINTS: No deduplication to maintain multiple values per tag
-            logger.LogInformation("[ROOT_NODE_BASED] Processing all {Count} datapoints without deduplication", 
+            // Try new publish-groups format first
+            var publishGroups = config.TransmissionStrategyConfig?.PublishGroups;
+            if (publishGroups != null && publishGroups.Any())
+            {
+                return GroupByPublishGroups(dataPoints, usePrefixMatching: true);
+            }
+
+            // Fall back to legacy prefix-based grouping
+            return GroupByLegacyRootNode(dataPoints);
+        }
+
+        /// <summary>
+        /// Legacy root node grouping logic for backward compatibility
+        /// </summary>
+        private IEnumerable<KeyValuePair<string, IEnumerable<UADataPoint>>> GroupByLegacyRootNode(
+            IList<UADataPoint> dataPoints)
+        {
+            var rootNodeMap = new Dictionary<string, List<UADataPoint>>();
+
+            logger.LogInformation("[ROOT_NODE_BASED] Using legacy grouping for {Count} datapoints", 
                 dataPoints.Count);
 
             // Group datapoints by root node and count them
@@ -111,14 +125,33 @@ namespace Cognite.OpcUa.Utils
         private IEnumerable<KeyValuePair<string, IEnumerable<UADataPoint>>> GroupByTagList(
             IList<UADataPoint> dataPoints)
         {
-            // Try new format first (with custom names)
+            logger.LogTrace("[TAG_LIST_BASED] Processing {Count} datapoints for tag list grouping", 
+                dataPoints.Count);
+
+            // Try new publish-groups format first
+            var publishGroups = config.TransmissionStrategyConfig?.PublishGroups;
+            if (publishGroups != null && publishGroups.Any())
+            {
+                return GroupByPublishGroups(dataPoints, usePrefixMatching: false);
+            }
+
+            // Try tag-list-groups format (with custom names)
             var effectiveTagListsWithNames = config.TransmissionStrategyConfig?.GetEffectiveTagListsWithNames();
             if (effectiveTagListsWithNames != null && effectiveTagListsWithNames.Any())
             {
                 return GroupByTagListWithNames(dataPoints, effectiveTagListsWithNames);
             }
 
-            // Fall back to legacy format
+            // Fall back to legacy tag-lists format
+            return GroupByLegacyTagLists(dataPoints);
+        }
+
+        /// <summary>
+        /// Legacy tag list grouping logic for backward compatibility
+        /// </summary>
+        private IEnumerable<KeyValuePair<string, IEnumerable<UADataPoint>>> GroupByLegacyTagLists(
+            IList<UADataPoint> dataPoints)
+        {
             var effectiveTagLists = config.GetEffectiveTagLists();
             if (effectiveTagLists == null || !effectiveTagLists.Any())
             {
@@ -255,6 +288,93 @@ namespace Cognite.OpcUa.Utils
                 .ToDictionary(group => group.Key, group => group.AsEnumerable());
 
             return tagGroups.Select(kvp => new KeyValuePair<string, IEnumerable<UADataPoint>>(kvp.Key, kvp.Value));
+        }
+
+        /// <summary>
+        /// Groups data points using the new unified publish-groups configuration
+        /// </summary>
+        private IEnumerable<KeyValuePair<string, IEnumerable<UADataPoint>>> GroupByPublishGroups(
+            IList<UADataPoint> dataPoints, bool usePrefixMatching)
+        {
+            var publishGroups = config.TransmissionStrategyConfig?.PublishGroups;
+            if (publishGroups == null || !publishGroups.Any())
+            {
+                logger.LogWarning("[PUBLISH_GROUPS] No publish groups configured, falling back to chunk-based grouping");
+                return GroupByChunk(dataPoints);
+            }
+
+            var groupedDataPoints = new Dictionary<string, List<UADataPoint>>();
+            var processedDataPoints = new HashSet<string>();
+
+            logger.LogInformation("[PUBLISH_GROUPS] Processing {Count} datapoints using {Strategy} strategy", 
+                dataPoints.Count, usePrefixMatching ? "ROOT_NODE_BASED" : "TAG_LIST_BASED");
+
+            // Get namespace table from client for node ID resolution
+            NamespaceTable? namespaceTable = null;
+            try
+            {
+                namespaceTable = client?.NamespaceTable;
+            }
+            catch (Exception ex)
+            {
+                logger.LogTrace(ex, "[PUBLISH_GROUPS] Could not get namespace table from client");
+            }
+
+            foreach (var dataPoint in dataPoints)
+            {
+                // Skip if already processed (for TAG_LIST_BASED "first match wins")
+                if (!usePrefixMatching && processedDataPoints.Contains(dataPoint.Id))
+                {
+                    continue;
+                }
+
+                var groupName = MqttGroupingHelper.FindGroupNameForNode(
+                    dataPoint.Id, 
+                    publishGroups, 
+                    usePrefixMatching,
+                    namespaceTable,
+                    logger);
+
+                if (!string.IsNullOrEmpty(groupName))
+                {
+                    if (!groupedDataPoints.ContainsKey(groupName))
+                    {
+                        groupedDataPoints[groupName] = new List<UADataPoint>();
+                    }
+
+                    groupedDataPoints[groupName].Add(dataPoint);
+                    
+                    if (!usePrefixMatching) // TAG_LIST_BASED: mark as processed
+                    {
+                        processedDataPoints.Add(dataPoint.Id);
+                    }
+                }
+                else
+                {
+                    // No matching group found, add to unassigned
+                    if (!groupedDataPoints.ContainsKey("unassigned"))
+                    {
+                        groupedDataPoints["unassigned"] = new List<UADataPoint>();
+                    }
+                    groupedDataPoints["unassigned"].Add(dataPoint);
+                    
+                    if (!usePrefixMatching) // TAG_LIST_BASED: mark as processed
+                    {
+                        processedDataPoints.Add(dataPoint.Id);
+                    }
+                }
+            }
+
+            logger.LogInformation("[PUBLISH_GROUPS] Grouped into {GroupCount} publish groups", groupedDataPoints.Count);
+            
+            // Log group summary
+            foreach (var kvp in groupedDataPoints.OrderBy(x => x.Key))
+            {
+                logger.LogInformation("[PUBLISH_GROUPS] Group '{GroupName}': {DataPointCount} datapoints", 
+                    kvp.Key, kvp.Value.Count);
+            }
+
+            return groupedDataPoints.Select(kvp => new KeyValuePair<string, IEnumerable<UADataPoint>>(kvp.Key, kvp.Value));
         }
 
         /// <summary>
