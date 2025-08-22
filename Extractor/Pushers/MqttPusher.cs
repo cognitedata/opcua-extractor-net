@@ -668,8 +668,16 @@ namespace Cognite.OpcUa.Pushers
                                 throw new Exception(result.ReasonString);
                             }
 
-                            // Log successful chunk transmission
-                            log.LogInformation("[MQTT Chunk Success] Successfully sent {Count} datapoints to MQTT broker", actualDataPointCount);
+                            // Log successful chunk transmission - use debug level for TAG_CHANGE_BASED to reduce noise
+                            var strategy = config.GetEffectiveTransmissionStrategy();
+                            if (strategy == MqttTransmissionStrategy.TAG_CHANGE_BASED)
+                            {
+                                log.LogDebug("[MQTT Chunk Success] Successfully sent {Count} datapoints to MQTT broker", actualDataPointCount);
+                            }
+                            else
+                            {
+                                log.LogInformation("[MQTT Chunk Success] Successfully sent {Count} datapoints to MQTT broker", actualDataPointCount);
+                            }
 
                             return (object?)result;
                         };
@@ -900,12 +908,19 @@ namespace Cognite.OpcUa.Pushers
 
             // Add transmission strategy specific metadata
             var strategy = config.GetEffectiveTransmissionStrategy();
+            
+            // Add data_group_by field with the current transmission strategy
+            metadata["data_group_by"] = strategy.ToString();
+            
+            // Add unified publish_group_name field based on strategy
             switch (strategy)
             {
                 case MqttTransmissionStrategy.ROOT_NODE_BASED:
+                case MqttTransmissionStrategy.TAG_LIST_BASED:
+                    // For ROOT_NODE_BASED and TAG_LIST_BASED, use publish-groups.name
                     if (!string.IsNullOrEmpty(groupKey))
                     {
-                        metadata["root_node_name"] = groupKey;
+                        metadata["publish_group_name"] = groupKey;
                     }
                     break;
 
@@ -938,21 +953,15 @@ namespace Cognite.OpcUa.Pushers
                         // Fallback to timestamp-based chunk_id
                         chunkId = $"chunk_{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}_{Guid.NewGuid().ToString("N")[..8]}";
                     }
-                    metadata["chunk_id"] = chunkId;
-                    break;
-
-                case MqttTransmissionStrategy.TAG_LIST_BASED:
-                    if (!string.IsNullOrEmpty(groupKey))
-                    {
-                        metadata["tag_list_name"] = groupKey;
-                    }
+                    // For CHUNK_BASED, use the auto-generated chunk_id
+                    metadata["publish_group_name"] = chunkId;
                     break;
 
                 case MqttTransmissionStrategy.TAG_CHANGE_BASED:
-                    // For tag change based, we could include the tag name that changed
+                    // For TAG_CHANGE_BASED, use the individual tag ID
                     if (!string.IsNullOrEmpty(groupKey))
                     {
-                        metadata["changed_tag"] = groupKey;
+                        metadata["publish_group_name"] = groupKey;
                     }
                     break;
             }
@@ -1019,10 +1028,8 @@ namespace Cognite.OpcUa.Pushers
                     {
                         "json_format_type" => "jsonFormatType",
                         "message_timestamp" => "messageTimestamp",
-                        "root_node_name" => "rootNodeName",
-                        "chunk_id" => "chunkId", 
-                        "tag_list_name" => "tagListName",
-                        "changed_tag" => "changedTag",
+                        "data_group_by" => "dataGroupBy",
+                        "publish_group_name" => "publishGroupName",
                         _ => kvp.Key
                     };
                     camelCaseMetadata[key] = kvp.Value;

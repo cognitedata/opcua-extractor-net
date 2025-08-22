@@ -162,7 +162,7 @@ influx-db-metrics:
     password: "admin"
     retention-policy: "autogen"
     measurement-prefix: "opcua"
-    batch-size: 100
+    batch-size: 1
 
 influx:
     enabled: false
@@ -230,26 +230,28 @@ mqtt:
     mqtt-transmission-strategy: 
 
          #running setting
-#        data-group-by: ROOT_NODE_BASED
+        data-group-by: TAG_CHANGE_BASED
         
 #        # NEW UNIFIED FORMAT: Advanced publish groups with selectors and exclusions
 #        # Supports both ROOT_NODE_BASED and TAG_LIST_BASED strategies
-#        publish-groups:
+        publish-groups:
 #          # Group B: High-priority S.A tags that need separate handling
-#          - name: "S_A_TagGroup-A"
-#            selectors:
+          - name: "S_A_TagGroup-A"
+            selectors:
+              # Pattern for critical sensors
+              - pattern: "s=S\\.A\\.TagGroup-A\\..*"
+
+          - name: "S_A_TagGroup-B"
+            selectors:
 #              # Pattern for critical sensors
-#              - pattern: "s=S\\.A\\.TagGroup-A\\..*"
+              - pattern: "s=S\\.A\\.TagGroup-B\\..*"
 
-#          - name: "S_A_TagGroup-B"
-#            selectors:
-#              # Pattern for critical sensors
-#              - pattern: "s=S\\.A\\.TagGroup-B\\..*"
-
-#          - name: "S_A_Tags"
-#            selectors:
-#              - pattern: "s=S\\.A\\.[^.]*$"
-
+          - name: "S_A_Tags"
+            selectors:
+              - pattern: "s=S\\.A\\.[^.]*$"
+                exclude:
+                  patterns:
+                    - "s=S\\.A\\.Tag(?:[1-9]|1[0-9]|20)$"
 
 
           #sample setting
@@ -286,44 +288,4 @@ mqtt:
 
 
 
-        # EXAMPLE: Alternative TAG_LIST_BASED configuration
-        # Uncomment below and change data-group-by to use TAG_LIST_BASED strategy instead
-         data-group-by: TAG_LIST_BASED
-         publish-groups:
-        #   # Group 1: Quality control KPI tags from different lines
-           - name: "S.A.TagGroup-A"
-             selectors:
-               - tags:
-                   - "s=S.A.TagGroup-A.Tag001"
-                   - "s=S.A.TagGroup-A.Tag002"
-                   - "s=S.A.TagGroup-A.Tag003"
-                   - "s=S.A.TagGroup-A.Tag004"
-                   - "s=S.A.TagGroup-A.Tag005"
-                   - "s=S.A.TagGroup-A.Tag006"
-                   - "s=S.A.TagGroup-A.Tag007"
-                   - "s=S.A.TagGroup-A.Tag008"
-                   - "s=S.A.TagGroup-A.Tag009"
-                   - "s=S.A.TagGroup-A.Tag010"
-                   - "s=S.A.TagGroup-A.Tag011"
-                   - "s=S.A.TagGroup-A.Tag012"
-                   - "s=S.A.TagGroup-A.Tag013"
-                   - "s=S.A.TagGroup-A.Tag014"
-                   - "s=S.A.TagGroup-A.Tag015"
-                   - "s=S.A.TagGroup-A.Tag016"
-                   - "s=S.A.TagGroup-A.Tag017"
-                   - "s=S.A.TagGroup-A.Tag018"
-                   - "s=S.A.TagGroup-A.Tag019"
-                   - "s=S.A.TagGroup-A.Tag020"
-        #   
-        #   # Group 2: All motor data but exclude test motors
-        #   - name: "All-Motor-Data"
-        #     selectors:
-        #       - pattern: "s=.*\\.Motor\\..*"
-        #         exclude:
-        #           patterns:
-        #             - "s=.*\\.TestMotor\\..*"
-        #   
-        #   # Group 3: Catch-all for other analog values
-        #   - name: "Other-Analog-Values"
-        #     selectors:
-        #       - pattern: "s=.*\\.AnalogInput.*"
+
