@@ -57,6 +57,54 @@ namespace Cognite.OpcUa
 
             var values = await client.ReadRawValues(idsToRead, token);
 
+            // Log detailed information about each value read from server
+            var serverCapabilityNames = new[]
+            {
+                "MaxBrowseContinuationPoints",
+                "MaxHistoryContinuationPoints", 
+                "MaxMonitoredItemsPerCall",
+                "MaxNodesPerBrowse",
+                "MaxNodesPerHistoryReadData",
+                "MaxNodesPerHistoryReadEvents",
+                "MaxNodesPerRead"
+            };
+
+            log.LogInformation("Server capabilities read results:");
+            for (int i = 0; i < idsToRead.Length; i++)
+            {
+                var nodeId = idsToRead[i];
+                var dataValue = values[nodeId];
+                var capabilityName = serverCapabilityNames[i];
+                
+                if (StatusCode.IsBad(dataValue.StatusCode))
+                {
+                    log.LogWarning("  {CapabilityName}: Failed to read (StatusCode: {StatusCode})", 
+                        capabilityName, dataValue.StatusCode);
+                }
+                else
+                {
+                    try
+                    {
+                        var serverValue = Convert.ToInt32(dataValue.Value);
+                        if (serverValue > 0)
+                        {
+                            log.LogInformation("  {CapabilityName}: {ServerValue} (successfully read from server)", 
+                                capabilityName, serverValue);
+                        }
+                        else
+                        {
+                            log.LogInformation("  {CapabilityName}: {ServerValue} (server returned 0 or null)", 
+                                capabilityName, serverValue);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        log.LogWarning("  {CapabilityName}: Failed to convert value '{Value}' to integer ({Error})", 
+                            capabilityName, dataValue.Value, ex.Message);
+                    }
+                }
+            }
+
             int SafeValue(int cVal, DataValue sVal, string name)
             {
                 int val = 0;
@@ -81,6 +129,10 @@ namespace Cognite.OpcUa
                 else if (cVal == 0)
                 {
                     log.LogWarning("No upper limit is set on {Name} by the server, the extractor will continue with {CVal}", name, cVal);
+                }
+                else if (val <= 0)
+                {
+                    log.LogInformation("Server returned invalid value ({Val}) for {Name}, using configured value {CVal}", val, name, cVal);
                 }
                 return cVal;
             }

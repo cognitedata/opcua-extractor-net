@@ -28,9 +28,9 @@ source:
   # 추가 필요한 설정들:
     limit-to-server-config: true  # 서버 설정 제한 사용 여부
     browse-throttling:
-    max-per-minute: 0           # 분당 최대 browse 요청 수
-    max-parallelism: 0          # 최대 병렬 browse 요청 수  
-    max-node-parallelism: 100   # ← 이 값을 0보다 크게 설정 (예: 100)
+       max-per-minute: 0           # 분당 최대 browse 요청 수
+       max-parallelism: 0          # 최대 병렬 browse 요청 수  
+       max-node-parallelism: 100   # ← 이 값을 0보다 크게 설정 (예: 100)
 
 
 extraction:
@@ -158,9 +158,9 @@ history:
     data: false
     # 추가 필요한 설정:
     throttling:
-    max-per-minute: 0           # 분당 최대 history 요청 수
-    max-parallelism: 0          # 최대 병렬 history 요청 수
-    max-node-parallelism: 100   # ← 이 값을 0보다 크게 설정 (예: 100)
+       max-per-minute: 0           # 분당 최대 history 요청 수
+       max-parallelism: 0          # 최대 병렬 history 요청 수
+       max-node-parallelism: 100   # ← 이 값을 0보다 크게 설정 (예: 100)
 
 logger:
     # Writes log events at this level to the Console. One of verbose, debug, information, warning, error, fatal.
@@ -168,7 +168,7 @@ logger:
     console:
         level: "information"
     file:
-        level: "information"
+        level: "verbose"
         path: "logs/log.txt"
 
 metrics:
