@@ -25,6 +25,14 @@ source:
     browse-nodes-chunk: 1
     browse-chunk: 1000
 
+  # 추가 필요한 설정들:
+    limit-to-server-config: true  # 서버 설정 제한 사용 여부
+    browse-throttling:
+    max-per-minute: 0           # 분당 최대 browse 요청 수
+    max-parallelism: 0          # 최대 병렬 browse 요청 수  
+    max-node-parallelism: 100   # ← 이 값을 0보다 크게 설정 (예: 100)
+
+
 extraction:
     # Global prefix for externalId towards pushers. Should be unique to prevent name conflicts in the push destinations.
     # The externalId is: IdPrefix + NamespaceMap[nodeId.NamespaceUri] + nodeId.Identifier
@@ -110,7 +118,7 @@ extraction:
 
 
     # Time in minutes between each call to browse the OPC-UA directory, then push new nodes to destinations.
-    auto-rebrowse-period: 30m
+    auto-rebrowse-period: "55 * * * *"
     enable-audit-discovery: false
 
     transformations:
@@ -140,6 +148,20 @@ subscriptions:
     recreate-stopped-subscriptions: true
     recreate-subscription-grace-period: -1
 
+history:
+    #아래 내용은 필수
+    # Enable/disable history synchronization from the OPC-UA server to CDF.
+    # This is a master switch covering both events and data
+    enabled: false
+    # Enable or disable data history on nodes with history. "Enabled" must be true.
+    # By default nodes with AccessLevel ReadHistory are read.
+    data: false
+    # 추가 필요한 설정:
+    throttling:
+    max-per-minute: 0           # 분당 최대 history 요청 수
+    max-parallelism: 0          # 최대 병렬 history 요청 수
+    max-node-parallelism: 100   # ← 이 값을 0보다 크게 설정 (예: 100)
+
 logger:
     # Writes log events at this level to the Console. One of verbose, debug, information, warning, error, fatal.
     # If not present, or if the level is invalid, Console is not used.
@@ -147,7 +169,7 @@ logger:
         level: "information"
     file:
         level: "information"
-        path: "/logs/log.txt"
+        path: "logs/log.txt"
 
 metrics:
     # otherMetrics:
@@ -156,7 +178,8 @@ metrics:
 
 influx-db-metrics:
     enabled: true
-    url: "http://192.168.11.116:58086"
+#    url: "http://192.168.11.116:58086"
+    url: "http://192.168.11.115:8086"
     database: "opcua_metrics"
     username: "admin"
     password: "admin"
@@ -230,21 +253,29 @@ mqtt:
     mqtt-transmission-strategy: 
 
          #running setting
-        data-group-by: TAG_CHANGE_BASED
-        
-#        # NEW UNIFIED FORMAT: Advanced publish groups with selectors and exclusions
-#        # Supports both ROOT_NODE_BASED and TAG_LIST_BASED strategies
+        data-group-by: ROOT_NODE_BASED
         publish-groups:
-#          # Group B: High-priority S.A tags that need separate handling
           - name: "S_A_TagGroup-A"
             selectors:
-              # Pattern for critical sensors
               - pattern: "s=S\\.A\\.TagGroup-A\\..*"
 
           - name: "S_A_TagGroup-B"
             selectors:
-#              # Pattern for critical sensors
               - pattern: "s=S\\.A\\.TagGroup-B\\..*"
+
+#        # NEW UNIFIED FORMAT: Advanced publish groups with selectors and exclusions
+#        # Supports both ROOT_NODE_BASED and TAG_LIST_BASED strategies
+#        publish-groups:
+#          # Group B: High-priority S.A tags that need separate handling
+#          - name: "S_A_TagGroup-A"
+#            selectors:
+#              # Pattern for critical sensors
+#              - pattern: "s=S\\.A\\.TagGroup-A\\..*"
+
+#          - name: "S_A_TagGroup-B"
+#            selectors:
+#              # Pattern for critical sensors
+#              - pattern: "s=S\\.A\\.TagGroup-B\\..*"
 
           - name: "S_A_Tags"
             selectors:
@@ -286,6 +317,81 @@ mqtt:
 #              # Pattern for critical sensors
 #              - pattern: "s=S\\.A\\.Critical\\..*"
 
+#         data-group-by: TAG_LIST_BASED
+#         publish-groups:
+        #   # Group 1: Quality control KPI tags from different lines
+#           - name: "S.A.TagGroup-A"
+#             selectors:
+#               - tags:
+#                   - "s=S.A.TagGroup-A.Tag001"
+#                   - "s=S.A.TagGroup-A.Tag002"
+#                   - "s=S.A.TagGroup-A.Tag003"
+#                   - "s=S.A.TagGroup-A.Tag004"
+#                   - "s=S.A.TagGroup-A.Tag005"
+#                   - "s=S.A.TagGroup-A.Tag006"
+#                   - "s=S.A.TagGroup-A.Tag007"
+#                   - "s=S.A.TagGroup-A.Tag008"
+#                   - "s=S.A.TagGroup-A.Tag009"
+#                   - "s=S.A.TagGroup-A.Tag010"
+#                   - "s=S.A.TagGroup-A.Tag011"
+#                   - "s=S.A.TagGroup-A.Tag012"
+#                   - "s=S.A.TagGroup-A.Tag013"
+#                   - "s=S.A.TagGroup-A.Tag014"
+#                   - "s=S.A.TagGroup-A.Tag015"
+#                   - "s=S.A.TagGroup-A.Tag016"
+#                   - "s=S.A.TagGroup-A.Tag017"
+#                   - "s=S.A.TagGroup-A.Tag018"
+#                   - "s=S.A.TagGroup-A.Tag019"
+#                   - "s=S.A.TagGroup-A.Tag020"
+        #   
+        #   # Group 2: All motor data but exclude test motors
+#           - name: "S.A.TagGroup-B"
+#             selectors:
+#               - pattern: "s=S\\.A\\.TagGroup-B\\..*"
 
+
+#           - name: "S.A.Tags"
+#             selectors:
+#               - prefix: "s=S.A"
+#                 exclude:
+                  # Exclude specific admin/maintenance tags
+#                   tags:
+#                     - "s=S.A.Tag1"
+#                     - "s=S.A.Tag2"
+#                     - "s=S.A.Tag3"
+#                     - "s=S.A.Tag4"
+#                     - "s=S.A.Tag5"
+#                     - "s=S.A.Tag6"
+#                     - "s=S.A.Tag7"
+#                     - "s=S.A.Tag8"
+#                     - "s=S.A.Tag9"
+#                     - "s=S.A.Tag10"
+#                     - "s=S.A.Tag11"
+#                     - "s=S.A.Tag12"
+#                     - "s=S.A.Tag13"
+#                     - "s=S.A.Tag14"
+#                     - "s=S.A.Tag15"
+#                     - "s=S.A.Tag16"
+#                     - "s=S.A.Tag17"
+#                     - "s=S.A.Tag18"
+#                     - "s=S.A.Tag19"
+#                     - "s=S.A.Tag20"
+                  # Exclude all diagnostics folder content
+#                  patterns:
+#                    - "s=S\\.A\\.Diagnostics\\..*"
+#                    - "s=S\\.A\\._System\\..*"
+        #   
+        #   # Group 2: All motor data but exclude test motors
+#           - name: "S.A.TagGroup-B"
+#             selectors:
+#               - pattern: "s=S\\.A\\.TagGroup-B\\..*"
+        #         exclude:
+        #           patterns:
+        #             - "s=.*\\.TestMotor\\..*"
+        #   
+        #   # Group 3: Catch-all for other analog values
+        #   - name: "Other-Analog-Values"
+        #     selectors:
+        #       - pattern: "s=.*\\.AnalogInput.*"
 
 

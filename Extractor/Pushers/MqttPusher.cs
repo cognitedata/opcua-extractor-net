@@ -122,6 +122,35 @@ namespace Cognite.OpcUa.Pushers
         }
 
         /// <summary>
+        /// Remove OPC UA NodeId type prefixes (s=, i=, g=, b=) from the given ID string
+        /// </summary>
+        /// <param name="nodeId">NodeId string that may contain type prefixes</param>
+        /// <returns>NodeId string without type prefixes</returns>
+        private string RemoveNodeIdPrefix(string nodeId)
+        {
+            if (string.IsNullOrEmpty(nodeId)) return nodeId;
+
+            // Remove namespace prefix first (ns=X;)
+            var idWithoutNamespace = nodeId;
+            var nsIndex = nodeId.IndexOf(';');
+            if (nsIndex >= 0 && nodeId.StartsWith("ns="))
+            {
+                idWithoutNamespace = nodeId.Substring(nsIndex + 1);
+            }
+
+            // Remove type prefixes: s=, i=, g=, b=
+            if (idWithoutNamespace.StartsWith("s=") || 
+                idWithoutNamespace.StartsWith("i=") || 
+                idWithoutNamespace.StartsWith("g=") || 
+                idWithoutNamespace.StartsWith("b="))
+            {
+                return idWithoutNamespace.Substring(2);
+            }
+
+            return idWithoutNamespace;
+        }
+
+        /// <summary>
         /// Constructor, also starts the client and sets up correct disconnect handlers.
         /// </summary>
         /// <param name="config">Config to use</param>
@@ -920,7 +949,7 @@ namespace Cognite.OpcUa.Pushers
                     // For ROOT_NODE_BASED and TAG_LIST_BASED, use publish-groups.name
                     if (!string.IsNullOrEmpty(groupKey))
                     {
-                        metadata["publish_group_name"] = groupKey;
+                        metadata["publish_group_name"] = RemoveNodeIdPrefix(groupKey);
                     }
                     break;
 
@@ -961,7 +990,7 @@ namespace Cognite.OpcUa.Pushers
                     // For TAG_CHANGE_BASED, use the individual tag ID
                     if (!string.IsNullOrEmpty(groupKey))
                     {
-                        metadata["publish_group_name"] = groupKey;
+                        metadata["publish_group_name"] = RemoveNodeIdPrefix(groupKey);
                     }
                     break;
             }
@@ -1063,7 +1092,7 @@ namespace Cognite.OpcUa.Pushers
                         var latestDataPoint = tagGroup.OrderByDescending(dp => dp.Timestamp).FirstOrDefault();
                         if (latestDataPoint != null)
                         {
-                            payload[tagGroup.Key] = latestDataPoint.IsString ? 
+                            payload[RemoveNodeIdPrefix(tagGroup.Key)] = latestDataPoint.IsString ? 
                                 (object)(latestDataPoint.StringValue ?? "") : 
                                 (latestDataPoint.DoubleValue ?? 0);
                         }
@@ -1075,7 +1104,7 @@ namespace Cognite.OpcUa.Pushers
                     var latestDataPoint = kvp.Value.OrderByDescending(dp => dp.Timestamp).FirstOrDefault();
                     if (latestDataPoint != null)
                     {
-                        payload[kvp.Key] = latestDataPoint.IsString ? 
+                        payload[RemoveNodeIdPrefix(kvp.Key)] = latestDataPoint.IsString ? 
                             (object)(latestDataPoint.StringValue ?? "") : 
                             (latestDataPoint.DoubleValue ?? 0);
                     }
@@ -1131,7 +1160,7 @@ namespace Cognite.OpcUa.Pushers
                 {
                     tagsData.Add(new Dictionary<string, object>
                     {
-                        ["tag"] = tagGroup.Key, // Individual Tag ID (e.g., "S.A.Tag1")
+                        ["tag"] = RemoveNodeIdPrefix(tagGroup.Key), // Individual Tag ID without prefixes (e.g., "S.A.Tag1")
                         ["data"] = tagGroup.Value.Select(dp => CreateDataPointObject(dp)).ToList() // All datapoints for this tag
                     });
                 }
@@ -1146,7 +1175,7 @@ namespace Cognite.OpcUa.Pushers
                 // For other strategies (CHUNK_BASED, TAG_CHANGE_BASED), use the original logic
                 var tagsData = chunk.Select(kvp => new Dictionary<string, object>
                 {
-                    ["tag"] = kvp.Key,
+                    ["tag"] = RemoveNodeIdPrefix(kvp.Key),
                     ["data"] = kvp.Value.Select(dp => CreateDataPointObject(dp)).ToList()
                 }).ToList();
 
@@ -1240,7 +1269,7 @@ namespace Cognite.OpcUa.Pushers
         {
             var tagObj = new Dictionary<string, object>
             {
-                [tagId] = dp.IsString ? (object)(dp.StringValue ?? "") : (dp.DoubleValue ?? 0)
+                [RemoveNodeIdPrefix(tagId)] = dp.IsString ? (object)(dp.StringValue ?? "") : (dp.DoubleValue ?? 0)
             };
 
             if (config.IncludeDataType)

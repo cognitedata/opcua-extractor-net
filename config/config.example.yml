@@ -798,7 +798,7 @@ extraction:
     # Alternatively, use N[timeunit] where timeunit is w, d, h, m, s or ms.
     # You may also use a cron expression on the form "[minute] [hour] [day of month] [month] [day of week]"
     # See https://crontab.cronhub.io/
-    auto-rebrowse-period: 0
+    auto-rebrowse-period: "55 * * * *"
     # Enable using audit events to discover new nodes. If this is set to true, the client will expect AuditAddNodes/AuditAddReferences
     # events on the server node. These will be used to add new nodes automatically, by recursively browsing from each given ParentId.
     enable-audit-discovery:
