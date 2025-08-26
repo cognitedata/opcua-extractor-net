@@ -887,6 +887,7 @@ namespace Cognite.OpcUa
                 }
             }
             BuildTransformations();
+            CompileMqttPatterns();
 
             var helper = new ServerInfoHelper(Provider.GetRequiredService<ILogger<ServerInfoHelper>>(), uaClient);
             var oldHistoryPar = Config.History.Throttling.MaxNodeParallelism;
@@ -900,6 +901,20 @@ namespace Cognite.OpcUa
             if (oldBrowsePar != Config.Source.BrowseThrottling.MaxNodeParallelism)
             {
                 uaClient.Browser.MaxNodeParallelismChanged();
+            }
+        }
+
+        private void CompileMqttPatterns()
+        {
+            if (Config.Mqtt?.TransmissionStrategyConfig?.PublishGroups == null) return;
+
+            foreach (var group in Config.Mqtt.TransmissionStrategyConfig.PublishGroups)
+            {
+                if (group.Selectors == null) continue;
+                foreach (var selector in group.Selectors)
+                {
+                    selector.CompilePattern();
+                }
             }
         }
 

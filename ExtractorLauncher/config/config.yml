@@ -57,18 +57,18 @@ extraction:
           node-id: "s=S.C"
         - namespace-uri: "KEPServerEX"
           node-id: "s=S.D"
-#        - namespace-uri: "KEPServerEX"
-#          node-id: "s=S.E"
-#        - namespace-uri: "KEPServerEX"
-#          node-id: "s=S.F"
-#        - namespace-uri: "KEPServerEX"
-#          node-id: "s=S.G"
-#        - namespace-uri: "KEPServerEX"
-#          node-id: "s=S.H"
-#        - namespace-uri: "KEPServerEX"
-#          node-id: "s=S.I"
-#        - namespace-uri: "KEPServerEX"
-#          node-id: "s=S.J"
+        - namespace-uri: "KEPServerEX"
+          node-id: "s=S.E"
+        - namespace-uri: "KEPServerEX"
+          node-id: "s=S.F"
+        - namespace-uri: "KEPServerEX"
+          node-id: "s=S.G"
+        - namespace-uri: "KEPServerEX"
+          node-id: "s=S.H"
+        - namespace-uri: "KEPServerEX"
+          node-id: "s=S.I"
+        - namespace-uri: "KEPServerEX"
+          node-id: "s=S.J"
 
 
 
@@ -157,24 +157,24 @@ extraction:
       - type: Ignore
         filter:
           id: "s=S.D._System"
-#      - type: Ignore
-#        filter:
-#          id: "s=S.E._System"
-#      - type: Ignore
-#        filter:
-#          id: "s=S.F._System"
-#      - type: Ignore
-#        filter:
-#          id: "s=S.G._System"
-#      - type: Ignore
-#        filter:
-#          id: "s=S.H._System"
-#      - type: Ignore
-#        filter:
-#          id: "s=S.I._System"
-#      - type: Ignore
-#        filter:
-#          id: "s=S.J._System"
+      - type: Ignore
+        filter:
+          id: "s=S.E._System"
+      - type: Ignore
+        filter:
+          id: "s=S.F._System"
+      - type: Ignore
+        filter:
+          id: "s=S.G._System"
+      - type: Ignore
+        filter:
+          id: "s=S.H._System"
+      - type: Ignore
+        filter:
+          id: "s=S.I._System"
+      - type: Ignore
+        filter:
+          id: "s=S.J._System"
 
     # Configuration for ingesting status codes to CDF timeseries.
     status-codes:
@@ -348,40 +348,39 @@ mqtt:
 
           - name: "S_B_Tags"
             selectors:
-              - prefix: "s=S.B"
-
+              - pattern: "s=S\\.B\\.[^.]*$"
 
           - name: "S_C_Tags"
             selectors:
-              - prefix: "s=S.C"
+              - pattern: "s=S\\.C\\.[^.]*$"
 
           - name: "S_D_Tags"
             selectors:
-              - prefix: "s=S.D"
+              - pattern: "s=S\\.D\\.[^.]*$"
 
           - name: "S_E_Tags"
             selectors:
-              - prefix: "s=S.E"
+              - pattern: "s=S\\.E\\.[^.]*$"
 
           - name: "S_F_Tags"
             selectors:
-              - prefix: "s=S.F"
+              - pattern: "s=S\\.F\\.[^.]*$"
 
           - name: "S_G_Tags"
             selectors:
-              - prefix: "s=S.G"
+              - pattern: "s=S\\.G\\.[^.]*$"
 
           - name: "S_H_Tags"
             selectors:
-              - prefix: "s=S.H"
+              - pattern: "s=S\\.H\\.[^.]*$"
 
           - name: "S_I_Tags"
             selectors:
-              - prefix: "s=S.I"
+              - pattern: "s=S\\.I\\.[^.]*$"
 
           - name: "S_J_Tags"
             selectors:
-              - prefix: "s=S.J"
+              - pattern: "s=S\\.J\\.[^.]*$"
 
 
 

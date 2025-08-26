@@ -15,6 +15,7 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Text.Json.Serialization;
@@ -113,6 +114,32 @@ namespace Cognite.OpcUa.Config
         /// </summary>
         [YamlDotNet.Serialization.YamlMember(Alias = "patterns")]
         public List<string>? Patterns { get; set; }
+
+        /// <summary>
+        /// Compiled regex patterns.
+        /// </summary>
+        [YamlDotNet.Serialization.YamlIgnore]
+        public List<Regex>? CompiledPatterns { get; private set; }
+
+        /// <summary>
+        /// Pre-compiles the regex patterns.
+        /// </summary>
+        public void CompilePatterns()
+        {
+            if (Patterns == null) return;
+            CompiledPatterns = new List<Regex>();
+            foreach (var pattern in Patterns)
+            {
+                try
+                {
+                    CompiledPatterns.Add(new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.Compiled));
+                }
+                catch (ArgumentException)
+                {
+                    // Ignore invalid patterns
+                }
+            }
+        }
     }
 
     /// <summary>
@@ -141,10 +168,36 @@ namespace Cognite.OpcUa.Config
         public string? Pattern { get; set; }
 
         /// <summary>
+        /// Compiled regex pattern.
+        /// </summary>
+        [YamlDotNet.Serialization.YamlIgnore]
+        public Regex? CompiledPattern { get; private set; }
+
+        /// <summary>
         /// Exclusion rules to filter out specific tags from this selector.
         /// </summary>
         [YamlDotNet.Serialization.YamlMember(Alias = "exclude")]
         public ExcludeConfig? Exclude { get; set; }
+
+        /// <summary>
+        /// Pre-compiles the regex pattern.
+        /// </summary>
+        public void CompilePattern()
+        {
+            if (Pattern != null)
+            {
+                try
+                {
+                    CompiledPattern = new Regex(Pattern, RegexOptions.IgnoreCase | RegexOptions.Compiled);
+                }
+                catch (ArgumentException)
+                {
+                    // Ignore invalid patterns
+                }
+            }
+
+            Exclude?.CompilePatterns();
+        }
     }
 
     /// <summary>

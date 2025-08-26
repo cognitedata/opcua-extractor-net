@@ -310,7 +310,9 @@ namespace Cognite.OpcUa.Utils
                 var startTime = DateTime.UtcNow;
                 try
                 {
-                    var regex = new Regex(selector.Pattern, RegexOptions.IgnoreCase | RegexOptions.Compiled);
+                    var regex = selector.CompiledPattern;
+                    if (regex == null) return (false, 0);
+
                     var match = regex.Match(nodeId);
                     if (match.Success)
                     {
@@ -340,13 +342,12 @@ namespace Cognite.OpcUa.Utils
                 }
 
                 // Check excluded patterns
-                if (!isExcluded && selector.Exclude.Patterns != null)
+                if (!isExcluded && selector.Exclude.CompiledPatterns != null)
                 {
-                    foreach (var excludePattern in selector.Exclude.Patterns)
+                    foreach (var excludeRegex in selector.Exclude.CompiledPatterns)
                     {
                         try
                         {
-                            var excludeRegex = new Regex(excludePattern, RegexOptions.IgnoreCase | RegexOptions.Compiled);
                             if (excludeRegex.IsMatch(nodeId))
                             {
                                 isExcluded = true;
@@ -397,12 +398,11 @@ namespace Cognite.OpcUa.Utils
                     logger?.LogTrace("[Selector] Tag exact match: {NodeId}", nodeId);
                 }
             }
-            else if (!string.IsNullOrEmpty(selector.Pattern))
+            else if (selector.CompiledPattern != null)
             {
                 try
                 {
-                    var regex = new Regex(selector.Pattern, RegexOptions.IgnoreCase | RegexOptions.Compiled);
-                    var match = regex.Match(nodeId);
+                    var match = selector.CompiledPattern.Match(nodeId);
                     if (match.Success)
                     {
                         isMatch = true;
@@ -430,24 +430,23 @@ namespace Cognite.OpcUa.Utils
                 }
 
                 // Check excluded patterns
-                if (!isExcluded && selector.Exclude.Patterns != null)
+                if (!isExcluded && selector.Exclude.CompiledPatterns != null)
                 {
-                    foreach (var excludePattern in selector.Exclude.Patterns)
+                    foreach (var excludeRegex in selector.Exclude.CompiledPatterns)
                     {
                         try
                         {
-                            var excludeRegex = new Regex(excludePattern, RegexOptions.IgnoreCase | RegexOptions.Compiled);
                             if (excludeRegex.IsMatch(nodeId))
                             {
                                 isExcluded = true;
                                 logger?.LogTrace("[Selector] Excluded by pattern: '{Pattern}' -> {NodeId}", 
-                                    excludePattern, nodeId);
+                                    excludeRegex.ToString(), nodeId);
                                 break;
                             }
                         }
                         catch (Exception ex)
                         {
-                            logger?.LogWarning(ex, "[Selector] Invalid exclude regex pattern: {Pattern}", excludePattern);
+                            logger?.LogWarning(ex, "[Selector] Invalid exclude regex pattern: {Pattern}", excludeRegex.ToString());
                         }
                     }
                 }
