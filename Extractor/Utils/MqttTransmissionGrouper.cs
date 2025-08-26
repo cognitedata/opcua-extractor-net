@@ -306,8 +306,13 @@ namespace Cognite.OpcUa.Utils
             var groupedDataPoints = new Dictionary<string, List<UADataPoint>>();
             var processedDataPoints = new HashSet<string>();
 
+            // Start timing for group processing
+            var groupProcessingStartTime = DateTime.UtcNow;
+            logger.LogInformation("-----------------------------");
             logger.LogInformation("[PUBLISH_GROUPS] Processing {Count} datapoints using {Strategy} strategy", 
                 dataPoints.Count, usePrefixMatching ? "ROOT_NODE_BASED" : "TAG_LIST_BASED");
+            
+            // Statistics tracking is now handled by MqttGroupingHelper
 
             // Get namespace table from client for node ID resolution
             NamespaceTable? namespaceTable = null;
@@ -320,6 +325,14 @@ namespace Cognite.OpcUa.Utils
                 logger.LogTrace(ex, "[PUBLISH_GROUPS] Could not get namespace table from client");
             }
 
+            // Use the new batch processing method with statistics
+            var (groupingResults, groupingStats) = MqttGroupingHelper.FindGroupNamesForNodes(
+                dataPoints, 
+                publishGroups, 
+                usePrefixMatching,
+                namespaceTable,
+                logger);
+
             foreach (var dataPoint in dataPoints)
             {
                 // Skip if already processed (for TAG_LIST_BASED "first match wins")
@@ -328,12 +341,7 @@ namespace Cognite.OpcUa.Utils
                     continue;
                 }
 
-                var groupName = MqttGroupingHelper.FindGroupNameForNode(
-                    dataPoint.Id, 
-                    publishGroups, 
-                    usePrefixMatching,
-                    namespaceTable,
-                    logger);
+                var groupName = groupingResults.ContainsKey(dataPoint.Id) ? groupingResults[dataPoint.Id] : null;
 
                 if (!string.IsNullOrEmpty(groupName))
                 {
@@ -365,7 +373,11 @@ namespace Cognite.OpcUa.Utils
                 }
             }
 
+            var groupProcessingEndTime = DateTime.UtcNow;
+            var groupProcessingDuration = groupProcessingEndTime - groupProcessingStartTime;
+            
             logger.LogInformation("[PUBLISH_GROUPS] Grouped into {GroupCount} publish groups", groupedDataPoints.Count);
+            logger.LogInformation("[PUBLISH_GROUPS] Total group processing took {Duration}ms", groupProcessingDuration.TotalMilliseconds);
             
             // Log group summary
             foreach (var kvp in groupedDataPoints.OrderBy(x => x.Key))
@@ -373,6 +385,8 @@ namespace Cognite.OpcUa.Utils
                 logger.LogInformation("[PUBLISH_GROUPS] Group '{GroupName}': {DataPointCount} datapoints", 
                     kvp.Key, kvp.Value.Count);
             }
+            
+            logger.LogInformation("-----------------------------");
 
             return groupedDataPoints.Select(kvp => new KeyValuePair<string, IEnumerable<UADataPoint>>(kvp.Key, kvp.Value));
         }

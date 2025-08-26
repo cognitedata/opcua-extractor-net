@@ -31,6 +31,19 @@ namespace Cognite.OpcUa.Utils
     public static class MqttGroupingHelper
     {
         /// <summary>
+        /// Statistics for grouping operations
+        /// </summary>
+        public class GroupingStats
+        {
+            public int PrefixMatches { get; set; }
+            public int RegexMatches { get; set; }
+            public int TagMatches { get; set; }
+            public double PrefixTotalMs { get; set; }
+            public double RegexTotalMs { get; set; }
+            public double TagTotalMs { get; set; }
+        }
+
+        /// <summary>
         /// Finds the appropriate group name for a given node ID based on publish groups configuration.
         /// </summary>
         /// <param name="nodeId">The node ID to find a group for</param>
@@ -70,6 +83,58 @@ namespace Cognite.OpcUa.Utils
                 // TAG_LIST_BASED: "First matching rule wins" - use the first group that matches
                 return FindFirstMatch(resolvedNodeId, publishGroups, logger);
             }
+        }
+
+        /// <summary>
+        /// Finds the appropriate group name for multiple nodes and returns grouping statistics.
+        /// </summary>
+        public static (Dictionary<string, string?> Results, GroupingStats Stats) FindGroupNamesForNodes(
+            IList<Cognite.OpcUa.Types.UADataPoint> dataPoints,
+            List<PublishGroup> publishGroups,
+            bool usePrefixMatching,
+            NamespaceTable? namespaceTable = null,
+            ILogger? logger = null)
+        {
+            var results = new Dictionary<string, string?>();
+            var stats = new GroupingStats();
+            
+            var overallStartTime = DateTime.UtcNow;
+
+            foreach (var dataPoint in dataPoints)
+            {
+                var result = FindGroupNameForNodeWithStats(dataPoint.Id, publishGroups, usePrefixMatching, namespaceTable, stats);
+                results[dataPoint.Id] = result;
+            }
+
+            var overallEndTime = DateTime.UtcNow;
+            var overallDuration = overallEndTime - overallStartTime;
+
+            // Log aggregated statistics
+            logger?.LogInformation("-----------------------------");
+            logger?.LogInformation("[Grouping Stats] Processed {Count} datapoints in {Duration}ms", 
+                dataPoints.Count, overallDuration.TotalMilliseconds);
+            
+            if (stats.PrefixMatches > 0)
+            {
+                logger?.LogInformation("[Prefix Stats] {Count} prefix matches, avg {AvgMs:F2}ms per match, total {TotalMs:F2}ms", 
+                    stats.PrefixMatches, stats.PrefixTotalMs / stats.PrefixMatches, stats.PrefixTotalMs);
+            }
+            
+            if (stats.RegexMatches > 0)
+            {
+                logger?.LogInformation("[RegExp Stats] {Count} regex matches, avg {AvgMs:F2}ms per match, total {TotalMs:F2}ms", 
+                    stats.RegexMatches, stats.RegexTotalMs / stats.RegexMatches, stats.RegexTotalMs);
+            }
+            
+            if (stats.TagMatches > 0)
+            {
+                logger?.LogInformation("[Tag Stats] {Count} exact tag matches, avg {AvgMs:F2}ms per match, total {TotalMs:F2}ms", 
+                    stats.TagMatches, stats.TagTotalMs / stats.TagMatches, stats.TagTotalMs);
+            }
+            
+            logger?.LogInformation("-----------------------------");
+
+            return (results, stats);
         }
 
         /// <summary>
@@ -125,6 +190,184 @@ namespace Cognite.OpcUa.Utils
 
             logger?.LogTrace("[TAG_LIST_BASED] No match found");
             return null;
+        }
+
+        /// <summary>
+        /// Finds group name for a single node with statistics collection
+        /// </summary>
+        private static string? FindGroupNameForNodeWithStats(
+            string nodeId,
+            List<PublishGroup> publishGroups,
+            bool usePrefixMatching,
+            NamespaceTable? namespaceTable,
+            GroupingStats stats)
+        {
+            if (string.IsNullOrEmpty(nodeId) || publishGroups == null || !publishGroups.Any())
+            {
+                return null;
+            }
+
+            // Resolve short-form string identifiers to full namespace format if needed
+            var resolvedNodeId = ResolveNodeIdNamespace(nodeId, namespaceTable, null);
+
+            if (usePrefixMatching)
+            {
+                // ROOT_NODE_BASED: "Most specific rule wins" - find the longest matching prefix/pattern
+                return FindMostSpecificMatchWithStats(resolvedNodeId, publishGroups, stats);
+            }
+            else
+            {
+                // TAG_LIST_BASED: "First matching rule wins" - use the first group that matches
+                return FindFirstMatchWithStats(resolvedNodeId, publishGroups, stats);
+            }
+        }
+
+        /// <summary>
+        /// ROOT_NODE_BASED logic with statistics collection
+        /// </summary>
+        private static string? FindMostSpecificMatchWithStats(string nodeId, List<PublishGroup> publishGroups, GroupingStats stats)
+        {
+            string? bestMatch = null;
+            int bestMatchLength = 0;
+
+            foreach (var group in publishGroups)
+            {
+                if (string.IsNullOrEmpty(group.Name) || group.Selectors == null)
+                    continue;
+
+                foreach (var selector in group.Selectors)
+                {
+                    var matchResult = EvaluateSelectorWithStats(nodeId, selector, stats);
+                    if (matchResult.IsMatch && matchResult.MatchLength > bestMatchLength)
+                    {
+                        bestMatch = group.Name;
+                        bestMatchLength = matchResult.MatchLength;
+                    }
+                }
+            }
+
+            return bestMatch;
+        }
+
+        /// <summary>
+        /// TAG_LIST_BASED logic with statistics collection
+        /// </summary>
+        private static string? FindFirstMatchWithStats(string nodeId, List<PublishGroup> publishGroups, GroupingStats stats)
+        {
+            foreach (var group in publishGroups)
+            {
+                if (string.IsNullOrEmpty(group.Name) || group.Selectors == null)
+                    continue;
+
+                foreach (var selector in group.Selectors)
+                {
+                    var matchResult = EvaluateSelectorWithStats(nodeId, selector, stats);
+                    if (matchResult.IsMatch)
+                    {
+                        return group.Name;
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Evaluates whether a node ID matches a selector's criteria and is not excluded, with statistics collection.
+        /// </summary>
+        private static (bool IsMatch, int MatchLength) EvaluateSelectorWithStats(string nodeId, SelectorConfig selector, GroupingStats stats)
+        {
+            bool isMatch = false;
+            int matchLength = 0;
+
+            // Check inclusion criteria
+            if (!string.IsNullOrEmpty(selector.Prefix))
+            {
+                var startTime = DateTime.UtcNow;
+                if (nodeId.StartsWith(selector.Prefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    isMatch = true;
+                    matchLength = selector.Prefix.Length;
+                }
+                var endTime = DateTime.UtcNow;
+                stats.PrefixMatches++;
+                stats.PrefixTotalMs += (endTime - startTime).TotalMilliseconds;
+            }
+            else if (selector.Tags != null && selector.Tags.Any())
+            {
+                var startTime = DateTime.UtcNow;
+                if (selector.Tags.Contains(nodeId, StringComparer.OrdinalIgnoreCase))
+                {
+                    isMatch = true;
+                    matchLength = nodeId.Length; // Exact match gets full length
+                }
+                var endTime = DateTime.UtcNow;
+                stats.TagMatches++;
+                stats.TagTotalMs += (endTime - startTime).TotalMilliseconds;
+            }
+            else if (!string.IsNullOrEmpty(selector.Pattern))
+            {
+                var startTime = DateTime.UtcNow;
+                try
+                {
+                    var regex = new Regex(selector.Pattern, RegexOptions.IgnoreCase | RegexOptions.Compiled);
+                    var match = regex.Match(nodeId);
+                    if (match.Success)
+                    {
+                        isMatch = true;
+                        matchLength = match.Length;
+                    }
+                }
+                catch (Exception)
+                {
+                    // Ignore regex errors in stats collection
+                }
+                var endTime = DateTime.UtcNow;
+                stats.RegexMatches++;
+                stats.RegexTotalMs += (endTime - startTime).TotalMilliseconds;
+            }
+
+            // Check exclusion criteria if matched (without detailed timing for exclude patterns)
+            if (isMatch && selector.Exclude != null)
+            {
+                bool isExcluded = false;
+
+                // Check excluded tags
+                if (selector.Exclude.Tags != null && 
+                    selector.Exclude.Tags.Contains(nodeId, StringComparer.OrdinalIgnoreCase))
+                {
+                    isExcluded = true;
+                }
+
+                // Check excluded patterns
+                if (!isExcluded && selector.Exclude.Patterns != null)
+                {
+                    foreach (var excludePattern in selector.Exclude.Patterns)
+                    {
+                        try
+                        {
+                            var excludeRegex = new Regex(excludePattern, RegexOptions.IgnoreCase | RegexOptions.Compiled);
+                            if (excludeRegex.IsMatch(nodeId))
+                            {
+                                isExcluded = true;
+                                break;
+                            }
+                        }
+                        catch (Exception)
+                        {
+                            // Ignore regex errors
+                        }
+                    }
+                }
+
+                if (isExcluded)
+                {
+                    isMatch = false;
+                    matchLength = 0;
+                }
+            }
+
+            return (isMatch, matchLength);
         }
 
         /// <summary>

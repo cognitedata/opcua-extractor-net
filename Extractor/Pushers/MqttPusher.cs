@@ -282,7 +282,8 @@ namespace Cognite.OpcUa.Pushers
                     {
                         try
                         {
-                            var result = await PushDataPointsChunk(groupedData, ct);
+                            var chunkStartTime = DateTime.UtcNow;
+                            var result = await PushDataPointsChunk(groupedData, chunkStartTime, ct);
                             return result;
                         }
                         catch (Exception ex)
@@ -376,7 +377,10 @@ namespace Cognite.OpcUa.Pushers
             // CRITICAL FIX: Enumerate and materialize the collection immediately to prevent infinite loops
             var allDataPointsList = allDataPoints.ToList();
             
-            log.LogInformation("[DEBUG] Starting transmission strategy grouping with {Strategy}. Total datapoints: {Count}", 
+            // Start timing for complete MQTT processing (including grouping)
+            var mqttProcessingStartTime = DateTime.UtcNow;
+            log.LogInformation("-----------------------------");
+            log.LogInformation("[STARTING GROUPING] Starting transmission strategy grouping with {Strategy}. Total datapoints: {Count}", 
                 config.GetEffectiveTransmissionStrategy(), allDataPointsList.Count);
             
             log.LogInformation("[MQTT PUSH DEBUG] About to call GroupDataPoints with {Count} datapoints", allDataPointsList.Count);
@@ -396,7 +400,7 @@ namespace Cognite.OpcUa.Pushers
                     group.Key, group.Value.Count());
             }
             
-            var result = await PushDataPointsChunk(convertedDataPointList, token);
+            var result = await PushDataPointsChunk(convertedDataPointList, mqttProcessingStartTime, token);
 
             if (!result)
             {
@@ -639,7 +643,7 @@ namespace Cognite.OpcUa.Pushers
         /// </summary>
         /// <param name="dataPointList">Datapoints to create, grouped by timeseries name.</param>
         /// <returns>True on success, false on failure</returns>
-        private async Task<bool> PushDataPointsChunk(IDictionary<string, IEnumerable<UADataPoint>> dataPointList, CancellationToken token)
+        private async Task<bool> PushDataPointsChunk(IDictionary<string, IEnumerable<UADataPoint>> dataPointList, DateTime mqttProcessingStartTime, CancellationToken token)
         {
             if (dataPointList == null || !dataPointList.Any()) return false;
             if (!client.IsConnected)
@@ -796,8 +800,14 @@ namespace Cognite.OpcUa.Pushers
 
                     // Calculate and log total transmitted datapoints
                     var totalTransmitted = dataPointList.Select(dp => (long)dp.Value.Count()).Sum();
+                    var mqttProcessingEndTime = DateTime.UtcNow;
+                    var mqttProcessingDuration = mqttProcessingEndTime - mqttProcessingStartTime;
+                    
                     log.LogInformation("[MQTT Total Success] Successfully transmitted {Count} datapoints to MQTT broker using {Strategy} strategy", 
                         totalTransmitted, config.GetEffectiveTransmissionStrategy());
+                    log.LogInformation("[MQTT Processing Time] Total MQTT transmission processing took {Duration}ms", 
+                        mqttProcessingDuration.TotalMilliseconds);
+                    log.LogInformation("-----------------------------");
                 }
                 else // Protobuf
         {

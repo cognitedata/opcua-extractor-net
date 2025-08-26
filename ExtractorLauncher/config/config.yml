@@ -22,15 +22,20 @@ source:
     endpoint-url: "opc.tcp://192.168.11.46:49320"  # KEPServer의 실제 IP와 포트로 변경
     # Publishing interval을 100ms로 설정하여 지연 최소화
     publishing-interval: 10000
+    # Sets the maximum number of nodes per call to the Browse service. 
+    # Large numbers are likely to exceed the server's tolerance. 
+    # Lower numbers greatly increase startup time."
     browse-nodes-chunk: 1
+    # Sets the maximum requested results per node for each call to the Browse service
+    # 간단히 설명해서 1개의 노드당 brow 가능한 최대 child nodes 개수 
     browse-chunk: 1000
 
-  # 추가 필요한 설정들:
+    # 필수 설정: Browse Throttling 제한
     limit-to-server-config: true  # 서버 설정 제한 사용 여부
     browse-throttling:
-       max-per-minute: 0           # 분당 최대 browse 요청 수
-       max-parallelism: 0          # 최대 병렬 browse 요청 수  
-       max-node-parallelism: 100   # ← 이 값을 0보다 크게 설정 (예: 100)
+       max-per-minute: 0           # 분당 최대 browse 요청 수 (0 = 무제한)
+       max-parallelism: 10         # 최대 병렬 browse 요청 수 (동시 실행 요청 수)
+       max-node-parallelism: 1    # 동시 처리 노드 수 (Continuation Points 제한)
 
 
 extraction:
@@ -46,8 +51,26 @@ extraction:
     root-nodes:
         - namespace-uri: "KEPServerEX"
           node-id: "s=S.A"
-        #- namespace-uri: "KEPServerEX"
-        #  node-id: "s=S.B"
+        - namespace-uri: "KEPServerEX"
+          node-id: "s=S.B"
+        - namespace-uri: "KEPServerEX"
+          node-id: "s=S.C"
+        - namespace-uri: "KEPServerEX"
+          node-id: "s=S.D"
+#        - namespace-uri: "KEPServerEX"
+#          node-id: "s=S.E"
+#        - namespace-uri: "KEPServerEX"
+#          node-id: "s=S.F"
+#        - namespace-uri: "KEPServerEX"
+#          node-id: "s=S.G"
+#        - namespace-uri: "KEPServerEX"
+#          node-id: "s=S.H"
+#        - namespace-uri: "KEPServerEX"
+#          node-id: "s=S.I"
+#        - namespace-uri: "KEPServerEX"
+#          node-id: "s=S.J"
+
+
 
     # KEPServer의 네임스페이스 매핑 - TAG_LIST_BASED 전략을 위해 빈 값으로 설정
     namespace-map:
@@ -115,7 +138,7 @@ extraction:
         estimate-array-sizes: false
 
 
-
+   
 
     # Time in minutes between each call to browse the OPC-UA directory, then push new nodes to destinations.
     auto-rebrowse-period: "55 * * * *"
@@ -125,6 +148,33 @@ extraction:
       - type: Ignore
         filter:
           id: "s=S.A._System"
+      - type: Ignore
+        filter:
+          id: "s=S.B._System"
+      - type: Ignore
+        filter:
+          id: "s=S.C._System"
+      - type: Ignore
+        filter:
+          id: "s=S.D._System"
+#      - type: Ignore
+#        filter:
+#          id: "s=S.E._System"
+#      - type: Ignore
+#        filter:
+#          id: "s=S.F._System"
+#      - type: Ignore
+#        filter:
+#          id: "s=S.G._System"
+#      - type: Ignore
+#        filter:
+#          id: "s=S.H._System"
+#      - type: Ignore
+#        filter:
+#          id: "s=S.I._System"
+#      - type: Ignore
+#        filter:
+#          id: "s=S.J._System"
 
     # Configuration for ingesting status codes to CDF timeseries.
     status-codes:
@@ -141,7 +191,7 @@ subscriptions:
         deadband-value: 0
     log-bad-values: true
     ignore-access-level: false
-    sampling-interval: 100
+    sampling-interval: 300
     queue-length: 1
     keep-alive-count: 10
     lifetime-count: 1000
@@ -168,7 +218,7 @@ logger:
     console:
         level: "information"
     file:
-        level: "verbose"
+        level: "information"
         path: "logs/log.txt"
 
 metrics:
@@ -176,8 +226,23 @@ metrics:
     #   - namespaceUri: "KEPServerEX"
     #     nodeId: "SomeCustomMetric"
 
+
+
+#influxdb에 저장되는 metric info
+#opcua_CurrentSessionCount
+#opcua_CurrentSubscriptionCount
+#opcua_PublishingIntervalCount
+#opcua_ServerViewCount
+#opcua_SessionAbortCount
+#opcua_SessionTimeoutCount
+#opcua_RejectedRequestsCount
+#opcua_RejectedSessionCount
+#opcua_SecurityRejectedRequestsCount
+#opcua_SecurityRejectedSessionCount
+
 influx-db-metrics:
     enabled: true
+    server-metrics: true
 #    url: "http://192.168.11.116:58086"
     url: "http://192.168.11.115:8086"
     database: "opcua_metrics"
@@ -257,11 +322,11 @@ mqtt:
         publish-groups:
           - name: "S_A_TagGroup-A"
             selectors:
-              - pattern: "s=S\\.A\\.TagGroup-A\\..*"
+              - prefix: "s=S.A.TagGroup-A"
 
           - name: "S_A_TagGroup-B"
             selectors:
-              - pattern: "s=S\\.A\\.TagGroup-B\\..*"
+              - prefix: "s=S.A.TagGroup-B"
 
 #        # NEW UNIFIED FORMAT: Advanced publish groups with selectors and exclusions
 #        # Supports both ROOT_NODE_BASED and TAG_LIST_BASED strategies
@@ -280,9 +345,44 @@ mqtt:
           - name: "S_A_Tags"
             selectors:
               - pattern: "s=S\\.A\\.[^.]*$"
-                exclude:
-                  patterns:
-                    - "s=S\\.A\\.Tag(?:[1-9]|1[0-9]|20)$"
+
+          - name: "S_B_Tags"
+            selectors:
+              - prefix: "s=S.B"
+
+
+          - name: "S_C_Tags"
+            selectors:
+              - prefix: "s=S.C"
+
+          - name: "S_D_Tags"
+            selectors:
+              - prefix: "s=S.D"
+
+          - name: "S_E_Tags"
+            selectors:
+              - prefix: "s=S.E"
+
+          - name: "S_F_Tags"
+            selectors:
+              - prefix: "s=S.F"
+
+          - name: "S_G_Tags"
+            selectors:
+              - prefix: "s=S.G"
+
+          - name: "S_H_Tags"
+            selectors:
+              - prefix: "s=S.H"
+
+          - name: "S_I_Tags"
+            selectors:
+              - prefix: "s=S.I"
+
+          - name: "S_J_Tags"
+            selectors:
+              - prefix: "s=S.J"
+
 
 
           #sample setting

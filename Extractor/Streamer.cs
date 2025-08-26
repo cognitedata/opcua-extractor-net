@@ -179,6 +179,7 @@ namespace Cognite.OpcUa
             // Log data drained from queue
             if (dataPointList.Count > 0)
             {
+                log.LogInformation("-----------------------------");
                 log.LogInformation("[Queue Drain] Drained {Count} datapoints from internal queue, processing {NodeCount} nodes", 
                     dataPointList.Count, pointRanges.Count);
             }
@@ -258,6 +259,7 @@ namespace Cognite.OpcUa
                 // Log total data drained from queue
                 if (totalProcessed > 0)
                 {
+                    log.LogInformation("-----------------------------");
                     log.LogInformation("[Queue Drain Streaming] Drained {Count} datapoints from internal queue, processing {NodeCount} nodes", 
                         totalProcessed, totalNodeIds.Count);
                 }
@@ -436,12 +438,12 @@ namespace Cognite.OpcUa
                 sequenceNumber = notification.Message?.SequenceNumber;
             }
 
-            // 추가: OPC UA 서버에서 받은 데이터포인트 수 로그 출력
+            // 진단: OPC UA 서버에서 받은 데이터포인트 수 로그 출력
             var dequeuedValues = item.DequeueValues().ToList();
-            if (dequeuedValues.Count > 0)
+            if (dequeuedValues.Count > 1)  // 1개보다 많으면 로그 출력
             {
-                // log.LogInformation("[OPC UA SERVER DATA] Tag '{TagId}' received {Count} datapoints from server", 
-                //     node.Id, dequeuedValues.Count);
+                log.LogInformation("[OPC UA QUEUE ISSUE] Tag '{TagId}' received {Count} datapoints from server (queue buildup detected)", 
+                    node.Id, dequeuedValues.Count);
             }
 
             foreach (var datapoint in dequeuedValues)
@@ -483,9 +485,12 @@ namespace Cognite.OpcUa
 
             var buffDps = ToDataPoint(datapoint, node, receivedTime, sequenceNumber).ToList();
             
-            // 추가: ToDataPoint에서 생성된 UADataPoint 수 로그 출력
-            // log.LogInformation("[DATAPOINT CONVERSION] Tag '{TagId}' converted to {Count} UADataPoints (SourceTimestamp: {Timestamp})", 
-            //     node.Id, buffDps.Count, datapoint.SourceTimestamp);
+            // 진단: Array 변수로 인한 중복 생성 확인
+            if (buffDps.Count > 1)
+            {
+                log.LogWarning("[ARRAY CONVERSION] Tag '{TagId}' converted to {Count} UADataPoints (Array variable detected, SourceTimestamp: {Timestamp})", 
+                    node.Id, buffDps.Count, datapoint.SourceTimestamp);
+            }
             
             if (StatusCode.IsGood(datapoint.StatusCode))
             {
