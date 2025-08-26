@@ -95,15 +95,68 @@ namespace Cognite.OpcUa.Utils
             NamespaceTable? namespaceTable = null,
             ILogger? logger = null)
         {
-            var results = new Dictionary<string, string?>();
             var stats = new GroupingStats();
-            
             var overallStartTime = DateTime.UtcNow;
+            Dictionary<string, string?> results;
 
-            foreach (var dataPoint in dataPoints)
+            if (usePrefixMatching)
             {
-                var result = FindGroupNameForNodeWithStats(dataPoint.Id, publishGroups, usePrefixMatching, namespaceTable, stats);
-                results[dataPoint.Id] = result;
+                // ROOT_NODE_BASED is more complex to optimize, as it needs to find the *best* match,
+                // so it must check all groups for each datapoint.
+                results = new Dictionary<string, string?>();
+                foreach (var dataPoint in dataPoints)
+                {
+                    var result = FindGroupNameForNodeWithStats(dataPoint.Id, publishGroups, usePrefixMatching, namespaceTable, stats);
+                    results[dataPoint.Id] = result;
+                }
+            }
+            else
+            {
+                // TAG_LIST_BASED: Optimized approach.
+                // A datapoint is assigned to the first group that matches it.
+                results = new Dictionary<string, string?>(dataPoints.Count);
+                var unassigned = dataPoints.ToDictionary(dp => dp.Id);
+                
+                var resolvedNodeIds = dataPoints.ToDictionary(
+                    dp => dp.Id,
+                    dp => ResolveNodeIdNamespace(dp.Id, namespaceTable, logger)
+                );
+
+                foreach (var group in publishGroups)
+                {
+                    if (!unassigned.Any()) break; // All datapoints have been grouped.
+
+                    var matchedIds = new List<string>();
+                    // Iterate over the current set of unassigned datapoints.
+                    foreach (var dp in unassigned.Values)
+                    {
+                        var resolvedId = resolvedNodeIds[dp.Id];
+                        // For TAG_LIST_BASED, a datapoint belongs to the first group that matches.
+                        // So we check all selectors for the current group.
+                        foreach (var selector in group.Selectors)
+                        {
+                            var matchResult = EvaluateSelectorWithStats(resolvedId, selector, stats);
+                            if (matchResult.IsMatch)
+                            {
+                                results[dp.Id] = group.Name;
+                                matchedIds.Add(dp.Id);
+                                break; // Move to the next datapoint
+                            }
+                        }
+                    }
+
+                    // Remove the newly matched datapoints from the unassigned pool.
+                    foreach (var id in matchedIds)
+                    {
+                        unassigned.Remove(id);
+                    }
+                }
+
+                // Any remaining datapoints have no group.
+                foreach (var id in unassigned.Keys)
+                {
+                    results[id] = null;
+                }
             }
 
             var overallEndTime = DateTime.UtcNow;
@@ -111,27 +164,27 @@ namespace Cognite.OpcUa.Utils
 
             // Log aggregated statistics
             logger?.LogInformation("-----------------------------");
-            logger?.LogInformation("[Grouping Stats] Processed {Count} datapoints in {Duration}ms", 
+            logger?.LogInformation("[Grouping Stats] Processed {Count} datapoints in {Duration}ms",
                 dataPoints.Count, overallDuration.TotalMilliseconds);
-            
+
             if (stats.PrefixMatches > 0)
             {
-                logger?.LogInformation("[Prefix Stats] {Count} prefix matches, avg {AvgMs:F2}ms per match, total {TotalMs:F2}ms", 
+                logger?.LogInformation("[Prefix Stats] {Count} prefix matches, avg {AvgMs:F2}ms per match, total {TotalMs:F2}ms",
                     stats.PrefixMatches, stats.PrefixTotalMs / stats.PrefixMatches, stats.PrefixTotalMs);
             }
-            
+
             if (stats.RegexMatches > 0)
             {
-                logger?.LogInformation("[RegExp Stats] {Count} regex matches, avg {AvgMs:F2}ms per match, total {TotalMs:F2}ms", 
+                logger?.LogInformation("[RegExp Stats] {Count} regex matches, avg {AvgMs:F2}ms per match, total {TotalMs:F2}ms",
                     stats.RegexMatches, stats.RegexTotalMs / stats.RegexMatches, stats.RegexTotalMs);
             }
-            
+
             if (stats.TagMatches > 0)
             {
-                logger?.LogInformation("[Tag Stats] {Count} exact tag matches, avg {AvgMs:F2}ms per match, total {TotalMs:F2}ms", 
+                logger?.LogInformation("[Tag Stats] {Count} exact tag matches, avg {AvgMs:F2}ms per match, total {TotalMs:F2}ms",
                     stats.TagMatches, stats.TagTotalMs / stats.TagMatches, stats.TagTotalMs);
             }
-            
+
             logger?.LogInformation("-----------------------------");
 
             return (results, stats);

@@ -34,7 +34,7 @@ source:
     limit-to-server-config: true  # 서버 설정 제한 사용 여부
     browse-throttling:
        max-per-minute: 0           # 분당 최대 browse 요청 수 (0 = 무제한)
-       max-parallelism: 10         # 최대 병렬 browse 요청 수 (동시 실행 요청 수)
+       max-parallelism: 1000         # 최대 병렬 browse 요청 수 (동시 실행 요청 수)
        max-node-parallelism: 1    # 동시 처리 노드 수 (Continuation Points 제한)
 
 
@@ -216,9 +216,9 @@ logger:
     # Writes log events at this level to the Console. One of verbose, debug, information, warning, error, fatal.
     # If not present, or if the level is invalid, Console is not used.
     console:
-        level: "information"
+        level: "verbose"
     file:
-        level: "information"
+        level: "verbose"
         path: "logs/log.txt"
 
 metrics:
@@ -311,36 +311,60 @@ mqtt:
     max-concurrency: 4
     
     # MQTT transmission strategy for grouping and sending data
-    # ROOT_NODE_BASED: Group by extraction.root-nodes configuration with "most specific rule wins"
-    # TAG_LIST_BASED: Group by specified tag lists with "first matching rule wins"
-    # CHUNK_BASED: Use existing chunking strategy (default) 
-    # TAG_CHANGE_BASED: Send based on OPC UA tag changes (subscription-based)
+    # ROOT_NODE_BASED(즉 "루트 노드를 기반으로 그룹핑한다"): Group by extraction.root-nodes configuration with "most specific rule wins"
+    # 사용 패턴: 이 전략은 OPC UA 서버의 **계층 구조(Hierarchy)**를 기반으로 노드를 그룹핑하기 위해 설계되었습니다. 
+    #          사용자는 설정 파일에 ns=2;s=Machine/Pump/와 같이 특정 "루트 노드"를 prefix로 지정하고, 
+    #          그 하위에 있는 모든 노드들을 하나의 그룹으로 묶으려한다.
+    # 알고리즘:  계층적 그룹핑을 올바르게 처리하려면, Machine/Pump/ 아래의 노드가 상위 규칙인 Machine/ 그룹이 아닌 Machine/Pump/ 그룹에 
+    #          정확히 할당되어야 하고, 이를 위해 "가장 구체적인 규칙 우선(MOST_SPECIFIC_RULE)" 알고리즘이 반드시 필요 함.
+
+    # TAG_LIST_BASED("태그 리스트를 기반으로 그룹핑한다"): Group by specified tag lists with "first matching rule wins"
+    # 사용 패턴: 이 전략은 계층 구조와 상관없이, 사용자가 명시적인 **태그 목록(Tag List)**을 제공하여 그룹을 구성하는 경우를 위해 설계되었습니다. 
+    #          "A 그룹에는 이 10개의 태그, B 그룹에는 저 20개의 태그" 와 같이 평면적인 목록을 사용하는 방식입니다.
+    # 알고리즘:  이 방식에서는 만약 하나의 태그가 실수로 여러 그룹의 목록에 포함되었을 때, 혼란을 피하기 위한 결정적인 규칙이 필요합니다. 
+    #          이때 가장 간단하고 직관적인 방법이 "설정 파일에 먼저 등장하는 그룹(규칙)에 할당"하는 FIRST_MATCHED_RULE 알고리즘입니다.
+    # CHUNK_BASED("조각화 기반"): Use existing chunking strategy (default) 
+    # TAG_CHANGE_BASED("태그 변경 기반"): Send based on OPC UA tag changes (subscription-based)
+
+
     mqtt-transmission-strategy: 
 
          #running setting
+         #MOST_SPECIFIC_RULE
         data-group-by: ROOT_NODE_BASED
-        publish-groups:
-          - name: "S_A_TagGroup-A"
-            selectors:
-              - prefix: "s=S.A.TagGroup-A"
 
-          - name: "S_A_TagGroup-B"
-            selectors:
-              - prefix: "s=S.A.TagGroup-B"
-
-#        # NEW UNIFIED FORMAT: Advanced publish groups with selectors and exclusions
-#        # Supports both ROOT_NODE_BASED and TAG_LIST_BASED strategies
 #        publish-groups:
-#          # Group B: High-priority S.A tags that need separate handling
 #          - name: "S_A_TagGroup-A"
 #            selectors:
-#              # Pattern for critical sensors
-#              - pattern: "s=S\\.A\\.TagGroup-A\\..*"
+#              - prefix: "s=S.A.TagGroup-A"
 
 #          - name: "S_A_TagGroup-B"
 #            selectors:
-#              # Pattern for critical sensors
-#              - pattern: "s=S\\.A\\.TagGroup-B\\..*"
+#              - prefix: "s=S.A.TagGroup-B"
+
+        # NEW UNIFIED FORMAT: Advanced publish groups with selectors and exclusions
+        # Supports both ROOT_NODE_BASED and TAG_LIST_BASED strategies
+        publish-groups:
+          # Group B: High-priority S.A tags that need separate handling
+          - name: "S_A_TagGroup-A"
+            selectors:
+              
+              - pattern: "s=S\\.A\\.TagGroup-A\\..*"
+                exclude:
+                  tags:
+                    - "s=S.A.TagGroup-A.Tag001"
+                    - "s=S.A.TagGroup-A.Tag002"
+                    - "s=S.A.TagGroup-A.Tag003"
+                    - "s=S.A.TagGroup-A.Tag004"
+                    - "s=S.A.TagGroup-A.Tag005"
+                    - "s=S.A.TagGroup-A.Tag006"
+                    - "s=S.A.TagGroup-A.Tag007"
+
+
+          - name: "S_A_TagGroup-B"
+            selectors:
+              # Pattern for critical sensors
+              - pattern: "s=S\\.A\\.TagGroup-B\\..*"
 
           - name: "S_A_Tags"
             selectors:
@@ -349,6 +373,7 @@ mqtt:
           - name: "S_B_Tags"
             selectors:
               - pattern: "s=S\\.B\\.[^.]*$"
+
 
           - name: "S_C_Tags"
             selectors:
@@ -416,38 +441,17 @@ mqtt:
 #              # Pattern for critical sensors
 #              - pattern: "s=S\\.A\\.Critical\\..*"
 
+
+
+
+
+
+
+
+         #FIRST_MATCHED_RULE
 #         data-group-by: TAG_LIST_BASED
 #         publish-groups:
         #   # Group 1: Quality control KPI tags from different lines
-#           - name: "S.A.TagGroup-A"
-#             selectors:
-#               - tags:
-#                   - "s=S.A.TagGroup-A.Tag001"
-#                   - "s=S.A.TagGroup-A.Tag002"
-#                   - "s=S.A.TagGroup-A.Tag003"
-#                   - "s=S.A.TagGroup-A.Tag004"
-#                   - "s=S.A.TagGroup-A.Tag005"
-#                   - "s=S.A.TagGroup-A.Tag006"
-#                   - "s=S.A.TagGroup-A.Tag007"
-#                   - "s=S.A.TagGroup-A.Tag008"
-#                   - "s=S.A.TagGroup-A.Tag009"
-#                   - "s=S.A.TagGroup-A.Tag010"
-#                   - "s=S.A.TagGroup-A.Tag011"
-#                   - "s=S.A.TagGroup-A.Tag012"
-#                   - "s=S.A.TagGroup-A.Tag013"
-#                   - "s=S.A.TagGroup-A.Tag014"
-#                   - "s=S.A.TagGroup-A.Tag015"
-#                   - "s=S.A.TagGroup-A.Tag016"
-#                   - "s=S.A.TagGroup-A.Tag017"
-#                   - "s=S.A.TagGroup-A.Tag018"
-#                   - "s=S.A.TagGroup-A.Tag019"
-#                   - "s=S.A.TagGroup-A.Tag020"
-        #   
-        #   # Group 2: All motor data but exclude test motors
-#           - name: "S.A.TagGroup-B"
-#             selectors:
-#               - pattern: "s=S\\.A\\.TagGroup-B\\..*"
-
 
 #           - name: "S.A.Tags"
 #             selectors:
@@ -479,8 +483,65 @@ mqtt:
 #                  patterns:
 #                    - "s=S\\.A\\.Diagnostics\\..*"
 #                    - "s=S\\.A\\._System\\..*"
+
+#           - name: "S_B_Tags"
+#             selectors:
+#              - pattern: "s=S\\.B\\.[^.]*$"
+
+
+#           - name: "S_C_Tags"
+#             selectors:
+#              - pattern: "s=S\\.C\\.[^.]*$"
+
+#           - name: "S_D_Tags"
+#             selectors:
+#              - pattern: "s=S\\.D\\.[^.]*$"
+
+#           - name: "S_E_Tags"
+#             selectors:
+#              - pattern: "s=S\\.E\\.[^.]*$"
+
+#           - name: "S_F_Tags"
+#             selectors:
+#              - pattern: "s=S\\.F\\.[^.]*$"
+
+#           - name: "S_G_Tags"
+#             selectors:
+#              - pattern: "s=S\\.G\\.[^.]*$"
+
+#           - name: "S_H_Tags"
+#             selectors:
+#              - pattern: "s=S\\.H\\.[^.]*$"
+
+#           - name: "S_I_Tags"
+#             selectors:
+#              - pattern: "s=S\\.I\\.[^.]*$"
+
+#           - name: "S_J_Tags"
+#             selectors:
+#              - pattern: "s=S\\.J\\.[^.]*$"
+
+#           - name: "S.A.TagGroup-A"
+#             selectors:
+#               - tags:
+#                   - "s=S.A.TagGroup-A.Tag001"
+#                   - "s=S.A.TagGroup-A.Tag002"
+#                   - "s=S.A.TagGroup-A.Tag003"
+#                   - "s=S.A.TagGroup-A.Tag004"
+#                   - "s=S.A.TagGroup-A.Tag005"
+#                   - "s=S.A.TagGroup-A.Tag006"
+#                   - "s=S.A.TagGroup-A.Tag007"
+#                   - "s=S.A.TagGroup-A.Tag008"
+#                   - "s=S.A.TagGroup-A.Tag009"
+#                   - "s=S.A.TagGroup-A.Tag010"
+        
+#           - name: "S.A.TagGroup-B"
+#             selectors:
+#               - pattern: "s=S\\.A\\.TagGroup-B\\..*"
+
+
         #   
-        #   # Group 2: All motor data but exclude test motors
+        #   # Sample: All motor data but exclude test motors
 #           - name: "S.A.TagGroup-B"
 #             selectors:
 #               - pattern: "s=S\\.A\\.TagGroup-B\\..*"
@@ -488,7 +549,7 @@ mqtt:
         #           patterns:
         #             - "s=.*\\.TestMotor\\..*"
         #   
-        #   # Group 3: Catch-all for other analog values
+        #   # Sample: Catch-all for other analog values
         #   - name: "Other-Analog-Values"
         #     selectors:
         #       - pattern: "s=.*\\.AnalogInput.*"
