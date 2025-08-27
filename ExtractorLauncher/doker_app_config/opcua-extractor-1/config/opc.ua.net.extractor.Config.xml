@@ -1,0 +1,79 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<ApplicationConfiguration
+  xmlns:ua="http://opcfoundation.org/UA/2008/02/Types.xsd"
+  xmlns="http://opcfoundation.org/UA/SDK/Configuration.xsd"
+  schemaLocation="./Schema/ApplicationConfiguration.xsd"
+>
+  <ApplicationName>OPC-UA Extractor Client</ApplicationName>
+  <ApplicationUri>urn:localhost:Cognite:OPCUAExtractor</ApplicationUri>
+  <ApplicationType>Client_1</ApplicationType>
+
+  <SecurityConfiguration>
+
+    <!-- Where the application instance certificate is stored (MachineDefault) -->
+    <ApplicationCertificate>
+      <StoreType>X509Store</StoreType>
+      <StorePath>CurrentUser\My</StorePath>
+      <SubjectName>CN=Opcua-extractor, C=NO, S=Oslo, O=Cognite, DC=localhost</SubjectName>
+    </ApplicationCertificate>
+
+    <!-- Where the issuer certificate are stored (certificate authorities) -->
+    <TrustedIssuerCertificates>
+      <StoreType>Directory</StoreType>
+      <StorePath>./certificates/pki/issuer</StorePath>
+    </TrustedIssuerCertificates>
+
+    <!-- Where the trust list is stored (UA Applications) -->
+    <TrustedPeerCertificates>
+      <StoreType>Directory</StoreType>
+      <StorePath>./certificates/pki/trusted</StorePath>
+    </TrustedPeerCertificates>
+
+    <!-- The directory used to store invalid certficates for later review by the administrator. -->
+    <RejectedCertificateStore>
+      <StoreType>Directory</StoreType>
+      <StorePath>./certificates/pki/rejected</StorePath>
+    </RejectedCertificateStore>
+
+    <AutoAcceptUntrustedCertificates>false</AutoAcceptUntrustedCertificates>
+
+  </SecurityConfiguration>
+
+  <TransportConfigurations/>
+
+  <TransportQuotas>
+    <OperationTimeout>600000</OperationTimeout>
+    <MaxStringLength>1048576</MaxStringLength>
+    <MaxByteStringLength>41943040</MaxByteStringLength>
+    <MaxArrayLength>65535</MaxArrayLength>
+    <MaxMessageSize>41943040</MaxMessageSize>
+    <MaxBufferSize>655350</MaxBufferSize>
+    <ChannelLifetime>300000</ChannelLifetime>
+    <SecurityTokenLifetime>3600000</SecurityTokenLifetime>
+  </TransportQuotas>
+
+  <!-- This element is only required for Client and ClientServer applications -->
+  <ClientConfiguration>
+    
+    <!-- The default timeout for new sessions -->
+    <DefaultSessionTimeout>600000</DefaultSessionTimeout>
+
+    <!-- The well-known URLs for the local discovery servers
+         URLs are tested in the order they appear in this list. -->
+    <WellKnownDiscoveryUrls>
+      <ua:String>opc.tcp://{0}:4840/UADiscovery</ua:String>
+    </WellKnownDiscoveryUrls>
+
+    <!-- EndpointDescriptions for system wide discovery servers -->
+    <DiscoveryServers></DiscoveryServers>
+
+    <!-- The minimum subscription lifetime.
+      This ensures subscriptions are not set to expire too quickly. The requesed lifetime count
+      and keep alive count are calculated using this value and the request publishing interval -->
+    <MinSubscriptionLifetime>10000</MinSubscriptionLifetime>
+  </ClientConfiguration>
+
+  <!-- Disables the hi-res clock if the QueryPerformanceCounter does work on a particular machine. -->
+  <DisableHiResClock>true</DisableHiResClock>
+
+</ApplicationConfiguration>

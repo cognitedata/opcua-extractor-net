@@ -1,0 +1,96 @@
+#version: '3.9'
+
+services:
+  opcua-extractor-1:
+    image: opcua-extractor-net:dx-0.95
+    deploy: # memory 제한을 위해 추가함 
+      resources:
+        limits:
+          memory: 512m
+        reservations:
+          memory: 256m
+    container_name: opcua_extractor_1_dx0.95
+    environment:
+      - OPCUA_CONFIG_DIR=/app/config
+      - OPCUA_LOG_DIR=/app/logs
+      - OPCUA_CERTIFICATE_DIR=/app/certificates
+      - OPCUA_OWN_CERTIFICATE_DIR=/app/certificates/pki/own
+      - STARTUP_DELAY_SECONDS=0
+    volumes:
+      #- docker run -d -v "$(pwd)/config:/config" -v "$(pwd)/logs:/logs" -v "$(pwd)/certificates:/certificates"   --name my-opcua-extractor   opcua-extractor-net:dx-0.9
+      - ./doker_app_config/opcua-extractor-1/config:/app/config
+      - ./doker_app_config/opcua-extractor-1/logs:/app/logs
+      - ./doker_app_config/opcua-extractor-1/certificates:/app/certificates
+    restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    networks:
+      - data-ingestion-net
+
+  opcua-extractor-2:
+    image: opcua-extractor-net:dx-0.95
+#    profiles: ["opcua2"]
+    deploy: # memory 제한을 위해 추가함
+      resources:
+        limits:
+          memory: 512m
+        reservations:
+          memory: 256m
+    container_name: opcua_extractor_2_dx0.95
+    environment:
+      - OPCUA_CONFIG_DIR=/app/config
+      - OPCUA_LOG_DIR=/app/logs
+      - OPCUA_CERTIFICATE_DIR=/app/certificates
+      - OPCUA_OWN_CERTIFICATE_DIR=/app/certificates/pki/own
+      - STARTUP_DELAY_SECONDS=30
+    volumes:
+      #- docker run -d -v "$(pwd)/config:/config" -v "$(pwd)/logs:/logs" -v "$(pwd)/certificates:/certificates"   --name my-opcua-extractor   opcua-extractor-net:dx-0.9
+      - ./doker_app_config/opcua-extractor-2/config:/app/config
+      - ./doker_app_config/opcua-extractor-2/logs:/app/logs
+      - ./doker_app_config/opcua-extractor-2/certificates:/app/certificates
+    restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    networks:
+      - data-ingestion-net
+
+  opcua-extractor-3:
+    image: opcua-extractor-net:dx-0.95
+#    profiles: ["opcua3"]
+    deploy: # memory 제한을 위해 추가함
+      resources:
+        limits:
+          memory: 512m
+        reservations:
+          memory: 256m
+    container_name: opcua_extractor_3_dx0.95
+    environment:
+      - OPCUA_CONFIG_DIR=/app/config
+      - OPCUA_LOG_DIR=/app/logs
+      - OPCUA_CERTIFICATE_DIR=/app/certificates
+      - OPCUA_OWN_CERTIFICATE_DIR=/app/certificates/pki/own
+      - STARTUP_DELAY_SECONDS=60
+    volumes:
+      #- docker run -d -v "$(pwd)/config:/config" -v "$(pwd)/logs:/logs" -v "$(pwd)/certificates:/certificates"   --name my-opcua-extractor   opcua-extractor-net:dx-0.9
+      - ./doker_app_config/opcua-extractor-3/config:/app/config
+      - ./doker_app_config/opcua-extractor-3/logs:/app/logs
+      - ./doker_app_config/opcua-extractor-3/certificates:/app/certificates
+    restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    networks:
+      - data-ingestion-net
+
+
+networks:
+  data-ingestion-net:
+    driver: bridge

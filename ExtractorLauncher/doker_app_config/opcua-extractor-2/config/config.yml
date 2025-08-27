@@ -1,0 +1,552 @@
+# Template for the config file,
+# Defaults to config.yml in ./config.
+# The config tool defaults to config/config.config-tool.yml, and uses the same config 
+# options, though only EndpointURL and if needed username/password/secure are required.
+# The values here are generally the default values, except for the contents of lists etc.
+# Your config file can contain only a subset of these config options. Any extra options will
+# cause the extractor to fail.
+
+# This is a minimal example configuration for meaningful extraction from OPC-UA to CDF.
+# It is recommended to run the config-tool in order to configure the extractor to
+# extract all relevant information.
+
+# By default this will extract the OPC-UA node hierarchy to the CDF asset hierarchy
+# and stream live data to timeseries. With proper configuration the extractor can
+# read string timeseries, events and historical data.
+
+# Version of the config schema
+version: 1
+
+source:
+    # KEPServer의 OPC-UA 엔드포인트 URL을 실제 주소로 변경
+    endpoint-url: "opc.tcp://192.168.11.46:49320"  # KEPServer의 실제 IP와 포트로 변경
+    # Publishing interval을 100ms로 설정하여 지연 최소화
+    publishing-interval: 10000
+    # Sets the maximum number of nodes per call to the Browse service. 
+    # Large numbers are likely to exceed the server's tolerance. 
+    # Lower numbers greatly increase startup time."
+    browse-nodes-chunk: 1
+    # Sets the maximum requested results per node for each call to the Browse service
+    # 간단히 설명해서 1개의 노드당 brow 가능한 최대 child nodes 개수 
+    browse-chunk: 1000
+
+    # 필수 설정: Browse Throttling 제한
+    limit-to-server-config: true  # 서버 설정 제한 사용 여부
+    browse-throttling:
+       max-per-minute: 0           # 분당 최대 browse 요청 수 (0 = 무제한)
+       max-parallelism: 1000         # 최대 병렬 browse 요청 수 (동시 실행 요청 수)
+       max-node-parallelism: 1    # 동시 처리 노드 수 (Continuation Points 제한)
+
+
+extraction:
+    # Global prefix for externalId towards pushers. Should be unique to prevent name conflicts in the push destinations.
+    # The externalId is: IdPrefix + NamespaceMap[nodeId.NamespaceUri] + nodeId.Identifier
+    id-prefix: "" # KEPServer용 prefix - namespace-map을 빈 값으로 설정하여 중복 방지
+
+    # Delay in ms between each push of data points to targets
+    # Alternatively, use N[timeunit] where timeunit is w, d, h, m, s or ms.
+    data-push-delay: 100
+
+    # KEPServer의 실제 태그 구조에 맞게 루트 노드 설정
+    root-nodes:
+        - namespace-uri: "KEPServerEX"
+          node-id: "s=S.A1"
+        - namespace-uri: "KEPServerEX"
+          node-id: "s=S.B1"
+        - namespace-uri: "KEPServerEX"
+          node-id: "s=S.C1"
+        - namespace-uri: "KEPServerEX"
+          node-id: "s=S.D1"
+        - namespace-uri: "KEPServerEX"
+          node-id: "s=S.E1"
+        - namespace-uri: "KEPServerEX"
+          node-id: "s=S.F1"
+        - namespace-uri: "KEPServerEX"
+          node-id: "s=S.G1"
+        - namespace-uri: "KEPServerEX"
+          node-id: "s=S.H1"
+        - namespace-uri: "KEPServerEX"
+          node-id: "s=S.I1"
+        - namespace-uri: "KEPServerEX"
+          node-id: "s=S.J1"
+
+
+
+    # KEPServer의 네임스페이스 매핑 - TAG_LIST_BASED 전략을 위해 빈 값으로 설정
+    namespace-map:
+        "KEPServerEX": ""
+    data-types:
+        # Add custom numeric types using their nodeId. is-step indicates whether the datatype is discrete,
+        # enum indicates that it is an enumeration, which may be mapped to a string if enums-as-strings is true.
+        # This also overwrite default behavior, so it is possible to make Integer discrete, etc.
+        # Note that the type in question needs to have a sensible numerical conversion in C#, unless it is an array type or similar,
+        # in which case each element needs a conversion
+        custom-numeric-types:
+        #    - node-id:
+        #          namespace-uri:
+        #          node-id:
+        #      is-step: false
+        #      enum: false
+
+        # List of NodeIds corresponding to DataTypes that should be ignored. Timeseries with these datatypes will not be mapped to destinations.
+        ignore-data-types:
+            # - NamespaceUri:
+            #   NodeId:
+
+        # Assume unknown ValueRanks without ArrayDimensions are all scalar, and create timeseries in CDF accordingly.
+        # If such a variable produces an array, only the first element will be mapped to CDF
+        unknown-as-scalar: false
+
+        # Maximum size of array variables. Only arrays with the ArrayDimensions property in opc-ua specified will be used,
+        # leave at 0 to only allow scalar values.
+        # Note that some server implementations have issues with the ArrayDimensions property, so it is not fetched at all if MaxArraySize is 0
+        # -1 indicates that there is no limit to array length, though only 1-dimensional structures will be read either way.
+        max-array-size: 0
+
+        # Set to true to allow fetching string variables. This means that all variables with non-numeric type is converted to string in some way.
+        # 문자형 변수 읽으려면 true로 설정 필요
+        allow-string-variables: true
+
+        # Map out the dataType hierarchy before starting, useful if there are custom or enum types.
+        # Necessary for enum metadata and for enums-as-strings to work. If this is false, any
+        # custom numeric types have to be added manually.
+        auto-identify-types: false
+
+        # If this is false and auto-identify-types is true, or there are manually added enums in custom-numeric-types,
+        # enums will be mapped to numeric timeseries, and labels are added as metadata fields.
+        # If this is true, labels are not mapped to metadata, and enums will be mapped to string timeseries with values
+        # equal to mapped label values.
+        enums-as-strings: true
+
+        # Add a metadata property dataType which contains the id of the OPC-UA datatype.
+        data-type-metadata: false
+
+        # True to treat null nodeIds as numeric instead of string
+        null-as-numeric: false
+
+        # Add full JSON node-ids to data pushed to Raw. TypeDefintionId, ParentNodeId, NodeId and DataTypeId.
+        expand-node-ids: false
+
+        # Add attributes generally used internally like AccessLevel, Historizing, ArrayDimensions, ValueRank etc.
+        # to data pushed to Raw.
+        append-internal-values: false
+
+        # If max-array-size is set, this looks for the MaxArraySize property on each node with one-dimension ValueRank,
+        # if it is not found, it tries to read the value as well, and look at the current size.
+        # ArrayDimensions is still the prefered way to identify array sizes, this is not guaranteed to generate
+        # reasonable or useful values.
+        estimate-array-sizes: false
+
+
+   
+
+    # Time in minutes between each call to browse the OPC-UA directory, then push new nodes to destinations.
+    auto-rebrowse-period: "55 * * * *"
+    enable-audit-discovery: false
+
+    transformations:
+      - type: Ignore
+        filter:
+          id: "s=S.A1._System"
+      - type: Ignore
+        filter:
+          id: "s=S.B1._System"
+      - type: Ignore
+        filter:
+          id: "s=S.C1._System"
+      - type: Ignore
+        filter:
+          id: "s=S.D1._System"
+      - type: Ignore
+        filter:
+          id: "s=S.E1._System"
+      - type: Ignore
+        filter:
+          id: "s=S.F1._System"
+      - type: Ignore
+        filter:
+          id: "s=S.G1._System"
+      - type: Ignore
+        filter:
+          id: "s=S.H1._System"
+      - type: Ignore
+        filter:
+          id: "s=S.I1._System"
+      - type: Ignore
+        filter:
+          id: "s=S.J1._System"
+
+    # Configuration for ingesting status codes to CDF timeseries.
+    status-codes:
+        status-codes-to-ingest: GoodOnly
+        ingest-status-codes: false
+
+subscriptions:
+    # Enable subscriptions on data-points.
+    data-points: true
+    events: false
+    data-change-filter:
+        trigger: "StatusValueTimestamp"
+        deadband-type: "None"
+        deadband-value: 0
+    log-bad-values: true
+    ignore-access-level: false
+    sampling-interval: 300
+    queue-length: 1
+    keep-alive-count: 10
+    lifetime-count: 1000
+    recreate-stopped-subscriptions: true
+    recreate-subscription-grace-period: -1
+
+history:
+    #아래 내용은 필수
+    # Enable/disable history synchronization from the OPC-UA server to CDF.
+    # This is a master switch covering both events and data
+    enabled: false
+    # Enable or disable data history on nodes with history. "Enabled" must be true.
+    # By default nodes with AccessLevel ReadHistory are read.
+    data: false
+    # 추가 필요한 설정:
+    throttling:
+       max-per-minute: 0           # 분당 최대 history 요청 수
+       max-parallelism: 0          # 최대 병렬 history 요청 수
+       max-node-parallelism: 100   # ← 이 값을 0보다 크게 설정 (예: 100)
+
+logger:
+    # Writes log events at this level to the Console. One of verbose, debug, information, warning, error, fatal.
+    # If not present, or if the level is invalid, Console is not used.
+    console:
+        level: "information"
+    file:
+        level: "information"
+        path: "logs/log.txt"
+
+metrics:
+    # otherMetrics:
+    #   - namespaceUri: "KEPServerEX"
+    #     nodeId: "SomeCustomMetric"
+
+
+
+#influxdb에 저장되는 metric info
+#opcua_CurrentSessionCount
+#opcua_CurrentSubscriptionCount
+#opcua_PublishingIntervalCount
+#opcua_ServerViewCount
+#opcua_SessionAbortCount
+#opcua_SessionTimeoutCount
+#opcua_RejectedRequestsCount
+#opcua_RejectedSessionCount
+#opcua_SecurityRejectedRequestsCount
+#opcua_SecurityRejectedSessionCount
+
+influx-db-metrics:
+    enabled: true
+    server-metrics: true
+#    url: "http://192.168.11.116:58086"
+    url: "http://192.168.11.115:8086"
+    database: "opcua_metrics"
+    username: "admin"
+    password: "admin"
+    retention-policy: "autogen"
+    measurement-prefix: "opcua"
+    batch-size: 1
+
+influx:
+    enabled: false
+
+mqtt: 
+    enabled: true
+    host: 192.168.11.115 
+    port: 1883
+    username: admin
+    password: misoinfo1!
+    use-tls: false
+    allow-untrusted-certificates: true
+    client-id: OPC-UA-Ext-Plain-JSON-2
+    asset-topic: opcua/assets
+    ts-topic: opcua/timeseries
+    datapoint-topic: opcua/datapoints
+    raw-topic: opcua/raw
+    use-grpc: false
+
+    # Timestamp format for JSON serialization
+    # "epoch" - Unix timestamp in milliseconds since epoch (default)
+    # "iso8601" - ISO 8601 format (YYYY-MM-DDTHH:mm:ss.SSS+09:00)
+    timestamp-format: iso8601
+
+    # Timezone offset for ISO8601 timestamp format
+    # Format: "+09:00" for Korea time, "+00:00" for UTC, etc.
+    # Only used when timestamp-format is "iso8601"
+    timezone-offset: "+09:00"
+
+    # JSON format type for MQTT output
+    # Available options:
+    # "Legacy" - Original timeseries format (existing format for backward compatibility)
+    # "PollingSnapshotObject" - Structured object format for polling/batch reads
+    #   - Includes metadata with data_ingest_type, message_timestamp, etc.
+    #   - Data section with shared timestamp and tags array
+    #   - Optimized for bulk data transmission with minimal size
+    # "PollingSnapshotPlain" - Flat structure format for polling/batch reads  
+    #   - Includes metadata with camelCase naming (dataIngestType, messageTimestamp)
+    #   - Tag values directly in root object with shared timestamp
+    #   - Most compact format for high-volume data
+    #   - subscription.queue-length value must be 1
+    # "Subscription" - Format for subscription-based data with individual timestamps
+    #   - Supports multiple data points per tag with different timestamps
+    #   - Each tag has its own data array with timestamp, value, sc, dt
+    #   - Ideal for event-driven subscription scenarios
+    json-format-type: Subscription
+    
+    # Whether to include metadata object in JSON output
+    include-metadata: true
+    include-message-timestamps: true
+    include-data-type: false
+    include-status-code: false
+    
+    # Adaptive chunking configuration for MQTT message optimization
+    max-message-size: 104857600
+    max-chunk-size: 1000
+    min-chunk-size: 10
+    max-concurrency: 4
+    
+    # MQTT transmission strategy for grouping and sending data
+    # ROOT_NODE_BASED(즉 "루트 노드를 기반으로 그룹핑한다"): Group by extraction.root-nodes configuration with "most specific rule wins"
+    # 사용 패턴: 이 전략은 OPC UA 서버의 **계층 구조(Hierarchy)**를 기반으로 노드를 그룹핑하기 위해 설계되었습니다. 
+    #          사용자는 설정 파일에 ns=2;s=Machine/Pump/와 같이 특정 "루트 노드"를 prefix로 지정하고, 
+    #          그 하위에 있는 모든 노드들을 하나의 그룹으로 묶으려한다.
+    # 알고리즘:  계층적 그룹핑을 올바르게 처리하려면, Machine/Pump/ 아래의 노드가 상위 규칙인 Machine/ 그룹이 아닌 Machine/Pump/ 그룹에 
+    #          정확히 할당되어야 하고, 이를 위해 "가장 구체적인 규칙 우선(MOST_SPECIFIC_RULE)" 알고리즘이 반드시 필요 함.
+
+    # TAG_LIST_BASED("태그 리스트를 기반으로 그룹핑한다"): Group by specified tag lists with "first matching rule wins"
+    # 사용 패턴: 이 전략은 계층 구조와 상관없이, 사용자가 명시적인 **태그 목록(Tag List)**을 제공하여 그룹을 구성하는 경우를 위해 설계되었습니다. 
+    #          "A 그룹에는 이 10개의 태그, B 그룹에는 저 20개의 태그" 와 같이 평면적인 목록을 사용하는 방식입니다.
+    # 알고리즘:  이 방식에서는 만약 하나의 태그가 실수로 여러 그룹의 목록에 포함되었을 때, 혼란을 피하기 위한 결정적인 규칙이 필요합니다. 
+    #          이때 가장 간단하고 직관적인 방법이 "설정 파일에 먼저 등장하는 그룹(규칙)에 할당"하는 FIRST_MATCHED_RULE 알고리즘입니다.
+    # CHUNK_BASED("조각화 기반"): Use existing chunking strategy (default) 
+    # TAG_CHANGE_BASED("태그 변경 기반"): Send based on OPC UA tag changes (subscription-based)
+
+
+    mqtt-transmission-strategy: 
+
+         #running setting
+         #MOST_SPECIFIC_RULE
+        data-group-by: ROOT_NODE_BASED
+
+#        publish-groups:
+#          - name: "S_A_TagGroup-A"
+#            selectors:
+#              - prefix: "s=S.A.TagGroup-A"
+
+#          - name: "S_A_TagGroup-B"
+#            selectors:
+#              - prefix: "s=S.A.TagGroup-B"
+
+        # NEW UNIFIED FORMAT: Advanced publish groups with selectors and exclusions
+        # Supports both ROOT_NODE_BASED and TAG_LIST_BASED strategies
+        publish-groups:
+          # Group B: High-priority S.A tags that need separate handling
+          - name: "S_A1_TagGroup-A1"
+            selectors:
+              
+              - pattern: "s=S\\.A1\\.TagGroup-A1\\..*"
+                exclude:
+                  tags:
+                    - "s=S.A1.TagGroup-A1.Tag001"
+                    - "s=S.A1.TagGroup-A1.Tag002"
+                    - "s=S.A1.TagGroup-A1.Tag003"
+                    - "s=S.A1.TagGroup-A1.Tag004"
+                    - "s=S.A1.TagGroup-A1.Tag005"
+                    - "s=S.A1.TagGroup-A1.Tag006"
+                    - "s=S.A1.TagGroup-A1.Tag007"
+
+
+          - name: "S_A1_Tags"
+            selectors:
+              - pattern: "s=S\\.A1\\.[^.]*$"
+
+          - name: "S_B1_Tags"
+            selectors:
+              - pattern: "s=S\\.B1\\.[^.]*$"
+
+
+          - name: "S_C1_Tags"
+            selectors:
+              - pattern: "s=S\\.C1\\.[^.]*$"
+
+          - name: "S_D1_Tags"
+            selectors:
+              - pattern: "s=S\\.D1\\.[^.]*$"
+
+          - name: "S_E1_Tags"
+            selectors:
+              - pattern: "s=S\\.E1\\.[^.]*$"
+
+          - name: "S_F1_Tags"
+            selectors:
+              - pattern: "s=S\\.F1\\.[^.]*$"
+
+          - name: "S_G1_Tags"
+            selectors:
+              - pattern: "s=S\\.G1\\.[^.]*$"
+
+          - name: "S_H1_Tags"
+            selectors:
+              - pattern: "s=S\\.H1\\.[^.]*$"
+
+          - name: "S_I1_Tags"
+            selectors:
+              - pattern: "s=S\\.I1\\.[^.]*$"
+
+          - name: "S_J1_Tags"
+            selectors:
+              - pattern: "s=S\\.J1\\.[^.]*$"
+
+
+
+          #sample setting
+          # Group A: S.A production data but exclude system diagnostics
+#          - name: "S_A_Tags"
+#            selectors:
+#              - prefix: "s=S.A"
+#                exclude:
+                  # Exclude specific admin/maintenance tags
+#                  tags:
+#                    - "s=S.A.System.LastMaintenance"
+#                    - "s=S.A.Admin.Override"
+                  # Exclude all diagnostics folder content
+#                  patterns:
+#                    - "s=S\\.A\\.Diagnostics\\..*"
+#                    - "s=S\\.A\\._System\\..*"
+          
+#          # Group B: High-priority S.A tags that need separate handling
+#          - name: "S_A_Group-A"
+#            selectors:
+#              # Pattern for critical sensors
+#              - pattern: "s=S\\.A\\.Group-A\\..*"
+
+#          - name: "S_A_Group-A"
+#            selectors:
+#              - tags:
+#                  - "s=S.A.Tag1"
+#                  - "s=S.A.Tag2"
+#                  - "s=S.A.Tag3"
+#                  - "s=S.A.Tag4"
+#                  - "s=S.A.Tag5"
+#              # Pattern for critical sensors
+#              - pattern: "s=S\\.A\\.Critical\\..*"
+
+
+
+
+
+
+
+
+         #FIRST_MATCHED_RULE
+#         data-group-by: TAG_LIST_BASED
+#         publish-groups:
+        #   # Group 1: Quality control KPI tags from different lines
+
+#           - name: "S.A.Tags"
+#             selectors:
+#               - prefix: "s=S.A"
+#                 exclude:
+                  # Exclude specific admin/maintenance tags
+#                   tags:
+#                     - "s=S.A.Tag1"
+#                     - "s=S.A.Tag2"
+#                     - "s=S.A.Tag3"
+#                     - "s=S.A.Tag4"
+#                     - "s=S.A.Tag5"
+#                     - "s=S.A.Tag6"
+#                     - "s=S.A.Tag7"
+#                     - "s=S.A.Tag8"
+#                     - "s=S.A.Tag9"
+#                     - "s=S.A.Tag10"
+#                     - "s=S.A.Tag11"
+#                     - "s=S.A.Tag12"
+#                     - "s=S.A.Tag13"
+#                     - "s=S.A.Tag14"
+#                     - "s=S.A.Tag15"
+#                     - "s=S.A.Tag16"
+#                     - "s=S.A.Tag17"
+#                     - "s=S.A.Tag18"
+#                     - "s=S.A.Tag19"
+#                     - "s=S.A.Tag20"
+                  # Exclude all diagnostics folder content
+#                  patterns:
+#                    - "s=S\\.A\\.Diagnostics\\..*"
+#                    - "s=S\\.A\\._System\\..*"
+
+#           - name: "S_B_Tags"
+#             selectors:
+#              - pattern: "s=S\\.B\\.[^.]*$"
+
+
+#           - name: "S_C_Tags"
+#             selectors:
+#              - pattern: "s=S\\.C\\.[^.]*$"
+
+#           - name: "S_D_Tags"
+#             selectors:
+#              - pattern: "s=S\\.D\\.[^.]*$"
+
+#           - name: "S_E_Tags"
+#             selectors:
+#              - pattern: "s=S\\.E\\.[^.]*$"
+
+#           - name: "S_F_Tags"
+#             selectors:
+#              - pattern: "s=S\\.F\\.[^.]*$"
+
+#           - name: "S_G_Tags"
+#             selectors:
+#              - pattern: "s=S\\.G\\.[^.]*$"
+
+#           - name: "S_H_Tags"
+#             selectors:
+#              - pattern: "s=S\\.H\\.[^.]*$"
+
+#           - name: "S_I_Tags"
+#             selectors:
+#              - pattern: "s=S\\.I\\.[^.]*$"
+
+#           - name: "S_J_Tags"
+#             selectors:
+#              - pattern: "s=S\\.J\\.[^.]*$"
+
+#           - name: "S.A.TagGroup-A"
+#             selectors:
+#               - tags:
+#                   - "s=S.A.TagGroup-A.Tag001"
+#                   - "s=S.A.TagGroup-A.Tag002"
+#                   - "s=S.A.TagGroup-A.Tag003"
+#                   - "s=S.A.TagGroup-A.Tag004"
+#                   - "s=S.A.TagGroup-A.Tag005"
+#                   - "s=S.A.TagGroup-A.Tag006"
+#                   - "s=S.A.TagGroup-A.Tag007"
+#                   - "s=S.A.TagGroup-A.Tag008"
+#                   - "s=S.A.TagGroup-A.Tag009"
+#                   - "s=S.A.TagGroup-A.Tag010"
+        
+#           - name: "S.A.TagGroup-B"
+#             selectors:
+#               - pattern: "s=S\\.A\\.TagGroup-B\\..*"
+
+
+        #   
+        #   # Sample: All motor data but exclude test motors
+#           - name: "S.A.TagGroup-B"
+#             selectors:
+#               - pattern: "s=S\\.A\\.TagGroup-B\\..*"
+        #         exclude:
+        #           patterns:
+        #             - "s=.*\\.TestMotor\\..*"
+        #   
+        #   # Sample: Catch-all for other analog values
+        #   - name: "Other-Analog-Values"
+        #     selectors:
+        #       - pattern: "s=.*\\.AnalogInput.*"
+
+

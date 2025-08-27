@@ -18,4 +18,12 @@ RUN dotnet publish "ExtractorLauncher.csproj" -c $configuration -o /app/publish 
 FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
-ENTRYPOINT ["dotnet", "OpcuaExtractor.dll"]
+
+# docker-entrypoint.sh 스크립트 복사 및 실행 권한 부여
+COPY --chown=app:app ExtractorLauncher/docker-entrypoint.sh .
+RUN chmod +x ./docker-entrypoint.sh
+
+# 스크립트를 새로운 ENTRYPOINT로 지정
+ENTRYPOINT ["./docker-entrypoint.sh"]
+# 기존 ENTRYPOINT는 CMD로 변경하여 스크립트에 인자로 전달
+CMD ["dotnet", "OpcuaExtractor.dll"]
