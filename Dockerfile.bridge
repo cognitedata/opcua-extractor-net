@@ -15,7 +15,7 @@ ENV MQTT_BRIDGE_CONFIG_DIR="/config"
 RUN mkdir -p /logs
 RUN chmod -R a+rw /logs
 
-RUN groupadd -g 1000 extractor && useradd -m -u 1000 -g extractor extractor
+RUN groupadd -g 1001 extractor && useradd -m -u 1001 -g extractor extractor
 USER extractor
 
 ENTRYPOINT ["dotnet", "/bridge/MQTTCDFBridge.dll"]

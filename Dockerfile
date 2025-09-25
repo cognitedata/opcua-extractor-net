@@ -26,7 +26,7 @@ RUN mkdir -p /logs /certificates
 RUN chmod -R a+rw /logs
 RUN chmod -R a+rw /certificates
 
-RUN groupadd -g 1000 extractor && useradd -m -u 1000 -g extractor extractor
+RUN groupadd -g 1001 extractor && useradd -m -u 1001 -g extractor extractor
 USER extractor
 
 ENTRYPOINT ["dotnet", "/extractor/OpcuaExtractor.dll"]
