@@ -69,7 +69,18 @@ namespace Cognite.OpcUa.Pushers.Writers
 
             if (idm != null)
             {
-                await idm.Init(extractor, token);
+                try
+                {
+                    await idm.Init(extractor, token);
+                }
+                catch (Exception ex)
+                {
+                    log.LogError(ex, "Failed to initialize data modeling writer.");
+                    if (idm.Assets) result.Objects = false;
+                    if (idm.Relationships) result.References = false;
+                    if (idm.Timeseries) result.Variables = false;
+                    return;
+                }
             }
 
             var assetMap = objects

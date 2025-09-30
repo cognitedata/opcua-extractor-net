@@ -917,7 +917,6 @@ namespace Cognite.OpcUa
             FullPushResult result,
             IPusher pusher)
         {
-            pusher.Initialized = false;
             pusher.DataFailing = true;
             pusher.EventsFailing = true;
 
