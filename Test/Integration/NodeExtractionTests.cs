@@ -4,6 +4,8 @@ using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.Subscriptions;
 using Cognite.OpcUa.Types;
+using CogniteSdk;
+using CogniteSdk.DataModels;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
@@ -1058,6 +1060,44 @@ namespace Test.Integration
             Assert.Equal("[0,1,2,3,4]", handler.Assets[id].metadata["TooLargeDim"]);
 
             await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
+        }
+        [Fact]
+        public async Task TestRebrowseFailedWeirdState()
+        {
+            tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
+            {
+                Clean = new CleanMetadataTargetConfig
+                {
+                    Relationships = false,
+                    Assets = true,
+                    Timeseries = true,
+                    Space = "test-space",
+                }
+            };
+            var (handler, pusher) = tester.GetCDFPusher();
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+            tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Base.Root, tester.Client);
+
+            // First, run the extractor and wait for data to arrive in CDF.
+            var runTask = extractor.RunExtractor();
+
+            await TestUtils.WaitForCondition(() => handler.Instances.Count != 0 && pusher.Initialized, 5);
+
+            // Now, rebrowse, but simulate failure to push timeseries to CDF.
+            handler.FailedRoutes.Add("/models/instances");
+            await extractor.Rebrowse();
+
+            // This is a rebrowse, and should _not_ set the extractor to uninitialized.
+            Assert.True(pusher.Initialized);
+
+            // Trigger a datapoint update.
+            tester.Server.UpdateNode(tester.Server.Ids.Base.DoubleVar1, 321.123);
+
+            var id = new InstanceIdentifier("test-space", tester.Client.GetUniqueId(tester.Server.Ids.Base.DoubleVar1));
+
+            await TestUtils.WaitForCondition(() => handler.DatapointsByInstanceId.TryGetValue(id, out var dps) && dps.NumericDatapoints.Last().Value == 321.123, 5);
+
+            handler.FailedRoutes.Clear();
         }
         #endregion
 

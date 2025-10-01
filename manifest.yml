@@ -67,6 +67,11 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.38.1":
+    description: Fix issue causing the extractor to stop pushing datapoints if pushing nodes to CDF during rebrowse fails.
+    changelog:
+      fixed:
+        - Fix issue causing the extractor to stop pushing datapoints if pushing nodes to CDF during rebrowse fails.
   "2.38.0":
     description: Support writing metadata as a JSON structure to Core Data Model Timeseries.
     changelog:

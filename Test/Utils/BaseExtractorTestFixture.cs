@@ -68,10 +68,10 @@ namespace Test.Utils
             Server = new ServerController(Setups, Provider, Port);
             await Server.Start();
             Source = new CancellationTokenSource();
-            Callbacks = new DummyClientCallbacks(Source.Token);
 
             for (int i = 0; i < 10; i++)
             {
+                Callbacks = new DummyClientCallbacks(Source.Token);
                 Client = new UAClient(Provider, Config)
                 {
                     Callbacks = Callbacks
