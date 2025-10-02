@@ -71,9 +71,9 @@ namespace Test.Unit
             tester.Config.Cognite.MetadataTargets.DataModels.SkipSimpleTypes = false;
 
             var (handler, pusher) = tester.GetCDFPusher();
-            using var extractor = tester.BuildExtractor(pusher);
+            await using var extractor = tester.BuildExtractor(pusher);
 
-            await extractor.RunExtractor(true);
+            await tester.RunExtractor(extractor, true);
 
             Assert.Equal(2, handler.Spaces.Count);
             // FolderType, BaseObjectType, BaseVariableType, BaseDataVariableType, PropertyType,
@@ -152,7 +152,7 @@ namespace Test.Unit
 
             try
             {
-                await extractor.RunExtractor(true);
+                await tester.RunExtractor(extractor, true);
                 Assert.Equal(2, handler.Spaces.Count);
                 Assert.Equal(18, handler.Views.Count);
                 Assert.Equal(13, handler.Containers.Count);
@@ -178,7 +178,7 @@ namespace Test.Unit
 
 
             await using var extractor2 = tester.BuildExtractor(pusher, true, stateStore);
-            await extractor2.RunExtractor(true);
+            await tester.RunExtractor(extractor2, true);
 
             Assert.Equal(2, handler.Spaces.Count);
             Assert.Equal(18, handler.Views.Count);
@@ -197,9 +197,9 @@ namespace Test.Unit
             tester.Config.Cognite.MetadataTargets.DataModels.TypesToMap = TypesToMap.All;
 
             var (handler, pusher) = tester.GetCDFPusher();
-            using var extractor = tester.BuildExtractor(pusher);
+            await using var extractor = tester.BuildExtractor(pusher);
 
-            await extractor.RunExtractor(true);
+            await tester.RunExtractor(extractor, true);
 
             Assert.Equal(2, handler.Spaces.Count);
 

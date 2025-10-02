@@ -115,9 +115,9 @@ namespace Test.Unit
             tester.Config.Extraction.DataTypes.MaxArraySize = 4;
             tester.Config.PubSub.Enabled = true;
             tester.Config.PubSub.PreferUadp = uadp;
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
 
-            await extractor.RunExtractor(true);
+            await tester.RunExtractor(extractor, true);
 
             var queue = (AsyncBlockingQueue<UADataPoint>)extractor.Streamer.GetType()
                 .GetField("dataPointQueue", BindingFlags.NonPublic | BindingFlags.Instance)

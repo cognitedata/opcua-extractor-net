@@ -101,6 +101,7 @@ namespace Test.Unit
         public async Task TestEndpointDiscovery()
         {
             // Test while connected
+
             await tester.Explorer.GetEndpoints(tester.Source.Token);
             var summary = tester.Explorer.Summary;
             Assert.True(summary.Session.Secure);
@@ -108,13 +109,15 @@ namespace Test.Unit
 
             var oldEP = tester.Config.Source.EndpointUrl;
             // Test failure to connect at all
-            await tester.Explorer.Close(CancellationToken.None);
-            tester.Explorer.ResetSummary();
-            tester.Config.Source.EndpointUrl = "opc.tcp://localhost:60000";
-            await Assert.ThrowsAsync<FatalException>(() => tester.Explorer.GetEndpoints(tester.Source.Token));
-            summary = tester.Explorer.Summary;
-            Assert.False(summary.Session.Secure);
-            Assert.Empty(summary.Session.Endpoints);
+            using (var explorer = new UAServerExplorer(tester.Provider, tester.Config, tester.BaseConfig, tester.Source.Token))
+            {
+                explorer.ResetSummary();
+                tester.Config.Source.EndpointUrl = "opc.tcp://localhost:60000";
+                await Assert.ThrowsAsync<FatalException>(() => explorer.GetEndpoints(tester.Source.Token));
+                summary = explorer.Summary;
+                Assert.False(summary.Session.Secure);
+                Assert.Empty(summary.Session.Endpoints);
+            }
 
             // Test connect from explorer
             tester.Config.Source.EndpointUrl = oldEP;

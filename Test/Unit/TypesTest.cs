@@ -13,6 +13,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using Test.Utils;
 using Xunit;
 using Xunit.Abstractions;
@@ -215,9 +216,9 @@ namespace Test.Unit
         }
 
         [Fact]
-        public void TestBuildMetadata()
+        public async Task TestBuildMetadata()
         {
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
             var node = new UAObject(new NodeId("test", 0), "test", null, null, NodeId.Null, null);
             Assert.Empty(node.BuildMetadata(tester.Config, extractor, false));
             Assert.Empty(node.BuildMetadata(tester.Config, extractor, true));
@@ -297,9 +298,9 @@ namespace Test.Unit
         }
 
         [Fact]
-        public void TestToCDFAsset()
+        public async Task TestToCDFAsset()
         {
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
 
             var node = new UAObject(new NodeId("test", 0), "test", null, null, new NodeId("parent", 0), null);
             node.Attributes.Description = "description";
@@ -351,9 +352,9 @@ namespace Test.Unit
         }
 
         [Fact]
-        public void TestToJson()
+        public async Task TestToJson()
         {
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
             var node = new UAObject(new NodeId("test", 0), "test", null, null, NodeId.Null, null);
             var converter = tester.Client.TypeConverter;
             var log = tester.Provider.GetRequiredService<ILogger<TypesTest>>();
@@ -421,9 +422,9 @@ namespace Test.Unit
                 MetadataToJson(log, node, extractor));
         }
         [Fact]
-        public void TestToJsonComplexTypes()
+        public async Task TestToJsonComplexTypes()
         {
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
             var node = new UAObject(new NodeId("test", 0), "test", null, null, NodeId.Null, null);
             var converter = tester.Client.TypeConverter;
             var log = tester.Provider.GetRequiredService<ILogger<TypesTest>>();
@@ -597,9 +598,9 @@ namespace Test.Unit
         }
 
         [Fact]
-        public void TestToStatelessTimeseries()
+        public async Task TestToStatelessTimeseries()
         {
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
 
             var pdt = new UADataType(DataTypeIds.String);
 
@@ -650,9 +651,9 @@ namespace Test.Unit
             Assert.Equal("value3", ts.Unit);
         }
         [Fact]
-        public void TestToTimeseries()
+        public async Task TestToTimeseries()
         {
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
 
             var node = new UAVariable(new NodeId("test", 0), "test", null, null, new NodeId("parent", 0), null);
             node.Attributes.Description = "description";
@@ -865,10 +866,10 @@ namespace Test.Unit
             Assert.Empty(dt.EnumValues);
         }
         [Fact]
-        public void TestTypeToDataPoint()
+        public async Task TestTypeToDataPoint()
         {
             // Normal double
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
             var now = DateTime.UtcNow;
             var dt = new UADataType(DataTypeIds.Double);
             var dp = dt.ToDataPoint(extractor, 123.123, now, "id", StatusCodes.Good);
@@ -1000,11 +1001,11 @@ namespace Test.Unit
             Assert.Equal(refStr.ReplaceLineEndings(), str.ReplaceLineEndings());
         }
         [Fact]
-        public void TestEventSerialization()
+        public async Task TestEventSerialization()
         {
             // minimal
             var now = DateTime.UtcNow;
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
             var state = new EventExtractionState(tester.Client, new NodeId("emitter", 0), true, true, true);
             extractor.State.SetEmitterState(state);
             extractor.State.RegisterNode(new NodeId("type", 0), tester.Client.GetUniqueId(new NodeId("type", 0)));
@@ -1068,9 +1069,9 @@ namespace Test.Unit
             }
         }
         [Fact]
-        public void TestToStatelessCDFEvent()
+        public async Task TestToStatelessCDFEvent()
         {
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
 
             var ts = DateTime.UtcNow;
 
@@ -1131,9 +1132,9 @@ namespace Test.Unit
             Assert.Equal(new[] { "gp.base:s=source" }, conv.AssetExternalIds);
         }
         [Fact]
-        public void TestToCDFEvent()
+        public async Task TestToCDFEvent()
         {
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
 
             var ts = DateTime.UtcNow;
 
@@ -1192,9 +1193,9 @@ namespace Test.Unit
             Assert.Equal(new long[] { 111 }, conv.AssetIds);
         }
         [Fact]
-        public void TestDeepEventMetadata()
+        public async Task TestDeepEventMetadata()
         {
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
 
             var ts = DateTime.UtcNow;
 
@@ -1234,9 +1235,9 @@ namespace Test.Unit
 
         #region uareference
         [Fact]
-        public void TestReferenceDebugDescription()
+        public async Task TestReferenceDebugDescription()
         {
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
             var organizes = tester.Client.TypeManager.GetReferenceType(ReferenceTypeIds.Organizes);
             var hasComponent = tester.Client.TypeManager.GetReferenceType(ReferenceTypeIds.HasComponent);
 
@@ -1267,9 +1268,9 @@ namespace Test.Unit
             Assert.Equal("Reference: Asset s=source i=47 Inverse Asset s=target", reference.ToString());
         }
         [Fact]
-        public void TestReferenceEquality()
+        public async Task TestReferenceEquality()
         {
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
             var organizes = tester.Client.TypeManager.GetReferenceType(ReferenceTypeIds.Organizes);
             var hasComponent = tester.Client.TypeManager.GetReferenceType(ReferenceTypeIds.HasComponent);
 
@@ -1298,9 +1299,9 @@ namespace Test.Unit
             Assert.Equal(reference.GetHashCode(), reference2.GetHashCode());
         }
         [Fact]
-        public void TestToRelationship()
+        public async Task TestToRelationship()
         {
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
             var organizes = tester.Client.TypeManager.GetReferenceType(ReferenceTypeIds.Organizes);
             var source = new UAObject(new NodeId("source", 0), "Source", "Source", null, NodeId.Null, null);
             var target = new UAVariable(new NodeId("target", 0), "Target", "Target", null, NodeId.Null, null);

@@ -51,7 +51,7 @@ namespace Test.Unit
         [Fact]
         public async Task TestHistoryDataHandler()
         {
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
             var cfg = new HistoryConfig
             {
                 Backfill = true,
@@ -188,7 +188,7 @@ namespace Test.Unit
         [Fact]
         public async Task TestHistoryEventHandler()
         {
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
             var cfg = new HistoryConfig
             {
                 Backfill = true
@@ -332,7 +332,7 @@ namespace Test.Unit
         [Fact(Timeout = 10000)]
         public async Task TestFrontfillData()
         {
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
 
             var cfg = new HistoryConfig
             {
@@ -434,7 +434,7 @@ namespace Test.Unit
         [Fact(Timeout = 10000)]
         public async Task TestBackfillData()
         {
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
 
             var cfg = new HistoryConfig
             {
@@ -534,7 +534,7 @@ namespace Test.Unit
         [Fact(Timeout = 10000)]
         public async Task TestFrontfillEvents()
         {
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
 
             var cfg = new HistoryConfig
             {
@@ -646,7 +646,7 @@ namespace Test.Unit
         [Fact(Timeout = 10000)]
         public async Task TestBackfillEvents()
         {
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
 
             var cfg = new HistoryConfig
             {
@@ -757,7 +757,7 @@ namespace Test.Unit
         [InlineData(4, 0)]
         public async Task TestReadGranularity(int expectedReads, int granularity)
         {
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
 
             var cfg = new HistoryConfig
             {
@@ -812,7 +812,7 @@ namespace Test.Unit
         [Fact(Timeout = 10000)]
         public async Task TestHistoryThrottling()
         {
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
 
             var cfg = new HistoryConfig
             {
@@ -902,7 +902,7 @@ namespace Test.Unit
         [Fact(Timeout = 10000)]
         public async Task TestReadHistoryMaxLength()
         {
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
 
             var logger = tester.Provider.GetRequiredService<ILogger<HistoryReader>>();
 
@@ -961,7 +961,7 @@ namespace Test.Unit
         [Fact(Timeout = 10000)]
         public async Task TestReadHistoryMaxLengthIgnoreCps()
         {
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
 
             var logger = tester.Provider.GetRequiredService<ILogger<HistoryReader>>();
 
@@ -1022,7 +1022,7 @@ namespace Test.Unit
         [Fact(Timeout = 10000)]
         public async Task TestReadHistoryMaxLengthBackfill()
         {
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
 
             var logger = tester.Provider.GetRequiredService<ILogger<HistoryReader>>();
 
@@ -1082,7 +1082,7 @@ namespace Test.Unit
         [Fact(Timeout = 10000)]
         public async Task TestHistoryReadFailureThreshold()
         {
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
             var logger = tester.Provider.GetRequiredService<ILogger<HistoryReader>>();
             var cfg = new HistoryConfig
             {

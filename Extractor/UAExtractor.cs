@@ -45,6 +45,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.ExceptionServices;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -117,7 +118,20 @@ namespace Cognite.OpcUa
         // Active subscriptions, used in tests for WaitForSubscription().
         private readonly HashSet<SubscriptionName> activeSubscriptions = new();
 
-        public PeriodicScheduler PeriodicScheduler { get; private set; } = null!;
+        public PeriodicScheduler PeriodicScheduler => Scheduler;
+
+        /// <summary>
+        /// Event that is set when InitTasks is finished, and never reset.
+        /// </summary>
+        private ManualResetEvent initEvent = new(false);
+
+        public WaitHandle OnInit => initEvent;
+
+        /// <summary>
+        /// Whether the extractor should close the client when it shuts down. Defaults to true,
+        /// disabled in tests.
+        /// </summary>
+        public bool CloseClientOnClose { get; set; } = true;
 
         /// <summary>
         /// Construct extractor with list of pushers
@@ -269,15 +283,33 @@ namespace Cognite.OpcUa
             TaskScheduler.ScheduleTaskNow(browseTask.Name, reScheduleIfRunning: true);
         }
 
+        public async Task ScheduleRebrowseAndWait(TimeSpan? timeout = null)
+        {
+            var task = TaskScheduler.WaitForNextEndOfTask(browseTask.Name, timeout ?? Timeout.InfiniteTimeSpan);
+            ScheduleRebrowse();
+            await task;
+        }
+
+        public async Task WaitForBrowseCompletion(TimeSpan? timeout = null)
+        {
+            await TaskScheduler.WaitForNextEndOfTask(browseTask.Name, timeout ?? Timeout.InfiniteTimeSpan);
+        }
+
         public void OnQueueOverflow()
         {
+            log.LogInformation("QUEUE OVERFLOW BEEP BOOP");
             pusherTask.TriggerPushNow();
         }
 
-        public void OnSubscriptionsEstablished()
+        public void StartPushers()
         {
             // Called when subscriptions are established.
             TaskScheduler.ScheduleTaskNow(pusherTask.Name);
+        }
+
+        public async Task WaitForNextPush(bool trigger = false, int timeout = 100)
+        {
+            await pusherTask.WaitForNextPush(trigger, timeout);
         }
 
         /// <summary>
@@ -299,17 +331,6 @@ namespace Cognite.OpcUa
                 historyReader?.RemoveIssue(HistoryReader.StateIssue.ServerConnection);
                 TaskScheduler.Notify();
             }
-        }
-
-        private async Task RunPeriodicTasks(CancellationToken token)
-        {
-            var scheduler = new PeriodicScheduler(token);
-            if (StateStorage != null && !Config.DryRun)
-            {
-                var interval = Config.StateStorage.IntervalValue.Value;
-                scheduler.SchedulePeriodicTask(nameof(StoreState), interval, StoreState, interval != Timeout.InfiniteTimeSpan);
-            }
-            await scheduler.WaitForAll();
         }
 
         public async Task StoreState(CancellationToken token)
@@ -347,13 +368,19 @@ namespace Cognite.OpcUa
             TaskScheduler.AddScheduledTask(browseTask, true);
             TaskScheduler.AddScheduledTask(pusherTask, false);
 
-            AddMonitoredTask(token => InitialConnection(), ExtractorTaskResult.Expected, "Initial Connection");
-            AddMonitoredTask(RunPeriodicTasks, ExtractorTaskResult.Unexpected, "Run Periodic Tasks");
+            AddMonitoredTask(token => InitialConnection(), SchedulerTaskResult.Expected, "Initial Connection");
+            if (StateStorage != null && !Config.DryRun)
+            {
+                var interval = Config.StateStorage.IntervalValue.Value;
+                Scheduler.SchedulePeriodicTask(nameof(StoreState), interval, StoreState, interval != Timeout.InfiniteTimeSpan);
+            }
             // TEMP: Rewrite as a proper task!
             if (historyReader != null)
             {
-                AddMonitoredTask(token => historyReader.Run(token), ExtractorTaskResult.Unexpected, "History Reader");
+                AddMonitoredTask(token => historyReader.Run(token), SchedulerTaskResult.Unexpected, "History Reader");
             }
+
+            initEvent.Set();
 
             return Task.CompletedTask;
         }
@@ -361,17 +388,11 @@ namespace Cognite.OpcUa
         protected override ExtractorId GetExtractorVersion()
         {
             var version = Extractor.Metrics.Version.GetVersion(Assembly.GetExecutingAssembly());
-            Console.WriteLine(version);
             return new ExtractorId
             {
                 ExternalId = "cognite-opcua",
                 Version = string.IsNullOrWhiteSpace(version) ? null : version.Truncate(32),
             };
-        }
-
-        public void InitExternal(CancellationToken token)
-        {
-            Init(token);
         }
 
         private async Task InitialConnection(int startTimeout = -1)
@@ -434,27 +455,11 @@ namespace Cognite.OpcUa
 
             if (pubSubManager != null)
             {
-                AddMonitoredTask(StartPubSub, ExtractorTaskResult.Expected, "Start PubSub");
+                AddMonitoredTask(StartPubSub, SchedulerTaskResult.Expected, "Start PubSub");
             }
         }
 
-        /// <summary>
-        /// Used for running the extractor without calling Start(token) and getting locked
-        /// into waiting for cancellation.
-        /// </summary>
-        /// <param name="quitAfterMap">False to wait for cancellation</param>
-        /// <returns></returns>
-        /* public async Task RunExtractor(bool quitAfterMap = false, int startTimeout = -1)
-        {
-            await RunExtractorInternal(startTimeout);
-            if (!quitAfterMap)
-            {
-                Looper.Run();
-                await Scheduler.WaitForAll();
-            }
-        }*/
-
-        public void ScheduleTask(Func<CancellationToken, Task> task, ExtractorTaskResult staticResult, string name)
+        public void ScheduleTask(Func<CancellationToken, Task> task, SchedulerTaskResult staticResult, string name)
         {
             AddMonitoredTask(task, staticResult, name);
         }
@@ -474,7 +479,7 @@ namespace Cognite.OpcUa
             await pusherTask.WaitForNextPush(true);
             pusher.Reset();
             Starting.Set(1);
-            AddMonitoredTask(token => FinishExtractorRestart(), ExtractorTaskResult.Expected, "Finish Extractor Restart");
+            AddMonitoredTask(token => FinishExtractorRestart(), SchedulerTaskResult.Expected, "Finish Extractor Restart");
         }
 
         /// <summary>
@@ -499,10 +504,10 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Closes the extractor, mainly just shutting down the opcua client and waiting for a clean loss of connection.
         /// </summary>
-        public async Task Close(bool closeClient = true)
+        public async Task Close()
         {
             Source?.Cancel();
-            if (!uaClient.Started || !closeClient) return;
+            if (!uaClient.Started || !CloseClientOnClose) return;
             try
             {
                 await uaClient.Close(CancellationToken.None);
@@ -957,6 +962,8 @@ namespace Cognite.OpcUa
             subscriptionTask?.AddVariables(states);
             subscriptionTask?.AddEmitters(State.EmitterStates);
 
+            StartPushers();
+
             if (subscriptionTask != null) TaskScheduler.ScheduleTaskNow(subscriptionTask.Name, reScheduleIfRunning: true);
         }
 
@@ -1079,7 +1086,7 @@ namespace Cognite.OpcUa
 
         protected override async ValueTask DisposeAsyncCore()
         {
-            await Close(true);
+            await Close();
 
             Starting.Set(0);
             historyReader?.Dispose();

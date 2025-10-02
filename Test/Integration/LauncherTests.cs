@@ -1,6 +1,7 @@
 ﻿using Cognite.Extractor.Logging;
 using Cognite.Extractor.Testing;
 using Cognite.Extractor.Utils;
+using Cognite.Extractor.Utils.Unstable.Runtime;
 using Cognite.OpcUa;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Subscriptions;
@@ -71,7 +72,7 @@ namespace Test.Integration
             {
                 lock (tester)
                 {
-                    extractor?.Dispose();
+                    extractor?.DisposeAsync().AsTask().Wait();
                     extractor = e;
                 }
             };
@@ -83,7 +84,7 @@ namespace Test.Integration
             extractor?.Close().Wait();
             lock (tester)
             {
-                extractor?.Dispose();
+                extractor?.DisposeAsync().AsTask().Wait();
             }
 
         }
@@ -472,14 +473,17 @@ version: 1
                 LogDir = "logs2",
                 Exit = true
             };
-            var options = new ExtractorRunnerParams<FullConfig, UAExtractor>();
+            var options = new ExtractorRuntimeBuilder<FullConfig, UAExtractor>("test", "opcuaextractor/1.0")
+            {
+                RestartPolicy = ExtractorRestartPolicy.Always,
+            };
 
             method.Invoke(typeof(ExtractorStarter), new object[] { log, config, setup, options, "config", services });
 
             Assert.Equal("logs2", config.Logger.File.Path);
             Assert.Equal("debug", config.Logger.File.Level);
             Assert.True(config.Source.ExitOnFailure);
-            Assert.False(options.Restart);
+            Assert.Equal(ExtractorRestartPolicy.Never, options.RestartPolicy);
             Assert.Equal("information", config.Logger.Console.Level);
 
             // Invalid configs

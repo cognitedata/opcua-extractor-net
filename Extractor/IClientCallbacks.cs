@@ -11,7 +11,7 @@ namespace Cognite.OpcUa
     {
         PeriodicScheduler PeriodicScheduler { get; }
 
-        void ScheduleTask(Func<CancellationToken, Task> task, ExtractorTaskResult staticResult, string name);
+        void ScheduleTask(Func<CancellationToken, Task> task, SchedulerTaskResult staticResult, string name);
 
         /// <summary>
         /// Invoked when client loses connection to server.

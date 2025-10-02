@@ -242,7 +242,7 @@ namespace Cognite.OpcUa
             if (SubscriptionManager == null)
             {
                 SubscriptionManager = new SubscriptionManager(this, Config, log);
-                Callbacks.ScheduleTask(SubscriptionManager.RunTaskLoop, Extractor.Utils.Unstable.ExtractorTaskResult.Unexpected, "SubscriptionManager");
+                Callbacks.ScheduleTask(SubscriptionManager.RunTaskLoop, SchedulerTaskResult.Unexpected, "SubscriptionManager");
             }
 
             if (SessionManager.RunningTask != null)
@@ -255,7 +255,7 @@ namespace Cognite.OpcUa
                 catch { }
             }
 
-            Callbacks.ScheduleTask(SessionManager.Run, Extractor.Utils.Unstable.ExtractorTaskResult.Unexpected, "SessionManager");
+            Callbacks.PeriodicScheduler.ScheduleTask("SessionManager", SessionManager.Run);
             await Task.WhenAny(SessionManager.WaitForSession(liveToken), SessionManager.RunningTask);
 
             var mgrExc = SessionManager.RunningTask?.Exception;

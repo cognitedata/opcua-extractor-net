@@ -1,6 +1,7 @@
 ﻿using Cognite.Extractor.Common;
 using Cognite.OpcUa;
 using Cognite.OpcUa.Subscriptions;
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -9,7 +10,7 @@ namespace Test.Utils
 {
     public class DummyClientCallbacks : IClientCallbacks
     {
-        public PeriodicScheduler TaskScheduler { get; }
+        public PeriodicScheduler PeriodicScheduler { get; }
         public bool Connected { get; set; }
         public int ServiceLevelCbCount { get; set; }
         public int LowServiceLevelCbCount { get; set; }
@@ -19,7 +20,7 @@ namespace Test.Utils
 
         public DummyClientCallbacks(CancellationToken token)
         {
-            TaskScheduler = new PeriodicScheduler(token);
+            PeriodicScheduler = new PeriodicScheduler(token);
         }
 
         public void OnServerDisconnect(UAClient source)
@@ -63,6 +64,11 @@ namespace Test.Utils
         public void OnCreatedSubscription(SubscriptionName subscription)
         {
             ActivelyFailedSubscriptions.Remove(subscription);
+        }
+
+        public void ScheduleTask(Func<CancellationToken, Task> task, SchedulerTaskResult staticResult, string name)
+        {
+            PeriodicScheduler.ScheduleTask(name, task);
         }
     }
 }

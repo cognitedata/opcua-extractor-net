@@ -60,9 +60,9 @@ namespace Test.Integration
             using var pusher = new DummyPusher(new DummyPusherConfig());
             tester.Config.History.Enabled = false;
             tester.Config.Events.History = false;
-            using var extractor = tester.BuildExtractor(pusher);
+            await using var extractor = tester.BuildExtractor(pusher);
 
-            var runTask = extractor.RunExtractor();
+            var runTask = tester.RunExtractor(extractor);
 
             var ids = tester.Server.Ids.Event;
 
@@ -100,9 +100,9 @@ namespace Test.Integration
             tester.Config.Events.DestinationNameMap["TypeProp"] = "Type";
 
             using var pusher = new DummyPusher(new DummyPusherConfig());
-            using var extractor = tester.BuildExtractor(pusher);
+            await using var extractor = tester.BuildExtractor(pusher);
 
-            var runTask = extractor.RunExtractor();
+            var runTask = tester.RunExtractor(extractor);
 
             var ids = tester.Server.Ids.Event;
 
@@ -142,10 +142,10 @@ namespace Test.Integration
             using var pusher = new DummyPusher(new DummyPusherConfig());
             tester.Config.Events.ExcludeEventFilter = null;
             tester.Config.Events.ExcludeProperties = new List<string>();
-            using var extractor = tester.BuildExtractor(pusher);
+            await using var extractor = tester.BuildExtractor(pusher);
             tester.Config.Events.History = false;
 
-            var runTask = extractor.RunExtractor();
+            var runTask = tester.RunExtractor(extractor);
 
             var ids = tester.Server.Ids.Event;
 
@@ -181,7 +181,7 @@ namespace Test.Integration
         public async Task TestDisableSubscriptions()
         {
             using var pusher = new DummyPusher(new DummyPusherConfig());
-            using var extractor = tester.BuildExtractor(pusher);
+            await using var extractor = tester.BuildExtractor(pusher);
 
             var ids = tester.Server.Ids.Event;
 
@@ -210,7 +210,7 @@ namespace Test.Integration
                 .GetValue(tester.Client);
 
             // Test everything normal
-            await extractor.RunExtractor(true);
+            await tester.RunExtractor(extractor, true);
             Assert.All(extractor.State.EmitterStates, state => { Assert.True(state.ShouldSubscribe); });
             await extractor.WaitForSubscription(SubscriptionName.Events);
             Assert.Equal(3u, session.Subscriptions.First(sub => sub.DisplayName.StartsWith(SubscriptionName.Events.Name(), StringComparison.InvariantCulture)).MonitoredItemCount);
@@ -219,7 +219,7 @@ namespace Test.Integration
             // Test disable subscriptions
             await Reset();
             tester.Config.Subscriptions.Events = false;
-            await extractor.RunExtractor(true);
+            await tester.RunExtractor(extractor, true);
             var state = extractor.State.GetEmitterState(ids.Obj1);
             Assert.False(state.ShouldSubscribe);
             state = extractor.State.GetEmitterState(ObjectIds.Server);
@@ -244,7 +244,7 @@ namespace Test.Integration
             };
 
             tester.Config.Subscriptions.Events = true;
-            await extractor.RunExtractor(true);
+            await tester.RunExtractor(extractor, true);
             state = extractor.State.GetEmitterState(ids.Obj1);
             Assert.False(state.ShouldSubscribe);
             state = extractor.State.GetEmitterState(ObjectIds.Server);
@@ -270,13 +270,13 @@ namespace Test.Integration
             tester.WipeEventHistory();
 
             using var pusher = new DummyPusher(new DummyPusherConfig());
-            using var extractor = tester.BuildExtractor(pusher);
+            await using var extractor = tester.BuildExtractor(pusher);
 
             var start = DateTime.UtcNow.AddSeconds(-5);
 
             tester.Server.PopulateEvents(start);
 
-            var runTask = extractor.RunExtractor();
+            var runTask = tester.RunExtractor(extractor);
             var ids = tester.Server.Ids.Event;
 
             await extractor.WaitForSubscription(SubscriptionName.Events);
@@ -320,13 +320,13 @@ namespace Test.Integration
             tester.WipeEventHistory();
 
             using var pusher = new DummyPusher(new DummyPusherConfig());
-            using var extractor = tester.BuildExtractor(pusher);
+            await using var extractor = tester.BuildExtractor(pusher);
 
             var now = DateTime.UtcNow;
 
             tester.Server.PopulateEvents(now.AddSeconds(-5));
 
-            var runTask = extractor.RunExtractor();
+            var runTask = tester.RunExtractor(extractor);
             var ids = tester.Server.Ids.Event;
 
             await extractor.WaitForSubscription(SubscriptionName.Events);
@@ -391,19 +391,19 @@ namespace Test.Integration
 
             try
             {
-                var runTask = extractor.RunExtractor();
+                var runTask = tester.RunExtractor(extractor);
 
                 await extractor.WaitForSubscription(SubscriptionName.Events);
 
                 await TestUtils.WaitForCondition(() => extractor.State.EmitterStates.All(node =>
                     !node.IsFrontfilling && !node.IsBackfilling), 10);
 
-                await extractor.Looper.WaitForNextPush();
+                await extractor.WaitForNextPush();
 
                 await TestUtils.WaitForCondition(() =>
                     pusher.Events.ContainsKey(ObjectIds.Server) && pusher.Events[ObjectIds.Server].Count == 700, 5);
 
-                await extractor.Looper.StoreState(tester.Source.Token);
+                await extractor.StoreState(tester.Source.Token);
                 await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
 
                 Assert.Equal(700, pusher.Events[ObjectIds.Server].Count);
@@ -422,14 +422,14 @@ namespace Test.Integration
 
             try
             {
-                var runTask = extractor.RunExtractor();
+                var runTask = tester.RunExtractor(extractor);
 
                 await extractor.WaitForSubscription(SubscriptionName.Events);
 
                 await TestUtils.WaitForCondition(() => extractor.State.EmitterStates.All(node =>
                     !node.IsFrontfilling && !node.IsBackfilling), 10);
 
-                await extractor.Looper.WaitForNextPush();
+                await extractor.WaitForNextPush();
 
                 await TestUtils.WaitForCondition(() =>
                     pusher.Events.ContainsKey(ObjectIds.Server) && pusher.Events[ObjectIds.Server].Count == 707, 5);
@@ -460,7 +460,7 @@ namespace Test.Integration
             tester.WipeEventHistory();
 
             using var pusher = new DummyPusher(new DummyPusherConfig());
-            using var extractor = tester.BuildExtractor(pusher);
+            await using var extractor = tester.BuildExtractor(pusher);
 
             var ids = tester.Server.Ids.Event;
 
@@ -480,7 +480,7 @@ namespace Test.Integration
             pusher.PushDataPointResult = DataPushResult.RecoverableFailure;
             pusher.TestConnectionResult = false;
 
-            var runTask = extractor.RunExtractor();
+            var runTask = tester.RunExtractor(extractor);
             await extractor.WaitForSubscription(SubscriptionName.Events);
 
             Assert.False(runTask.IsFaulted, $"Faulted! {runTask.Exception}");
@@ -516,7 +516,7 @@ namespace Test.Integration
         public async Task TestAuditEvents()
         {
             using var pusher = new DummyPusher(new DummyPusherConfig());
-            using var extractor = tester.BuildExtractor(pusher);
+            await using var extractor = tester.BuildExtractor(pusher);
 
             tester.Server.SetEventConfig(true, true, true);
 
@@ -524,7 +524,7 @@ namespace Test.Integration
             tester.Config.Extraction.RootNode = ids.Root.ToProtoNodeId(tester.Client);
             tester.Config.Extraction.EnableAuditDiscovery = true;
 
-            var runTask = extractor.RunExtractor();
+            var runTask = tester.RunExtractor(extractor);
             await extractor.WaitForSubscription(SubscriptionName.Audit);
 
             Assert.Equal(3, pusher.PushedNodes.Count);

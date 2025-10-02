@@ -40,10 +40,10 @@ namespace Test.Integration
             // Arrange
             using var pusher = new DummyPusher(new DummyPusherConfig());
             tester.Config.Extraction.RebrowseTriggers = config;
-            using var extractor = tester.BuildExtractor(pusher);
+            await using var extractor = tester.BuildExtractor(pusher);
 
             // Act
-            var runTask = extractor.RunExtractor();
+            var runTask = tester.RunExtractor(extractor);
             await extractor.WaitForSubscription(SubscriptionName.RebrowseTriggers);
 
             // Assert
@@ -59,10 +59,10 @@ namespace Test.Integration
             // Arrange
             using var pusher = new DummyPusher(new DummyPusherConfig());
             tester.Config.Extraction.RebrowseTriggers = config;
-            using var extractor = tester.BuildExtractor(pusher, true);
+            await using var extractor = tester.BuildExtractor(pusher, true);
 
             // Act
-            var runTask = extractor.RunExtractor();
+            var runTask = tester.RunExtractor(extractor);
             await extractor.WaitForSubscription(SubscriptionName.DataPoints);
 
             // Assert
@@ -89,7 +89,7 @@ namespace Test.Integration
                 tester.Config.StateStorage,
                 tester.Provider.GetRequiredService<ILogger<LiteDBStateStore>>()
             );
-            using var extractor = tester.BuildExtractor(cdfPusher, true, stateStore);
+            await using var extractor = tester.BuildExtractor(cdfPusher, true, stateStore);
             var npdId = tester.Client.GetUniqueId(tester.Server.Server.GetNamespacePublicationDateId());
             var npds = new NamespacePublicationDateState(npdId);
             var lts = DateTime.UtcNow.AddSeconds(-10);
@@ -112,7 +112,7 @@ namespace Test.Integration
                     },
                 tester.Source.Token
             );
-            var runTask = extractor.RunExtractor();
+            var runTask = tester.RunExtractor(extractor);
             await extractor.WaitForSubscription(SubscriptionName.RebrowseTriggers);
             var initialCount = cdfPusher.PushedNodes.Count;
             var addedId = tester.Server.Server.AddObject(

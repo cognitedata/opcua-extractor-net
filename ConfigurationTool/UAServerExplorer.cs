@@ -278,7 +278,7 @@ namespace Cognite.OpcUa.Config
         {
         }
 
-        public void ScheduleTask(Func<CancellationToken, Task> task, ExtractorTaskResult staticResult, string name)
+        public void ScheduleTask(Func<CancellationToken, Task> task, SchedulerTaskResult staticResult, string name)
         {
             PeriodicScheduler.ScheduleTask(name, task);
         }

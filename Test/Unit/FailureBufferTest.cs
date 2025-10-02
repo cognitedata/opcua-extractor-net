@@ -56,10 +56,10 @@ namespace Test.Unit
         }
 
         [Fact]
-        public void TestBuildFailureBuffer()
+        public async Task TestBuildFailureBuffer()
         {
             using var stateStore = new DummyStateStore();
-            using var extractor = tester.BuildExtractor(null, true, stateStore);
+            await using var extractor = tester.BuildExtractor(null, true, stateStore);
             var cfg = BuildConfig();
 
             Assert.False(File.Exists(cfg.FailureBuffer.DatapointPath));
@@ -74,8 +74,8 @@ namespace Test.Unit
             Assert.False(fb1.AnyPoints);
             Assert.False(fb1.AnyEvents);
 
-            File.WriteAllText(cfg.FailureBuffer.DatapointPath, "testtest");
-            File.WriteAllText(cfg.FailureBuffer.EventPath, "testtest");
+            await File.WriteAllTextAsync(cfg.FailureBuffer.DatapointPath, "testtest");
+            await File.WriteAllTextAsync(cfg.FailureBuffer.EventPath, "testtest");
 
             var fb2 = new FailureBuffer(log, cfg, extractor);
 
@@ -97,7 +97,7 @@ namespace Test.Unit
         public async Task TestWriteDatapointsToFile()
         {
             var cfg = BuildConfig();
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
 
             using var pusher = new DummyPusher(new DummyPusherConfig());
 
@@ -166,12 +166,12 @@ namespace Test.Unit
         }
 
         [Fact]
-        public void TestWriteDatapointsCap()
+        public async Task TestWriteDatapointsCap()
         {
             var log = tester.Provider.GetRequiredService<ILogger<FailureBuffer>>();
             var cfg = BuildConfig();
             cfg.FailureBuffer.MaxBufferSize = 2000;
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
             var fb = new FailureBuffer(log, cfg, extractor);
 
             var writeDps = fb.GetType().GetMethod("WriteDatapointsToFile", BindingFlags.Instance | BindingFlags.NonPublic);
@@ -192,7 +192,7 @@ namespace Test.Unit
         public async Task TestWriteEventsToFile()
         {
             var cfg = BuildConfig();
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
 
             using var pusher = new DummyPusher(new DummyPusherConfig());
 
@@ -248,12 +248,12 @@ namespace Test.Unit
         }
 
         [Fact]
-        public void TestWriteEventsCap()
+        public async Task TestWriteEventsCap()
         {
             var log = tester.Provider.GetRequiredService<ILogger<FailureBuffer>>();
             var cfg = BuildConfig();
             cfg.FailureBuffer.MaxBufferSize = 2000;
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
             var fb = new FailureBuffer(log, cfg, extractor);
 
             var writeEvents = fb.GetType().GetMethod("WriteEventsToFile", BindingFlags.Instance | BindingFlags.NonPublic);

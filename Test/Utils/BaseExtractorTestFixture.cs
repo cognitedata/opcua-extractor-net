@@ -19,6 +19,13 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using System.Linq;
 using Opc.Ua.Client;
 using Cognite.OpcUa.Subscriptions;
+using Cognite.Extractor.Common;
+using System.Runtime.ExceptionServices;
+using Cognite.Extractor.Utils.Unstable.Configuration;
+using Cognite.Extractor.Utils.Unstable.Tasks;
+using Cognite.Extractor.Utils.Unstable;
+using Cognite.Extractor.Logging;
+using Cognite.Extractor.Metrics;
 
 namespace Test.Utils
 {
@@ -37,6 +44,7 @@ namespace Test.Utils
         protected PredefinedSetup[] Setups { get; }
         public DummyClientCallbacks Callbacks { get; private set; }
         public ILogger Log { get; }
+        public DummyIntegrationSink TaskSink { get; }
         protected BaseExtractorTestFixture(PredefinedSetup[] setups = null)
         {
             Port = CommonTestUtils.NextPort;
@@ -49,9 +57,22 @@ namespace Test.Utils
             }
             catch { }
             Services = new ServiceCollection();
-            Config = Services.AddConfig<FullConfig>("config.test.yml", 1);
+            Config = Services.AddConfig<FullConfig>("config.test.yml", new[] {
+                    typeof(BaseCogniteConfig),
+                    typeof(LoggerConfig),
+                    typeof(HighAvailabilityConfig),
+                    typeof(MetricsConfig),
+                    typeof(StateStoreConfig),
+                }, 1);
+            Services.AddTransient<ExtractorTaskScheduler>();
             Config.Source.EndpointUrl = $"opc.tcp://localhost:{Port}";
+            TaskSink = new DummyIntegrationSink();
+            Services.AddSingleton(new ConnectionConfig
+            {
+                Project = "test",
+            });
             Configure(Services);
+            Services.AddSingleton<IIntegrationSink>(TaskSink);
             Provider = Services.BuildServiceProvider();
 
             Log = Provider.GetRequiredService<ILogger<BaseExtractorTestFixture>>();
@@ -149,10 +170,43 @@ namespace Test.Utils
 #pragma warning disable CA2000 // Dispose objects before losing scope. No idea why C# doesn't understand this.
             pusher ??= new DummyPusher(new DummyPusherConfig());
 #pragma warning restore CA2000 // Dispose objects before losing scope
-            var ext = new UAExtractor(Config, Provider, pusher, Client, stateStore);
-            ext.InitExternal(Source.Token);
+            var configWrapper = new ConfigWrapper<FullConfig>(Config, null);
+            var taskScheduler = Provider.GetRequiredService<ExtractorTaskScheduler>();
+            var sink = Provider.GetRequiredService<IIntegrationSink>();
+            var ext = new UAExtractor(configWrapper, Provider, taskScheduler, pusher, Client, sink, stateStore);
+            ext.CloseClientOnClose = false;
 
             return ext;
+        }
+
+        /// <summary>
+        /// Used for running the extractor without calling Start(token) and getting locked
+        /// into waiting for cancellation.
+        /// </summary>
+        /// <param name="quitAfterMap">False to wait for cancellation</param>
+        /// <param name="startTimeout">Timeout in milliseconds to wait for start.
+        /// <returns></returns>
+        public async Task RunExtractor(UAExtractor extractor, bool quitAfterMap = false, int startTimeout = -1)
+        {
+            var startTask = extractor.Start(Source.Token);
+            if (!quitAfterMap)
+            {
+                await startTask;
+                return;
+            }
+
+
+            var timeout = startTimeout >= 0 ? TimeSpan.FromMilliseconds(startTimeout) : Timeout.InfiniteTimeSpan;
+            var res = await Task.WhenAny(CommonUtils.WaitAsync(extractor.OnInit, timeout, Source.Token), startTask);
+            if (res.IsFaulted)
+            {
+                ExceptionDispatchInfo.Capture(res.Exception!).Throw();
+            }
+            // Now we're initialized, and can wait for browse.
+            await extractor.WaitForBrowseCompletion(timeout);
+
+            // We're done with browsing, and we can return to the test.
+            // This lets tests easily wait for initialization and browsing to complete.
         }
 
         public (CDFMockHandler, CDFPusher) GetCDFPusher()
@@ -163,12 +217,22 @@ namespace Test.Utils
                 newServices.Add(service);
             }
             CommonTestUtils.AddDummyProvider("test", CDFMockHandler.MockMode.None, true, newServices);
-            newServices.AddCogniteClient("appid", null, true, true, false);
+            DestinationUtilsUnstable.AddCogniteClient(newServices, "appid", null, true, true, false);
+            DestinationUtilsUnstable.AddCogniteDestination(newServices);
             newServices.AddWriters(Config);
             var provider = newServices.BuildServiceProvider();
+            var client = provider.GetRequiredService<CogniteSdk.Client>();
+            var logger = provider.GetRequiredService<ILogger<CogniteDestinationWithIDM>>();
+            var config = provider.GetRequiredService<BaseCogniteConfig>();
+            var connection = provider.GetRequiredService<ConnectionConfig>();
             var destination = provider.GetRequiredService<CogniteDestinationWithIDM>();
-            var pusher = new CDFPusher(Provider.GetRequiredService<ILogger<CDFPusher>>(),
-                Config, Config.Cognite, destination, provider);
+            var pusher = new CDFPusher(
+                Provider.GetRequiredService<ILogger<CDFPusher>>(),
+                Config,
+                Config.Cognite,
+                destination,
+                provider.GetRequiredService<ConnectionConfig>(),
+                provider);
             var handler = provider.GetRequiredService<CDFMockHandler>();
             return (handler, pusher);
         }
@@ -198,7 +262,7 @@ namespace Test.Utils
         public static async Task TerminateRunTask(Task runTask, UAExtractor extractor)
         {
             ArgumentNullException.ThrowIfNull(extractor);
-            await extractor.Close(false);
+            await extractor.Close();
             try
             {
                 await runTask;

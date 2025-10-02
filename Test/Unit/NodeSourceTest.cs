@@ -48,7 +48,7 @@ namespace Test.Unit
             tester.Config.Extraction.Relationships.Enabled = false;
             tester.Config.Extraction.DataTypes.AutoIdentifyTypes = true;
 
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
 
             NodeHierarchyBuilder GetBuilder(params NodeId[] nodesToRead)
             {
@@ -184,7 +184,7 @@ namespace Test.Unit
         public async Task TestNodeSetWithoutServer()
         {
             tester.Config.Extraction.Relationships.Enabled = true;
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
             tester.Config.Extraction.Relationships.Enabled = false;
             tester.Config.Source.EndpointUrl = null;
 
@@ -230,7 +230,7 @@ namespace Test.Unit
         [Fact]
         public async Task TestNodeSetSourceEvents()
         {
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
             var log = tester.Provider.GetRequiredService<ILogger<NodeSetNodeSource>>();
             var source = new NodeSetNodeSource(log, tester.Config, extractor, tester.Client, tester.Client.TypeManager);
 
@@ -283,7 +283,7 @@ namespace Test.Unit
         public async Task TestEstimateArraySize()
         {
             using var pusher = new DummyPusher(new DummyPusherConfig());
-            using var extractor = tester.BuildExtractor(pusher);
+            await using var extractor = tester.BuildExtractor(pusher);
 
             tester.Config.History.Enabled = false;
             var extConfig = tester.Config.Extraction;
@@ -293,7 +293,7 @@ namespace Test.Unit
 
             tester.Server.UpdateNode(tester.Ids.Wrong.RankImpreciseNoDim, new double[] { 1.0, 2.0, 3.0, 4.0 });
 
-            await extractor.RunExtractor(true);
+            await tester.RunExtractor(extractor, true);
 
             Assert.Equal(6, pusher.PushedNodes.Count);
             Assert.Equal(5, pusher.PushedNodes.Values.Count(node => node is UAVariable variable && variable.IsArray));
@@ -302,7 +302,7 @@ namespace Test.Unit
         [Fact]
         public async Task TestNodeSetEstimateArraySize()
         {
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
             var log = tester.Provider.GetRequiredService<ILogger<NodeSetNodeSource>>();
             var source = new NodeSetNodeSource(log, tester.Config, extractor, tester.Client, tester.Client.TypeManager);
 

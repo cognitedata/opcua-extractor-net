@@ -147,8 +147,6 @@ namespace Cognite.OpcUa.Tasks
 
             await Task.WhenAll(tasks);
 
-            extractor.OnSubscriptionsEstablished();
-
             return new TaskUpdatePayload(GetMessage(variables, emitters));
         }
     }
