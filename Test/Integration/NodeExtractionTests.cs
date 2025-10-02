@@ -1285,6 +1285,7 @@ namespace Test.Integration
 
             Compare(pusher.PushedNodes.Values, pusher.PushedVariables.Values, pusher.PushedReferences);
         }
-        #endregion
     }
+        #endregion
 }
+

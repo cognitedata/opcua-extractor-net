@@ -704,10 +704,10 @@ namespace Test.Integration
             }
 
             // Test disable subscriptions
-            tester.Config.Subscriptions.DataPoints = false;
             await using (var extractor = tester.BuildExtractor(pusher))
             {
                 tester.Log.LogDebug("Test disable subscriptions");
+                tester.Config.Subscriptions.DataPoints = false;
                 await tester.RunExtractor(extractor, true);
                 var state = extractor.State.GetNodeState(ids.DoubleVar1);
                 Assert.False(state.ShouldSubscribe);
@@ -755,19 +755,16 @@ namespace Test.Integration
             using var pusher = new DummyPusher(new DummyPusherConfig());
             using var stateStore = new DummyStateStore();
 
-            var ids = tester.Server.Ids.Base;
-
             tester.Config.History.Enabled = true;
             tester.Config.History.Data = true;
             tester.Config.Source.Redundancy.MonitorServiceLevel = true;
             tester.Config.StateStorage.Interval = "10h";
 
             await using var uaClient = new UAClient(tester.Provider, tester.Config);
-            var callbacks = new DummyClientCallbacks(tester.Source.Token);
-            uaClient.Callbacks = callbacks;
             await using var extractor = tester.BuildExtractor(pusher, true, stateStore, uaClient);
 
-            tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Base.Root, uaClient);
+            var ids = tester.Server.Ids.Base;
+            tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Base.Root, tester.Client);
 
             // Need to reset connection to server in order to begin measuring service level
             tester.Server.SetServerRedundancyStatus(190, RedundancySupport.Hot);
