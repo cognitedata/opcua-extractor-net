@@ -1266,6 +1266,8 @@ namespace Test.Unit
             string oldTimeseries = System.Text.Json.JsonSerializer.Serialize(handler.TimeseriesRaw);
             extractor.ClearKnownSubscriptions();
             var reader = (HistoryReader)extractor.GetType().GetField("historyReader", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(extractor);
+            ((Dictionary<NodeId, VariableExtractionState>)reader.GetType().GetField("activeVarStates", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(reader)).Clear();
+            ((Dictionary<NodeId, EventExtractionState>)reader.GetType().GetField("activeEventStates", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(reader)).Clear();
             reader.AddIssue(HistoryReader.StateIssue.NodeHierarchyRead);
             await extractor.RunExtractor(true);
             Assert.True(extractor.State.NodeStates.Count > 0);

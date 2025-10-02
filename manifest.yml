@@ -67,6 +67,11 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.28.2":
+    description: Avoid restarting history after rebrowse if no new nodes were discovered.
+    changelog:
+      fixed:
+        - Fix issue causing history to be restarted if rebrowse was triggered but no new nodes were discovered.
   "2.38.1":
     description: Fix issue causing the extractor to stop pushing datapoints if pushing nodes to CDF during rebrowse fails.
     changelog:

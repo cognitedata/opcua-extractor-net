@@ -332,16 +332,17 @@ namespace Cognite.OpcUa.History
         {
             lock (statesLock)
             {
+                bool anyAdded = false;
                 foreach (var state in varStates.Where(s => s.FrontfillEnabled))
                 {
-                    activeVarStates[state.SourceId] = state;
+                    anyAdded |= activeVarStates.TryAdd(state.SourceId, state);
                 }
 
                 foreach (var state in eventStates.Where(s => s.FrontfillEnabled))
                 {
-                    activeEventStates[state.SourceId] = state;
+                    anyAdded |= activeEventStates.TryAdd(state.SourceId, state);
                 }
-                if (state.IsGood)
+                if (state.IsGood && anyAdded)
                 {
                     stateChangedEvent.Set();
                 }
