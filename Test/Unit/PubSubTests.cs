@@ -117,7 +117,7 @@ namespace Test.Unit
             tester.Config.PubSub.PreferUadp = uadp;
             await using var extractor = tester.BuildExtractor();
 
-            await extractor.RunExtractor(true);
+            await tester.RunExtractor(extractor, true);
 
             var queue = (AsyncBlockingQueue<UADataPoint>)extractor.Streamer.GetType()
                 .GetField("dataPointQueue", BindingFlags.NonPublic | BindingFlags.Instance)

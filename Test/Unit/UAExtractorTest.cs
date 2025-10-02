@@ -1,5 +1,7 @@
-﻿using Cognite.Extractor.Common;
+using Cognite.Extractor.Common;
 using Cognite.Extractor.Testing;
+using Cognite.Extractor.Utils.Unstable.Configuration;
+using Cognite.Extractor.Utils.Unstable.Tasks;
 using Cognite.OpcUa;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
@@ -43,8 +45,8 @@ namespace Test.Unit
 
             try
             {
-                await using var extractor = tester.BuildExtractor(client: client);
-                await Assert.ThrowsAsync<SilentServiceException>(() => extractor.RunExtractor(true, 2));
+                await using var extractor = tester.BuildExtractor();
+                await Assert.ThrowsAsync<SilentServiceException>(() => tester.RunExtractor(extractor, true, 0));
             }
             finally
             {
@@ -58,7 +60,7 @@ namespace Test.Unit
             using var pusher = new DummyPusher(new DummyPusherConfig());
             await using var extractor = tester.BuildExtractor(pusher);
 
-            await extractor.RunExtractor(true);
+            await tester.RunExtractor(extractor, true);
 
             Assert.Equal(153, pusher.PushedNodes.Count);
             Assert.Equal(2000, pusher.PushedVariables.Count);
@@ -76,7 +78,7 @@ namespace Test.Unit
             using var pusher = new DummyPusher(new DummyPusherConfig());
             await using var extractor = tester.BuildExtractor(pusher);
 
-            var task = extractor.RunExtractor();
+            var task = tester.RunExtractor(extractor);
             await extractor.WaitForSubscription(SubscriptionName.DataPoints);
             Assert.NotEmpty(pusher.PushedNodes);
             pusher.PushedNodes.Clear();
@@ -259,10 +261,15 @@ namespace Test.Unit
             tester.Config.Extraction.DataTypes.EstimateArraySizes = true;
             using var pusher = new DummyPusher(new DummyPusherConfig());
             await using var client = new UAClient(tester.Provider, tester.Config);
-            await using var extractor = new UAExtractor(tester.Config, tester.Provider, pusher, client, null);
-
-            extractor.InitExternal(tester.Source.Token);
-            await extractor.RunExtractor(true);
+            await using var extractor = new UAExtractor(
+                new ConfigWrapper<FullConfig>(tester.Config, null),
+                tester.Provider,
+                tester.Provider.GetRequiredService<ExtractorTaskScheduler>(),
+                pusher,
+                client,
+                tester.TaskSink,
+                null);
+            await tester.RunExtractor(extractor, true);
 
             foreach (var node in pusher.PushedNodes)
             {
@@ -306,7 +313,7 @@ namespace Test.Unit
                 MaxDelay = "200ms"
             };
 
-            var extractorTask = extractor.RunExtractor(true);
+            var extractorTask = tester.RunExtractor(extractor, true);
 
             // Wait for initial push to complete
             await TestUtils.WaitForCondition(() => pusher.Initialized, 10,

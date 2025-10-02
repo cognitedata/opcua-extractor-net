@@ -21,6 +21,9 @@
     <PackageReference Include="Nito.AsyncEx" Version="5.1.2" />
     <PackageReference Include="Google.Protobuf" Version="3.34.0" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\dotnet-extractor-utils\ExtractorUtils\ExtractorUtils.csproj" />
+  </ItemGroup>
   <!--ItemGroup>
     <None Include="$(SolutionDir)config\**" CopyToOutputDirectory="Always" LinkBase="config\" />
   </ItemGroup-->

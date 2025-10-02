@@ -11,9 +11,6 @@ logger:
     console:
         level: "fatal"
 
-cognite:
-    project: test
-
 history:
     enabled: true
 
