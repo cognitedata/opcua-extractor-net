@@ -128,6 +128,16 @@ namespace Cognite.OpcUa
         public WaitHandle OnInit => initEvent;
 
         /// <summary>
+        /// Timeout for starting the UAClient, in seconds. Default is unlimited.
+        /// </summary>
+        public int StartTimeout { get; set; } = -1;
+
+        /// <summary>
+        /// Set once the extractor has fully loaded and parsed configuration.
+        /// </summary>
+        private bool isConfigurationReady = false;
+
+        /// <summary>
         /// Whether the extractor should close the client when it shuts down. Defaults to true,
         /// disabled in tests.
         /// </summary>
@@ -277,6 +287,11 @@ namespace Cognite.OpcUa
             Starting.Set(0);
         }
 
+        public bool IsReadyToBrowse => (uaClient.SessionManager.Session?.Connected ?? false
+            || (Config.Source.EndpointUrl == null && nodeSetSource?.IsInitialized == true))
+            && isConfigurationReady;
+
+
         public void ScheduleRebrowse()
         {
             browseTask.AddNodesToBrowse(RootNodes, isFull: true);
@@ -297,7 +312,6 @@ namespace Cognite.OpcUa
 
         public void OnQueueOverflow()
         {
-            log.LogInformation("QUEUE OVERFLOW BEEP BOOP");
             pusherTask.TriggerPushNow();
         }
 
@@ -395,14 +409,14 @@ namespace Cognite.OpcUa
             };
         }
 
-        private async Task InitialConnection(int startTimeout = -1)
+        private async Task InitialConnection()
         {
             if (!uaClient.Started && Config.Source.EndpointUrl != null)
             {
                 log.LogInformation("Start UAClient");
                 try
                 {
-                    await uaClient.Run(Source.Token, startTimeout);
+                    await uaClient.Run(Source.Token, StartTimeout);
                 }
                 catch (OperationCanceledException)
                 {
@@ -438,8 +452,9 @@ namespace Cognite.OpcUa
                     Config, this, uaClient, TypeManager);
                 await nodeSetSource.Initialize(Source.Token);
             }
-
             await ConfigureExtractor();
+
+            isConfigurationReady = true;
 
             TaskScheduler.Notify();
 

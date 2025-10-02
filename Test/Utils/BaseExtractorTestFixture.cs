@@ -157,7 +157,7 @@ namespace Test.Utils
             Config.Source.EndpointUrl = $"opc.tcp://localhost:{Port}";
             Config.GenerateDefaults();
         }
-        public UAExtractor BuildExtractor(IPusher pusher = null, bool clear = true, IExtractionStateStore stateStore = null)
+        public UAExtractor BuildExtractor(IPusher pusher = null, bool clear = true, IExtractionStateStore stateStore = null, UAClient client = null)
         {
             if (clear)
             {
@@ -173,7 +173,7 @@ namespace Test.Utils
             var configWrapper = new ConfigWrapper<FullConfig>(Config, null);
             var taskScheduler = Provider.GetRequiredService<ExtractorTaskScheduler>();
             var sink = Provider.GetRequiredService<IIntegrationSink>();
-            var ext = new UAExtractor(configWrapper, Provider, taskScheduler, pusher, Client, sink, stateStore);
+            var ext = new UAExtractor(configWrapper, Provider, taskScheduler, pusher, client ?? Client, sink, stateStore);
             ext.CloseClientOnClose = false;
 
             return ext;
@@ -203,7 +203,11 @@ namespace Test.Utils
                 ExceptionDispatchInfo.Capture(res.Exception!).Throw();
             }
             // Now we're initialized, and can wait for browse.
-            await extractor.WaitForBrowseCompletion(timeout);
+            res = await Task.WhenAny(extractor.WaitForBrowseCompletion(timeout), startTask);
+            if (res.IsFaulted)
+            {
+                ExceptionDispatchInfo.Capture(res.Exception!).Throw();
+            }
 
             // We're done with browsing, and we can return to the test.
             // This lets tests easily wait for initialization and browsing to complete.
@@ -323,8 +327,7 @@ namespace Test.Utils
             }
             if (Client != null)
             {
-                await Client.Close(CancellationToken.None);
-                Client.Dispose();
+                await Client.DisposeAsync();
                 Client = null;
             }
             Server?.Dispose();

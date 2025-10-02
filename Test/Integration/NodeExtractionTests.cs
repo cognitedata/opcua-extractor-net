@@ -1112,7 +1112,7 @@ namespace Test.Integration
             extraction.Relationships.Enabled = true;
             extraction.Relationships.Hierarchical = true;
             extraction.Relationships.InverseHierarchical = true;
-            await using var extractor = tester.BuildExtractor(pusher);
+
 
             extraction.RootNode = CommonTestUtils.ToProtoNodeId(tester.Ids.Custom.Root, tester.Client);
             extraction.DataTypes.AllowStringVariables = true;
@@ -1137,7 +1137,10 @@ namespace Test.Integration
             };
 
             // Nothing enabled, default run, copy results
-            await tester.RunExtractor(extractor, true);
+            await using (var extractor = tester.BuildExtractor(pusher))
+            {
+                await tester.RunExtractor(extractor, true);
+            }
             var assets = pusher.PushedNodes.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
             var tss = pusher.PushedVariables.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
             var refs = pusher.PushedReferences.ToHashSet();
@@ -1217,25 +1220,30 @@ namespace Test.Integration
             // Enable types only
             tester.Log.LogInformation("BEGIN TYPE RUN");
             tester.Client.TypeManager.Reset();
-            extractor.State.Clear();
-            tester.Config.Source.NodeSetSource.Types = true;
-            await tester.RunExtractor(extractor, true);
-            Compare(pusher.PushedNodes.Values, pusher.PushedVariables.Values, pusher.PushedReferences);
+            await using (var extractor = tester.BuildExtractor(pusher))
+            {
+                tester.Config.Source.NodeSetSource.Types = true;
+                await tester.RunExtractor(extractor, true);
+                Compare(pusher.PushedNodes.Values, pusher.PushedVariables.Values, pusher.PushedReferences);
+            }
+
 
             // Enable instance as well
 
             pusher.Wipe();
             tester.Log.LogInformation("BEGIN INSTANCE RUN");
             tester.Client.TypeManager.Reset();
-            extractor.State.Clear();
-            tester.Config.Source.NodeSetSource.Instance = true;
-            await tester.RunExtractor(extractor, true);
-            foreach (var node in pusher.PushedNodes.Values)
+            await using (var extractor = tester.BuildExtractor(pusher))
             {
-                tester.Log.LogInformation("{Node}", node);
-            }
+                tester.Config.Source.NodeSetSource.Instance = true;
+                await tester.RunExtractor(extractor, true);
+                foreach (var node in pusher.PushedNodes.Values)
+                {
+                    tester.Log.LogInformation("{Node}", node);
+                }
 
-            Compare(pusher.PushedNodes.Values, pusher.PushedVariables.Values, pusher.PushedReferences);
+                Compare(pusher.PushedNodes.Values, pusher.PushedVariables.Values, pusher.PushedReferences);
+            }
         }
         #endregion
     }

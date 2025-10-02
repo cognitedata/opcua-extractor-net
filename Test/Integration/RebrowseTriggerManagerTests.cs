@@ -113,6 +113,7 @@ namespace Test.Integration
                 tester.Source.Token
             );
             var runTask = tester.RunExtractor(extractor);
+            await extractor.WaitForBrowseCompletion();
             await extractor.WaitForSubscription(SubscriptionName.RebrowseTriggers);
             var initialCount = cdfPusher.PushedNodes.Count;
             var addedId = tester.Server.Server.AddObject(
@@ -132,6 +133,7 @@ namespace Test.Integration
                 "Expected node to be discovered"
             );
 
+            await extractor.StoreState(tester.Source.Token);
             await stateStore.RestoreExtractionState<
                 NamespacePublicationDateStorableState,
                 NamespacePublicationDateState

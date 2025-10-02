@@ -46,7 +46,7 @@ namespace Cognite.OpcUa
     /// <summary>
     /// Client managing the connection to the opcua server, and providing wrapper methods to simplify interaction with the server.
     /// </summary>
-    public class UAClient : IDisposable, IUAClientAccess
+    public class UAClient : IAsyncDisposable, IUAClientAccess
     {
         protected FullConfig Config { get; set; }
         protected ISession? Session => SessionManager.Session;
@@ -234,6 +234,7 @@ namespace Cognite.OpcUa
         private async Task StartSession(int timeout = -1)
         {
             if (Callbacks == null) throw new InvalidOperationException("Attempted to start UAClient without setting callbacks");
+            if (SessionManager.RunningTask != null) throw new InvalidOperationException("Attempted to start UAClient that is already running");
 
             var appConfig = await LoadAppConfig();
 
@@ -243,16 +244,6 @@ namespace Cognite.OpcUa
             {
                 SubscriptionManager = new SubscriptionManager(this, Config, log);
                 Callbacks.ScheduleTask(SubscriptionManager.RunTaskLoop, SchedulerTaskResult.Unexpected, "SubscriptionManager");
-            }
-
-            if (SessionManager.RunningTask != null)
-            {
-                await SessionManager.Close(liveToken);
-                try
-                {
-                    await SessionManager.RunningTask;
-                }
-                catch { }
             }
 
             Callbacks.PeriodicScheduler.ScheduleTask("SessionManager", SessionManager.Run);
@@ -922,17 +913,11 @@ namespace Cognite.OpcUa
             return Context.ToNodeId(id);
         }
 
-        public void Dispose()
-        {
-            Dispose(true);
-            GC.SuppressFinalize(this);
-        }
-
-        protected virtual void Dispose(bool disposing)
+        protected virtual async ValueTask DisposeAsyncCore()
         {
             try
             {
-                Close(CancellationToken.None).Wait();
+                await Close(CancellationToken.None);
             }
             catch (Exception ex)
             {
@@ -945,6 +930,11 @@ namespace Cognite.OpcUa
             }
             subscriptionSem.Dispose();
             SessionManager.Dispose();
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            await DisposeAsyncCore();
         }
         #endregion
     }

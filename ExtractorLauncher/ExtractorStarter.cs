@@ -49,6 +49,11 @@ namespace Cognite.OpcUa
 
         public static Action<CogniteDestination?, UAExtractor>? OnCreateExtractor { get; set; }
 
+        /// <summary>
+        /// Debug option to disable adding the CDF pusher to the service collection.
+        /// </summary>
+        public static bool AddCDFPusher { get; set; } = true;
+
         private static string? VerifyConfig(ILogger log, FullConfig config)
         {
             if (string.IsNullOrEmpty(config.Source.EndpointUrl))
@@ -290,16 +295,21 @@ namespace Cognite.OpcUa
                 config.GenerateDefaults();
             }
 
-            services.AddSingleton<IPusher>(provider =>
+
+            if (AddCDFPusher)
             {
-                var conf = provider.GetRequiredService<FullConfig>();
-                var dest = provider.GetService<CogniteDestinationWithIDM>();
-                var log = provider.GetRequiredService<ILogger<CDFPusher>>();
-                var connectionConfig = provider.GetRequiredService<ConnectionConfig>();
-                if (conf.Cognite == null || dest == null || dest.CogniteClient == null)
-                    return null!;
-                return new CDFPusher(log, conf, conf.Cognite, dest, connectionConfig, provider);
-            });
+                services.AddSingleton<IPusher>(provider =>
+                {
+                    var conf = provider.GetRequiredService<FullConfig>();
+                    var dest = provider.GetService<CogniteDestinationWithIDM>();
+                    var log = provider.GetRequiredService<ILogger<CDFPusher>>();
+                    var connectionConfig = provider.GetRequiredService<ConnectionConfig>();
+                    if (conf.Cognite == null || dest == null || dest.CogniteClient == null)
+                        return null!;
+                    return new CDFPusher(log, conf, conf.Cognite, dest, connectionConfig, provider);
+                });
+            }
+
 
             services.AddSingleton<UAClient>();
 

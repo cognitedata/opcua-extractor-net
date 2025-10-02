@@ -71,8 +71,7 @@ namespace Test.Unit
                 Source.Dispose();
                 Source = null;
             }
-            await Explorer?.Close(CancellationToken.None);
-            Explorer?.Dispose();
+            if (Explorer != null) await Explorer.DisposeAsync();
             Server?.Stop();
             Server?.Dispose();
 
@@ -109,7 +108,7 @@ namespace Test.Unit
 
             var oldEP = tester.Config.Source.EndpointUrl;
             // Test failure to connect at all
-            using (var explorer = new UAServerExplorer(tester.Provider, tester.Config, tester.BaseConfig, tester.Source.Token))
+            await using (var explorer = new UAServerExplorer(tester.Provider, tester.Config, tester.BaseConfig, tester.Source.Token))
             {
                 explorer.ResetSummary();
                 tester.Config.Source.EndpointUrl = "opc.tcp://localhost:60000";

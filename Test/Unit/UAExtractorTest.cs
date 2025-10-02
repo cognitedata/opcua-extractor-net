@@ -8,6 +8,7 @@ using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.Subscriptions;
 using Cognite.OpcUa.Types;
 using Cognite.OpcUa.Utils;
+using CogniteSdk.Alpha;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
@@ -37,17 +38,22 @@ namespace Test.Unit
         {
             var oldEP = tester.Config.Source.EndpointUrl;
             tester.Config.Source.EndpointUrl = "opc.tcp://localhost:60000";
-            await tester.Client.Close(tester.Source.Token);
+            await using var client = new UAClient(tester.Provider, tester.Config);
+            var callbacks = new DummyClientCallbacks(tester.Source.Token);
+            client.Callbacks = callbacks;
+            tester.TaskSink.Clear();
 
             try
             {
-                await using var extractor = tester.BuildExtractor();
-                await Assert.ThrowsAsync<SilentServiceException>(() => tester.RunExtractor(extractor, true, 0));
+                await using var extractor = tester.BuildExtractor(client: client);
+                extractor.StartTimeout = 2;
+                await tester.RunExtractor(extractor, true, 30000);
+                var lastError = tester.TaskSink.ReportedErrors.Last();
+                Assert.Equal(ErrorLevel.fatal, lastError.Level);
             }
             finally
             {
                 tester.Config.Source.EndpointUrl = oldEP;
-                await tester.Client.Run(tester.Source.Token, 0);
             }
         }
         [Fact]
@@ -70,7 +76,6 @@ namespace Test.Unit
         public async Task TestRestartOnReconnect()
         {
             tester.Config.Source.RestartOnReconnect = true;
-            if (!tester.Client.Started) await tester.Client.Run(tester.Source.Token, 0);
             tester.Config.Extraction.RootNode = tester.Ids.Base.Root.ToProtoNodeId(tester.Client);
 
             using var pusher = new DummyPusher(new DummyPusherConfig());
@@ -88,7 +93,6 @@ namespace Test.Unit
             await TestUtils.WaitForCondition(() => pusher.PushedNodes.Count > 0, 10);
 
             await extractor.Close();
-            await tester.Client.Run(tester.Source.Token, 0);
         }
         [Theory]
         [InlineData(0, 2, 2, 1, 0, 0)]
@@ -100,6 +104,7 @@ namespace Test.Unit
             using var pusher = new DummyPusher(new DummyPusherConfig());
             tester.Config.Extraction.Relationships.Enabled = true;
             await using var extractor = tester.BuildExtractor(pusher);
+            await extractor.Init(tester.Source.Token);
 
             switch (failAt)
             {
@@ -235,7 +240,7 @@ namespace Test.Unit
             Assert.Equal(100, tester.Config.Source.BrowseNodesChunk);
         }
 
-        [Fact]
+        [Fact(Timeout = 10000)]
         public async Task TestNoServerExtractor()
         {
             tester.Config.Source.EndpointUrl = null;
@@ -261,7 +266,7 @@ namespace Test.Unit
             tester.Config.Extraction.Relationships.Enabled = true;
             tester.Config.Extraction.DataTypes.EstimateArraySizes = true;
             using var pusher = new DummyPusher(new DummyPusherConfig());
-            using var client = new UAClient(tester.Provider, tester.Config);
+            await using var client = new UAClient(tester.Provider, tester.Config);
             await using var extractor = new UAExtractor(
                 new ConfigWrapper<FullConfig>(tester.Config, null),
                 tester.Provider,
