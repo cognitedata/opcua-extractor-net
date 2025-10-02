@@ -73,7 +73,7 @@ namespace Test.Unit
             var (handler, pusher) = tester.GetCDFPusher();
             await using var extractor = tester.BuildExtractor(pusher);
 
-            await extractor.RunExtractor(true);
+            await tester.RunExtractor(extractor, true);
 
             Assert.Equal(2, handler.Spaces.Count);
             // FolderType, BaseObjectType, BaseVariableType, BaseDataVariableType, PropertyType,
@@ -150,7 +150,7 @@ namespace Test.Unit
             var (handler, pusher) = tester.GetCDFPusher();
             await using (var extractor = tester.BuildExtractor(pusher, true, stateStore))
             {
-                await extractor.RunExtractor(true);
+                await tester.RunExtractor(extractor, true);
                 Assert.Equal(2, handler.Spaces.Count);
                 Assert.Equal(18, handler.Views.Count);
                 Assert.Equal(13, handler.Containers.Count);
@@ -171,7 +171,7 @@ namespace Test.Unit
 
             await using (var extractor = tester.BuildExtractor(pusher, true, stateStore))
             {
-                await extractor.RunExtractor(true);
+                await tester.RunExtractor(extractor, true);
             }
 
             Assert.Equal(2, handler.Spaces.Count);
@@ -193,7 +193,7 @@ namespace Test.Unit
             var (handler, pusher) = tester.GetCDFPusher();
             await using var extractor = tester.BuildExtractor(pusher);
 
-            await extractor.RunExtractor(true);
+            await tester.RunExtractor(extractor, true);
 
             Assert.Equal(2, handler.Spaces.Count);
 

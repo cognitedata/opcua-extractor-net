@@ -302,10 +302,11 @@ namespace Test.Unit
             tester.Config.Extraction.Deletes.Enabled = true;
             using var stateStore = new MockStateStore();
 
-            await using var extractor = tester.BuildExtractor(pusher, true, stateStore);
+            await using var extractor = tester.BuildExtractor(pusher, stateStore: stateStore);
+            // We're invoking PushNodes directly without starting the extractor, so we need to call init.
+            await extractor.Init(tester.Source.Token);
             // We need a reference to the delete manager
             var deleteManager = extractor.GetType().GetField("deletesManager", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).GetValue(extractor) as DeletesManager;
-
 
             // Register some initial nodes
             var result = GetTestResult(extractor, 2);
@@ -378,7 +379,7 @@ namespace Test.Unit
             var addedVarExtId = tester.Client.GetUniqueId(addedVarId);
 
             // Run the extractor and verify that we got the node.
-            await extractor.RunExtractor(true);
+            await tester.RunExtractor(extractor, true);
             Assert.True(pusher.PushedNodes.ContainsKey(addedId));
 
             Assert.True(stateStore.States["known_objects"].ContainsKey(addedExtId));
@@ -389,7 +390,7 @@ namespace Test.Unit
             // Run rebrowse, we should discover the deleted node.
             tester.Server.Server.RemoveNode(addedId);
             tester.Server.Server.RemoveNode(addedVarId);
-            await extractor.Rebrowse();
+            await extractor.ScheduleRebrowseAndWait(TimeSpan.FromSeconds(10));
             Assert.False(stateStore.States["known_objects"].ContainsKey(addedExtId));
             Assert.False(stateStore.States["known_variables"].ContainsKey(addedVarExtId));
             Assert.Contains(addedExtId, pusher.LastDeleteReq.Objects.Select(s => s.Id));
@@ -423,7 +424,7 @@ namespace Test.Unit
             var addedExtId = tester.Client.GetUniqueId(addedId);
             var addedVarExtId = tester.Client.GetUniqueId(addedVarId);
             // Run the extractor and verify that we got the node.
-            await extractor.RunExtractor(true);
+            await tester.RunExtractor(extractor, true);
             Assert.True(handler.Assets.ContainsKey(addedExtId));
             Assert.True(handler.Timeseries.ContainsKey(addedVarExtId));
             Assert.False(handler.Assets[addedExtId].metadata.ContainsKey("deleted"));
@@ -446,7 +447,7 @@ namespace Test.Unit
             // Run rebrowse, we should discover the deleted nodes.
             tester.Server.Server.RemoveNode(addedId);
             tester.Server.Server.RemoveNode(addedVarId);
-            await extractor.Rebrowse();
+            await extractor.ScheduleRebrowseAndWait(TimeSpan.FromSeconds(10));
             Assert.Equal("true", handler.Assets[addedExtId].metadata["deleted"]);
             Assert.Equal("true", handler.Timeseries[addedVarExtId].metadata["deleted"]);
             Assert.False(handler.Relationships.ContainsKey(refExtId));
@@ -490,7 +491,7 @@ namespace Test.Unit
             var addedVarExtId = tester.Client.GetUniqueId(addedVarId);
 
             // Run the extractor and verify that we got the node.
-            await extractor.RunExtractor(true);
+            await tester.RunExtractor(extractor, true);
             Assert.True(handler.AssetsRaw.ContainsKey(addedExtId));
             Assert.True(handler.TimeseriesRaw.ContainsKey(addedVarExtId));
             handler.Timeseries.Values.ToList().ForEach(v => _output.WriteLine(v.ToString()));
@@ -515,7 +516,7 @@ namespace Test.Unit
             // Run rebrowse, we should discover the deleted nodes.
             tester.Server.Server.RemoveNode(addedId);
             tester.Server.Server.RemoveNode(addedVarId);
-            await extractor.Rebrowse();
+            await extractor.ScheduleRebrowseAndWait(TimeSpan.FromSeconds(10));
             Assert.True(handler.AssetsRaw[addedExtId].GetProperty("deleted").GetBoolean());
             Assert.True(handler.TimeseriesRaw[addedVarExtId].GetProperty("deleted").GetBoolean());
             Assert.True(handler.RelationshipsRaw[refExtId].deleted);

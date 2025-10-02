@@ -38,22 +38,19 @@ namespace Test.Unit
             var dps = new List<UADataPoint>();
             pusher.DataPoints[(new NodeId("id", 0), -1)] = dps;
             pusher.Initialized = true;
+            tester.Config.Extraction.DataPushDelay = "100h"; // Effectively disable automatic pushing
+            tester.Config.Subscriptions.DataPoints = false;
+            tester.Config.Subscriptions.Events = false;
+            tester.Config.History.Enabled = false;
+            tester.Config.Extraction.RootNode = tester.Ids.Base.Root.ToProtoNodeId(tester.Client);
             await using var extractor = tester.BuildExtractor(pusher);
-
-            using var evt = new ManualResetEvent(false);
+            var waitTask = extractor.WaitForNextPush();
+            await tester.RunExtractor(extractor, true);
+            await waitTask;
 
             var queue = (AsyncBlockingQueue<UADataPoint>)extractor.Streamer.GetType()
                 .GetField("dataPointQueue", BindingFlags.NonPublic | BindingFlags.Instance)
                 .GetValue(extractor.Streamer);
-
-            void DummyLooper(CancellationToken token)
-            {
-                if (token.IsCancellationRequested) return;
-                Assert.True(queue.Count <= 1_000_000);
-                evt.Set();
-            }
-
-            extractor.Looper.Scheduler.SchedulePeriodicTask("Pushers", Timeout.InfiniteTimeSpan, DummyLooper, false);
 
             extractor.Streamer.AllowData = true;
             var start = DateTime.UtcNow;
@@ -66,7 +63,7 @@ namespace Test.Unit
 
             extractor.State.SetNodeState(state, "id");
 
-            Assert.False(evt.WaitOne(100));
+            await Assert.ThrowsAsync<TimeoutException>(async () => await extractor.WaitForNextPush(false, 10));
 
             await extractor.Streamer.EnqueueAsync(new UADataPoint(start, "id", -1, StatusCodes.Good));
             Assert.Equal(1, queue.Count);
@@ -75,36 +72,27 @@ namespace Test.Unit
             Assert.Single(dps);
             Assert.Equal(0, queue.Count);
 
-            // Should block
+            // Should trigger push twice
+            waitTask = extractor.WaitForNextPush();
             var task = extractor.Streamer.EnqueueAsync(Enumerable.Range(0, 2_000_000).Select(idx => new UADataPoint(start.AddMilliseconds(idx), "id", idx, StatusCodes.Good)));
 
-            var wait = Task.Delay(100);
-            Assert.Equal(wait, await Task.WhenAny(wait, task));
+            await waitTask;
+            await extractor.WaitForNextPush();
 
-            Assert.True(evt.WaitOne(10000));
-            Assert.Equal(1_000_000, queue.Count);
-            evt.Reset();
-            await extractor.Streamer.PushDataPoints(pusher, tester.Source.Token);
-            Assert.True(evt.WaitOne(10000));
-            Assert.Equal(1_000_000, queue.Count);
-            evt.Reset();
             // Should terminate
             Assert.Equal(task, await Task.WhenAny(task, Task.Delay(500)));
-            await extractor.Streamer.PushDataPoints(pusher, tester.Source.Token);
 
             Assert.Equal(2_000_001, dps.Count);
             Assert.Equal(0, queue.Count);
 
             await extractor.Streamer.EnqueueAsync(Enumerable.Range(2000000, 999999).Select(idx => new UADataPoint(start.AddMilliseconds(idx), "id", idx, StatusCodes.Good)));
 
-            Assert.False(evt.WaitOne(100));
+            await Assert.ThrowsAsync<TimeoutException>(async () => await extractor.WaitForNextPush(false, 10));
             Assert.Equal(999_999, queue.Count);
 
             await extractor.Streamer.EnqueueAsync(new UADataPoint(start.AddMilliseconds(3000000), "id", 300, StatusCodes.Good));
-            Assert.True(evt.WaitOne(10000));
-            Assert.Equal(1_000_000, queue.Count);
+            await extractor.WaitForNextPush();
 
-            await extractor.Streamer.PushDataPoints(pusher, tester.Source.Token);
             Assert.Equal(start, state.DestinationExtractedRange.First);
             Assert.Equal(start.AddMilliseconds(3000000), state.DestinationExtractedRange.Last);
         }
@@ -113,24 +101,21 @@ namespace Test.Unit
         {
             using var pusher = new DummyPusher(new DummyPusherConfig());
             pusher.Initialized = true;
+            tester.Config.Extraction.DataPushDelay = "100h"; // Effectively disable automatic pushing
+            tester.Config.Subscriptions.DataPoints = false;
+            tester.Config.Subscriptions.Events = false;
+            tester.Config.History.Enabled = false;
+            tester.Config.Extraction.RootNode = tester.Ids.Base.Root.ToProtoNodeId(tester.Client);
             await using var extractor = tester.BuildExtractor(pusher);
+            var waitTask = extractor.WaitForNextPush();
+            await tester.RunExtractor(extractor, true);
+            await waitTask;
 
             var id = new NodeId("id", 0);
 
             var queue = (AsyncBlockingQueue<UAEvent>)extractor.Streamer.GetType()
                 .GetField("eventQueue", BindingFlags.NonPublic | BindingFlags.Instance)
                 .GetValue(extractor.Streamer);
-
-            using var evt = new ManualResetEvent(false);
-
-            void DummyLooper(CancellationToken token)
-            {
-                if (token.IsCancellationRequested) return;
-                Assert.True(queue.Count <= 100_000);
-                evt.Set();
-            }
-
-            extractor.Looper.Scheduler.SchedulePeriodicTask("Pushers", Timeout.InfiniteTimeSpan, DummyLooper, false);
 
             extractor.Streamer.AllowEvents = true;
             var start = DateTime.UtcNow;
@@ -140,7 +125,7 @@ namespace Test.Unit
             state.FinalizeRangeInit();
             extractor.State.SetEmitterState(state);
 
-            Assert.False(evt.WaitOne(100));
+            await Assert.ThrowsAsync<TimeoutException>(async () => await extractor.WaitForNextPush(false, 10));
 
             await extractor.Streamer.EnqueueAsync(new UAEvent { EmittingNode = id, Time = start });
             Assert.Equal(1, queue.Count);
@@ -151,21 +136,13 @@ namespace Test.Unit
             Assert.Single(evts);
             Assert.Equal(0, queue.Count);
 
-            // Should block
+            // Should trigger push twice.
+            waitTask = extractor.WaitForNextPush();
             var task = extractor.Streamer.EnqueueAsync(Enumerable.Range(0, 200_000).Select(idx =>
                 new UAEvent { EmittingNode = id, Time = start.AddMilliseconds(idx) }));
 
-            var wait = Task.Delay(100);
-            Assert.Equal(wait, await Task.WhenAny(wait, task));
-
-            Assert.True(evt.WaitOne(10000));
-            Assert.Equal(100_000, queue.Count);
-            evt.Reset();
-            await extractor.Streamer.PushEvents(pusher, tester.Source.Token);
-            Assert.True(evt.WaitOne(10000));
-            Assert.Equal(100_000, queue.Count);
-            evt.Reset();
-            await extractor.Streamer.PushEvents(pusher, tester.Source.Token);
+            await waitTask;
+            await extractor.WaitForNextPush();
 
             Assert.Equal(200001, evts.Count);
             Assert.Equal(0, queue.Count);
@@ -173,14 +150,12 @@ namespace Test.Unit
             await extractor.Streamer.EnqueueAsync(Enumerable.Range(200000, 99999).Select(idx =>
                 new UAEvent { EmittingNode = id, Time = start.AddMilliseconds(idx) }));
 
-            Assert.False(evt.WaitOne(100));
+            await Assert.ThrowsAsync<TimeoutException>(async () => await extractor.WaitForNextPush(false, 10));
             Assert.Equal(99999, queue.Count);
 
             await extractor.Streamer.EnqueueAsync(new UAEvent { EmittingNode = id, Time = start.AddMilliseconds(300000) });
-            Assert.True(evt.WaitOne(10000));
-            Assert.Equal(100000, queue.Count);
+            await extractor.WaitForNextPush();
 
-            await extractor.Streamer.PushEvents(pusher, tester.Source.Token);
             Assert.Equal(start, state.DestinationExtractedRange.First);
             Assert.Equal(start.AddMilliseconds(300000), state.DestinationExtractedRange.Last);
         }

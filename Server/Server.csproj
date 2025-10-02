@@ -18,4 +18,7 @@
     <PackageReference Include="OPCFoundation.NetStandard.Opc.Ua.PubSub" Version="1.5.375.457-beta" />
     <PackageReference Include="OPCFoundation.NetStandard.Opc.Ua.Server" Version="1.5.375.457" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\dotnet-extractor-utils\ExtractorUtils\ExtractorUtils.csproj" />
+  </ItemGroup>
 </Project>

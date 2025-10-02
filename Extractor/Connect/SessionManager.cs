@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Cognite.Extractor.Common;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Subscriptions;
 using Cognite.OpcUa.Utils;
@@ -65,7 +66,7 @@ namespace Cognite.OpcUa.Connect
 
 
         public bool Running { get; private set; }
-        public Task? RunningTask { get; private set; }
+        public Task<SchedulerTaskResult>? RunningTask { get; private set; }
 
         private DateTime? lastConnectionSwitch = null;
 
@@ -144,7 +145,7 @@ namespace Cognite.OpcUa.Connect
         }
 
 
-        public async Task Run(CancellationToken token)
+        public async Task<SchedulerTaskResult> Run(CancellationToken token)
         {
             if (Running) throw new ExtractorFailureException("Session manager has already been started");
             Running = true;
@@ -156,7 +157,7 @@ namespace Cognite.OpcUa.Connect
             try
             {
                 RunningTask = RunInner(token);
-                await RunningTask;
+                return await RunningTask;
             }
             catch (Exception ex)
             {
@@ -178,7 +179,7 @@ namespace Cognite.OpcUa.Connect
             client.SubscriptionManager!.EnqueueTask(new ServiceLevelSubscriptionTask(OnServiceLevelUpdate, client.Callbacks));
         }
 
-        private async Task RunInner(CancellationToken token)
+        private async Task<SchedulerTaskResult> RunInner(CancellationToken token)
         {
             while (!token.IsCancellationRequested)
             {
@@ -200,7 +201,7 @@ namespace Cognite.OpcUa.Connect
                     {
                         state = SessionManagerState.Closed;
                         pendingActions.Reset();
-                        break;
+                        return SchedulerTaskResult.Expected;
                     }
 
                     byte? updateServiceLevel = pendingActions.ServiceLevelUpdate;
@@ -261,12 +262,13 @@ namespace Cognite.OpcUa.Connect
                         // Don't run the callbacks inside the session manager loop, since
                         // if we lose connection while the callbacks are running,
                         // we need the loop to recover.
-                        client.Callbacks.ScheduleTask(_ => client.Callbacks.OnServerReconnect(client), Extractor.Utils.Unstable.ExtractorTaskResult.Expected, "OnServerReconnect");
+                        client.Callbacks.ScheduleTask(_ => client.Callbacks.OnServerReconnect(client), SchedulerTaskResult.Expected, "OnServerReconnect");
                     }
 
                     await onNewPendingActions.WaitAsync(token);
                 }
             }
+            return SchedulerTaskResult.Unexpected;
         }
 
         public static async Task<byte> ReadServiceLevel(ISession session, CancellationToken token)

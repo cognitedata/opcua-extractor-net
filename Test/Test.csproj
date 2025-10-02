@@ -39,6 +39,9 @@
     </PackageReference>
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\..\dotnet-extractor-utils\Cognite.Testing\Cognite.Testing.csproj" />
+  </ItemGroup>
+  <ItemGroup>
     <None Update="config.config-tool-test.yml">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
