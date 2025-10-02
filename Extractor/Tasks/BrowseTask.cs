@@ -60,7 +60,7 @@ namespace Cognite.OpcUa.Tasks
 
         public override bool CanRunNow()
         {
-            return client.SessionManager.Session?.Connected ?? false;
+            return extractor.IsReadyToBrowse;
         }
 
         private (INodeSource nodeSource, ITypeAndNodeSource typeSource) GetSources(

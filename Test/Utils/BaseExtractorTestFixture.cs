@@ -157,7 +157,6 @@ namespace Test.Utils
             Config.Source.EndpointUrl = $"opc.tcp://localhost:{Port}";
             Config.GenerateDefaults();
         }
-
         public UAExtractor BuildExtractor(IPusher pusher = null, bool clear = true, IExtractionStateStore stateStore = null, UAClient client = null)
         {
             if (clear)
@@ -183,7 +182,6 @@ namespace Test.Utils
                     MaxTries = 2,
                 };
                 ext.CloseClientOnClose = client != null;
-                ext.InitExternal(Source.Token);
                 return ext;
             }
             catch
@@ -217,7 +215,11 @@ namespace Test.Utils
                 ExceptionDispatchInfo.Capture(res.Exception!).Throw();
             }
             // Now we're initialized, and can wait for browse.
-            await extractor.WaitForBrowseCompletion(timeout);
+            res = await Task.WhenAny(extractor.WaitForBrowseCompletion(timeout), startTask);
+            if (res.IsFaulted)
+            {
+                ExceptionDispatchInfo.Capture(res.Exception!).Throw();
+            }
 
             // We're done with browsing, and we can return to the test.
             // This lets tests easily wait for initialization and browsing to complete.
@@ -337,8 +339,7 @@ namespace Test.Utils
             }
             if (Client != null)
             {
-                await Client.Close(CancellationToken.None);
-                Client.Dispose();
+                await Client.DisposeAsync();
                 Client = null;
             }
             Server?.Dispose();

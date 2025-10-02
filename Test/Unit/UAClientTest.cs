@@ -159,7 +159,9 @@ namespace Test.Unit
         public async Task TestConnectionFailure()
         {
             string oldEP = tester.Config.Source.EndpointUrl;
-            await using var client = tester.MakeClient();
+            await using var client = new UAClient(tester.Provider, tester.Config);
+            var callbacks = new DummyClientCallbacks(tester.Source.Token);
+            client.Callbacks = callbacks;
             tester.Config.Source.EndpointUrl = "opc.tcp://localhost:62009";
             try
             {
@@ -175,7 +177,9 @@ namespace Test.Unit
         [Fact]
         public async Task TestConfigFailure()
         {
-            await using var client = tester.MakeClient();
+            await using var client = new UAClient(tester.Provider, tester.Config);
+            var callbacks = new DummyClientCallbacks(tester.Source.Token);
+            client.Callbacks = callbacks;
             tester.Config.Source.ConfigRoot = "wrong";
             try
             {
@@ -191,10 +195,11 @@ namespace Test.Unit
         [InlineData(false)]
         public async Task TestReconnect(bool forceRestart)
         {
-            await using var client = tester.MakeClient();
+            await using var client = new UAClient(tester.Provider, tester.Config);
+            var callbacks = new DummyClientCallbacks(tester.Source.Token);
+            client.Callbacks = callbacks;
             tester.Config.Source.KeepAliveInterval = 1000;
             tester.Config.Source.ForceRestart = forceRestart;
-
             var oldEp = tester.Config.Source.EndpointUrl;
             tester.Config.Source.EndpointUrl = "opc.tcp://localhost:62400";
 
@@ -205,7 +210,8 @@ namespace Test.Unit
                 ConfigRoot = "Server.Test.UaClient"
             };
             await server.Start();
-            var callbacks = (DummyClientCallbacks)client.Callbacks;
+
+            tester.Config.Source.EndpointUrl = "opc.tcp://localhost:62400";
 
             try
             {
@@ -217,17 +223,15 @@ namespace Test.Unit
                 server.Stop();
                 await TestUtils.WaitForCondition(() => !callbacks.Connected, 20, "Expected client to disconnect");
                 Assert.False(callbacks.Connected);
-
                 await server.Start();
                 await TestUtils.WaitForCondition(() => callbacks.Connected, 20, "Expected client to reconnect");
-
                 Assert.True(callbacks.Connected);
             }
             finally
             {
                 server.Stop();
-                tester.Config.Source.EndpointUrl = "opc.tcp://localhost:62000";
                 tester.Config.Source.KeepAliveInterval = 10000;
+                tester.Config.Source.EndpointUrl = oldEp;
             }
         }
         [Fact]
@@ -248,6 +252,7 @@ namespace Test.Unit
             }
             finally
             {
+                await client.Close(tester.Source.Token);
                 Environment.SetEnvironmentVariable("OPCUA_CERTIFICATE_DIR", null);
                 Directory.Delete("./certificates-test/", true);
             }
@@ -272,8 +277,6 @@ namespace Test.Unit
                 {
                     await Assert.ThrowsAsync<SilentServiceException>(() => client.Run(tester.Source.Token, 0));
                 }
-
-                tester.Server.Server.SetValidator(false);
 
                 await using (var client = tester.MakeClient())
                 {

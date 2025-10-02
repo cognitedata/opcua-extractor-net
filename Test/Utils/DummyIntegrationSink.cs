@@ -63,5 +63,11 @@ namespace Test.Utils
             // Needs to return a task that runs until canceled.
             return CommonUtils.WaitAsync(token.WaitHandle, Timeout.InfiniteTimeSpan, token);
         }
+
+        public void Clear()
+        {
+            ReportedErrors.Clear();
+            TaskEvents.Clear();
+        }
     }
 }
