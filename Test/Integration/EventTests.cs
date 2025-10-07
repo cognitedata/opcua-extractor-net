@@ -197,6 +197,8 @@ namespace Test.Integration
                 extractor.State.Clear();
                 var reader = (HistoryReader)extractor.GetType().GetField("historyReader", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(extractor);
                 reader.AddIssue(HistoryReader.StateIssue.NodeHierarchyRead);
+                ((Dictionary<NodeId, VariableExtractionState>)reader.GetType().GetField("activeVarStates", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(reader)).Clear();
+                ((Dictionary<NodeId, EventExtractionState>)reader.GetType().GetField("activeEventStates", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(reader)).Clear();
                 await tester.RemoveSubscription(extractor, SubscriptionName.Events);
             }
 
