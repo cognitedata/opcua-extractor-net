@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Nito.AsyncEx;
+using Prometheus;
 
 namespace Cognite.OpcUa.Utils
 {
@@ -32,6 +33,9 @@ namespace Cognite.OpcUa.Utils
 
         private ILogger log;
 
+        private static readonly Gauge queueLength = Metrics
+            .CreateGauge("opcua_extractor_queue_length", "Length of the upload queues", "type");
+
         /// <summary>
         /// Constructor.
         /// </summary>
@@ -52,6 +56,11 @@ namespace Cognite.OpcUa.Utils
             OnQueueOverflow?.Invoke(this, new EventArgs());
         }
 
+        private void UpdateMetrics()
+        {
+            queueLength.WithLabels(Name).Set(queue.Count);
+        }
+
         /// <summary>
         /// Enqeueue an item, blocking until the queue has capacity to accept the item.
         /// </summary>
@@ -67,6 +76,7 @@ namespace Cognite.OpcUa.Utils
                     queueNotFull.Wait(token);
                 }
                 queue.Enqueue(item);
+                UpdateMetrics();
                 queueNotEmpty.Notify();
                 if (Capacity > 0 && queue.Count >= Capacity) NotifyOverflow();
             }
@@ -86,13 +96,14 @@ namespace Cognite.OpcUa.Utils
                     while (Capacity > 0 && queue.Count >= Capacity)
                     {
                         log.LogTrace("{} queue is full", Name);
+                        UpdateMetrics();
                         queueNotFull.Wait(token);
                     }
                     queue.Enqueue(item);
                     queueNotEmpty.Notify();
                     if (Capacity > 0 && queue.Count >= Capacity) NotifyOverflow();
                 }
-
+                UpdateMetrics();
             }
         }
 
@@ -111,6 +122,7 @@ namespace Cognite.OpcUa.Utils
                     await queueNotFull.WaitAsync(token);
                 }
                 queue.Enqueue(item);
+                UpdateMetrics();
                 queueNotEmpty.Notify();
                 if (Capacity > 0 && queue.Count >= Capacity) NotifyOverflow();
             }
@@ -130,12 +142,14 @@ namespace Cognite.OpcUa.Utils
                     while (Capacity > 0 && queue.Count >= Capacity)
                     {
                         log.LogTrace("{} queue is full", Name);
+                        UpdateMetrics();
                         await queueNotFull.WaitAsync(token);
                     }
                     queue.Enqueue(item);
                     queueNotEmpty.Notify();
                     if (Capacity > 0 && queue.Count >= Capacity) NotifyOverflow();
                 }
+                UpdateMetrics();
             }
         }
 
@@ -152,6 +166,7 @@ namespace Cognite.OpcUa.Utils
                 {
                     yield return item;
                 }
+                UpdateMetrics();
                 queueNotFull.NotifyAll();
             }
         }
@@ -169,6 +184,7 @@ namespace Cognite.OpcUa.Utils
                 {
                     yield return item;
                 }
+                UpdateMetrics();
                 queueNotFull.NotifyAll();
             }
         }
@@ -186,6 +202,7 @@ namespace Cognite.OpcUa.Utils
             using (queueMutex.Lock(token))
             {
                 var r = queue.TryDequeue(out item);
+                UpdateMetrics();
                 if (r) queueNotFull.Notify();
                 return r;
             }
@@ -202,6 +219,7 @@ namespace Cognite.OpcUa.Utils
             using (await queueMutex.LockAsync(token))
             {
                 var r = queue.TryDequeue(out var item);
+                UpdateMetrics();
                 if (r) queueNotFull.Notify();
                 else return default;
                 return item;
@@ -221,6 +239,7 @@ namespace Cognite.OpcUa.Utils
                 {
                     token.ThrowIfCancellationRequested();
                     var r = queue.TryDequeue(out var item);
+                    UpdateMetrics();
                     if (r)
                     {
                         queueNotFull.Notify();
@@ -244,6 +263,7 @@ namespace Cognite.OpcUa.Utils
                 {
                     token.ThrowIfCancellationRequested();
                     var r = queue.TryDequeue(out var item);
+                    UpdateMetrics();
                     if (r)
                     {
                         queueNotFull.Notify();
@@ -263,6 +283,7 @@ namespace Cognite.OpcUa.Utils
             using (await queueMutex.LockAsync(token))
             {
                 queue.Clear();
+                UpdateMetrics();
                 queueNotFull.NotifyAll();
             }
         }

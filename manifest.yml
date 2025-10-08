@@ -67,6 +67,11 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.29.0":
+    description: Add a metric on upload queue length.
+    changelog:
+      added:
+        - Added a metric opcua_extractor_queue_length to monitor the length of the upload queues. This metric is labeled either "Events" or "Datapoints".
   "2.28.2":
     description: Avoid restarting history after rebrowse if no new nodes were discovered.
     changelog:
