@@ -278,13 +278,38 @@ namespace Cognite.OpcUa.History
         {
             lock (statesLock)
             {
+                // Check for and initialize any states that were never properly initialized
+                // This can happen if state restoration failed during initial push
+                int uninitializedVarCount = 0;
+                int uninitializedEventCount = 0;
+
                 foreach (var state in activeVarStates)
                 {
+                    if (!state.Value.Initialized)
+                    {
+                        log.LogWarning("Variable state {Id} was never initialized, initializing to empty range", state.Value.Id);
+                        state.Value.InitToEmpty();
+                        state.Value.FinalizeRangeInit();
+                        uninitializedVarCount++;
+                    }
                     state.Value.RestartHistory();
                 }
                 foreach (var state in activeEventStates)
                 {
+                    if (!state.Value.Initialized)
+                    {
+                        log.LogWarning("Event state {Id} was never initialized, initializing to empty range", state.Value.Id);
+                        state.Value.InitToEmpty();
+                        state.Value.FinalizeRangeInit();
+                        uninitializedEventCount++;
+                    }
                     state.Value.RestartHistory();
+                }
+
+                if (uninitializedVarCount > 0 || uninitializedEventCount > 0)
+                {
+                    log.LogWarning("Initialized {VarCount} variable states and {EventCount} event states that were previously uninitialized",
+                        uninitializedVarCount, uninitializedEventCount);
                 }
             }
         }
