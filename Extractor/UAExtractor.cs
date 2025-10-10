@@ -1070,24 +1070,42 @@ namespace Cognite.OpcUa
                 }
             }
 
+            // Restore extraction state from state storage if enabled
+            // Wrap in try-catch to ensure that state restoration failure doesn't prevent
+            // state initialization (FinalizeRangeInit must always be called)
             if (StateStorage != null && Config.StateStorage.IntervalValue.Value != Timeout.InfiniteTimeSpan)
             {
-                if (Streamer.AllowEvents)
+                try
                 {
-                    pushTasks = pushTasks.Append(StateStorage.RestoreExtractionState(
-                        State.EmitterStates.Where(state => state.FrontfillEnabled).ToDictionary(state => state.Id),
-                        Config.StateStorage.EventStore,
-                        false,
-                        Source.Token));
-                }
+                    var stateRestoreTasks = new List<Task>();
 
-                if (Streamer.AllowData)
+                    if (Streamer.AllowEvents)
+                    {
+                        stateRestoreTasks.Add(StateStorage.RestoreExtractionState(
+                            State.EmitterStates.Where(state => state.FrontfillEnabled).ToDictionary(state => state.Id),
+                            Config.StateStorage.EventStore,
+                            false,
+                            Source.Token));
+                    }
+
+                    if (Streamer.AllowData)
+                    {
+                        stateRestoreTasks.Add(StateStorage.RestoreExtractionState(
+                            newStates.Where(state => state != null && state.FrontfillEnabled).ToDictionary(state => state?.Id!, state => state!),
+                            Config.StateStorage.VariableStore,
+                            false,
+                            Source.Token));
+                    }
+
+                    if (stateRestoreTasks.Any())
+                    {
+                        await Task.WhenAll(stateRestoreTasks);
+                    }
+                }
+                catch (Exception ex)
                 {
-                    pushTasks = pushTasks.Append(StateStorage.RestoreExtractionState(
-                        newStates.Where(state => state != null && state.FrontfillEnabled).ToDictionary(state => state?.Id!, state => state!),
-                        Config.StateStorage.VariableStore,
-                        false,
-                        Source.Token));
+                    log.LogError(ex, "Failed to restore extraction state from state storage, states will be initialized to empty ranges: {Message}", ex.Message);
+                    // Continue - states will be initialized below via FinalizeRangeInit
                 }
             }
 
@@ -1107,6 +1125,8 @@ namespace Cognite.OpcUa
                 trackedTimeseres.Inc(input.Variables.Count());
             }
 
+            // ALWAYS finalize states, even if state restoration failed
+            // This ensures states are marked as Initialized and have valid time ranges
             foreach (var state in newStates.Concat<UAHistoryExtractionState?>(State.EmitterStates))
             {
                 state?.FinalizeRangeInit();
