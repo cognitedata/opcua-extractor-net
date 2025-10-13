@@ -906,8 +906,15 @@ namespace Cognite.OpcUa
             return Context.ToNodeId(id);
         }
 
+
+        private int disposed = 0;
+
         public void Dispose()
         {
+            if (Interlocked.CompareExchange(ref disposed, 1, 0) == 0)
+            {
+                return;
+            }
             Dispose(true);
             GC.SuppressFinalize(this);
         }
@@ -931,6 +938,16 @@ namespace Cognite.OpcUa
             SessionManager.Dispose();
         }
 
+        public async ValueTask DisposeAsync()
+        {
+            if (Interlocked.CompareExchange(ref disposed, 1, 0) == 0)
+            {
+                return;
+            }
+            await DisposeAsyncCore();
+            GC.SuppressFinalize(this);
+        }
+
         protected virtual async ValueTask DisposeAsyncCore()
         {
             try
@@ -950,11 +967,6 @@ namespace Cognite.OpcUa
             }
             subscriptionSem.Dispose();
             SessionManager.Dispose();
-        }
-
-        public async ValueTask DisposeAsync()
-        {
-            await DisposeAsyncCore();
         }
         #endregion
     }

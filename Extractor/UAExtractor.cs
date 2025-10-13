@@ -1307,8 +1307,14 @@ namespace Cognite.OpcUa
         }
         #endregion
 
+        private int disposed = 0;
+
         protected override async ValueTask DisposeAsyncCore()
         {
+            if (Interlocked.CompareExchange(ref disposed, 1, 0) == 0)
+            {
+                return;
+            }
             Starting.Set(0);
             historyReader?.Dispose();
             historyReader = null;
@@ -1317,8 +1323,6 @@ namespace Cognite.OpcUa
 
             await base.DisposeAsyncCore();
         }
-
-        private int disposed = 0;
 
         protected override void Dispose(bool disposing)
         {
