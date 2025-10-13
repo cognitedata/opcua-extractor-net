@@ -115,7 +115,7 @@ namespace Test.Unit
             tester.Config.Extraction.DataTypes.MaxArraySize = 4;
             tester.Config.PubSub.Enabled = true;
             tester.Config.PubSub.PreferUadp = uadp;
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
 
             await extractor.RunExtractor(true);
 

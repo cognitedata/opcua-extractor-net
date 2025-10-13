@@ -57,7 +57,7 @@ namespace Test.Integration
             tester.Config.Extraction.RootNode = tester.Ids.Base.Root.ToProtoNodeId(tester.Client);
             tester.Server.PopulateBaseHistory();
 
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(true, null, pusher);
             var runTask = extractor.RunExtractor();
 
             await extractor.Looper.WaitForNextPush();
@@ -279,7 +279,7 @@ namespace Test.Integration
 
             var (handler, cdfPusher) = tester.GetCDFPusher();
 
-            using var extractor = tester.BuildExtractor(true, null, pusher, cdfPusher);
+            await using var extractor = tester.BuildExtractor(true, null, pusher, cdfPusher);
             var runTask = extractor.RunExtractor();
 
             handler.AllowEvents = false;

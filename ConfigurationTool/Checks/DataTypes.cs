@@ -131,7 +131,7 @@ namespace Cognite.OpcUa.Config
         /// </summary>
         public async Task ReadCustomTypes(CancellationToken token)
         {
-            if (Session == null || !Session.Connected)
+            if (!Started)
             {
                 await Run(token, 0);
                 await LimitConfigValues(token);

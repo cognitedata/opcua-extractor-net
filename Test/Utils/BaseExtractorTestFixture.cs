@@ -153,6 +153,23 @@ namespace Test.Utils
             return ext;
         }
 
+        public UAExtractor BuildExtractor(IPusher pusher = null, bool clear = true, IExtractionStateStore stateStore = null, UAClient client = null)
+        {
+            if (clear)
+            {
+                RemoveSubscription(null, SubscriptionName.Events).Wait();
+                RemoveSubscription(null, SubscriptionName.DataPoints).Wait();
+                RemoveSubscription(null, SubscriptionName.Audit).Wait();
+                RemoveSubscription(null, SubscriptionName.RebrowseTriggers).Wait();
+                Client.Browser.Transformations = null;
+            }
+            pusher ??= new DummyPusher(new DummyPusherConfig());
+            var ext = new UAExtractor(Config, Provider, new[] { pusher }, client ?? Client, stateStore);
+            ext.InitExternal(Source.Token);
+
+            return ext;
+        }
+
         public (InfluxPusher pusher, InfluxDBClient client) GetInfluxPusher(string dbName, bool clear = true)
         {
             if (Config.Influx == null)

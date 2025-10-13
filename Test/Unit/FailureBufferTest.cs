@@ -67,7 +67,7 @@ namespace Test.Unit
         public void TestBuildFailureBuffer()
         {
             using var stateStore = new DummyStateStore();
-            using var extractor = tester.BuildExtractor(true, stateStore);
+            await using var extractor = tester.BuildExtractor(true, stateStore);
             var cfg = BuildConfig();
 
             Assert.False(File.Exists(cfg.FailureBuffer.DatapointPath));
@@ -102,7 +102,7 @@ namespace Test.Unit
         {
             var cfg = BuildConfig();
             using var stateStore = new LiteDBStateStore(cfg.StateStorage, tester.Provider.GetRequiredService<ILogger<LiteDBStateStore>>());
-            using var extractor = tester.BuildExtractor(true, stateStore);
+            await using var extractor = tester.BuildExtractor(true, stateStore);
 
             cfg.FailureBuffer.Influx = true;
             cfg.FailureBuffer.InfluxStateStore = true;
@@ -187,7 +187,7 @@ namespace Test.Unit
         {
             var cfg = BuildConfig();
             using var stateStore = new LiteDBStateStore(cfg.StateStorage, tester.Provider.GetRequiredService<ILogger<LiteDBStateStore>>());
-            using var extractor = tester.BuildExtractor(true, stateStore);
+            await using var extractor = tester.BuildExtractor(true, stateStore);
 
             cfg.FailureBuffer.Influx = true;
             cfg.FailureBuffer.InfluxStateStore = true;
@@ -274,7 +274,7 @@ namespace Test.Unit
         {
             var cfg = BuildConfig();
             using var stateStore = new LiteDBStateStore(cfg.StateStorage, tester.Provider.GetRequiredService<ILogger<LiteDBStateStore>>());
-            using var extractor = tester.BuildExtractor(true, stateStore);
+            await using var extractor = tester.BuildExtractor(true, stateStore);
 
             cfg.FailureBuffer.Influx = true;
             cfg.FailureBuffer.InfluxStateStore = true;
@@ -348,7 +348,7 @@ namespace Test.Unit
             // Just testing the actual ReadDatapoints method, which covers influx. We can test reading from file properly separately.
             var cfg = BuildConfig();
             using var stateStore = new LiteDBStateStore(cfg.StateStorage, tester.Provider.GetRequiredService<ILogger<LiteDBStateStore>>());
-            using var extractor = tester.BuildExtractor(true, stateStore);
+            await using var extractor = tester.BuildExtractor(true, stateStore);
 
             cfg.FailureBuffer.Influx = true;
             cfg.FailureBuffer.InfluxStateStore = true;
@@ -457,7 +457,7 @@ namespace Test.Unit
             var cfg = BuildConfig();
             cfg.FailureBuffer.DatapointsBatch = 100;
             using var pusher = new DummyPusher(new DummyPusherConfig());
-            using var extractor = tester.BuildExtractor(pushers: pusher);
+            await using var extractor = tester.BuildExtractor(pushers: pusher);
             var fb = new FailureBuffer(log, cfg, extractor, null);
             var state = new VariableExtractionState(extractor,
                 CommonTestUtils.GetSimpleVariable("state1", new UADataType(DataTypeIds.Double)),
@@ -494,7 +494,7 @@ namespace Test.Unit
         {
             var cfg = BuildConfig();
             using var stateStore = new LiteDBStateStore(cfg.StateStorage, tester.Provider.GetRequiredService<ILogger<LiteDBStateStore>>());
-            using var extractor = tester.BuildExtractor(true, stateStore);
+            await using var extractor = tester.BuildExtractor(true, stateStore);
 
             cfg.FailureBuffer.Influx = true;
             cfg.FailureBuffer.InfluxStateStore = true;
@@ -589,7 +589,7 @@ namespace Test.Unit
             var cfg = BuildConfig();
             cfg.FailureBuffer.EventsBatch = 100;
             using var pusher = new DummyPusher(new DummyPusherConfig());
-            using var extractor = tester.BuildExtractor(true, pushers: pusher);
+            await using var extractor = tester.BuildExtractor(true, pushers: pusher);
             pusher.Extractor = extractor;
 
             var log = tester.Provider.GetRequiredService<ILogger<FailureBuffer>>();
@@ -615,7 +615,7 @@ namespace Test.Unit
         public async Task TestWriteDatapointsToFile()
         {
             var cfg = BuildConfig();
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
 
             using var dPusher = new DummyPusher(new DummyPusherConfig());
             var pushers = new IPusher[] { dPusher };
@@ -690,7 +690,7 @@ namespace Test.Unit
             var log = tester.Provider.GetRequiredService<ILogger<FailureBuffer>>();
             var cfg = BuildConfig();
             cfg.FailureBuffer.MaxBufferSize = 2000;
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
             var fb = new FailureBuffer(log, cfg, extractor, null);
 
             var writeDps = fb.GetType().GetMethod("WriteDatapointsToFile", BindingFlags.Instance | BindingFlags.NonPublic);
@@ -711,7 +711,7 @@ namespace Test.Unit
         public async Task TestWriteEventsToFile()
         {
             var cfg = BuildConfig();
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
 
             using var dPusher = new DummyPusher(new DummyPusherConfig());
             var pushers = new IPusher[] { dPusher };
@@ -773,7 +773,7 @@ namespace Test.Unit
             var log = tester.Provider.GetRequiredService<ILogger<FailureBuffer>>();
             var cfg = BuildConfig();
             cfg.FailureBuffer.MaxBufferSize = 2000;
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
             var fb = new FailureBuffer(log, cfg, extractor, null);
 
             var writeEvents = fb.GetType().GetMethod("WriteEventsToFile", BindingFlags.Instance | BindingFlags.NonPublic);

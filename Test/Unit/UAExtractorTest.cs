@@ -39,7 +39,7 @@ namespace Test.Unit
 
             try
             {
-                using var extractor = tester.BuildExtractor();
+                await using var extractor = tester.BuildExtractor();
                 await Assert.ThrowsAsync<SilentServiceException>(() => extractor.RunExtractor(true, 0));
             }
             finally
@@ -53,7 +53,7 @@ namespace Test.Unit
         {
             tester.Config.Extraction.RootNode = tester.Server.Ids.Full.Root.ToProtoNodeId(tester.Client);
             var pusher = new DummyPusher(new DummyPusherConfig());
-            using var extractor = tester.BuildExtractor(pushers: pusher);
+            await using var extractor = tester.BuildExtractor(pushers: pusher);
 
             await extractor.RunExtractor(true);
 
@@ -72,7 +72,7 @@ namespace Test.Unit
             tester.Config.Extraction.RootNode = tester.Ids.Base.Root.ToProtoNodeId(tester.Client);
 
             var pusher = new DummyPusher(new DummyPusherConfig());
-            using var extractor = tester.BuildExtractor(pushers: pusher);
+            await using var extractor = tester.BuildExtractor(pushers: pusher);
 
             var task = extractor.RunExtractor();
             await extractor.WaitForSubscription(SubscriptionName.DataPoints);
@@ -98,7 +98,7 @@ namespace Test.Unit
         {
             var pusher = new DummyPusher(new DummyPusherConfig());
             tester.Config.Extraction.Relationships.Enabled = true;
-            using var extractor = tester.BuildExtractor(pushers: pusher);
+            await using var extractor = tester.BuildExtractor(pushers: pusher);
 
             switch (failAt)
             {
@@ -175,7 +175,7 @@ namespace Test.Unit
         [Fact]
         public void TestGetExtraMetadata()
         {
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
 
             tester.Config.Extraction.DataTypes.DataTypeMetadata = true;
             var variable = new UAVariable(new NodeId("test", 0), "test", null, null, NodeId.Null, null);
@@ -268,7 +268,7 @@ namespace Test.Unit
             tester.Config.Extraction.DataTypes.EstimateArraySizes = true;
             using var pusher = new DummyPusher(new DummyPusherConfig());
             using var client = new UAClient(tester.Provider, tester.Config);
-            using var extractor = new UAExtractor(tester.Config, tester.Provider, new[] { pusher }, client, null);
+            await using var extractor = new UAExtractor(tester.Config, tester.Provider, new[] { pusher }, client, null);
 
             extractor.InitExternal(tester.Source.Token);
             await extractor.RunExtractor(true);

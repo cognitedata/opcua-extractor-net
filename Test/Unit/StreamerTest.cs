@@ -37,7 +37,7 @@ namespace Test.Unit
             pusher.UniqueToNodeId["id"] = (new NodeId("id", 0), -1);
             var dps = new List<UADataPoint>();
             pusher.DataPoints[(new NodeId("id", 0), -1)] = dps;
-            using var extractor = tester.BuildExtractor(pushers: pusher);
+            await using var extractor = tester.BuildExtractor(pushers: pusher);
 
             using var evt = new ManualResetEvent(false);
 
@@ -111,7 +111,7 @@ namespace Test.Unit
         public async Task TestEventQueue()
         {
             using var pusher = new DummyPusher(new DummyPusherConfig());
-            using var extractor = tester.BuildExtractor(pushers: pusher);
+            await using var extractor = tester.BuildExtractor(pushers: pusher);
 
             var id = new NodeId("id", 0);
 
@@ -198,7 +198,7 @@ namespace Test.Unit
             var dps2 = new List<UADataPoint>();
             pusher2.DataPoints[(new NodeId("id", 0), -1)] = dps2;
 
-            using var extractor = tester.BuildExtractor(true, null, pusher, pusher2);
+            await using var extractor = tester.BuildExtractor(true, null, pusher, pusher2);
 
             extractor.Streamer.AllowData = true;
             var start = DateTime.UtcNow;
@@ -247,7 +247,7 @@ namespace Test.Unit
             using var pusher = new DummyPusher(new DummyPusherConfig());
             using var pusher2 = new DummyPusher(new DummyPusherConfig());
 
-            using var extractor = tester.BuildExtractor(true, null, pusher, pusher2);
+            await using var extractor = tester.BuildExtractor(true, null, pusher, pusher2);
 
             tester.Config.Events.History = true;
             extractor.Streamer.AllowEvents = true;
@@ -297,7 +297,7 @@ namespace Test.Unit
         [Fact]
         public void TestDataHandler()
         {
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
             var var1 = new UAVariable(new NodeId("id", 0), "node", null, null, NodeId.Null, null);
             var1.FullAttributes.DataType = new UADataType(DataTypeIds.Double);
             var node = new VariableExtractionState(tester.Client, var1, true, true, true);
@@ -356,7 +356,7 @@ namespace Test.Unit
         public void TestToDataPoint()
         {
             CommonTestUtils.ResetMetricValue("opcua_array_points_missed");
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
             var var1 = new UAVariable(new NodeId("id", 0), "node", null, null, NodeId.Null, null);
             var1.FullAttributes.DataType = new UADataType(DataTypeIds.Double);
             var node1 = new VariableExtractionState(tester.Client, var1, true, true, true);
@@ -447,7 +447,7 @@ namespace Test.Unit
         [Fact]
         public void TestEventHandler()
         {
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
             var state = EventUtils.PopulateEventData(extractor, tester, true);
 
             var queue = (AsyncBlockingQueue<UAEvent>)extractor.Streamer.GetType()
@@ -533,7 +533,7 @@ namespace Test.Unit
         [Fact]
         public void TestToEvent()
         {
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
             var state = EventUtils.PopulateEventData(extractor, tester, true);
 
             var filter = new EventFilter { SelectClauses = EventUtils.GetSelectClause(tester) };
@@ -597,7 +597,7 @@ namespace Test.Unit
         public void TestDatapointAsEvent()
         {
             CommonTestUtils.ResetMetricValue("opcua_array_points_missed");
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
             var var1 = new UAVariable(new NodeId("id", 0), "node", null, null, NodeId.Null, null);
             var1.FullAttributes.DataType = new UADataType(DataTypeIds.Double);
             var1.AsEvents = true;

@@ -236,7 +236,7 @@ namespace Test.Unit
         [Fact]
         public void TestBuildMetadata()
         {
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
             var node = new UAObject(new NodeId("test", 0), "test", null, null, NodeId.Null, null);
             Assert.Empty(node.BuildMetadata(tester.Config, extractor, false));
             Assert.Empty(node.BuildMetadata(tester.Config, extractor, true));
@@ -318,7 +318,7 @@ namespace Test.Unit
         [Fact]
         public void TestToCDFAsset()
         {
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
 
             var node = new UAObject(new NodeId("test", 0), "test", null, null, new NodeId("parent", 0), null);
             node.Attributes.Description = "description";
@@ -372,7 +372,7 @@ namespace Test.Unit
         [Fact]
         public void TestToJson()
         {
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
             var node = new UAObject(new NodeId("test", 0), "test", null, null, NodeId.Null, null);
             var converter = tester.Client.TypeConverter;
             var log = tester.Provider.GetRequiredService<ILogger<TypesTest>>();
@@ -442,7 +442,7 @@ namespace Test.Unit
         [Fact]
         public void TestToJsonComplexTypes()
         {
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
             var node = new UAObject(new NodeId("test", 0), "test", null, null, NodeId.Null, null);
             var converter = tester.Client.TypeConverter;
             var log = tester.Provider.GetRequiredService<ILogger<TypesTest>>();
@@ -618,7 +618,7 @@ namespace Test.Unit
         [Fact]
         public void TestToStatelessTimeseries()
         {
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
 
             var pdt = new UADataType(DataTypeIds.String);
 
@@ -671,7 +671,7 @@ namespace Test.Unit
         [Fact]
         public void TestToTimeseries()
         {
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
 
             var node = new UAVariable(new NodeId("test", 0), "test", null, null, new NodeId("parent", 0), null);
             node.Attributes.Description = "description";
@@ -887,7 +887,7 @@ namespace Test.Unit
         public void TestTypeToDataPoint()
         {
             // Normal double
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
             var now = DateTime.UtcNow;
             var dt = new UADataType(DataTypeIds.Double);
             var dp = dt.ToDataPoint(extractor, 123.123, now, "id", StatusCodes.Good);
@@ -1023,7 +1023,7 @@ namespace Test.Unit
         {
             // minimal
             var now = DateTime.UtcNow;
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
             var state = new EventExtractionState(tester.Client, new NodeId("emitter", 0), true, true, true);
             extractor.State.SetEmitterState(state);
             extractor.State.RegisterNode(new NodeId("type", 0), tester.Client.GetUniqueId(new NodeId("type", 0)));
@@ -1089,7 +1089,7 @@ namespace Test.Unit
         [Fact]
         public void TestToStatelessCDFEvent()
         {
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
 
             var ts = DateTime.UtcNow;
 
@@ -1152,7 +1152,7 @@ namespace Test.Unit
         [Fact]
         public void TestToCDFEvent()
         {
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
 
             var ts = DateTime.UtcNow;
 
@@ -1213,7 +1213,7 @@ namespace Test.Unit
         [Fact]
         public void TestDeepEventMetadata()
         {
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
 
             var ts = DateTime.UtcNow;
 
@@ -1255,7 +1255,7 @@ namespace Test.Unit
         [Fact]
         public void TestReferenceDebugDescription()
         {
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
             var organizes = tester.Client.TypeManager.GetReferenceType(ReferenceTypeIds.Organizes);
             var hasComponent = tester.Client.TypeManager.GetReferenceType(ReferenceTypeIds.HasComponent);
 
@@ -1288,7 +1288,7 @@ namespace Test.Unit
         [Fact]
         public void TestReferenceEquality()
         {
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
             var organizes = tester.Client.TypeManager.GetReferenceType(ReferenceTypeIds.Organizes);
             var hasComponent = tester.Client.TypeManager.GetReferenceType(ReferenceTypeIds.HasComponent);
 
@@ -1319,7 +1319,7 @@ namespace Test.Unit
         [Fact]
         public void TestToRelationship()
         {
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
             var organizes = tester.Client.TypeManager.GetReferenceType(ReferenceTypeIds.Organizes);
             var source = new UAObject(new NodeId("source", 0), "Source", "Source", null, NodeId.Null, null);
             var target = new UAVariable(new NodeId("target", 0), "Target", "Target", null, NodeId.Null, null);

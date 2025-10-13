@@ -62,7 +62,7 @@ namespace Test.Unit
         [Fact]
         public void TestGetTsUpdate()
         {
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
             var node = new UAVariable(new NodeId("test", 0), "test", null, null, new NodeId("parent", 0), null);
             node.Attributes.Description = "description";
             node.Attributes.Properties = new List<BaseUANode>();
@@ -157,7 +157,7 @@ namespace Test.Unit
         [Fact]
         public void TestGetAssetUpdate()
         {
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
             var node = new UAObject(new NodeId("test", 0), "test", null, null, new NodeId("parent", 0), null);
             node.Attributes.Description = "description";
             node.Attributes.Properties = new List<BaseUANode>();
