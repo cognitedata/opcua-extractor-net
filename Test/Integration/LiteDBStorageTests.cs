@@ -118,7 +118,7 @@ namespace Test.Integration
             List<InfluxBufferState> states;
 
             using (var stateStore = new LiteDBStateStore(tester.Config.StateStorage, tester.Provider.GetRequiredService<ILogger<LiteDBStateStore>>()))
-            using (var extractor = tester.BuildExtractor(true, stateStore, pusher, cdfPusher))
+            await using (var extractor = tester.BuildExtractor(true, stateStore, pusher, cdfPusher))
             {
                 var runTask = extractor.RunExtractor();
 
@@ -155,7 +155,7 @@ namespace Test.Integration
             }
 
             using (var stateStore = new LiteDBStateStore(tester.Config.StateStorage, tester.Provider.GetRequiredService<ILogger<LiteDBStateStore>>()))
-            using (var extractor = tester.BuildExtractor(true, stateStore, pusher, cdfPusher))
+            await using (var extractor = tester.BuildExtractor(true, stateStore, pusher, cdfPusher))
             {
                 handler.BlockAllConnections = false;
 
@@ -207,7 +207,7 @@ namespace Test.Integration
             List<InfluxBufferState> states;
 
             using (var stateStore = new LiteDBStateStore(tester.Config.StateStorage, tester.Provider.GetRequiredService<ILogger<LiteDBStateStore>>()))
-            using (var extractor = tester.BuildExtractor(true, stateStore, pusher, cdfPusher))
+            await using (var extractor = tester.BuildExtractor(true, stateStore, pusher, cdfPusher))
             {
                 var runTask = extractor.RunExtractor();
                 await extractor.WaitForSubscription(SubscriptionName.Events);
@@ -237,7 +237,7 @@ namespace Test.Integration
             }
 
             using (var stateStore = new LiteDBStateStore(tester.Config.StateStorage, tester.Provider.GetRequiredService<ILogger<LiteDBStateStore>>()))
-            using (var extractor = tester.BuildExtractor(true, stateStore, pusher, cdfPusher))
+            await using (var extractor = tester.BuildExtractor(true, stateStore, pusher, cdfPusher))
             {
                 handler.BlockAllConnections = false;
 

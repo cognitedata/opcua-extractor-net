@@ -148,9 +148,7 @@ namespace Test.Unit
 
 
             var (handler, pusher) = tester.GetCDFPusher();
-            var extractor = tester.BuildExtractor(true, stateStore, pusher);
-
-            try
+            await using (var extractor = tester.BuildExtractor(true, stateStore, pusher))
             {
                 await extractor.RunExtractor(true);
                 Assert.Equal(2, handler.Spaces.Count);
@@ -158,12 +156,6 @@ namespace Test.Unit
                 Assert.Equal(13, handler.Containers.Count);
                 Assert.Equal(68, handler.Instances.Count(inst => inst.Value["instanceType"].ToString() == "node"));
                 Assert.Equal(81, handler.Instances.Count(inst => inst.Value["instanceType"].ToString() == "edge"));
-            }
-            finally
-            {
-                tester.Log.LogDebug("Start dispose");
-                await extractor.DisposeAsync();
-                tester.Log.LogDebug("End dispose");
             }
 
             tester.Config.Extraction.Transformations = tester.Config.Extraction.Transformations
@@ -177,8 +169,10 @@ namespace Test.Unit
                 });
 
 
-            await await using var extractor2 = tester.BuildExtractor(true, stateStore, pusher);
-            await extractor2.RunExtractor(true);
+            await using (var extractor = tester.BuildExtractor(true, stateStore, pusher))
+            {
+                await extractor.RunExtractor(true);
+            }
 
             Assert.Equal(2, handler.Spaces.Count);
             Assert.Equal(18, handler.Views.Count);

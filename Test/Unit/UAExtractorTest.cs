@@ -35,17 +35,18 @@ namespace Test.Unit
         {
             var oldEP = tester.Config.Source.EndpointUrl;
             tester.Config.Source.EndpointUrl = "opc.tcp://localhost:60000";
-            await tester.Client.Close(tester.Source.Token);
+            await using var client = new UAClient(tester.Provider, tester.Config);
+            var callbacks = new DummyClientCallbacks(tester.Source.Token);
+            client.Callbacks = callbacks;
 
             try
             {
-                await using var extractor = tester.BuildExtractor();
-                await Assert.ThrowsAsync<SilentServiceException>(() => extractor.RunExtractor(true, 0));
+                await using var extractor = tester.BuildExtractor(client: client);
+                await Assert.ThrowsAsync<SilentServiceException>(() => extractor.RunExtractor(true, 2));
             }
             finally
             {
                 tester.Config.Source.EndpointUrl = oldEP;
-                await tester.Client.Run(tester.Source.Token, 0);
             }
         }
         [Fact]
@@ -68,7 +69,6 @@ namespace Test.Unit
         public async Task TestRestartOnReconnect()
         {
             tester.Config.Source.RestartOnReconnect = true;
-            if (!tester.Client.Started) await tester.Client.Run(tester.Source.Token, 0);
             tester.Config.Extraction.RootNode = tester.Ids.Base.Root.ToProtoNodeId(tester.Client);
 
             var pusher = new DummyPusher(new DummyPusherConfig());
@@ -83,9 +83,6 @@ namespace Test.Unit
             Assert.True(pusher.OnReset.WaitOne(10000));
 
             await TestUtils.WaitForCondition(() => pusher.PushedNodes.Count > 0, 10);
-
-            await extractor.Close();
-            await tester.Client.Run(tester.Source.Token, 0);
         }
         [Theory]
         [InlineData(0, 2, 2, 1, 0, 0)]
@@ -173,7 +170,7 @@ namespace Test.Unit
         }
 
         [Fact]
-        public void TestGetExtraMetadata()
+        public async Task TestGetExtraMetadata()
         {
             await using var extractor = tester.BuildExtractor();
 
@@ -267,7 +264,7 @@ namespace Test.Unit
             tester.Config.Extraction.Relationships.Enabled = true;
             tester.Config.Extraction.DataTypes.EstimateArraySizes = true;
             using var pusher = new DummyPusher(new DummyPusherConfig());
-            using var client = new UAClient(tester.Provider, tester.Config);
+            await using var client = new UAClient(tester.Provider, tester.Config);
             await using var extractor = new UAExtractor(tester.Config, tester.Provider, new[] { pusher }, client, null);
 
             extractor.InitExternal(tester.Source.Token);

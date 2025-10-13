@@ -295,7 +295,7 @@ namespace Test.Unit
             Assert.Equal(4000, evts2.Count);
         }
         [Fact]
-        public void TestDataHandler()
+        public async Task TestDataHandler()
         {
             await using var extractor = tester.BuildExtractor();
             var var1 = new UAVariable(new NodeId("id", 0), "node", null, null, NodeId.Null, null);
@@ -353,7 +353,7 @@ namespace Test.Unit
             Assert.Equal(6, queue.Count);
         }
         [Fact]
-        public void TestToDataPoint()
+        public async Task TestToDataPoint()
         {
             CommonTestUtils.ResetMetricValue("opcua_array_points_missed");
             await using var extractor = tester.BuildExtractor();
@@ -445,7 +445,7 @@ namespace Test.Unit
 
 
         [Fact]
-        public void TestEventHandler()
+        public async Task TestEventHandler()
         {
             await using var extractor = tester.BuildExtractor();
             var state = EventUtils.PopulateEventData(extractor, tester, true);
@@ -493,7 +493,7 @@ namespace Test.Unit
             item.SaveValueInCache(rawEvt);
             extractor.Streamer.EventSubscriptionHandler(item, null);
             Assert.Equal(1, queue.Count);
-            var generated = queue.Dequeue();
+            var generated = await queue.DequeueAsync();
             Assert.Single(generated.MetaData);
 
             // Test multiple events, one early, one late, one ok
@@ -531,7 +531,7 @@ namespace Test.Unit
 
         }
         [Fact]
-        public void TestToEvent()
+        public async Task TestToEvent()
         {
             await using var extractor = tester.BuildExtractor();
             var state = EventUtils.PopulateEventData(extractor, tester, true);
@@ -594,7 +594,7 @@ namespace Test.Unit
             Assert.True(created.MetaData.ContainsKey("unit"));
         }
         [Fact]
-        public void TestDatapointAsEvent()
+        public async Task TestDatapointAsEvent()
         {
             CommonTestUtils.ResetMetricValue("opcua_array_points_missed");
             await using var extractor = tester.BuildExtractor();
@@ -615,7 +615,7 @@ namespace Test.Unit
 
             Assert.Equal(1, queue.Count);
 
-            var evt = queue.Dequeue();
+            var evt = await queue.DequeueAsync();
 
             Assert.Equal(node1.Id + "-1000", evt.EventId);
             Assert.Equal(node1.SourceId, evt.SourceNode);

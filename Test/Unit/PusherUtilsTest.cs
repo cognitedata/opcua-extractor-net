@@ -12,6 +12,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text.Json;
+using System.Threading.Tasks;
 using Test.Utils;
 using Xunit;
 using Xunit.Abstractions;
@@ -60,7 +61,7 @@ namespace Test.Unit
         }
 
         [Fact]
-        public void TestGetTsUpdate()
+        public async Task TestGetTsUpdate()
         {
             await using var extractor = tester.BuildExtractor();
             var node = new UAVariable(new NodeId("test", 0), "test", null, null, new NodeId("parent", 0), null);
@@ -155,7 +156,7 @@ namespace Test.Unit
             Assert.Null(result.Name);
         }
         [Fact]
-        public void TestGetAssetUpdate()
+        public async Task TestGetAssetUpdate()
         {
             await using var extractor = tester.BuildExtractor();
             var node = new UAObject(new NodeId("test", 0), "test", null, null, new NodeId("parent", 0), null);

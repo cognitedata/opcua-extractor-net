@@ -78,6 +78,8 @@ namespace Cognite.OpcUa
 
         public bool Started { get; private set; }
 
+        public bool CloseClientOnClose { get; set; } = true;
+
         private static readonly Gauge startTime = Metrics
             .CreateGauge("opcua_start_time", "Start time for the extractor");
 
@@ -475,10 +477,10 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Closes the extractor, mainly just shutting down the opcua client and waiting for a clean loss of connection.
         /// </summary>
-        public async Task Close(bool closeClient = true)
+        public async Task Close()
         {
             Source?.Cancel();
-            if (!uaClient.Started || !closeClient) return;
+            if (!uaClient.Started || !CloseClientOnClose) return;
             try
             {
                 await uaClient.Close(CancellationToken.None);

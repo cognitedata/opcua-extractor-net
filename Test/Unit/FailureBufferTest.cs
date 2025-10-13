@@ -64,7 +64,7 @@ namespace Test.Unit
         }
 
         [Fact]
-        public void TestBuildFailureBuffer()
+        public async Task TestBuildFailureBuffer()
         {
             using var stateStore = new DummyStateStore();
             await using var extractor = tester.BuildExtractor(true, stateStore);
@@ -82,8 +82,8 @@ namespace Test.Unit
             Assert.False(fb1.AnyPoints);
             Assert.False(fb1.AnyEvents);
 
-            File.WriteAllText(cfg.FailureBuffer.DatapointPath, "testtest");
-            File.WriteAllText(cfg.FailureBuffer.EventPath, "testtest");
+            await File.WriteAllTextAsync(cfg.FailureBuffer.DatapointPath, "testtest");
+            await File.WriteAllTextAsync(cfg.FailureBuffer.EventPath, "testtest");
 
             var fb2 = new FailureBuffer(log, cfg, extractor, null);
 
@@ -685,7 +685,7 @@ namespace Test.Unit
         }
 
         [Fact]
-        public void TestWriteDatapointsCap()
+        public async Task TestWriteDatapointsCap()
         {
             var log = tester.Provider.GetRequiredService<ILogger<FailureBuffer>>();
             var cfg = BuildConfig();
@@ -768,7 +768,7 @@ namespace Test.Unit
         }
 
         [Fact]
-        public void TestWriteEventsCap()
+        public async Task TestWriteEventsCap()
         {
             var log = tester.Provider.GetRequiredService<ILogger<FailureBuffer>>();
             var cfg = BuildConfig();

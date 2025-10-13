@@ -148,6 +148,7 @@ namespace Test.Utils
                 Client.Browser.Transformations = null;
             }
             var ext = new UAExtractor(Config, Provider, pushers, Client, stateStore);
+            ext.CloseClientOnClose = false;
             ext.InitExternal(Source.Token);
 
             return ext;
@@ -165,6 +166,7 @@ namespace Test.Utils
             }
             pusher ??= new DummyPusher(new DummyPusherConfig());
             var ext = new UAExtractor(Config, Provider, new[] { pusher }, client ?? Client, stateStore);
+            ext.CloseClientOnClose = client != null;
             ext.InitExternal(Source.Token);
 
             return ext;
@@ -245,7 +247,7 @@ namespace Test.Utils
         public static async Task TerminateRunTask(Task runTask, UAExtractor extractor)
         {
             ArgumentNullException.ThrowIfNull(extractor);
-            await extractor.Close(false);
+            await extractor.Close();
             try
             {
                 await runTask;
