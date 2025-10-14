@@ -1073,8 +1073,7 @@ namespace Cognite.OpcUa
             // Restore extraction state from state storage if enabled
             if (StateStorage != null && Config.StateStorage.IntervalValue.Value != Timeout.InfiniteTimeSpan)
             {
-                var stateRestorationTask = RestoreExtractionStateWithRetry(newStates);
-                pushTasks = pushTasks.Append(stateRestorationTask);
+                pushTasks = pushTasks.Append(RestoreExtractionStateWithRetry(newStates));
             }
 
 
