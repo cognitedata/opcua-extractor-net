@@ -1073,60 +1073,7 @@ namespace Cognite.OpcUa
             // Restore extraction state from state storage if enabled
             if (StateStorage != null && Config.StateStorage.IntervalValue.Value != Timeout.InfiniteTimeSpan)
             {
-                // Add issue to block history until state restoration completes
-                historyReader?.AddIssue(HistoryReader.StateIssue.StateRestorationPending);
-                
-                var stateRestorationTask = Task.Run(async () =>
-                {
-                    // Retry state restoration forever until it succeeds
-                    var retryConfig = new RetryUtilConfig
-                    {
-                        MaxTries = 0,           // Retry forever 
-                        Timeout = "0s",         
-                        InitialDelay = "2s",
-                        MaxDelay = "60s"        
-                    };
-                        
-                    await RetryUtil.RetryAsync(
-                        "restore extraction state",
-                        async () =>
-                        {
-                            var tasks = new List<Task>();
-                                
-                            if (Streamer.AllowEvents)
-                            {
-                                tasks.Add(StateStorage.RestoreExtractionState(
-                                    State.EmitterStates.Where(state => state.FrontfillEnabled).ToDictionary(state => state.Id),
-                                    Config.StateStorage.EventStore,
-                                    false,
-                                    Source.Token));
-                            }
-
-                            if (Streamer.AllowData)
-                            {
-                                tasks.Add(StateStorage.RestoreExtractionState(
-                                    newStates.Where(state => state != null && state.FrontfillEnabled).ToDictionary(state => state?.Id!, state => state!),
-                                    Config.StateStorage.VariableStore,
-                                    false,
-                                    Source.Token));
-                            }
-                                
-                            if (tasks.Any())
-                            {
-                                await Task.WhenAll(tasks);
-                            }
-                        },
-                        retryConfig,
-                        shouldRetry: ex => true,  // Retry all exceptions 
-                        log,
-                        Source.Token
-                    );
-                        
-                    // Successfully restored state - allow history to proceed
-                    historyReader?.RemoveIssue(HistoryReader.StateIssue.StateRestorationPending);
-                    log.LogInformation("Successfully restored extraction state from state storage");
-                });
-                
+                var stateRestorationTask = RestoreExtractionStateWithRetry(newStates);
                 pushTasks = pushTasks.Append(stateRestorationTask);
             }
 
@@ -1146,12 +1093,73 @@ namespace Cognite.OpcUa
                 trackedTimeseres.Inc(input.Variables.Count());
             }
 
-            // ALWAYS finalize states, even if state restoration failed
-            // This ensures states are marked as Initialized and have valid time ranges
             foreach (var state in newStates.Concat<UAHistoryExtractionState?>(State.EmitterStates))
             {
                 state?.FinalizeRangeInit();
             }
+        }
+
+        /// <summary>
+        /// Restore extraction state from state storage with infinite retry.
+        /// Blocks history reading until state is successfully restored to prevent data duplication.
+        /// </summary>
+        /// <param name="newStates">Variable states to restore</param>
+        /// <returns>Task that completes when state is restored or extractor is cancelled</returns>
+        private Task RestoreExtractionStateWithRetry(IEnumerable<VariableExtractionState?> newStates)
+        {
+            // Add issue to block history until state restoration completes
+            historyReader?.AddIssue(HistoryReader.StateIssue.StateRestorationPending);
+            
+            return Task.Run(async () =>
+            {
+                // Retry state restoration forever until it succeeds
+                var retryConfig = new RetryUtilConfig
+                {
+                    MaxTries = 0,           // Retry forever 
+                    Timeout = "0s",
+                    InitialDelay = "2s",
+                    MaxDelay = "60s"
+                };
+                    
+                await RetryUtil.RetryAsync(
+                    "restore extraction state",
+                    async () =>
+                    {
+                        var tasks = new List<Task>();
+                            
+                        if (Streamer.AllowEvents)
+                        {
+                            tasks.Add(StateStorage!.RestoreExtractionState(
+                                State.EmitterStates.Where(state => state.FrontfillEnabled).ToDictionary(state => state.Id),
+                                Config.StateStorage.EventStore,
+                                false,
+                                Source.Token));
+                        }
+
+                        if (Streamer.AllowData)
+                        {
+                            tasks.Add(StateStorage!.RestoreExtractionState(
+                                newStates.Where(state => state != null && state.FrontfillEnabled).ToDictionary(state => state?.Id!, state => state!),
+                                Config.StateStorage.VariableStore,
+                                false,
+                                Source.Token));
+                        }
+                            
+                        if (tasks.Any())
+                        {
+                            await Task.WhenAll(tasks);
+                        }
+                    },
+                    retryConfig,
+                    shouldRetry: ex => true,  // Retry all exceptions 
+                    log,
+                    Source.Token
+                );
+                    
+                // Successfully restored state - allow history to proceed
+                historyReader?.RemoveIssue(HistoryReader.StateIssue.StateRestorationPending);
+                log.LogInformation("Successfully restored extraction state from state storage");
+            });
         }
 
         /// <summary>

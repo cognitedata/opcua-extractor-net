@@ -1,6 +1,7 @@
 ﻿using Cognite.Extractor.Testing;
 using Cognite.OpcUa;
 using Cognite.OpcUa.Config;
+using Cognite.OpcUa.History;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.Subscriptions;
@@ -281,6 +282,55 @@ namespace Test.Unit
             Assert.Equal(15, pusher.PushedNodes.Count);
             Assert.Equal(38, pusher.PushedVariables.Count);
             Assert.Equal(10, pusher.PushedReferences.Count);
+        }
+
+        [Theory]
+        [InlineData(0)] // No failures - state restored immediately
+        [InlineData(2)] // 2 failures then success - tests retry
+        [InlineData(5)] // 5 failures then success - tests multiple retries
+        public async Task TestStateRestorationRetry(int failureCount)
+        {
+            tester.Config.Extraction.RootNode = tester.Server.Ids.Base.Root.ToProtoNodeId(tester.Client);
+            tester.Config.StateStorage = new StateStorageConfig
+            {
+                Interval = "100",
+                VariableStore = "test-variables",
+                EventStore = "test-events"
+            };
+            tester.Config.History.Enabled = true;
+            tester.Config.History.Data = true;
+
+            using var stateStore = new DummyStateStore
+            {
+                FailRestoreStateNTimes = failureCount
+            };
+
+            using var pusher = new DummyPusher(new DummyPusherConfig());
+            using var extractor = tester.BuildExtractor(true, stateStore, pusher);
+
+            var extractorTask = extractor.RunExtractor(true);
+
+            try
+            {
+                // Wait for initial push to complete
+                await TestUtils.WaitForCondition(() => pusher.Initialized, 10, 
+                    () => $"Extractor should be initialized");
+
+                var expectedWaitTime = failureCount == 0 ? 2 : (int)Math.Pow(2, failureCount + 1) + 5;
+                
+                await TestUtils.WaitForCondition(
+                    () => stateStore.NumRestoreState >= failureCount + 1, 
+                    expectedWaitTime,
+                    () => $"Expected {failureCount + 1} restore attempts, got {stateStore.NumRestoreState}");
+                
+                Assert.Equal(failureCount + 1, stateStore.NumRestoreState);
+            }
+            finally
+            {
+                await extractor.Close();
+                tester.Config.StateStorage = null;
+                tester.Config.History.Enabled = false;
+            }
         }
     }
 }
