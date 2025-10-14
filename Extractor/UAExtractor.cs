@@ -1071,42 +1071,74 @@ namespace Cognite.OpcUa
             }
 
             // Restore extraction state from state storage if enabled
-            // Wrap in try-catch to ensure that state restoration failure doesn't prevent
-            // state initialization (FinalizeRangeInit must always be called)
+            // Block history reading until state is successfully restored to prevent data duplication
             if (StateStorage != null && Config.StateStorage.IntervalValue.Value != Timeout.InfiniteTimeSpan)
             {
-                try
+                // Add issue to block history until state restoration completes
+                historyReader?.AddIssue(HistoryReader.StateIssue.StateRestorationPending);
+                
+                var stateRestorationTask = Task.Run(async () =>
                 {
-                    var stateRestoreTasks = new List<Task>();
-
-                    if (Streamer.AllowEvents)
+                    try
                     {
-                        stateRestoreTasks.Add(StateStorage.RestoreExtractionState(
-                            State.EmitterStates.Where(state => state.FrontfillEnabled).ToDictionary(state => state.Id),
-                            Config.StateStorage.EventStore,
-                            false,
-                            Source.Token));
-                    }
+                        // Retry state restoration to handle transient network issues or timeouts
+                        // Use CDF retry configuration for consistency
+                        var retryConfig = new Cognite.Extractor.Common.RetryUtilConfig
+                        {
+                            MaxTries = 5,
+                            Timeout = "10m",  // Total timeout of 10 minutes  
+                            InitialDelay = "2s",
+                            MaxDelay = "60s"
+                        };
+                        
+                        await RetryUtil.RetryAsync(
+                            "restore extraction state",
+                            async () =>
+                            {
+                                var tasks = new List<Task>();
+                                
+                                if (Streamer.AllowEvents)
+                                {
+                                    tasks.Add(StateStorage.RestoreExtractionState(
+                                        State.EmitterStates.Where(state => state.FrontfillEnabled).ToDictionary(state => state.Id),
+                                        Config.StateStorage.EventStore,
+                                        false,
+                                        Source.Token));
+                                }
 
-                    if (Streamer.AllowData)
-                    {
-                        stateRestoreTasks.Add(StateStorage.RestoreExtractionState(
-                            newStates.Where(state => state != null && state.FrontfillEnabled).ToDictionary(state => state?.Id!, state => state!),
-                            Config.StateStorage.VariableStore,
-                            false,
-                            Source.Token));
+                                if (Streamer.AllowData)
+                                {
+                                    tasks.Add(StateStorage.RestoreExtractionState(
+                                        newStates.Where(state => state != null && state.FrontfillEnabled).ToDictionary(state => state?.Id!, state => state!),
+                                        Config.StateStorage.VariableStore,
+                                        false,
+                                        Source.Token));
+                                }
+                                
+                                if (tasks.Any())
+                                {
+                                    await Task.WhenAll(tasks);
+                                }
+                            },
+                            retryConfig,
+                            shouldRetry: ex => true,  // Retry all exceptions (timeouts, network issues, etc.)
+                            log,
+                            Source.Token
+                        );
+                        
+                        // Successfully restored state - allow history to proceed
+                        historyReader?.RemoveIssue(HistoryReader.StateIssue.StateRestorationPending);
+                        log.LogInformation("Successfully restored extraction state from state storage");
                     }
-
-                    if (stateRestoreTasks.Any())
+                    catch (Exception ex)
                     {
-                        await Task.WhenAll(stateRestoreTasks);
+                        log.LogCritical(ex, "Failed to restore extraction state after multiple retries. History reading will be blocked.");
+                        log.LogCritical("To recover: Fix CDF connectivity and restart the extractor, or delete and recreate the state table");
+                        // Keep StateRestorationPending issue - history remains blocked to prevent data duplication
                     }
-                }
-                catch (Exception ex)
-                {
-                    log.LogError(ex, "Failed to restore extraction state from state storage, states will be initialized to empty ranges: {Message}", ex.Message);
-                    // Continue - states will be initialized below via FinalizeRangeInit
-                }
+                });
+                
+                pushTasks = pushTasks.Append(stateRestorationTask);
             }
 
 
