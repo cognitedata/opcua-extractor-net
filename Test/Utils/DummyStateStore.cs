@@ -12,7 +12,7 @@ namespace Test.Utils
         public int NumDeleteState { get; private set; }
         public int NumRestoreState { get; private set; }
         public int NumStoreState { get; private set; }
-        
+
         public int FailRestoreStateNTimes { get; set; }
         private int restoreFailCount;
 

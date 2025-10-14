@@ -1109,7 +1109,7 @@ namespace Cognite.OpcUa
         {
             // Add issue to block history until state restoration completes
             historyReader?.AddIssue(HistoryReader.StateIssue.StateRestorationPending);
-            
+
             return Task.Run(async () =>
             {
                 // Retry state restoration forever until it succeeds
@@ -1120,13 +1120,13 @@ namespace Cognite.OpcUa
                     InitialDelay = "2s",
                     MaxDelay = "60s"
                 };
-                    
+
                 await RetryUtil.RetryAsync(
                     "restore extraction state",
                     async () =>
                     {
                         var tasks = new List<Task>();
-                            
+
                         if (Streamer.AllowEvents)
                         {
                             tasks.Add(StateStorage!.RestoreExtractionState(
@@ -1144,7 +1144,7 @@ namespace Cognite.OpcUa
                                 false,
                                 Source.Token));
                         }
-                            
+
                         if (tasks.Any())
                         {
                             await Task.WhenAll(tasks);
@@ -1155,7 +1155,7 @@ namespace Cognite.OpcUa
                     log,
                     Source.Token
                 );
-                    
+
                 // Successfully restored state - allow history to proceed
                 historyReader?.RemoveIssue(HistoryReader.StateIssue.StateRestorationPending);
                 log.LogInformation("Successfully restored extraction state from state storage");

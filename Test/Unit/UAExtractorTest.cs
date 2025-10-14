@@ -313,16 +313,16 @@ namespace Test.Unit
             try
             {
                 // Wait for initial push to complete
-                await TestUtils.WaitForCondition(() => pusher.Initialized, 10, 
+                await TestUtils.WaitForCondition(() => pusher.Initialized, 10,
                     () => $"Extractor should be initialized");
 
                 var expectedWaitTime = failureCount == 0 ? 2 : (int)Math.Pow(2, failureCount + 1) + 5;
-                
+
                 await TestUtils.WaitForCondition(
-                    () => stateStore.NumRestoreState >= failureCount + 1, 
+                    () => stateStore.NumRestoreState >= failureCount + 1,
                     expectedWaitTime,
                     () => $"Expected {failureCount + 1} restore attempts, got {stateStore.NumRestoreState}");
-                
+
                 Assert.Equal(failureCount + 1, stateStore.NumRestoreState);
             }
             finally
