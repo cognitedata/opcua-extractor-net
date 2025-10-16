@@ -1115,7 +1115,7 @@ namespace Cognite.OpcUa
                 MaxTries = 0,           // Retry forever 
                 Timeout = "0s",
                 InitialDelay = "2s",
-                MaxDelay = "60s"
+                MaxDelay = "300s"
             };
 
             await RetryUtil.RetryAsync(
