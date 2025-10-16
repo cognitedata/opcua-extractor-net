@@ -13,6 +13,9 @@ namespace Test.Utils
         public int NumRestoreState { get; private set; }
         public int NumStoreState { get; private set; }
 
+        public int FailRestoreStateNTimes { get; set; }
+        private int restoreFailCount;
+
         public Task DeleteExtractionState(IEnumerable<IExtractionState> extractionStates, string tableName, CancellationToken token)
         {
             NumDeleteState++;
@@ -33,12 +36,22 @@ namespace Test.Utils
             where K : IExtractionState
         {
             NumRestoreState++;
+            if (restoreFailCount < FailRestoreStateNTimes)
+            {
+                restoreFailCount++;
+                throw new TimeoutException($"Simulated state restoration timeout (attempt {restoreFailCount})");
+            }
             return Task.CompletedTask;
         }
 
         public Task RestoreExtractionState<K>(IDictionary<string, K> extractionStates, string tableName, bool initializeMissing, CancellationToken token) where K : BaseExtractionState
         {
             NumRestoreState++;
+            if (restoreFailCount < FailRestoreStateNTimes)
+            {
+                restoreFailCount++;
+                throw new TimeoutException($"Simulated state restoration timeout (attempt {restoreFailCount})");
+            }
             return Task.CompletedTask;
         }
 

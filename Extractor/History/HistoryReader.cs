@@ -272,6 +272,7 @@ namespace Cognite.OpcUa.History
             NodeHierarchyRead,
             DataPushFailing,
             EventsPushFailing,
+            StateRestorationPending,
         }
 
         private void RestartHistoryInStates()
