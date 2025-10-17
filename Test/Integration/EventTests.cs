@@ -60,7 +60,7 @@ namespace Test.Integration
             using var pusher = new DummyPusher(new DummyPusherConfig());
             tester.Config.History.Enabled = false;
             tester.Config.Events.History = false;
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(true, null, pusher);
 
             var runTask = extractor.RunExtractor();
 
@@ -100,7 +100,7 @@ namespace Test.Integration
             tester.Config.Events.DestinationNameMap["TypeProp"] = "Type";
 
             using var pusher = new DummyPusher(new DummyPusherConfig());
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(true, null, pusher);
 
             var runTask = extractor.RunExtractor();
 
@@ -142,7 +142,7 @@ namespace Test.Integration
             using var pusher = new DummyPusher(new DummyPusherConfig());
             tester.Config.Events.ExcludeEventFilter = null;
             tester.Config.Events.ExcludeProperties = new List<string>();
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(true, null, pusher);
             tester.Config.Events.History = false;
 
             var runTask = extractor.RunExtractor();
@@ -181,7 +181,6 @@ namespace Test.Integration
         public async Task TestDisableSubscriptions()
         {
             using var pusher = new DummyPusher(new DummyPusherConfig() { ReadExtractedRanges = true });
-            using var extractor = tester.BuildExtractor(true, null, pusher);
 
             var ids = tester.Server.Ids.Event;
 
@@ -192,46 +191,41 @@ namespace Test.Integration
             tester.Config.Events.History = true;
             tester.Config.Subscriptions.RecreateSubscriptionGracePeriod = "100ms";
 
-            async Task Reset()
-            {
-                extractor.State.Clear();
-                var reader = (HistoryReader)extractor.GetType().GetField("historyReader", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(extractor);
-                reader.AddIssue(HistoryReader.StateIssue.NodeHierarchyRead);
-                ((Dictionary<NodeId, VariableExtractionState>)reader.GetType().GetField("activeVarStates", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(reader)).Clear();
-                ((Dictionary<NodeId, EventExtractionState>)reader.GetType().GetField("activeEventStates", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(reader)).Clear();
-                await tester.RemoveSubscription(extractor, SubscriptionName.Events);
-            }
-
             tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(ids.Root, tester.Client);
 
             tester.WipeEventHistory();
             tester.Server.PopulateEvents();
             CommonTestUtils.ResetMetricValue("opcua_frontfill_events_count");
 
-            var session = (Session)tester.Client.GetType().GetProperty("Session", BindingFlags.Instance | BindingFlags.NonPublic)
-                .GetValue(tester.Client);
-
             // Test everything normal
-            await extractor.RunExtractor(true);
-            Assert.All(extractor.State.EmitterStates, state => { Assert.True(state.ShouldSubscribe); });
-            await extractor.WaitForSubscription(SubscriptionName.Events);
-            Assert.Equal(3u, session.Subscriptions.First(sub => sub.DisplayName.StartsWith(SubscriptionName.Events.Name(), StringComparison.InvariantCulture)).MonitoredItemCount);
-            await TestUtils.WaitForCondition(() => extractor.State.EmitterStates.All(s => !s.IsFrontfilling), 10);
+            await using (var extractor = tester.BuildExtractor(true, null, pusher))
+            {
+                await extractor.RunExtractor(true);
+                Assert.All(extractor.State.EmitterStates, state => { Assert.True(state.ShouldSubscribe); });
+                await extractor.WaitForSubscription(SubscriptionName.Events);
+                var session = tester.Client.SessionManager.Session;
+                Assert.Equal(3u, session.Subscriptions.First(sub => sub.DisplayName.StartsWith(SubscriptionName.Events.Name(), StringComparison.InvariantCulture)).MonitoredItemCount);
+                await TestUtils.WaitForCondition(() => extractor.State.EmitterStates.All(s => !s.IsFrontfilling), 10);
+            }
+
+
 
             // Test disable subscriptions
-            await Reset();
             tester.Config.Subscriptions.Events = false;
-            await extractor.RunExtractor(true);
-            var state = extractor.State.GetEmitterState(ids.Obj1);
-            Assert.False(state.ShouldSubscribe);
-            state = extractor.State.GetEmitterState(ObjectIds.Server);
-            Assert.False(state.ShouldSubscribe);
-            await extractor.WaitForSubscription(SubscriptionName.DataPoints);
-            Assert.DoesNotContain(session.Subscriptions, sub => sub.DisplayName.StartsWith(SubscriptionName.Events.Name(), StringComparison.InvariantCulture));
-            await TestUtils.WaitForCondition(() => extractor.State.EmitterStates.All(s => !s.IsFrontfilling), 10);
+            await using (var extractor = tester.BuildExtractor(true, null, pusher))
+            {
+                await extractor.RunExtractor(true);
+                var state = extractor.State.GetEmitterState(ids.Obj1);
+                Assert.False(state.ShouldSubscribe);
+                state = extractor.State.GetEmitterState(ObjectIds.Server);
+                Assert.False(state.ShouldSubscribe);
+                await extractor.WaitForSubscription(SubscriptionName.DataPoints);
+                var session = tester.Client.SessionManager.Session;
+                Assert.DoesNotContain(session.Subscriptions, sub => sub.DisplayName.StartsWith(SubscriptionName.Events.Name(), StringComparison.InvariantCulture));
+                await TestUtils.WaitForCondition(() => extractor.State.EmitterStates.All(s => !s.IsFrontfilling), 10);
+            }
 
             // Test disable specific subscriptions
-            await Reset();
             var oldTransforms = tester.Config.Extraction.Transformations;
             tester.Config.Extraction.Transformations = new List<RawNodeTransformation>
             {
@@ -246,14 +240,18 @@ namespace Test.Integration
             };
 
             tester.Config.Subscriptions.Events = true;
-            await extractor.RunExtractor(true);
-            state = extractor.State.GetEmitterState(ids.Obj1);
-            Assert.False(state.ShouldSubscribe);
-            state = extractor.State.GetEmitterState(ObjectIds.Server);
-            Assert.True(state.ShouldSubscribe);
-            await extractor.WaitForSubscription(SubscriptionName.Events);
-            Assert.Equal(2u, session.Subscriptions.First(sub => sub.DisplayName.StartsWith(SubscriptionName.Events.Name(), StringComparison.InvariantCulture)).MonitoredItemCount);
-            await TestUtils.WaitForCondition(() => extractor.State.EmitterStates.All(s => !s.IsFrontfilling), 10);
+            await using (var extractor = tester.BuildExtractor(true, null, pusher))
+            {
+                await extractor.RunExtractor(true);
+                var state = extractor.State.GetEmitterState(ids.Obj1);
+                Assert.False(state.ShouldSubscribe);
+                state = extractor.State.GetEmitterState(ObjectIds.Server);
+                Assert.True(state.ShouldSubscribe);
+                await extractor.WaitForSubscription(SubscriptionName.Events);
+                var session = tester.Client.SessionManager.Session;
+                Assert.Equal(2u, session.Subscriptions.First(sub => sub.DisplayName.StartsWith(SubscriptionName.Events.Name(), StringComparison.InvariantCulture)).MonitoredItemCount);
+                await TestUtils.WaitForCondition(() => extractor.State.EmitterStates.All(s => !s.IsFrontfilling), 10);
+            }
         }
         #endregion
 
@@ -272,7 +270,7 @@ namespace Test.Integration
             tester.WipeEventHistory();
 
             using var pusher = new DummyPusher(new DummyPusherConfig());
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(true, null, pusher);
 
             var start = DateTime.UtcNow.AddSeconds(-5);
 
@@ -322,7 +320,7 @@ namespace Test.Integration
             tester.WipeEventHistory();
 
             using var pusher = new DummyPusher(new DummyPusherConfig());
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(true, null, pusher);
 
             var now = DateTime.UtcNow;
 
@@ -374,7 +372,6 @@ namespace Test.Integration
             }, tester.Provider.GetRequiredService<ILogger<LiteDBStateStore>>());
 
             using var pusher = new DummyPusher(new DummyPusherConfig() { ReadExtractedRanges = false });
-            var extractor = tester.BuildExtractor(true, stateStore, pusher);
 
             var ids = tester.Server.Ids.Event;
 
@@ -388,11 +385,10 @@ namespace Test.Integration
 
             var now = DateTime.UtcNow;
 
-
             tester.WipeEventHistory();
             tester.Server.PopulateEvents(now.AddSeconds(-5));
 
-            try
+            await using (var extractor = tester.BuildExtractor(true, stateStore, pusher))
             {
                 var runTask = extractor.RunExtractor();
 
@@ -413,17 +409,11 @@ namespace Test.Integration
                 Assert.Equal(200, pusher.Events[ids.Obj1].Count);
                 pusher.Wipe();
             }
-            finally
-            {
-                await extractor.DisposeAsync();
-            }
 
             tester.Server.PopulateEvents(now.AddSeconds(-15));
             tester.Server.PopulateEvents(now.AddSeconds(5));
 
-            extractor = tester.BuildExtractor(true, stateStore, pusher);
-
-            try
+            await using (var extractor = tester.BuildExtractor(true, stateStore, pusher))
             {
                 var runTask = extractor.RunExtractor();
 
@@ -442,10 +432,6 @@ namespace Test.Integration
                 Assert.Equal(202, pusher.Events[ids.Obj1].Count);
                 pusher.Wipe();
             }
-            finally
-            {
-                await extractor.DisposeAsync();
-            }
         }
         [Theory]
         [InlineData(true)]
@@ -453,7 +439,6 @@ namespace Test.Integration
         public async Task TestPusherStateRestart(bool backfill)
         {
             using var pusher = new DummyPusher(new DummyPusherConfig() { ReadExtractedRanges = true });
-            var extractor = tester.BuildExtractor(true, null, pusher);
 
             var ids = tester.Server.Ids.Event;
 
@@ -469,7 +454,7 @@ namespace Test.Integration
             tester.WipeEventHistory();
             tester.Server.PopulateEvents(now.AddSeconds(-5));
 
-            try
+            await using (var extractor = tester.BuildExtractor(true, null, pusher))
             {
                 var runTask = extractor.RunExtractor();
 
@@ -488,17 +473,11 @@ namespace Test.Integration
                 Assert.Equal(700, pusher.Events[ObjectIds.Server].Count);
                 Assert.Equal(200, pusher.Events[ids.Obj1].Count);
             }
-            finally
-            {
-                await extractor.DisposeAsync();
-            }
 
             tester.Server.PopulateEvents(now.AddSeconds(-15));
             tester.Server.PopulateEvents(now.AddSeconds(5));
 
-            extractor = tester.BuildExtractor(true, null, pusher);
-
-            try
+            await using (var extractor = tester.BuildExtractor(true, null, pusher))
             {
                 var runTask = extractor.RunExtractor();
 
@@ -524,10 +503,6 @@ namespace Test.Integration
                     Assert.Equal(402, pusher.Events[ids.Obj1].Count);
                 }
             }
-            finally
-            {
-                await extractor.DisposeAsync();
-            }
         }
         #endregion
         [Fact]
@@ -545,7 +520,7 @@ namespace Test.Integration
             tester.WipeEventHistory();
 
             using var pusher = new DummyPusher(new DummyPusherConfig() { ReadExtractedRanges = true });
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(true, null, pusher);
 
             var ids = tester.Server.Ids.Event;
 
@@ -601,7 +576,7 @@ namespace Test.Integration
         public async Task TestAuditEvents()
         {
             using var pusher = new DummyPusher(new DummyPusherConfig());
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(true, null, pusher);
 
             tester.Server.SetEventConfig(true, true, true);
 
