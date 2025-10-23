@@ -67,6 +67,11 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.40.0":
+    description: Improve state restoration handling with retry logic.
+    changelog:
+      added:
+        - Added retry logic for state restoration with exponential backoff to handle temporary failures.
   "2.39.0":
     description: Add a metric on upload queue length.
     changelog:
