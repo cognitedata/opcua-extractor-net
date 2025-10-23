@@ -104,7 +104,7 @@ namespace Test.Unit
         public async Task TestHistoryConsistencyData(
             int nodesChunk, int resultChunk, int nodeParallelism, bool ignoreCps, int maxReadLength, bool backfill)
         {
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
 
             var cfg = new HistoryConfig
             {
@@ -185,7 +185,7 @@ namespace Test.Unit
         public async Task TestHistoryConsistencyEvents(
             int nodesChunk, int resultChunk, int nodeParallelism, bool ignoreCps, int maxReadLength, bool backfill)
         {
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
 
             var cfg = new HistoryConfig
             {

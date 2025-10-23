@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Threading.Tasks;
 using Test.Utils;
 using Xunit;
 using Xunit.Abstractions;
@@ -27,9 +28,9 @@ namespace Test.Unit
         #region BuildMetadataAsJson Tests
 
         [Fact]
-        public void TestBuildMetadataAsJsonEmptyNode()
+        public async Task TestBuildMetadataAsJsonEmptyNode()
         {
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
             var node = CommonTestUtils.GetSimpleVariable("test", new UADataType(DataTypeIds.String));
 
             var jsonMetadata = node.BuildMetadataAsJson(tester.Config, extractor, false);
@@ -42,9 +43,9 @@ namespace Test.Unit
         }
 
         [Fact]
-        public void TestBuildMetadataAsJsonWithProperties()
+        public async Task TestBuildMetadataAsJsonWithProperties()
         {
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
             var pdt = new UADataType(DataTypeIds.String);
             var node = CommonTestUtils.GetSimpleVariable("test", pdt);
 
@@ -70,9 +71,9 @@ namespace Test.Unit
         }
 
         [Fact]
-        public void TestBuildMetadataAsJsonWithNestedProperties()
+        public async Task TestBuildMetadataAsJsonWithNestedProperties()
         {
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
             // Define data types
             var stringDt = new UADataType(DataTypeIds.String);
             var doubleDt = new UADataType(DataTypeIds.Double);
@@ -141,9 +142,9 @@ namespace Test.Unit
         }
 
         [Fact]
-        public void TestBuildMetadataAsJsonWithExtras()
+        public async Task TestBuildMetadataAsJsonWithExtras()
         {
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
             var node = CommonTestUtils.GetSimpleVariable("test", new UADataType(DataTypeIds.String));
 
             // Enable node type metadata
@@ -159,9 +160,9 @@ namespace Test.Unit
         }
 
         [Fact]
-        public void TestBuildMetadataAsJsonNullValues()
+        public async Task TestBuildMetadataAsJsonNullValues()
         {
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
             var pdt = new UADataType(DataTypeIds.String);
             var node = CommonTestUtils.GetSimpleVariable("test", pdt);
 
@@ -183,9 +184,9 @@ namespace Test.Unit
         }
 
         [Fact]
-        public void TestBuildMetadataAsJsonNumericValues()
+        public async Task TestBuildMetadataAsJsonNumericValues()
         {
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
             var node = CommonTestUtils.GetSimpleVariable("test", new UADataType(DataTypeIds.String));
 
             // Add numeric properties
@@ -212,9 +213,9 @@ namespace Test.Unit
         #region ToIdmTimeSeries Tests
 
         [Fact]
-        public void TestToIdmTimeSeriesMetadataAsJsonFalse()
+        public async Task TestToIdmTimeSeriesMetadataAsJsonFalse()
         {
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
             var pdt = new UADataType(DataTypeIds.String);
             var variable = CommonTestUtils.GetSimpleVariable("testVar", new UADataType(DataTypeIds.Double));
 
@@ -250,9 +251,9 @@ namespace Test.Unit
         }
 
         [Fact]
-        public void TestToIdmTimeSeriesMetadataAsJsonTrue()
+        public async Task TestToIdmTimeSeriesMetadataAsJsonTrue()
         {
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
             var pdt = new UADataType(DataTypeIds.String);
             var variable = CommonTestUtils.GetSimpleVariable("testVar", new UADataType(DataTypeIds.Double));
 
@@ -306,9 +307,9 @@ namespace Test.Unit
         }
 
         [Fact]
-        public void TestToIdmTimeSeriesMetadataAsJsonWithNestedProperties()
+        public async Task TestToIdmTimeSeriesMetadataAsJsonWithNestedProperties()
         {
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
             var pdt = new UADataType(DataTypeIds.String);
             var variable = CommonTestUtils.GetSimpleVariable("testVar", new UADataType(DataTypeIds.Double));
 
@@ -363,9 +364,9 @@ namespace Test.Unit
         }
 
         [Fact]
-        public void TestToIdmTimeSeriesDefaultConfig()
+        public async Task TestToIdmTimeSeriesDefaultConfig()
         {
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
             var variable = CommonTestUtils.GetSimpleVariable("testVar", new UADataType(DataTypeIds.Double));
 
             // Test with default config (MetadataAsJson should default to false)
@@ -378,9 +379,9 @@ namespace Test.Unit
         }
 
         [Fact]
-        public void TestToIdmTimeSeriesNullCogniteConfig()
+        public async Task TestToIdmTimeSeriesNullCogniteConfig()
         {
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
             var variable = CommonTestUtils.GetSimpleVariable("testVar", new UADataType(DataTypeIds.Double));
 
             // Ensure config is null
@@ -394,9 +395,9 @@ namespace Test.Unit
         }
 
         [Fact]
-        public void TestToIdmTimeSeriesEmptyExtractedData()
+        public async Task TestToIdmTimeSeriesEmptyExtractedData()
         {
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
             var variable = CommonTestUtils.GetSimpleVariable("testVar", new UADataType(DataTypeIds.Double));
 
             // No properties added - extractedData should be empty but not null
@@ -424,9 +425,9 @@ namespace Test.Unit
         #region Edge Cases and Error Handling
 
         [Fact]
-        public void TestToIdmTimeSeriesComplexJsonStructure()
+        public async Task TestToIdmTimeSeriesComplexJsonStructure()
         {
-            using var extractor = tester.BuildExtractor();
+            await using var extractor = tester.BuildExtractor();
             var variable = CommonTestUtils.GetSimpleVariable("testVar", new UADataType(DataTypeIds.Double));
 
             // Create properties that would result in complex JSON structures

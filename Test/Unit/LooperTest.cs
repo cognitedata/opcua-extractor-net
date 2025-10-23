@@ -39,7 +39,7 @@ namespace Test.Unit
                 Interval = "1000000"
             };
             using var stateStore = new DummyStateStore();
-            using var extractor = tester.BuildExtractor(true, stateStore, new DummyPusher(new DummyPusherConfig()));
+            await using var extractor = tester.BuildExtractor(true, stateStore, new DummyPusher(new DummyPusherConfig()));
             bool synch1 = false;
             bool synch2 = false;
             using var source = CancellationTokenSource.CreateLinkedTokenSource(tester.Source.Token);
@@ -129,7 +129,7 @@ namespace Test.Unit
         {
             var pusher1 = new DummyPusher(new DummyPusherConfig());
             var pusher2 = new DummyPusher(new DummyPusherConfig());
-            using var extractor = tester.BuildExtractor(true, null, pusher1, pusher2);
+            await using var extractor = tester.BuildExtractor(true, null, pusher1, pusher2);
 
             var start = DateTime.UtcNow;
 
@@ -224,7 +224,7 @@ namespace Test.Unit
             var pusher2 = new DummyPusher(new DummyPusherConfig());
             var pusher3 = new DummyPusher(new DummyPusherConfig());
             tester.Config.Extraction.Relationships.Enabled = true;
-            using var extractor = tester.BuildExtractor(true, null, pusher1, pusher2, pusher3);
+            await using var extractor = tester.BuildExtractor(true, null, pusher1, pusher2, pusher3);
             tester.Config.Extraction.Relationships.Enabled = false;
 
             var start = DateTime.UtcNow;

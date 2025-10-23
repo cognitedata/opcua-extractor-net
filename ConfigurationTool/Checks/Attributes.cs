@@ -46,7 +46,7 @@ namespace Cognite.OpcUa.Config
         {
             log.LogInformation("Reading variable chunk sizes to determine the AttributeChunk property");
 
-            if (Session == null || !Session.Connected)
+            if (!Started)
             {
                 await Run(token, 0);
                 await LimitConfigValues(token);
