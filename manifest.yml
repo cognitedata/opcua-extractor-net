@@ -67,6 +67,11 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.40.2":
+    description: Fix extractor executable signature.
+    changelog:
+      fixed:
+        - Fixed an issue causing the extractor executable signature to be missing.
   "2.40.1":
     description: Avoid logging keyvault secrets.
     changelog:

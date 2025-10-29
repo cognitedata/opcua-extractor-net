@@ -72,7 +72,7 @@ jobs:
                     }
 
     build-windows-installer:
-        runs-on: windows-latest
+        runs-on: windows-2022
         environment: ${{ needs.prerequisites.outputs.branch == 'master' && 'CD' || 'CI' }}
         needs: prerequisites
 
