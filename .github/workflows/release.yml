@@ -2,7 +2,9 @@ name: Release extractor
 
 on:
     push:
-        branches: [ master ]
+        branches: 
+        - master
+        - release-*.*
     
 jobs:
     common:

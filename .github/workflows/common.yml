@@ -70,6 +70,12 @@ jobs:
                     } else {
                         core.warning('Will not create release for version ${{ steps.get-version.outputs.version }} because it already exists.')
                     }
+          - name: Check if current is a release branch
+            id: is-final-branch
+            run: |
+              const branch = ${{ steps.current-branch.outputs.branch }}
+              const regex = /^(master|release-[0-9]+\.x)$/
+            
 
     build-windows-installer:
         runs-on: windows-latest
