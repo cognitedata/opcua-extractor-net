@@ -494,7 +494,10 @@ namespace Cognite.OpcUa.Utils
         {
             return ConfigurationUtils.ConfigToString(config,
                 Enumerable.Empty<string>(),
-                new[] { "ConfigDir", "BaseExcludeProperties", "IdpAuthentication", "ApiKey", "Password" },
+                new[] {
+                    "ConfigDir", "BaseExcludeProperties", "IdpAuthentication",
+                    "ApiKey", "Password", "KeyVault", "Secret"
+                },
                 new[] { "Cognite" },
                 false);
         }
