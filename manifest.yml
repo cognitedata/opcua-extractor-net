@@ -67,6 +67,11 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.40.1":
+    description: Avoid logging keyvault secrets.
+    changelog:
+      security:
+        - Avoid logging keyvault secrets when running the extractor in debug mode.
   "2.40.0":
     description: Improve state restoration handling with retry logic.
     changelog:
