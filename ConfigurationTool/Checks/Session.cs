@@ -69,7 +69,7 @@ namespace Cognite.OpcUa.Config
                 Summary.Session.Secure = secureExists;
             }
 
-            if (Session == null || !Session.Connected)
+            if (!Started)
             {
                 try
                 {
