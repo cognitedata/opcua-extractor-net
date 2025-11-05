@@ -43,7 +43,8 @@ namespace Cognite.OpcUa
         private static readonly Gauge version =
             Metrics.CreateGauge("opcua_version",
                 $"version: {Extractor.Metrics.Version.GetVersion(Assembly.GetExecutingAssembly())}"
-                + $", status: {Extractor.Metrics.Version.GetDescription(Assembly.GetExecutingAssembly())}");
+                + $", status: {Extractor.Metrics.Version.GetDescription(Assembly.GetExecutingAssembly())}",
+                new[] { "version" });
 
         public static Action<CogniteDestination?, UAExtractor>? OnCreateExtractor { get; set; }
 
@@ -352,8 +353,8 @@ namespace Cognite.OpcUa
 
             log ??= LoggingUtils.GetDefault();
 
-            version.Set(0);
             var ver = Extractor.Metrics.Version.GetVersion(Assembly.GetExecutingAssembly());
+            version.WithLabels(ver).Set(0);
 
 
             FullConfig? config = null;
