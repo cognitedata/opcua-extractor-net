@@ -98,8 +98,14 @@ namespace Test.Unit
             var loopTask = extractor.Looper.Scheduler.WaitForAll();
             await TestUtils.WaitForCondition(() => loopTask.IsFaulted || loopTask.IsCompleted, 5);
             var ex = loopTask.Exception.Flatten();
-            Assert.IsType<ExtractorFailureException>(ex.InnerException);
-            Assert.Equal("SomeException", ex.InnerException.Message);
+            // In ExtractorUtils 1.37.1+, the scheduler wraps exceptions in SchedulerException
+            var innerEx = ex.InnerException;
+            if (innerEx?.InnerException != null)
+            {
+                innerEx = innerEx.InnerException;
+            }
+            Assert.IsType<ExtractorFailureException>(innerEx);
+            Assert.Equal("SomeException", innerEx.Message);
         }
 
         private void InitPusherLoopTest(UAExtractor extractor, params DummyPusher[] pushers)
