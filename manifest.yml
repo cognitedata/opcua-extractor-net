@@ -67,6 +67,11 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.40.4":
+    description: Fix regression causing history to restart on rebrowse if state store is enabled.
+    changelog:
+      fixed:
+        - Fix regression causing history to restart on rebrowse if state store is enabled.
   "2.40.3":
     description: Set extractor version as a label value on the opcua_version metric.
     changelog:
