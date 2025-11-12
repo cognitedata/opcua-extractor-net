@@ -383,9 +383,9 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="quitAfterMap">False to wait for cancellation</param>
         /// <returns></returns>
-        public async Task RunExtractor(bool quitAfterMap = false, int startTimeout = -1)
+        public async Task RunExtractor(bool quitAfterMap = false, int startTimeoutSeconds = -1)
         {
-            await RunExtractorInternal(startTimeout);
+            await RunExtractorInternal(startTimeoutSeconds);
             if (!quitAfterMap)
             {
                 Looper.Run();

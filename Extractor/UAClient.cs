@@ -911,7 +911,7 @@ namespace Cognite.OpcUa
 
         public void Dispose()
         {
-            if (Interlocked.CompareExchange(ref disposed, 1, 0) == 0)
+            if (Interlocked.CompareExchange(ref disposed, 1, 0) == 1)
             {
                 return;
             }
@@ -940,7 +940,7 @@ namespace Cognite.OpcUa
 
         public async ValueTask DisposeAsync()
         {
-            if (Interlocked.CompareExchange(ref disposed, 1, 0) == 0)
+            if (Interlocked.CompareExchange(ref disposed, 1, 0) == 1)
             {
                 return;
             }
