@@ -78,6 +78,8 @@ namespace Cognite.OpcUa
 
         public bool Started { get; private set; }
 
+        public bool CloseClientOnClose { get; set; } = true;
+
         private static readonly Gauge startTime = Metrics
             .CreateGauge("opcua_start_time", "Start time for the extractor");
 
@@ -381,9 +383,9 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="quitAfterMap">False to wait for cancellation</param>
         /// <returns></returns>
-        public async Task RunExtractor(bool quitAfterMap = false, int startTimeout = -1)
+        public async Task RunExtractor(bool quitAfterMap = false, int startTimeoutSeconds = -1)
         {
-            await RunExtractorInternal(startTimeout);
+            await RunExtractorInternal(startTimeoutSeconds);
             if (!quitAfterMap)
             {
                 Looper.Run();
@@ -475,10 +477,10 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Closes the extractor, mainly just shutting down the opcua client and waiting for a clean loss of connection.
         /// </summary>
-        public async Task Close(bool closeClient = true)
+        public async Task Close()
         {
             Source?.Cancel();
-            if (!uaClient.Started || !closeClient) return;
+            if (!uaClient.Started || !CloseClientOnClose) return;
             try
             {
                 await uaClient.Close(CancellationToken.None);
@@ -1350,8 +1352,14 @@ namespace Cognite.OpcUa
         }
         #endregion
 
+        private int disposed = 0;
+
         protected override async ValueTask DisposeAsyncCore()
         {
+            if (Interlocked.CompareExchange(ref disposed, 1, 0) == 0)
+            {
+                return;
+            }
             Starting.Set(0);
             historyReader?.Dispose();
             historyReader = null;
@@ -1360,8 +1368,6 @@ namespace Cognite.OpcUa
 
             await base.DisposeAsyncCore();
         }
-
-        private int disposed = 0;
 
         protected override void Dispose(bool disposing)
         {

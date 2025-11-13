@@ -148,6 +148,25 @@ namespace Test.Utils
                 Client.Browser.Transformations = null;
             }
             var ext = new UAExtractor(Config, Provider, pushers, Client, stateStore);
+            ext.CloseClientOnClose = false;
+            ext.InitExternal(Source.Token);
+
+            return ext;
+        }
+
+        public UAExtractor BuildExtractor(IPusher pusher = null, bool clear = true, IExtractionStateStore stateStore = null, UAClient client = null)
+        {
+            if (clear)
+            {
+                RemoveSubscription(null, SubscriptionName.Events).Wait();
+                RemoveSubscription(null, SubscriptionName.DataPoints).Wait();
+                RemoveSubscription(null, SubscriptionName.Audit).Wait();
+                RemoveSubscription(null, SubscriptionName.RebrowseTriggers).Wait();
+                Client.Browser.Transformations = null;
+            }
+            pusher ??= new DummyPusher(new DummyPusherConfig());
+            var ext = new UAExtractor(Config, Provider, new[] { pusher }, client ?? Client, stateStore);
+            ext.CloseClientOnClose = client != null;
             ext.InitExternal(Source.Token);
 
             return ext;
@@ -228,7 +247,7 @@ namespace Test.Utils
         public static async Task TerminateRunTask(Task runTask, UAExtractor extractor)
         {
             ArgumentNullException.ThrowIfNull(extractor);
-            await extractor.Close(false);
+            await extractor.Close();
             try
             {
                 await runTask;
