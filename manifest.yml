@@ -67,6 +67,26 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.40.3":
+    description: Set extractor version as a label value on the opcua_version metric.
+    changelog:
+      added:
+        - Set extractor version as a label value on the opcua_version metric.
+  "2.40.2":
+    description: Fix extractor executable signature.
+    changelog:
+      fixed:
+        - Fixed an issue causing the extractor executable signature to be missing.
+  "2.40.1":
+    description: Avoid logging keyvault secrets.
+    changelog:
+      security:
+        - Avoid logging keyvault secrets when running the extractor in debug mode.
+  "2.40.0":
+    description: Improve state restoration handling with retry logic.
+    changelog:
+      added:
+        - Added retry logic for state restoration with exponential backoff to handle temporary failures.
   "2.39.0":
     description: Add a metric on upload queue length.
     changelog:
