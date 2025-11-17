@@ -1090,6 +1090,8 @@ namespace Test.Integration
             // This is a rebrowse, and should _not_ set the extractor to uninitialized.
             Assert.True(pusher.Initialized);
 
+            await extractor.WaitForSubscription(SubscriptionName.DataPoints);
+
             // Trigger a datapoint update.
             tester.Server.UpdateNode(tester.Server.Ids.Base.DoubleVar1, 321.123);
 
