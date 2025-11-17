@@ -62,20 +62,28 @@ jobs:
                   let shouldRelease = 1;
                   const targetReleasePattern = /^(master|release-\d{1,2}\.x)$/;
                   const version = 'v${{steps.get-version.outputs.version}}';
-                  const response = await github.rest.repos.listTags({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    per_page: 100
-                  });
-                  const tags = response.data.map(tag => tag.name);
-                  let currentBbranch = '${{steps.current-branch.outputs.branch}}';
-
-                  if (targetReleasePattern.test(currentBranch)) {
-                    if tags.find(t => t === version) === undefined {
-                      shouldRelease = 0;
+                  const allTags = await github.paginate(
+                    github.rest.repos.listTags,
+                    {
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      per_page: 100
                     }
+                  );
+                  const tagNames = (allTags ? allTags : []).map(tag => tag.name);
+                  const currentBranch = '${{steps.current-branch.outputs.branch}}';
+
+                  // Debugging
+                  core.notice(targetReleasePattern.test(currentBranch))
+                  core.notice(targetReleasePattern.test("release-3.x"))
+                  core.notice(targetReleasePattern.test("master"))
+                  core.notice(tagNames.find(t => t === version) === undefined)
+                  core.notice(tagNames.find(t => t === "v3.0.0") === undefined)
+
+                  if (targetReleasePattern.test(currentBranch) && tagNames.find(t => t === version) === undefined) {
+                    shouldRelease = 0;
                   }
-                  core.setOutput('test', shouldRelease)
+                  core.setOutput('test', shouldRelease.toString())
 
           - name: Get RPM version
             id: rpmver
