@@ -88,7 +88,7 @@ namespace Test.Unit
         [Fact]
         public async Task TestPushReadDataPoints()
         {
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(true, null, pusher);
 
             CommonTestUtils.ResetMetricValues("opcua_datapoint_push_failures_influx",
                 "opcua_datapoints_pushed_influx", "opcua_datapoint_pushes_influx",
@@ -196,7 +196,7 @@ namespace Test.Unit
         [Fact]
         public async Task TestPushReadEvents()
         {
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(true, null, pusher);
 
             CommonTestUtils.ResetMetricValues("opcua_event_push_failures_influx",
                 "opcua_events_pushed_influx", "opcua_event_pushes_influx",
@@ -308,7 +308,7 @@ namespace Test.Unit
         [Fact]
         public async Task TestInitExtractedRanges()
         {
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(true, null, pusher);
 
             tester.Config.Influx.ReadExtractedRanges = true;
             VariableExtractionState[] GetStates()
@@ -401,7 +401,7 @@ namespace Test.Unit
         [Fact]
         public async Task TestInitExtractedEventRanges()
         {
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(true, null, pusher);
 
             EventExtractionState[] GetStates()
             {

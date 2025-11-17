@@ -175,7 +175,7 @@ namespace Test.Unit
         [Fact]
         public async Task TestPushEvents()
         {
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(true, null, pusher);
 
             CommonTestUtils.ResetMetricValues("opcua_event_push_failures_mqtt",
                 "opcua_events_pushed_mqtt", "opcua_event_pushes_mqtt");
@@ -251,7 +251,7 @@ namespace Test.Unit
         [Fact]
         public async Task TestCreateUpdateAssets()
         {
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(true, null, pusher);
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_mqtt");
             tester.Config.Mqtt.RawMetadata = null;
 
@@ -314,7 +314,7 @@ namespace Test.Unit
         [Fact]
         public async Task TestCreateUpdateRawAssets()
         {
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(true, null, pusher);
 
             tester.Config.Mqtt.RawMetadata = new RawMetadataConfig
             {
@@ -366,7 +366,7 @@ namespace Test.Unit
         [Fact]
         public async Task TestCreateUpdateTimeseries()
         {
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(true, null, pusher);
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_mqtt");
             tester.Config.Mqtt.RawMetadata = null;
 
@@ -436,7 +436,7 @@ namespace Test.Unit
         [Fact]
         public async Task TestCreateUpdateRawTimeseries()
         {
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(true, null, pusher);
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_mqtt");
 
             tester.Config.Mqtt.RawMetadata = new RawMetadataConfig
@@ -494,7 +494,7 @@ namespace Test.Unit
         [Fact]
         public async Task TestCreateRelationships()
         {
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(true, null, pusher);
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_mqtt");
 
             var organizes = tester.Client.TypeManager.GetReferenceType(ReferenceTypeIds.Organizes);
@@ -562,7 +562,7 @@ namespace Test.Unit
         [Fact]
         public async Task TestCreateRawRelationships()
         {
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(true, null, pusher);
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_mqtt");
 
             var organizes = tester.Client.TypeManager.GetReferenceType(ReferenceTypeIds.Organizes);
@@ -648,7 +648,7 @@ namespace Test.Unit
                 Location = "mqtt-state-store-1.db"
             };
             using var stateStore = new LiteDBStateStore(stateStoreConfig, tester.Provider.GetRequiredService<ILogger<LiteDBStateStore>>());
-            using var extractor = tester.BuildExtractor(true, stateStore, pusher);
+            await using var extractor = tester.BuildExtractor(true, stateStore, pusher);
             CommonTestUtils.ResetMetricValues("opcua_node_ensure_failures_mqtt", "opcua_created_assets_mqtt",
                 "opcua_created_timeseries_mqtt");
             tester.Config.Mqtt.RawMetadata = null;
@@ -718,7 +718,7 @@ namespace Test.Unit
 
             using var stateStore = new LiteDBStateStore(stateStoreConfig, tester.Provider.GetRequiredService<ILogger<LiteDBStateStore>>());
 
-            using var extractor = tester.BuildExtractor(true, stateStore, pusher);
+            await using var extractor = tester.BuildExtractor(true, stateStore, pusher);
 
             var uaSource = new UANodeSource(tester.Log, extractor, tester.Client, tester.Client.TypeManager);
 
