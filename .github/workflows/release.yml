@@ -13,6 +13,7 @@ jobs:
     build:
         uses: ./.github/workflows/test.yml
         secrets: inherit
+
     publish-binaries:
         runs-on: ubuntu-latest
         needs: common
@@ -20,6 +21,12 @@ jobs:
         if: ${{ needs.common.outputs.should-release == 0 }}
         steps:
           - uses: actions/checkout@v5
+
+          - name: Message about build
+            uses: actions/github-script@v8
+            with:
+                script: |
+                    core.notice('Will release version ${{ steps.get-version.outputs.version }}...')
 
           - name: Download Linux Artifacts
             uses: actions/download-artifact@v6

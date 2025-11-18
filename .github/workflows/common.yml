@@ -56,41 +56,11 @@ jobs:
 
           - name: Confirm release
             id: confirm-release
-            uses: actions/github-script@v8
-            with:
-                script: |
-                  let shouldRelease = 1;
-                  const targetReleasePattern = /^(master|release-\d{1,2}\.x)$/;
-                  const version = 'v${{steps.get-version.outputs.version}}';
-                  const allTags = await github.paginate(
-                    github.rest.repos.listTags,
-                    {
-                      owner: context.repo.owner,
-                      repo: context.repo.repo,
-                      per_page: 100
-                    }
-                  );
-                  const tagNames = (allTags ? allTags : []).map(tag => tag.name);
-                  const currentBranch = '${{steps.current-branch.outputs.branch}}';
-
-                  if (targetReleasePattern.test(currentBranch) && tagNames.find(t => t === version) === undefined) {
-                    shouldRelease = 0;
-                  }
-                  core.setOutput('test', shouldRelease.toString())
+            run: echo "test=$(git tag --list 'v${{ steps.get-version.outputs.version }}' | wc -l | sed s/\ //g)" >> $GITHUB_OUTPUT
 
           - name: Get RPM version
             id: rpmver
             run: echo "rpmver=$(echo "${{ steps.get-version.outputs.version}}" | tr - _)" >> "$GITHUB_OUTPUT"
-
-          - name: Message about build
-            uses: actions/github-script@v8
-            with:
-                script: |
-                    if (${{ steps.confirm-release.outputs.test }} == 0) {
-                        core.notice('Will release version ${{ steps.get-version.outputs.version }}...')
-                    } else {
-                        core.warning('Will not create release for version ${{ steps.get-version.outputs.version }} because it already exists.')
-                    }
 
     build-windows-installer:
         runs-on: windows-2022
