@@ -73,13 +73,6 @@ jobs:
                   const tagNames = (allTags ? allTags : []).map(tag => tag.name);
                   const currentBranch = '${{steps.current-branch.outputs.branch}}';
 
-                  // Debugging
-                  core.notice(targetReleasePattern.test(currentBranch))
-                  core.notice(targetReleasePattern.test("release-3.x"))
-                  core.notice(targetReleasePattern.test("master"))
-                  core.notice(tagNames.find(t => t === version) === undefined)
-                  core.notice(tagNames.find(t => t === "v3.0.0") === undefined)
-
                   if (targetReleasePattern.test(currentBranch) && tagNames.find(t => t === version) === undefined) {
                     shouldRelease = 0;
                   }
