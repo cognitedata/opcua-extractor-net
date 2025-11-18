@@ -62,8 +62,13 @@ namespace Cognite.OpcUa.History
         public bool CurrentHistoryRunIsBad { get; private set; }
 
 
-        public HistoryReader(ILogger<HistoryReader> log,
-            UAClient uaClient, UAExtractor extractor, TypeManager typeManager, FullConfig config, CancellationToken token)
+        public HistoryReader(
+            ILogger<HistoryReader> log,
+            UAClient uaClient,
+            UAExtractor extractor,
+            TypeManager typeManager,
+            FullConfig config,
+            CancellationToken token)
         {
             this.log = log;
             this.config = config;
@@ -76,7 +81,7 @@ namespace Cognite.OpcUa.History
             continuationPoints = new BlockingResourceCounter(
                 throttling.MaxNodeParallelism > 0 ? throttling.MaxNodeParallelism : 1_000);
             waiter = new OperationWaiter();
-            state = new State(config);
+            state = new State(config, extractor.StateStorage != null && config.StateStorage.IntervalValue.Value != Timeout.InfiniteTimeSpan);
         }
 
         private async Task RunHistoryBatch(IEnumerable<UAHistoryExtractionState> states, HistoryReadType type)
@@ -235,7 +240,7 @@ namespace Cognite.OpcUa.History
                 return issues.Remove(issue);
             }
 
-            public State(FullConfig config)
+            public State(FullConfig config, bool hasStateStore)
             {
                 if (config.Subscriptions.Events && config.Events.Enabled && config.Events.History)
                 {
@@ -244,6 +249,10 @@ namespace Cognite.OpcUa.History
                 if (config.Subscriptions.DataPoints && config.History.Data)
                 {
                     issues.Add(StateIssue.DataPointSubscription);
+                }
+                if (hasStateStore)
+                {
+                    issues.Add(StateIssue.StateRestorationPending);
                 }
                 issues.Add(StateIssue.NodeHierarchyRead);
             }

@@ -78,6 +78,8 @@ namespace Cognite.OpcUa
 
         public bool Started { get; private set; }
 
+        public bool CloseClientOnClose { get; set; } = true;
+
         private static readonly Gauge startTime = Metrics
             .CreateGauge("opcua_start_time", "Start time for the extractor");
 
@@ -381,9 +383,9 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="quitAfterMap">False to wait for cancellation</param>
         /// <returns></returns>
-        public async Task RunExtractor(bool quitAfterMap = false, int startTimeout = -1)
+        public async Task RunExtractor(bool quitAfterMap = false, int startTimeoutSeconds = -1)
         {
-            await RunExtractorInternal(startTimeout);
+            await RunExtractorInternal(startTimeoutSeconds);
             if (!quitAfterMap)
             {
                 Looper.Run();
@@ -475,10 +477,10 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Closes the extractor, mainly just shutting down the opcua client and waiting for a clean loss of connection.
         /// </summary>
-        public async Task Close(bool closeClient = true)
+        public async Task Close()
         {
             Source?.Cancel();
-            if (!uaClient.Started || !closeClient) return;
+            if (!uaClient.Started || !CloseClientOnClose) return;
             try
             {
                 await uaClient.Close(CancellationToken.None);
@@ -1020,7 +1022,7 @@ namespace Cognite.OpcUa
             var newStates = input.Variables
                 .Select(ts => ts.Id)
                 .Distinct()
-                .Select(id => State.GetNodeState(id));
+                .SelectNonNull(id => State.GetNodeState(id));
 
             bool initial = input.Variables.Count() + input.Objects.Count() >= State.NumActiveNodes;
 
@@ -1075,6 +1077,10 @@ namespace Cognite.OpcUa
             {
                 pushTasks = pushTasks.Append(RestoreExtractionStateWithRetry(newStates));
             }
+            else
+            {
+                historyReader?.AddStates(newStates, State.EmitterStates);
+            }
 
 
             pushTasks = pushTasks.ToList();
@@ -1092,7 +1098,7 @@ namespace Cognite.OpcUa
                 trackedTimeseres.Inc(input.Variables.Count());
             }
 
-            foreach (var state in newStates.Concat<UAHistoryExtractionState?>(State.EmitterStates))
+            foreach (var state in newStates.Concat<UAHistoryExtractionState>(State.EmitterStates))
             {
                 state?.FinalizeRangeInit();
             }
@@ -1104,10 +1110,8 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="newStates">Variable states to restore</param>
         /// <returns>Task that completes when state is restored or extractor is cancelled</returns>
-        private async Task RestoreExtractionStateWithRetry(IEnumerable<VariableExtractionState?> newStates)
+        private async Task RestoreExtractionStateWithRetry(IEnumerable<VariableExtractionState> newStates)
         {
-            // Add issue to block history until state restoration completes
-            historyReader?.AddIssue(HistoryReader.StateIssue.StateRestorationPending);
 
             // Retry state restoration forever until it succeeds
             var retryConfig = new RetryUtilConfig
@@ -1136,7 +1140,7 @@ namespace Cognite.OpcUa
                     if (Streamer.AllowData)
                     {
                         tasks.Add(StateStorage!.RestoreExtractionState(
-                            newStates.Where(state => state != null && state.FrontfillEnabled).ToDictionary(state => state?.Id!, state => state!),
+                            newStates.Where(state => state.FrontfillEnabled).ToDictionary(state => state.Id),
                             Config.StateStorage.VariableStore,
                             false,
                             Source.Token));
@@ -1154,6 +1158,7 @@ namespace Cognite.OpcUa
             );
 
             // Successfully restored state - allow history to proceed
+            historyReader?.AddStates(newStates, State.EmitterStates);
             historyReader?.RemoveIssue(HistoryReader.StateIssue.StateRestorationPending);
             log.LogInformation("Successfully restored extraction state from state storage");
         }
@@ -1206,8 +1211,6 @@ namespace Cognite.OpcUa
         private IEnumerable<Func<CancellationToken, Task>> CreateSubscriptions(IEnumerable<UAVariable> variables)
         {
             var states = variables.Select(ts => ts.Id).Distinct().SelectNonNull(id => State.GetNodeState(id));
-
-            historyReader?.AddStates(states, State.EmitterStates);
 
             log.LogInformation("Synchronize {NumNodesToSynch} nodes", variables.Count());
             var tasks = new List<Func<CancellationToken, Task>>();
@@ -1350,8 +1353,14 @@ namespace Cognite.OpcUa
         }
         #endregion
 
+        private int disposed = 0;
+
         protected override async ValueTask DisposeAsyncCore()
         {
+            if (Interlocked.CompareExchange(ref disposed, 1, 0) == 0)
+            {
+                return;
+            }
             Starting.Set(0);
             historyReader?.Dispose();
             historyReader = null;
@@ -1360,8 +1369,6 @@ namespace Cognite.OpcUa
 
             await base.DisposeAsyncCore();
         }
-
-        private int disposed = 0;
 
         protected override void Dispose(bool disposing)
         {

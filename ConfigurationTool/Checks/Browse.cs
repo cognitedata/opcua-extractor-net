@@ -131,7 +131,7 @@ namespace Cognite.OpcUa.Config
         /// <returns></returns>
         public async Task GetBrowseChunkSizes(CancellationToken token)
         {
-            if (Session == null || !Session.Connected)
+            if (!Started)
             {
                 await Run(token, 0);
                 await LimitConfigValues(token);

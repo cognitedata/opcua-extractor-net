@@ -46,7 +46,7 @@ namespace Test.Integration
         public async Task TestNoDataTypeConfig()
         {
             var pusher = new DummyPusher(new DummyPusherConfig());
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(true, null, pusher);
 
             var ids = tester.Server.Ids.Custom;
             tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(ids.Root, tester.Client);
@@ -87,7 +87,7 @@ namespace Test.Integration
         public async Task TestAllowStringTypes()
         {
             var pusher = new DummyPusher(new DummyPusherConfig());
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(true, null, pusher);
 
             var ids = tester.Server.Ids.Custom;
             tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(ids.Root, tester.Client);
@@ -120,7 +120,7 @@ namespace Test.Integration
         public async Task TestAllowSmallArrays()
         {
             var pusher = new DummyPusher(new DummyPusherConfig());
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(true, null, pusher);
 
             var ids = tester.Server.Ids.Custom;
             tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(ids.Root, tester.Client);
@@ -161,7 +161,7 @@ namespace Test.Integration
         public async Task TestAllowLargerArrays()
         {
             var pusher = new DummyPusher(new DummyPusherConfig());
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(true, null, pusher);
 
             var ids = tester.Server.Ids.Custom;
             tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(ids.Root, tester.Client);
@@ -197,7 +197,7 @@ namespace Test.Integration
         public async Task TestAutoIdentifyTypes()
         {
             var pusher = new DummyPusher(new DummyPusherConfig());
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(true, null, pusher);
 
             var ids = tester.Server.Ids.Custom;
             tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(ids.Root, tester.Client);
@@ -237,7 +237,7 @@ namespace Test.Integration
         public async Task TestEnumsAsStrings()
         {
             var pusher = new DummyPusher(new DummyPusherConfig());
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(true, null, pusher);
 
             var ids = tester.Server.Ids.Custom;
             tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(ids.Root, tester.Client);
@@ -283,7 +283,7 @@ namespace Test.Integration
             dataTypes.MaxArraySize = -1;
             dataTypes.AutoIdentifyTypes = true;
             dataTypes.IgnoreDataTypes = new List<ProtoNodeId> { CommonTestUtils.ToProtoNodeId(ids.IgnoreType, tester.Client) };
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(true, null, pusher);
             await extractor.RunExtractor(true);
 
             Assert.Equal(6, pusher.PushedNodes.Count);
@@ -300,7 +300,7 @@ namespace Test.Integration
         public async Task TestCustomDataType()
         {
             var pusher = new DummyPusher(new DummyPusherConfig());
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(true, null, pusher);
 
             var ids = tester.Server.Ids.Custom;
             tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(ids.Root, tester.Client);
@@ -332,7 +332,7 @@ namespace Test.Integration
         public async Task TestNullDataType(bool nullAsNumeric)
         {
             var pusher = new DummyPusher(new DummyPusherConfig());
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(true, null, pusher);
 
             var ids = tester.Server.Ids.Wrong;
             tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(ids.Root, tester.Client);
@@ -359,7 +359,7 @@ namespace Test.Integration
         public async Task TestUnknownAsScalar()
         {
             var pusher = new DummyPusher(new DummyPusherConfig());
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(true, null, pusher);
 
             var ids = tester.Server.Ids.Wrong;
             tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(ids.Root, tester.Client);
@@ -389,7 +389,7 @@ namespace Test.Integration
         public async Task TestIgnoreName()
         {
             var pusher = new DummyPusher(new DummyPusherConfig());
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(true, null, pusher);
 
             var ids = tester.Server.Ids.Custom;
             tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(ids.Root, tester.Client);
@@ -421,7 +421,7 @@ namespace Test.Integration
         public async Task TestIgnoreNamePrefix()
         {
             var pusher = new DummyPusher(new DummyPusherConfig());
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(true, null, pusher);
 
             var ids = tester.Server.Ids.Custom;
             tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(ids.Root, tester.Client);
@@ -455,7 +455,7 @@ namespace Test.Integration
             var pusher = new DummyPusher(new DummyPusherConfig());
             var extraction = tester.Config.Extraction;
             extraction.PropertyNameFilter = "ble Str|ble Arr|r[0-9]$";
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(true, null, pusher);
 
             var ids = tester.Server.Ids.Custom;
             tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(ids.Root, tester.Client);
@@ -494,7 +494,7 @@ namespace Test.Integration
             using var pusher = new DummyPusher(new DummyPusherConfig());
             var extraction = tester.Config.Extraction;
             extraction.PropertyIdFilter = "enum";
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(true, null, pusher);
 
             var ids = tester.Server.Ids.Custom;
             tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(ids.Root, tester.Client);
@@ -519,7 +519,7 @@ namespace Test.Integration
         {
             using var pusher = new DummyPusher(new DummyPusherConfig());
             var extraction = tester.Config.Extraction;
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(true, null, pusher);
 
             // Duplicates should be handled
             tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Custom.Root, tester.Client);
@@ -543,7 +543,7 @@ namespace Test.Integration
         {
             using var pusher = new DummyPusher(new DummyPusherConfig());
             var extraction = tester.Config.Extraction;
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(true, null, pusher);
 
             var ids = tester.Server.Ids.Custom;
             tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Custom.Root, tester.Client);
@@ -568,7 +568,7 @@ namespace Test.Integration
         {
             using var pusher = new DummyPusher(new DummyPusherConfig());
             var extraction = tester.Config.Extraction;
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(true, null, pusher);
 
             var ids = tester.Server.Ids.Custom;
             tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Custom.Root, tester.Client);
@@ -599,7 +599,7 @@ namespace Test.Integration
         {
             var pusher = new DummyPusher(new DummyPusherConfig());
             var extraction = tester.Config.Extraction;
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(true, null, pusher);
 
             var ids = tester.Server.Ids.Custom;
             tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(ids.Root, tester.Client);
@@ -677,7 +677,7 @@ namespace Test.Integration
             var pusher = new DummyPusher(new DummyPusherConfig());
             tester.Config.Extraction.Relationships.Enabled = true;
 
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(true, null, pusher);
             await RunReferenceExtraction(extractor);
 
             Assert.Equal(8, pusher.PushedReferences.Count);
@@ -702,7 +702,7 @@ namespace Test.Integration
             tester.Config.Extraction.Relationships.Enabled = true;
             tester.Config.Extraction.Relationships.Hierarchical = true;
 
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(true, null, pusher);
             await RunReferenceExtraction(extractor);
 
             foreach (var rf in pusher.PushedReferences)
@@ -729,7 +729,7 @@ namespace Test.Integration
             tester.Config.Extraction.Relationships.Enabled = true;
             tester.Config.Extraction.Relationships.Hierarchical = true;
             tester.Config.Extraction.Relationships.InverseHierarchical = true;
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(true, null, pusher);
 
             await RunReferenceExtraction(extractor);
 
@@ -757,7 +757,7 @@ namespace Test.Integration
             tester.Config.Extraction.Relationships.Enabled = true;
             tester.Config.Extraction.Relationships.Hierarchical = true;
             tester.Config.Extraction.Relationships.InverseHierarchical = true;
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(true, null, pusher);
 
             pusher.NoInit = true;
             pusher.TestConnectionResult = false;
@@ -791,7 +791,7 @@ namespace Test.Integration
             Assert.False(pusher.NoInit);
             Assert.True(pusher.Initialized);
 
-            await extractor.Close(false);
+            await extractor.Close();
 
             var comp = await Task.WhenAny(runTask, Task.Delay(10000));
             Assert.Equal(comp, runTask);
@@ -806,7 +806,7 @@ namespace Test.Integration
             tester.Config.Extraction.Relationships.Enabled = true;
             tester.Config.Extraction.Relationships.Hierarchical = true;
             tester.Config.Extraction.Relationships.InverseHierarchical = true;
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(true, null, pusher);
 
             pusher.NoInit = false;
             pusher.TestConnectionResult = false;
@@ -856,7 +856,7 @@ namespace Test.Integration
 
             Assert.True(pusher.Initialized);
 
-            await extractor.Close(false);
+            await extractor.Close();
 
             await runTask;
         }
@@ -884,7 +884,7 @@ namespace Test.Integration
                 }
             };
             var (handler, pusher) = tester.GetCDFPusher();
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(true, null, pusher);
 
             var upd = tester.Config.Extraction.Update;
             upd.Objects.Name = assetName;
@@ -958,7 +958,7 @@ namespace Test.Integration
                 }
             };
             var (handler, pusher) = tester.GetCDFPusher();
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(true, null, pusher);
 
             tester.Config.Extraction.DataTypes.AllowStringVariables = true;
             tester.Config.Extraction.DataTypes.MaxArraySize = 4;
@@ -1026,7 +1026,7 @@ namespace Test.Integration
                 }
             };
             var (handler, pusher) = tester.GetCDFPusher();
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(true, null, pusher);
 
 
             tester.Server.Server.MutateNode(tester.Server.Ids.Wrong.TooLargeProp, state =>
@@ -1075,7 +1075,7 @@ namespace Test.Integration
                 }
             };
             var (handler, pusher) = tester.GetCDFPusher();
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(true, null, pusher);
             tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Base.Root, tester.Client);
 
             // First, run the extractor and wait for data to arrive in CDF.
@@ -1089,6 +1089,8 @@ namespace Test.Integration
 
             // This is a rebrowse, and should _not_ set the extractor to uninitialized.
             Assert.True(pusher.Initialized);
+
+            await extractor.WaitForSubscription(SubscriptionName.DataPoints);
 
             // Trigger a datapoint update.
             tester.Server.UpdateNode(tester.Server.Ids.Base.DoubleVar1, 321.123);
@@ -1120,7 +1122,7 @@ namespace Test.Integration
                 }
             };
 
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(true, null, pusher);
 
             tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(ObjectIds.ObjectsFolder, tester.Client);
 
@@ -1172,7 +1174,7 @@ namespace Test.Integration
                 }
             };
 
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(true, null, pusher);
 
             tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(ObjectIds.ObjectsFolder, tester.Client);
 
@@ -1225,7 +1227,7 @@ namespace Test.Integration
                     Type = TransformationType.Ignore
                 }
             };
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(true, null, pusher);
             tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Custom.Root, tester.Client);
             extraction.DataTypes.AllowStringVariables = true;
             extraction.DataTypes.MaxArraySize = -1;
@@ -1269,7 +1271,7 @@ namespace Test.Integration
                     Type = TransformationType.Include,
                 },
             };
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(true, null, pusher);
 
             await extractor.RunExtractor(true);
 
@@ -1284,7 +1286,7 @@ namespace Test.Integration
         {
             using var pusher = new DummyPusher(new DummyPusherConfig());
             var extraction = tester.Config.Extraction;
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(true, null, pusher);
             extraction.RootNode = CommonTestUtils.ToProtoNodeId(ObjectIds.TypesFolder, tester.Client);
             extraction.NodeTypes.AsNodes = true;
             extraction.DataTypes.AllowStringVariables = true;
@@ -1310,7 +1312,7 @@ namespace Test.Integration
         {
             using var pusher = new DummyPusher(new DummyPusherConfig());
             var extraction = tester.Config.Extraction;
-            using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(true, null, pusher);
             extraction.RootNode = CommonTestUtils.ToProtoNodeId(ObjectIds.TypesFolder, tester.Client);
             extraction.NodeTypes.AsNodes = true;
             extraction.DataTypes.AllowStringVariables = true;
@@ -1335,7 +1337,6 @@ namespace Test.Integration
             extraction.Relationships.Enabled = true;
             extraction.Relationships.Hierarchical = true;
             extraction.Relationships.InverseHierarchical = true;
-            using var extractor = tester.BuildExtractor(true, null, pusher);
 
             extraction.RootNode = CommonTestUtils.ToProtoNodeId(tester.Ids.Custom.Root, tester.Client);
             extraction.DataTypes.AllowStringVariables = true;
@@ -1361,7 +1362,10 @@ namespace Test.Integration
             };
 
             // Nothing enabled, default run, copy results
-            await extractor.RunExtractor(true);
+            await using (var extractor = tester.BuildExtractor(true, null, pusher))
+            {
+                await extractor.RunExtractor(true);
+            }
             var assets = pusher.PushedNodes.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
             var tss = pusher.PushedVariables.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
             var refs = pusher.PushedReferences.ToHashSet();
@@ -1441,20 +1445,26 @@ namespace Test.Integration
             // Enable types only
             tester.Log.LogInformation("BEGIN TYPE RUN");
             tester.Client.TypeManager.Reset();
-            tester.Config.Source.NodeSetSource.Types = true;
-            await extractor.RunExtractor(true);
-            Compare(pusher.PushedNodes.Values, pusher.PushedVariables.Values, pusher.PushedReferences);
+            await using (var extractor = tester.BuildExtractor(true, null, pusher))
+            {
+                tester.Config.Source.NodeSetSource.Types = true;
+                await extractor.RunExtractor(true);
+                Compare(pusher.PushedNodes.Values, pusher.PushedVariables.Values, pusher.PushedReferences);
+            }
 
             // Enable instance as well
 
             pusher.Wipe();
             tester.Log.LogInformation("BEGIN INSTANCE RUN");
             tester.Client.TypeManager.Reset();
-            tester.Config.Source.NodeSetSource.Instance = true;
-            await extractor.RunExtractor(true);
-            foreach (var node in pusher.PushedNodes.Values)
+            await using (var extractor = tester.BuildExtractor(true, null, pusher))
             {
-                tester.Log.LogInformation("{Node}", node);
+                tester.Config.Source.NodeSetSource.Instance = true;
+                await extractor.RunExtractor(true);
+                foreach (var node in pusher.PushedNodes.Values)
+                {
+                    tester.Log.LogInformation("{Node}", node);
+                }
             }
 
             Compare(pusher.PushedNodes.Values, pusher.PushedVariables.Values, pusher.PushedReferences);

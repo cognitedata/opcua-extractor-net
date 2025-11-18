@@ -40,7 +40,7 @@ namespace Test.Integration
             // Arrange
             var pusher = new DummyPusher(new DummyPusherConfig());
             tester.Config.Extraction.RebrowseTriggers = config;
-            using var extractor = tester.BuildExtractor(pushers: pusher);
+            await using var extractor = tester.BuildExtractor(pushers: pusher);
 
             // Act
             var runTask = extractor.RunExtractor();
@@ -59,7 +59,7 @@ namespace Test.Integration
             // Arrange
             var pusher = new DummyPusher(new DummyPusherConfig());
             tester.Config.Extraction.RebrowseTriggers = config;
-            using var extractor = tester.BuildExtractor(true, pushers: pusher);
+            await using var extractor = tester.BuildExtractor(true, pushers: pusher);
 
             // Act
             var runTask = extractor.RunExtractor();
@@ -90,7 +90,7 @@ namespace Test.Integration
                 tester.Config.StateStorage,
                 tester.Provider.GetRequiredService<ILogger<LiteDBStateStore>>()
             );
-            using var extractor = tester.BuildExtractor(true, stateStore, cdfPusher);
+            await using var extractor = tester.BuildExtractor(true, stateStore, cdfPusher);
             var npdId = tester.Client.GetUniqueId(tester.Server.Server.GetNamespacePublicationDateId());
             var npds = new NamespacePublicationDateState(npdId);
             var lts = DateTime.UtcNow.AddSeconds(-10);
