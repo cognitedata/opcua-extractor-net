@@ -22,12 +22,6 @@ jobs:
         steps:
           - uses: actions/checkout@v5
 
-          - name: Message about build
-            uses: actions/github-script@v8
-            with:
-                script: |
-                    core.notice('Will release version ${{ steps.get-version.outputs.version }}...')
-
           - name: Download Linux Artifacts
             uses: actions/download-artifact@v6
             with:

@@ -62,6 +62,16 @@ jobs:
             id: rpmver
             run: echo "rpmver=$(echo "${{ steps.get-version.outputs.version}}" | tr - _)" >> "$GITHUB_OUTPUT"
 
+          - name: Message about build
+            uses: actions/github-script@v8
+            with:
+                script: |
+                    if (${{ steps.confirm-release.outputs.test }} == 0) {
+                        core.notice('Will release version ${{ steps.get-version.outputs.version }}...')
+                    } else {
+                        core.warning('Will not create release for version ${{ steps.get-version.outputs.version }} because it already exists.')
+                    }
+
     build-windows-installer:
         runs-on: windows-2022
         environment: ${{ needs.prerequisites.outputs.branch == 'master' && 'CD' || 'CI' }}
