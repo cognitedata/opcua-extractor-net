@@ -46,16 +46,17 @@ jobs:
             run: echo "version=$(cat manifest.yml | shyaml keys-0 versions | xargs -0 | cut -d\  -f1)" >> "$GITHUB_OUTPUT"
 
           - run: echo ${{ steps.get-version.outputs.version }}
+
           - id: get-pub-args
             run: echo "args=$(./get-build-args.sh ${{ steps.get-version.outputs.version }})" >> "$GITHUB_OUTPUT"
-
-          - name: Confirm release
-            id: confirm-release
-            run: echo "test=$(git tag --list 'v${{ steps.get-version.outputs.version }}' | wc -l | sed s/\ //g)" >> $GITHUB_OUTPUT
 
           - name: Get branch name
             id: current-branch
             run: echo "branch=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> "$GITHUB_OUTPUT"
+
+          - name: Confirm release
+            id: confirm-release
+            run: echo "test=$(git tag --list 'v${{ steps.get-version.outputs.version }}' | wc -l | sed s/\ //g)" >> $GITHUB_OUTPUT
 
           - name: Get RPM version
             id: rpmver
@@ -87,7 +88,7 @@ jobs:
 
           - name: Restore tools
             run: dotnet tool restore
-          
+
           - name: Build Executable
             run: dotnet publish -c Release -r win-x64 ${{ needs.prerequisites.outputs.args }} .\ExtractorLauncher\ -o extractorbuild\
 
@@ -158,7 +159,7 @@ jobs:
     build-linux-installers:
         runs-on: ubuntu-latest
         needs: prerequisites
-        
+
         steps:
           - uses: actions/checkout@v5
           - name: Setup .NET
@@ -182,7 +183,7 @@ jobs:
           - name: Build release binary
             run: dotnet publish -c Release -r linux-x64 ${{ needs.prerequisites.outputs.args }} ExtractorLauncher/ -o linux/publish/
           - run: sh ./build-linux-installers.sh ${{ needs.prerequisites.outputs.version }}
-          
+
           - name: Build windows release
             run: dotnet publish -c Release -r win-x64 ${{ needs.prerequisites.outputs.args }} ExtractorLauncher/
           - run: ./build-zip.sh win-x64 false ${{ needs.prerequisites.outputs.version }}

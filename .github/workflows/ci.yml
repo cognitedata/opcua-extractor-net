@@ -2,7 +2,9 @@ name: Build and test extractor
 
 on:
     pull_request:
-        branches: [ master ]
+        branches:
+        - master
+        - release-*.*
 
 jobs:
     common:
@@ -28,13 +30,13 @@ jobs:
             python-version: '3.10'
 
         - name: Install extractor uploader
-          env: 
+          env:
             PYPI_ARTIFACTORY_USERNAME: ${{ secrets.ARTIFACTORY_READONLY_TOKEN_USER_PUBLIC_REPOS }}
             PYPI_ARTIFACTORY_PASSWORD: ${{ secrets.ARTIFACTORY_READONLY_TOKEN_PUBLIC_REPOS }}
           run: |
             python -m pip install --upgrade pip
             pip install cognite-extractor-publisher --extra-index-url "https://${PYPI_ARTIFACTORY_USERNAME}:${PYPI_ARTIFACTORY_PASSWORD}@cognite.jfrog.io/cognite/api/pypi/snakepit/simple"
-  
+
         - name: Verify manifest
           run: |
             publish-extractor validate --manifest manifest.yml --config-files Test/config.test.yml

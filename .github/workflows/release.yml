@@ -2,8 +2,10 @@ name: Release extractor
 
 on:
     push:
-        branches: [ master ]
-    
+        branches:
+        - master
+        - release-*.*
+
 jobs:
     common:
         uses: ./.github/workflows/common.yml
@@ -11,6 +13,7 @@ jobs:
     build:
         uses: ./.github/workflows/test.yml
         secrets: inherit
+
     publish-binaries:
         runs-on: ubuntu-latest
         needs: common
@@ -42,7 +45,7 @@ jobs:
             uses: softprops/action-gh-release@v2
             with:
                 files: |
-                    artifacts/opcua-extractor.win-x64.${{ needs.common.outputs.version }}.zip 
+                    artifacts/opcua-extractor.win-x64.${{ needs.common.outputs.version }}.zip
                     artifacts/opcua-extractor.linux-x64.${{ needs.common.outputs.version }}.zip
                     artifacts/mqtt-cdf-bridge.win-x64.${{ needs.common.outputs.version }}.zip
                     artifacts/mqtt-cdf-bridge.linux-x64.${{ needs.common.outputs.version }}.zip
@@ -61,7 +64,7 @@ jobs:
                 python-version: '3.10'
 
           - name: Install extractor uploader
-            env: 
+            env:
                 PYPI_ARTIFACTORY_USERNAME: ${{ secrets.ARTIFACTORY_READONLY_TOKEN_USER_PUBLIC_REPOS }}
                 PYPI_ARTIFACTORY_PASSWORD: ${{ secrets.ARTIFACTORY_READONLY_TOKEN_PUBLIC_REPOS }}
             run: |
