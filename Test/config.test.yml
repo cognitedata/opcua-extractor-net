@@ -18,10 +18,6 @@ mqtt:
     host: "localhost"
     port: 4060
 
-influx:
-    host: "http://localhost:8086"
-    database: "testdb"
-
 history:
     enabled: true
 

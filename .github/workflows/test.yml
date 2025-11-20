@@ -24,8 +24,6 @@ jobs:
           run: "sudo apt-get update && sudo apt-get -y install gnupg curl procps && curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | sudo apt-key add - && sudo apt-get install -y mosquitto"
         - name: Setup mosquitto
           run: mosquitto -p 4060 &
-        - name: Setup influxdb
-          run: sh setup-influxdb.sh
         - name: Run tests
           run: sh test.sh
         - name: Upload coverage to Codecov

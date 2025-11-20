@@ -24,18 +24,6 @@ namespace Cognite.OpcUa.Config
         /// </summary>
         public bool Enabled { get; set; }
         /// <summary>
-        /// If state-storage is configured, this can be used to store the ranges of points buffered in influxdb, so that
-        /// they can be recovered even if the extractor goes down.
-        /// </summary>
-        public bool InfluxStateStore { get; set; }
-        /// <summary>
-        /// Use an influxdb pusher as buffer. Requires an influxdb destination to be configured.
-        /// This is intended to be used if there is a local influxdb instance running.
-        /// If points are received on non-historical points while the connection to CDF is down,
-        /// they are read from influxdb once the connection is restored.
-        /// </summary>
-        public bool Influx { get; set; }
-        /// <summary>
         /// Store datapoints to a binary file. There is no safety, and a bad write can corrupt the file,
         /// but it is very fast.
         /// Path to a local binary buffer file for datapoints.
