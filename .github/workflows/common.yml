@@ -35,7 +35,7 @@ jobs:
             rpmver: ${{ steps.rpmver.outputs.rpmver }}
         steps:
           - name: checkout master
-            uses: actions/checkout@v5
+            uses: actions/checkout@v6
             with:
                 fetch-depth: 0
           - name: Install shyaml
@@ -78,7 +78,7 @@ jobs:
         needs: prerequisites
 
         steps:
-          - uses: actions/checkout@v5
+          - uses: actions/checkout@v6
           - name: Setup .NET
             uses: actions/setup-dotnet@v5
             with:
@@ -161,7 +161,7 @@ jobs:
         needs: prerequisites
 
         steps:
-          - uses: actions/checkout@v5
+          - uses: actions/checkout@v6
           - name: Setup .NET
             uses: actions/setup-dotnet@v5
             with:
@@ -235,7 +235,7 @@ jobs:
         needs: prerequisites
 
         steps:
-        - uses: actions/checkout@v5
+        - uses: actions/checkout@v6
           name: Checkout
 
         - id: image_tags
