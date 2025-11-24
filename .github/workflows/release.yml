@@ -20,7 +20,7 @@ jobs:
         environment: CD
         if: ${{ needs.common.outputs.should-release == 0 }}
         steps:
-          - uses: actions/checkout@v5
+          - uses: actions/checkout@v6
 
           - name: Download Linux Artifacts
             uses: actions/download-artifact@v6
