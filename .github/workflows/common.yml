@@ -101,7 +101,7 @@ jobs:
                 CLIENT_CERTIFICATE: ${{ secrets.CODE_SIGNING_CLIENT_CERT }}
                 CLIENT_CERTIFICATE_PASSWORD: ${{ secrets.CODE_SIGNING_CLIENT_CERT_PASSWORD }}
                 KEYPAIR_ALIAS: ${{ secrets.CODE_SIGNING_KEYPAIR_ALIAS }}
-            uses: cognitedata/code-sign-action/@v3
+            uses: cognitedata/code-sign-action/@v5
             with:
                 path-to-binary: .\extractorbuild\OpcuaExtractor.exe
 
@@ -122,7 +122,7 @@ jobs:
                 CLIENT_CERTIFICATE: ${{ secrets.CODE_SIGNING_CLIENT_CERT }}
                 CLIENT_CERTIFICATE_PASSWORD: ${{ secrets.CODE_SIGNING_CLIENT_CERT_PASSWORD }}
                 KEYPAIR_ALIAS: ${{ secrets.CODE_SIGNING_KEYPAIR_ALIAS }}
-            uses: cognitedata/code-sign-action/@v3
+            uses: cognitedata/code-sign-action/@v5
             with:
                 path-to-binary: .\managerbuild\OpcUaServiceManager.exe
 
@@ -142,7 +142,7 @@ jobs:
                 CLIENT_CERTIFICATE: ${{ secrets.CODE_SIGNING_CLIENT_CERT }}
                 CLIENT_CERTIFICATE_PASSWORD: ${{ secrets.CODE_SIGNING_CLIENT_CERT_PASSWORD }}
                 KEYPAIR_ALIAS: ${{ secrets.CODE_SIGNING_KEYPAIR_ALIAS }}
-            uses: cognitedata/code-sign-action/@v3
+            uses: cognitedata/code-sign-action/@v5
             with:
                 path-to-binary: .\OpcUaExtractorSetup\bin\Release\OpcUaExtractorSetup.msi
 
