@@ -84,7 +84,6 @@ namespace Test.Integration
             {
                 Database = StateStoreConfig.StorageType.LiteDb,
                 Location = "lite-state-rebrowse.db",
-                InfluxVariableStore = "namespace_publication_dates"
             };
             using var stateStore = new LiteDBStateStore(
                 tester.Config.StateStorage,
