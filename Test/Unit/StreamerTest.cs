@@ -496,7 +496,7 @@ namespace Test.Unit
             var generated = await queue.DequeueAsync();
             Assert.Single(generated.MetaData);
 
-            // Test multiple events, one early, one late, one ok
+            // Test multiple events, one early, one late, one now
 
             var val1 = EventUtils.GetEventValues(DateTime.UtcNow);
             var val2 = EventUtils.GetEventValues(DateTime.UtcNow);
@@ -511,7 +511,7 @@ namespace Test.Unit
             item.SaveValueInCache(evt2);
             item.SaveValueInCache(evt3);
             extractor.Streamer.EventSubscriptionHandler(item, null);
-            Assert.Equal(1, queue.Count);
+            Assert.Equal(3, queue.Count);
 
             // Again after frontfill
             state.UpdateFromFrontfill(DateTime.MinValue, true);
@@ -519,7 +519,7 @@ namespace Test.Unit
             item.SaveValueInCache(evt2);
             item.SaveValueInCache(evt3);
             extractor.Streamer.EventSubscriptionHandler(item, null);
-            Assert.Equal(3, queue.Count);
+            Assert.Equal(6, queue.Count);
 
             // After backfill
             state.UpdateFromBackfill(DateTime.MaxValue, true);
@@ -527,7 +527,7 @@ namespace Test.Unit
             item.SaveValueInCache(evt2);
             item.SaveValueInCache(evt3);
             extractor.Streamer.EventSubscriptionHandler(item, null);
-            Assert.Equal(6, queue.Count);
+            Assert.Equal(9, queue.Count);
 
         }
         [Fact]

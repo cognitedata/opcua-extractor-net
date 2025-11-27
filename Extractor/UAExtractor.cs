@@ -142,7 +142,7 @@ namespace Cognite.OpcUa
             if (config.FailureBuffer.Enabled)
             {
                 FailureBuffer = new FailureBuffer(provider.GetRequiredService<ILogger<FailureBuffer>>(),
-                    config, this, this.pushers.OfType<InfluxPusher>().FirstOrDefault());
+                    config, this);
             }
             if (run != null) run.Continuous = true;
 
@@ -357,10 +357,6 @@ namespace Cognite.OpcUa
                 await rebrowseTriggerManager.EnableCustomServerSubscriptions(Source.Token);
             }
 
-            if (Config.FailureBuffer.Enabled && FailureBuffer != null)
-            {
-                await FailureBuffer.InitializeBufferStates(State.NodeStates, State.EmitterStates, Source.Token);
-            }
             foreach (var task in synchTasks)
             {
                 Scheduler.ScheduleTask(null, task);
