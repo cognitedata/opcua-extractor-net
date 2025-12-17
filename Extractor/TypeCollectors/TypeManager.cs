@@ -21,6 +21,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using Cognite.Extractor.Common;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.NodeSources;
