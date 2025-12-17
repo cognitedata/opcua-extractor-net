@@ -67,6 +67,11 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.40.5":
+    description: Maintenance release.
+    changelog:
+      changed:
+        - Updated dependencies, mainly to address changes to unstable records support.
   "2.40.4":
     description: Fix regression causing history to restart on rebrowse if state store is enabled.
     changelog:
