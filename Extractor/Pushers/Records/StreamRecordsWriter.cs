@@ -8,7 +8,6 @@ using Cognite.Extractor.Utils;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Pushers.FDM;
 using Cognite.OpcUa.Types;
-using Cognite.OpcUa.Utils;
 using CogniteSdk;
 using CogniteSdk.Beta;
 using CogniteSdk.DataModels;
@@ -27,6 +26,7 @@ namespace Cognite.OpcUa.Pushers.Records
         private readonly RecordsConfig logAnalyticsConfig;
         private readonly LogContainerCache containerCache;
         private readonly string stream;
+        public const string RecordsStreamName = "ImmutableDataStaging";
 
         private DMSValueConverter? converter;
         private INodeIdConverter? context;
@@ -66,7 +66,7 @@ namespace Cognite.OpcUa.Pushers.Records
                 {
                     Template = new StreamTemplateSettings
                     {
-                        Name = StreamTemplateName.ImmutableDataStaging
+                        Name = RecordsStreamName
                     }
                 }
             }, token);
