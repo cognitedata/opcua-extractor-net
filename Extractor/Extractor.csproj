@@ -13,7 +13,7 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="AdysTech.InfluxDB.Client.Net.Core" Version="0.25.0" />
-    <PackageReference Include="Cognite.ExtractorUtils" Version="1.37.1" />
+    <PackageReference Include="Cognite.ExtractorUtils" Version="1.39.0" />
     <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
     <PackageReference Include="OPCFoundation.NetStandard.Opc.Ua.Client" Version="1.5.375.457" />
     <PackageReference Include="OPCFoundation.NetStandard.Opc.Ua.Configuration" Version="1.5.375.457" />
@@ -21,7 +21,7 @@
     <PackageReference Include="System.ComponentModel.Annotations" Version="5.0.0" />
     <PackageReference Include="MQTTnet" Version="4.3.7.1207" />
     <PackageReference Include="Nito.AsyncEx" Version="5.1.2" />
-    <PackageReference Include="Google.Protobuf" Version="3.33.1" />
+    <PackageReference Include="Google.Protobuf" Version="3.33.2" />
   </ItemGroup>
   <!--ItemGroup>
     <None Include="$(SolutionDir)config\**" CopyToOutputDirectory="Always" LinkBase="config\" />
