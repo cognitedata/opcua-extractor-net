@@ -78,24 +78,6 @@ namespace Cognite.OpcUa.Utils
 
             return (objects, timeseries);
         }
-        /// <summary>
-        /// Select elements from <typeparamref name="TIn"/> to <typeparamref name="TOut"/>,
-        /// returning only when the result is not null.
-        /// </summary>
-        /// <typeparam name="TIn">Source type</typeparam>
-        /// <typeparam name="TOut">Target type</typeparam>
-        /// <param name="enumerable">Source enumerable</param>
-        /// <param name="map">Mapping function</param>
-        /// <returns>Enumerable with non-null elements</returns>
-        public static IEnumerable<TOut> SelectNonNull<TIn, TOut>(this IEnumerable<TIn> enumerable, Func<TIn, TOut?> map) where TOut : class
-        {
-            foreach (var item in enumerable)
-            {
-                var result = map(item);
-                if (result == null) continue;
-                yield return result;
-            }
-        }
 
         public enum SourceOp
         {
