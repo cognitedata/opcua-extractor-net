@@ -58,12 +58,15 @@ jobs:
           - name: Is release branch
             id: is-release-branch
             run: |
-              if [[ "${{ steps.current-branch.outputs.branch }}" =~ ^(master|release-\d+\.x)$ ]]; then
+              [[ "release-2.x" =~ ^(master|release-[[:digit:]]+\.x)$ ]]
+              IS_RELEASE_BRANCH=$?
+              if [[ $IS_RELEASE_BRANCH -eq 0 ]]; then
                 echo "match=true" >> $GITHUB_OUTPUT
 
               else
                 echo "match=false" >> $GITHUB_OUTPUT
               fi;
+              echo "IS_RELEASE_BRANCH=$IS_RELEASE_BRANCH"
 
           - name: Confirm release
             id: confirm-release
