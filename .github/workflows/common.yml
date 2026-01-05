@@ -59,12 +59,12 @@ jobs:
             id: is-release-branch
             run: |
               if [[ "${{ steps.current-branch.outputs.branch }}" =~ ^(master|release-[[:digit:]]+\.x)$ ]]; then
+                echo "::notice::This branch will create a new release"
                 echo "match=true" >> $GITHUB_OUTPUT
-                echo "::debug::This branch will create a new release"
 
               else
+                echo "::notice::This branch will not create a new release"
                 echo "match=false" >> $GITHUB_OUTPUT
-                echo "::debug::This branch will not create a new release"
               fi;
 
           - name: Confirm release
