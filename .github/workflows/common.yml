@@ -33,8 +33,9 @@ jobs:
             version: ${{ steps.get-version.outputs.version }}
             args: ${{ steps.get-pub-args.outputs.args }}
             rpmver: ${{ steps.rpmver.outputs.rpmver }}
+            is-release-branch: ${{ steps.is-release-branch.outpts.match }}
         steps:
-          - name: checkout master
+          - name: checkout branch
             uses: actions/checkout@v6
             with:
                 fetch-depth: 0
@@ -54,13 +55,23 @@ jobs:
             id: current-branch
             run: echo "branch=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> "$GITHUB_OUTPUT"
 
+          - name: Is release branch
+            id: is-release-branch
+            run: |
+              if [[ "${{ steps.current-branch.outputs.branch }}" =~ ^(master|release-\d+\.x)$ ]]; then
+                echo "match=true" >> $GITHUB_OUTPUT
+
+              else
+                echo "match=false" >> $GITHUB_OUTPUT
+              fi;
+
           - name: Confirm release
             id: confirm-release
             run: echo "test=$(git tag --list 'v${{ steps.get-version.outputs.version }}' | wc -l | sed s/\ //g)" >> $GITHUB_OUTPUT
 
           - name: Get RPM version
             id: rpmver
-            run: echo "rpmver=$(echo "${{ steps.get-version.outputs.version}}" | tr - _)" >> "$GITHUB_OUTPUT"
+            run: echo "rpmver=$(echo "${{ steps.get-version.outputs.version }}" | tr - _)" >> "$GITHUB_OUTPUT"
 
           - name: Message about build
             uses: actions/github-script@v8
@@ -74,7 +85,7 @@ jobs:
 
     build-windows-installer:
         runs-on: windows-2022
-        environment: ${{ needs.prerequisites.outputs.branch == 'master' && 'CD' || 'CI' }}
+        environment: ${{ needs.prerequisites.outputs.is-release-branch == 'true' && 'CD' || 'CI' }}
         needs: prerequisites
 
         steps:
@@ -93,7 +104,7 @@ jobs:
             run: dotnet publish -c Release -r win-x64 ${{ needs.prerequisites.outputs.args }} .\ExtractorLauncher\ -o extractorbuild\
 
           - name: Sign executable
-            if: ${{ needs.prerequisites.outputs.branch == 'master' }}
+            if: ${{ needs.prerequisites.outputs.is-release-branch == 'true' }}
             env:
                 CERTIFICATE_HOST: ${{ secrets.CODE_SIGNING_CERT_HOST }}
                 CERTIFICATE_HOST_API_KEY: ${{ secrets.CODE_SIGNING_CERT_HOST_API_KEY }}
@@ -114,7 +125,7 @@ jobs:
           - run: xcopy OpcUaServiceManager\bin\Release managerbuild /S /Y
 
           - name: Sign manager
-            if: ${{ needs.prerequisites.outputs.branch == 'master' }}
+            if: ${{ needs.prerequisites.outputs.is-release-branch == 'true' }}
             env:
                 CERTIFICATE_HOST: ${{ secrets.CODE_SIGNING_CERT_HOST }}
                 CERTIFICATE_HOST_API_KEY: ${{ secrets.CODE_SIGNING_CERT_HOST_API_KEY }}
@@ -134,7 +145,7 @@ jobs:
             run: .\build.ps1 -v ${{ needs.prerequisites.outputs.version }} -b msbuild -d "OPC-UA Extractor" -c .\setup-config.json
 
           - name: Sign MSI
-            if: ${{ needs.prerequisites.outputs.branch == 'master' }}
+            if: ${{ needs.prerequisites.outputs.is-release-branch == 'true' }}
             env:
                 CERTIFICATE_HOST: ${{ secrets.CODE_SIGNING_CERT_HOST }}
                 CERTIFICATE_HOST_API_KEY: ${{ secrets.CODE_SIGNING_CERT_HOST_API_KEY }}
@@ -150,7 +161,7 @@ jobs:
 
           - name: Upload artifacts
             uses: actions/upload-artifact@v6
-            if: ${{ needs.prerequisites.outputs.should-release == 0 && needs.prerequisites.outputs.branch == 'master' }}
+            if: ${{ needs.prerequisites.outputs.should-release == 0 && needs.prerequisites.outputs.is-release-branch == 'true' }}
             with:
                 name: installer
                 path: .\OpcUaExtractorSetup-${{ needs.prerequisites.outputs.version }}.msi
@@ -209,7 +220,7 @@ jobs:
           - run: ./build-zip-server.sh linux-x64 true ${{ needs.prerequisites.outputs.version }}
 
           - name: Move artifacts to separate folder
-            if: ${{ needs.prerequisites.outputs.should-release == 0 && needs.prerequisites.outputs.branch == 'master' }}
+            if: ${{ needs.prerequisites.outputs.should-release == 0 && needs.prerequisites.outputs.is-release-branch == 'true' }}
             run: |
               mkdir artifacts
               mv ./opcua-extractor.win-x64.${{ needs.prerequisites.outputs.version }}.zip artifacts/
@@ -223,7 +234,7 @@ jobs:
 
           - name: Upload artifacts
             uses: actions/upload-artifact@v6
-            if: ${{ needs.prerequisites.outputs.should-release == 0 && needs.prerequisites.outputs.branch == 'master' }}
+            if: ${{ needs.prerequisites.outputs.should-release == 0 && needs.prerequisites.outputs.is-release-branch == 'true' }}
             with:
               name: linux-artifacts
               path: artifacts/
@@ -231,7 +242,7 @@ jobs:
 
     build-docker:
         runs-on: ubuntu-latest
-        environment: ${{ needs.prerequisites.outputs.branch == 'master' && 'CD' || 'CI' }}
+        environment: ${{ needs.prerequisites.outputs.is-release-branch == 'true' && 'CD' || 'CI' }}
         needs: prerequisites
 
         steps:
@@ -271,14 +282,14 @@ jobs:
             image: docker.io/${{ steps.image_tags.outputs.bridge_dockerhub }}
 
         - name: "Log in to the Dockerhub"
-          if: ${{ needs.prerequisites.outputs.should-release == 0 && needs.prerequisites.outputs.branch == 'master' }}
+          if: ${{ needs.prerequisites.outputs.should-release == 0 && needs.prerequisites.outputs.is-release-branch == 'true' }}
           uses: docker/login-action@v3
           with:
             username: ${{ secrets.DOCKERHUB_USER }}
             password: ${{ secrets.DOCKERHUB_ACCESS_TOKEN }}
 
         - name: Push images dockerhub
-          if: ${{ needs.prerequisites.outputs.should-release == 0 && needs.prerequisites.outputs.branch == 'master' }}
+          if: ${{ needs.prerequisites.outputs.should-release == 0 && needs.prerequisites.outputs.is-release-branch == 'true' }}
           run: |
             echo "Images being pushed as ${{ steps.image_tags.outputs.extractor_dockerhub }}, ${{ steps.image_tags.outputs.bridge_dockerhub }}"
             docker push ${{ steps.image_tags.outputs.extractor_dockerhub }}
