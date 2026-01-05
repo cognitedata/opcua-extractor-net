@@ -58,15 +58,14 @@ jobs:
           - name: Is release branch
             id: is-release-branch
             run: |
-              [[ "${{ steps.current-branch.outputs.branch }}" =~ ^(master|release-[[:digit:]]+\.x)$ ]]
-              IS_RELEASE_BRANCH=$?
-              if [[ $IS_RELEASE_BRANCH -eq 0 ]]; then
+              if [[ "${{ steps.current-branch.outputs.branch }}" =~ ^(master|release-[[:digit:]]+\.x)$ ]]; then
                 echo "match=true" >> $GITHUB_OUTPUT
+                echo "::debug::This branch will create a new release"
 
               else
                 echo "match=false" >> $GITHUB_OUTPUT
+                echo "::debug::This branch will not create a new release"
               fi;
-              echo "IS_RELEASE_BRANCH=$IS_RELEASE_BRANCH"
 
           - name: Confirm release
             id: confirm-release
