@@ -58,7 +58,7 @@ jobs:
           - name: Is release branch
             id: is-release-branch
             run: |
-              [[ "release-2.x" =~ ^(master|release-[[:digit:]]+\.x)$ ]]
+              [[ "${{ steps.current-branch.outputs.branch }}" =~ ^(master|release-[[:digit:]]+\.x)$ ]]
               IS_RELEASE_BRANCH=$?
               if [[ $IS_RELEASE_BRANCH -eq 0 ]]; then
                 echo "match=true" >> $GITHUB_OUTPUT
