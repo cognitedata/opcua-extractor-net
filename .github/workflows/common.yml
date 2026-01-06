@@ -33,7 +33,7 @@ jobs:
             version: ${{ steps.get-version.outputs.version }}
             args: ${{ steps.get-pub-args.outputs.args }}
             rpmver: ${{ steps.rpmver.outputs.rpmver }}
-            is-release-branch: ${{ steps.is-release-branch.outpts.match }}
+            is-release-branch: ${{ steps.is-release-branch.outputs.match }}
         steps:
           - name: checkout branch
             uses: actions/checkout@v6
