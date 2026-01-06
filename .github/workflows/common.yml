@@ -18,6 +18,9 @@ on:
             rpmver:
                 description: Version to tag RPM with
                 value: ${{ jobs.prerequisites.outputs.rpmver }}
+            is-release-branch:
+                description: A string boolean indicating if the current branch is a release branch
+                value: ${{ jobs.prerequisites.outputs.is-release-branch.outpts }}
         secrets:
             ARTIFACTORY_READONLY_TOKEN_USER_PUBLIC_REPOS:
                 required: true
