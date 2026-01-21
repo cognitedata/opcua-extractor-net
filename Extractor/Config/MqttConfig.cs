@@ -100,10 +100,6 @@ namespace Cognite.OpcUa.Config
         /// They will not be deleted or updated.
         /// </summary>
         public long InvalidateBefore { get; set; }
-        /// <summary>
-        /// DEPRECATED. If true, pusher will not push to target.
-        /// </summary>
-        public bool Debug { get; set; }
         public bool ReadExtractedRanges { get; set; }
         /// <summary>
         /// Do not push any metadata at all. If this is true, plain timeseries without metadata will be created,

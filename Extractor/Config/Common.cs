@@ -72,10 +72,6 @@ namespace Cognite.OpcUa.Config
     public interface IPusherConfig
     {
         /// <summary>
-        /// True to not write to destination, as a kind of dry-run for this destination.
-        /// </summary>
-        bool Debug { get; set; }
-        /// <summary>
         /// If applicable, read the ranges of extracted variables from the destination.
         /// </summary>
         bool ReadExtractedRanges { get; set; }

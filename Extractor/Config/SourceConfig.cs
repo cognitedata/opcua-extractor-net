@@ -65,16 +65,6 @@ namespace Cognite.OpcUa.Config
         [DefaultValue(500)]
         public int PublishingInterval { get; set; } = 500;
         /// <summary>
-        /// DEPRECATED, see subscriptions.sampling-interval
-        /// </summary>
-        [DefaultValue(100)]
-        public int? SamplingInterval { get; set; } = null;
-        /// <summary>
-        /// DEPRECATED, see subscriptions.queue-length
-        /// </summary>
-        [DefaultValue(100)]
-        public int? QueueLength { get; set; } = null;
-        /// <summary>
         /// OPC-UA username, can be left out to use anonymous authentication.
         /// </summary>
         public string? Username { get; set; }
