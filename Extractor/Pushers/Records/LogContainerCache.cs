@@ -124,7 +124,7 @@ namespace Cognite.OpcUa.Pushers.Records
                 Space = config.ModelSpace,
                 ExternalId = eventType.Name,
                 Description = eventType.FullAttributes.Description,
-                UsedFor = UsedFor.node,
+                UsedFor = UsedFor.record,
                 Properties = properties,
             };
         }

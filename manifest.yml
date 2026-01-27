@@ -67,6 +67,11 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.40.6":
+    description: Fix creation of containers in unstable records support.
+    changelog:
+      fixed:
+        - Fix creation of containers in unstable records support. The extractor will now create containers with `usedFor` set to `record`.
   "2.40.5":
     description: Maintenance release.
     changelog:
