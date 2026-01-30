@@ -757,7 +757,7 @@ namespace Cognite.OpcUa
         }
 
         /// <summary>
-        /// Build transformations from configured list and deprecated filter properties.
+        /// Build transformations from configured list.
         /// </summary>
         private void BuildTransformations()
         {
@@ -772,55 +772,6 @@ namespace Cognite.OpcUa
                 }
             }
 
-            if (!string.IsNullOrEmpty(Config.Extraction.PropertyIdFilter))
-            {
-                log.LogWarning("Property Id filter is deprecated, use transformations instead");
-                transformations.Add(new NodeTransformation(new RawNodeTransformation
-                {
-                    Filter = new NodeFilter
-                    {
-                        Id = new RegexFieldFilter(Config.Extraction.PropertyIdFilter)
-                    },
-                    Type = TransformationType.Property
-                }, idx++));
-            }
-            if (!string.IsNullOrEmpty(Config.Extraction.PropertyNameFilter))
-            {
-                log.LogWarning("Property Name filter is deprecated, use transformations instead");
-                transformations.Add(new NodeTransformation(new RawNodeTransformation
-                {
-                    Filter = new NodeFilter
-                    {
-                        Name = new RegexFieldFilter(Config.Extraction.PropertyNameFilter)
-                    },
-                    Type = TransformationType.Property
-                }, idx++));
-            }
-            if (Config.Extraction.IgnoreName != null && Config.Extraction.IgnoreName.Any())
-            {
-                log.LogWarning("Ignore name is deprecated, use transformations instead");
-                transformations.Add(new NodeTransformation(new RawNodeTransformation
-                {
-                    Filter = new NodeFilter
-                    {
-                        Name = new ListFieldFilter(Config.Extraction.IgnoreName, null)
-                    },
-                    Type = TransformationType.Ignore
-                }, idx++));
-            }
-            if (Config.Extraction.IgnoreNamePrefix != null && Config.Extraction.IgnoreNamePrefix.Any())
-            {
-                log.LogWarning("Ignore name prefix is deprecated, use transformations instead: {Prefix}", string.Join(',', Config.Extraction.IgnoreNamePrefix));
-                var filterStr = string.Join('|', Config.Extraction.IgnoreNamePrefix.Select(str => $"^{str}"));
-                transformations.Add(new NodeTransformation(new RawNodeTransformation
-                {
-                    Filter = new NodeFilter
-                    {
-                        Name = new RegexFieldFilter(filterStr)
-                    },
-                    Type = TransformationType.Ignore
-                }, idx++));
-            }
             foreach (var trans in transformations)
             {
                 log.LogDebug("{Transformation}", trans.ToString());
