@@ -130,12 +130,22 @@ namespace Cognite.OpcUa
                 return "datapoints-batch must be greater than 0";
             }
 
-            var cleanTarget = config?.Cognite?.MetadataTargets?.Clean;
+            var cleanTarget = config.Cognite?.MetadataTargets?.Clean;
             if (cleanTarget?.MetadataAsJson == true && string.IsNullOrWhiteSpace(cleanTarget.Space))
             {
                 return "cognite.metadata-targets.clean.space is required when metadata-as-json is enabled";
             }
 
+            if (config.StateStorage.Database != Extractor.StateStorage.StateStoreConfig.StorageType.None
+                && string.IsNullOrWhiteSpace(config.StateStorage.Location))
+            {
+                return "When state-storage.database is set to something other than None, state-storage.location must be specified";
+            }
+
+            if ((config.History?.Enabled ?? false) && !config.StateStorage.IsEnabled)
+            {
+                return "When history is enabled, you must configure state-storage.";
+            }
 
             return null;
         }

@@ -1,4 +1,5 @@
-﻿using Cognite.Extractor.StateStorage;
+﻿using Cognite.Extractor.Common;
+using Cognite.Extractor.StateStorage;
 using Cognite.OpcUa;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Nodes;
@@ -72,9 +73,24 @@ namespace Test.Unit
             return Task.CompletedTask;
         }
 
-        public Task RestoreExtractionState<K>(IDictionary<string, K> extractionStates, string tableName, bool initializeMissing, CancellationToken token) where K : BaseExtractionState
+        public async Task RestoreExtractionState<K>(IDictionary<string, K> extractionStates, string tableName, bool initializeMissing, CancellationToken token) where K : BaseExtractionState
         {
-            throw new NotImplementedException();
+            var mapped = new HashSet<string>();
+
+            await RestoreExtractionState<BaseExtractionStatePoco, K>(extractionStates, tableName, (state, poco) =>
+            {
+                if (!(poco is BaseExtractionStatePoco statePoco)) return;
+                state.InitExtractedRange(statePoco.FirstTimestamp, statePoco.LastTimestamp);
+                mapped.Add(state.Id);
+            }, token).ConfigureAwait(false);
+
+            if (initializeMissing)
+            {
+                foreach (var state in extractionStates.Where(state => !mapped.Contains(state.Key)))
+                {
+                    state.Value.InitExtractedRange(TimeRange.Empty.First, TimeRange.Empty.Last);
+                }
+            }
         }
 
         public Task StoreExtractionState<T, K>(IEnumerable<K> extractionStates, string tableName, Func<K, T> buildStorableState, CancellationToken token)

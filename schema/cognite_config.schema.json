@@ -37,11 +37,6 @@
                 }
             ]
         },
-        "read-extracted-ranges": {
-            "type": "boolean",
-            "description": "Specifies whether to read start/end-points for datapoints on startup, where possible. It is generally recommended to use the [`state-storage`](#state-storage) instead of this.",
-            "default": true
-        },
         "metadata-targets": {
             "type": "object",
             "description": "Configure targets for node metadata. This configures which resources other than time series datapoints are created. By default, if this is left out, no metadata is written at all.",

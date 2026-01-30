@@ -896,7 +896,6 @@ namespace Cognite.OpcUa
             }
 
             if (input.Deletes == null) result.Deletes = true;
-            if (!pusher.BaseConfig.ReadExtractedRanges) result.Ranges = true;
 
             log.LogInformation("Executing pushes on pusher {Type}", pusher.GetType());
 
@@ -916,31 +915,6 @@ namespace Cognite.OpcUa
                 result.Variables = true;
                 result.Objects = true;
                 result.References = true;
-            }
-
-            if (pusher.BaseConfig.ReadExtractedRanges)
-            {
-                var statesToSync = input
-                    .Variables
-                    .Select(ts => ts.Id)
-                    .Distinct()
-                    .SelectNonNull(id => State.GetNodeState(id))
-                    .Where(state => state.FrontfillEnabled && !state.Initialized);
-
-                var eventStatesToSync = State.EmitterStates.Where(state => state.FrontfillEnabled && !state.Initialized);
-
-                var initResults = await Task.WhenAll(
-                    pusher.InitExtractedRanges(statesToSync, Config.History.Backfill, Source.Token),
-                    pusher.InitExtractedEventRanges(eventStatesToSync, Config.History.Backfill, Source.Token));
-
-                result.Ranges = initResults[0];
-
-                if (!initResults.All(res => res))
-                {
-                    log.LogError("Initialization of extracted ranges failed for pusher {Name}", pusher.GetType());
-                    PushNodesFailure(input, result, pusher);
-                    return;
-                }
             }
 
             if (input.Deletes != null)
@@ -1019,8 +993,7 @@ namespace Cognite.OpcUa
                 }
             }
 
-            // Restore extraction state from state storage if enabled
-            if (StateStorage != null && Config.StateStorage.IntervalValue.Value != Timeout.InfiniteTimeSpan)
+            if (StateStorage != null)
             {
                 pushTasks = pushTasks.Append(RestoreExtractionStateWithRetry(newStates));
             }
@@ -1051,6 +1024,14 @@ namespace Cognite.OpcUa
             }
         }
 
+        public RetryUtilConfig StateStoreRetryConfig = new RetryUtilConfig
+        {
+            MaxTries = 0,           // Retry forever 
+            Timeout = "0s",
+            InitialDelay = "2s",
+            MaxDelay = "300s"
+        };
+
         /// <summary>
         /// Restore extraction state from state storage with infinite retry.
         /// Blocks history reading until state is successfully restored to prevent data duplication.
@@ -1059,16 +1040,6 @@ namespace Cognite.OpcUa
         /// <returns>Task that completes when state is restored or extractor is cancelled</returns>
         private async Task RestoreExtractionStateWithRetry(IEnumerable<VariableExtractionState> newStates)
         {
-
-            // Retry state restoration forever until it succeeds
-            var retryConfig = new RetryUtilConfig
-            {
-                MaxTries = 0,           // Retry forever 
-                Timeout = "0s",
-                InitialDelay = "2s",
-                MaxDelay = "300s"
-            };
-
             await RetryUtil.RetryAsync(
                 "restore extraction state",
                 async () =>
@@ -1098,7 +1069,7 @@ namespace Cognite.OpcUa
                         await Task.WhenAll(tasks);
                     }
                 },
-                retryConfig,
+                StateStoreRetryConfig,
                 shouldRetry: ex => true,  // Retry all exceptions 
                 log,
                 Source.Token
