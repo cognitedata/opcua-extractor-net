@@ -19,6 +19,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using System.Linq;
 using Opc.Ua.Client;
 using Cognite.OpcUa.Subscriptions;
+using Cognite.Extractor.Common;
 
 namespace Test.Utils
 {
@@ -147,6 +148,11 @@ namespace Test.Utils
                 Client.Browser.Transformations = null;
             }
             var ext = new UAExtractor(Config, Provider, pushers, Client, stateStore);
+            // To avoid running forever, don't set an infinite retry by default.
+            ext.StateStoreRetryConfig = new RetryUtilConfig
+            {
+                MaxTries = 2,
+            };
             ext.CloseClientOnClose = false;
             ext.InitExternal(Source.Token);
 
