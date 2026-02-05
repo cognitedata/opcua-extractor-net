@@ -10,7 +10,6 @@
   <ItemGroup>
     <ProjectReference Include="..\ConfigurationTool\ConfigurationTool.csproj" />
     <ProjectReference Include="..\Extractor\Extractor.csproj" />
-    <ProjectReference Include="..\MQTTCDFBridge\MQTTCDFBridge.csproj" />
     <ProjectReference Include="..\Server\Server.csproj" />
     <ProjectReference Include="..\ExtractorLauncher\ExtractorLauncher.csproj" />
   </ItemGroup>
@@ -40,9 +39,6 @@
     </PackageReference>
   </ItemGroup>
   <ItemGroup>
-    <None Update="config.bridge.yml">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>
     <None Update="config.config-tool-test.yml">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>

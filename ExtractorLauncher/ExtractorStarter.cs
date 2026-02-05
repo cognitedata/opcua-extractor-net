@@ -70,7 +70,7 @@ namespace Cognite.OpcUa
             }
 
             if (string.IsNullOrEmpty(config.Extraction.IdPrefix)) log.LogWarning("No id-prefix specified in config file");
-            if (config.Cognite == null && config.Mqtt == null) log.LogWarning("No destination system specified");
+            if (config.Cognite == null) log.LogWarning("No destination system specified");
             if (config.Extraction.IdPrefix == "events.") return "Do not use events. as id-prefix, as it is used internally";
 
             if (config.Subscriptions.LifetimeCount <= 0 || config.Subscriptions.LifetimeCount < 3 * config.Subscriptions.KeepAliveCount)
@@ -303,13 +303,6 @@ namespace Cognite.OpcUa
                 var log = provider.GetRequiredService<ILogger<CDFPusher>>();
                 if (conf.Cognite == null || dest == null || dest.CogniteClient == null) return null!;
                 return new CDFPusher(log, conf, conf.Cognite, dest, provider);
-            });
-            services.AddSingleton<IPusher, MQTTPusher>(provider =>
-            {
-                var conf = provider.GetService<FullConfig>();
-                var log = provider.GetRequiredService<ILogger<MQTTPusher>>();
-                if (conf?.Mqtt == null) return null!;
-                return new MQTTPusher(log, provider, conf.Mqtt);
             });
 
             services.AddSingleton<UAClient>();
