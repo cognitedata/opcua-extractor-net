@@ -27,11 +27,9 @@ namespace Cognite.OpcUa
     {
         public string? IdPrefix { get; set; }
         public int AssetsUpdated { get; set; }
-        public int RawAssetsUpdated { get; set; }
         public int AssetsCreated { get; set; }
         public int RawAssetsCreated { get; set; }
         public int TimeSeriesUpdated { get; set; }
-        public int RawTimeseriesUpdated { get; set; }
         public int TimeSeriesCreated { get; set; }
         public int RawTimeseriesCreated { get; set; }
         public int RelationshipsCreated { get; set; }

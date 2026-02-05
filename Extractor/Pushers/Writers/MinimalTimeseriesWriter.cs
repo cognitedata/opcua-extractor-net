@@ -49,7 +49,7 @@ namespace Cognite.OpcUa.Pushers.Writers
         }
 
         protected override Task UpdateTimeseries(UAExtractor extractor, IDictionary<string, UAVariable> tsMap,
-                IEnumerable<TimeSeries> timeseries, IDictionary<NodeId, long> nodeToAssetIds, TypeUpdateConfig update, Result result, CancellationToken token)
+                IEnumerable<TimeSeries> timeseries, IDictionary<NodeId, long> nodeToAssetIds, Result result, CancellationToken token)
         {
             return Task.CompletedTask;
         }

@@ -901,7 +901,7 @@ namespace Cognite.OpcUa
 
             if (input.Objects.Any() || input.Variables.Any() || input.References.Any())
             {
-                var pushResult = await pusher.PushNodes(input.Objects, input.Variables, input.References, Config.Extraction.Update, Source.Token);
+                var pushResult = await pusher.PushNodes(input.Objects, input.Variables, input.References, Source.Token);
                 result.Apply(pushResult);
                 if (!result.Variables || !result.Objects || !result.References)
                 {

@@ -187,18 +187,16 @@ namespace Cognite.OpcUa.NodeSources
             }
 
             // Add to final collections.
-            var update = config.Extraction.Update;
-
             int objCount = 0, varCount = 0;
             // Add variables and objects to final lists and cache
             foreach (var obj in rawObjects)
             {
-                if (FilterBaseNode(update.Objects, obj))
+                if (FilterBaseNode(obj))
                 {
                     FinalDestinationObjects.Add(obj);
                     FinalSourceObjects.Add(obj);
                     objCount++;
-                    AddManagedNode(update.Objects, obj);
+                    AddManagedNode(obj);
                     if (obj.Id == ObjectIds.ModellingRule_Mandatory)
                     {
                         logger.LogDebug("Add managed object mandatory");
@@ -208,10 +206,10 @@ namespace Cognite.OpcUa.NodeSources
 
             foreach (var variable in rawVariables)
             {
-                if (FilterBaseNode(update.Variables, variable) && AddVariableToLists(variable))
+                if (FilterBaseNode(variable) && AddVariableToLists(variable))
                 {
                     varCount++;
-                    AddManagedNode(update.Variables, variable);
+                    AddManagedNode(variable);
                 }
             }
 
@@ -232,19 +230,17 @@ namespace Cognite.OpcUa.NodeSources
             }
         }
 
-        private void AddManagedNode(TypeUpdateConfig update, BaseUANode node)
+        private void AddManagedNode(BaseUANode node)
         {
             extractor.State.RegisterNode(node.Id, node.GetUniqueId(client.Context));
             extractor.State.AddActiveNode(
                 node,
-                config.Extraction.Update.Objects,
                 config.Extraction.DataTypes.DataTypeMetadata,
                 config.Extraction.NodeTypes.Metadata);
             foreach (var prop in node.GetAllProperties())
             {
                 extractor.State.AddActiveNode(
                 prop,
-                update,
                 config.Extraction.DataTypes.DataTypeMetadata,
                 config.Extraction.NodeTypes.Metadata);
             }
@@ -387,16 +383,15 @@ namespace Cognite.OpcUa.NodeSources
             }
         }
 
-        private bool FilterBaseNode(TypeUpdateConfig update, BaseUANode node)
+        private bool FilterBaseNode(BaseUANode node)
         {
             // If deletes are enabled, we are not able to filter any nodes, even if that has a real cost in terms of memory usage.
-            if (update.AnyUpdate && !config.Extraction.Deletes.Enabled)
+            if (!config.Extraction.Deletes.Enabled)
             {
                 var oldChecksum = extractor.State.GetMappedNode(node.Id)?.Checksum;
                 if (oldChecksum != null)
                 {
                     node.Changed |= oldChecksum != node.GetUpdateChecksum(
-                        update,
                         config.Extraction.DataTypes.DataTypeMetadata,
                         config.Extraction.NodeTypes.Metadata);
                     return node.Changed;

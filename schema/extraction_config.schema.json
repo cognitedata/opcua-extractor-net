@@ -72,21 +72,6 @@
             "description": "Time between each push to destinations. Format is as given in [Timestamps and intervals](#timestamps-and-intervals).",
             "default": "1s"
         },
-        "update": {
-            "type": "object",
-            "description": "Update data in destinations on re-browse or restart. Set `auto-rebrowse-period` to do this periodically.",
-            "unevaluatedProperties": false,
-            "properties": {
-                "objects": {
-                    "$ref": "type-update-config",
-                    "description": "Configuration for updating objects and object types."
-                },
-                "variables": {
-                    "$ref": "type-update-config",
-                    "description": "Configuration for updating variables and variable types."
-                }
-            }
-        },
         "data-types": {
             "$ref": "data-type-config"
         },
@@ -232,29 +217,6 @@
         }
     },
     "$defs": {
-        "type-update-config": {
-            "type": "object",
-            "$id": "type-update-config",
-            "unevaluatedProperties": false,
-            "properties": {
-                "description": {
-                    "type": "boolean",
-                    "description": "Set to `true` to update description"
-                },
-                "context": {
-                    "type": "boolean",
-                    "description": "Set to `true` to update context, i.e. the position of the node in the node hierarchy"
-                },
-                "metadata": {
-                    "type": "boolean",
-                    "description": "Set to `true` to update metadata, including fields like `unit`."
-                },
-                "name": {
-                    "type": "boolean",
-                    "description": "Set to `true` to update name."
-                }
-            }
-        },
         "proto-data-type": {
             "type": "object",
             "$id": "proto-data-type",

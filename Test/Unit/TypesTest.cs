@@ -33,45 +33,19 @@ namespace Test.Unit
         }
         #region uanode
         [Theory]
-        [InlineData(true, true, true, true, true)]
-        [InlineData(true, true, true, true, false)]
-        [InlineData(true, true, true, false, false)]
-        [InlineData(true, true, false, false, false)]
-        [InlineData(true, false, false, false, false)]
-        [InlineData(false, true, false, false, false)]
-        [InlineData(false, false, true, false, false)]
-        [InlineData(false, false, false, true, true)]
-        [InlineData(false, false, false, false, false)]
-        [InlineData(true, false, true, false, true)]
-        public void TestChecksum(bool context, bool description, bool name, bool metadata, bool ntMeta)
+        [InlineData(true)]
+        [InlineData(false)]
+        public void TestChecksum(bool ntMeta)
         {
-            var update = new TypeUpdateConfig
-            {
-                Context = context,
-                Description = description,
-                Name = name,
-                Metadata = metadata
-            };
             int csA, csB;
-            void AssertNotEqualIf(bool cond)
-            {
-                if (cond)
-                {
-                    Assert.NotEqual(csA, csB);
-                }
-                else
-                {
-                    Assert.Equal(csA, csB);
-                }
-            }
 
             var nodeA = new UAObject(new NodeId("node", 0), null, null, null, NodeId.Null, null);
             var nodeB = new UAObject(new NodeId("node", 0), null, null, null, NodeId.Null, null);
 
             (int, int) Update(BaseUANode nodeA, BaseUANode nodeB)
             {
-                int csA = nodeA.GetUpdateChecksum(update, false, ntMeta);
-                int csB = nodeB.GetUpdateChecksum(update, false, ntMeta);
+                int csA = nodeA.GetUpdateChecksum(false, ntMeta);
+                int csB = nodeB.GetUpdateChecksum(false, ntMeta);
                 return (csA, csB);
             }
 
@@ -82,7 +56,7 @@ namespace Test.Unit
             // Test name
             nodeA = new UAObject(new NodeId("node", 0), "name", null, null, NodeId.Null, null);
             (csA, csB) = Update(nodeA, nodeB);
-            AssertNotEqualIf(update.Name);
+            Assert.NotEqual(csA, csB);
             nodeB = new UAObject(new NodeId("node", 0), "name", null, null, NodeId.Null, null);
             (csA, csB) = Update(nodeA, nodeB);
             Assert.Equal(csA, csB);
@@ -90,7 +64,7 @@ namespace Test.Unit
             // Test context
             nodeA = new UAObject(new NodeId("node", 0), "name", null, null, new NodeId("parent", 0), null);
             (csA, csB) = Update(nodeA, nodeB);
-            AssertNotEqualIf(update.Context);
+            Assert.NotEqual(csA, csB);
             nodeB = new UAObject(new NodeId("node", 0), "name", null, null, new NodeId("parent", 0), null);
             (csA, csB) = Update(nodeA, nodeB);
             Assert.Equal(csA, csB);
@@ -99,7 +73,7 @@ namespace Test.Unit
             nodeA.Attributes.Description = "description";
             nodeB.Attributes.Description = "otherDesc";
             (csA, csB) = Update(nodeA, nodeB);
-            AssertNotEqualIf(update.Description);
+            Assert.NotEqual(csA, csB);
             nodeB.Attributes.Description = "description";
             (csA, csB) = Update(nodeA, nodeB);
             Assert.Equal(csA, csB);
@@ -126,7 +100,7 @@ namespace Test.Unit
                 propC, propD
             };
             (csA, csB) = Update(nodeA, nodeB);
-            AssertNotEqualIf(update.Metadata);
+            Assert.NotEqual(csA, csB);
             (nodeB.Attributes.Properties[1] as UAVariable).FullAttributes.Value = new Variant("valueB");
             (csA, csB) = Update(nodeA, nodeB);
             Assert.Equal(csA, csB);
@@ -135,7 +109,14 @@ namespace Test.Unit
             nodeA.FullAttributes.TypeDefinition = new UAObjectType(new NodeId("type", 0));
             nodeB.FullAttributes.TypeDefinition = new UAObjectType(new NodeId("type2", 0));
             (csA, csB) = Update(nodeA, nodeB);
-            AssertNotEqualIf(ntMeta && update.Metadata);
+            if (ntMeta)
+            {
+                Assert.NotEqual(csA, csB);
+            }
+            else
+            {
+                Assert.Equal(csA, csB);
+            }
             nodeB.FullAttributes.TypeDefinition = new UAObjectType(new NodeId("type", 0));
             (csA, csB) = Update(nodeA, nodeB);
             Assert.Equal(csA, csB);
@@ -150,7 +131,7 @@ namespace Test.Unit
             nodeB.Attributes.AddProperty(nestProp2);
 
             (csA, csB) = Update(nodeA, nodeB);
-            AssertNotEqualIf(update.Metadata);
+            Assert.NotEqual(csA, csB);
             nestProp2.Attributes.Properties = nestProp.Attributes.Properties;
             (csA, csB) = Update(nodeA, nodeB);
             Assert.Equal(csA, csB);
@@ -163,7 +144,7 @@ namespace Test.Unit
             typeB.FullAttributes.DataType = pdt;
             typeB.FullAttributes.Value = new Variant("value2");
             (csA, csB) = Update(typeA, typeB);
-            AssertNotEqualIf(update.Metadata);
+            Assert.NotEqual(csA, csB);
             typeB.FullAttributes.Value = new Variant("value1");
             (csA, csB) = Update(typeA, typeB);
             Assert.Equal(csA, csB);
