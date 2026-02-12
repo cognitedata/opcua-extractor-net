@@ -137,27 +137,6 @@ namespace Test.Utils
             Config.Source.EndpointUrl = $"opc.tcp://localhost:{Port}";
             Config.GenerateDefaults();
         }
-        public UAExtractor BuildExtractor(bool clear = true, IExtractionStateStore stateStore = null, params IPusher[] pushers)
-        {
-            if (clear)
-            {
-                RemoveSubscription(null, SubscriptionName.Events).Wait();
-                RemoveSubscription(null, SubscriptionName.DataPoints).Wait();
-                RemoveSubscription(null, SubscriptionName.Audit).Wait();
-                RemoveSubscription(null, SubscriptionName.RebrowseTriggers).Wait();
-                Client.Browser.Transformations = null;
-            }
-            var ext = new UAExtractor(Config, Provider, pushers, Client, stateStore);
-            // To avoid running forever, don't set an infinite retry by default.
-            ext.StateStoreRetryConfig = new RetryUtilConfig
-            {
-                MaxTries = 2,
-            };
-            ext.CloseClientOnClose = false;
-            ext.InitExternal(Source.Token);
-
-            return ext;
-        }
 
         public UAExtractor BuildExtractor(IPusher pusher = null, bool clear = true, IExtractionStateStore stateStore = null, UAClient client = null)
         {
@@ -169,12 +148,26 @@ namespace Test.Utils
                 RemoveSubscription(null, SubscriptionName.RebrowseTriggers).Wait();
                 Client.Browser.Transformations = null;
             }
+#pragma warning disable CA2000 // Dispose objects before losing scope
             pusher ??= new DummyPusher(new DummyPusherConfig());
-            var ext = new UAExtractor(Config, Provider, new[] { pusher }, client ?? Client, stateStore);
-            ext.CloseClientOnClose = client != null;
-            ext.InitExternal(Source.Token);
-
-            return ext;
+#pragma warning restore CA2000 // Dispose objects before losing scope
+            try
+            {
+                var ext = new UAExtractor(Config, Provider, pusher, client ?? Client, stateStore);
+                // To avoid running forever, don't set an infinite retry by default.
+                ext.StateStoreRetryConfig = new RetryUtilConfig
+                {
+                    MaxTries = 2,
+                };
+                ext.CloseClientOnClose = client != null;
+                ext.InitExternal(Source.Token);
+                return ext;
+            }
+            catch
+            {
+                pusher.Dispose();
+                throw;
+            }
         }
 
         public (CDFMockHandler, CDFPusher) GetCDFPusher()

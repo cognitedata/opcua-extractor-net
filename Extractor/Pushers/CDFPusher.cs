@@ -117,9 +117,9 @@ namespace Cognite.OpcUa.Pushers
         /// Attempts to push the given list of datapoints to CDF.
         /// </summary>'
         /// <returns>True if push succeeded, false if it failed, null if there were no points to push.</returns>
-        public async Task<bool?> PushDataPoints(IEnumerable<UADataPoint> points, CancellationToken token)
+        public async Task<DataPushResult> PushDataPoints(IEnumerable<UADataPoint> points, CancellationToken token)
         {
-            if (points == null) return null;
+            if (points == null) return DataPushResult.NoDataPushed;
             Dictionary<string, List<UADataPoint>> dataPointList = points
                 .GroupBy(dp => dp.Id)
                 .Where(group =>
@@ -134,12 +134,12 @@ namespace Cognite.OpcUa.Pushers
 
             int count = dataPointList.Aggregate(0, (seed, points) => seed + points.Value.Count);
 
-            if (count == 0) return null;
+            if (count == 0) return DataPushResult.NoDataPushed;
 
             if (fullConfig.DryRun)
             {
                 log.LogInformation("Dry run enabled. Would insert {Count} datapoints over {C2} timeseries to CDF", count, dataPointList.Count);
-                return null;
+                return DataPushResult.NoDataPushed;
             }
 
             if (config.MetadataTargets?.Clean?.Space != null)
@@ -159,13 +159,32 @@ namespace Cognite.OpcUa.Pushers
                 return await PushDataPointsClassic(inserts, count, token);
             }
         }
+
+        public async Task<bool> CanPushDataPoints(CancellationToken token)
+        {
+            try
+            {
+                // Check if the timeseries API is accessible
+                await destination.CogniteClient.TimeSeries.ListAsync(new TimeSeriesQuery
+                {
+                    Limit = 1,
+                }, token);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                log.LogError("Timeseries API is unavailable: {Err}", ex.Message);
+                return false;
+            }
+        }
+
         /// <summary>
         /// Attempts to push the given list of events to CDF.
         /// </summary>
         /// <returns>True if push succeeded, false if it failed, null if there were no events to push.</returns>
-        public async Task<bool?> PushEvents(IEnumerable<UAEvent> events, CancellationToken token)
+        public async Task<DataPushResult> PushEvents(IEnumerable<UAEvent> events, CancellationToken token)
         {
-            if (events == null) return null;
+            if (events == null) return DataPushResult.NoDataPushed;
             var eventList = new List<UAEvent>();
             int count = 0;
             foreach (var buffEvent in events)
@@ -179,12 +198,12 @@ namespace Cognite.OpcUa.Pushers
                 count++;
             }
 
-            if (count == 0) return null;
+            if (count == 0) return DataPushResult.NoDataPushed;
 
             if (fullConfig.DryRun)
             {
                 log.LogInformation("Dry run enabled. Would insert {Count} events to CDF", count);
-                return null;
+                return DataPushResult.NoDataPushed;
             }
 
             if (recordsWriter != null)
@@ -197,7 +216,31 @@ namespace Cognite.OpcUa.Pushers
             }
         }
 
-        private async Task<bool?> PushClassicEvents(IEnumerable<UAEvent> events, int count, CancellationToken token)
+        public async Task<bool> CanPushEvents(CancellationToken token)
+        {
+            if (recordsWriter != null)
+            {
+                return await recordsWriter.IsRecordsAccessible(token);
+            }
+            else
+            {
+                try
+                {
+                    await destination.CogniteClient.Events.ListAsync(new EventQuery
+                    {
+                        Limit = 1
+                    }, token);
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    log.LogError("Events API is unavailable: {Err}", ex.Message);
+                    return false;
+                }
+            }
+        }
+
+        private async Task<DataPushResult> PushClassicEvents(IEnumerable<UAEvent> events, int count, CancellationToken token)
         {
             try
             {
@@ -218,7 +261,7 @@ namespace Cognite.OpcUa.Pushers
                     {
                         log.LogError("Failed to push {NumFailedEvents} events to CDF: {Message}", count, fatalError.Exception?.Message);
                         eventPushFailures.Inc();
-                        return fatalError.Exception is ResponseException rex && (rex.Code == 400 || rex.Code == 409);
+                        return PusherUtils.ResultFromException(fatalError.Exception);
                     }
                 }
 
@@ -231,10 +274,10 @@ namespace Cognite.OpcUa.Pushers
             {
                 log.LogError(exc, "Failed to push {NumFailedEvents} events to CDF: {Message}", count, exc.Message);
                 eventPushFailures.Inc();
-                return exc is ResponseException rex && (rex.Code == 400 || rex.Code == 409);
+                return PusherUtils.ResultFromException(exc);
             }
 
-            return true;
+            return DataPushResult.Success;
         }
 
         /// <summary>
@@ -442,7 +485,7 @@ namespace Cognite.OpcUa.Pushers
         #endregion
 
         #region datapoints
-        private async Task<bool?> PushDataPointsIdm(Dictionary<Identity, IEnumerable<Datapoint>> inserts, int totalCount, CancellationToken token)
+        private async Task<DataPushResult> PushDataPointsIdm(Dictionary<Identity, IEnumerable<Datapoint>> inserts, int totalCount, CancellationToken token)
         {
             try
             {
@@ -454,6 +497,12 @@ namespace Cognite.OpcUa.Pushers
 
                 if (result.Errors != null)
                 {
+                    var fatal = result.Errors.FirstOrDefault(err => err.Type == ErrorType.FatalFailure);
+                    if (fatal != null)
+                    {
+                        dataPointPushFailures.Inc();
+                        return PusherUtils.ResultFromException(fatal.Exception);
+                    }
                     var missing = result.Errors.FirstOrDefault(err => err.Type == ErrorType.ItemMissing);
                     if (missing?.Skipped != null)
                     {
@@ -488,25 +537,24 @@ namespace Cognite.OpcUa.Pushers
                     }
                 }
 
-                result.ThrowOnFatal();
                 log.LogDebug("Successfully pushed {Real} / {Total} points to CDF", realCount, totalCount);
 
                 dataPointPushes.Inc();
                 dataPointsCounter.Inc(realCount);
 
-                if (realCount == 0) return null;
+
+                if (realCount == 0) return DataPushResult.Success;
             }
             catch (Exception e)
             {
                 log.LogError(e, "Failed to push {Count} points to CDF: {Message}", totalCount, e.Message);
                 dataPointPushFailures.Inc();
-                // Return false indicating unexpected failure if we want to buffer.
-                return false;
+                return PusherUtils.ResultFromException(e);
             }
-            return true;
+            return DataPushResult.Success;
         }
 
-        private async Task<bool?> PushDataPointsClassic(Dictionary<Identity, IEnumerable<Datapoint>> inserts, int totalCount, CancellationToken token)
+        private async Task<DataPushResult> PushDataPointsClassic(Dictionary<Identity, IEnumerable<Datapoint>> inserts, int totalCount, CancellationToken token)
         {
             try
             {
@@ -518,6 +566,13 @@ namespace Cognite.OpcUa.Pushers
 
                 if (result.Errors != null)
                 {
+                    var fatal = result.Errors.FirstOrDefault(err => err.Type == ErrorType.FatalFailure);
+                    if (fatal != null)
+                    {
+                        dataPointPushFailures.Inc();
+                        return PusherUtils.ResultFromException(fatal.Exception);
+                    }
+
                     var missing = result.Errors.FirstOrDefault(err => err.Type == ErrorType.ItemMissing);
                     if (missing?.Skipped != null)
                     {
@@ -552,22 +607,21 @@ namespace Cognite.OpcUa.Pushers
                     }
                 }
 
-                result.ThrowOnFatal();
                 log.LogDebug("Successfully pushed {Real} / {Total} points to CDF", realCount, totalCount);
 
                 dataPointPushes.Inc();
                 dataPointsCounter.Inc(realCount);
 
-                if (realCount == 0) return null;
+                // We managed to push, even if nothing went through due to mismatch or missing IDs.
+                if (realCount == 0) return DataPushResult.Success;
             }
             catch (Exception e)
             {
                 log.LogError(e, "Failed to push {Count} points to CDF: {Message}", totalCount, e.Message);
                 dataPointPushFailures.Inc();
-                // Return false indicating unexpected failure if we want to buffer.
-                return false;
+                return PusherUtils.ResultFromException(e);
             }
-            return true;
+            return DataPushResult.Success;
         }
 
         #endregion

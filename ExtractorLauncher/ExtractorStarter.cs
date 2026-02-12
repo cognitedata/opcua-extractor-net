@@ -24,6 +24,7 @@ using Cognite.OpcUa.Pushers;
 using Cognite.OpcUa.Pushers.Writers;
 using Cognite.OpcUa.Utils;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Prometheus;
 using Serilog;
@@ -296,12 +297,13 @@ namespace Cognite.OpcUa
                 config.GenerateDefaults();
             }
 
-            services.AddSingleton<IPusher, CDFPusher>(provider =>
+            services.AddSingleton<IPusher>(provider =>
             {
                 var conf = provider.GetRequiredService<FullConfig>();
                 var dest = provider.GetService<CogniteDestinationWithIDM>();
                 var log = provider.GetRequiredService<ILogger<CDFPusher>>();
-                if (conf.Cognite == null || dest == null || dest.CogniteClient == null) return null!;
+                if (conf.Cognite == null || dest == null || dest.CogniteClient == null)
+                    return null!;
                 return new CDFPusher(log, conf, conf.Cognite, dest, provider);
             });
 
