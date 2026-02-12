@@ -67,6 +67,11 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.40.7":
+    description: Fix issue causing error handling to fail when encountering mismatched timeseries against data modelling.
+    changelog:
+      fixed:
+        - Fix issue causing error handling to fail when encountering mismatched timeseries against data modelling.
   "2.40.6":
     description: Fix creation of containers in unstable records support.
     changelog:

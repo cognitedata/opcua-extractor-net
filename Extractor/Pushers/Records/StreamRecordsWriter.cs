@@ -26,7 +26,7 @@ namespace Cognite.OpcUa.Pushers.Records
         private readonly RecordsConfig logAnalyticsConfig;
         private readonly LogContainerCache containerCache;
         private readonly string stream;
-        public const string RecordsStreamName = "ImmutableDataStaging";
+        public const string RecordsStreamName = "BasicArchive";
 
         private DMSValueConverter? converter;
         private INodeIdConverter? context;
