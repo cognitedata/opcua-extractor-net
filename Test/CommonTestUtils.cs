@@ -204,14 +204,12 @@ namespace Test
         public static void VerifyStartingConditions(
             Dictionary<string, AssetDummy> assets,
             Dictionary<string, TimeseriesDummy> timeseries,
-            UpdateConfig upd,
             IUAClientAccess client,
             CustomNodeReference ids,
             bool raw)
         {
             ArgumentNullException.ThrowIfNull(assets);
             ArgumentNullException.ThrowIfNull(timeseries);
-            upd ??= new UpdateConfig();
             ArgumentNullException.ThrowIfNull(client);
             ArgumentNullException.ThrowIfNull(ids);
             Assert.Equal(6, assets.Count);
@@ -223,23 +221,23 @@ namespace Test
             var stringyId = client.GetUniqueId(ids.StringyVar);
             var mysteryId = client.GetUniqueId(ids.MysteryVar);
 
-            if (!upd.Objects.Name) Assert.Equal("CustomRoot", assets[rootId].name);
-            if (!upd.Objects.Description) Assert.True(string.IsNullOrEmpty(assets[rootId].description));
+            Assert.Equal("CustomRoot", assets[rootId].name);
+            Assert.True(string.IsNullOrEmpty(assets[rootId].description));
 
 
-            if (!upd.Variables.Name) Assert.Equal("StringyVar", timeseries[stringyId].name);
-            if (!upd.Variables.Description) Assert.True(string.IsNullOrEmpty(timeseries[stringyId].description));
+            Assert.Equal("StringyVar", timeseries[stringyId].name);
+            Assert.True(string.IsNullOrEmpty(timeseries[stringyId].description));
 
             if (raw)
             {
-                if (!upd.Variables.Context) Assert.Equal(rootId, (timeseries[stringyId] as StatelessTimeseriesDummy).assetExternalId);
+                Assert.Equal(rootId, (timeseries[stringyId] as StatelessTimeseriesDummy).assetExternalId);
             }
             else
             {
-                if (!upd.Variables.Context) Assert.Equal(assets[rootId].id, timeseries[stringyId].assetId);
+                Assert.Equal(assets[rootId].id, timeseries[stringyId].assetId);
             }
 
-            if (!upd.Objects.Context) Assert.Equal(rootId, assets[obj2Id].parentExternalId);
+            Assert.Equal(rootId, assets[obj2Id].parentExternalId);
 
             Dictionary<string, string> obj1Meta, obj2Meta, stringyMeta, mysteryMeta;
 
@@ -258,39 +256,32 @@ namespace Test
                 mysteryMeta = timeseries[mysteryId].metadata;
             }
 
-            if (!upd.Objects.Metadata)
-            {
-                Assert.True(obj1Meta == null || obj1Meta.Count == 0);
-                Assert.Equal(2, obj2Meta.Count);
-                Assert.Equal("1234", obj2Meta["NumericProp"]);
-            }
-            if (!upd.Variables.Metadata)
-            {
-                Assert.True(stringyMeta == null || stringyMeta.Count == 0);
-                Assert.Equal(2, mysteryMeta.Count);
-                if (raw)
-                {
-                    Assert.Equal(@"{""Low"":0,""High"":100}", mysteryMeta["EURange"]);
-                }
-                else
-                {
-                    Assert.Equal("(0, 100)", mysteryMeta["EURange"]);
-                }
-            }
 
+            Assert.True(obj1Meta == null || obj1Meta.Count == 0);
+            Assert.Equal(2, obj2Meta.Count);
+            Assert.Equal("1234", obj2Meta["NumericProp"]);
+
+            Assert.True(stringyMeta == null || stringyMeta.Count == 0);
+            Assert.Equal(2, mysteryMeta.Count);
+            if (raw)
+            {
+                Assert.Equal("{\"Low\":0,\"High\":100}", mysteryMeta["EURange"]);
+            }
+            else
+            {
+                Assert.Equal("(0, 100)", mysteryMeta["EURange"]);
+            }
         }
 
         public static void VerifyModified(
             Dictionary<string, AssetDummy> assets,
             Dictionary<string, TimeseriesDummy> timeseries,
-            UpdateConfig upd,
             IUAClientAccess client,
             CustomNodeReference ids,
             bool raw)
         {
             ArgumentNullException.ThrowIfNull(assets);
             ArgumentNullException.ThrowIfNull(timeseries);
-            upd ??= new UpdateConfig();
             ArgumentNullException.ThrowIfNull(client);
             ArgumentNullException.ThrowIfNull(ids);
             Assert.Equal(6, assets.Count);
@@ -302,20 +293,20 @@ namespace Test
             var stringyId = client.GetUniqueId(ids.StringyVar);
             var mysteryId = client.GetUniqueId(ids.MysteryVar);
 
-            if (upd.Objects.Name) Assert.Equal("CustomRoot updated", assets[rootId].name);
-            if (upd.Objects.Description) Assert.Equal("custom root description", assets[rootId].description);
+            Assert.Equal("CustomRoot updated", assets[rootId].name);
+            Assert.Equal("custom root description", assets[rootId].description);
 
-            if (upd.Variables.Name) Assert.Equal("StringyVar updated", timeseries[stringyId].name);
-            if (upd.Variables.Description) Assert.Equal("Stringy var description", timeseries[stringyId].description);
+            Assert.Equal("StringyVar updated", timeseries[stringyId].name);
+            Assert.Equal("Stringy var description", timeseries[stringyId].description);
             if (raw)
             {
-                if (upd.Objects.Context) Assert.Equal(obj1Id, assets[obj2Id].parentExternalId);
-                if (upd.Variables.Context) Assert.Equal(obj1Id, (timeseries[stringyId] as StatelessTimeseriesDummy).assetExternalId);
+                Assert.Equal(obj1Id, assets[obj2Id].parentExternalId);
+                Assert.Equal(obj1Id, (timeseries[stringyId] as StatelessTimeseriesDummy).assetExternalId);
             }
             else
             {
-                if (upd.Objects.Context) Assert.Equal(obj1Id, assets[obj2Id].parentExternalId);
-                if (upd.Variables.Context) Assert.Equal(assets[obj1Id].id, timeseries[stringyId].assetId);
+                Assert.Equal(obj1Id, assets[obj2Id].parentExternalId);
+                Assert.Equal(assets[obj1Id].id, timeseries[stringyId].assetId);
             }
 
             Dictionary<string, string> obj1Meta, obj2Meta, stringyMeta, mysteryMeta;
@@ -335,20 +326,21 @@ namespace Test
                 mysteryMeta = timeseries[mysteryId].metadata;
             }
 
+            Assert.Single(obj1Meta);
+            Assert.Equal("New asset prop value", obj1Meta["NewAssetProp"]);
+            Assert.Equal(2, obj2Meta.Count);
+            Assert.Equal("4321", obj2Meta["NumericProp"]);
+            Assert.True(obj2Meta.ContainsKey("StringProp updated"));
 
-            if (upd.Objects.Metadata)
+            Assert.Single(stringyMeta);
+            Assert.Equal("New prop value", stringyMeta["NewProp"]);
+            Assert.Equal(2, mysteryMeta.Count);
+            if (raw)
             {
-                Assert.Single(obj1Meta);
-                Assert.Equal("New asset prop value", obj1Meta["NewAssetProp"]);
-                Assert.Equal(2, obj2Meta.Count);
-                Assert.Equal("4321", obj2Meta["NumericProp"]);
-                Assert.True(obj2Meta.ContainsKey("StringProp updated"));
+                Assert.Equal("{\"Low\":0,\"High\":200}", mysteryMeta["EURange"]);
             }
-            if (upd.Variables.Metadata)
+            else
             {
-                Assert.Single(stringyMeta);
-                Assert.Equal("New prop value", stringyMeta["NewProp"]);
-                Assert.Equal(2, mysteryMeta.Count);
                 Assert.Equal("(0, 200)", mysteryMeta["EURange"]);
             }
         }

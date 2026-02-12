@@ -152,9 +152,9 @@ namespace Cognite.OpcUa
         /// Add node to overview of known mapped nodes
         /// </summary>
         /// <param name="node">Node to add</param>
-        public void AddActiveNode(BaseUANode node, TypeUpdateConfig update, bool dataTypeMetadata, bool nodeTypeMetadata)
+        public void AddActiveNode(BaseUANode node, bool dataTypeMetadata, bool nodeTypeMetadata)
         {
-            mappedNodes[node.Id] = new MappedNode(node, update, dataTypeMetadata, nodeTypeMetadata);
+            mappedNodes[node.Id] = new MappedNode(node, dataTypeMetadata, nodeTypeMetadata);
         }
         /// <summary>
         /// Get node checksum by NodeId and index if it exists
