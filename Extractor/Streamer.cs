@@ -186,11 +186,18 @@ namespace Cognite.OpcUa
                 result = await pusher.PushDataPoints(dataPointList, token);
             }
 
-            if (pusher.DataFailing && result == DataPushResult.NoDataPushed && pusher.Initialized)
+            if (pusher.DataFailing && result == DataPushResult.NoDataPushed)
             {
                 if (await pusher.CanPushDataPoints(token))
                 {
-                    result = DataPushResult.ReadyToPush;
+                    if (pusher.Initialized)
+                    {
+                        result = DataPushResult.Success;
+                    }
+                    else
+                    {
+                        result = DataPushResult.ReadyToPush;
+                    }
                 }
             }
 
@@ -267,19 +274,18 @@ namespace Cognite.OpcUa
                 result = await pusher.PushEvents(eventList, token);
             }
 
-            if (pusher.EventsFailing && result == DataPushResult.NoDataPushed && pusher.Initialized)
+            if (pusher.EventsFailing && result == DataPushResult.NoDataPushed)
             {
                 if (await pusher.CanPushEvents(token))
                 {
-                    result = DataPushResult.Success;
-                }
-            }
-
-            if (result == DataPushResult.NoDataPushed && pusher.EventsFailing)
-            {
-                if (await pusher.CanPushEvents(token))
-                {
-                    result = DataPushResult.ReadyToPush;
+                    if (pusher.Initialized)
+                    {
+                        result = DataPushResult.Success;
+                    }
+                    else
+                    {
+                        result = DataPushResult.ReadyToPush;
+                    }
                 }
             }
 
