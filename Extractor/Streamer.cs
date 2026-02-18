@@ -210,6 +210,7 @@ namespace Cognite.OpcUa
                 {
                     await extractor.FailureBuffer.WriteDatapoints(dataPointList, pointRanges, token);
                 }
+                return;
             }
             else if (result == DataPushResult.UnrecoverableFailure)
             {
@@ -298,6 +299,7 @@ namespace Cognite.OpcUa
                 {
                     await extractor.FailureBuffer.WriteEvents(eventList, token);
                 }
+                return;
             }
             else if (result == DataPushResult.UnrecoverableFailure)
             {
