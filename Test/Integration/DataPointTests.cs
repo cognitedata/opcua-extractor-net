@@ -808,7 +808,6 @@ namespace Test.Integration
                         Assert.Equal(CogniteTime.DateTimeEpoch, state.SourceExtractedRange.First);
                         Assert.Equal(CogniteTime.DateTimeEpoch, state.SourceExtractedRange.Last);
                     }
-
                 });
 
                 Assert.True(state.DestinationExtractedRange.First == CogniteTime.DateTimeEpoch);

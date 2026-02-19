@@ -171,6 +171,7 @@ namespace Cognite.OpcUa
             await foreach (var dp in dataPointQueue.DrainAsync(token))
             {
                 dataPointList.Add(dp);
+                if (!StatusCode.IsGood(dp.Status)) continue;
                 if (!pointRanges.TryGetValue(dp.Id, out var range))
                 {
                     pointRanges[dp.Id] = new TimeRange(dp.Timestamp, dp.Timestamp);
@@ -373,7 +374,10 @@ namespace Cognite.OpcUa
             {
                 var evt = DpAsEvent(datapoint, node);
                 log.LogTrace("Subscription DataPoint treated as event {Event}", node);
-                node.UpdateFromStream(DateTime.MaxValue, datapoint.SourceTimestamp);
+                if (StatusCode.IsGood(datapoint.StatusCode))
+                {
+                    node.UpdateFromStream(DateTime.MaxValue, datapoint.SourceTimestamp);
+                }
                 Enqueue(evt);
                 return;
             }
@@ -383,6 +387,10 @@ namespace Cognite.OpcUa
             {
                 node.UpdateFromStream(buffDps);
             }
+
+            if ((extractor.StateStorage == null || config.StateStorage.IntervalValue.Value == Timeout.InfiniteTimeSpan)
+                 && (node.IsFrontfilling && datapoint.SourceTimestamp > node.SourceExtractedRange.Last
+                    || node.IsBackfilling && datapoint.SourceTimestamp < node.SourceExtractedRange.First)) return;
 
             foreach (var buffDp in buffDps)
             {

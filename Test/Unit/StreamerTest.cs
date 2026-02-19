@@ -315,19 +315,19 @@ namespace Test.Unit
             foreach (var not in notifications) item.SaveValueInCache(not);
             extractor.Streamer.DataSubscriptionHandler(item, null);
 
-            Assert.Equal(4, queue.Count);
+            Assert.Equal(2, queue.Count);
 
             node.UpdateFromFrontfill(DateTime.MinValue, true);
             foreach (var not in notifications) item.SaveValueInCache(not);
             extractor.Streamer.DataSubscriptionHandler(item, null);
 
-            Assert.Equal(8, queue.Count); // Another 4
+            Assert.Equal(5, queue.Count); // Another 3
 
             node.UpdateFromBackfill(DateTime.MaxValue, true);
             foreach (var not in notifications) item.SaveValueInCache(not);
             extractor.Streamer.DataSubscriptionHandler(item, null);
 
-            Assert.Equal(12, queue.Count);
+            Assert.Equal(9, queue.Count);
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_bad_datapoints", 3));
 
@@ -335,7 +335,7 @@ namespace Test.Unit
             foreach (var not in notifications) item2.SaveValueInCache(not);
             extractor.Streamer.DataSubscriptionHandler(item2, null);
 
-            Assert.Equal(12, queue.Count);
+            Assert.Equal(9, queue.Count);
         }
         [Fact]
         public async Task TestToDataPoint()
