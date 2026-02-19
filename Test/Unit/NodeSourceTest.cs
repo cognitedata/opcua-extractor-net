@@ -283,7 +283,7 @@ namespace Test.Unit
         public async Task TestEstimateArraySize()
         {
             using var pusher = new DummyPusher(new DummyPusherConfig());
-            await using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(pusher);
 
             tester.Config.History.Enabled = false;
             var extConfig = tester.Config.Extraction;

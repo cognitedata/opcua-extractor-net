@@ -31,6 +31,7 @@ using System.Threading;
 using Nito.AsyncEx;
 using System.Threading.Tasks;
 using Cognite.OpcUa.Utils;
+using Cognite.Extractor.StateStorage;
 
 namespace Cognite.OpcUa
 {
@@ -149,14 +150,18 @@ namespace Cognite.OpcUa
             if (events == null) return;
             await eventQueue.EnqueueAsync(events);
         }
+
+        private bool ShouldUpdateStateFromStream(UAHistoryExtractionState state)
+        {
+            return extractor.AllowUpdateState || !state.FrontfillEnabled && !state.BackfillEnabled;
+        }
+
         /// <summary>
         /// Push data points to destinations
         /// </summary>
-        /// <param name="passingPushers">Succeeding pushers, data will be pushed to these.</param>
-        /// <param name="failingPushers">Failing pushers, data will not be pushed to these.</param>
+        /// <param name="pushers">Pushers to write data to, if it is live.</param>
         /// <returns>True if history should be restarted after this</returns>
-        public async Task PushDataPoints(IEnumerable<IPusher> passingPushers,
-            IEnumerable<IPusher> failingPushers, CancellationToken token)
+        public async Task PushDataPoints(IPusher pusher, CancellationToken token)
         {
             if (!AllowData) return;
 
@@ -174,63 +179,77 @@ namespace Cognite.OpcUa
                 pointRanges[dp.Id] = range.Extend(dp.Timestamp, dp.Timestamp);
             }
 
-            var results = await Task.WhenAll(passingPushers.Select(pusher => pusher.PushDataPoints(dataPointList, token)));
 
-            bool anyFailed = results.Any(status => status == false);
-
-            if (anyFailed || failingPushers.Any())
+            DataPushResult result = DataPushResult.NoDataPushed;
+            if (pusher.Initialized)
             {
-                List<IPusher> failedPushers = new List<IPusher>();
-                if (anyFailed)
+                result = await pusher.PushDataPoints(dataPointList, token);
+            }
+
+            if (pusher.DataFailing && result == DataPushResult.NoDataPushed)
+            {
+                if (await pusher.CanPushDataPoints(token))
                 {
-                    var failed = results.Select((res, idx) => (result: res, Index: idx)).Where(x => x.result == false).ToList();
-                    foreach (var pair in failed)
+                    if (pusher.Initialized)
                     {
-                        var pusher = passingPushers.ElementAt(pair.Index);
-                        pusher.DataFailing = true;
-                        failedPushers.Add(pusher);
+                        result = DataPushResult.Success;
                     }
-                    log.LogWarning("Pushers of types {Types} failed while pushing datapoints",
-                        string.Concat(failedPushers.Select(pusher => pusher.GetType().ToString())));
-                    extractor.OnDataPushFailure();
+                    else
+                    {
+                        result = DataPushResult.ReadyToPush;
+                    }
                 }
+            }
+
+            if (result == DataPushResult.RecoverableFailure)
+            {
+                pusher.DataFailing = true;
+                extractor.OnDataPushFailure();
+
                 if (config.FailureBuffer.Enabled && extractor.FailureBuffer != null)
                 {
                     await extractor.FailureBuffer.WriteDatapoints(dataPointList, pointRanges, token);
                 }
-
                 return;
             }
-            var reconnectedPushers = passingPushers.Where(pusher => pusher.DataFailing).ToList();
-            if (reconnectedPushers.Count != 0)
+            else if (result == DataPushResult.UnrecoverableFailure)
             {
-                log.LogInformation("{Count} failing pushers were able to push data, reconnecting", reconnectedPushers.Count);
-                extractor.OnDataPushRecovery();
+                // This is generally either a bug, or some conflict that can't be resolved automatically.
+                // All we can really do is alert the user and keep going. Buffering this data is
+                // useless, since we can never recover anyway. It is better to keep going and
+                // require the user to re-ingest.
+                // If we can build workarounds for specific cases, that is a potential future feature.
+                log.LogError("Unrecoverable error while pushing data points. These values will never be successfully pushed and are skipped. They will need to be re-ingested after the error is manually corrected.");
+                return;
+            }
 
-                foreach (var pusher in reconnectedPushers)
-                {
-                    pusher.DataFailing = false;
-                }
+            if (pusher.DataFailing && (result == DataPushResult.Success || result == DataPushResult.ReadyToPush))
+            {
+                pusher.DataFailing = false;
+                log.LogInformation("Pusher was able to push data, reconnecting");
+                extractor.OnDataPushRecovery();
+            }
+            else if (pusher.DataFailing)
+            {
+                return;
             }
 
             if (config.FailureBuffer.Enabled && extractor.FailureBuffer != null && extractor.FailureBuffer.AnyPoints)
             {
-                await extractor.FailureBuffer.ReadDatapoints(passingPushers, token);
+                await extractor.FailureBuffer.ReadDatapoints(pusher, token);
             }
+
             foreach ((string id, var range) in pointRanges)
             {
                 var state = extractor.State.GetNodeState(id);
-                if (state != null && (extractor.AllowUpdateState || !state.FrontfillEnabled && !state.BackfillEnabled)) state.UpdateDestinationRange(range.First, range.Last);
+                if (state != null && ShouldUpdateStateFromStream(state)) state.UpdateDestinationRange(range.First, range.Last);
             }
         }
+
         /// <summary>
         /// Push events to destinations
         /// </summary>
-        /// <param name="passingPushers">Succeeding pushers, events will be pushed to these.</param>
-        /// <param name="failingPushers">Failing pushers, events will not be pushed to these.</param>
-        /// <returns>True if history should be restarted after this</returns>
-        public async Task PushEvents(IEnumerable<IPusher> passingPushers,
-            IEnumerable<IPusher> failingPushers, CancellationToken token)
+        public async Task PushEvents(IPusher pusher, CancellationToken token)
         {
             if (!AllowEvents) return;
 
@@ -249,53 +268,64 @@ namespace Cognite.OpcUa
                 eventRanges[evt.EmittingNode] = range.Extend(evt.Time, evt.Time);
             }
 
-            var results = await Task.WhenAll(passingPushers.Select(pusher => pusher.PushEvents(eventList, token)));
 
-            var anyFailed = results.Any(status => status == false);
-
-            if (anyFailed || failingPushers.Any())
+            DataPushResult result = DataPushResult.NoDataPushed;
+            if (pusher.Initialized)
             {
-                var failedPushers = new List<IPusher>();
-                if (anyFailed)
+                result = await pusher.PushEvents(eventList, token);
+            }
+
+            if (pusher.EventsFailing && result == DataPushResult.NoDataPushed)
+            {
+                if (await pusher.CanPushEvents(token))
                 {
-                    var failed = results.Select((res, idx) => (result: res, Index: idx)).Where(x => x.result == false).ToList();
-                    foreach (var pair in failed)
+                    if (pusher.Initialized)
                     {
-                        var pusher = passingPushers.ElementAt(pair.Index);
-                        pusher.EventsFailing = true;
-                        failedPushers.Add(pusher);
+                        result = DataPushResult.Success;
                     }
-                    log.LogWarning("Pushers of types {Types} failed while pushing events",
-                        failedPushers.Select(pusher => pusher.GetType().ToString()).Aggregate((src, val) => src + ", " + val));
-                    extractor.OnEventsPushFailure();
+                    else
+                    {
+                        result = DataPushResult.ReadyToPush;
+                    }
                 }
+            }
+
+            if (result == DataPushResult.RecoverableFailure)
+            {
+                pusher.EventsFailing = true;
+                extractor.OnEventsPushFailure();
 
                 if (config.FailureBuffer.Enabled && extractor.FailureBuffer != null)
                 {
                     await extractor.FailureBuffer.WriteEvents(eventList, token);
                 }
-
                 return;
             }
-            var reconnectedPushers = passingPushers.Where(pusher => pusher.EventsFailing).ToList();
-            if (reconnectedPushers.Count != 0)
+            else if (result == DataPushResult.UnrecoverableFailure)
             {
-                log.LogInformation("{Count} failing pushers were able to push events, reconnecting", reconnectedPushers.Count);
-                extractor.OnEventsPushRecovery();
-
-                foreach (var pusher in reconnectedPushers)
-                {
-                    pusher.EventsFailing = false;
-                }
+                log.LogError("Unrecoverable error while pushing events. These values will never be successfully pushed and are skipped. They will need to be re-ingested after the error is manually corrected.");
+                return;
             }
+
+            if (pusher.EventsFailing && (result == DataPushResult.Success || result == DataPushResult.ReadyToPush))
+            {
+                pusher.EventsFailing = false;
+                log.LogInformation("Pusher was able to push events, reconnecting");
+                extractor.OnEventsPushRecovery();
+            }
+            else if (pusher.EventsFailing)
+            {
+                return;
+            }
+
             if (config.FailureBuffer.Enabled && extractor.FailureBuffer != null && extractor.FailureBuffer.AnyEvents)
             {
-                await extractor.FailureBuffer.ReadEvents(passingPushers, token);
+                await extractor.FailureBuffer.ReadEvents(pusher, token);
             }
-            foreach (var (id, range) in eventRanges)
+            foreach ((var id, var range) in eventRanges)
             {
                 var state = extractor.State.GetEmitterState(id);
-                if (state != null && (extractor.AllowUpdateState || !state.FrontfillEnabled && !state.BackfillEnabled)) state?.UpdateDestinationRange(range.First, range.Last);
+                if (state != null && ShouldUpdateStateFromStream(state)) state.UpdateDestinationRange(range.First, range.Last);
             }
         }
         /// <summary>

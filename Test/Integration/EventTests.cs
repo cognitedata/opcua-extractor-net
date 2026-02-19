@@ -60,7 +60,7 @@ namespace Test.Integration
             using var pusher = new DummyPusher(new DummyPusherConfig());
             tester.Config.History.Enabled = false;
             tester.Config.Events.History = false;
-            await using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(pusher);
 
             var runTask = extractor.RunExtractor();
 
@@ -100,7 +100,7 @@ namespace Test.Integration
             tester.Config.Events.DestinationNameMap["TypeProp"] = "Type";
 
             using var pusher = new DummyPusher(new DummyPusherConfig());
-            await using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(pusher);
 
             var runTask = extractor.RunExtractor();
 
@@ -142,7 +142,7 @@ namespace Test.Integration
             using var pusher = new DummyPusher(new DummyPusherConfig());
             tester.Config.Events.ExcludeEventFilter = null;
             tester.Config.Events.ExcludeProperties = new List<string>();
-            await using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(pusher);
             tester.Config.Events.History = false;
 
             var runTask = extractor.RunExtractor();
@@ -198,7 +198,7 @@ namespace Test.Integration
             CommonTestUtils.ResetMetricValue("opcua_frontfill_events_count");
 
             // Test everything normal
-            await using (var extractor = tester.BuildExtractor(true, null, pusher))
+            await using (var extractor = tester.BuildExtractor(pusher))
             {
                 await extractor.RunExtractor(true);
                 Assert.All(extractor.State.EmitterStates, state => { Assert.True(state.ShouldSubscribe); });
@@ -212,7 +212,7 @@ namespace Test.Integration
 
             // Test disable subscriptions
             tester.Config.Subscriptions.Events = false;
-            await using (var extractor = tester.BuildExtractor(true, null, pusher))
+            await using (var extractor = tester.BuildExtractor(pusher))
             {
                 await extractor.RunExtractor(true);
                 var state = extractor.State.GetEmitterState(ids.Obj1);
@@ -240,7 +240,7 @@ namespace Test.Integration
             };
 
             tester.Config.Subscriptions.Events = true;
-            await using (var extractor = tester.BuildExtractor(true, null, pusher))
+            await using (var extractor = tester.BuildExtractor(pusher))
             {
                 await extractor.RunExtractor(true);
                 var state = extractor.State.GetEmitterState(ids.Obj1);
@@ -270,7 +270,7 @@ namespace Test.Integration
             tester.WipeEventHistory();
 
             using var pusher = new DummyPusher(new DummyPusherConfig());
-            await using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(pusher);
 
             var start = DateTime.UtcNow.AddSeconds(-5);
 
@@ -320,7 +320,7 @@ namespace Test.Integration
             tester.WipeEventHistory();
 
             using var pusher = new DummyPusher(new DummyPusherConfig());
-            await using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(pusher);
 
             var now = DateTime.UtcNow;
 
@@ -387,7 +387,7 @@ namespace Test.Integration
             tester.WipeEventHistory();
             tester.Server.PopulateEvents(now.AddSeconds(-5));
 
-            await using (var extractor = tester.BuildExtractor(true, stateStore, pusher))
+            await using (var extractor = tester.BuildExtractor(pusher, true, stateStore))
             {
                 var runTask = extractor.RunExtractor();
 
@@ -412,7 +412,7 @@ namespace Test.Integration
             tester.Server.PopulateEvents(now.AddSeconds(-15));
             tester.Server.PopulateEvents(now.AddSeconds(5));
 
-            await using (var extractor = tester.BuildExtractor(true, stateStore, pusher))
+            await using (var extractor = tester.BuildExtractor(pusher, true, stateStore))
             {
                 var runTask = extractor.RunExtractor();
 
@@ -448,7 +448,7 @@ namespace Test.Integration
             tester.WipeEventHistory();
 
             using var pusher = new DummyPusher(new DummyPusherConfig());
-            await using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(pusher);
 
             var ids = tester.Server.Ids.Event;
 
@@ -464,8 +464,8 @@ namespace Test.Integration
 
             tester.Server.PopulateEvents(now.AddSeconds(-20));
 
-            pusher.PushEventResult = false;
-            pusher.PushDataPointResult = false;
+            pusher.PushEventResult = DataPushResult.RecoverableFailure;
+            pusher.PushDataPointResult = DataPushResult.RecoverableFailure;
             pusher.TestConnectionResult = false;
 
             var runTask = extractor.RunExtractor();
@@ -489,8 +489,8 @@ namespace Test.Integration
             await TestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_buffer_num_events", 2), 5,
                 () => $"Expected 2 events to arrive in buffer, but got {CommonTestUtils.GetMetricValue("opcua_buffer_num_events")}");
 
-            pusher.PushEventResult = true;
-            pusher.PushDataPointResult = true;
+            pusher.PushEventResult = DataPushResult.Success;
+            pusher.PushDataPointResult = DataPushResult.Success;
             pusher.TestConnectionResult = true;
 
             await TestUtils.WaitForCondition(() => pusher.Events.Count == 3 && pusher.Events[ObjectIds.Server].Count == 714, 10);
@@ -504,7 +504,7 @@ namespace Test.Integration
         public async Task TestAuditEvents()
         {
             using var pusher = new DummyPusher(new DummyPusherConfig());
-            await using var extractor = tester.BuildExtractor(true, null, pusher);
+            await using var extractor = tester.BuildExtractor(pusher);
 
             tester.Server.SetEventConfig(true, true, true);
 

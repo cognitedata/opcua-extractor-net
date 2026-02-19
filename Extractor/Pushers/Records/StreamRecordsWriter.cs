@@ -72,7 +72,7 @@ namespace Cognite.OpcUa.Pushers.Records
             }, token);
         }
 
-        public async Task<bool?> PushEvents(UAExtractor extractor, List<UAEvent> events, CancellationToken token)
+        public async Task<DataPushResult> PushEvents(UAExtractor extractor, List<UAEvent> events, CancellationToken token)
         {
             if (converter == null)
             {
@@ -83,7 +83,7 @@ namespace Cognite.OpcUa.Pushers.Records
                 catch (Exception ex)
                 {
                     log.LogError(ex, "Failed to initialize records writer: {Message}", ex.Message);
-                    return false;
+                    return PusherUtils.ResultFromException(ex);
                 }
             }
 
@@ -108,12 +108,26 @@ namespace Cognite.OpcUa.Pushers.Records
             try
             {
                 await destination.InsertRecordsAsync(stream, logs, token);
-                return true;
+                return DataPushResult.Success;
             }
             catch (Exception ex)
             {
                 log.LogError(ex, "Failed to push events to log analytics: {Message}", ex.Message);
-                return ex is ResponseException rex && (rex.Code == 400 || rex.Code == 409);
+                return PusherUtils.ResultFromException(ex);
+            }
+        }
+
+        public async Task<bool> IsRecordsAccessible(CancellationToken token)
+        {
+            try
+            {
+                await destination.CogniteClient.Beta.StreamRecords.RetrieveStreamAsync(stream, token);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                log.LogError("Failed to retrieve stream from CDF: {Err}", ex.Message);
+                return false;
             }
         }
     }
