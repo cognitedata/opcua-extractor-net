@@ -196,8 +196,6 @@ namespace Test.Unit
         [Fact]
         public async Task TestPushDataPointsWithStatus()
         {
-            tester.Config.Extraction.StatusCodes.IngestStatusCodes = true;
-
             handler.MockTimeseries("test-ts-double");
 
             var dps = new[] {
@@ -223,8 +221,6 @@ namespace Test.Unit
         [Fact]
         public async Task TestPushDataPointsNull()
         {
-            tester.Config.Extraction.StatusCodes.IngestStatusCodes = true;
-
             handler.MockTimeseries("test-ts-double");
 
             var start = DateTime.UnixEpoch;

@@ -154,10 +154,10 @@ namespace Test.Unit
                 ContinuationPoint = new byte[] { 1, 2, 3 }
             };
             historyDataHandler.Invoke(reader, new object[] { node });
-            Assert.Equal(100, node.TotalRead);
+            Assert.Equal(200, node.TotalRead);
             Assert.Equal(start.AddSeconds(99), state1.SourceExtractedRange.Last);
             Assert.True(state1.IsFrontfilling);
-            Assert.Equal(100, queue.Count);
+            Assert.Equal(200, queue.Count);
             Assert.True(CommonTestUtils.TestMetricValue("opcua_bad_datapoints", 100));
 
             // Test flush buffer

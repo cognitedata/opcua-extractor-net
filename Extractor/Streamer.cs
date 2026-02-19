@@ -171,6 +171,7 @@ namespace Cognite.OpcUa
             await foreach (var dp in dataPointQueue.DrainAsync(token))
             {
                 dataPointList.Add(dp);
+                if (!StatusCode.IsGood(dp.Status)) continue;
                 if (!pointRanges.TryGetValue(dp.Id, out var range))
                 {
                     pointRanges[dp.Id] = new TimeRange(dp.Timestamp, dp.Timestamp);
@@ -365,20 +366,6 @@ namespace Cognite.OpcUa
                     log.LogDebug("Bad streaming datapoint: {BadDatapointExternalId} {SourceTimestamp}. Value: {Value}, Status: {Status}",
                         node.Id, datapoint.SourceTimestamp, datapoint.Value, ExtractorUtils.GetStatusCodeName((uint)datapoint.StatusCode));
                 }
-
-                switch (config.Extraction.StatusCodes.StatusCodesToIngest)
-                {
-                    case StatusCodeMode.All:
-                        break;
-                    case StatusCodeMode.Uncertain:
-                        if (!StatusCode.IsUncertain(datapoint.StatusCode))
-                        {
-                            return;
-                        }
-                        break;
-                    case StatusCodeMode.GoodOnly:
-                        return;
-                }
             }
 
             timeToExtractorDps.Observe((DateTime.UtcNow - datapoint.SourceTimestamp).TotalSeconds);
@@ -387,7 +374,10 @@ namespace Cognite.OpcUa
             {
                 var evt = DpAsEvent(datapoint, node);
                 log.LogTrace("Subscription DataPoint treated as event {Event}", node);
-                node.UpdateFromStream(DateTime.MaxValue, datapoint.SourceTimestamp);
+                if (StatusCode.IsGood(datapoint.StatusCode))
+                {
+                    node.UpdateFromStream(DateTime.MaxValue, datapoint.SourceTimestamp);
+                }
                 Enqueue(evt);
                 return;
             }

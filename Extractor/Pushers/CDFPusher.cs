@@ -146,7 +146,7 @@ namespace Cognite.OpcUa.Pushers
             {
                 var inserts = dataPointList.ToDictionary(
                     kvp => Identity.Create(new InstanceIdentifier(config.MetadataTargets.Clean.Space, kvp.Key)),
-                    kvp => kvp.Value.SelectNonNull(dp => dp.ToCDFDataPoint(fullConfig.Extraction.StatusCodes.IngestStatusCodes, log))
+                    kvp => kvp.Value.SelectNonNull(dp => dp.ToCDFDataPoint(log))
                 );
                 return await PushDataPointsIdm(inserts, count, token);
             }
@@ -154,7 +154,7 @@ namespace Cognite.OpcUa.Pushers
             {
                 var inserts = dataPointList.ToDictionary(
                     kvp => Identity.Create(kvp.Key),
-                    kvp => kvp.Value.SelectNonNull(dp => dp.ToCDFDataPoint(fullConfig.Extraction.StatusCodes.IngestStatusCodes, log))
+                    kvp => kvp.Value.SelectNonNull(dp => dp.ToCDFDataPoint(log))
                 );
                 return await PushDataPointsClassic(inserts, count, token);
             }
