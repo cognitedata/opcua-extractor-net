@@ -1,5 +1,6 @@
 ﻿using Cognite.Extractor.Common;
 using Cognite.Extractor.Configuration;
+using Cognite.OpcUa;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.Nodes;
@@ -1156,6 +1157,169 @@ namespace Test.Unit
 
             var exc = await Assert.ThrowsAsync<SmartAggregateException>(() => CommonTestUtils.RunHistory(reader, states, HistoryReadType.BackfillData));
             Assert.Equal("2 errors of type Opc.Ua.ServiceResultException. StatusCode: BadInvalidArgument", exc.Message);
+        }
+
+        /// <summary>
+        /// Test that if EnqueueAsync fails (simulating a crash), the state is NOT updated.
+        /// This verifies the fix where we enqueue BEFORE updating state to ensure at-least-once delivery.
+        /// </summary>
+        [Fact]
+        public async Task TestHistoryDataHandlerEnqueueFailure()
+        {
+            await using var extractor = tester.BuildExtractor();
+            var cfg = new HistoryConfig
+            {
+                Data = true
+            };
+
+            tester.Config.History = cfg;
+
+            // Inject a mock streamer that throws on EnqueueAsync
+            var mockStreamer = new FailingStreamer(
+                tester.Provider.GetRequiredService<ILogger<Streamer>>(),
+                extractor,
+                tester.Config);
+            var streamerField = typeof(UAExtractor).GetField("<Streamer>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic);
+            streamerField?.SetValue(extractor, mockStreamer);
+
+            using var throttler = new TaskThrottler(2, false);
+            var cps = new BlockingResourceCounter(1000);
+            var dummyState = new UAHistoryExtractionState(tester.Client, new NodeId("test", 0), true, true);
+            var log = tester.Provider.GetRequiredService<ILogger<HistoryReaderTest>>();
+
+            using var reader = new HistoryScheduler(log, tester.Client, extractor, extractor.TypeManager, tester.Config, HistoryReadType.FrontfillData,
+                throttler, cps, new[] { dummyState }, tester.Source.Token);
+
+            var dt = new UADataType(DataTypeIds.Double);
+            var var1 = new UAVariable(new NodeId("state1", 0), "state1", null, null, NodeId.Null, null);
+            var1.FullAttributes.DataType = dt;
+            var state1 = new VariableExtractionState(extractor, var1, true, true, true);
+            extractor.State.SetNodeState(state1, "state1");
+            state1.FinalizeRangeInit();
+
+            // Capture initial state
+            Assert.True(state1.IsFrontfilling);
+            var initialRange = state1.SourceExtractedRange;
+
+            var start = DateTime.UtcNow;
+            var dataValues = new DataValueCollection(Enumerable.Range(0, 10)
+                .Select(idx => new DataValue(idx, StatusCodes.Good, start.AddSeconds(idx))));
+            var historyData = new HistoryData { DataValues = dataValues };
+
+            var node = new HistoryReadNode(HistoryReadType.FrontfillData, new NodeId("state1", 0))
+            {
+                LastResult = historyData,
+                ContinuationPoint = null
+            };
+
+            var historyDataHandler = reader.GetType().GetMethod("HistoryDataHandler", BindingFlags.NonPublic | BindingFlags.Instance);
+
+            // The handler should throw because EnqueueAsync fails
+            var ex = await Assert.ThrowsAsync<Exception>(() => (Task)historyDataHandler!.Invoke(reader, new object[] { node })!);
+            Assert.Contains("Simulated enqueue failure", ex.Message);
+
+            // CRITICAL: State should NOT have been updated because the exception happened before state update
+            Assert.Equal(initialRange.Last, state1.SourceExtractedRange.Last);
+            Assert.Equal(initialRange.First, state1.SourceExtractedRange.First);
+            Assert.True(state1.IsFrontfilling, "State should still be frontfilling since update was never called");
+        }
+
+        /// <summary>
+        /// Test that if EnqueueAsync fails for events (simulating a crash), the state is NOT updated.
+        /// This verifies the fix where we enqueue BEFORE updating state to ensure at-least-once delivery.
+        /// </summary>
+        [Fact]
+        public async Task TestHistoryEventHandlerEnqueueFailure()
+        {
+            await using var extractor = tester.BuildExtractor();
+            var cfg = new HistoryConfig
+            {
+                Backfill = true
+            };
+
+            tester.Config.History = cfg;
+
+            // Inject a mock streamer that throws on EnqueueAsync for events
+            var mockStreamer = new FailingStreamer(
+                tester.Provider.GetRequiredService<ILogger<Streamer>>(),
+                extractor,
+                tester.Config);
+            var streamerField = typeof(UAExtractor).GetField("<Streamer>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic);
+            streamerField?.SetValue(extractor, mockStreamer);
+
+            var log = tester.Provider.GetRequiredService<ILogger<HistoryReaderTest>>();
+
+            using var throttler = new TaskThrottler(2, false);
+            var cps = new BlockingResourceCounter(1000);
+            var dummyState = new UAHistoryExtractionState(tester.Client, new NodeId("test", 0), true, true);
+
+            using var reader = new HistoryScheduler(log, tester.Client, extractor, extractor.TypeManager, tester.Config, HistoryReadType.FrontfillEvents,
+                throttler, cps, new[] { dummyState }, tester.Source.Token);
+
+            var state = EventUtils.PopulateEventData(extractor, tester, false);
+            state.FinalizeRangeInit();
+
+            // Capture initial state
+            Assert.True(state.IsFrontfilling);
+            var initialRange = state.SourceExtractedRange;
+
+            var filter = new EventFilter { SelectClauses = EventUtils.GetSelectClause(tester) };
+            var details = new ReadEventDetails { Filter = filter };
+
+            var start = DateTime.UtcNow;
+            var frontfillEvents = new HistoryEventFieldListCollection(Enumerable.Range(0, 10)
+                .Select(idx => EventUtils.GetEventValues(start.AddSeconds(idx)))
+                .Select(values => new HistoryEventFieldList { EventFields = values }));
+            var historyEvents = new HistoryEvent { Events = frontfillEvents };
+
+            var node = new HistoryReadNode(HistoryReadType.FrontfillEvents, new NodeId("emitter", 0))
+            {
+                LastResult = historyEvents,
+                ContinuationPoint = null
+            };
+
+            var historyEventHandler = reader.GetType().GetMethod("HistoryEventHandler", BindingFlags.NonPublic | BindingFlags.Instance);
+
+            // The handler should throw because EnqueueAsync fails
+            var ex = await Assert.ThrowsAsync<Exception>(() => (Task)historyEventHandler!.Invoke(reader, new object[] { node, details })!);
+            Assert.Contains("Simulated enqueue failure", ex.Message, StringComparison.OrdinalIgnoreCase);
+
+            // CRITICAL: State should NOT have been updated because the exception happened before state update
+            Assert.Equal(initialRange.Last, state.SourceExtractedRange.Last);
+            Assert.Equal(initialRange.First, state.SourceExtractedRange.First);
+            Assert.True(state.IsFrontfilling, "State should still be frontfilling since update was never called");
+        }
+
+        /// <summary>
+        /// Mock Streamer that throws on EnqueueAsync to simulate a crash during enqueue.
+        /// Used to verify that state updates happen AFTER successful enqueue.
+        /// </summary>
+        private class FailingStreamer : Streamer
+        {
+            public FailingStreamer(ILogger<Streamer> log, UAExtractor extractor, FullConfig config)
+                : base(log, extractor, config)
+            {
+            }
+
+            public override Task EnqueueAsync(UADataPoint dp)
+            {
+                throw new Exception("Simulated enqueue failure for datapoint");
+            }
+
+            public override Task EnqueueAsync(IEnumerable<UADataPoint> dps)
+            {
+                throw new Exception("Simulated enqueue failure for datapoints");
+            }
+
+            public override Task EnqueueAsync(UAEvent evt)
+            {
+                throw new Exception("Simulated enqueue failure for event");
+            }
+
+            public override Task EnqueueAsync(IEnumerable<UAEvent> events)
+            {
+                throw new Exception("Simulated enqueue failure for events");
+            }
         }
     }
 }

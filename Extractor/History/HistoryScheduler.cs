@@ -590,19 +590,7 @@ namespace Cognite.OpcUa.History
                 }
             }
 
-            node.Completed = IsNodeCompleted(node, first, last, data?.DataValues != null && data.DataValues.Count > 0);
-
-            if (Frontfill)
-            {
-                node.State.UpdateFromFrontfill(Config.IgnoreContinuationPoints ? last : goodLast, node.Completed);
-            }
-            else
-            {
-                node.State.UpdateFromBackfill(Config.IgnoreContinuationPoints ? first : goodFirst, node.Completed);
-            }
-
             int cnt = 0;
-
 
             if (node.State is not VariableExtractionState nodeState) return;
 
@@ -619,6 +607,17 @@ namespace Cognite.OpcUa.History
 
             node.LastRead = cnt;
             node.TotalRead += cnt;
+
+            node.Completed = IsNodeCompleted(node, first, last, data?.DataValues != null && data.DataValues.Count > 0);
+
+            if (Frontfill)
+            {
+                node.State.UpdateFromFrontfill(Config.IgnoreContinuationPoints ? last : goodLast, node.Completed);
+            }
+            else
+            {
+                node.State.UpdateFromBackfill(Config.IgnoreContinuationPoints ? first : goodFirst, node.Completed);
+            }
 
             if (!node.Completed || !Frontfill) return;
 
@@ -712,6 +711,8 @@ namespace Cognite.OpcUa.History
                 }
             }
 
+            await extractor.Streamer.EnqueueAsync(createdEvents);
+
             node.Completed = IsNodeCompleted(node, first, last, any);
 
             if (Frontfill)
@@ -722,8 +723,6 @@ namespace Cognite.OpcUa.History
             {
                 node.State.UpdateFromBackfill(first, node.Completed);
             }
-
-            await extractor.Streamer.EnqueueAsync(createdEvents);
 
             node.LastRead = createdEvents.Count;
             node.TotalRead += createdEvents.Count;
@@ -736,9 +735,9 @@ namespace Cognite.OpcUa.History
             if (buffered.Any())
             {
                 var (smin, smax) = buffered.MinMax(dp => dp.Time);
-                emitterState.UpdateFromStream(smin, smax);
                 log.LogDebug("Read {Count} events from buffer of state {Id}", buffered.Count(), node.State.Id);
                 await extractor.Streamer.EnqueueAsync(buffered);
+                emitterState.UpdateFromStream(smin, smax);
             }
         }
         #endregion

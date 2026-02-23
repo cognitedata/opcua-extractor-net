@@ -356,25 +356,25 @@ namespace Cognite.OpcUa
             if (node.AsEvents)
             {
                 var evt = DpAsEvent(datapoint, node);
+                Enqueue(evt);
                 log.LogTrace("Subscription DataPoint treated as event {Event}", node);
                 node.UpdateFromStream(DateTime.MaxValue, datapoint.SourceTimestamp);
-                Enqueue(evt);
                 return;
-            }
-
-            var buffDps = ToDataPoint(datapoint, node);
-            if (StatusCode.IsGood(datapoint.StatusCode))
-            {
-                node.UpdateFromStream(buffDps);
             }
 
             if ((extractor.StateStorage == null || config.StateStorage.IntervalValue.Value == Timeout.InfiniteTimeSpan)
                  && (node.IsFrontfilling && datapoint.SourceTimestamp > node.SourceExtractedRange.Last
                     || node.IsBackfilling && datapoint.SourceTimestamp < node.SourceExtractedRange.First)) return;
 
+            var buffDps = ToDataPoint(datapoint, node);
+
             foreach (var buffDp in buffDps)
             {
                 Enqueue(buffDp);
+            }
+            if (StatusCode.IsGood(datapoint.StatusCode))
+            {
+                node.UpdateFromStream(buffDps);
             }
         }
 

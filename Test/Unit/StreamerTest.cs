@@ -208,13 +208,13 @@ namespace Test.Unit
                 true, true, true);
             state.InitToEmpty();
             state.FinalizeRangeInit();
-            state.UpdateFromBackfill(DateTime.MaxValue, true);
-            state.UpdateFromFrontfill(DateTime.MinValue, true);
 
             extractor.State.SetNodeState(state, "id");
             var toPush = Enumerable.Range(0, 1000).Select(idx => new UADataPoint(start.AddMilliseconds(idx), "id", idx, StatusCodes.Good)).ToList();
             await extractor.Streamer.EnqueueAsync(toPush);
             await extractor.Streamer.PushDataPoints(new[] { pusher, pusher2 }, Enumerable.Empty<IPusher>(), tester.Source.Token);
+            state.UpdateFromBackfill(DateTime.MaxValue, true);
+            state.UpdateFromFrontfill(DateTime.MinValue, true);
             Assert.Equal(1000, dps.Count);
             Assert.Equal(1000, dps2.Count);
 
@@ -258,11 +258,11 @@ namespace Test.Unit
             var state = new EventExtractionState(tester.Client, id, true, true, true);
             state.InitToEmpty();
             state.FinalizeRangeInit();
-            state.UpdateFromBackfill(DateTime.MaxValue, true);
-            state.UpdateFromFrontfill(DateTime.MinValue, true);
 
             extractor.State.SetEmitterState(state);
             var toPush = Enumerable.Range(0, 1000).Select(idx => new UAEvent { Time = start.AddMilliseconds(idx), EmittingNode = id }).ToList();
+            state.UpdateFromBackfill(DateTime.MaxValue, true);
+            state.UpdateFromFrontfill(DateTime.MinValue, true);
             await extractor.Streamer.EnqueueAsync(toPush);
             await extractor.Streamer.PushEvents(new[] { pusher, pusher2 }, Enumerable.Empty<IPusher>(), tester.Source.Token);
 
