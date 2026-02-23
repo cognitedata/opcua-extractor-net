@@ -1216,7 +1216,7 @@ namespace Test.Unit
 
             // The handler should throw because EnqueueAsync fails
             var ex = await Assert.ThrowsAsync<Exception>(() => (Task)historyDataHandler!.Invoke(reader, new object[] { node })!);
-            Assert.Contains("Simulated enqueue failure", ex.Message);
+            Assert.Contains("Simulated enqueue failure", ex.Message, StringComparison.OrdinalIgnoreCase);
 
             // CRITICAL: State should NOT have been updated because the exception happened before state update
             Assert.Equal(initialRange.Last, state1.SourceExtractedRange.Last);
