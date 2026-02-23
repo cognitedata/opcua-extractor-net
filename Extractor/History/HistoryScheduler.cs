@@ -592,6 +592,8 @@ namespace Cognite.OpcUa.History
 
             int cnt = 0;
 
+            node.Completed = IsNodeCompleted(node, first, last, data?.DataValues != null && data.DataValues.Count > 0);
+
             if (node.State is not VariableExtractionState nodeState) return;
 
             foreach (var datapoint in dataPoints)
@@ -607,8 +609,6 @@ namespace Cognite.OpcUa.History
 
             node.LastRead = cnt;
             node.TotalRead += cnt;
-
-            node.Completed = IsNodeCompleted(node, first, last, data?.DataValues != null && data.DataValues.Count > 0);
 
             if (Frontfill)
             {
