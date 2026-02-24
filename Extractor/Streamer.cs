@@ -119,7 +119,7 @@ namespace Cognite.OpcUa
         /// Enqueue a datapoint, pushes if this exceeds the maximum.
         /// </summary>
         /// <param name="dp">Datapoint to enqueue.</param>
-        public async Task EnqueueAsync(UADataPoint dp)
+        public virtual async Task EnqueueAsync(UADataPoint dp)
         {
             await dataPointQueue.EnqueueAsync(dp);
         }
@@ -127,7 +127,7 @@ namespace Cognite.OpcUa
         /// Enqueue a list of datapoints, pushes if this exceeds the maximum.
         /// </summary>
         /// <param name="dps">Datapoints to enqueue.</param>
-        public async Task EnqueueAsync(IEnumerable<UADataPoint> dps)
+        public virtual async Task EnqueueAsync(IEnumerable<UADataPoint> dps)
         {
             if (dps == null) return;
             await dataPointQueue.EnqueueAsync(dps);
@@ -136,7 +136,7 @@ namespace Cognite.OpcUa
         /// Enqueues an event, pushes if this exceeds the maximum.
         /// </summary>
         /// <param name="evt">Event to enqueue.</param>
-        public async Task EnqueueAsync(UAEvent evt)
+        public virtual async Task EnqueueAsync(UAEvent evt)
         {
             await eventQueue.EnqueueAsync(evt);
         }
@@ -144,7 +144,7 @@ namespace Cognite.OpcUa
         /// Enqueues a list of events, pushes if this exceeds the maximum.
         /// </summary>
         /// <param name="events">Events to enqueue.</param>
-        public async Task EnqueueAsync(IEnumerable<UAEvent> events)
+        public virtual async Task EnqueueAsync(IEnumerable<UAEvent> events)
         {
             if (events == null) return;
             await eventQueue.EnqueueAsync(events);
@@ -356,25 +356,25 @@ namespace Cognite.OpcUa
             if (node.AsEvents)
             {
                 var evt = DpAsEvent(datapoint, node);
+                Enqueue(evt);
                 log.LogTrace("Subscription DataPoint treated as event {Event}", node);
                 node.UpdateFromStream(DateTime.MaxValue, datapoint.SourceTimestamp);
-                Enqueue(evt);
                 return;
-            }
-
-            var buffDps = ToDataPoint(datapoint, node);
-            if (StatusCode.IsGood(datapoint.StatusCode))
-            {
-                node.UpdateFromStream(buffDps);
             }
 
             if ((extractor.StateStorage == null || config.StateStorage.IntervalValue.Value == Timeout.InfiniteTimeSpan)
                  && (node.IsFrontfilling && datapoint.SourceTimestamp > node.SourceExtractedRange.Last
                     || node.IsBackfilling && datapoint.SourceTimestamp < node.SourceExtractedRange.First)) return;
 
+            var buffDps = ToDataPoint(datapoint, node);
+
             foreach (var buffDp in buffDps)
             {
                 Enqueue(buffDp);
+            }
+            if (StatusCode.IsGood(datapoint.StatusCode))
+            {
+                node.UpdateFromStream(buffDps);
             }
         }
 
