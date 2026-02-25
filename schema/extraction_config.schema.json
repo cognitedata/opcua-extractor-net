@@ -173,28 +173,6 @@
                 }
             }
         },
-        "status-codes": {
-            "type": "object",
-            "unevaluatedProperties": false,
-            "description": "Configuration for ingesting status codes to CDF timeseries.",
-            "properties": {
-                "status-codes-to-ingest": {
-                    "type": "string",
-                    "enum": [
-                        "GoodOnly",
-                        "Uncertain",
-                        "All"
-                    ],
-                    "description": "Which data points to ingest to CDF. `All` ingests all datapoints, including bad. `Uncertain` ingests good and uncertain data points. `GoodOnly` ingest only good datapoints.",
-                    "default": "GoodOnly"
-                },
-                "ingest-status-codes": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "Whether to ingest status codes into the time series API."
-                }
-            }
-        },
         "rebrowse-triggers": {
             "type": "object",
             "unevaluatedProperties": false,

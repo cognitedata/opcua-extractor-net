@@ -221,8 +221,6 @@ cognite:
     project:
     # Cognite service url
     host: "https://api.cognitedata.com"
-    # Replace all instances of NaN with this floating point number. If left empty, ignore instead.
-    nan-replacement:
     # Data set to use for new objects. Existing objects will not be updated
     data-set:
         # Data set internal id.
@@ -696,15 +694,6 @@ extraction:
         # Name of marker indicating that a node is deleted.
         # Added to metadata, or as a column in Raw.
         delete-marker: "deleted"
-
-    # Configuration for ingesting status codes to CDF timeseries.
-    status-codes:
-        # Which data points to ingest to CDF.
-        # `All` ingests all datapoints, including bad.
-        # `Uncertain` ingests good and uncertain data points.
-        # `GoodOnly` ingest only good datapoints.
-        status-codes-to-ingest: GoodOnly
-        ingest-status-codes: false
 
 subscriptions:
     # Enable subscriptions on data-points.
