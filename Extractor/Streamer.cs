@@ -170,13 +170,14 @@ namespace Cognite.OpcUa
                 dataPointList.Add(dp);
                 if (!pointRanges.TryGetValue(dp.Id, out var range))
                 {
+                    // Get source extracted range while we are draining, to make sure we don't update the state with a range that exceeds this.
                     sourceRanges[dp.Id] = extractor.State.GetNodeState(dp.Id)?.SourceExtractedRange ?? new TimeRange(dp.Timestamp, dp.Timestamp);
                     pointRanges[dp.Id] = new TimeRange(dp.Timestamp, dp.Timestamp);
                     continue;
                 }
                 range = range.Extend(dp.Timestamp, dp.Timestamp);
-                // Make sure update is within the bounds of the source extracted range.
-                pointRanges[dp.Id] = sourceRanges[dp.Id].Contract(range);
+                // Make sure pointRanges' updated range is within the bounds of the source extracted range.
+                pointRanges[dp.Id] = range.Contract(sourceRanges[dp.Id]);
             }
 
             var results = await Task.WhenAll(passingPushers.Select(pusher => pusher.PushDataPoints(dataPointList, token)));
@@ -252,9 +253,9 @@ namespace Cognite.OpcUa
                     eventRanges[evt.EmittingNode] = new TimeRange(evt.Time, evt.Time);
                     continue;
                 }
-                // Same thing we do for events above.
+                // Same thing that we do for datapoints above.
                 range = range.Extend(evt.Time, evt.Time);
-                eventRanges[evt.EmittingNode] = sourceEventRanges[evt.EmittingNode].Contract(range);
+                eventRanges[evt.EmittingNode] = range.Contract(sourceEventRanges[evt.EmittingNode]);
             }
 
             var results = await Task.WhenAll(passingPushers.Select(pusher => pusher.PushEvents(eventList, token)));
