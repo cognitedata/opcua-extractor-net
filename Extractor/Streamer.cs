@@ -241,17 +241,20 @@ namespace Cognite.OpcUa
 
             var eventList = new List<UAEvent>();
             var eventRanges = new Dictionary<NodeId, TimeRange>();
+            var sourceEventRanges = new Dictionary<NodeId, TimeRange>();
 
             await foreach (var evt in eventQueue.DrainAsync(token))
             {
                 eventList.Add(evt);
                 if (!eventRanges.TryGetValue(evt.EmittingNode, out var range))
                 {
+                    sourceEventRanges[evt.EmittingNode] = extractor.State.GetEmitterState(evt.EmittingNode)?.SourceExtractedRange ?? new TimeRange(evt.Time, evt.Time);
                     eventRanges[evt.EmittingNode] = new TimeRange(evt.Time, evt.Time);
                     continue;
                 }
-
-                eventRanges[evt.EmittingNode] = range.Extend(evt.Time, evt.Time);
+                // Same thing we do for events above.
+                range = range.Extend(evt.Time, evt.Time);
+                eventRanges[evt.EmittingNode] = sourceEventRanges[evt.EmittingNode].Contract(range);
             }
 
             var results = await Task.WhenAll(passingPushers.Select(pusher => pusher.PushEvents(eventList, token)));
