@@ -170,7 +170,9 @@ namespace Cognite.OpcUa
                 if (!sourceRanges.TryGetValue(dp.Id, out var range))
                 {
                     // We only track source range so that the destination updated range after push is never greater than the source range here.
+                    // The source range for this datapoint would already have been updated during enqueue.
                     sourceRanges[dp.Id] = extractor.State.GetNodeState(dp.Id)?.SourceExtractedRange ?? new TimeRange(dp.Timestamp, dp.Timestamp);
+
                     continue;
                 }                
             }
@@ -197,7 +199,7 @@ namespace Cognite.OpcUa
                 }
                 if (config.FailureBuffer.Enabled && extractor.FailureBuffer != null)
                 {
-                    await extractor.FailureBuffer.WriteDatapoints(dataPointList, pointRanges, token);
+                    await extractor.FailureBuffer.WriteDatapoints(dataPointList, sourceRanges, token);
                 }
 
                 return;
@@ -218,7 +220,7 @@ namespace Cognite.OpcUa
             {
                 await extractor.FailureBuffer.ReadDatapoints(passingPushers, token);
             }
-            foreach ((string id, var range) in pointRanges)
+            foreach ((string id, var range) in sourceRanges)
             {
                 var state = extractor.State.GetNodeState(id);
                 if (state != null && (extractor.AllowUpdateState || !state.FrontfillEnabled && !state.BackfillEnabled)) state.UpdateDestinationRange(range.First, range.Last);
