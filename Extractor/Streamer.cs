@@ -161,20 +161,22 @@ namespace Cognite.OpcUa
             if (!AllowData) return;
 
             var dataPointList = new List<UADataPoint>();
-            // Track source extracted timestamps and for each node in the current batch to update state later.
+            // Track source extracted timestamps and normal timestamps for each node in the current batch to update state later.
+            var pointRanges = new Dictionary<string, TimeRange>();
             var sourceRanges = new Dictionary<string, TimeRange>();
 
             await foreach (var dp in dataPointQueue.DrainAsync(token))
             {
                 dataPointList.Add(dp);
-                if (!sourceRanges.TryGetValue(dp.Id, out var range))
+                if (!pointRanges.TryGetValue(dp.Id, out var range))
                 {
-                    // We only track source range so that the destination updated range after push is never greater than the source range here.
-                    // The source range for this datapoint would already have been updated during enqueue.
                     sourceRanges[dp.Id] = extractor.State.GetNodeState(dp.Id)?.SourceExtractedRange ?? new TimeRange(dp.Timestamp, dp.Timestamp);
-
+                    pointRanges[dp.Id] = new TimeRange(dp.Timestamp, dp.Timestamp);
                     continue;
-                }                
+                }
+                range = range.Extend(dp.Timestamp, dp.Timestamp);
+                // Make sure update is within the bounds of the source extracted range.
+                pointRanges[dp.Id] = sourceRanges[dp.Id].Contract(range);
             }
 
             var results = await Task.WhenAll(passingPushers.Select(pusher => pusher.PushDataPoints(dataPointList, token)));
@@ -199,7 +201,7 @@ namespace Cognite.OpcUa
                 }
                 if (config.FailureBuffer.Enabled && extractor.FailureBuffer != null)
                 {
-                    await extractor.FailureBuffer.WriteDatapoints(dataPointList, sourceRanges, token);
+                    await extractor.FailureBuffer.WriteDatapoints(dataPointList, pointRanges, token);
                 }
 
                 return;
@@ -220,7 +222,7 @@ namespace Cognite.OpcUa
             {
                 await extractor.FailureBuffer.ReadDatapoints(passingPushers, token);
             }
-            foreach ((string id, var range) in sourceRanges)
+            foreach ((string id, var range) in pointRanges)
             {
                 var state = extractor.State.GetNodeState(id);
                 if (state != null && (extractor.AllowUpdateState || !state.FrontfillEnabled && !state.BackfillEnabled)) state.UpdateDestinationRange(range.First, range.Last);
