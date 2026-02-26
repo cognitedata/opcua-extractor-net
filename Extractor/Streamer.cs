@@ -161,17 +161,18 @@ namespace Cognite.OpcUa
             if (!AllowData) return;
 
             var dataPointList = new List<UADataPoint>();
-            var pointRanges = new Dictionary<string, TimeRange>();
+            // Track source extracted timestamps and for each node in the current batch to update state later.
+            var sourceRanges = new Dictionary<string, TimeRange>();
 
             await foreach (var dp in dataPointQueue.DrainAsync(token))
             {
                 dataPointList.Add(dp);
-                if (!pointRanges.TryGetValue(dp.Id, out var range))
+                if (!sourceRanges.TryGetValue(dp.Id, out var range))
                 {
-                    pointRanges[dp.Id] = new TimeRange(dp.Timestamp, dp.Timestamp);
+                    // We only track source range so that the destination updated range after push is never greater than the source range here.
+                    sourceRanges[dp.Id] = extractor.State.GetNodeState(dp.Id)?.SourceExtractedRange ?? new TimeRange(dp.Timestamp, dp.Timestamp);
                     continue;
-                }
-                pointRanges[dp.Id] = range.Extend(dp.Timestamp, dp.Timestamp);
+                }                
             }
 
             var results = await Task.WhenAll(passingPushers.Select(pusher => pusher.PushDataPoints(dataPointList, token)));
