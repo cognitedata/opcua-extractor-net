@@ -381,7 +381,7 @@ cognite:
         # Maximum number of parallel requests per timeseries operation
         time-series: 20
         # Maximum number of parallel requests per assets operation
-        assets: 20
+        assets: 1
         # Maximum number of parallel requests per datapoints operation
         data-points: 10
         # Maximum number of parallel requests per raw operation
@@ -389,9 +389,9 @@ cognite:
         # Maximum number of parallel requests per get first/last datapoint operation
         ranges: 20
         # Maximum number of parallel requests per events operation
-        events: 20
+        events: 1
         # Maximum number of parallel requests per data modeling instances operation
-        instances: 4
+        instances: 1
         # Maximum number of parallel requests per data modeling records operation
         stream-records: 4
     # Configure if the SDK should do logging of requests
