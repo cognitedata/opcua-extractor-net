@@ -68,6 +68,7 @@ namespace Test.Unit
             Assert.False(evt.WaitOne(100));
 
             await extractor.Streamer.EnqueueAsync(new UADataPoint(start, "id", -1, StatusCodes.Good));
+            state.UpdateFromStream(start, start);
             Assert.Equal(1, queue.Count);
             await extractor.Streamer.PushDataPoints(new[] { pusher }, Enumerable.Empty<IPusher>(), tester.Source.Token);
 
