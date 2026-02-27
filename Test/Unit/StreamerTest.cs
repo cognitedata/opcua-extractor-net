@@ -106,7 +106,7 @@ namespace Test.Unit
             Assert.Equal(1_000_000, queue.Count);
 
             await extractor.Streamer.PushDataPoints(new[] { pusher }, Enumerable.Empty<IPusher>(), tester.Source.Token);
-//            Assert.Equal(start, state.DestinationExtractedRange.First);
+            Assert.Equal(start, state.DestinationExtractedRange.First);
             Assert.Equal(start.AddMilliseconds(3000000), state.DestinationExtractedRange.Last);
         }
         [Fact(Timeout = 20000)]
