@@ -167,6 +167,7 @@ namespace Cognite.OpcUa
             if (!AllowData) return;
 
             var dataPointList = new List<UADataPoint>();
+
             // Track source extracted timestamps and normal timestamps for each node in the current batch to update state later.
             var ranges = new Dictionary<string, Ranges>();
 
@@ -178,6 +179,7 @@ namespace Cognite.OpcUa
                     // Get source extracted range while we are draining, to make sure we don't update the state with a range that exceeds this.
                     ranges[dp.Id] = new Ranges
                     {
+                        // Source extracted range will always exist, so default is irrelevant.
                         sourceExtractedRange = extractor.State.GetNodeState(dp.Id)?.SourceExtractedRange ?? new TimeRange(dp.Timestamp, dp.Timestamp),
                         queuePointsRange = new TimeRange(dp.Timestamp, dp.Timestamp)
                     };
