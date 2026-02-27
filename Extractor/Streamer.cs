@@ -266,7 +266,7 @@ namespace Cognite.OpcUa
                 }
                 range.queuePointsRange = range.queuePointsRange.Extend(evt.Time, evt.Time);
                 ranges[evt.EmittingNode] = range;
-            } 
+            }
 
             var results = await Task.WhenAll(passingPushers.Select(pusher => pusher.PushEvents(eventList, token)));
 
