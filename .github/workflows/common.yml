@@ -149,7 +149,7 @@ jobs:
           - run: mv .\OpcUaExtractorSetup\bin\Release\OpcUaExtractorSetup.msi .\OpcUaExtractorSetup-${{ needs.prerequisites.outputs.version }}.msi
 
           - name: Upload artifacts
-            uses: actions/upload-artifact@v6
+            uses: actions/upload-artifact@v7
             if: ${{ needs.prerequisites.outputs.should-release == 0 && needs.prerequisites.outputs.branch == 'master' }}
             with:
                 name: installer
@@ -212,7 +212,7 @@ jobs:
               mv ./opcua-extractor_${{ needs.prerequisites.outputs.version }}_amd64.deb artifacts/
 
           - name: Upload artifacts
-            uses: actions/upload-artifact@v6
+            uses: actions/upload-artifact@v7
             if: ${{ needs.prerequisites.outputs.should-release == 0 && needs.prerequisites.outputs.branch == 'master' }}
             with:
               name: linux-artifacts
