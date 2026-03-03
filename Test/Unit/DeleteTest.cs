@@ -110,7 +110,12 @@ namespace Test.Unit
 
         public Task StoreExtractionState<K>(IEnumerable<K> extractionStates, string tableName, CancellationToken token) where K : BaseExtractionState
         {
-            throw new NotImplementedException();
+            return StoreExtractionState<BaseExtractionStatePoco, K>(extractionStates, tableName, state => new BaseExtractionStatePoco
+            {
+                Id = state.Id,
+                FirstTimestamp = state.DestinationExtractedRange.First,
+                LastTimestamp = state.DestinationExtractedRange.Last
+            }, token);
         }
     }
 
@@ -492,6 +497,10 @@ namespace Test.Unit
 
             // Run the extractor and verify that we got the node.
             await tester.RunExtractor(extractor, true);
+            foreach (var kvp in handler.AssetsRaw)
+            {
+                tester.Log.LogInformation("AssetRaw: {Id} - {Data}", kvp.Key, kvp.Value);
+            }
             Assert.True(handler.AssetsRaw.ContainsKey(addedExtId));
             Assert.True(handler.TimeseriesRaw.ContainsKey(addedVarExtId));
             handler.Timeseries.Values.ToList().ForEach(v => _output.WriteLine(v.ToString()));

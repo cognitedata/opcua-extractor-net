@@ -54,6 +54,7 @@ namespace Test.Unit
             await using var extractor = tester.BuildExtractor();
             var cfg = new HistoryConfig
             {
+                Enabled = true,
                 Backfill = true,
                 Data = true
             };
@@ -188,13 +189,14 @@ namespace Test.Unit
         [Fact]
         public async Task TestHistoryEventHandler()
         {
-            await using var extractor = tester.BuildExtractor();
             var cfg = new HistoryConfig
             {
+                Enabled = true,
                 Backfill = true
             };
 
             tester.Config.History = cfg;
+            await using var extractor = tester.BuildExtractor();
 
             var log = tester.Provider.GetRequiredService<ILogger<HistoryReaderTest>>();
 
@@ -332,8 +334,6 @@ namespace Test.Unit
         [Fact(Timeout = 10000)]
         public async Task TestFrontfillData()
         {
-            await using var extractor = tester.BuildExtractor();
-
             var cfg = new HistoryConfig
             {
                 Backfill = true,
@@ -341,6 +341,7 @@ namespace Test.Unit
                 Enabled = true
             };
             tester.Config.History = cfg;
+            await using var extractor = tester.BuildExtractor();
 
             var log = tester.Provider.GetRequiredService<ILogger<HistoryReader>>();
 
@@ -434,14 +435,13 @@ namespace Test.Unit
         [Fact(Timeout = 10000)]
         public async Task TestBackfillData()
         {
-            await using var extractor = tester.BuildExtractor();
-
             var cfg = new HistoryConfig
             {
                 Backfill = true,
                 Enabled = true
             };
             tester.Config.History = cfg;
+            await using var extractor = tester.BuildExtractor();
 
             var log = tester.Provider.GetRequiredService<ILogger<HistoryReader>>();
 
@@ -534,8 +534,6 @@ namespace Test.Unit
         [Fact(Timeout = 10000)]
         public async Task TestFrontfillEvents()
         {
-            await using var extractor = tester.BuildExtractor();
-
             var cfg = new HistoryConfig
             {
                 Backfill = true,
@@ -543,6 +541,9 @@ namespace Test.Unit
             };
 
             tester.Config.History = cfg;
+            await using var extractor = tester.BuildExtractor();
+
+
 
             tester.Config.Events.Enabled = true;
             tester.Config.Events.History = true;
@@ -646,14 +647,15 @@ namespace Test.Unit
         [Fact(Timeout = 10000)]
         public async Task TestBackfillEvents()
         {
-            await using var extractor = tester.BuildExtractor();
-
             var cfg = new HistoryConfig
             {
+                Enabled = true,
                 Backfill = true,
             };
-
             tester.Config.History = cfg;
+            await using var extractor = tester.BuildExtractor();
+
+
 
             tester.Config.Events.Enabled = true;
             tester.Config.Events.History = true;
@@ -757,16 +759,15 @@ namespace Test.Unit
         [InlineData(4, 0)]
         public async Task TestReadGranularity(int expectedReads, int granularity)
         {
-            await using var extractor = tester.BuildExtractor();
-
             var cfg = new HistoryConfig
             {
+                Enabled = true,
                 Backfill = true,
                 Data = true,
                 Granularity = granularity.ToString()
             };
-
             tester.Config.History = cfg;
+            await using var extractor = tester.BuildExtractor();
 
             var log = tester.Provider.GetRequiredService<ILogger<HistoryReader>>();
 
@@ -812,16 +813,14 @@ namespace Test.Unit
         [Fact(Timeout = 10000)]
         public async Task TestHistoryThrottling()
         {
-            await using var extractor = tester.BuildExtractor();
-
             var cfg = new HistoryConfig
             {
+                Enabled = true,
                 Backfill = true,
                 Data = true
             };
-
             tester.Config.History = cfg;
-
+            await using var extractor = tester.BuildExtractor();
 
             var dt = new UADataType(DataTypeIds.Double);
             var dt2 = new UADataType(DataTypeIds.String);
@@ -902,17 +901,17 @@ namespace Test.Unit
         [Fact(Timeout = 10000)]
         public async Task TestReadHistoryMaxLength()
         {
-            await using var extractor = tester.BuildExtractor();
-
-            var logger = tester.Provider.GetRequiredService<ILogger<HistoryReader>>();
-
             var cfg = new HistoryConfig
             {
+                Enabled = true,
                 Backfill = false,
                 Data = true,
                 EndTime = new TimestampWrapper(tester.HistoryStart.AddSeconds(20).ToUnixTimeMilliseconds().ToString())
             };
+            tester.Config.History = cfg;
+            await using var extractor = tester.BuildExtractor();
 
+            var logger = tester.Provider.GetRequiredService<ILogger<HistoryReader>>();
 
             var dt = new UADataType(DataTypeIds.Double);
             var dt2 = new UADataType(DataTypeIds.String);
@@ -946,8 +945,6 @@ namespace Test.Unit
             cfg.MaxReadLength = "1s";
             cfg.DataChunk = 50;
 
-            tester.Config.History = cfg;
-
             using var reader = new HistoryReader(logger, tester.Client, extractor, extractor.TypeManager, tester.Config, tester.Source.Token);
 
             await CommonTestUtils.RunHistory(reader, states, HistoryReadType.FrontfillData);
@@ -961,17 +958,17 @@ namespace Test.Unit
         [Fact(Timeout = 10000)]
         public async Task TestReadHistoryMaxLengthIgnoreCps()
         {
-            await using var extractor = tester.BuildExtractor();
-
-            var logger = tester.Provider.GetRequiredService<ILogger<HistoryReader>>();
-
             var cfg = new HistoryConfig
             {
+                Enabled = true,
                 Backfill = false,
                 Data = true,
                 EndTime = new TimestampWrapper(tester.HistoryStart.AddSeconds(20).ToUnixTimeMilliseconds().ToString())
             };
+            tester.Config.History = cfg;
+            await using var extractor = tester.BuildExtractor();
 
+            var logger = tester.Provider.GetRequiredService<ILogger<HistoryReader>>();
 
             var dt = new UADataType(DataTypeIds.Double);
             var dt2 = new UADataType(DataTypeIds.String);
@@ -1006,8 +1003,6 @@ namespace Test.Unit
             cfg.DataChunk = 50;
             cfg.IgnoreContinuationPoints = true;
 
-            tester.Config.History = cfg;
-
             using var reader = new HistoryReader(logger, tester.Client, extractor, extractor.TypeManager, tester.Config, tester.Source.Token);
 
             await CommonTestUtils.RunHistory(reader, states, HistoryReadType.FrontfillData);
@@ -1022,17 +1017,17 @@ namespace Test.Unit
         [Fact(Timeout = 10000)]
         public async Task TestReadHistoryMaxLengthBackfill()
         {
-            await using var extractor = tester.BuildExtractor();
-
-            var logger = tester.Provider.GetRequiredService<ILogger<HistoryReader>>();
-
             var cfg = new HistoryConfig
             {
+                Enabled = true,
                 Backfill = true,
                 Data = true,
                 StartTime = new TimestampWrapper(tester.HistoryStart.AddSeconds(-5).ToUnixTimeMilliseconds().ToString())
             };
+            tester.Config.History = cfg;
+            await using var extractor = tester.BuildExtractor();
 
+            var logger = tester.Provider.GetRequiredService<ILogger<HistoryReader>>();
 
             var dt = new UADataType(DataTypeIds.Double);
             var dt2 = new UADataType(DataTypeIds.String);
@@ -1066,8 +1061,6 @@ namespace Test.Unit
             cfg.MaxReadLength = "1s";
             cfg.DataChunk = 50;
 
-            tester.Config.History = cfg;
-
             using var reader = new HistoryReader(logger, tester.Client, extractor, extractor.TypeManager, tester.Config, tester.Source.Token);
 
             await CommonTestUtils.RunHistory(reader, states, HistoryReadType.BackfillData);
@@ -1082,15 +1075,18 @@ namespace Test.Unit
         [Fact(Timeout = 10000)]
         public async Task TestHistoryReadFailureThreshold()
         {
-            await using var extractor = tester.BuildExtractor();
-            var logger = tester.Provider.GetRequiredService<ILogger<HistoryReader>>();
             var cfg = new HistoryConfig
             {
+                Enabled = true,
                 Backfill = true,
                 Data = true,
                 EndTime = new TimestampWrapper(tester.HistoryStart.AddSeconds(20).ToUnixTimeMilliseconds().ToString()),
                 ErrorThreshold = 40
             };
+            tester.Config.History = cfg;
+
+            await using var extractor = tester.BuildExtractor();
+            var logger = tester.Provider.GetRequiredService<ILogger<HistoryReader>>();
 
             var dt = new UADataType(DataTypeIds.Double);
             var dt2 = new UADataType(DataTypeIds.String);
@@ -1118,8 +1114,6 @@ namespace Test.Unit
             var queue = (AsyncBlockingQueue<UADataPoint>)extractor.Streamer.GetType()
                 .GetField("dataPointQueue", BindingFlags.NonPublic | BindingFlags.Instance)
                 .GetValue(extractor.Streamer);
-
-            tester.Config.History = cfg;
 
             using var reader = new HistoryReader(logger, tester.Client, extractor, extractor.TypeManager, tester.Config, tester.Source.Token);
 

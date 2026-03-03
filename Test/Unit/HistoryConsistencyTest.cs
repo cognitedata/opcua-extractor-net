@@ -104,8 +104,6 @@ namespace Test.Unit
         public async Task TestHistoryConsistencyData(
             int nodesChunk, int resultChunk, int nodeParallelism, bool ignoreCps, int maxReadLength, bool backfill)
         {
-            await using var extractor = tester.BuildExtractor();
-
             var cfg = new HistoryConfig
             {
                 Enabled = true,
@@ -116,6 +114,8 @@ namespace Test.Unit
                 DataNodesChunk = nodesChunk,
                 DataChunk = resultChunk
             };
+            tester.Config.History = cfg;
+            await using var extractor = tester.BuildExtractor();
 
             var logger = tester.Provider.GetRequiredService<ILogger<HistoryReader>>();
 
@@ -185,8 +185,6 @@ namespace Test.Unit
         public async Task TestHistoryConsistencyEvents(
             int nodesChunk, int resultChunk, int nodeParallelism, bool ignoreCps, int maxReadLength, bool backfill)
         {
-            await using var extractor = tester.BuildExtractor();
-
             var cfg = new HistoryConfig
             {
                 Enabled = true,
@@ -197,6 +195,9 @@ namespace Test.Unit
                 DataNodesChunk = nodesChunk,
                 DataChunk = resultChunk
             };
+            tester.Config.History = cfg;
+
+            await using var extractor = tester.BuildExtractor();
 
             var logger = tester.Provider.GetRequiredService<ILogger<HistoryReader>>();
 
@@ -205,8 +206,6 @@ namespace Test.Unit
 
             cfg.Throttling.MaxNodeParallelism = nodeParallelism;
             cfg.StartTime = new TimestampWrapper(tester.HistoryStart.AddSeconds(-10).ToUnixTimeMilliseconds().ToString());
-
-            tester.Config.History = cfg;
 
             using var reader = new HistoryReader(logger, tester.Client, extractor, extractor.TypeManager, tester.Config, tester.Source.Token);
 

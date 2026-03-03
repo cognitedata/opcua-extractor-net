@@ -26,7 +26,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Cognite.Extractor.Testing" Version="1.37.1" />
+    <PackageReference Include="Cognite.Extractor.Testing" Version="1.39.1" />
     <PackageReference Include="coverlet.msbuild" Version="8.0.0">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -37,9 +37,6 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\..\dotnet-extractor-utils\Cognite.Testing\Cognite.Testing.csproj" />
   </ItemGroup>
   <ItemGroup>
     <None Update="config.config-tool-test.yml">

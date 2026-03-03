@@ -180,6 +180,7 @@ namespace Test.Integration
         [Fact]
         public async Task TestDisableSubscriptions()
         {
+            using var stateStore = new DummyStateStore();
             using var pusher = new DummyPusher(new DummyPusherConfig());
 
             var ids = tester.Server.Ids.Event;
@@ -198,7 +199,7 @@ namespace Test.Integration
             CommonTestUtils.ResetMetricValue("opcua_frontfill_events_count");
 
             // Test everything normal
-            await using (var extractor = tester.BuildExtractor(pusher))
+            await using (var extractor = tester.BuildExtractor(pusher, stateStore: stateStore))
             {
                 await tester.RunExtractor(extractor, true);
                 Assert.All(extractor.State.EmitterStates, state => { Assert.True(state.ShouldSubscribe); });
@@ -212,7 +213,7 @@ namespace Test.Integration
 
             // Test disable subscriptions
             tester.Config.Subscriptions.Events = false;
-            await using (var extractor = tester.BuildExtractor(pusher))
+            await using (var extractor = tester.BuildExtractor(pusher, stateStore: stateStore))
             {
                 await tester.RunExtractor(extractor, true);
                 var state = extractor.State.GetEmitterState(ids.Obj1);
@@ -240,7 +241,7 @@ namespace Test.Integration
             };
 
             tester.Config.Subscriptions.Events = true;
-            await using (var extractor = tester.BuildExtractor(pusher))
+            await using (var extractor = tester.BuildExtractor(pusher, stateStore: stateStore))
             {
                 await tester.RunExtractor(extractor, true);
                 var state = extractor.State.GetEmitterState(ids.Obj1);
@@ -270,7 +271,8 @@ namespace Test.Integration
             tester.WipeEventHistory();
 
             using var pusher = new DummyPusher(new DummyPusherConfig());
-            await using var extractor = tester.BuildExtractor(pusher);
+            using var stateStore = new DummyStateStore();
+            await using var extractor = tester.BuildExtractor(pusher, stateStore: stateStore);
 
             var start = DateTime.UtcNow.AddSeconds(-5);
 
@@ -320,7 +322,8 @@ namespace Test.Integration
             tester.WipeEventHistory();
 
             using var pusher = new DummyPusher(new DummyPusherConfig());
-            await using var extractor = tester.BuildExtractor(pusher);
+            using var stateStore = new DummyStateStore();
+            await using var extractor = tester.BuildExtractor(pusher, stateStore: stateStore);
 
             var now = DateTime.UtcNow;
 
@@ -448,7 +451,8 @@ namespace Test.Integration
             tester.WipeEventHistory();
 
             using var pusher = new DummyPusher(new DummyPusherConfig());
-            await using var extractor = tester.BuildExtractor(pusher);
+            using var stateStore = new DummyStateStore();
+            await using var extractor = tester.BuildExtractor(pusher, stateStore: stateStore);
 
             var ids = tester.Server.Ids.Event;
 
