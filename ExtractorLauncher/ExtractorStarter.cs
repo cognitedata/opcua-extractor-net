@@ -338,6 +338,7 @@ namespace Cognite.OpcUa
                 BufferRemoteConfig = true,
                 LogException = (log, e, msg) => ExtractorUtils.LogException(log, e, msg, msg),
                 OnCreateExtractor = OnCreateExtractor,
+                NoConnection = setup.Offline
             };
 
             var runtime = await builder.MakeRuntime(token);

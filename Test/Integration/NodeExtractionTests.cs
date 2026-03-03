@@ -890,6 +890,7 @@ namespace Test.Integration
                     Space = "test-space",
                 }
             };
+            tester.Config.Logger.Console.Level = "information";
             var (handler, pusher) = tester.GetCDFPusher();
             await using var extractor = tester.BuildExtractor(pusher);
             tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Base.Root, tester.Client);
@@ -901,7 +902,7 @@ namespace Test.Integration
 
             // Now, rebrowse, but simulate failure to push timeseries to CDF.
             handler.FailedRoutes.Add("/models/instances");
-            await extractor.Rebrowse();
+            await extractor.ScheduleRebrowseAndWait(TimeSpan.FromSeconds(10));
 
             // This is a rebrowse, and should _not_ set the extractor to uninitialized.
             Assert.True(pusher.Initialized);
@@ -913,7 +914,9 @@ namespace Test.Integration
 
             var id = new InstanceIdentifier("test-space", tester.Client.GetUniqueId(tester.Server.Ids.Base.DoubleVar1));
 
-            await TestUtils.WaitForCondition(() => handler.DatapointsByInstanceId.TryGetValue(id, out var dps) && dps.NumericDatapoints.Any(v => v.Value == 321.123), 5);
+            await TestUtils.WaitForCondition(() => handler.DatapointsByInstanceId.TryGetValue(id, out var dps) && dps.NumericDatapoints.Any(v => v.Value == 321.123), 5,
+                () => $"Expected to find datapoint with value 321.123 for instance {id}, but got"
+                + $"{string.Join(", ", handler.DatapointsByInstanceId.TryGetValue(id, out var dps) ? dps.NumericDatapoints.Select(dp => dp.Value) : new List<double>())}");
 
             handler.FailedRoutes.Clear();
         }
@@ -1286,6 +1289,6 @@ namespace Test.Integration
             Compare(pusher.PushedNodes.Values, pusher.PushedVariables.Values, pusher.PushedReferences);
         }
     }
-        #endregion
+    #endregion
 }
 

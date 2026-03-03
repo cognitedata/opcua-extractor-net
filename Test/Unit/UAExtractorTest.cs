@@ -264,6 +264,7 @@ namespace Test.Unit
             tester.Config.Extraction.DataTypes.MaxArraySize = 10;
             tester.Config.Extraction.DataTypes.AutoIdentifyTypes = true;
             tester.Config.Extraction.Relationships.Enabled = true;
+            tester.Config.History.Enabled = false;
             tester.Config.Extraction.DataTypes.EstimateArraySizes = true;
             using var pusher = new DummyPusher(new DummyPusherConfig());
             await using var client = new UAClient(tester.Provider, tester.Config);

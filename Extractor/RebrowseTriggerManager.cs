@@ -269,13 +269,13 @@ namespace Cognite.OpcUa
 
             if (!_extractionStates.TryGetValue(id, out var lastState))
             {
-                logger.LogDebug($"No state found for: {id}");
-                logger.LogDebug($"Creating state for: {id}");
+                logger.LogDebug("No state found for: {id}", id);
+                logger.LogDebug("Creating state for: {id}", id);
                 lastState = new NamespacePublicationDateState(id);
             }
             lastState.LastTimestamp = valueTime;
             lastState.LastTimeModified = DateTime.UtcNow;
-            logger.LogDebug($"Updating state for: {id} to {valueTime}");
+            logger.LogDebug("Updating state for: {id} to {valueTime}", id, valueTime);
             _extractionStates[id] = lastState;
 
             await _extractor.StateStorage.StoreExtractionState<

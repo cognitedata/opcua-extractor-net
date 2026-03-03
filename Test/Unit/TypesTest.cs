@@ -545,6 +545,8 @@ namespace Test.Unit
             Assert.Single(node.CreateTimeseries());
             Assert.Null(node.ArrayChildren);
 
+            tester.Config.History.Enabled = true;
+
             node.FullAttributes.AccessLevel = AccessLevels.CurrentRead | AccessLevels.HistoryRead;
             node.FullAttributes.DataType = new UADataType(DataTypeIds.Double);
             node.FullAttributes.ValueRank = ValueRanks.OneDimension;
@@ -575,6 +577,7 @@ namespace Test.Unit
             var id = new NodeId("test", 0);
             var node = new UAVariable(id, "name", null, null, NodeId.Null, new UAVariableType(new NodeId("test", 0)));
 
+            tester.Config.History.Enabled = true;
             node.FullAttributes.AccessLevel = AccessLevels.CurrentRead | AccessLevels.HistoryRead;
             node.FullAttributes.DataType = new UADataType(DataTypeIds.Double);
             node.FullAttributes.ValueRank = ValueRanks.OneDimension;

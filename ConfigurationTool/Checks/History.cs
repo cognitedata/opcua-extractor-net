@@ -45,10 +45,16 @@ namespace Cognite.OpcUa.Config
         {
             await PopulateNodes(token);
             await ReadNodeData(token);
+            bool oldHistory = Config.History.Enabled;
+            bool oldHistoryData = Config.History.Data;
+            Config.History.Enabled = true;
+            Config.History.Data = true;
 
             var historizingStates = nodeList.Where(node =>
                     (node is UAVariable variable) && !variable.IsProperty && variable.FullAttributes.ShouldReadHistory(Config))
                 .Select(node => new VariableExtractionState(this, (UAVariable)node, true, true, true)).ToList();
+            Config.History.Enabled = oldHistory;
+            Config.History.Data = oldHistoryData;
 
             var stateMap = historizingStates.ToDictionary(state => state.SourceId);
 

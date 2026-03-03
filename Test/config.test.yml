@@ -11,9 +11,6 @@ logger:
     console:
         level: "fatal"
 
-history:
-    enabled: true
-
 extraction:
     # Global prefix for externalId. Should be unique to prevent name conflicts.
     id-prefix: "gp."

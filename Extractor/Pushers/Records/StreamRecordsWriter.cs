@@ -31,6 +31,8 @@ namespace Cognite.OpcUa.Pushers.Records
         private DMSValueConverter? converter;
         private INodeIdConverter? context;
 
+        public const string RecordsStreamName = "BasicArchive";
+
         public StreamRecordsWriter(FullConfig config, CogniteDestination destination, ILogger<StreamRecordsWriter> log)
         {
             // this.config = config;
@@ -66,7 +68,7 @@ namespace Cognite.OpcUa.Pushers.Records
                 {
                     Template = new StreamTemplateSettings
                     {
-                        Name = StreamTemplateName.ImmutableDataStaging
+                        Name = RecordsStreamName
                     }
                 }
             }, token);
@@ -121,7 +123,7 @@ namespace Cognite.OpcUa.Pushers.Records
         {
             try
             {
-                await destination.CogniteClient.Beta.StreamRecords.RetrieveStreamAsync(stream, token);
+                await destination.CogniteClient.Beta.StreamRecords.RetrieveStreamAsync(stream, null, token);
                 return true;
             }
             catch (Exception ex)

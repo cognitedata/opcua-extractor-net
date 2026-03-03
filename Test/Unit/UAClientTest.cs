@@ -278,6 +278,8 @@ namespace Test.Unit
                     await Assert.ThrowsAsync<SilentServiceException>(() => client.Run(tester.Source.Token, 0));
                 }
 
+                tester.Server.Server.SetValidator(false);
+
                 await using (var client = tester.MakeClient())
                 {
                     await client.Run(tester.Source.Token, 0);

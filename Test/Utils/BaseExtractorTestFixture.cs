@@ -170,12 +170,20 @@ namespace Test.Utils
 #pragma warning disable CA2000 // Dispose objects before losing scope
             pusher ??= new DummyPusher(new DummyPusherConfig());
 #pragma warning restore CA2000 // Dispose objects before losing scope
+            bool managingStateStore = false;
             try
             {
+                if (Config.History.Enabled && stateStore == null)
+                {
+#pragma warning disable CA2000 // Dispose objects before losing scope, we're doing this.
+                    stateStore = new DummyStateStore();
+#pragma warning restore CA2000 // Dispose objects before losing scope
+                    managingStateStore = true;
+                }
                 var configWrapper = new ConfigWrapper<FullConfig>(Config, null);
                 var taskScheduler = Provider.GetRequiredService<ExtractorTaskScheduler>();
                 var sink = Provider.GetRequiredService<IIntegrationSink>();
-                var ext = new UAExtractor(configWrapper, Provider, taskScheduler, pusher, Client, sink, stateStore);
+                var ext = new UAExtractor(configWrapper, Provider, taskScheduler, pusher, client ?? Client, sink, stateStore);
                 // To avoid running forever, don't set an infinite retry by default.
                 ext.StateStoreRetryConfig = new RetryUtilConfig
                 {
@@ -188,6 +196,13 @@ namespace Test.Utils
             {
                 pusher.Dispose();
                 throw;
+            }
+            finally
+            {
+                if (managingStateStore)
+                {
+                    stateStore.Dispose();
+                }
             }
         }
 

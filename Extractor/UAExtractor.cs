@@ -85,8 +85,6 @@ namespace Cognite.OpcUa
 
         public bool Started { get; private set; }
 
-        public bool CloseClientOnClose { get; set; } = true;
-
         private static readonly Gauge startTime = Metrics
             .CreateGauge("opcua_start_time", "Start time for the extractor");
 
@@ -923,7 +921,7 @@ namespace Cognite.OpcUa
 
             if (StateStorage != null)
             {
-                pushTasks.Add(RestoreExtractionStateWithRetry(newStates));
+                Scheduler.ScheduleTask(null, (token) => RestoreExtractionStateWithRetry(newStates, token));
             }
             else
             {
@@ -945,11 +943,6 @@ namespace Cognite.OpcUa
                 trackedAssets.Inc(input.Objects.Count());
                 trackedTimeseres.Inc(input.Variables.Count());
             }
-
-            foreach (var state in newStates.Concat<UAHistoryExtractionState>(State.EmitterStates))
-            {
-                state?.FinalizeRangeInit();
-            }
         }
 
         public RetryUtilConfig StateStoreRetryConfig = new RetryUtilConfig
@@ -966,7 +959,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="newStates">Variable states to restore</param>
         /// <returns>Task that completes when state is restored or extractor is cancelled</returns>
-        private async Task RestoreExtractionStateWithRetry(IEnumerable<VariableExtractionState> newStates)
+        private async Task RestoreExtractionStateWithRetry(IEnumerable<VariableExtractionState> newStates, CancellationToken token)
         {
             await RetryUtil.RetryAsync(
                 "restore extraction state",
@@ -980,7 +973,7 @@ namespace Cognite.OpcUa
                             State.EmitterStates.Where(state => state.FrontfillEnabled).ToDictionary(state => state.Id),
                             Config.StateStorage.EventStore,
                             false,
-                            Source.Token));
+                            token));
                     }
 
                     if (Streamer.AllowData)
@@ -989,18 +982,24 @@ namespace Cognite.OpcUa
                             newStates.Where(state => state.FrontfillEnabled).ToDictionary(state => state.Id),
                             Config.StateStorage.VariableStore,
                             false,
-                            Source.Token));
+                            token));
                     }
 
                     if (tasks.Any())
                     {
                         await Task.WhenAll(tasks);
                     }
+
+
+                    foreach (var state in newStates.Concat<UAHistoryExtractionState>(State.EmitterStates))
+                    {
+                        state?.FinalizeRangeInit();
+                    }
                 },
                 StateStoreRetryConfig,
                 shouldRetry: ex => true,  // Retry all exceptions 
                 log,
-                Source.Token
+                token
             );
 
             // Successfully restored state - allow history to proceed
@@ -1144,8 +1143,6 @@ namespace Cognite.OpcUa
             }
         }
         #endregion
-
-        private int disposed = 0;
 
         protected override async ValueTask DisposeAsyncCore()
         {

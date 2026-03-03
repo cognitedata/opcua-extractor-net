@@ -81,7 +81,12 @@ namespace Cognite.OpcUa.History
             continuationPoints = new BlockingResourceCounter(
                 throttling.MaxNodeParallelism > 0 ? throttling.MaxNodeParallelism : 1_000);
             waiter = new OperationWaiter();
-            state = new State(config, extractor.StateStorage != null && config.StateStorage.IntervalValue.Value != Timeout.InfiniteTimeSpan);
+            // We check this during extractor setup, but sanity check it here, to catch this in tests.
+            if (extractor.StateStorage == null)
+            {
+                throw new InvalidOperationException("History reader requires state storage to be configured");
+            }
+            state = new State(config);
         }
 
         private async Task RunHistoryBatch(IEnumerable<UAHistoryExtractionState> states, HistoryReadType type)
@@ -239,7 +244,7 @@ namespace Cognite.OpcUa.History
                 return issues.Remove(issue);
             }
 
-            public State(FullConfig config, bool hasStateStore)
+            public State(FullConfig config)
             {
                 if (config.Subscriptions.Events && config.Events.Enabled && config.Events.History)
                 {
@@ -249,10 +254,7 @@ namespace Cognite.OpcUa.History
                 {
                     issues.Add(StateIssue.DataPointSubscription);
                 }
-                if (hasStateStore)
-                {
-                    issues.Add(StateIssue.StateRestorationPending);
-                }
+                issues.Add(StateIssue.StateRestorationPending);
                 issues.Add(StateIssue.NodeHierarchyRead);
             }
 

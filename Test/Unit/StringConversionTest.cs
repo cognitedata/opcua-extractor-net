@@ -386,6 +386,7 @@ namespace Test.Unit
                 Assert.Equal(expected, result);
             }
 
+            tester.Config.History.Enabled = true;
             tester.Config.Events.Enabled = true;
             tester.Config.Events.History = true;
             var node = new UAObject(new NodeId("test", 0), "test", null, null, NodeId.Null, null);

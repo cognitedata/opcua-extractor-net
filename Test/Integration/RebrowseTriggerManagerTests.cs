@@ -22,7 +22,6 @@ namespace Test.Integration
     {
         private readonly StaticServerTestFixture tester;
         private readonly ITestOutputHelper _output;
-        private readonly Dictionary<string, NamespacePublicationDateState> _extractionStates = new();
 
         public RebrowseTriggerManagerTests(ITestOutputHelper output, StaticServerTestFixture tester)
         {
@@ -89,19 +88,23 @@ namespace Test.Integration
                 tester.Config.StateStorage,
                 tester.Provider.GetRequiredService<ILogger<LiteDBStateStore>>()
             );
+            var extractionStates = new Dictionary<string, NamespacePublicationDateState>();
             await using var extractor = tester.BuildExtractor(cdfPusher, true, stateStore);
+
             var npdId = tester.Client.GetUniqueId(tester.Server.Server.GetNamespacePublicationDateId());
             var npds = new NamespacePublicationDateState(npdId);
             var lts = DateTime.UtcNow.AddSeconds(-10);
             var simulatedLastTimestamp = lts.ToUnixTimeMilliseconds();
             npds.LastTimestamp = simulatedLastTimestamp;
             npds.LastTimeModified = DateTime.UtcNow;
-            _extractionStates.TryAdd(npdId, npds);
+
+            extractionStates.TryAdd(npdId, npds);
+
             await stateStore.StoreExtractionState<
                 NamespacePublicationDateStorableState,
                 NamespacePublicationDateState
             >(
-                _extractionStates.Values.ToList(),
+                extractionStates.Values.ToList(),
                 tester.Config.StateStorage.NamespacePublicationDateStore,
                 (state) =>
                     new NamespacePublicationDateStorableState
@@ -112,9 +115,11 @@ namespace Test.Integration
                     },
                 tester.Source.Token
             );
+
             var runTask = tester.RunExtractor(extractor);
             await extractor.WaitForBrowseCompletion();
             await extractor.WaitForSubscription(SubscriptionName.RebrowseTriggers);
+
             var initialCount = cdfPusher.PushedNodes.Count;
             var addedId = tester.Server.Server.AddObject(
                 tester.Ids.Audit.Root,
@@ -133,24 +138,27 @@ namespace Test.Integration
                 "Expected node to be discovered"
             );
 
-            await extractor.StoreState(tester.Source.Token);
-            await stateStore.RestoreExtractionState<
-                NamespacePublicationDateStorableState,
-                NamespacePublicationDateState
-            >(
-                _extractionStates,
-                tester.Config.StateStorage.NamespacePublicationDateStore,
-                (value, item) =>
-                {
-                    value.LastTimestamp = item.LastTimestamp;
-                },
-                tester.Source.Token
-            );
-            foreach (var id in _extractionStates)
+            await TestUtils.WaitForCondition(async () =>
+            {
+                await stateStore.RestoreExtractionState<
+                    NamespacePublicationDateStorableState,
+                    NamespacePublicationDateState
+                >(
+                    extractionStates,
+                    tester.Config.StateStorage.NamespacePublicationDateStore,
+                    (value, item) =>
+                    {
+                        value.LastTimestamp = item.LastTimestamp;
+                    },
+                    tester.Source.Token
+                );
+                return extractionStates.TryGetValue(npdId, out var newState) && newState.LastTimestamp == newTime.ToUnixTimeMilliseconds();
+            }, 10, "Expected state to be updated with new timestamp");
+            foreach (var id in extractionStates)
             {
                 _output.WriteLine($"Value of {id.Key} is {id.Value.LastTimestamp}");
             }
-            Assert.True(_extractionStates.TryGetValue(npdId, out var newNpds));
+            Assert.True(extractionStates.TryGetValue(npdId, out var newNpds));
             _output.WriteLine($"Test response {newTime.ToUnixTimeMilliseconds()}: {newNpds.LastTimestamp}");
             // Assert.True(false);
             Assert.Equal(newTime.ToUnixTimeMilliseconds(), newNpds.LastTimestamp);

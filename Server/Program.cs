@@ -22,8 +22,6 @@ using Opc.Ua;
 using System;
 using System.Collections.Generic;
 using System.CommandLine;
-using System.CommandLine.Builder;
-using System.CommandLine.Parsing;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -275,7 +273,7 @@ namespace Server
             exitEvent.WaitOne();
         }
 
-        private static Parser GetCommandLineOptions()
+        private static RootCommand GetCommandLineOptions()
         {
             var root = new RootCommand
             {
@@ -316,9 +314,7 @@ namespace Server
             }, binder);
 
 
-            return new CommandLineBuilder(root)
-                .UseHelp()
-                .Build();
+            return root;
         }
     }
 }

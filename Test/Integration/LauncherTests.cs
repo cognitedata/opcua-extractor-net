@@ -169,7 +169,8 @@ version: 1
                 tester.EndpointUrl,
                 "--no-config",
                 "--auto-accept",
-                "--exit"
+                "--exit",
+                "--offline"
             };
             var task = Program.Main(args);
 
@@ -198,7 +199,8 @@ version: 1
                 "--auto-accept",
                 "--config-file",
                 "config-test-1.yml",
-                "--exit"
+                "--exit",
+                "--offline"
             };
             await File.WriteAllTextAsync("config-test-1.yml", GetConfigToolOutput());
 
@@ -231,9 +233,10 @@ version: 1
                 "--service",
                 "--working-dir",
                 Directory.GetCurrentDirectory(),
-                "--config-root",
+                "--config-dir",
                 "config",
-                "--exit"
+                "--exit",
+                "--offline"
             };
             await File.WriteAllTextAsync("config-test-1.yml", GetConfigToolOutput());
 
