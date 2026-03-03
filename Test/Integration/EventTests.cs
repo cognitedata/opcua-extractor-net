@@ -142,8 +142,8 @@ namespace Test.Integration
             using var pusher = new DummyPusher(new DummyPusherConfig());
             tester.Config.Events.ExcludeEventFilter = null;
             tester.Config.Events.ExcludeProperties = new List<string>();
-            await using var extractor = tester.BuildExtractor(pusher);
             tester.Config.Events.History = false;
+            await using var extractor = tester.BuildExtractor(pusher);
 
             var runTask = tester.RunExtractor(extractor);
 
@@ -347,7 +347,7 @@ namespace Test.Integration
             tester.Server.PopulateEvents(now.AddSeconds(5));
             tester.Server.PopulateEvents(now.AddSeconds(-15));
 
-            await extractor.RestartHistoryWaitForStop();
+            await extractor.ScheduleHistoryReadAndWait(TimeSpan.FromSeconds(10));
 
             await TestUtils.WaitForCondition(() => pusher.Events.Count == 2 && pusher.Events[ObjectIds.Server].Count == 1407
                 && pusher.Events[ids.Obj1].Count == 402, 5,
@@ -448,6 +448,12 @@ namespace Test.Integration
             tester.Config.FailureBuffer.EventPath = "event-buffer-test.bin";
             tester.Config.FailureBuffer.Enabled = true;
 
+            tester.Config.History.Enabled = true;
+            tester.Config.Events.History = true;
+            tester.Config.Events.ExcludeEventFilter = "2$";
+            tester.Config.Events.ExcludeProperties = new[] { "PropertyNum" };
+            tester.Config.Events.DestinationNameMap["TypeProp"] = "Type";
+
             tester.WipeEventHistory();
 
             using var pusher = new DummyPusher(new DummyPusherConfig());
@@ -455,12 +461,6 @@ namespace Test.Integration
             await using var extractor = tester.BuildExtractor(pusher, stateStore: stateStore);
 
             var ids = tester.Server.Ids.Event;
-
-            tester.Config.History.Enabled = true;
-            tester.Config.Events.History = true;
-            tester.Config.Events.ExcludeEventFilter = "2$";
-            tester.Config.Events.ExcludeProperties = new[] { "PropertyNum" };
-            tester.Config.Events.DestinationNameMap["TypeProp"] = "Type";
 
             CommonTestUtils.ResetMetricValues("opcua_buffer_num_events");
 

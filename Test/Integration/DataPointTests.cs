@@ -7,6 +7,7 @@ using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.Subscriptions;
 using Cognite.OpcUa.Types;
+using CogniteSdk.DataModels;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
@@ -486,13 +487,13 @@ namespace Test.Integration
         {
             using var pusher = new DummyPusher(new DummyPusherConfig());
             using var stateStore = new DummyStateStore();
+            tester.Config.History.Enabled = true;
+            tester.Config.History.Data = true;
+            tester.Config.History.Backfill = backfill;
             await using var extractor = tester.BuildExtractor(pusher, stateStore: stateStore);
 
             var ids = tester.Server.Ids.Custom;
 
-            tester.Config.History.Enabled = true;
-            tester.Config.History.Data = true;
-            tester.Config.History.Backfill = backfill;
             var dataTypes = tester.Config.Extraction.DataTypes;
             dataTypes.AllowStringVariables = true;
             dataTypes.AutoIdentifyTypes = true;
@@ -539,7 +540,6 @@ namespace Test.Integration
         {
             using var pusher = new DummyPusher(new DummyPusherConfig());
             using var stateStore = new DummyStateStore();
-            await using var extractor = tester.BuildExtractor(pusher, stateStore: stateStore);
 
             var ids = tester.Server.Ids.Custom;
 
@@ -550,8 +550,9 @@ namespace Test.Integration
             dataTypes.AllowStringVariables = true;
             dataTypes.AutoIdentifyTypes = true;
             dataTypes.MaxArraySize = 4;
-
             tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Custom.Root, tester.Client);
+
+            await using var extractor = tester.BuildExtractor(pusher, stateStore: stateStore);
 
             var now = DateTime.UtcNow;
 
@@ -577,7 +578,7 @@ namespace Test.Integration
             tester.Server.PopulateCustomHistory(now.AddSeconds(-15));
             tester.Server.PopulateCustomHistory(now.AddSeconds(5));
 
-            await extractor.RestartHistoryWaitForStop();
+            await extractor.ScheduleHistoryReadAndWait(TimeSpan.FromSeconds(10));
 
             await extractor.WaitForNextPush();
             await extractor.WaitForNextPush();
@@ -713,10 +714,10 @@ namespace Test.Integration
             }
 
             // Test disable subscriptions
+            tester.Config.Subscriptions.DataPoints = false;
             await using (var extractor = tester.BuildExtractor(pusher, stateStore: stateStore))
             {
                 tester.Log.LogDebug("Test disable subscriptions");
-                tester.Config.Subscriptions.DataPoints = false;
                 await tester.RunExtractor(extractor, true);
                 var state = extractor.State.GetNodeState(ids.DoubleVar1);
                 Assert.False(state.ShouldSubscribe);
@@ -895,16 +896,15 @@ namespace Test.Integration
 
             tester.Config.FailureBuffer.DatapointPath = "datapoint-buffer-test.bin";
             tester.Config.FailureBuffer.Enabled = true;
+            tester.Config.History.Enabled = true;
+            tester.Config.History.Data = true;
+            tester.Config.Extraction.DataTypes.AllowStringVariables = true;
 
             using var stateStore = new DummyStateStore();
             using var pusher = new DummyPusher(new DummyPusherConfig());
             await using var extractor = tester.BuildExtractor(pusher, stateStore: stateStore);
 
             var ids = tester.Server.Ids.Base;
-
-            tester.Config.History.Enabled = true;
-            tester.Config.History.Data = true;
-            tester.Config.Extraction.DataTypes.AllowStringVariables = true;
 
             CommonTestUtils.ResetMetricValues("opcua_buffer_num_points");
 
@@ -1001,6 +1001,49 @@ namespace Test.Integration
             // Wait for history to be read back once the subscription recovers.
             await TestUtils.WaitForCondition(() => pusher.DataPoints[(ids.DoubleVar1, -1)].Count >= 2000, 20, () =>
                 $"Expected 2000 got {pusher.DataPoints[(ids.DoubleVar1, -1)].Count}");
+        }
+
+        [Fact]
+        public async Task TestRebrowseFailedWeirdState()
+        {
+            tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
+            {
+                Clean = new CleanMetadataTargetConfig
+                {
+                    Relationships = false,
+                    Assets = true,
+                    Timeseries = true,
+                    Space = "test-space",
+                }
+            };
+            tester.Config.Logger.Console.Level = "debug";
+            var (handler, pusher) = tester.GetCDFPusher();
+            await using var extractor = tester.BuildExtractor(pusher);
+            tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Base.Root, tester.Client);
+
+            // First, run the extractor and wait for data to arrive in CDF.
+            var runTask = tester.RunExtractor(extractor);
+            await extractor.WaitForSubscription(SubscriptionName.DataPoints);
+
+            await TestUtils.WaitForCondition(() => handler.Instances.Count != 0 && pusher.Initialized, 5);
+
+            // Now, rebrowse, but simulate failure to push timeseries to CDF.
+            handler.FailedRoutes.Add("/models/instances");
+            await extractor.ScheduleRebrowseAndWait(TimeSpan.FromSeconds(10));
+
+            // This is a rebrowse, and should _not_ set the extractor to uninitialized.
+            Assert.True(pusher.Initialized);
+
+            // Trigger a datapoint update.
+            tester.Server.UpdateNode(tester.Server.Ids.Base.DoubleVar1, 321.123);
+
+            var id = new InstanceIdentifier("test-space", tester.Client.GetUniqueId(tester.Server.Ids.Base.DoubleVar1));
+
+            await TestUtils.WaitForCondition(() => handler.DatapointsByInstanceId.TryGetValue(id, out var dps) && dps.NumericDatapoints.Any(v => v.Value == 321.123), 5,
+                () => $"Expected to find datapoint with value 321.123 for instance {id}, but got"
+                + $"{string.Join(", ", handler.DatapointsByInstanceId.TryGetValue(id, out var dps) ? dps.NumericDatapoints.Select(dp => dp.Value) : new List<double>())}");
+
+            handler.FailedRoutes.Clear();
         }
     }
 }

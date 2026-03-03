@@ -5,6 +5,7 @@ using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.NodeSources;
+using Cognite.OpcUa.Tasks;
 using Cognite.OpcUa.Types;
 using Cognite.OpcUa.Utils;
 using Microsoft.Extensions.DependencyInjection;
@@ -117,14 +118,14 @@ namespace Test.Unit
             tester.Config.History = cfg;
             await using var extractor = tester.BuildExtractor();
 
-            var logger = tester.Provider.GetRequiredService<ILogger<HistoryReader>>();
+            var logger = tester.Provider.GetRequiredService<ILogger<HistoryTask>>();
 
             cfg.Throttling.MaxNodeParallelism = nodeParallelism;
             cfg.StartTime = new TimestampWrapper(tester.HistoryStart.AddSeconds(-10).ToUnixTimeMilliseconds().ToString());
 
             tester.Config.History = cfg;
 
-            using var reader = new HistoryReader(logger, tester.Client, extractor, extractor.TypeManager, tester.Config, tester.Source.Token);
+            var reader = new HistoryTask(logger, tester.Client, extractor, extractor.TypeManager, tester.Config);
 
             var dt = new UADataType(DataTypeIds.Double);
             var dt2 = new UADataType(DataTypeIds.String);
@@ -154,11 +155,11 @@ namespace Test.Unit
                 .GetField("dataPointQueue", BindingFlags.NonPublic | BindingFlags.Instance)
                 .GetValue(extractor.Streamer);
 
-            await CommonTestUtils.RunHistory(reader, states, HistoryReadType.FrontfillData);
+            await CommonTestUtils.RunHistory(reader, states, HistoryReadType.FrontfillData, tester.Source.Token);
 
             if (backfill)
             {
-                await CommonTestUtils.RunHistory(reader, states, HistoryReadType.BackfillData);
+                await CommonTestUtils.RunHistory(reader, states, HistoryReadType.BackfillData, tester.Source.Token);
             }
 
             var distinct = (await queue.DrainAsync().ToListAsync(default)).DistinctBy(dp => (dp.Id, dp.Timestamp)).GroupBy(dp => dp.Id)
@@ -199,7 +200,7 @@ namespace Test.Unit
 
             await using var extractor = tester.BuildExtractor();
 
-            var logger = tester.Provider.GetRequiredService<ILogger<HistoryReader>>();
+            var logger = tester.Provider.GetRequiredService<ILogger<HistoryTask>>();
 
             tester.Config.Events.Enabled = true;
             tester.Config.Events.History = true;
@@ -207,7 +208,7 @@ namespace Test.Unit
             cfg.Throttling.MaxNodeParallelism = nodeParallelism;
             cfg.StartTime = new TimestampWrapper(tester.HistoryStart.AddSeconds(-10).ToUnixTimeMilliseconds().ToString());
 
-            using var reader = new HistoryReader(logger, tester.Client, extractor, extractor.TypeManager, tester.Config, tester.Source.Token);
+            var reader = new HistoryTask(logger, tester.Client, extractor, extractor.TypeManager, tester.Config);
 
             var states = new[]
             {
@@ -236,11 +237,11 @@ namespace Test.Unit
             var fields = extractor.TypeManager.EventFields;
             extractor.State.PopulateActiveEventTypes(fields);
 
-            await CommonTestUtils.RunHistory(reader, states, HistoryReadType.FrontfillEvents);
+            await CommonTestUtils.RunHistory(reader, states, HistoryReadType.FrontfillEvents, tester.Source.Token);
 
             if (backfill)
             {
-                await CommonTestUtils.RunHistory(reader, states, HistoryReadType.BackfillEvents);
+                await CommonTestUtils.RunHistory(reader, states, HistoryReadType.BackfillEvents, tester.Source.Token);
             }
 
             var distinct = (await queue.DrainAsync().ToListAsync(default)).DistinctBy(evt => evt.Message).GroupBy(evt => evt.EmittingNode)

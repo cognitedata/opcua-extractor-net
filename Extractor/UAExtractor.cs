@@ -63,7 +63,6 @@ namespace Cognite.OpcUa
         public IExtractionStateStore? StateStorage { get; }
         public State State { get; }
         public Streamer Streamer { get; }
-        private HistoryReader? historyReader;
         public IEnumerable<NodeId> RootNodes { get; private set; } = null!;
         private readonly IPusher pusher;
         public IPusher Pusher => pusher;
@@ -114,6 +113,7 @@ namespace Cognite.OpcUa
         private readonly SubscriptionTask? subscriptionTask;
         private readonly BrowseTask browseTask;
         private readonly PusherTask pusherTask;
+        private readonly HistoryTask? historyTask;
 
         // Active subscriptions, used in tests for WaitForSubscription().
         private readonly HashSet<SubscriptionName> activeSubscriptions = new();
@@ -196,6 +196,12 @@ namespace Cognite.OpcUa
             }
             browseTask = new BrowseTask(this, uaClient, Config, Provider);
             pusherTask = new PusherTask(this, Config, pusher, Provider.GetRequiredService<ILogger<PusherTask>>());
+            if (Config.History.Enabled)
+            {
+                historyTask = new HistoryTask(Provider.GetRequiredService<ILogger<HistoryTask>>(),
+                    uaClient, this, TypeManager, Config);
+            }
+
 
             pusher.Extractor = this;
 
@@ -224,7 +230,7 @@ namespace Cognite.OpcUa
 
         private bool GetAllowUpdateState()
         {
-            if (historyReader != null && historyReader.CurrentHistoryRunIsBad) return false;
+            if (historyTask != null && historyTask.CurrentHistoryRunIsBad) return false;
             if (!Config.Source.Redundancy.MonitorServiceLevel) return true;
 
             return uaClient.SessionManager.CurrentServiceLevel >= Config.Source.Redundancy.ServiceLevelThreshold;
@@ -237,7 +243,7 @@ namespace Cognite.OpcUa
         /// <param name="e">EventArgs for this event</param>
         public void OnServerDisconnect(UAClient source)
         {
-            historyReader?.AddIssue(HistoryReader.StateIssue.ServerConnection);
+            historyTask?.AddIssue(HistoryTask.StateIssue.ServerConnection);
         }
 
         public Task OnServiceLevelAboveThreshold(UAClient source)
@@ -245,7 +251,7 @@ namespace Cognite.OpcUa
             if (Source.IsCancellationRequested) return Task.CompletedTask;
 
             log.LogInformation("Service level went above threshold");
-            historyReader?.RemoveIssue(HistoryReader.StateIssue.ServiceLevel);
+            historyTask?.RemoveIssue(HistoryTask.StateIssue.ServiceLevel);
 
             return Task.CompletedTask;
         }
@@ -256,34 +262,34 @@ namespace Cognite.OpcUa
 
             log.LogInformation("Service level dropped below threshold");
 
-            historyReader?.AddIssue(HistoryReader.StateIssue.ServiceLevel);
+            historyTask?.AddIssue(HistoryTask.StateIssue.ServiceLevel);
 
             return Task.CompletedTask;
         }
 
         public void OnDataPushFailure()
         {
-            historyReader?.AddIssue(HistoryReader.StateIssue.DataPushFailing);
+            historyTask?.AddIssue(HistoryTask.StateIssue.DataPushFailing);
         }
 
         public void OnEventsPushFailure()
         {
-            historyReader?.AddIssue(HistoryReader.StateIssue.EventsPushFailing);
+            historyTask?.AddIssue(HistoryTask.StateIssue.EventsPushFailing);
         }
 
         public void OnDataPushRecovery()
         {
-            historyReader?.RemoveIssue(HistoryReader.StateIssue.DataPushFailing);
+            historyTask?.RemoveIssue(HistoryTask.StateIssue.DataPushFailing);
         }
 
         public void OnEventsPushRecovery()
         {
-            historyReader?.RemoveIssue(HistoryReader.StateIssue.EventsPushFailing);
+            historyTask?.RemoveIssue(HistoryTask.StateIssue.EventsPushFailing);
         }
 
         public void OnNodeHierarchyRead()
         {
-            historyReader?.RemoveIssue(HistoryReader.StateIssue.NodeHierarchyRead);
+            historyTask?.RemoveIssue(HistoryTask.StateIssue.NodeHierarchyRead);
             Starting.Set(0);
         }
 
@@ -321,6 +327,21 @@ namespace Cognite.OpcUa
             TaskScheduler.ScheduleTaskNow(pusherTask.Name);
         }
 
+        public void RestartHistory()
+        {
+            if (historyTask == null) return;
+            TaskScheduler.CancelTask(historyTask.Name);
+            TaskScheduler.ScheduleTaskNow(historyTask.Name, true);
+        }
+
+        public async Task ScheduleHistoryReadAndWait(TimeSpan? timeout = null)
+        {
+            if (historyTask == null) return;
+            var task = TaskScheduler.WaitForNextEndOfTask(historyTask.Name, timeout ?? Timeout.InfiniteTimeSpan);
+            TaskScheduler.ScheduleTaskNow(historyTask.Name, true);
+            await task;
+        }
+
         public async Task WaitForNextPush(bool trigger = false, int timeout = 100)
         {
             await pusherTask.WaitForNextPush(trigger, timeout);
@@ -342,7 +363,7 @@ namespace Cognite.OpcUa
             }
             else
             {
-                historyReader?.RemoveIssue(HistoryReader.StateIssue.ServerConnection);
+                historyTask?.RemoveIssue(HistoryTask.StateIssue.ServerConnection);
                 TaskScheduler.Notify();
             }
         }
@@ -362,14 +383,6 @@ namespace Cognite.OpcUa
 
         protected override Task InitTasks()
         {
-            historyReader?.Dispose();
-
-            if (Config.History.Enabled)
-            {
-                historyReader = new HistoryReader(Provider.GetRequiredService<ILogger<HistoryReader>>(),
-                    uaClient, this, TypeManager, Config, Source.Token);
-            }
-
             log.LogInformation("Starting OPC UA Extractor version {Version}",
                 Extractor.Metrics.Version.GetVersion(Assembly.GetExecutingAssembly()));
             log.LogInformation("Revision information: {Status}",
@@ -389,9 +402,9 @@ namespace Cognite.OpcUa
                 Scheduler.SchedulePeriodicTask(nameof(StoreState), interval, StoreState, interval != Timeout.InfiniteTimeSpan);
             }
             // TEMP: Rewrite as a proper task!
-            if (historyReader != null)
+            if (historyTask != null)
             {
-                AddMonitoredTask(token => historyReader.Run(token), SchedulerTaskResult.Unexpected, "History Reader");
+                TaskScheduler.AddScheduledTask(historyTask, true);
             }
 
             initEvent.Set();
@@ -489,7 +502,7 @@ namespace Cognite.OpcUa
                 activeSubscriptions.Clear();
             }
 
-            historyReader?.AddIssue(HistoryReader.StateIssue.NodeHierarchyRead);
+            historyTask?.AddIssue(HistoryTask.StateIssue.NodeHierarchyRead);
 
             await pusherTask.WaitForNextPush(true);
             pusher.Reset();
@@ -584,15 +597,9 @@ namespace Cognite.OpcUa
 
         public void TriggerHistoryRestart()
         {
-            historyReader?.RequestRestart();
-        }
-
-        public async Task RestartHistoryWaitForStop()
-        {
-            if (historyReader != null)
-            {
-                await historyReader.RequestRestartWaitForTermination(Source.Token);
-            }
+            if (historyTask == null) return;
+            TaskScheduler.CancelTask(historyTask.Name);
+            TaskScheduler.ScheduleTaskNow(historyTask.Name, true);
         }
 
         public void OnSubscriptionFailure(SubscriptionName subscription)
@@ -600,10 +607,10 @@ namespace Cognite.OpcUa
             switch (subscription)
             {
                 case SubscriptionName.Events:
-                    historyReader?.AddIssue(HistoryReader.StateIssue.EventSubscription);
+                    historyTask?.AddIssue(HistoryTask.StateIssue.EventSubscription);
                     break;
                 case SubscriptionName.DataPoints:
-                    historyReader?.AddIssue(HistoryReader.StateIssue.DataPointSubscription);
+                    historyTask?.AddIssue(HistoryTask.StateIssue.DataPointSubscription);
                     break;
             }
         }
@@ -617,10 +624,10 @@ namespace Cognite.OpcUa
             switch (subscription)
             {
                 case SubscriptionName.Events:
-                    historyReader?.RemoveIssue(HistoryReader.StateIssue.EventSubscription);
+                    historyTask?.RemoveIssue(HistoryTask.StateIssue.EventSubscription);
                     break;
                 case SubscriptionName.DataPoints:
-                    historyReader?.RemoveIssue(HistoryReader.StateIssue.DataPointSubscription);
+                    historyTask?.RemoveIssue(HistoryTask.StateIssue.DataPointSubscription);
                     break;
             }
         }
@@ -771,9 +778,9 @@ namespace Cognite.OpcUa
             var oldBrowsePar = Config.Source.BrowseThrottling.MaxNodeParallelism;
             await helper.LimitConfigValues(Config, Source.Token);
 
-            if (historyReader != null && oldHistoryPar != Config.History.Throttling.MaxNodeParallelism)
+            if (historyTask != null && oldHistoryPar != Config.History.Throttling.MaxNodeParallelism)
             {
-                historyReader.MaxNodeParallelismChanged();
+                historyTask.MaxNodeParallelismChanged();
             }
             if (oldBrowsePar != Config.Source.BrowseThrottling.MaxNodeParallelism)
             {
@@ -925,7 +932,7 @@ namespace Cognite.OpcUa
             }
             else
             {
-                historyReader?.AddStates(newStates, State.EmitterStates);
+                historyTask?.AddStates(newStates, State.EmitterStates);
             }
 
 
@@ -1003,8 +1010,8 @@ namespace Cognite.OpcUa
             );
 
             // Successfully restored state - allow history to proceed
-            historyReader?.AddStates(newStates, State.EmitterStates);
-            historyReader?.RemoveIssue(HistoryReader.StateIssue.StateRestorationPending);
+            historyTask?.AddStates(newStates, State.EmitterStates);
+            historyTask?.RemoveIssue(HistoryTask.StateIssue.StateRestorationPending);
             log.LogInformation("Successfully restored extraction state from state storage");
         }
 
@@ -1017,7 +1024,7 @@ namespace Cognite.OpcUa
         {
             var states = variables.Select(ts => ts.Id).Distinct().SelectNonNull(id => State.GetNodeState(id));
 
-            historyReader?.AddStates(states, State.EmitterStates);
+            historyTask?.AddStates(states, State.EmitterStates);
 
             subscriptionTask?.AddVariables(states);
             subscriptionTask?.AddEmitters(State.EmitterStates);
@@ -1149,8 +1156,6 @@ namespace Cognite.OpcUa
             await Close();
 
             Starting.Set(0);
-            historyReader?.Dispose();
-            historyReader = null;
             pubSubManager?.Dispose();
             pubSubManager = null;
 
