@@ -293,7 +293,7 @@ namespace Test.Unit
 
             tester.Server.UpdateNode(tester.Ids.Wrong.RankImpreciseNoDim, new double[] { 1.0, 2.0, 3.0, 4.0 });
 
-            await extractor.RunExtractor(true);
+            await tester.RunExtractor(extractor, true);
 
             Assert.Equal(6, pusher.PushedNodes.Count);
             Assert.Equal(5, pusher.PushedNodes.Values.Count(node => node is UAVariable variable && variable.IsArray));

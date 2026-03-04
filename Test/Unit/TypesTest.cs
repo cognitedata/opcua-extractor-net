@@ -44,8 +44,8 @@ namespace Test.Unit
 
             (int, int) Update(BaseUANode nodeA, BaseUANode nodeB)
             {
-                int csA = nodeA.GetUpdateChecksum(false, ntMeta);
-                int csB = nodeB.GetUpdateChecksum(false, ntMeta);
+                int csA = nodeA.GetUpdateChecksum(ntMeta);
+                int csB = nodeB.GetUpdateChecksum(ntMeta);
                 return (csA, csB);
             }
 
@@ -545,6 +545,8 @@ namespace Test.Unit
             Assert.Single(node.CreateTimeseries());
             Assert.Null(node.ArrayChildren);
 
+            tester.Config.History.Enabled = true;
+
             node.FullAttributes.AccessLevel = AccessLevels.CurrentRead | AccessLevels.HistoryRead;
             node.FullAttributes.DataType = new UADataType(DataTypeIds.Double);
             node.FullAttributes.ValueRank = ValueRanks.OneDimension;
@@ -575,6 +577,7 @@ namespace Test.Unit
             var id = new NodeId("test", 0);
             var node = new UAVariable(id, "name", null, null, NodeId.Null, new UAVariableType(new NodeId("test", 0)));
 
+            tester.Config.History.Enabled = true;
             node.FullAttributes.AccessLevel = AccessLevels.CurrentRead | AccessLevels.HistoryRead;
             node.FullAttributes.DataType = new UADataType(DataTypeIds.Double);
             node.FullAttributes.ValueRank = ValueRanks.OneDimension;
@@ -624,7 +627,7 @@ namespace Test.Unit
             Assert.Equal("gp.base:s=parent", ts.AssetExternalId);
             Assert.True(ts.IsStep);
             Assert.False(ts.IsString);
-            Assert.Equal(4, ts.Metadata.Count);
+            Assert.Equal(5, ts.Metadata.Count);
             for (int i = 1; i <= 4; i++) Assert.Equal($"value{i}", ts.Metadata[$"prop{i}"]);
             Assert.Null(ts.Unit);
             Assert.Equal("description", ts.Description);
@@ -645,7 +648,7 @@ namespace Test.Unit
             Assert.Equal("value4", ts.AssetExternalId);
             Assert.True(ts.IsStep);
             Assert.False(ts.IsString);
-            Assert.Equal(4, ts.Metadata.Count);
+            Assert.Equal(5, ts.Metadata.Count);
             for (int i = 1; i <= 4; i++) Assert.Equal($"value{i}", ts.Metadata[$"prop{i}"]);
             Assert.Equal("value1", ts.Description);
             Assert.Equal("value3", ts.Unit);
@@ -685,7 +688,7 @@ namespace Test.Unit
             Assert.Equal(111, ts.AssetId);
             Assert.True(ts.IsStep);
             Assert.False(ts.IsString);
-            Assert.Equal(4, ts.Metadata.Count);
+            Assert.Equal(5, ts.Metadata.Count);
             Assert.Null(ts.Unit);
             Assert.Equal("description", ts.Description);
 
@@ -712,7 +715,7 @@ namespace Test.Unit
             Assert.Equal(222, ts.AssetId);
             Assert.True(ts.IsStep);
             Assert.False(ts.IsString);
-            Assert.Equal(4, ts.Metadata.Count);
+            Assert.Equal(5, ts.Metadata.Count);
             Assert.Equal("value1", ts.Description);
             Assert.Equal("value3", ts.Unit);
         }

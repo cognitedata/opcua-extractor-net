@@ -55,6 +55,8 @@ namespace Cognite.OpcUa.NodeSources
 
         private bool isInitialized;
 
+        public bool IsInitialized => isInitialized;
+
         public NodeSetNodeSource(ILogger logger, FullConfig config, UAExtractor extractor, UAClient client, TypeManager typeManager)
         {
             this.logger = logger;

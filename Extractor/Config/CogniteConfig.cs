@@ -18,6 +18,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using Cognite.Extensions;
 using Cognite.Extractor.Common;
 using Cognite.Extractor.Utils;
+using Cognite.Extractor.Utils.Unstable.Configuration;
 using CogniteSdk.DataModels;
 using System;
 using System.Collections.Generic;
@@ -26,7 +27,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace Cognite.OpcUa.Config
 {
-    public class CognitePusherConfig : CogniteConfig, IPusherConfig
+    public class CognitePusherConfig : BaseCogniteConfig, IPusherConfig
     {
         /// <summary>
         /// Data set to use for new objects. Requires the capability datasets:read if external-id is used.

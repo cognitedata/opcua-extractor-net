@@ -1,6 +1,7 @@
 ﻿using Cognite.Extractor.Logging;
 using Cognite.Extractor.Testing;
 using Cognite.Extractor.Utils;
+using Cognite.Extractor.Utils.Unstable.Runtime;
 using Cognite.OpcUa;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Subscriptions;
@@ -67,11 +68,12 @@ namespace Test.Integration
             Program.CommandDryRun = false;
             Program.OnLaunch = (s, o) => CommonBuild(s);
             Program.RootToken = tester.Source.Token;
+            ExtractorStarter.AddCDFPusher = false;
             ExtractorStarter.OnCreateExtractor = (d, e) =>
             {
                 lock (tester)
                 {
-                    extractor?.Dispose();
+                    extractor?.DisposeAsync().AsTask().Wait();
                     extractor = e;
                 }
             };
@@ -83,9 +85,13 @@ namespace Test.Integration
             extractor?.Close().Wait();
             lock (tester)
             {
-                extractor?.Dispose();
+                extractor?.DisposeAsync().AsTask().Wait();
             }
 
+            Program.OnLaunch = null;
+            Program.RootToken = null;
+            ExtractorStarter.AddCDFPusher = true;
+            ExtractorStarter.OnCreateExtractor = null;
         }
 
         private void CommonBuild(ServiceCollection services)
@@ -163,7 +169,8 @@ version: 1
                 tester.EndpointUrl,
                 "--no-config",
                 "--auto-accept",
-                "--exit"
+                "--exit",
+                "--offline"
             };
             var task = Program.Main(args);
 
@@ -173,7 +180,7 @@ version: 1
 
                 await extractor.WaitForSubscription(SubscriptionName.DataPoints);
 
-                await TestUtils.WaitForCondition(() => pusher.PushedNodes.Count != 0, 10);
+                await TestUtils.WaitForCondition(() => pusher?.PushedNodes.Count > 0, 10);
                 Assert.Equal(167, pusher.PushedNodes.Count);
                 Assert.Equal(2006, pusher.PushedVariables.Count);
             }
@@ -192,7 +199,8 @@ version: 1
                 "--auto-accept",
                 "--config-file",
                 "config-test-1.yml",
-                "--exit"
+                "--exit",
+                "--offline"
             };
             await File.WriteAllTextAsync("config-test-1.yml", GetConfigToolOutput());
 
@@ -225,9 +233,10 @@ version: 1
                 "--service",
                 "--working-dir",
                 Directory.GetCurrentDirectory(),
-                "--config-root",
+                "--config-dir",
                 "config",
-                "--exit"
+                "--exit",
+                "--offline"
             };
             await File.WriteAllTextAsync("config-test-1.yml", GetConfigToolOutput());
 
@@ -472,14 +481,17 @@ version: 1
                 LogDir = "logs2",
                 Exit = true
             };
-            var options = new ExtractorRunnerParams<FullConfig, UAExtractor>();
+            var options = new ExtractorRuntimeBuilder<FullConfig, UAExtractor>("test", "opcuaextractor/1.0")
+            {
+                RestartPolicy = ExtractorRestartPolicy.Always,
+            };
 
             method.Invoke(typeof(ExtractorStarter), new object[] { log, config, setup, options, "config", services });
 
             Assert.Equal("logs2", config.Logger.File.Path);
             Assert.Equal("debug", config.Logger.File.Level);
             Assert.True(config.Source.ExitOnFailure);
-            Assert.False(options.Restart);
+            Assert.Equal(ExtractorRestartPolicy.Never, options.RestartPolicy);
             Assert.Equal("information", config.Logger.Console.Level);
 
             // Invalid configs
@@ -500,7 +512,7 @@ version: 1
             log.Events.Clear();
             config.Source.EndpointUrl = tester.EndpointUrl;
             method.Invoke(typeof(ExtractorStarter), new object[] { log, config, setup, options, "config", services });
-            Assert.Equal(3, log.Events.Where(evt => evt.LogLevel == Microsoft.Extensions.Logging.LogLevel.Warning).Count());
+            Assert.Equal(2, log.Events.Where(evt => evt.LogLevel == Microsoft.Extensions.Logging.LogLevel.Warning).Count());
 
             // events idprefix
             config.Extraction.IdPrefix = "events.";

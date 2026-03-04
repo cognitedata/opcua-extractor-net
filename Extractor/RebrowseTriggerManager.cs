@@ -204,7 +204,7 @@ namespace Cognite.OpcUa
                         "Triggering a rebrowse due to a changes yet in {value} to be reflected",
                         node.Item2
                     );
-                    _extractor.Looper.QueueRebrowse();
+                    _extractor.ScheduleRebrowse();
                     await UpsertSavedTimestampFor(id!, valueTime, token);
                 }
             }
@@ -233,7 +233,7 @@ namespace Cognite.OpcUa
                             lastTimestamp,
                             valueTime
                         );
-                        _extractor.Looper.QueueRebrowse();
+                        _extractor.ScheduleRebrowse();
                         Task.Run(async () => await UpsertSavedTimestampFor(id, valueTime, token));
                     }
                     else
@@ -269,13 +269,13 @@ namespace Cognite.OpcUa
 
             if (!_extractionStates.TryGetValue(id, out var lastState))
             {
-                logger.LogDebug($"No state found for: {id}");
-                logger.LogDebug($"Creating state for: {id}");
+                logger.LogDebug("No state found for: {id}", id);
+                logger.LogDebug("Creating state for: {id}", id);
                 lastState = new NamespacePublicationDateState(id);
             }
             lastState.LastTimestamp = valueTime;
             lastState.LastTimeModified = DateTime.UtcNow;
-            logger.LogDebug($"Updating state for: {id} to {valueTime}");
+            logger.LogDebug("Updating state for: {id} to {valueTime}", id, valueTime);
             _extractionStates[id] = lastState;
 
             await _extractor.StateStorage.StoreExtractionState<

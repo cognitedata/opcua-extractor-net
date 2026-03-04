@@ -985,8 +985,6 @@ namespace Test.Unit
                 Database = "metadata",
                 Enable = true
             };
-            tester.Config.Extraction.DataTypes.ExpandNodeIds = true;
-            tester.Config.Extraction.DataTypes.AppendInternalValues = true;
             tester.Config.Extraction.DataTypes.AllowStringVariables = true;
             tester.Config.Extraction.DataTypes.MaxArraySize = 10;
             tester.Config.Subscriptions.IgnoreAccessLevel = true;
@@ -1103,8 +1101,6 @@ namespace Test.Unit
                     Database = "metadata"
                 }
             };
-            tester.Config.Extraction.DataTypes.ExpandNodeIds = true;
-            tester.Config.Extraction.DataTypes.AppendInternalValues = true;
             tester.Config.Extraction.DataTypes.AllowStringVariables = true;
             tester.Config.Extraction.DataTypes.MaxArraySize = 10;
             tester.Config.Extraction.DataTypes.AutoIdentifyTypes = true;
@@ -1112,71 +1108,76 @@ namespace Test.Unit
             tester.Config.History.Enabled = true;
 
             (handler, pusher) = tester.GetCDFPusher();
-            await using var extractor = tester.BuildExtractor(pusher);
-
             // Nothing in CDF
-            await extractor.RunExtractor(true);
-            Assert.Empty(extractor.State.EmitterStates);
-            Assert.Empty(extractor.State.NodeStates);
-            tester.Config.Cognite.RawNodeBuffer.BrowseOnEmpty = true;
-            await extractor.RunExtractor(true);
-            Assert.True(extractor.State.NodeStates.Count > 0);
-            Assert.NotEmpty(handler.AssetsRaw);
-            Assert.NotEmpty(handler.TimeseriesRaw);
-            Assert.NotEmpty(handler.Timeseries);
-            Assert.Empty(handler.Assets);
-
-            await extractor.WaitForSubscription(SubscriptionName.DataPoints);
-            await tester.RemoveSubscription(extractor, SubscriptionName.DataPoints);
-
-            extractor.State.Clear();
-
-            // Now there is something in CDF, read it back
-            tester.Config.Cognite.RawNodeBuffer.BrowseOnEmpty = false;
-            string oldAssets = System.Text.Json.JsonSerializer.Serialize(handler.AssetsRaw);
-            string oldTimeseries = System.Text.Json.JsonSerializer.Serialize(handler.TimeseriesRaw);
-            extractor.ClearKnownSubscriptions();
-            var reader = (HistoryReader)extractor.GetType().GetField("historyReader", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(extractor);
-            ((Dictionary<NodeId, VariableExtractionState>)reader.GetType().GetField("activeVarStates", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(reader)).Clear();
-            ((Dictionary<NodeId, EventExtractionState>)reader.GetType().GetField("activeEventStates", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(reader)).Clear();
-            reader.AddIssue(HistoryReader.StateIssue.NodeHierarchyRead);
-            await extractor.RunExtractor(true);
-            Assert.True(extractor.State.NodeStates.Count > 0);
-
-            string newAssets = System.Text.Json.JsonSerializer.Serialize(handler.AssetsRaw);
-            string newTimeseries = System.Text.Json.JsonSerializer.Serialize(handler.TimeseriesRaw);
-
-            // Ensure data in raw is untouched.
-            Assert.Equal(oldAssets, newAssets);
-            Assert.Equal(oldTimeseries, newTimeseries);
-
-            await extractor.WaitForSubscription(SubscriptionName.DataPoints);
-
-            try
+            await using (var extractor = tester.BuildExtractor(pusher))
             {
-                await TestUtils.WaitForCondition(() => extractor.State.NodeStates.All(s => !s.IsFrontfilling), 5);
+                await tester.RunExtractor(extractor, true);
+                Assert.Empty(extractor.State.EmitterStates);
+                Assert.Empty(extractor.State.NodeStates);
             }
-            finally
+
+            await using (var extractor = tester.BuildExtractor(pusher))
             {
-                foreach (var state in extractor.State.NodeStates)
+                tester.Config.Cognite.RawNodeBuffer.BrowseOnEmpty = true;
+                await tester.RunExtractor(extractor, true);
+                Assert.True(extractor.State.NodeStates.Count > 0);
+                Assert.NotEmpty(handler.AssetsRaw);
+                Assert.NotEmpty(handler.TimeseriesRaw);
+                Assert.NotEmpty(handler.Timeseries);
+                Assert.Empty(handler.Assets);
+
+                await extractor.WaitForSubscription(SubscriptionName.DataPoints);
+                await tester.RemoveSubscription(extractor, SubscriptionName.DataPoints);
+
+                extractor.State.Clear();
+            }
+
+
+            await using (var extractor = tester.BuildExtractor(pusher))
+            {
+                // Now there is something in CDF, read it back
+                tester.Config.Cognite.RawNodeBuffer.BrowseOnEmpty = false;
+                string oldAssets = System.Text.Json.JsonSerializer.Serialize(handler.AssetsRaw);
+                string oldTimeseries = System.Text.Json.JsonSerializer.Serialize(handler.TimeseriesRaw);
+                extractor.ClearKnownSubscriptions();
+                await tester.RunExtractor(extractor, true);
+                Assert.True(extractor.State.NodeStates.Count > 0);
+
+                string newAssets = System.Text.Json.JsonSerializer.Serialize(handler.AssetsRaw);
+                string newTimeseries = System.Text.Json.JsonSerializer.Serialize(handler.TimeseriesRaw);
+
+                // Ensure data in raw is untouched.
+                Assert.Equal(oldAssets, newAssets);
+                Assert.Equal(oldTimeseries, newTimeseries);
+
+                await extractor.WaitForSubscription(SubscriptionName.DataPoints);
+
+                try
                 {
-                    tester.Log.LogDebug("State is frontfilling: {Id} {State}", state.Id, state.IsFrontfilling);
+                    await TestUtils.WaitForCondition(() => extractor.State.NodeStates.All(s => !s.IsFrontfilling), 5);
                 }
+                finally
+                {
+                    foreach (var state in extractor.State.NodeStates)
+                    {
+                        tester.Log.LogDebug("State is frontfilling: {Id} {State}", state.Id, state.IsFrontfilling);
+                    }
+                }
+
+                var id = tester.Client.GetUniqueId(tester.Server.Ids.Custom.MysteryVar);
+
+                int idx = 0;
+                await TestUtils.WaitForCondition(async () =>
+                {
+                    tester.Server.UpdateNode(tester.Server.Ids.Custom.MysteryVar, idx++);
+                    await extractor.Streamer.PushDataPoints(pusher, tester.Source.Token);
+                    return handler.Datapoints.ContainsKey(id) && handler.Datapoints[id].NumericDatapoints.Count != 0;
+                }, 10);
+
+                Assert.True(extractor.State.NodeStates.Where(state => state.FrontfillEnabled).Any());
+
+                tester.WipeCustomHistory();
             }
-
-            var id = tester.Client.GetUniqueId(tester.Server.Ids.Custom.MysteryVar);
-
-            int idx = 0;
-            await TestUtils.WaitForCondition(async () =>
-            {
-                tester.Server.UpdateNode(tester.Server.Ids.Custom.MysteryVar, idx++);
-                await extractor.Streamer.PushDataPoints(pusher, tester.Source.Token);
-                return handler.Datapoints.ContainsKey(id) && handler.Datapoints[id].NumericDatapoints.Count != 0;
-            }, 10);
-
-            Assert.True(extractor.State.NodeStates.Where(state => state.FrontfillEnabled).Any());
-
-            tester.WipeCustomHistory();
         }
         [Fact]
         public async Task TestCDFAsSourceEvents()
@@ -1197,60 +1198,65 @@ namespace Test.Unit
                     Database = "metadata"
                 }
             };
-            tester.Config.Extraction.DataTypes.ExpandNodeIds = true;
-            tester.Config.Extraction.DataTypes.AppendInternalValues = true;
             tester.Config.Events.Enabled = true;
             tester.Config.Events.ReadServer = false;
             tester.Config.Subscriptions.DataPoints = true;
             tester.Config.Extraction.RootNode = tester.Ids.Event.Root.ToProtoNodeId(tester.Client);
 
             (handler, pusher) = tester.GetCDFPusher();
-            await using var extractor = tester.BuildExtractor(pusher);
-
             // Nothing in CDF
-            await extractor.RunExtractor(true);
-            Assert.Empty(extractor.State.EmitterStates);
-            Assert.Empty(extractor.State.NodeStates);
-            tester.Config.Cognite.RawNodeBuffer.BrowseOnEmpty = true;
-            await extractor.RunExtractor(true);
-            Assert.True(extractor.State.NodeStates.Count > 0);
-            Assert.NotEmpty(handler.AssetsRaw);
-            Assert.NotEmpty(handler.TimeseriesRaw);
-            Assert.NotEmpty(handler.Timeseries);
-            Assert.Empty(handler.Assets);
-
-            await extractor.WaitForSubscription(SubscriptionName.Events);
-            await tester.RemoveSubscription(extractor, SubscriptionName.Events);
-
-            extractor.State.Clear();
-
-            // Now there is something in CDF, read it back
-            tester.Config.Cognite.RawNodeBuffer.BrowseOnEmpty = false;
-            string oldAssets = JsonSerializer.Serialize(handler.AssetsRaw);
-            string oldTimeseries = JsonSerializer.Serialize(handler.TimeseriesRaw);
-            handler.Timeseries.Clear();
-            extractor.ClearKnownSubscriptions();
-            await extractor.RunExtractor(true);
-            Assert.True(extractor.State.NodeStates.Count > 0);
-
-            string newAssets = JsonSerializer.Serialize(handler.AssetsRaw);
-            string newTimeseries = JsonSerializer.Serialize(handler.TimeseriesRaw);
-
-            // Ensure data in raw is untouched.
-            Assert.Equal(oldAssets, newAssets);
-            Assert.Equal(oldTimeseries, newTimeseries);
-
-            await extractor.WaitForSubscription(SubscriptionName.Events);
-
-            tester.Server.TriggerEvents(0);
-
-            await TestUtils.WaitForCondition(async () =>
+            await using (var extractor = tester.BuildExtractor(pusher))
             {
-                await extractor.Streamer.PushEvents(pusher, tester.Source.Token);
-                return handler.Events.Count != 0;
-            }, 10);
+                await tester.RunExtractor(extractor, true);
+                Assert.Empty(extractor.State.EmitterStates);
+                Assert.Empty(extractor.State.NodeStates);
+            }
 
-            tester.WipeEventHistory();
+            await using (var extractor = tester.BuildExtractor(pusher))
+            {
+                tester.Config.Cognite.RawNodeBuffer.BrowseOnEmpty = true;
+                await tester.RunExtractor(extractor, true);
+                Assert.True(extractor.State.NodeStates.Count > 0);
+                Assert.NotEmpty(handler.AssetsRaw);
+                Assert.NotEmpty(handler.TimeseriesRaw);
+                Assert.NotEmpty(handler.Timeseries);
+                Assert.Empty(handler.Assets);
+
+                await extractor.WaitForSubscription(SubscriptionName.Events);
+                await tester.RemoveSubscription(extractor, SubscriptionName.Events);
+            }
+
+
+            await using (var extractor = tester.BuildExtractor(pusher))
+            {
+                // Now there is something in CDF, read it back
+                tester.Config.Cognite.RawNodeBuffer.BrowseOnEmpty = false;
+                string oldAssets = JsonSerializer.Serialize(handler.AssetsRaw);
+                string oldTimeseries = JsonSerializer.Serialize(handler.TimeseriesRaw);
+                handler.Timeseries.Clear();
+                extractor.ClearKnownSubscriptions();
+                await tester.RunExtractor(extractor, true);
+                Assert.True(extractor.State.NodeStates.Count > 0);
+
+                string newAssets = JsonSerializer.Serialize(handler.AssetsRaw);
+                string newTimeseries = JsonSerializer.Serialize(handler.TimeseriesRaw);
+
+                // Ensure data in raw is untouched.
+                Assert.Equal(oldAssets, newAssets);
+                Assert.Equal(oldTimeseries, newTimeseries);
+
+                await extractor.WaitForSubscription(SubscriptionName.Events);
+
+                tester.Server.TriggerEvents(0);
+
+                await TestUtils.WaitForCondition(async () =>
+                {
+                    await extractor.Streamer.PushEvents(pusher, tester.Source.Token);
+                    return handler.Events.Count != 0;
+                }, 10);
+
+                tester.WipeEventHistory();
+            }
         }
 
         [Fact]
@@ -1272,8 +1278,6 @@ namespace Test.Unit
                     AssetsTable = "assets"
                 }
             };
-            tester.Config.Extraction.DataTypes.ExpandNodeIds = true;
-            tester.Config.Extraction.DataTypes.AppendInternalValues = true;
             tester.Config.Events.Enabled = true;
             tester.Config.Events.ReadServer = false;
             tester.Config.Subscriptions.DataPoints = true;
@@ -1281,32 +1285,35 @@ namespace Test.Unit
             tester.Config.Source.AltSourceBackgroundBrowse = true;
             (handler, pusher) = tester.GetCDFPusher();
 
-            await using var extractor = tester.BuildExtractor(pusher);
+            await using (var extractor = tester.BuildExtractor(pusher))
+            {
+                // Populate data in Raw
+                tester.Config.Cognite.RawNodeBuffer.BrowseOnEmpty = true;
+                await tester.RunExtractor(extractor, true);
+                Assert.True(extractor.State.NodeStates.Count > 0);
+                Assert.NotEmpty(handler.AssetsRaw);
+                Assert.NotEmpty(handler.TimeseriesRaw);
+                Assert.NotEmpty(handler.Timeseries);
+                Assert.Empty(handler.Assets);
+                await extractor.WaitForSubscription(SubscriptionName.Events);
+                await tester.RemoveSubscription(extractor, SubscriptionName.Events);
 
-            // Populate data in Raw
-            tester.Config.Cognite.RawNodeBuffer.BrowseOnEmpty = true;
-            await extractor.RunExtractor(true);
-            Assert.True(extractor.State.NodeStates.Count > 0);
-            Assert.NotEmpty(handler.AssetsRaw);
-            Assert.NotEmpty(handler.TimeseriesRaw);
-            Assert.NotEmpty(handler.Timeseries);
-            Assert.Empty(handler.Assets);
+                extractor.State.Clear();
+            }
 
-            await extractor.WaitForSubscription(SubscriptionName.Events);
-            await tester.RemoveSubscription(extractor, SubscriptionName.Events);
+            await using (var extractor = tester.BuildExtractor(pusher))
+            {
+                // Remove all timeseries
+                handler.TimeseriesRaw.Clear();
+                handler.Timeseries.Clear();
 
-            extractor.State.Clear();
+                // Now the extractor should throw instead of falling back to browse
+                tester.Config.Cognite.RawNodeBuffer.BrowseOnEmpty = false;
 
-            // Remove all timeseries
-            handler.TimeseriesRaw.Clear();
-            handler.Timeseries.Clear();
+                await tester.RunExtractor(extractor, true);
 
-            // Now the extractor should throw instead of falling back to browse
-            tester.Config.Cognite.RawNodeBuffer.BrowseOnEmpty = false;
-
-            await extractor.RunExtractor(true);
-
-            await TestUtils.WaitForCondition(() => handler.TimeseriesRaw.Count > 0, 10);
+                await TestUtils.WaitForCondition(() => handler.TimeseriesRaw.Count > 0, 10);
+            }
         }
 
         [Fact]
@@ -1377,7 +1384,7 @@ namespace Test.Unit
             await using var extractor = tester.BuildExtractor(pusher);
 
             // Run the extractor to get a type hierarchy.
-            await extractor.RunExtractor(true);
+            await tester.RunExtractor(extractor, true);
 
             var customEventType = extractor.State.ActiveEvents[tester.Server.Ids.Event.CustomType];
             // Add a custom structure to the event type
@@ -1449,7 +1456,7 @@ namespace Test.Unit
             (handler, pusher) = tester.GetCDFPusher();
             await using var extractor = tester.BuildExtractor(pusher);
             // Run the extractor to get a type hierarchy.
-            await extractor.RunExtractor(true);
+            await tester.RunExtractor(extractor, true);
 
             var customEventType = extractor.State.ActiveEvents[tester.Server.Ids.Event.CustomType];
             // Add a custom structure to the event type
@@ -1521,7 +1528,7 @@ namespace Test.Unit
             (handler, pusher) = tester.GetCDFPusher();
             await using var extractor = tester.BuildExtractor(pusher);
             // Run the extractor to get a type hierarchy.
-            await extractor.RunExtractor(true);
+            await tester.RunExtractor(extractor, true);
 
             var customEventType = extractor.State.ActiveEvents[tester.Server.Ids.Event.CustomType];
             // Add a custom structure to the event type

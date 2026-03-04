@@ -24,8 +24,6 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System;
 using System.CommandLine;
-using System.CommandLine.Builder;
-using System.CommandLine.Parsing;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -61,6 +59,8 @@ namespace Cognite.OpcUa
         public bool NoConfig { get; set; }
         [CommandLineOption("Run the extractor in dry-run mode. In this mode, it will not push anything to destinations")]
         public bool DryRun { get; set; }
+        [CommandLineOption("Run the extractor in offline mode, meaning it will not attempt to load a connection config, and writing to CDF will fail")]
+        public bool Offline { get; set; }
 
         public bool ConfigTool { get; set; }
         public FullConfig? Config { get; set; }
@@ -104,7 +104,7 @@ namespace Cognite.OpcUa
             return await GetCommandLineOptions().InvokeAsync(args);
         }
 
-        private static Parser GetCommandLineOptions()
+        private static RootCommand GetCommandLineOptions()
         {
             var services = new ServiceCollection();
 
@@ -150,10 +150,7 @@ namespace Cognite.OpcUa
                 await ExtractorStarter.RunConfigTool(null, setup, services, RootToken ?? CancellationToken.None);
             }, toolBinder);
 
-            return new CommandLineBuilder(rootCommand)
-                .UseVersionOption()
-                .UseHelp()
-                .Build();
+            return rootCommand;
         }
 
         private static async Task RunService(ServiceCollection extServices, ExtractorParams setup)
