@@ -67,6 +67,11 @@ schema:
    - "https://raw.githubusercontent.com/"
 
 versions:
+  "2.40.8":
+    description: Fix rare race condition allowing history range read to increment without pushing events to CDF.
+    changelog:
+      fixed:
+        - Fix rare race condition allowing history range read to increment without pushing events to CDF.
   "2.40.7":
     description: Fix issue causing error handling to fail when encountering mismatched timeseries against data modelling.
     changelog:

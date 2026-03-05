@@ -149,6 +149,12 @@ namespace Cognite.OpcUa
             if (events == null) return;
             await eventQueue.EnqueueAsync(events);
         }
+
+        private struct Ranges
+        {
+            public TimeRange sourceExtractedRange;
+            public TimeRange queuePointsRange;
+        }
         /// <summary>
         /// Push data points to destinations
         /// </summary>
@@ -161,17 +167,26 @@ namespace Cognite.OpcUa
             if (!AllowData) return;
 
             var dataPointList = new List<UADataPoint>();
-            var pointRanges = new Dictionary<string, TimeRange>();
+
+            // Track source extracted timestamps and normal timestamps for each node in the current batch to update state later.
+            var ranges = new Dictionary<string, Ranges>();
 
             await foreach (var dp in dataPointQueue.DrainAsync(token))
             {
                 dataPointList.Add(dp);
-                if (!pointRanges.TryGetValue(dp.Id, out var range))
+                if (!ranges.TryGetValue(dp.Id, out var range))
                 {
-                    pointRanges[dp.Id] = new TimeRange(dp.Timestamp, dp.Timestamp);
+                    // Get source extracted range while we are draining, to make sure we don't update the state with a range that exceeds this.
+                    ranges[dp.Id] = new Ranges
+                    {
+                        // Source extracted range will always exist, so default is irrelevant.
+                        sourceExtractedRange = extractor.State.GetNodeState(dp.Id)?.SourceExtractedRange ?? new TimeRange(dp.Timestamp, dp.Timestamp),
+                        queuePointsRange = new TimeRange(dp.Timestamp, dp.Timestamp)
+                    };
                     continue;
                 }
-                pointRanges[dp.Id] = range.Extend(dp.Timestamp, dp.Timestamp);
+                range.queuePointsRange = range.queuePointsRange.Extend(dp.Timestamp, dp.Timestamp);
+                ranges[dp.Id] = range;
             }
 
             var results = await Task.WhenAll(passingPushers.Select(pusher => pusher.PushDataPoints(dataPointList, token)));
@@ -196,6 +211,7 @@ namespace Cognite.OpcUa
                 }
                 if (config.FailureBuffer.Enabled && extractor.FailureBuffer != null)
                 {
+                    var pointRanges = ranges.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.queuePointsRange);
                     await extractor.FailureBuffer.WriteDatapoints(dataPointList, pointRanges, token);
                 }
 
@@ -217,10 +233,12 @@ namespace Cognite.OpcUa
             {
                 await extractor.FailureBuffer.ReadDatapoints(passingPushers, token);
             }
-            foreach ((string id, var range) in pointRanges)
+            foreach ((string id, var range) in ranges)
             {
                 var state = extractor.State.GetNodeState(id);
-                if (state != null && (extractor.AllowUpdateState || !state.FrontfillEnabled && !state.BackfillEnabled)) state.UpdateDestinationRange(range.First, range.Last);
+                // Make sure we don't update the destination range beyond the source extracted range at the time of reading from queue.
+                var pointRange = range.queuePointsRange.Contract(range.sourceExtractedRange);
+                if (state != null && (extractor.AllowUpdateState || !state.FrontfillEnabled && !state.BackfillEnabled)) state.UpdateDestinationRange(pointRange.First, pointRange.Last);
             }
         }
         /// <summary>
@@ -235,18 +253,19 @@ namespace Cognite.OpcUa
             if (!AllowEvents) return;
 
             var eventList = new List<UAEvent>();
-            var eventRanges = new Dictionary<NodeId, TimeRange>();
+            var ranges = new Dictionary<NodeId, Ranges>();
 
             await foreach (var evt in eventQueue.DrainAsync(token))
             {
                 eventList.Add(evt);
-                if (!eventRanges.TryGetValue(evt.EmittingNode, out var range))
+                if (!ranges.TryGetValue(evt.EmittingNode, out var range))
                 {
-                    eventRanges[evt.EmittingNode] = new TimeRange(evt.Time, evt.Time);
+                    var sourceRange = extractor.State.GetEmitterState(evt.EmittingNode)?.SourceExtractedRange ?? new TimeRange(evt.Time, evt.Time);
+                    ranges[evt.EmittingNode] = new Ranges { sourceExtractedRange = sourceRange, queuePointsRange = new TimeRange(evt.Time, evt.Time) };
                     continue;
                 }
-
-                eventRanges[evt.EmittingNode] = range.Extend(evt.Time, evt.Time);
+                range.queuePointsRange = range.queuePointsRange.Extend(evt.Time, evt.Time);
+                ranges[evt.EmittingNode] = range;
             }
 
             var results = await Task.WhenAll(passingPushers.Select(pusher => pusher.PushEvents(eventList, token)));
@@ -292,10 +311,12 @@ namespace Cognite.OpcUa
             {
                 await extractor.FailureBuffer.ReadEvents(passingPushers, token);
             }
-            foreach (var (id, range) in eventRanges)
+            foreach (var (id, range) in ranges)
             {
                 var state = extractor.State.GetEmitterState(id);
-                if (state != null && (extractor.AllowUpdateState || !state.FrontfillEnabled && !state.BackfillEnabled)) state?.UpdateDestinationRange(range.First, range.Last);
+                // Make sure we don't update the destination range beyond the source extracted range at the time of reading from queue.
+                var eventRange = range.queuePointsRange.Contract(range.sourceExtractedRange);
+                if (state != null && (extractor.AllowUpdateState || !state.FrontfillEnabled && !state.BackfillEnabled)) state?.UpdateDestinationRange(eventRange.First, eventRange.Last);
             }
         }
         /// <summary>
