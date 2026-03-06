@@ -1,4 +1,4 @@
-﻿/* Cognite Extractor for OPC-UA
+/* Cognite Extractor for OPC-UA
 Copyright (C) 2021 Cognite AS
 
 This program is free software; you can redistribute it and/or
@@ -94,7 +94,7 @@ namespace Cognite.OpcUa
                 {
                     return "cognite.metadata-targets.raw.database is required when setting raw";
                 }
-                if (rawMetaTarget.AssetsTable == null || rawMetaTarget.RelationshipsTable == null || rawMetaTarget.TimeseriesTable == null)
+                if (rawMetaTarget.AssetsTable == null && rawMetaTarget.RelationshipsTable == null && rawMetaTarget.TimeseriesTable == null)
                 {
                     return "At least one of assets-table, relationships-table or timeseries-table is required when setting cognite.metadata-targets.raw";
                 }
