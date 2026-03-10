@@ -1,0 +1,27 @@
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+
+WORKDIR /build
+COPY . .
+
+RUN dotnet publish -c Release -o /build/deploy Server/
+
+FROM mcr.microsoft.com/dotnet/runtime:8.0
+
+WORKDIR /server
+COPY --from=build /build/deploy .
+COPY --from=build /build/config/Server.Test.Config.xml ./config/
+
+RUN apt-get -qq update \
+    && apt-get -qq upgrade \
+    && apt-get -qq clean \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN mkdir -p /certificates /server/servercertificates
+RUN chmod -R a+rw /certificates /server/servercertificates
+
+RUN groupadd -g 1001 server && useradd -m -u 1001 -g server server
+USER server
+
+EXPOSE 62546
+
+ENTRYPOINT ["dotnet", "/server/Server.dll"]
