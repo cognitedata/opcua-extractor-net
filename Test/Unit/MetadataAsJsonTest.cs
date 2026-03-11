@@ -39,7 +39,7 @@ namespace Test.Unit
 
             var jsonMetadataWithExtras = node.BuildMetadataAsJson(tester.Config, extractor, true);
             Assert.NotNull(jsonMetadataWithExtras);
-            Assert.Empty(jsonMetadataWithExtras);
+            Assert.Single(jsonMetadataWithExtras);
         }
 
         [Fact]
@@ -154,9 +154,10 @@ namespace Test.Unit
 
             var jsonMetadata = node.BuildMetadataAsJson(tester.Config, extractor, true);
 
-            Assert.Single(jsonMetadata);
+            Assert.Equal(2, jsonMetadata.Count);
             Assert.True(jsonMetadata.ContainsKey("TypeDefinition"));
             Assert.Equal("CustomType", jsonMetadata["TypeDefinition"]?.GetValue<string>());
+            Assert.Equal("String", jsonMetadata["dataType"]?.GetValue<string>());
         }
 
         [Fact]
@@ -241,7 +242,7 @@ namespace Test.Unit
             Assert.NotNull(result);
             Assert.NotNull(result.Properties);
             Assert.NotNull(result.Properties.extractedData);
-            Assert.Single(result.Properties.extractedData);
+            Assert.Equal(2, result.Properties.extractedData.Count);
 
             // Should contain string value as JsonNode
             Assert.True(result.Properties.extractedData.ContainsKey("propA"));
@@ -285,12 +286,13 @@ namespace Test.Unit
             Assert.NotNull(result);
             Assert.NotNull(result.Properties);
             Assert.NotNull(result.Properties.extractedData);
-            Assert.Equal(3, result.Properties.extractedData.Count);
+            Assert.Equal(4, result.Properties.extractedData.Count);
 
             // Verify different value types are preserved
             Assert.True(result.Properties.extractedData.ContainsKey("stringProp"));
             Assert.True(result.Properties.extractedData.ContainsKey("intProp"));
             Assert.True(result.Properties.extractedData.ContainsKey("boolProp"));
+            Assert.True(result.Properties.extractedData.ContainsKey("dataType"));
 
             var stringValue = result.Properties.extractedData["stringProp"];
             var intValue = result.Properties.extractedData["intProp"];
@@ -343,8 +345,8 @@ namespace Test.Unit
             Assert.NotNull(result.Properties);
             Assert.NotNull(result.Properties.extractedData);
 
-            // Check that there is one top-level property: "parent"
-            Assert.Single(result.Properties.extractedData);
+            // Check that there is one top-level property: "parent", and data type metadata.
+            Assert.Equal(2, result.Properties.extractedData.Count);
             Assert.True(result.Properties.extractedData.ContainsKey("parent"));
 
             // Check the nested structure of "parent"
@@ -417,7 +419,8 @@ namespace Test.Unit
             Assert.NotNull(result);
             Assert.NotNull(result.Properties);
             Assert.NotNull(result.Properties.extractedData);
-            Assert.Empty(result.Properties.extractedData);
+            Assert.Single(result.Properties.extractedData);
+            Assert.Equal("Double", result.Properties.extractedData["dataType"]?.GetValue<string>()); // Type info should still be present
         }
 
         #endregion

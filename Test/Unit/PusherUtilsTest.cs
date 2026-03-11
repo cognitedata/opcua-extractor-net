@@ -86,6 +86,7 @@ namespace Test.Unit
                 Description = "description",
                 Metadata = new Dictionary<string, string>
                 {
+                    { "dataType", "Boolean" },
                     { "prop1", "value1" },
                     { "prop2", "value2" },
                     { "prop3", "value3" },
@@ -120,7 +121,7 @@ namespace Test.Unit
             Assert.Equal("description2", result.Description.Set);
             Assert.Equal("test2", result.Name.Set);
             Assert.Equal(222, result.AssetId.Set);
-            Assert.Equal(4, result.Metadata.Set.Count);
+            Assert.Equal(5, result.Metadata.Set.Count);
             Assert.Equal("value1", result.Metadata.Set["prop1"]);
             Assert.False(result.Metadata.Set.ContainsKey("prop2"));
             Assert.Equal("value3", result.Metadata.Set["prop3"]);
@@ -134,7 +135,7 @@ namespace Test.Unit
             result = PusherUtils.GetTSUpdate(tester.Config, extractor, ts, node, nodeToAssetIds);
             Assert.Null(result.AssetId);
             Assert.Null(result.Description);
-            Assert.Null(result.Metadata);
+            Assert.Single(result.Metadata.Set);
             Assert.Null(result.Name);
         }
         [Fact]
