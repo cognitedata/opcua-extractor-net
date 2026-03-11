@@ -72,6 +72,19 @@ By default it runs on `opc.tcp://localhost:62546`, so that is where you would co
 The server is capable of generating history for events and simple and complex datapoints, as well as generating periodic updates, events and changes over time.
 It can also optionally simulate some types of buggy server behavior.
 
+### Running the test server in Docker
+
+You can also build and run the test server as a Docker container:
+
+```bash
+docker build -f Dockerfile.server -t opcua-test-server .
+docker run -p 62546:62546 opcua-test-server --core-profile -e opc.tcp://0.0.0.0
+```
+
+The `--core-profile` flag enables history and periodic updates for all node hierarchies, so the server produces meaningful data out of the box. The `-e opc.tcp://0.0.0.0` flag binds the server to all network interfaces, which is required for the port mapping to work from outside the container.
+
+The server will be reachable at `opc.tcp://localhost:62546`. Run `docker run --rm opcua-test-server --help` to see all available options.
+
 ## Development
 
 You will need .NET 8.0. Then simply run `dotnet build` to compile,
