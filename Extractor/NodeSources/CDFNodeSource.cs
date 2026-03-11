@@ -110,7 +110,7 @@ namespace Cognite.OpcUa.NodeSources
         {
             // Use config value to determine if deleted nodes should be included
             var includeDeleted = sourceConfig.IncludeDeletedNodes;
-            
+
             // Ignores nodesToBrowse, nothing really to do with that here
             var options = new JsonSerializerOptions();
             extractor.TypeConverter.AddConverters(options, ConverterType.Node);
@@ -121,7 +121,7 @@ namespace Cognite.OpcUa.NodeSources
             bool eventsEnabled = config.Subscriptions.Events || config.History.Enabled && config.Events.History;
             eventsEnabled = eventsEnabled && config.Events.Enabled;
 
-            var deleteMarker = config.Extraction.Deletes.DeleteMarker?? null;
+            var deleteMarker = config.Extraction.Deletes.DeleteMarker ?? null;
             int objCount = 0, varCount = 0, deletedCount = 0;
             if ((dataEnabled || eventsEnabled) && !string.IsNullOrEmpty(sourceConfig.TimeseriesTable))
             {
@@ -132,17 +132,16 @@ namespace Cognite.OpcUa.NodeSources
                     if (string.IsNullOrEmpty(deleteMarker))
                     {
                         tsData = await pusher.GetRawRows(database, sourceConfig.TimeseriesTable, new[] {
-                            "NodeId", "ParentNodeId", "name", "DataTypeId", "InternalInfo" 
+                            "NodeId", "ParentNodeId", "name", "DataTypeId", "InternalInfo"
                             }, token);
                     }
-                    else                   
+                    else
                     {
                         tsData = await pusher.GetRawRows(database, sourceConfig.TimeseriesTable, new[] {
                             "NodeId", "ParentNodeId", "name", "DataTypeId", "InternalInfo", deleteMarker
                             }, token);
                     }
-                    
-                    
+
                     IEnumerable<RawRow<Dictionary<string, JsonElement>>> rowsToProcess = tsData;
                     if (!includeDeleted)
                     {
@@ -151,7 +150,7 @@ namespace Cognite.OpcUa.NodeSources
                         deletedCount += tsData.Count() - activeRows.Count;
                         rowsToProcess = activeRows;
                     }
-                    
+
                     nodes = await DeserializeRawData(rowsToProcess, options, token) ?? Enumerable.Empty<SavedNode>();
                 }
                 catch (Exception ex)
@@ -185,14 +184,14 @@ namespace Cognite.OpcUa.NodeSources
                     IEnumerable<RawRow<Dictionary<string, JsonElement>>> assetData;
                     if (string.IsNullOrEmpty(deleteMarker))
                     {
-                         assetData = await pusher.GetRawRows(database, sourceConfig.AssetsTable, new[]
+                        assetData = await pusher.GetRawRows(database, sourceConfig.AssetsTable, new[]
                             {
                                 "NodeId", "ParentNodeId", "name", "InternalInfo"
                             }, token);
                     }
                     else
                     {
-                         assetData = await pusher.GetRawRows(database, sourceConfig.AssetsTable, new[]
+                        assetData = await pusher.GetRawRows(database, sourceConfig.AssetsTable, new[]
                             {
                                 "NodeId", "ParentNodeId", "name", "InternalInfo", deleteMarker
                             }, token);
@@ -205,7 +204,7 @@ namespace Cognite.OpcUa.NodeSources
                         deletedCount += assetData.Count() - activeRows.Count;
                         rowsToProcess = activeRows;
                     }
-                    
+
                     nodes = await DeserializeRawData(rowsToProcess, options, token) ?? Enumerable.Empty<SavedNode>();
                 }
                 catch (Exception ex)

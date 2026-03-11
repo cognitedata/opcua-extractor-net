@@ -1353,11 +1353,11 @@ namespace Test.Unit
 
             // Set config to include deleted nodes
             tester.Config.Cognite.RawNodeBuffer.IncludeDeletedNodes = true;
-            
+
             // Create a new source with the updated config
             var sourceWithDeleted = new CDFNodeSource(log, tester.Config, extractor, pusher, extractor.TypeManager);
             var resultWithDeleted = await sourceWithDeleted.LoadNodes(Enumerable.Empty<NodeId>(), 0, HierarchicalReferenceMode.Disabled, "test", tester.Source.Token);
-            
+
             // Should have all 2 variables (including deleted one)
             Assert.Equal(2, resultWithDeleted.Nodes.Count(n => n is UAVariable));
             Assert.Contains(resultWithDeleted.Nodes, n => n.Name == "var1");
