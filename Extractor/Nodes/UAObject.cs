@@ -115,9 +115,9 @@ namespace Cognite.OpcUa.Nodes
             return null;
         }
 
-        public override int GetUpdateChecksum(bool dataTypeMetadata, bool nodeTypeMetadata)
+        public override int GetUpdateChecksum(bool nodeTypeMetadata)
         {
-            int checksum = base.GetUpdateChecksum(dataTypeMetadata, nodeTypeMetadata);
+            int checksum = base.GetUpdateChecksum(nodeTypeMetadata);
             unchecked
             {
                 if (nodeTypeMetadata)

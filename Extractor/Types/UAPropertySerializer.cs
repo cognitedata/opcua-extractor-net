@@ -244,14 +244,8 @@ namespace Cognite.OpcUa.Types
             }
             writer.WriteStartObject();
             WriteBaseValues(writer, value);
-            if (config.Extraction.DataTypes.ExpandNodeIds)
-            {
-                WriteNodeIds(writer, value, options);
-            }
-            if (config.Extraction.DataTypes.AppendInternalValues)
-            {
-                WriteInternalInfo(writer, value, options);
-            }
+            WriteNodeIds(writer, value, options);
+            WriteInternalInfo(writer, value, options);
             writer.WriteEndObject();
         }
     }

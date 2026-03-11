@@ -200,22 +200,9 @@ namespace Cognite.OpcUa.Config
         /// </summary>
         public bool EnumsAsStrings { get; set; }
         /// <summary>
-        /// Add a metadata property dataType which contains the id of the OPC-UA datatype.
-        /// </summary>
-        public bool DataTypeMetadata { get; set; }
-        /// <summary>
         /// True to treat null nodeIds as numeric instead of string
         /// </summary>
         public bool NullAsNumeric { get; set; }
-        /// <summary>
-        /// Add full JSON node-ids to data pushed to Raw. TypeDefintionId, ParentNodeId, NodeId and DataTypeId.
-        /// </summary>
-        public bool ExpandNodeIds { get; set; }
-        /// <summary>
-        /// Add attributes generally used internally like AccessLevel, Historizing, ArrayDimensions, ValueRank etc.
-        /// to data pushed to Raw.
-        /// </summary>
-        public bool AppendInternalValues { get; set; }
         /// <summary>
         /// If max-array-size is set, this looks for the MaxArraySize property on each node with one-dimension ValueRank,
         /// if it is not found, it tries to read the value as well, and look at the current size.

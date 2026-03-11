@@ -130,8 +130,6 @@ namespace Cognite.OpcUa.TypeCollectors
                 if (tp.NodeClass == NodeClass.ObjectType && !config.Extraction.NodeTypes.Metadata
                     && (tp is not UAObjectType otp || !otp.IsEventType())) continue;
                 if (tp.NodeClass == NodeClass.VariableType && !config.Extraction.NodeTypes.Metadata) continue;
-                if (tp.NodeClass == NodeClass.DataType && !config.Extraction.DataTypes.DataTypeMetadata
-                    && !config.Extraction.DataTypes.AutoIdentifyTypes) continue;
                 if (tp.NodeClass == NodeClass.ReferenceType && !config.Extraction.Relationships.Enabled) continue;
                 toRead.Add(tp);
             }
