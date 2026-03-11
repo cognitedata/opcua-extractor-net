@@ -121,16 +121,27 @@ namespace Cognite.OpcUa.NodeSources
             bool eventsEnabled = config.Subscriptions.Events || config.History.Enabled && config.Events.History;
             eventsEnabled = eventsEnabled && config.Events.Enabled;
 
-            var deleteMarker = config.Extraction.Deletes.DeleteMarker;
+            var deleteMarker = config.Extraction.Deletes.DeleteMarker?? null;
             int objCount = 0, varCount = 0, deletedCount = 0;
             if ((dataEnabled || eventsEnabled) && !string.IsNullOrEmpty(sourceConfig.TimeseriesTable))
             {
                 IEnumerable<SavedNode> nodes;
                 try
                 {
-                    var tsData = await pusher.GetRawRows(database, sourceConfig.TimeseriesTable, new[] {
-                        "NodeId", "ParentNodeId", "name", "DataTypeId", "InternalInfo", deleteMarker
-                    }, token);
+                    IEnumerable<RawRow<Dictionary<string, JsonElement>>> tsData;
+                    if (string.IsNullOrEmpty(deleteMarker))
+                    {
+                        tsData = await pusher.GetRawRows(database, sourceConfig.TimeseriesTable, new[] {
+                            "NodeId", "ParentNodeId", "name", "DataTypeId", "InternalInfo" 
+                            }, token);
+                    }
+                    else                   
+                    {
+                        tsData = await pusher.GetRawRows(database, sourceConfig.TimeseriesTable, new[] {
+                            "NodeId", "ParentNodeId", "name", "DataTypeId", "InternalInfo", deleteMarker
+                            }, token);
+                    }
+                    
                     
                     IEnumerable<RawRow<Dictionary<string, JsonElement>>> rowsToProcess = tsData;
                     if (!includeDeleted)
@@ -171,11 +182,21 @@ namespace Cognite.OpcUa.NodeSources
                 IEnumerable<SavedNode> nodes;
                 try
                 {
-                    var assetData = await pusher.GetRawRows(database, sourceConfig.AssetsTable, new[]
+                    IEnumerable<RawRow<Dictionary<string, JsonElement>>> assetData;
+                    if (string.IsNullOrEmpty(deleteMarker))
                     {
-                        "NodeId", "ParentNodeId", "name", "InternalInfo", deleteMarker
-                    }, token);
-                    
+                         assetData = await pusher.GetRawRows(database, sourceConfig.AssetsTable, new[]
+                            {
+                                "NodeId", "ParentNodeId", "name", "InternalInfo"
+                            }, token);
+                    }
+                    else
+                    {
+                         assetData = await pusher.GetRawRows(database, sourceConfig.AssetsTable, new[]
+                            {
+                                "NodeId", "ParentNodeId", "name", "InternalInfo", deleteMarker
+                            }, token);
+                    }
                     IEnumerable<RawRow<Dictionary<string, JsonElement>>> rowsToProcess = assetData;
                     if (!includeDeleted)
                     {
