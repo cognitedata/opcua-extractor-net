@@ -68,6 +68,7 @@ namespace Test.Unit
             Assert.False(evt.WaitOne(100));
 
             await extractor.Streamer.EnqueueAsync(new UADataPoint(start, "id", -1, StatusCodes.Good));
+            state.UpdateFromStream(start, start);
             Assert.Equal(1, queue.Count);
             await extractor.Streamer.PushDataPoints(new[] { pusher }, Enumerable.Empty<IPusher>(), tester.Source.Token);
 
@@ -100,6 +101,7 @@ namespace Test.Unit
             Assert.Equal(999_999, queue.Count);
 
             await extractor.Streamer.EnqueueAsync(new UADataPoint(start.AddMilliseconds(3000000), "id", 300, StatusCodes.Good));
+            state.UpdateFromStream(start.AddMilliseconds(3000000), start.AddMilliseconds(3000000));
             Assert.True(evt.WaitOne(10000));
             Assert.Equal(1_000_000, queue.Count);
 
@@ -141,6 +143,7 @@ namespace Test.Unit
             Assert.False(evt.WaitOne(100));
 
             await extractor.Streamer.EnqueueAsync(new UAEvent { EmittingNode = id, Time = start });
+            state.UpdateFromStream(start, start);
             Assert.Equal(1, queue.Count);
             await extractor.Streamer.PushEvents(new[] { pusher }, Enumerable.Empty<IPusher>(), tester.Source.Token);
 
@@ -175,6 +178,7 @@ namespace Test.Unit
             Assert.Equal(99999, queue.Count);
 
             await extractor.Streamer.EnqueueAsync(new UAEvent { EmittingNode = id, Time = start.AddMilliseconds(300000) });
+            state.UpdateFromStream(start.AddMilliseconds(300000), start.AddMilliseconds(300000));
             Assert.True(evt.WaitOne(10000));
             Assert.Equal(100000, queue.Count);
 
