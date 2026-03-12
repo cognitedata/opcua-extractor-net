@@ -116,7 +116,7 @@ namespace Cognite.OpcUa.NodeSources
             if (!string.IsNullOrEmpty(deleteMarker))
             {
                 columns = columns.Append(deleteMarker).ToArray();
-            }                
+            }
             return columns;
         }
 
