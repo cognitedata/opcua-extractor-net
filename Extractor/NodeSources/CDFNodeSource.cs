@@ -68,6 +68,28 @@ namespace Cognite.OpcUa.NodeSources
             return JsonSerializer.Deserialize<IEnumerable<SavedNode>>(stream, options);
         }
 
+        /// <summary>
+        /// Check if a raw row has been marked as deleted based on the delete marker column.
+        /// CDF does soft deletes - it marks nodes as deleted rather than removing them.
+        /// </summary>
+        private static bool IsRowDeleted(RawRow<Dictionary<string, JsonElement>> row, string deleteMarker)
+        {
+            if (row.Columns.TryGetValue(deleteMarker, out var deletedValue))
+            {
+                // The deleted marker can be a boolean true, or a string "true"
+                if (deletedValue.ValueKind == JsonValueKind.True)
+                {
+                    return true;
+                }
+                if (deletedValue.ValueKind == JsonValueKind.String &&
+                    string.Equals(deletedValue.GetString(), "true", StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
         private NodeLoadResult TakeResults()
         {
             var res = new NodeLoadResult(
@@ -84,6 +106,20 @@ namespace Cognite.OpcUa.NodeSources
             return Task.CompletedTask;
         }
 
+        private string[] GetColumnNames(string deleteMarker, bool isAsset = false)
+        {
+            var columns = new[] { "NodeId", "ParentNodeId", "name", "InternalInfo" };
+            if (!isAsset)
+            {
+                columns = columns.Append("DataType").ToArray();
+            }
+            if (!string.IsNullOrEmpty(deleteMarker))
+            {
+                columns = columns.Append(deleteMarker).ToArray();
+            }
+            return columns;
+        }
+
         public async Task<NodeLoadResult> LoadNodes(IEnumerable<NodeId> nodesToBrowse, uint nodeClassMask, HierarchicalReferenceMode hierarchicalReferences, string purpose, CancellationToken token)
         {
             // Ignores nodesToBrowse, nothing really to do with that here
@@ -96,16 +132,23 @@ namespace Cognite.OpcUa.NodeSources
             bool eventsEnabled = config.Subscriptions.Events || config.History.Enabled && config.Events.History;
             eventsEnabled = eventsEnabled && config.Events.Enabled;
 
-            int objCount = 0, varCount = 0;
+            var deleteMarker = config.Extraction.Deletes.DeleteMarker;
+            int objCount = 0, varCount = 0, deletedCount = 0;
             if ((dataEnabled || eventsEnabled) && !string.IsNullOrEmpty(sourceConfig.TimeseriesTable))
             {
                 IEnumerable<SavedNode> nodes;
                 try
                 {
-                    var tsData = await pusher.GetRawRows(database, sourceConfig.TimeseriesTable, new[] {
-                        "NodeId", "ParentNodeId", "name", "DataTypeId", "InternalInfo"
-                    }, token);
-                    nodes = await DeserializeRawData(tsData, options, token) ?? Enumerable.Empty<SavedNode>();
+                    IEnumerable<RawRow<Dictionary<string, JsonElement>>> tsData = await pusher.GetRawRows(database, sourceConfig.TimeseriesTable, GetColumnNames(deleteMarker), token);
+                    IEnumerable<RawRow<Dictionary<string, JsonElement>>> rowsToProcess = tsData;
+                    if (!string.IsNullOrEmpty(deleteMarker))
+                    {
+                        // Filter out deleted rows before deserialization (CDF does soft deletes)
+                        rowsToProcess = tsData.Where(row => !IsRowDeleted(row, deleteMarker)).ToList();
+                        deletedCount += tsData.Count() - rowsToProcess.Count();
+                    }
+
+                    nodes = await DeserializeRawData(rowsToProcess, options, token) ?? Enumerable.Empty<SavedNode>();
                 }
                 catch (Exception ex)
                 {
@@ -135,11 +178,16 @@ namespace Cognite.OpcUa.NodeSources
                 IEnumerable<SavedNode> nodes;
                 try
                 {
-                    var assetData = await pusher.GetRawRows(database, sourceConfig.AssetsTable, new[]
+                    IEnumerable<RawRow<Dictionary<string, JsonElement>>> assetData = await pusher.GetRawRows(database, sourceConfig.AssetsTable, GetColumnNames(deleteMarker, true), token);
+                    IEnumerable<RawRow<Dictionary<string, JsonElement>>> rowsToProcess = assetData;
+                    if (!string.IsNullOrEmpty(deleteMarker))
                     {
-                        "NodeId", "ParentNodeId", "name", "InternalInfo"
-                    }, token);
-                    nodes = await DeserializeRawData(assetData, options, token) ?? Enumerable.Empty<SavedNode>();
+                        // Filter out deleted rows before deserialization (CDF does soft deletes)
+                        rowsToProcess = assetData.Where(row => !IsRowDeleted(row, deleteMarker)).ToList();
+                        deletedCount += assetData.Count() - rowsToProcess.Count();
+                    }
+
+                    nodes = await DeserializeRawData(rowsToProcess, options, token) ?? Enumerable.Empty<SavedNode>();
                 }
                 catch (Exception ex)
                 {
@@ -157,6 +205,10 @@ namespace Cognite.OpcUa.NodeSources
 
                     if (nodeMap.TryAdd(obj)) objCount++;
                 }
+            }
+            if (deletedCount > 0)
+            {
+                logger.LogInformation("Skipped {Deleted} soft-deleted nodes from CDF Raw", deletedCount);
             }
             logger.LogInformation("Retrieved {Obj} objects and {Var} variables from CDF Raw", objCount, varCount);
 

@@ -45,6 +45,14 @@ namespace Cognite.OpcUa.NodeSources
     public interface INodeSource
     {
         Task Initialize(CancellationToken token);
+        /// <summary>
+        /// Load nodes from the source.
+        /// </summary>
+        /// <param name="nodesToBrowse">Root nodes to start browsing from.</param>
+        /// <param name="nodeClassMask">Node class mask to filter nodes.</param>
+        /// <param name="hierarchicalReferences">Mode for hierarchical references.</param>
+        /// <param name="purpose">Purpose description for logging.</param>
+        /// <param name="token">Cancellation token.</param>
         Task<NodeLoadResult> LoadNodes(
             IEnumerable<NodeId> nodesToBrowse,
             uint nodeClassMask,
