@@ -122,9 +122,6 @@ namespace Cognite.OpcUa.NodeSources
 
         public async Task<NodeLoadResult> LoadNodes(IEnumerable<NodeId> nodesToBrowse, uint nodeClassMask, HierarchicalReferenceMode hierarchicalReferences, string purpose, CancellationToken token)
         {
-            // Use config value to determine if deleted nodes should be included
-            var includeDeleted = sourceConfig.IncludeDeletedNodes;
-
             // Ignores nodesToBrowse, nothing really to do with that here
             var options = new JsonSerializerOptions();
             extractor.TypeConverter.AddConverters(options, ConverterType.Node);
@@ -144,7 +141,7 @@ namespace Cognite.OpcUa.NodeSources
                 {
                     IEnumerable<RawRow<Dictionary<string, JsonElement>>> tsData = await pusher.GetRawRows(database, sourceConfig.TimeseriesTable, GetColumnNames(deleteMarker), token);
                     IEnumerable<RawRow<Dictionary<string, JsonElement>>> rowsToProcess = tsData;
-                    if (!includeDeleted)
+                    if (!string.IsNullOrEmpty(deleteMarker))
                     {
                         // Filter out deleted rows before deserialization (CDF does soft deletes)
                         rowsToProcess = tsData.Where(row => !IsRowDeleted(row, deleteMarker)).ToList();
@@ -183,7 +180,7 @@ namespace Cognite.OpcUa.NodeSources
                 {
                     IEnumerable<RawRow<Dictionary<string, JsonElement>>> assetData = await pusher.GetRawRows(database, sourceConfig.AssetsTable, GetColumnNames(deleteMarker, true), token);
                     IEnumerable<RawRow<Dictionary<string, JsonElement>>> rowsToProcess = assetData;
-                    if (!includeDeleted)
+                    if (!string.IsNullOrEmpty(deleteMarker))
                     {
                         // Filter out deleted rows before deserialization (CDF does soft deletes)
                         rowsToProcess = assetData.Where(row => !IsRowDeleted(row, deleteMarker)).ToList();

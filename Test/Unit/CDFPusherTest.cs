@@ -1307,69 +1307,6 @@ namespace Test.Unit
         }
 
         [Fact]
-        public async Task TestGetNodesFromCDFWithDeletedNodesIncluded()
-        {
-            await using var extractor = tester.BuildExtractor();
-
-            tester.Config.Cognite.RawNodeBuffer = new CDFNodeSourceConfig
-            {
-                AssetsTable = "assets",
-                TimeseriesTable = "timeseries",
-                Database = "metadata",
-                Enable = true
-            };
-            tester.Config.Extraction.DataTypes.ExpandNodeIds = true;
-            tester.Config.Extraction.DataTypes.AppendInternalValues = true;
-            tester.Config.Extraction.DataTypes.AllowStringVariables = true;
-            tester.Config.Subscriptions.IgnoreAccessLevel = true;
-            tester.Config.Subscriptions.DataPoints = true;
-            tester.Config.Events.Enabled = true;
-
-            var log = tester.Provider.GetRequiredService<ILogger<CDFNodeSource>>();
-            var source = new CDFNodeSource(log, tester.Config, extractor, pusher, extractor.TypeManager);
-            var uaSource = new UANodeSource(tester.Log, extractor, tester.Client, extractor.TypeManager);
-
-            // Add normal (non-deleted) variables
-            var variable1 = new UAVariable(new NodeId("var1", 0), "var1", null, null, NodeId.Null, null);
-            variable1.FullAttributes.DataType = new UADataType(DataTypeIds.Double);
-            variable1.FullAttributes.ValueRank = -1;
-            NodeToRawWithDeleteFlag(extractor, variable1, ConverterType.Variable, true, deleted: false);
-
-            // Add a deleted variable
-            var deletedVariable = new UAVariable(new NodeId("deleted_var", 0), "deleted_var", null, null, NodeId.Null, null);
-            deletedVariable.FullAttributes.DataType = new UADataType(DataTypeIds.Double);
-            deletedVariable.FullAttributes.ValueRank = -1;
-            NodeToRawWithDeleteFlag(extractor, deletedVariable, ConverterType.Variable, true, deleted: true);
-
-            // Add normal (non-deleted) object
-            var object1 = new UAObject(new NodeId("obj1", 0), "obj1", null, null, NodeId.Null, null);
-            object1.FullAttributes.EventNotifier = EventNotifiers.SubscribeToEvents;
-            NodeToRawWithDeleteFlag(extractor, object1, ConverterType.Node, false, deleted: false);
-
-            // Add a deleted object
-            var deletedObject = new UAObject(new NodeId("deleted_obj", 0), "deleted_obj", null, null, NodeId.Null, null);
-            deletedObject.FullAttributes.EventNotifier = EventNotifiers.SubscribeToEvents;
-            NodeToRawWithDeleteFlag(extractor, deletedObject, ConverterType.Node, false, deleted: true);
-
-            // Set config to include deleted nodes
-            tester.Config.Cognite.RawNodeBuffer.IncludeDeletedNodes = true;
-
-            // Create a new source with the updated config
-            var sourceWithDeleted = new CDFNodeSource(log, tester.Config, extractor, pusher, extractor.TypeManager);
-            var resultWithDeleted = await sourceWithDeleted.LoadNodes(Enumerable.Empty<NodeId>(), 0, HierarchicalReferenceMode.Disabled, "test", tester.Source.Token);
-
-            // Should have all 2 variables (including deleted one)
-            Assert.Equal(2, resultWithDeleted.Nodes.Count(n => n is UAVariable));
-            Assert.Contains(resultWithDeleted.Nodes, n => n.Name == "var1");
-            Assert.Contains(resultWithDeleted.Nodes, n => n.Name == "deleted_var");
-
-            // Should have all 2 objects (including deleted one)
-            Assert.Equal(2, resultWithDeleted.Nodes.Count(n => n is UAObject));
-            Assert.Contains(resultWithDeleted.Nodes, n => n.Name == "obj1");
-            Assert.Contains(resultWithDeleted.Nodes, n => n.Name == "deleted_obj");
-        }
-
-        [Fact]
         public async Task TestCDFAsSourceData()
         {
             tester.Config.Cognite.RawNodeBuffer = new CDFNodeSourceConfig

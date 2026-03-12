@@ -214,11 +214,6 @@ namespace Cognite.OpcUa.Config
         /// potentially valid extraction targets.
         /// </summary>
         public bool BrowseOnEmpty { get; set; }
-        /// <summary>
-        /// If true, include nodes that have been soft-deleted in CDF.
-        /// By default (false), soft-deleted nodes are filtered out when reading from CDF.
-        /// </summary>
-        public bool IncludeDeletedNodes { get; set; }
     }
     public class BrowseCallbackConfig : FunctionCallConfig
     {
