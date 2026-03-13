@@ -55,6 +55,8 @@ namespace Cognite.OpcUa.NodeSources
 
         private bool isInitialized;
 
+        public bool IsInitialized => isInitialized;
+
         public NodeSetNodeSource(ILogger logger, FullConfig config, UAExtractor extractor, UAClient client, TypeManager typeManager)
         {
             this.logger = logger;
@@ -347,6 +349,11 @@ namespace Cognite.OpcUa.NodeSources
             var nextIds = new HashSet<NodeId>();
             foreach (var id in rootIds)
             {
+                if (!nodeDict.ContainsKey(id))
+                {
+                    logger.LogWarning("Root node {Id} not found in nodeset files, skipping", id);
+                    continue;
+                }
                 visitedNodes.Add(id);
                 if (BuildNode(id, NodeId.Null, nodeClassMask))
                 {

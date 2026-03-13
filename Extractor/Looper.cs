@@ -128,7 +128,7 @@ namespace Cognite.OpcUa
             pusher.NoInit = false;
             var pending = pusher.PendingNodes;
             pusher.PendingNodes = null;
-            await extractor.PushNodes(pending, pusher, true);
+            await extractor.PushNodes(pending, true);
 
             if (pusher.Initialized)
             {

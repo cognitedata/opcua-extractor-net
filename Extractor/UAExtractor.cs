@@ -61,6 +61,7 @@ namespace Cognite.OpcUa
         private HistoryReader? historyReader;
         public IEnumerable<NodeId> RootNodes { get; private set; } = null!;
         private readonly IPusher pusher;
+        public IPusher Pusher => pusher;
         private readonly ConcurrentQueue<NodeId> extraNodesToBrowse = new ConcurrentQueue<NodeId>();
         public TransformationCollection? Transformations { get; private set; }
         public TypeConverter TypeConverter => uaClient.TypeConverter;
@@ -74,6 +75,7 @@ namespace Cognite.OpcUa
         private NodeSetNodeSource? nodeSetSource;
 
         private readonly DeletesManager? deletesManager;
+        public DeletesManager? DeletesManager => deletesManager;
 
         public bool ShouldStartLooping { get; set; } = true;
 
@@ -111,6 +113,21 @@ namespace Cognite.OpcUa
 
         // Active subscriptions, used in tests for WaitForSubscription().
         private readonly HashSet<SubscriptionName> activeSubscriptions = new();
+
+        /// <summary>
+        /// Set once the extractor has fully loaded and parsed configuration.
+        /// </summary>
+        private bool isConfigurationReady = false;
+
+        /// <summary>
+        /// Will be true if the extractor is ready to browse and create subscriptions.
+        /// This requires either a connected session to the OPC-UA server, or an initialized NodeSet source,
+        /// as well as having processed the configuration.
+        /// </summary>
+        public bool IsReadyToBrowse => (
+            uaClient.SessionManager.Session?.Connected ?? false
+            || Config.Source.EndpointUrl == null
+        ) && isConfigurationReady;
 
         /// <summary>
         /// Construct extractor with list of pushers
@@ -261,6 +278,12 @@ namespace Cognite.OpcUa
             historyReader?.RemoveIssue(HistoryReader.StateIssue.EventsPushFailing);
         }
 
+        public void OnNodeHierarchyRead()
+        {
+            historyReader?.RemoveIssue(HistoryReader.StateIssue.NodeHierarchyRead);
+            Starting.Set(0);
+        }
+
         /// <summary>
         /// Event handler for UAClient reconnect
         /// </summary>
@@ -341,13 +364,11 @@ namespace Cognite.OpcUa
                 Config.Source.LimitToServerConfig = false;
                 Config.Source.NodeSetSource.Types = true;
                 Config.Source.NodeSetSource.Instance = true;
-                nodeSetSource = new NodeSetNodeSource(
-                    Provider.GetRequiredService<ILogger<NodeSetNodeSource>>(),
-                    Config, this, uaClient, TypeManager);
-                await nodeSetSource.Initialize(Source.Token);
             }
 
             await ConfigureExtractor();
+
+            isConfigurationReady = true;
 
             Started = true;
 
@@ -716,7 +737,7 @@ namespace Cognite.OpcUa
 
             await PushNodes(toPush);
 
-            historyReader?.RemoveIssue(HistoryReader.StateIssue.NodeHierarchyRead);
+            OnNodeHierarchyRead();
             // Changed flag means that it already existed, so we avoid synchronizing these.
             var historyTasks = CreateSubscriptions(result.SourceVariables.Where(var => !var.Changed));
             Starting.Set(0);
@@ -882,9 +903,7 @@ namespace Cognite.OpcUa
         /// <param name="input">Nodes to push</param>
         /// <param name="pusher">Destination to push to</param>
         /// <param name="initial">True if this counts as initialization of the pusher</param>
-        public async Task PushNodes(
-            PusherInput? input,
-            IPusher pusher, bool initial)
+        public async Task PushNodes(PusherInput? input, bool initial)
         {
             if (input == null)
             {
@@ -961,7 +980,7 @@ namespace Cognite.OpcUa
             }
 
             var pushTasks = new List<Task> {
-                PushNodes(input, pusher, initial)
+                PushNodes(input, initial)
             };
 
             if (Config.DryRun)
@@ -1133,7 +1152,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="variables">Variables to synchronize</param>
         /// <returns>Two tasks, one for data and one for events</returns>
-        private IEnumerable<Func<CancellationToken, Task>> CreateSubscriptions(IEnumerable<UAVariable> variables)
+        public IEnumerable<Func<CancellationToken, Task>> CreateSubscriptions(IEnumerable<UAVariable> variables)
         {
             var states = variables.Select(ts => ts.Id).Distinct().SelectNonNull(id => State.GetNodeState(id));
 
