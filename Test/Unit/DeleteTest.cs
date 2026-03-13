@@ -319,7 +319,7 @@ namespace Test.Unit
 
             Assert.Null(pusher.LastDeleteReq);
             // Execute the push, it should succeed and we should get nodes in the pusher.
-            await extractor.PushNodes(input, pusher, true);
+            await extractor.PushNodes(input, true);
             Assert.NotNull(pusher.LastDeleteReq);
             Assert.Null(pusher.PendingNodes);
 
@@ -341,7 +341,7 @@ namespace Test.Unit
             Assert.Single(input.Deletes.Variables);
             Assert.Single(input.Deletes.References);
 
-            await extractor.PushNodes(input, pusher, false);
+            await extractor.PushNodes(input, false);
             Assert.NotNull(pusher.LastDeleteReq);
 
             Assert.Single(pusher.LastDeleteReq.Objects);
@@ -356,7 +356,7 @@ namespace Test.Unit
             // Next push with same input should result in no deletes
             input = await PusherInput.FromNodeSourceResult(result, extractor.Context, deleteManager, tester.Source.Token);
 
-            await extractor.PushNodes(input, pusher, false);
+            await extractor.PushNodes(input, false);
             Assert.Empty(pusher.LastDeleteReq.Objects);
             Assert.Empty(pusher.LastDeleteReq.Variables);
             Assert.Empty(pusher.LastDeleteReq.References);

@@ -138,7 +138,7 @@ namespace Test.Unit
 
             var input = new PusherInput(nodes, variables, references, null);
 
-            await extractor.PushNodes(input, pusher, true);
+            await extractor.PushNodes(input, true);
 
             Assert.Equal(pushedObjects, pusher.PushedNodes.Count);
             Assert.Equal(pushedVariables, pusher.PushedVariables.Count);
