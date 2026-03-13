@@ -46,7 +46,7 @@ namespace Cognite.OpcUa
     /// <summary>
     /// Client managing the connection to the opcua server, and providing wrapper methods to simplify interaction with the server.
     /// </summary>
-    public class UAClient : IDisposable, IAsyncDisposable, IUAClientAccess
+    public class UAClient : IAsyncDisposable, IUAClientAccess
     {
         protected FullConfig Config { get; set; }
         protected ISession? Session => SessionManager.Session;
@@ -227,7 +227,7 @@ namespace Cognite.OpcUa
         private async Task StartSession(int timeout = -1)
         {
             if (Callbacks == null) throw new InvalidOperationException("Attempted to start UAClient without setting callbacks");
-            if (Started) throw new InvalidOperationException("Attempted to start UAClient which is already running");
+            if (SessionManager.RunningTask != null) throw new InvalidOperationException("Attempted to start UAClient that is already running");
 
             var appConfig = await LoadAppConfig();
 
@@ -236,10 +236,10 @@ namespace Cognite.OpcUa
             if (SubscriptionManager == null)
             {
                 SubscriptionManager = new SubscriptionManager(this, Config, log);
-                Callbacks.TaskScheduler.ScheduleTask("SubscriptionManager", SubscriptionManager.RunTaskLoop);
+                Callbacks.ScheduleTask(SubscriptionManager.RunTaskLoop, SchedulerTaskResult.Unexpected, "SubscriptionManager");
             }
 
-            Callbacks.TaskScheduler.ScheduleTask("SessionManager", SessionManager.Run);
+            Callbacks.PeriodicScheduler.ScheduleTask("SessionManager", SessionManager.Run);
             await Task.WhenAny(SessionManager.WaitForSession(liveToken), SessionManager.RunningTask);
 
             var mgrExc = SessionManager.RunningTask?.Exception;
@@ -906,48 +906,6 @@ namespace Cognite.OpcUa
             return Context.ToNodeId(id);
         }
 
-
-        private int disposed = 0;
-
-        public void Dispose()
-        {
-            if (Interlocked.CompareExchange(ref disposed, 1, 0) == 1)
-            {
-                return;
-            }
-            Dispose(true);
-            GC.SuppressFinalize(this);
-        }
-
-        protected virtual void Dispose(bool disposing)
-        {
-            try
-            {
-                Close(CancellationToken.None).Wait();
-            }
-            catch (Exception ex)
-            {
-                log.LogWarning("Failed to close UAClient: {Message}", ex.Message);
-            }
-            waiter.Dispose();
-            if (AppConfig != null)
-            {
-                AppConfig.CertificateValidator.CertificateValidation -= CertificateValidationHandler;
-            }
-            subscriptionSem.Dispose();
-            SessionManager.Dispose();
-        }
-
-        public async ValueTask DisposeAsync()
-        {
-            if (Interlocked.CompareExchange(ref disposed, 1, 0) == 1)
-            {
-                return;
-            }
-            await DisposeAsyncCore();
-            GC.SuppressFinalize(this);
-        }
-
         protected virtual async ValueTask DisposeAsyncCore()
         {
             try
@@ -961,13 +919,23 @@ namespace Cognite.OpcUa
             waiter.Dispose();
             if (AppConfig != null)
             {
-
                 AppConfig.CertificateValidator.CertificateValidation -= CertificateValidationHandler;
-
             }
             subscriptionSem.Dispose();
             SessionManager.Dispose();
         }
+
+        private int disposed;
+        public async ValueTask DisposeAsync()
+        {
+            if (Interlocked.CompareExchange(ref disposed, 1, 0) == 1)
+            {
+                return;
+            }
+            await DisposeAsyncCore();
+            GC.SuppressFinalize(this);
+        }
+
         #endregion
     }
 }

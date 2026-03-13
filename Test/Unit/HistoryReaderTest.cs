@@ -4,6 +4,7 @@ using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.NodeSources;
+using Cognite.OpcUa.Tasks;
 using Cognite.OpcUa.Types;
 using Cognite.OpcUa.Utils;
 using Microsoft.Extensions.DependencyInjection;
@@ -54,6 +55,7 @@ namespace Test.Unit
             await using var extractor = tester.BuildExtractor();
             var cfg = new HistoryConfig
             {
+                Enabled = true,
                 Backfill = true,
                 Data = true
             };
@@ -188,13 +190,14 @@ namespace Test.Unit
         [Fact]
         public async Task TestHistoryEventHandler()
         {
-            await using var extractor = tester.BuildExtractor();
             var cfg = new HistoryConfig
             {
+                Enabled = true,
                 Backfill = true
             };
 
             tester.Config.History = cfg;
+            await using var extractor = tester.BuildExtractor();
 
             var log = tester.Provider.GetRequiredService<ILogger<HistoryReaderTest>>();
 
@@ -332,8 +335,6 @@ namespace Test.Unit
         [Fact(Timeout = 10000)]
         public async Task TestFrontfillData()
         {
-            await using var extractor = tester.BuildExtractor();
-
             var cfg = new HistoryConfig
             {
                 Backfill = true,
@@ -341,10 +342,11 @@ namespace Test.Unit
                 Enabled = true
             };
             tester.Config.History = cfg;
+            await using var extractor = tester.BuildExtractor();
 
-            var log = tester.Provider.GetRequiredService<ILogger<HistoryReader>>();
+            var log = tester.Provider.GetRequiredService<ILogger<HistoryTask>>();
 
-            using var reader = new HistoryReader(log, tester.Client, extractor, extractor.TypeManager, tester.Config, tester.Source.Token);
+            var reader = new HistoryTask(log, tester.Client, extractor, extractor.TypeManager, tester.Config);
 
             var dt = new UADataType(DataTypeIds.Double);
             var dt2 = new UADataType(DataTypeIds.String);
@@ -376,12 +378,12 @@ namespace Test.Unit
             CommonTestUtils.ResetMetricValues("opcua_frontfill_data_count", "opcua_frontfill_data_points");
 
             // Test no states
-            await CommonTestUtils.RunHistory(reader, Enumerable.Empty<VariableExtractionState>(), HistoryReadType.FrontfillData);
+            await CommonTestUtils.RunHistory(reader, Enumerable.Empty<VariableExtractionState>(), HistoryReadType.FrontfillData, tester.Source.Token);
             Assert.Equal(0, queue.Count);
             Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 0));
 
             // Test read half
-            await CommonTestUtils.RunHistory(reader, states, HistoryReadType.FrontfillData);
+            await CommonTestUtils.RunHistory(reader, states, HistoryReadType.FrontfillData, tester.Source.Token);
             // 4 nodes, one is array of 4, half of history = 3*500 + 4*500
             Assert.Equal(3500, queue.Count);
             await queue.Clear();
@@ -392,7 +394,7 @@ namespace Test.Unit
             cfg.DataNodesChunk = 2;
             foreach (var state in states) state.RestartHistory();
             CommonTestUtils.ResetMetricValues("opcua_frontfill_data_count", "opcua_frontfill_data_points");
-            await CommonTestUtils.RunHistory(reader, states, HistoryReadType.FrontfillData);
+            await CommonTestUtils.RunHistory(reader, states, HistoryReadType.FrontfillData, tester.Source.Token);
             Assert.Equal(3500, queue.Count);
             await queue.Clear();
             Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 2));
@@ -403,7 +405,7 @@ namespace Test.Unit
             cfg.DataNodesChunk = 100;
             foreach (var state in states) state.RestartHistory();
             CommonTestUtils.ResetMetricValues("opcua_frontfill_data_count", "opcua_frontfill_data_points");
-            await CommonTestUtils.RunHistory(reader, states, HistoryReadType.FrontfillData);
+            await CommonTestUtils.RunHistory(reader, states, HistoryReadType.FrontfillData, tester.Source.Token);
             Assert.Equal(3500, queue.Count);
             await queue.Clear();
             Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 5));
@@ -420,7 +422,7 @@ namespace Test.Unit
             cfg.IgnoreContinuationPoints = true;
             foreach (var state in states) state.RestartHistory();
             CommonTestUtils.ResetMetricValues("opcua_frontfill_data_count", "opcua_frontfill_data_points");
-            await Task.WhenAny(CommonTestUtils.RunHistory(reader, states, HistoryReadType.FrontfillData), Task.Delay(10000));
+            await Task.WhenAny(CommonTestUtils.RunHistory(reader, states, HistoryReadType.FrontfillData, tester.Source.Token), Task.Delay(10000));
             Assert.Equal(3542, queue.Count);
             await queue.Clear();
             Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 7));
@@ -434,18 +436,17 @@ namespace Test.Unit
         [Fact(Timeout = 10000)]
         public async Task TestBackfillData()
         {
-            await using var extractor = tester.BuildExtractor();
-
             var cfg = new HistoryConfig
             {
                 Backfill = true,
                 Enabled = true
             };
             tester.Config.History = cfg;
+            await using var extractor = tester.BuildExtractor();
 
-            var log = tester.Provider.GetRequiredService<ILogger<HistoryReader>>();
+            var log = tester.Provider.GetRequiredService<ILogger<HistoryTask>>();
 
-            using var reader = new HistoryReader(log, tester.Client, extractor, extractor.TypeManager, tester.Config, tester.Source.Token);
+            var reader = new HistoryTask(log, tester.Client, extractor, extractor.TypeManager, tester.Config);
 
             var dt = new UADataType(DataTypeIds.Double);
             var dt2 = new UADataType(DataTypeIds.String);
@@ -477,12 +478,12 @@ namespace Test.Unit
             CommonTestUtils.ResetMetricValues("opcua_backfill_data_count", "opcua_backfill_data_points");
 
             // Test no states
-            await CommonTestUtils.RunHistory(reader, Enumerable.Empty<VariableExtractionState>(), HistoryReadType.BackfillData);
+            await CommonTestUtils.RunHistory(reader, Enumerable.Empty<VariableExtractionState>(), HistoryReadType.BackfillData, tester.Source.Token);
             Assert.Equal(0, queue.Count);
             Assert.True(CommonTestUtils.TestMetricValue("opcua_backfill_data_count", 0));
 
             // Test read half
-            await CommonTestUtils.RunHistory(reader, states, HistoryReadType.BackfillData);
+            await CommonTestUtils.RunHistory(reader, states, HistoryReadType.BackfillData, tester.Source.Token);
             // 4 nodes, one is array of 4, half of history = 3*500 + 4*500
             Assert.Equal(3500, queue.Count);
             await queue.Clear();
@@ -493,7 +494,7 @@ namespace Test.Unit
             cfg.DataNodesChunk = 2;
             foreach (var state in states) state.RestartHistory();
             CommonTestUtils.ResetMetricValues("opcua_backfill_data_count", "opcua_backfill_data_points");
-            await CommonTestUtils.RunHistory(reader, states, HistoryReadType.BackfillData);
+            await CommonTestUtils.RunHistory(reader, states, HistoryReadType.BackfillData, tester.Source.Token);
             Assert.Equal(3500, queue.Count);
             await queue.Clear();
             Assert.True(CommonTestUtils.TestMetricValue("opcua_backfill_data_count", 2));
@@ -504,7 +505,7 @@ namespace Test.Unit
             cfg.DataNodesChunk = 100;
             foreach (var state in states) state.RestartHistory();
             CommonTestUtils.ResetMetricValues("opcua_backfill_data_count", "opcua_backfill_data_points");
-            await CommonTestUtils.RunHistory(reader, states, HistoryReadType.BackfillData);
+            await CommonTestUtils.RunHistory(reader, states, HistoryReadType.BackfillData, tester.Source.Token);
             Assert.Equal(3500, queue.Count);
             await queue.Clear();
             Assert.True(CommonTestUtils.TestMetricValue("opcua_backfill_data_count", 5));
@@ -520,7 +521,7 @@ namespace Test.Unit
             cfg.IgnoreContinuationPoints = true;
             foreach (var state in states) state.RestartHistory();
             CommonTestUtils.ResetMetricValues("opcua_backfill_data_count", "opcua_backfill_data_points");
-            await Task.WhenAny(CommonTestUtils.RunHistory(reader, states, HistoryReadType.BackfillData), Task.Delay(10000));
+            await Task.WhenAny(CommonTestUtils.RunHistory(reader, states, HistoryReadType.BackfillData, tester.Source.Token), Task.Delay(10000));
             Assert.Equal(3542, queue.Count);
             await queue.Clear();
             Assert.True(CommonTestUtils.TestMetricValue("opcua_backfill_data_count", 7));
@@ -534,8 +535,6 @@ namespace Test.Unit
         [Fact(Timeout = 10000)]
         public async Task TestFrontfillEvents()
         {
-            await using var extractor = tester.BuildExtractor();
-
             var cfg = new HistoryConfig
             {
                 Backfill = true,
@@ -543,13 +542,16 @@ namespace Test.Unit
             };
 
             tester.Config.History = cfg;
+            await using var extractor = tester.BuildExtractor();
+
+
 
             tester.Config.Events.Enabled = true;
             tester.Config.Events.History = true;
 
-            var log = tester.Provider.GetRequiredService<ILogger<HistoryReader>>();
+            var log = tester.Provider.GetRequiredService<ILogger<HistoryTask>>();
 
-            using var reader = new HistoryReader(log, tester.Client, extractor, extractor.TypeManager, tester.Config, tester.Source.Token);
+            var reader = new HistoryTask(log, tester.Client, extractor, extractor.TypeManager, tester.Config);
 
             var states = new[]
             {
@@ -584,12 +586,12 @@ namespace Test.Unit
             CommonTestUtils.ResetMetricValues("opcua_frontfill_events_count", "opcua_frontfill_events");
 
             // Test no states
-            await CommonTestUtils.RunHistory(reader, Enumerable.Empty<EventExtractionState>(), HistoryReadType.FrontfillEvents);
+            await CommonTestUtils.RunHistory(reader, Enumerable.Empty<EventExtractionState>(), HistoryReadType.FrontfillEvents, tester.Source.Token);
             Assert.Equal(0, queue.Count);
             Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 0));
 
             // Test read half
-            await CommonTestUtils.RunHistory(reader, states, HistoryReadType.FrontfillEvents);
+            await CommonTestUtils.RunHistory(reader, states, HistoryReadType.FrontfillEvents, tester.Source.Token);
             Assert.Equal(500, queue.Count);
             await queue.Clear();
             Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 1));
@@ -599,7 +601,7 @@ namespace Test.Unit
             cfg.EventNodesChunk = 1;
             foreach (var state in states) state.RestartHistory();
             CommonTestUtils.ResetMetricValues("opcua_frontfill_events_count", "opcua_frontfill_events");
-            await CommonTestUtils.RunHistory(reader, states, HistoryReadType.FrontfillEvents);
+            await CommonTestUtils.RunHistory(reader, states, HistoryReadType.FrontfillEvents, tester.Source.Token);
             Assert.Equal(500, queue.Count);
             await queue.Clear();
             Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 2));
@@ -610,7 +612,7 @@ namespace Test.Unit
             cfg.EventNodesChunk = 100;
             foreach (var state in states) state.RestartHistory();
             CommonTestUtils.ResetMetricValues("opcua_frontfill_events_count", "opcua_frontfill_events");
-            await CommonTestUtils.RunHistory(reader, states, HistoryReadType.FrontfillEvents);
+            await CommonTestUtils.RunHistory(reader, states, HistoryReadType.FrontfillEvents, tester.Source.Token);
             Assert.Equal(500, queue.Count);
             await queue.Clear();
             // 100 events from obj1, 400 from the server. They are read together, so first read 100 from both,
@@ -632,7 +634,7 @@ namespace Test.Unit
             cfg.Granularity = "1s";
             foreach (var state in states) state.RestartHistory();
             CommonTestUtils.ResetMetricValues("opcua_frontfill_events_count", "opcua_frontfill_events");
-            await Task.WhenAny(CommonTestUtils.RunHistory(reader, states, HistoryReadType.FrontfillEvents), Task.Delay(10000));
+            await Task.WhenAny(CommonTestUtils.RunHistory(reader, states, HistoryReadType.FrontfillEvents, tester.Source.Token), Task.Delay(10000));
             Assert.Equal(526, queue.Count);
             await queue.Clear();
             Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 7));
@@ -646,21 +648,22 @@ namespace Test.Unit
         [Fact(Timeout = 10000)]
         public async Task TestBackfillEvents()
         {
-            await using var extractor = tester.BuildExtractor();
-
             var cfg = new HistoryConfig
             {
+                Enabled = true,
                 Backfill = true,
             };
-
             tester.Config.History = cfg;
+            await using var extractor = tester.BuildExtractor();
+
+
 
             tester.Config.Events.Enabled = true;
             tester.Config.Events.History = true;
 
-            var log = tester.Provider.GetRequiredService<ILogger<HistoryReader>>();
+            var log = tester.Provider.GetRequiredService<ILogger<HistoryTask>>();
 
-            using var reader = new HistoryReader(log, tester.Client, extractor, extractor.TypeManager, tester.Config, tester.Source.Token);
+            var reader = new HistoryTask(log, tester.Client, extractor, extractor.TypeManager, tester.Config);
 
             var states = new[]
             {
@@ -695,12 +698,12 @@ namespace Test.Unit
             CommonTestUtils.ResetMetricValues("opcua_backfill_events_count", "opcua_backfill_events");
 
             // Test no states
-            await CommonTestUtils.RunHistory(reader, Enumerable.Empty<EventExtractionState>(), HistoryReadType.BackfillEvents);
+            await CommonTestUtils.RunHistory(reader, Enumerable.Empty<EventExtractionState>(), HistoryReadType.BackfillEvents, tester.Source.Token);
             Assert.Equal(0, queue.Count);
             Assert.True(CommonTestUtils.TestMetricValue("opcua_backfill_events_count", 0));
 
             // Test read half
-            await CommonTestUtils.RunHistory(reader, states, HistoryReadType.BackfillEvents);
+            await CommonTestUtils.RunHistory(reader, states, HistoryReadType.BackfillEvents, tester.Source.Token);
             Assert.Equal(500, queue.Count);
             await queue.Clear();
             Assert.True(CommonTestUtils.TestMetricValue("opcua_backfill_events_count", 1));
@@ -710,7 +713,7 @@ namespace Test.Unit
             cfg.EventNodesChunk = 1;
             foreach (var state in states) state.RestartHistory();
             CommonTestUtils.ResetMetricValues("opcua_backfill_events_count", "opcua_backfill_events");
-            await CommonTestUtils.RunHistory(reader, states, HistoryReadType.BackfillEvents);
+            await CommonTestUtils.RunHistory(reader, states, HistoryReadType.BackfillEvents, tester.Source.Token);
             Assert.Equal(500, queue.Count);
             await queue.Clear();
             Assert.True(CommonTestUtils.TestMetricValue("opcua_backfill_events_count", 2));
@@ -721,7 +724,7 @@ namespace Test.Unit
             cfg.EventNodesChunk = 100;
             foreach (var state in states) state.RestartHistory();
             CommonTestUtils.ResetMetricValues("opcua_backfill_events_count", "opcua_backfill_events");
-            await CommonTestUtils.RunHistory(reader, states, HistoryReadType.BackfillEvents);
+            await CommonTestUtils.RunHistory(reader, states, HistoryReadType.BackfillEvents, tester.Source.Token);
             Assert.Equal(500, queue.Count);
             await queue.Clear();
             // 100 events from obj1, 400 from the server. They are read together, so first read 100 from both,
@@ -741,7 +744,7 @@ namespace Test.Unit
             cfg.Granularity = "1";
             foreach (var state in states) state.RestartHistory();
             CommonTestUtils.ResetMetricValues("opcua_backfill_events_count", "opcua_backfill_events");
-            await Task.WhenAny(CommonTestUtils.RunHistory(reader, states, HistoryReadType.BackfillEvents), Task.Delay(10000));
+            await Task.WhenAny(CommonTestUtils.RunHistory(reader, states, HistoryReadType.BackfillEvents, tester.Source.Token), Task.Delay(10000));
             Assert.Equal(526, queue.Count);
             await queue.Clear();
             Assert.True(CommonTestUtils.TestMetricValue("opcua_backfill_events_count", 7));
@@ -757,20 +760,19 @@ namespace Test.Unit
         [InlineData(4, 0)]
         public async Task TestReadGranularity(int expectedReads, int granularity)
         {
-            await using var extractor = tester.BuildExtractor();
-
             var cfg = new HistoryConfig
             {
+                Enabled = true,
                 Backfill = true,
                 Data = true,
                 Granularity = granularity.ToString()
             };
-
             tester.Config.History = cfg;
+            await using var extractor = tester.BuildExtractor();
 
-            var log = tester.Provider.GetRequiredService<ILogger<HistoryReader>>();
+            var log = tester.Provider.GetRequiredService<ILogger<HistoryTask>>();
 
-            using var reader = new HistoryReader(log, tester.Client, extractor, extractor.TypeManager, tester.Config, tester.Source.Token);
+            var reader = new HistoryTask(log, tester.Client, extractor, extractor.TypeManager, tester.Config);
 
             var dt = new UADataType(DataTypeIds.Double);
             var dt2 = new UADataType(DataTypeIds.String);
@@ -802,7 +804,7 @@ namespace Test.Unit
 
             CommonTestUtils.ResetMetricValues("opcua_frontfill_data_count", "opcua_frontfill_data_points", "opcua_history_reads");
 
-            await CommonTestUtils.RunHistory(reader, states, HistoryReadType.FrontfillData);
+            await CommonTestUtils.RunHistory(reader, states, HistoryReadType.FrontfillData, tester.Source.Token);
             // 4 nodes, one is array of 4, half of history = 3*500 + 4*500
             Assert.Equal(3500, queue.Count);
 
@@ -812,16 +814,14 @@ namespace Test.Unit
         [Fact(Timeout = 10000)]
         public async Task TestHistoryThrottling()
         {
-            await using var extractor = tester.BuildExtractor();
-
             var cfg = new HistoryConfig
             {
+                Enabled = true,
                 Backfill = true,
                 Data = true
             };
-
             tester.Config.History = cfg;
-
+            await using var extractor = tester.BuildExtractor();
 
             var dt = new UADataType(DataTypeIds.Double);
             var dt2 = new UADataType(DataTypeIds.String);
@@ -856,11 +856,11 @@ namespace Test.Unit
             {
                 MaxNodeParallelism = 1,
             };
-            var log = tester.Provider.GetRequiredService<ILogger<HistoryReader>>();
+            var log = tester.Provider.GetRequiredService<ILogger<HistoryTask>>();
 
-            using (var reader = new HistoryReader(log, tester.Client, extractor, extractor.TypeManager, tester.Config, tester.Source.Token))
+            var reader = new HistoryTask(log, tester.Client, extractor, extractor.TypeManager, tester.Config);
             {
-                await CommonTestUtils.RunHistory(reader, states, HistoryReadType.FrontfillData);
+                await CommonTestUtils.RunHistory(reader, states, HistoryReadType.FrontfillData, tester.Source.Token);
                 Assert.Equal(3500, queue.Count);
                 // 4 since nodes may not be read in parallel
                 Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 4));
@@ -870,12 +870,12 @@ namespace Test.Unit
                 cfg.Throttling.MaxNodeParallelism = 2;
             }
 
-            using (var reader = new HistoryReader(log, tester.Client, extractor, extractor.TypeManager, tester.Config, tester.Source.Token))
+            reader = new HistoryTask(log, tester.Client, extractor, extractor.TypeManager, tester.Config);
             {
                 await queue.Clear();
                 foreach (var state in states) state.RestartHistory();
                 CommonTestUtils.ResetMetricValues("opcua_frontfill_data_count", "opcua_frontfill_data_points");
-                await CommonTestUtils.RunHistory(reader, states, HistoryReadType.FrontfillData);
+                await CommonTestUtils.RunHistory(reader, states, HistoryReadType.FrontfillData, tester.Source.Token);
                 Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 2));
                 Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_points", 3500));
 
@@ -884,7 +884,7 @@ namespace Test.Unit
                 await queue.Clear();
                 foreach (var state in states) state.RestartHistory();
                 CommonTestUtils.ResetMetricValues("opcua_frontfill_data_count", "opcua_frontfill_data_points");
-                await CommonTestUtils.RunHistory(reader, states, HistoryReadType.FrontfillData);
+                await CommonTestUtils.RunHistory(reader, states, HistoryReadType.FrontfillData, tester.Source.Token);
                 Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 2));
                 Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_points", 3500));
 
@@ -893,7 +893,7 @@ namespace Test.Unit
                 await queue.Clear();
                 foreach (var state in states) state.RestartHistory();
                 CommonTestUtils.ResetMetricValues("opcua_frontfill_data_count", "opcua_frontfill_data_points");
-                await CommonTestUtils.RunHistory(reader, states, HistoryReadType.FrontfillData);
+                await CommonTestUtils.RunHistory(reader, states, HistoryReadType.FrontfillData, tester.Source.Token);
                 Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 2));
                 Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_points", 3500));
             }
@@ -902,17 +902,17 @@ namespace Test.Unit
         [Fact(Timeout = 10000)]
         public async Task TestReadHistoryMaxLength()
         {
-            await using var extractor = tester.BuildExtractor();
-
-            var logger = tester.Provider.GetRequiredService<ILogger<HistoryReader>>();
-
             var cfg = new HistoryConfig
             {
+                Enabled = true,
                 Backfill = false,
                 Data = true,
                 EndTime = new TimestampWrapper(tester.HistoryStart.AddSeconds(20).ToUnixTimeMilliseconds().ToString())
             };
+            tester.Config.History = cfg;
+            await using var extractor = tester.BuildExtractor();
 
+            var logger = tester.Provider.GetRequiredService<ILogger<HistoryTask>>();
 
             var dt = new UADataType(DataTypeIds.Double);
             var dt2 = new UADataType(DataTypeIds.String);
@@ -946,11 +946,9 @@ namespace Test.Unit
             cfg.MaxReadLength = "1s";
             cfg.DataChunk = 50;
 
-            tester.Config.History = cfg;
+            var reader = new HistoryTask(logger, tester.Client, extractor, extractor.TypeManager, tester.Config);
 
-            using var reader = new HistoryReader(logger, tester.Client, extractor, extractor.TypeManager, tester.Config, tester.Source.Token);
-
-            await CommonTestUtils.RunHistory(reader, states, HistoryReadType.FrontfillData);
+            await CommonTestUtils.RunHistory(reader, states, HistoryReadType.FrontfillData, tester.Source.Token);
             // 100 for each of the 7 nodes, then 1 extra every second of read, so 11.
             Assert.Equal(7077, queue.Count);
             var metric = CommonTestUtils.GetMetricValue("opcua_frontfill_data_count");
@@ -961,17 +959,17 @@ namespace Test.Unit
         [Fact(Timeout = 10000)]
         public async Task TestReadHistoryMaxLengthIgnoreCps()
         {
-            await using var extractor = tester.BuildExtractor();
-
-            var logger = tester.Provider.GetRequiredService<ILogger<HistoryReader>>();
-
             var cfg = new HistoryConfig
             {
+                Enabled = true,
                 Backfill = false,
                 Data = true,
                 EndTime = new TimestampWrapper(tester.HistoryStart.AddSeconds(20).ToUnixTimeMilliseconds().ToString())
             };
+            tester.Config.History = cfg;
+            await using var extractor = tester.BuildExtractor();
 
+            var logger = tester.Provider.GetRequiredService<ILogger<HistoryTask>>();
 
             var dt = new UADataType(DataTypeIds.Double);
             var dt2 = new UADataType(DataTypeIds.String);
@@ -1006,11 +1004,9 @@ namespace Test.Unit
             cfg.DataChunk = 50;
             cfg.IgnoreContinuationPoints = true;
 
-            tester.Config.History = cfg;
+            var reader = new HistoryTask(logger, tester.Client, extractor, extractor.TypeManager, tester.Config);
 
-            using var reader = new HistoryReader(logger, tester.Client, extractor, extractor.TypeManager, tester.Config, tester.Source.Token);
-
-            await CommonTestUtils.RunHistory(reader, states, HistoryReadType.FrontfillData);
+            await CommonTestUtils.RunHistory(reader, states, HistoryReadType.FrontfillData, tester.Source.Token);
             // 100 for each of the 7 nodes, then 2 extra every second of read.
             Assert.Equal(7154, queue.Count);
             var metric = CommonTestUtils.GetMetricValue("opcua_frontfill_data_count");
@@ -1022,17 +1018,17 @@ namespace Test.Unit
         [Fact(Timeout = 10000)]
         public async Task TestReadHistoryMaxLengthBackfill()
         {
-            await using var extractor = tester.BuildExtractor();
-
-            var logger = tester.Provider.GetRequiredService<ILogger<HistoryReader>>();
-
             var cfg = new HistoryConfig
             {
+                Enabled = true,
                 Backfill = true,
                 Data = true,
                 StartTime = new TimestampWrapper(tester.HistoryStart.AddSeconds(-5).ToUnixTimeMilliseconds().ToString())
             };
+            tester.Config.History = cfg;
+            await using var extractor = tester.BuildExtractor();
 
+            var logger = tester.Provider.GetRequiredService<ILogger<HistoryTask>>();
 
             var dt = new UADataType(DataTypeIds.Double);
             var dt2 = new UADataType(DataTypeIds.String);
@@ -1066,11 +1062,9 @@ namespace Test.Unit
             cfg.MaxReadLength = "1s";
             cfg.DataChunk = 50;
 
-            tester.Config.History = cfg;
+            var reader = new HistoryTask(logger, tester.Client, extractor, extractor.TypeManager, tester.Config);
 
-            using var reader = new HistoryReader(logger, tester.Client, extractor, extractor.TypeManager, tester.Config, tester.Source.Token);
-
-            await CommonTestUtils.RunHistory(reader, states, HistoryReadType.BackfillData);
+            await CommonTestUtils.RunHistory(reader, states, HistoryReadType.BackfillData, tester.Source.Token);
             // 100 for each of the 7 nodes, then 1 extra per read of data
             Assert.Equal(7070, queue.Count);
             var metric = CommonTestUtils.GetMetricValue("opcua_backfill_data_count");
@@ -1082,15 +1076,18 @@ namespace Test.Unit
         [Fact(Timeout = 10000)]
         public async Task TestHistoryReadFailureThreshold()
         {
-            await using var extractor = tester.BuildExtractor();
-            var logger = tester.Provider.GetRequiredService<ILogger<HistoryReader>>();
             var cfg = new HistoryConfig
             {
+                Enabled = true,
                 Backfill = true,
                 Data = true,
                 EndTime = new TimestampWrapper(tester.HistoryStart.AddSeconds(20).ToUnixTimeMilliseconds().ToString()),
                 ErrorThreshold = 40
             };
+            tester.Config.History = cfg;
+
+            await using var extractor = tester.BuildExtractor();
+            var logger = tester.Provider.GetRequiredService<ILogger<HistoryTask>>();
 
             var dt = new UADataType(DataTypeIds.Double);
             var dt2 = new UADataType(DataTypeIds.String);
@@ -1119,14 +1116,12 @@ namespace Test.Unit
                 .GetField("dataPointQueue", BindingFlags.NonPublic | BindingFlags.Instance)
                 .GetValue(extractor.Streamer);
 
-            tester.Config.History = cfg;
-
-            using var reader = new HistoryReader(logger, tester.Client, extractor, extractor.TypeManager, tester.Config, tester.Source.Token);
+            var reader = new HistoryTask(logger, tester.Client, extractor, extractor.TypeManager, tester.Config);
 
             tester.Server.Issues.HistoryReadStatusOverride[tester.Server.Ids.Custom.MysteryVar] = StatusCodes.BadInvalidArgument;
 
             // Just one failure should not fail
-            await CommonTestUtils.RunHistory(reader, states, HistoryReadType.FrontfillData);
+            await CommonTestUtils.RunHistory(reader, states, HistoryReadType.FrontfillData, tester.Source.Token);
 
             // only 6 timeseries succeed, so we only get data for those
             Assert.Equal(6000, queue.Count);
@@ -1136,7 +1131,7 @@ namespace Test.Unit
 
             tester.Server.Issues.HistoryReadStatusOverride[tester.Server.Ids.Base.DoubleVar1] = StatusCodes.BadInvalidArgument;
 
-            var exc = await Assert.ThrowsAsync<SmartAggregateException>(() => CommonTestUtils.RunHistory(reader, states, HistoryReadType.BackfillData));
+            var exc = await Assert.ThrowsAsync<SmartAggregateException>(() => CommonTestUtils.RunHistory(reader, states, HistoryReadType.BackfillData, tester.Source.Token));
             Assert.Equal("2 errors of type Opc.Ua.ServiceResultException. StatusCode: BadInvalidArgument", exc.Message);
         }
     }

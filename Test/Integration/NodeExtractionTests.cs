@@ -52,7 +52,7 @@ namespace Test.Integration
             tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(ids.Root, tester.Client);
             var dataTypes = tester.Config.Extraction.DataTypes;
 
-            await extractor.RunExtractor(true);
+            await tester.RunExtractor(extractor, true);
 
             Assert.Equal(3, pusher.PushedNodes.Count);
             var node = pusher.PushedNodes[ids.Root];
@@ -94,7 +94,7 @@ namespace Test.Integration
             var dataTypes = tester.Config.Extraction.DataTypes;
 
             dataTypes.AllowStringVariables = true;
-            await extractor.RunExtractor(true);
+            await tester.RunExtractor(extractor, true);
 
             Assert.Equal(3, pusher.PushedNodes.Count);
             Assert.Equal(6, pusher.PushedVariables.Count);
@@ -128,7 +128,7 @@ namespace Test.Integration
 
             dataTypes.AllowStringVariables = true;
             dataTypes.MaxArraySize = 2;
-            await extractor.RunExtractor(true);
+            await tester.RunExtractor(extractor, true);
 
             Assert.Equal(4, pusher.PushedNodes.Count);
             Assert.Equal(8, pusher.PushedVariables.Count);
@@ -169,7 +169,7 @@ namespace Test.Integration
 
             dataTypes.AllowStringVariables = true;
             dataTypes.MaxArraySize = -1;
-            await extractor.RunExtractor(true);
+            await tester.RunExtractor(extractor, true);
 
             Assert.Equal(6, pusher.PushedNodes.Count);
             Assert.Equal(16, pusher.PushedVariables.Count);
@@ -206,7 +206,7 @@ namespace Test.Integration
             dataTypes.AllowStringVariables = true;
             dataTypes.MaxArraySize = -1;
             dataTypes.AutoIdentifyTypes = true;
-            await extractor.RunExtractor(true);
+            await tester.RunExtractor(extractor, true);
 
             Assert.Equal(6, pusher.PushedNodes.Count);
             Assert.Equal(16, pusher.PushedVariables.Count);
@@ -247,7 +247,7 @@ namespace Test.Integration
             dataTypes.MaxArraySize = -1;
             dataTypes.AutoIdentifyTypes = true;
             dataTypes.EnumsAsStrings = true;
-            await extractor.RunExtractor(true);
+            await tester.RunExtractor(extractor, true);
 
             Assert.Equal(6, pusher.PushedNodes.Count);
             Assert.Equal(16, pusher.PushedVariables.Count);
@@ -284,8 +284,7 @@ namespace Test.Integration
             dataTypes.AutoIdentifyTypes = true;
             dataTypes.IgnoreDataTypes = new List<ProtoNodeId> { CommonTestUtils.ToProtoNodeId(ids.IgnoreType, tester.Client) };
             await using var extractor = tester.BuildExtractor(pusher);
-
-            await extractor.RunExtractor(true);
+            await tester.RunExtractor(extractor, true);
 
             Assert.Equal(6, pusher.PushedNodes.Count);
             Assert.Equal(15, pusher.PushedVariables.Count);
@@ -317,7 +316,7 @@ namespace Test.Integration
                     NodeId = CommonTestUtils.ToProtoNodeId(ids.NumberType, tester.Client)
                 }
             };
-            await extractor.RunExtractor(true);
+            await tester.RunExtractor(extractor, true);
 
             Assert.Equal(6, pusher.PushedNodes.Count);
             Assert.Equal(16, pusher.PushedVariables.Count);
@@ -342,7 +341,7 @@ namespace Test.Integration
             dataTypes.AllowStringVariables = true;
             dataTypes.AutoIdentifyTypes = true;
             dataTypes.NullAsNumeric = nullAsNumeric;
-            await extractor.RunExtractor(true);
+            await tester.RunExtractor(extractor, true);
 
             Assert.Single(pusher.PushedNodes);
             Assert.Single(pusher.PushedVariables);
@@ -370,7 +369,7 @@ namespace Test.Integration
             dataTypes.AutoIdentifyTypes = true;
             dataTypes.UnknownAsScalar = true;
             dataTypes.MaxArraySize = -1;
-            await extractor.RunExtractor(true);
+            await tester.RunExtractor(extractor, true);
 
             Assert.Equal(3, pusher.PushedNodes.Count);
             Assert.Equal(10, pusher.PushedVariables.Count);
@@ -393,7 +392,6 @@ namespace Test.Integration
             var extraction = tester.Config.Extraction;
             await using var extractor = tester.BuildExtractor(pusher);
 
-
             // Duplicates should be handled
             tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Custom.Root, tester.Client);
             tester.Config.Extraction.RootNodes = new[]
@@ -406,7 +404,7 @@ namespace Test.Integration
             extraction.DataTypes.MaxArraySize = -1;
             extraction.DataTypes.AutoIdentifyTypes = true;
 
-            await extractor.RunExtractor(true);
+            await tester.RunExtractor(extractor, true);
 
             Assert.Equal(7, pusher.PushedNodes.Count);
             Assert.Equal(21, pusher.PushedVariables.Count);
@@ -418,7 +416,6 @@ namespace Test.Integration
             var extraction = tester.Config.Extraction;
             await using var extractor = tester.BuildExtractor(pusher);
 
-
             var ids = tester.Server.Ids.Custom;
             tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Custom.Root, tester.Client);
 
@@ -427,7 +424,7 @@ namespace Test.Integration
             extraction.DataTypes.AutoIdentifyTypes = true;
             extraction.MapVariableChildren = true;
 
-            await extractor.RunExtractor(true);
+            await tester.RunExtractor(extractor, true);
 
             Assert.Equal(9, pusher.PushedNodes.Count);
             Assert.Equal(16, pusher.PushedVariables.Count);
@@ -444,7 +441,6 @@ namespace Test.Integration
             var extraction = tester.Config.Extraction;
             await using var extractor = tester.BuildExtractor(pusher);
 
-
             var ids = tester.Server.Ids.Custom;
             tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Custom.Root, tester.Client);
 
@@ -457,7 +453,7 @@ namespace Test.Integration
                 CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Custom.NumberType, tester.Client)
             };
 
-            await extractor.RunExtractor(true);
+            await tester.RunExtractor(extractor, true);
 
             Assert.Equal(9, pusher.PushedNodes.Count);
             Assert.Equal(15, pusher.PushedVariables.Count);
@@ -476,7 +472,6 @@ namespace Test.Integration
             var extraction = tester.Config.Extraction;
             await using var extractor = tester.BuildExtractor(pusher);
 
-
             var ids = tester.Server.Ids.Custom;
             tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(ids.Root, tester.Client);
 
@@ -485,7 +480,7 @@ namespace Test.Integration
             extraction.DataTypes.AutoIdentifyTypes = true;
             extraction.NodeTypes.Metadata = true;
 
-            await extractor.RunExtractor(true);
+            await tester.RunExtractor(extractor, true);
 
             Assert.Equal(6, pusher.PushedNodes.Count);
             Assert.Equal(16, pusher.PushedVariables.Count);
@@ -539,7 +534,7 @@ namespace Test.Integration
                 CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Custom.IgnoreType, tester.Client)
             };
 
-            await extractor.RunExtractor(true);
+            await tester.RunExtractor(extractor, true);
 
             dataTypes.AllowStringVariables = false;
             dataTypes.MaxArraySize = 0;
@@ -606,7 +601,6 @@ namespace Test.Integration
             tester.Config.Extraction.Relationships.InverseHierarchical = true;
             await using var extractor = tester.BuildExtractor(pusher);
 
-
             await RunReferenceExtraction(extractor);
 
             Assert.Equal(28, pusher.PushedReferences.Count);
@@ -635,7 +629,6 @@ namespace Test.Integration
             tester.Config.Extraction.Relationships.InverseHierarchical = true;
             await using var extractor = tester.BuildExtractor(pusher);
 
-
             pusher.NoInit = true;
             pusher.TestConnectionResult = false;
 
@@ -646,7 +639,7 @@ namespace Test.Integration
             dataTypes.MaxArraySize = 4;
             dataTypes.AutoIdentifyTypes = true;
 
-            var runTask = extractor.RunExtractor();
+            var runTask = tester.RunExtractor(extractor);
             await extractor.WaitForSubscription(SubscriptionName.DataPoints);
 
             Assert.Empty(pusher.PushedNodes);
@@ -685,7 +678,6 @@ namespace Test.Integration
             tester.Config.Extraction.Relationships.InverseHierarchical = true;
             await using var extractor = tester.BuildExtractor(pusher);
 
-
             pusher.NoInit = false;
             pusher.TestConnectionResult = false;
             pusher.PushNodesResult = !failNodes;
@@ -698,7 +690,7 @@ namespace Test.Integration
             dataTypes.MaxArraySize = 4;
             dataTypes.AutoIdentifyTypes = true;
 
-            var runTask = extractor.RunExtractor();
+            var runTask = tester.RunExtractor(extractor);
             await extractor.WaitForSubscription(SubscriptionName.DataPoints);
 
             await TestUtils.WaitForCondition(() =>
@@ -755,14 +747,13 @@ namespace Test.Integration
             var (handler, pusher) = tester.GetCDFPusher();
             await using var extractor = tester.BuildExtractor(pusher);
 
-
             tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Custom.Root, tester.Client);
 
             tester.Config.Extraction.DataTypes.AllowStringVariables = true;
             tester.Config.Extraction.DataTypes.MaxArraySize = 4;
             tester.Config.History.Enabled = false;
 
-            var runTask = extractor.RunExtractor();
+            var runTask = tester.RunExtractor(extractor);
 
             await TestUtils.WaitForCondition(() => handler.Assets.Count != 0 && handler.Timeseries.Count != 0, 5);
 
@@ -770,9 +761,7 @@ namespace Test.Integration
 
             tester.Server.ModifyCustomServer();
 
-            var rebrowseTask = extractor.Rebrowse();
-            await Task.WhenAny(rebrowseTask, Task.Delay(10000));
-            Assert.True(rebrowseTask.IsCompleted);
+            await extractor.ScheduleRebrowseAndWait(TimeSpan.FromSeconds(10));
 
             CommonTestUtils.VerifyModified(handler.Assets, handler.Timeseries, extractor, tester.Server.Ids.Custom, false);
 
@@ -805,12 +794,11 @@ namespace Test.Integration
             var (handler, pusher) = tester.GetCDFPusher();
             await using var extractor = tester.BuildExtractor(pusher);
 
-
             tester.Config.Extraction.DataTypes.AllowStringVariables = true;
             tester.Config.Extraction.DataTypes.MaxArraySize = 4;
             tester.Config.History.Enabled = false;
 
-            var runTask = extractor.RunExtractor();
+            var runTask = tester.RunExtractor(extractor);
 
             await TestUtils.WaitForCondition(() => handler.AssetsRaw.Count != 0 && handler.TimeseriesRaw.Count != 0, 5);
 
@@ -823,7 +811,7 @@ namespace Test.Integration
 
             tester.Server.ModifyCustomServer();
 
-            await extractor.Rebrowse();
+            await extractor.ScheduleRebrowseAndWait(TimeSpan.FromSeconds(10));
 
             CommonTestUtils.VerifyModified(
                 handler.AssetsRaw
@@ -857,7 +845,6 @@ namespace Test.Integration
             await using var extractor = tester.BuildExtractor(pusher);
 
 
-
             tester.Server.Server.MutateNode(tester.Server.Ids.Wrong.TooLargeProp, state =>
             {
                 var varState = state as PropertyState;
@@ -865,7 +852,7 @@ namespace Test.Integration
                 varState.Value = null;
             });
 
-            var runTask = extractor.RunExtractor();
+            var runTask = tester.RunExtractor(extractor);
 
             await TestUtils.WaitForCondition(() => handler.Assets.Count != 0 && handler.Timeseries.Count != 0, 5);
 
@@ -873,7 +860,7 @@ namespace Test.Integration
 
             Assert.True(string.IsNullOrEmpty(handler.Assets[id].metadata["TooLargeDim"]));
 
-            await extractor.Rebrowse();
+            await extractor.ScheduleRebrowseAndWait(TimeSpan.FromSeconds(10));
 
             Assert.True(string.IsNullOrEmpty(handler.Assets[id].metadata["TooLargeDim"]));
 
@@ -884,51 +871,11 @@ namespace Test.Integration
                 varState.Value = Enumerable.Range(0, 5).ToArray();
             });
 
-            await extractor.Rebrowse();
+            await extractor.ScheduleRebrowseAndWait(TimeSpan.FromSeconds(10));
 
             Assert.Equal("[0,1,2,3,4]", handler.Assets[id].metadata["TooLargeDim"]);
 
             await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
-        }
-        [Fact]
-        public async Task TestRebrowseFailedWeirdState()
-        {
-            tester.Config.Cognite.MetadataTargets = new MetadataTargetsConfig
-            {
-                Clean = new CleanMetadataTargetConfig
-                {
-                    Relationships = false,
-                    Assets = true,
-                    Timeseries = true,
-                    Space = "test-space",
-                }
-            };
-            var (handler, pusher) = tester.GetCDFPusher();
-            await using var extractor = tester.BuildExtractor(pusher);
-            tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Base.Root, tester.Client);
-
-            // First, run the extractor and wait for data to arrive in CDF.
-            var runTask = extractor.RunExtractor();
-
-            await TestUtils.WaitForCondition(() => handler.Instances.Count != 0 && pusher.Initialized, 5);
-
-            // Now, rebrowse, but simulate failure to push timeseries to CDF.
-            handler.FailedRoutes.Add("/models/instances");
-            await extractor.Rebrowse();
-
-            // This is a rebrowse, and should _not_ set the extractor to uninitialized.
-            Assert.True(pusher.Initialized);
-
-            await extractor.WaitForSubscription(SubscriptionName.DataPoints);
-
-            // Trigger a datapoint update.
-            tester.Server.UpdateNode(tester.Server.Ids.Base.DoubleVar1, 321.123);
-
-            var id = new InstanceIdentifier("test-space", tester.Client.GetUniqueId(tester.Server.Ids.Base.DoubleVar1));
-
-            await TestUtils.WaitForCondition(() => handler.DatapointsByInstanceId.TryGetValue(id, out var dps) && dps.NumericDatapoints.Any(v => v.Value == 321.123), 5);
-
-            handler.FailedRoutes.Clear();
         }
         #endregion
 
@@ -959,7 +906,7 @@ namespace Test.Integration
             extraction.DataTypes.MaxArraySize = -1;
             extraction.DataTypes.AutoIdentifyTypes = true;
 
-            await extractor.RunExtractor(true);
+            await tester.RunExtractor(extractor, true);
 
             var root = pusher.PushedNodes[ObjectIds.ObjectsFolder] as UAObject;
             var meta = root.BuildMetadata(tester.Config, extractor, false);
@@ -1011,7 +958,7 @@ namespace Test.Integration
             extraction.DataTypes.MaxArraySize = 0;
             extraction.DataTypes.AutoIdentifyTypes = false;
 
-            await extractor.RunExtractor(true);
+            await tester.RunExtractor(extractor, true);
 
             var root = pusher.PushedNodes[ObjectIds.ObjectsFolder] as UAObject;
             var meta = root.BuildMetadata(tester.Config, extractor, false);
@@ -1057,12 +1004,11 @@ namespace Test.Integration
                 }
             };
             await using var extractor = tester.BuildExtractor(pusher);
-
             tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Custom.Root, tester.Client);
             extraction.DataTypes.AllowStringVariables = true;
             extraction.DataTypes.MaxArraySize = -1;
             extraction.DataTypes.AutoIdentifyTypes = true;
-            await extractor.RunExtractor(true);
+            await tester.RunExtractor(extractor, true);
 
             Assert.Single(pusher.PushedNodes);
             Assert.Empty(pusher.PushedVariables);
@@ -1103,8 +1049,7 @@ namespace Test.Integration
             };
             await using var extractor = tester.BuildExtractor(pusher);
 
-
-            await extractor.RunExtractor(true);
+            await tester.RunExtractor(extractor, true);
 
             Assert.Single(pusher.PushedNodes);
             Assert.Equal(3, pusher.PushedVariables.Count);
@@ -1118,13 +1063,12 @@ namespace Test.Integration
             using var pusher = new DummyPusher(new DummyPusherConfig());
             var extraction = tester.Config.Extraction;
             await using var extractor = tester.BuildExtractor(pusher);
-
             extraction.RootNode = CommonTestUtils.ToProtoNodeId(ObjectIds.TypesFolder, tester.Client);
             extraction.NodeTypes.AsNodes = true;
             extraction.DataTypes.AllowStringVariables = true;
             extraction.DataTypes.MaxArraySize = -1;
             extraction.DataTypes.AutoIdentifyTypes = true;
-            await extractor.RunExtractor(true);
+            await tester.RunExtractor(extractor, true);
 
             Assert.Equal(884, pusher.PushedNodes.Count);
             Assert.Equal(2, pusher.PushedVariables.Count);
@@ -1146,7 +1090,6 @@ namespace Test.Integration
             using var pusher = new DummyPusher(new DummyPusherConfig());
             var extraction = tester.Config.Extraction;
             await using var extractor = tester.BuildExtractor(pusher);
-
             extraction.RootNode = CommonTestUtils.ToProtoNodeId(ObjectIds.TypesFolder, tester.Client);
             extraction.NodeTypes.AsNodes = true;
             extraction.DataTypes.AllowStringVariables = true;
@@ -1154,7 +1097,7 @@ namespace Test.Integration
             extraction.DataTypes.AutoIdentifyTypes = true;
             extraction.Relationships.Enabled = true;
             extraction.Relationships.Hierarchical = false;
-            await extractor.RunExtractor(true);
+            await tester.RunExtractor(extractor, true);
 
             Assert.Equal(884, pusher.PushedNodes.Count);
             Assert.Equal(2, pusher.PushedVariables.Count);
@@ -1197,7 +1140,7 @@ namespace Test.Integration
             // Nothing enabled, default run, copy results
             await using (var extractor = tester.BuildExtractor(pusher))
             {
-                await extractor.RunExtractor(true);
+                await tester.RunExtractor(extractor, true);
             }
             var assets = pusher.PushedNodes.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
             var tss = pusher.PushedVariables.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
@@ -1281,7 +1224,7 @@ namespace Test.Integration
             await using (var extractor = tester.BuildExtractor(pusher))
             {
                 tester.Config.Source.NodeSetSource.Types = true;
-                await extractor.RunExtractor(true);
+                await tester.RunExtractor(extractor, true);
                 Compare(pusher.PushedNodes.Values, pusher.PushedVariables.Values, pusher.PushedReferences);
             }
 
@@ -1293,7 +1236,7 @@ namespace Test.Integration
             await using (var extractor = tester.BuildExtractor(pusher))
             {
                 tester.Config.Source.NodeSetSource.Instance = true;
-                await extractor.RunExtractor(true);
+                await tester.RunExtractor(extractor, true);
                 foreach (var node in pusher.PushedNodes.Values)
                 {
                     tester.Log.LogInformation("{Node}", node);
@@ -1302,6 +1245,7 @@ namespace Test.Integration
 
             Compare(pusher.PushedNodes.Values, pusher.PushedVariables.Values, pusher.PushedReferences);
         }
-        #endregion
     }
+    #endregion
 }
+

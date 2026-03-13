@@ -21,6 +21,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using Cognite.Extractor.Common;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Nodes;
 using Cognite.OpcUa.NodeSources;
@@ -259,10 +260,9 @@ namespace Cognite.OpcUa.TypeCollectors
                 if (NodeChildren.TryGetValue(type.Id, out var children))
                 {
                     var enumValues = children.SelectNonNull(child => NodeMap.GetValueOrDefault(child))
-                        .OfType<UAVariable>().Where(v =>
+                        .OfType<UAVariable>().FirstOrDefault(v =>
                             v.Attributes.BrowseName!.Name == "EnumStrings"
-                            || v.Attributes.BrowseName!.Name == "EnumValues")
-                        .FirstOrDefault();
+                            || v.Attributes.BrowseName!.Name == "EnumValues");
                     if (enumValues != null)
                     {
                         type.SetEnumStrings(log, enumValues.Value);

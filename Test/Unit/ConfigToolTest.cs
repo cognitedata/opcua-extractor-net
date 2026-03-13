@@ -100,6 +100,7 @@ namespace Test.Unit
         public async Task TestEndpointDiscovery()
         {
             // Test while connected
+
             await tester.Explorer.GetEndpoints(tester.Source.Token);
             var summary = tester.Explorer.Summary;
             Assert.True(summary.Session.Secure);
@@ -117,7 +118,6 @@ namespace Test.Unit
                 Assert.False(summary.Session.Secure);
                 Assert.Empty(summary.Session.Endpoints);
             }
-
 
             // Test connect from explorer
             tester.Config.Source.EndpointUrl = oldEP;

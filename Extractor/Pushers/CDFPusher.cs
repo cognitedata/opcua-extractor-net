@@ -16,7 +16,9 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using Cognite.Extensions;
+using Cognite.Extractor.Common;
 using Cognite.Extractor.Utils;
+using Cognite.Extractor.Utils.Unstable.Configuration;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.Nodes;
@@ -65,12 +67,14 @@ namespace Cognite.OpcUa.Pushers
         private RawMetadataTargetConfig? RawMetadataTargetConfig => fullConfig.Cognite?.MetadataTargets?.Raw;
 
         private StreamRecordsWriter? recordsWriter;
+        private ConnectionConfig connectionConfig;
 
         public CDFPusher(
             ILogger<CDFPusher> log,
             FullConfig fullConfig,
             CognitePusherConfig config,
             CogniteDestinationWithIDM destination,
+            ConnectionConfig connectionConfig,
             IServiceProvider provider)
         {
             Extractor = null!;
@@ -80,6 +84,7 @@ namespace Cognite.OpcUa.Pushers
             this.destination = destination;
             this.fullConfig = fullConfig;
             cdfWriter = provider.GetRequiredService<CDFWriter>();
+            this.connectionConfig = connectionConfig;
 
             if (fullConfig.Cognite?.Records != null)
             {
@@ -389,14 +394,14 @@ namespace Cognite.OpcUa.Pushers
 
             try
             {
-                await destination.CogniteClient.TestCogniteConfig(config.Project!, token, checkProjectOwnership: false);
+                await destination.CogniteClient.TestCogniteConfig(connectionConfig.Project!, token, checkProjectOwnership: false);
             }
             catch (Exception ex)
             {
                 log.LogError(
                     "Failed to get CDF login status, this is likely a problem with the network or configuration. Project {Project} at {Url}: {Message}",
-                    config.Project,
-                    config.Host,
+                    connectionConfig.Project,
+                    connectionConfig.BaseUrl,
                     ex.Message
                 );
                 return false;
@@ -414,8 +419,8 @@ namespace Cognite.OpcUa.Pushers
                 log.LogError(
                     "Could not access CDF Time Series - most likely due "
                         + "to insufficient access rights on API key. Project {Project} at {Host}: {Message}",
-                    config.Project,
-                    config.Host,
+                    connectionConfig.Project,
+                    connectionConfig.BaseUrl,
                     ex.Message
                 );
                 return false;
@@ -435,8 +440,8 @@ namespace Cognite.OpcUa.Pushers
                     log.LogError(
                         "Could not access CDF Events, though event emitters are specified - most likely due "
                             + "to insufficient access rights on API key. Project {Project} at {Host}: {Message}",
-                        config.Project,
-                        config.Host,
+                        connectionConfig.Project,
+                        connectionConfig.BaseUrl,
                         ex.Message
                     );
                     return false;
@@ -643,8 +648,8 @@ namespace Cognite.OpcUa.Pushers
                     log.LogError(
                         "Could not fetch data set by external id. It may not exist, or the user may lack"
                             + " sufficient access rights. Project {Project} at {Host}, id {Id}: {Message}",
-                        config.Project,
-                        config.Host,
+                        connectionConfig.Project,
+                        connectionConfig.BaseUrl,
                         config.DataSet.ExternalId,
                         ex.Message
                     );

@@ -64,7 +64,7 @@ namespace Cognite.OpcUa.Config
         /// <summary>
         /// Configuration for writing to CDF.
         /// </summary>
-        public CognitePusherConfig? Cognite { get; set; }
+        public CognitePusherConfig Cognite { get; set; } = null!;
         /// <summary>
         /// Configuration for how data should be extracted.
         /// </summary>
@@ -108,13 +108,9 @@ namespace Cognite.OpcUa.Config
             Source ??= new SourceConfig();
             Logger ??= new UALoggerConfig();
             Metrics ??= new UAMetricsConfig();
-            if (Cognite != null)
-            {
-                if (Cognite.CdfChunking == null) Cognite.CdfChunking = new ChunkingConfig();
-                if (Cognite.CdfThrottling == null) Cognite.CdfThrottling = new ThrottlingConfig();
-                if (Cognite.CdfRetries == null) Cognite.CdfRetries = new RetryConfig();
-                if (Cognite.SdkLogging == null) Cognite.SdkLogging = new SdkLoggingConfig();
-            }
+            Cognite ??= new CognitePusherConfig();
+            if (Cognite.CdfChunking == null) Cognite.CdfChunking = new ChunkingConfig();
+            if (Cognite.CdfThrottling == null) Cognite.CdfThrottling = new ThrottlingConfig();
             Extraction ??= new ExtractionConfig();
             Events ??= new EventConfig();
             FailureBuffer ??= new FailureBufferConfig();

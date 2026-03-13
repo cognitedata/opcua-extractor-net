@@ -22,11 +22,13 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using Cognite.OpcUa;
 using Cognite.OpcUa.Config;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.Nodes;
+using Cognite.OpcUa.Tasks;
 using CogniteSdk;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -380,10 +382,10 @@ namespace Test
             return variable;
         }
 
-        public static async Task RunHistory(HistoryReader reader, IEnumerable<UAHistoryExtractionState> states, HistoryReadType type)
+        public static async Task RunHistory(HistoryTask reader, IEnumerable<UAHistoryExtractionState> states, HistoryReadType type, CancellationToken token)
         {
             var task = (Task)reader.GetType().GetMethod("RunHistoryBatch", BindingFlags.Instance | BindingFlags.NonPublic)
-                .Invoke(reader, new object[] { states, type });
+                .Invoke(reader, new object[] { states, type, token });
             await task;
         }
     }
